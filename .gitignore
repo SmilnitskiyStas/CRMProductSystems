@@ -1,0 +1,30 @@
+# ── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+*.tsbuildinfo
+.env.local
+.env*.local
+
+# ── .NET / Backend ───────────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+.vs/
+*.suo
+*.userosscache
+*.sln.docstates
+appsettings.Production.json
+appsettings.Secrets.json
+
+# ── Docker / Infrastructure ──────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/settings.json
