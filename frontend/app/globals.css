@@ -1,0 +1,54 @@
+/* Import design system fonts matching the prototype */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ShelfGuard dark-first design system — mapped from prototype colors */
+  :root {
+    --background: 225 21% 7%;       /* #0F1117 */
+    --foreground: 220 50% 94%;      /* #E8EDF5 */
+    --card: 225 28% 15%;            /* #1C2333 */
+    --card-foreground: 220 50% 94%;
+    --popover: 225 23% 12%;         /* #161B27 */
+    --popover-foreground: 220 50% 94%;
+    --primary: 211 65% 50%;         /* #2D7DD2 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 225 26% 23%;       /* #2A3347 */
+    --secondary-foreground: 220 50% 94%;
+    --muted: 225 26% 23%;           /* #2A3347 */
+    --muted-foreground: 220 13% 61%; /* #8A94A8 */
+    --accent: 211 65% 50%;          /* #2D7DD2 */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;       /* #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 225 26% 23%;          /* #2A3347 */
+    --input: 225 28% 15%;           /* #1C2333 */
+    --ring: 211 65% 50%;            /* #2D7DD2 */
+    --radius: 0.25rem;              /* 4px — matches prototype */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    padding: 0;
+    font-family: "Inter", sans-serif;
+  }
+
+  /* Thin scrollbars matching the prototype */
+  ::-webkit-scrollbar         { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track   { background: transparent; }
+  ::-webkit-scrollbar-thumb   { background: #2A3347; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3A4560; }
+
+  input, button { outline: none; }
+  button:focus-visible { outline: 2px solid #2D7DD2; outline-offset: 2px; }
+}

@@ -1,0 +1,91 @@
+project-architect  →  огляд backlog, підтвердження пріоритетів
+database-engineer  →  TASK-002: повна v1 схема БД + RLS
+backend-developer  →  TASK-001: rename + TASK-003: JWT auth
+frontend-developer →  TASK-009: web auth pages
+qa-tester          →  після кожної завершеної задачі
+
+
+Хороше питання. Давай розберемо як все це реально працює — є кілька рівнів.
+
+Як зараз влаштована система
+.claude/agents/*.md    →  довідкові документи (Claude читає за запитом)
+.claude/skills/*/. md  →  довідкові документи (Claude читає за запитом)
+.claude/commands/*.md  →  SLASH КОМАНДИ (/create-feature, /fix-bug...) ← це єдине що автоматично
+.claude/skills/personal-engineering-standards/SKILL.md  ← FleetView skill (автоматично)
+Різниця принципова:
+Файли зі SKILL.md — це справжні FleetView skills, вони автоматично виявляються і підхоплюються
+Решта .md файлів в агентах і skills — це довідкові документи, Claude читає їх тільки коли ти про це скажеш або вони в slash команді
+
+3 способи використання агентів і skills
+Спосіб 1 — Slash команди (найзручніше)
+/create-feature inventory product catalog
+/fix-bug products API returns 500 on empty list
+/review-code backend/ShelfGuard.Api/Controllers/
+Це вже є і працює.
+Спосіб 2 — Природня мова (завжди працює)
+"Виступи як backend-developer і реалізуй TASK-003 (JWT auth)"
+"Ти database-engineer — перевір чи правильно налаштований RLS на таблиці products"
+"Використай skill create-api-endpoint і зроби ендпоінт для stock"
+Спосіб 3 — Slash команди per-agent (можна додати)
+Зараз їх немає, але можемо створити. Наприклад /backend TASK-003.
+
+Рекомендація — додамо per-agent команди
+Хочеш щоб я створив slash команди типу:
+/backend   → запускає backend-developer agent
+/frontend  → запускає frontend-developer agent
+/database  → запускає database-engineer agent
+/qa        → запускає qa-tester agent
+/architect → запускає project-architect agent
+Тоді можна буде писати:
+/backend implement TASK-003 JWT authentication
+/database create full v1 schema from v1-spec.md section 4
+/qa test the products API
+
+—--------------реалізація швидких команд запуску per-agent команди-------------------
+Всі доступні slash команди
+Per-agent (нові)
+Команда
+Агент
+Приклад
+/backend
+backend-developer
+/backend TASK-003 JWT authentication
+/frontend
+frontend-developer
+/frontend TASK-009 login page
+/database
+database-engineer
+/database TASK-002 full v1 schema
+/qa
+qa-tester
+/qa test products API
+/architect
+project-architect
+/architect plan auth module
+/pm
+project-manager
+/pm show current sprint
+/security
+security-reviewer
+/security review auth controller
+/devops
+devops-engineer
+/devops add Redis to docker-compose
+/docs
+documentation-writer
+/docs update api-contracts after TASK-006
+
+Існуючі
+Команда
+Що робить
+/create-feature
+Створити fullstack feature з нуля
+/fix-bug
+Знайти і виправити баг
+/review-code
+Code review як senior architect
+/generate-docs
+Оновити документацію
+/refactor-module
+Рефакторинг модуля
+

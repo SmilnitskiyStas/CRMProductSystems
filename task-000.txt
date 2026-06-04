@@ -1,0 +1,91 @@
+Залишилося (❌) для закриття TASK-000:
+#
+Що
+Агент
+Файли
+A
+Додати Redis до docker-compose.yml
+devops-engineer
+docker-compose.yml
+B
+Scaffold /worker (BullMQ Node.js)
+devops-engineer
+/worker/package.json, /worker/src/index.ts, job stubs
+C
+Оновити architecture.md — замінити CRM.* → ShelfGuard.* в іменах шарів
+documentation-writer
+.claude/docs/architecture.md
+D
+Оновити docker-compose.yml — назва БД crm → shelfguard
+devops-engineer
+docker-compose.yml, ADR-004
+
+
+ADR-005: Worker scaffold як частина TASK-000
+## ADR-005: Worker directory created in TASK-000, not TASK-008
+Date: 2026-06-03
+Status: accepted
+Context:
+BullMQ worker (ADR-001) потребує Node.js /worker сервісу.
+Docker Compose і backend повинні знати структуру worker ще до TASK-008.
+Decision:
+/worker scaffold (package.json, src/index.ts, job stubs) створюється в TASK-000.
+Реальна логіка (expiry-check, notification) — в TASK-008.
+Consequences:
++ docker-compose.yml може включити worker service одразу
++ backend-developer знає queue names наперед
+- Невеликий overhead у TASK-000
+
+Деталізований план роботи TASK-000
+Крок 1 — devops-engineer (паралельно з кроком 2)
+Файл: docker-compose.yml
+Додати:
+ redis:
+   image: redis:7-alpine
+   ports: "6380:6379"   # 6379 може бути зайнятий локально
+   volumes: redisdata
+   healthcheck
+ worker:
+   build: ./worker
+   depends_on: [postgres, redis]
+   environment:
+     REDIS_URL: redis://redis:6379
+     DATABASE_URL: ...
+Перейменувати DB: crm → shelfguard (або залишити crm для сумісності — рішення нижче)
+Рішення щодо DB name: залишаємо crm до TASK-001 (rename) щоб не зламати поточний backend. TASK-001 перейменовує проєкти і connection string разом.
+Файл: /worker/ scaffold
+/worker
+├── package.json         (BullMQ, ioredis, typescript, tsx)
+├── tsconfig.json
+├── src/
+│   ├── index.ts         (main: start schedulers + workers)
+│   ├── queues/
+│   │   └── index.ts     (expiry-queue, notification-queue exports)
+│   └── jobs/
+│       ├── expiry-check.job.ts   (placeholder)
+│       ├── notification.job.ts   (placeholder)
+│       ├── weekly-report.job.ts  (placeholder)
+│       └── cleanup.job.ts        (placeholder)
+└── Dockerfile
+Крок 2 — documentation-writer (паралельно з кроком 1)
+Файл: .claude/docs/architecture.md
+Замінити CRM.Api/Application/Domain/Infrastructure → ShelfGuard.* у таблиці шарів
+Додати секцію Worker (BullMQ) з посиланням на ADR-001
+Додати ADR-005
+Крок 3 — project-manager (після 1+2)
+Перевірити всі пункти виконано
+Перенести TASK-000 з current.md → done.md
+Написати task log 000_2026-06-03_..._project-manager.md
+Стартувати TASK-001 (перенести в current.md, призначити backend-developer)
+
+Порядок виконання
+TASK-000
+├── [паралельно]
+│   ├── devops-engineer  → docker-compose.yml (Redis) + /worker scaffold
+│   └── docs-writer      → architecture.md update
+└── project-manager      → close TASK-000, open TASK-001
+Оцінка часу: ~1 робоча сесія (scaffold + config + docs = прості зміни без бізнес-логіки).
+
+Наступні кроки після TASK-000
+Критичний ланцюг:
+TASK-001 (rename) → TASK-002 (schema) → TASK-003 (JWT) → TASK-004 + TASK-005 (паралельно)

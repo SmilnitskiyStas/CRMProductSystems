@@ -1,0 +1,94 @@
+// Shared API client. Adds Authorization header, handles 401 → refresh → retry.
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+// Token is kept in memory; localStorage is used only to survive page reloads.
+const TOKEN_KEY = "sg_token";
+let _token: string | null = null;
+
+export function getToken(): string | null {
+  if (_token) return _token;
+  if (typeof window === "undefined") return null;
+  _token = localStorage.getItem(TOKEN_KEY);
+  return _token;
+}
+
+export function setToken(token: string): void {
+  _token = token;
+  if (typeof window !== "undefined") localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  _token = null;
+  if (typeof window !== "undefined") localStorage.removeItem(TOKEN_KEY);
+}
+
+// apiFetch — base request function. Handles JSON, empty 204, and 401 retry.
+async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {},
+  isRetry = false,
+): Promise<T> {
+  const token = getToken();
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    credentials: "include", // sends HttpOnly refreshToken cookie
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  // 401 on a protected request — try refreshing once
+  if (res.status === 401 && !isRetry && path !== "/api/auth/login") {
+    const refreshed = await tryRefresh();
+    if (refreshed) return apiFetch<T>(path, options, true);
+    clearToken();
+    if (typeof window !== "undefined") window.location.href = "/login";
+    throw new ApiError(401, "Session expired.");
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new ApiError(res.status, body.error ?? `HTTP ${res.status}`);
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+async function tryRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { accessToken: string };
+    setToken(data.accessToken);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const api = {
+  get:    <T>(path: string, opts?: RequestInit) => apiFetch<T>(path, { ...opts, method: "GET" }),
+  post:   <T>(path: string, body?: unknown, opts?: RequestInit) =>
+    apiFetch<T>(path, { ...opts, method: "POST", body: body != null ? JSON.stringify(body) : undefined }),
+  put:    <T>(path: string, body?: unknown, opts?: RequestInit) =>
+    apiFetch<T>(path, { ...opts, method: "PUT", body: body != null ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string, opts?: RequestInit) => apiFetch<T>(path, { ...opts, method: "DELETE" }),
+};

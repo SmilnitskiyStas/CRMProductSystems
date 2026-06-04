@@ -1,0 +1,65 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using ShelfGuard.Application.Services;
+
+namespace ShelfGuard.Infrastructure.Services;
+
+public sealed class JwtService : IJwtService
+{
+    private readonly string _secret;
+    private readonly string _issuer;
+    private readonly string _audience;
+    private readonly int _accessTokenMinutes;
+
+    public JwtService(IConfiguration config)
+    {
+        _secret   = config["Jwt:Secret"]   ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
+        _issuer   = config["Jwt:Issuer"]   ?? "shelfguard";
+        _audience = config["Jwt:Audience"] ?? "shelfguard";
+        _accessTokenMinutes = int.Parse(config["Jwt:AccessTokenMinutes"] ?? "15");
+    }
+
+    public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new(JwtRegisteredClaimNames.Email, email),
+            new(ClaimTypes.Role, role),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+
+        if (tenantId.HasValue)
+            claims.Add(new Claim("tenant_id", tenantId.Value.ToString()));
+        if (storeId.HasValue)
+            claims.Add(new Claim("store_id", storeId.Value.ToString()));
+
+        var token = new JwtSecurityToken(
+            issuer: _issuer,
+            audience: _audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(_accessTokenMinutes),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public (string RawToken, string TokenHash) GenerateRefreshToken()
+    {
+        var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        return (raw, HashToken(raw));
+    }
+
+    public string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+}

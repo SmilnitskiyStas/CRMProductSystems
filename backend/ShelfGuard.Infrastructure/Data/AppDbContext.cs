@@ -1,0 +1,423 @@
+using Microsoft.EntityFrameworkCore;
+using ShelfGuard.Domain.Entities;
+
+namespace ShelfGuard.Infrastructure.Data;
+
+public sealed class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    // Auth (existing)
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    // POC catalog (kept for backward compat with existing catalog API)
+    public DbSet<Product> Products => Set<Product>();
+
+    // Structure
+    public DbSet<Store> Stores => Set<Store>();
+    public DbSet<StoreZone> StoreZones => Set<StoreZone>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<ProductSegment> ProductSegments => Set<ProductSegment>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+
+    // Products (v1 tenant-aware)
+    public DbSet<CatalogProduct> CatalogProducts => Set<CatalogProduct>();
+    public DbSet<ProductSupplierSetting> ProductSupplierSettings => Set<ProductSupplierSetting>();
+
+    // Stock
+    public DbSet<ProductStock> ProductStocks => Set<ProductStock>();
+    public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<StockEvent> StockEvents => Set<StockEvent>();
+
+    // Documents
+    public DbSet<StockReceipt> StockReceipts => Set<StockReceipt>();
+    public DbSet<StockReceiptItem> StockReceiptItems => Set<StockReceiptItem>();
+    public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
+    public DbSet<StockTransferItem> StockTransferItems => Set<StockTransferItem>();
+    public DbSet<WriteOff> WriteOffs => Set<WriteOff>();
+    public DbSet<WriteOffItem> WriteOffItems => Set<WriteOffItem>();
+    public DbSet<Discount> Discounts => Set<Discount>();
+
+    // Notifications
+    public DbSet<NotificationSetting> NotificationSettings => Set<NotificationSetting>();
+    public DbSet<NotificationQueue> NotificationQueues => Set<NotificationQueue>();
+
+    // Logs
+    public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        // ── Tenant ─────────────────────────────────────────────────────────
+        builder.Entity<Tenant>(e =>
+        {
+            e.ToTable("tenants");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.Name).HasMaxLength(255).IsRequired();
+            e.Property(t => t.Slug).HasMaxLength(100).IsRequired();
+            e.HasIndex(t => t.Slug).IsUnique();
+            e.Property(t => t.Plan).HasMaxLength(50).HasDefaultValue("basic");
+            e.Property(t => t.Modules).HasColumnType("jsonb").HasDefaultValue("[]");
+            e.Property(t => t.IsActive).HasDefaultValue(true);
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── User ────────────────────────────────────────────────────────────
+        builder.Entity<User>(e =>
+        {
+            e.ToTable("users");
+            e.HasKey(u => u.Id);
+            e.Property(u => u.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(u => u.Email).HasMaxLength(255).IsRequired();
+            e.HasIndex(u => u.Email).IsUnique();
+            e.Property(u => u.Phone).HasMaxLength(20);
+            e.Property(u => u.FullName).HasMaxLength(255).IsRequired();
+            e.Property(u => u.PasswordHash).HasMaxLength(255).IsRequired();
+            e.Property(u => u.Role).HasMaxLength(50).IsRequired();
+            e.Property(u => u.TelegramChatId).HasMaxLength(100);
+            e.Property(u => u.IsActive).HasDefaultValue(true);
+            e.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasOne(u => u.Tenant).WithMany(t => t.Users)
+             .HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+        });
+
+        // ── RefreshToken ────────────────────────────────────────────────────
+        builder.Entity<RefreshToken>(e =>
+        {
+            e.ToTable("refresh_tokens");
+            e.HasKey(rt => rt.Id);
+            e.Property(rt => rt.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(rt => rt.TokenHash).HasMaxLength(64).IsRequired();
+            e.HasIndex(rt => rt.TokenHash).IsUnique();
+            e.Property(rt => rt.ExpiresAt).IsRequired();
+            e.Property(rt => rt.ReplacedByTokenHash).HasMaxLength(64);
+            e.Property(rt => rt.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasOne(rt => rt.User).WithMany(u => u.RefreshTokens)
+             .HasForeignKey(rt => rt.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── Product (POC) ───────────────────────────────────────────────────
+        builder.Entity<Product>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Sku).HasMaxLength(100).IsRequired();
+            e.HasIndex(p => p.Sku).IsUnique();
+            e.Property(p => p.Name).HasMaxLength(200).IsRequired();
+            e.Property(p => p.Description).HasMaxLength(1000);
+            e.Property(p => p.Category).HasMaxLength(100).IsRequired();
+            e.Property(p => p.Unit).HasMaxLength(50).IsRequired();
+            e.Property(p => p.CostPrice).HasColumnType("numeric(18,4)");
+            e.Property(p => p.SalePrice).HasColumnType("numeric(18,4)");
+            e.Property(p => p.StockQuantity).HasColumnType("numeric(18,4)");
+            e.Property(p => p.ReorderLevel).HasColumnType("numeric(18,4)");
+        });
+
+        // ── Store ───────────────────────────────────────────────────────────
+        builder.Entity<Store>(e =>
+        {
+            e.ToTable("stores");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Name).HasMaxLength(255).IsRequired();
+            e.Property(s => s.Type).HasMaxLength(50).IsRequired();
+            e.Property(s => s.FloorPlan).HasColumnType("jsonb");
+            e.Property(s => s.Latitude).HasColumnType("decimal(10,7)");
+            e.Property(s => s.Longitude).HasColumnType("decimal(10,7)");
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── StoreZone ───────────────────────────────────────────────────────
+        builder.Entity<StoreZone>(e =>
+        {
+            e.ToTable("store_zones");
+            e.HasKey(z => z.Id);
+            e.Property(z => z.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(z => z.Name).HasMaxLength(255).IsRequired();
+            e.Property(z => z.Type).HasMaxLength(50).IsRequired();
+            e.Property(z => z.Position).HasColumnType("jsonb");
+            e.Property(z => z.TempMin).HasColumnType("decimal(5,1)");
+            e.Property(z => z.TempMax).HasColumnType("decimal(5,1)");
+            e.Property(z => z.ShelvesCount).HasDefaultValue(1);
+            e.Property(z => z.IsActive).HasDefaultValue(true);
+            e.HasOne(z => z.Store).WithMany(s => s.Zones)
+             .HasForeignKey(z => z.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── Category ────────────────────────────────────────────────────────
+        builder.Entity<Category>(e =>
+        {
+            e.ToTable("categories");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.Name).HasMaxLength(255).IsRequired();
+            e.Property(c => c.IsActive).HasDefaultValue(true);
+            e.HasOne(c => c.Tenant).WithMany()
+             .HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(c => c.Parent).WithMany()
+             .HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+        });
+
+        // ── ProductSegment ──────────────────────────────────────────────────
+        builder.Entity<ProductSegment>(e =>
+        {
+            e.ToTable("product_segments");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Name).HasMaxLength(255).IsRequired();
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Category).WithMany()
+             .HasForeignKey(s => s.CategoryId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── Supplier ────────────────────────────────────────────────────────
+        builder.Entity<Supplier>(e =>
+        {
+            e.ToTable("suppliers");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Name).HasMaxLength(255).IsRequired();
+            e.Property(s => s.Edrpou).HasMaxLength(20);
+            e.Property(s => s.ContactPerson).HasMaxLength(255);
+            e.Property(s => s.Phone).HasMaxLength(20);
+            e.Property(s => s.Email).HasMaxLength(255);
+            e.Property(s => s.DeliveryDays).HasDefaultValue(3);
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── CatalogProduct ──────────────────────────────────────────────────
+        builder.Entity<CatalogProduct>(e =>
+        {
+            e.ToTable("catalog_products");
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(p => p.Barcode).HasMaxLength(100);
+            e.Property(p => p.Name).HasMaxLength(255).IsRequired();
+            e.Property(p => p.Unit).HasMaxLength(20).HasDefaultValue("шт");
+            e.Property(p => p.ManagementType).HasMaxLength(10).HasDefaultValue("MTS");
+            e.Property(p => p.MinStock).HasColumnType("decimal(10,2)");
+            e.Property(p => p.MaxStock).HasColumnType("decimal(10,2)");
+            e.Property(p => p.SafetyBuffer).HasColumnType("decimal(10,2)");
+            e.Property(p => p.StorageTempMin).HasColumnType("decimal(5,1)");
+            e.Property(p => p.StorageTempMax).HasColumnType("decimal(5,1)");
+            e.Property(p => p.VatRate).HasColumnType("decimal(5,2)").HasDefaultValue(20m);
+            e.Property(p => p.PricePurchase).HasColumnType("decimal(12,2)");
+            e.Property(p => p.PriceRetail).HasColumnType("decimal(12,2)");
+            e.Property(p => p.IsActive).HasDefaultValue(true);
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasOne(p => p.Tenant).WithMany()
+             .HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(p => p.Category).WithMany()
+             .HasForeignKey(p => p.CategoryId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(p => p.Segment).WithMany()
+             .HasForeignKey(p => p.SegmentId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(p => p.DefaultSupplier).WithMany()
+             .HasForeignKey(p => p.DefaultSupplierId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── ProductSupplierSetting ──────────────────────────────────────────
+        builder.Entity<ProductSupplierSetting>(e =>
+        {
+            e.ToTable("product_supplier_settings");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Moq).HasColumnType("decimal(10,2)").HasDefaultValue(1m);
+            e.Property(s => s.Usq).HasColumnType("decimal(10,2)").HasDefaultValue(1m);
+            e.Property(s => s.PricePurchase).HasColumnType("decimal(12,2)");
+            e.Property(s => s.DeliveryDays).HasDefaultValue(3);
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            e.HasIndex(s => new { s.ProductId, s.SupplierId, s.TenantId }).IsUnique();
+            e.HasOne(s => s.Product).WithMany()
+             .HasForeignKey(s => s.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Supplier).WithMany()
+             .HasForeignKey(s => s.SupplierId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProductStock ────────────────────────────────────────────────────
+        builder.Entity<ProductStock>(e =>
+        {
+            e.ToTable("product_stock");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.BatchNumber).HasMaxLength(100);
+            e.Property(s => s.Quantity).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(s => s.QuantityInitial).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(s => s.ExpiryDate).IsRequired();
+            e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("safe");
+            e.Property(s => s.SourceType).HasMaxLength(50);
+            e.Property(s => s.AddedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.LastCheckedAt).HasDefaultValueSql("NOW()");
+            e.HasOne(s => s.Product).WithMany()
+             .HasForeignKey(s => s.ProductId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Store).WithMany()
+             .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Zone).WithMany()
+             .HasForeignKey(s => s.ZoneId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── StockMovement ───────────────────────────────────────────────────
+        builder.Entity<StockMovement>(e =>
+        {
+            e.ToTable("stock_movements");
+            e.HasKey(m => m.Id);
+            e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.MovementType).HasMaxLength(50).IsRequired();
+            e.Property(m => m.Quantity).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(m => m.QuantityBefore).HasColumnType("decimal(10,2)");
+            e.Property(m => m.QuantityAfter).HasColumnType("decimal(10,2)");
+            e.Property(m => m.UnitPrice).HasColumnType("decimal(12,2)");
+            e.Property(m => m.TotalAmount).HasColumnType("decimal(12,2)");
+            e.Property(m => m.ReferenceType).HasMaxLength(50);
+            e.Property(m => m.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── StockEvent ──────────────────────────────────────────────────────
+        builder.Entity<StockEvent>(e =>
+        {
+            e.ToTable("stock_events");
+            e.HasKey(ev => ev.Id);
+            e.Property(ev => ev.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(ev => ev.EventType).HasMaxLength(50).IsRequired();
+            e.Property(ev => ev.SourceDeviceId).HasMaxLength(100);
+            e.Property(ev => ev.QuantityDelta).HasColumnType("decimal(10,2)");
+            e.Property(ev => ev.Confidence).HasDefaultValue(100);
+            e.Property(ev => ev.Meta).HasColumnType("jsonb");
+            e.Property(ev => ev.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── StockReceipt ────────────────────────────────────────────────────
+        builder.Entity<StockReceipt>(e =>
+        {
+            e.ToTable("stock_receipts");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.Status).HasMaxLength(30).HasDefaultValue("draft");
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── StockReceiptItem ────────────────────────────────────────────────
+        builder.Entity<StockReceiptItem>(e =>
+        {
+            e.ToTable("stock_receipt_items");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.QuantityOrdered).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(i => i.QuantityReceived).HasColumnType("decimal(10,2)");
+            e.Property(i => i.PricePurchase).HasColumnType("decimal(12,2)");
+            e.Property(i => i.BatchNumber).HasMaxLength(100);
+            e.HasOne(i => i.Receipt).WithMany(r => r.Items)
+             .HasForeignKey(i => i.ReceiptId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── StockTransfer ───────────────────────────────────────────────────
+        builder.Entity<StockTransfer>(e =>
+        {
+            e.ToTable("stock_transfers");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.TransferType).HasMaxLength(50);
+            e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("draft");
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── StockTransferItem ───────────────────────────────────────────────
+        builder.Entity<StockTransferItem>(e =>
+        {
+            e.ToTable("stock_transfer_items");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.Quantity).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(i => i.ExpiryDate).IsRequired();
+            e.Property(i => i.BatchNumber).HasMaxLength(100);
+            e.HasOne(i => i.Transfer).WithMany(t => t.Items)
+             .HasForeignKey(i => i.TransferId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── WriteOff ────────────────────────────────────────────────────────
+        builder.Entity<WriteOff>(e =>
+        {
+            e.ToTable("write_offs");
+            e.HasKey(w => w.Id);
+            e.Property(w => w.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(w => w.Status).HasMaxLength(30).HasDefaultValue("draft");
+            e.Property(w => w.Reason).HasMaxLength(50);
+            e.Property(w => w.TotalLossAmount).HasColumnType("decimal(12,2)");
+            e.Property(w => w.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── WriteOffItem ────────────────────────────────────────────────────
+        builder.Entity<WriteOffItem>(e =>
+        {
+            e.ToTable("write_off_items");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.Quantity).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(i => i.UnitPrice).HasColumnType("decimal(12,2)");
+            e.Property(i => i.LossAmount).HasColumnType("decimal(12,2)");
+            e.HasOne(i => i.WriteOff).WithMany(w => w.Items)
+             .HasForeignKey(i => i.WriteOffId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── Discount ────────────────────────────────────────────────────────
+        builder.Entity<Discount>(e =>
+        {
+            e.ToTable("discounts");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(d => d.DiscountPercent).HasColumnType("decimal(5,2)").IsRequired();
+            e.Property(d => d.PriceOriginal).HasColumnType("decimal(12,2)");
+            e.Property(d => d.PriceDiscounted).HasColumnType("decimal(12,2)");
+            e.Property(d => d.Reason).HasMaxLength(50).HasDefaultValue("expiry");
+            e.Property(d => d.Status).HasMaxLength(20).HasDefaultValue("pending");
+            e.Property(d => d.ValidFrom).HasDefaultValueSql("NOW()");
+        });
+
+        // ── NotificationSetting ─────────────────────────────────────────────
+        builder.Entity<NotificationSetting>(e =>
+        {
+            e.ToTable("notification_settings");
+            e.HasKey(n => n.Id);
+            e.Property(n => n.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(n => n.EventType).HasMaxLength(100).IsRequired();
+            e.Property(n => n.Channel).HasMaxLength(50).IsRequired();
+            e.Property(n => n.IsEnabled).HasDefaultValue(true);
+            e.HasIndex(n => new { n.UserId, n.EventType, n.Channel }).IsUnique();
+            e.HasOne(n => n.User).WithMany()
+             .HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── NotificationQueue ───────────────────────────────────────────────
+        builder.Entity<NotificationQueue>(e =>
+        {
+            e.ToTable("notification_queue");
+            e.HasKey(n => n.Id);
+            e.Property(n => n.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(n => n.Channel).HasMaxLength(50).IsRequired();
+            e.Property(n => n.EventType).HasMaxLength(100);
+            e.Property(n => n.Payload).HasColumnType("jsonb");
+            e.Property(n => n.Status).HasMaxLength(20).HasDefaultValue("pending");
+            e.Property(n => n.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── ActivityLog ─────────────────────────────────────────────────────
+        builder.Entity<ActivityLog>(e =>
+        {
+            e.ToTable("activity_logs");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.Action).HasMaxLength(100).IsRequired();
+            e.Property(a => a.EntityType).HasMaxLength(50);
+            e.Property(a => a.IpAddress).HasMaxLength(50);
+            e.Property(a => a.Meta).HasColumnType("jsonb");
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+    }
+}

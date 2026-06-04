@@ -1,0 +1,15 @@
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\bin\Debug\net8.0\ShelfGuard.Application.deps.json
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\bin\Debug\net8.0\ShelfGuard.Application.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\bin\Debug\net8.0\ShelfGuard.Application.pdb
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\bin\Debug\net8.0\ShelfGuard.Domain.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\bin\Debug\net8.0\ShelfGuard.Domain.pdb
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.csproj.AssemblyReference.cache
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.AssemblyInfoInputs.cache
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.AssemblyInfo.cs
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.csproj.CoreCompileInputs.cache
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGua.BE1B5EEF.Up2Date
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\refint\ShelfGuard.Application.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.pdb
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ref\ShelfGuard.Application.dll

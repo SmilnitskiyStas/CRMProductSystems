@@ -1,0 +1,15 @@
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\bin\Debug\net8.0\CRM.Application.deps.json
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\bin\Debug\net8.0\CRM.Application.dll
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\bin\Debug\net8.0\CRM.Application.pdb
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\bin\Debug\net8.0\CRM.Domain.dll
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\bin\Debug\net8.0\CRM.Domain.pdb
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Application.csproj.AssemblyReference.cache
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Application.AssemblyInfoInputs.cache
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Application.AssemblyInfo.cs
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Application.csproj.CoreCompileInputs.cache
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Appl.F64C2975.Up2Date
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Application.dll
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\refint\CRM.Application.dll
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\CRM.Application.pdb
+C:\Users\stass\source\CRMProductSystems\backend\CRM.Application\obj\Debug\net8.0\ref\CRM.Application.dll
