@@ -45,6 +45,38 @@ Pages: /stock, /receipts, /receipts/:id, /transfers, /write-offs, /analytics
 
 ---
 
+## TASK-011b — Web products page (/inventory) ✅ done (2026-06-10)
+Log: `.claude/logs/tasks/011b_2026-06-10_products-page_frontend-developer.md`
+Route: /inventory — Catalog CRUD (list + create + edit + delete + detail drawer)
+
+---
+
+## TASK-024 — Notifications Settings API ✅ done (2026-06-10)
+Log: `.claude/logs/tasks/024_2026-06-10_notifications-api_backend-developer.md`
+Endpoints: GET /notifications/settings, PUT /notifications/settings, GET /notifications/history, POST /notifications/test
+
+---
+
+## TASK-023 — Users API (HR module) ✅ done (2026-06-10)
+Log: `.claude/logs/tasks/023_2026-06-10_users-api_backend-developer.md`
+Endpoints: GET /users, GET /users/:id, POST /users/invite, PUT /users/:id, PUT /users/:id/permissions, DELETE /users/:id, GET /users/:id/activity
+
+---
+
+## TASK-022 — Discounts API ✅ done (2026-06-10)
+Log: `.claude/logs/tasks/022_2026-06-10_discounts-api_backend-developer.md`
+Endpoints: GET /discounts, GET /discounts/:id, POST /discounts, PUT /discounts/:id/approve, PUT /discounts/:id/cancel
+
+---
+
+## BUG-001 — RLS Tenant Leakage ✅ fixed (2026-06-10)
+Log: `.claude/logs/tasks/bug001_2026-06-10_rls-tenant-leakage_security-reviewer.md`
+Fix: `TenantConnectionInterceptor.BuildSetSql()` now always SETs `app.tenant_id`.
+Provider users get null UUID → RLS returns `[]` instead of leaking tenant data.
+Tests: 13/13 pass.
+
+---
+
 ## Next candidates
 
 - **TASK-007** — ProductStock (batches) API + FEFO logic — **найвищий пріоритет**, блокує dashboard реальні дані

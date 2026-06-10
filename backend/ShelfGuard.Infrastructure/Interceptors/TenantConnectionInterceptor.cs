@@ -66,9 +66,13 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
     {
         var sb = new StringBuilder();
 
-        // Only set tenant_id when it is a valid UUID (provider users have no tenant claim).
+        // Always set app.tenant_id. Use the null UUID when the claim is absent (provider users)
+        // so that connection-pool reuse cannot leak a previous tenant's session variable.
+        // RLS: TenantId = '00000000-...'::uuid → never matches → 0 rows returned.
         if (!string.IsNullOrEmpty(tenantId) && Guid.TryParse(tenantId, out var guid))
             sb.Append($"SET app.tenant_id = '{guid:D}';");
+        else
+            sb.Append("SET app.tenant_id = '00000000-0000-0000-0000-000000000000';");
 
         // Only set role when it is on the known-roles whitelist.
         if (!string.IsNullOrEmpty(role) && ValidRoles.Contains(role))
