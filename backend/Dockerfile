@@ -6,10 +6,8 @@ COPY ["ShelfGuard.Application/ShelfGuard.Application.csproj", "ShelfGuard.Applic
 COPY ["ShelfGuard.Domain/ShelfGuard.Domain.csproj", "ShelfGuard.Domain/"]
 COPY ["ShelfGuard.Infrastructure/ShelfGuard.Infrastructure.csproj", "ShelfGuard.Infrastructure/"]
 
-RUN dotnet restore "ShelfGuard.Api/ShelfGuard.Api.csproj"
-
 COPY . .
-RUN dotnet publish "ShelfGuard.Api/ShelfGuard.Api.csproj" -c Release -o /app/publish --no-restore
+RUN dotnet publish "ShelfGuard.Api/ShelfGuard.Api.csproj" -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app

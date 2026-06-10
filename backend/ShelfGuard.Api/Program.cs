@@ -62,9 +62,12 @@ builder.Services
 
 builder.Services.AddAuthorization(AppPolicies.Configure);
 
+var allowedOrigins = (builder.Configuration["Cors:Origins"] ?? "http://localhost:3000")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()));

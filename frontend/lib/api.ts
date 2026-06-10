@@ -25,12 +25,18 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   _token = token;
-  if (typeof window !== "undefined") localStorage.setItem(TOKEN_KEY, token);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(TOKEN_KEY, token);
+    document.cookie = "sg_session=1; path=/; SameSite=Lax";
+  }
 }
 
 export function clearToken(): void {
   _token = null;
-  if (typeof window !== "undefined") localStorage.removeItem(TOKEN_KEY);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(TOKEN_KEY);
+    document.cookie = "sg_session=; path=/; max-age=0";
+  }
 }
 
 // apiFetch — base request function. Handles JSON, empty 204, and 401 retry.

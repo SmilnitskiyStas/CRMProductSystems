@@ -13,6 +13,7 @@ services:
       Jwt__Secret: ${JWT_SECRET}
       Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
       Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
+      Cors__Origins: ${Cors__Origins:-http://localhost:3000}
     external_links:
       - shelfguard_postgres
 
@@ -20,12 +21,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     container_name: shelfguard_web
     restart: unless-stopped
     ports:
       - '3100:3100'
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     depends_on:
       - api
 

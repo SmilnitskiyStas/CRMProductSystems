@@ -12,7 +12,8 @@ export function middleware(request: NextRequest) {
 
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAuth = AUTH_ROUTES.some((p) => pathname.startsWith(p));
-  const hasSession = request.cookies.has("refreshToken");
+  const hasSession =
+    request.cookies.has("sg_session") || request.cookies.has("refreshToken");
 
   // Redirect unauthenticated users away from protected routes
   if (isProtected && !hasSession) {
