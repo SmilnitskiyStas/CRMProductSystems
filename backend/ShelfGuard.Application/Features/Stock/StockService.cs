@@ -42,6 +42,18 @@ public sealed class StockService : IStockService
         return batches.Select(ToDto).ToList();
     }
 
+    public async Task<StockSummaryDto> GetSummaryAsync(Guid? storeId, CancellationToken ct = default)
+    {
+        var counts = await _repo.GetStatusCountsAsync(storeId, ct);
+        counts.TryGetValue("safe", out var safe);
+        counts.TryGetValue("warning", out var warning);
+        counts.TryGetValue("critical", out var critical);
+        counts.TryGetValue("expired", out var expired);
+        counts.TryGetValue("needs_verification", out var needsVerification);
+        return new StockSummaryDto(safe, warning, critical, expired, needsVerification,
+            safe + warning + critical + expired + needsVerification);
+    }
+
     public async Task<List<SuggestionDto>> GetSuggestionsAsync(Guid? storeId, CancellationToken ct = default)
     {
         var batches = await _repo.GetActionRequiredAsync(storeId, ct);

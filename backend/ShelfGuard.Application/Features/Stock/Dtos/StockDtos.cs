@@ -83,3 +83,12 @@ public sealed record StockAction(
     string? TargetStoreName,
     Guid? TargetStoreId
 );
+
+public sealed record StockSummaryDto(
+    int Safe,
+    int Warning,
+    int Critical,
+    int Expired,
+    int NeedsVerification,
+    int Total
+);

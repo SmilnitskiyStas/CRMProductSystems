@@ -31,6 +31,8 @@ public interface IStockRepository
     /// <summary>Returns stores of type 'production' or 'distribution' for the tenant.</summary>
     Task<List<Store>> GetProductionStoresAsync(CancellationToken ct = default);
 
+    Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default);
+
     Task AddAsync(ProductStock stock, CancellationToken ct = default);
     Task AddMovementAsync(StockMovement movement, CancellationToken ct = default);
     void Update(ProductStock stock);

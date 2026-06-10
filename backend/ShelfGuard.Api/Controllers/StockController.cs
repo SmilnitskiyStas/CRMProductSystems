@@ -38,6 +38,14 @@ public sealed class StockController : ControllerBase
         return batch is null ? NotFound() : Ok(batch);
     }
 
+    [HttpGet("summary")]
+    [ProducesResponseType(typeof(ShelfGuard.Application.Features.Stock.Dtos.StockSummaryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSummary([FromQuery] Guid? store_id, CancellationToken ct)
+    {
+        var summary = await _stock.GetSummaryAsync(store_id, ct);
+        return Ok(summary);
+    }
+
     [HttpGet("expiring")]
     [ProducesResponseType(typeof(List<ProductStockDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetExpiring(

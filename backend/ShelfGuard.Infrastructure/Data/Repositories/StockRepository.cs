@@ -136,6 +136,18 @@ public sealed class StockRepository : IStockRepository
             .Where(s => s.IsActive && (s.Type == "production" || s.Type == "distribution"))
             .ToListAsync(ct);
 
+    public async Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default)
+    {
+        var query = _db.ProductStocks.Where(s => s.Quantity > 0).AsQueryable();
+        if (storeId.HasValue)
+            query = query.Where(s => s.StoreId == storeId);
+
+        return await query
+            .GroupBy(s => s.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, ct);
+    }
+
     public async Task AddAsync(ProductStock stock, CancellationToken ct = default) =>
         await _db.ProductStocks.AddAsync(stock, ct);
 

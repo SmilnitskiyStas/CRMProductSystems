@@ -38,6 +38,8 @@ public interface IStockService
         Guid performedBy,
         CancellationToken ct = default);
 
+    Task<StockSummaryDto> GetSummaryAsync(Guid? storeId, CancellationToken ct = default);
+
     Task<FefoConsumeResult> FefoConsumeAsync(
         Guid tenantId,
         Guid performedBy,
