@@ -69,6 +69,13 @@ Endpoints: GET /discounts, GET /discounts/:id, POST /discounts, PUT /discounts/:
 
 ---
 
+## BUG-002 — GET /api/stock/summary ✅ fixed (2026-06-11)
+Log: `.claude/logs/tasks/bug002_2026-06-11_stock-summary-endpoint_backend-developer.md`
+Response: `{safe, warning, critical, expired, needsVerification, total}`. Optional `?store_id` filter.
+Verified on production: 25 total batches (11 safe / 7 warning / 5 critical / 2 expired).
+
+---
+
 ## BUG-001 — RLS Tenant Leakage ✅ fixed (2026-06-10)
 Log: `.claude/logs/tasks/bug001_2026-06-10_rls-tenant-leakage_security-reviewer.md`
 Fix: `TenantConnectionInterceptor.BuildSetSql()` now always SETs `app.tenant_id`.
