@@ -26,6 +26,8 @@ Child tables without direct TenantId use EXISTS subquery through parent.
 | InitialCreate | 2026-06-01 | POC Products table |
 | AddAuth | 2026-06-03 | tenants, users, refresh_tokens + RLS |
 | FullSchema | 2026-06-04 | Full v1 schema (19 new tables) |
+| FixRlsAndForeignKeys | 2026-06-04 | RLS on notification_settings + FK constraints + movement indexes |
+| AddIntegrationConfigs | 2026-06-06 | integration_configs table + RLS + unique index (TenantId, Service) |
 
 ## Tables
 
@@ -77,8 +79,13 @@ Child tables without direct TenantId use EXISTS subquery through parent.
 ### Notifications
 | Table | RLS | Notes |
 |---|---|---|
-| notification_settings | — | No RLS (tied to user, not tenant directly) |
+| notification_settings | ✅ | Via users.TenantId EXISTS sub-select |
 | notification_queue | ✅ | TenantId nullable (system messages have NULL) |
+
+### Integrations
+| Table | RLS | Notes |
+|---|---|---|
+| integration_configs | ✅ | TenantId direct. UNIQUE(TenantId, Service). Config JSONB encrypted at app layer. Supported services: telegram, resend, webhook, prro, iot |
 
 ### Logs
 | Table | RLS | Notes |
@@ -93,7 +100,26 @@ idx_stock_expiry_active ON product_stock("TenantId", "StoreId", "ProductId", "Ex
 
 -- Fast store dashboard queries
 idx_stock_tenant_store ON product_stock("TenantId", "StoreId")
+
+-- stock_movements filter support (GET /movements)
+idx_movements_tenant_type   ON stock_movements("TenantId", "MovementType")
+idx_movements_tenant_store  ON stock_movements("TenantId", "FromStoreId", "ToStoreId")
+idx_movements_product       ON stock_movements("TenantId", "ProductId")
+idx_movements_created_at    ON stock_movements("TenantId", "CreatedAt" DESC)
 ```
+
+## Foreign Key Constraints (added via FixRlsAndForeignKeys migration)
+| Table | Column | References |
+|---|---|---|
+| stock_movements | ProductId | catalog_products.Id ON DELETE RESTRICT |
+| stock_movements | FromStoreId | stores.Id ON DELETE RESTRICT (nullable) |
+| stock_movements | ToStoreId | stores.Id ON DELETE RESTRICT (nullable) |
+| write_offs | StoreId | stores.Id ON DELETE RESTRICT |
+| discounts | ProductId | catalog_products.Id ON DELETE RESTRICT |
+| discounts | StoreId | stores.Id ON DELETE RESTRICT |
+| discounts | ProductStockId | product_stock.Id ON DELETE SET NULL (nullable) |
+
+> Note: These FK constraints exist in the DB but NOT in EF Core's model snapshot (pure SQL migration). If navigation properties are added to entities later, the corresponding HasForeignKey() calls will conflict — drop and re-add the constraint in the migration. See ADR-009 for rationale.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShelfGuard.Application.Services;
+using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Domain.Interfaces;
 using ShelfGuard.Infrastructure.Data;
 using ShelfGuard.Infrastructure.Data.Repositories;
@@ -32,6 +33,48 @@ public static class DependencyInjection
 
         // POC repository
         services.AddScoped<IProductRepository, ProductRepository>();
+
+        // Catalog (v1 tenant-aware)
+        services.AddScoped<ICatalogProductRepository, CatalogProductRepository>();
+
+        // Stock
+        services.AddScoped<IStockRepository, StockRepository>();
+
+        // Stores
+        services.AddScoped<IStoreRepository, StoreRepository>();
+
+        // Suppliers
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
+
+        // Receipts
+        services.AddScoped<IReceiptRepository, ReceiptRepository>();
+
+        // Transfers
+        services.AddScoped<ITransferRepository, TransferRepository>();
+
+        // Write-offs
+        services.AddScoped<IWriteOffRepository, WriteOffRepository>();
+
+        // Analytics
+        services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
+
+        // Notifications
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+
+        // Integrations
+        services.AddScoped<IIntegrationRepository, IntegrationRepository>();
+
+        // Discounts
+        services.AddScoped<IDiscountRepository, DiscountRepository>();
+
+        // Activity log
+        services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
+
+        // Provider panel (super admin)
+        services.AddScoped<ITenantRepository, TenantRepository>();
+
+        // Movements audit log
+        services.AddScoped<IMovementRepository, MovementRepository>();
 
         return services;
     }

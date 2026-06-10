@@ -9,3 +9,10 @@ C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Domain\obj\Debug\net8
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Domain\obj\Debug\net8.0\refint\ShelfGuard.Domain.dll
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Domain\obj\Debug\net8.0\ShelfGuard.Domain.pdb
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Domain\obj\Debug\net8.0\ref\ShelfGuard.Domain.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Domain\obj\Debug\net8.0\ShelfGuard.Domain.sourcelink.json
+C:\Temp\sg-build-check\ShelfGuard.Domain.deps.json
+C:\Temp\sg-build-check\ShelfGuard.Domain.dll
+C:\Temp\sg-build-check\ShelfGuard.Domain.pdb
+C:\Temp\sg-provider-check\ShelfGuard.Domain.deps.json
+C:\Temp\sg-provider-check\ShelfGuard.Domain.dll
+C:\Temp\sg-provider-check\ShelfGuard.Domain.pdb

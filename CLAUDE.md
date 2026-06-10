@@ -165,7 +165,8 @@ This repository uses a structured multi-agent system. Agents are defined in `.cl
 | `project-manager` | Task creation, status tracking, sprint coordination |
 | `project-architect` | Architecture decisions, breaking requirements into tasks |
 | `backend-developer` | API endpoints, services, domain logic, backend tests |
-| `frontend-developer` | Pages, components, forms, API integration |
+| `frontend-developer` | Pages, components, forms, API integration (Next.js / React) |
+| `mobile-developer` | Expo screens, components, navigation, API integration (Expo SDK 56 / RN) |
 | `database-engineer` | Schema design, migrations, indexes, RLS policies |
 | `qa-tester` | Test plans, checklists, regression testing |
 | `security-reviewer` | Auth, permissions, input validation, sensitive data |

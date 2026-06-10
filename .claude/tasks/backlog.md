@@ -174,3 +174,115 @@ Tasks waiting to be picked up. Ordered by priority.
 **Priority:** low
 **Agent:** backend-developer + frontend-developer
 **Dependencies:** TASK-003, TASK-005
+
+---
+
+## TASK-021: Movements API (GET /movements)
+**Status:** planned
+**Priority:** high
+**Agent:** backend-developer
+**Dependencies:** TASK-007
+**Notes:** Read-only endpoint. Filter stock_movements by product_id, store_id, type, from, to (DateOnly). Needs IMovementRepository + MovementsController. Required for Analytics frontend + audit log.
+
+---
+
+## TASK-022: Discounts API (GET|POST /discounts, approve, cancel)
+**Status:** planned
+**Priority:** medium
+**Agent:** backend-developer
+**Dependencies:** TASK-007
+**Notes:** discounts table exists, no service/controller. Endpoints: GET /discounts (?store_id, ?status), POST /discounts, PUT /discounts/:id/approve, PUT /discounts/:id/cancel. Webhook to POS on approve (placeholder for v1).
+
+---
+
+## TASK-023: Users API (HR module)
+**Status:** planned
+**Priority:** high
+**Agent:** backend-developer
+**Dependencies:** TASK-003, TASK-005
+**Notes:** GET /users (store_manager sees only own store), POST /users/invite, GET /users/:id, PUT /users/:id, DELETE /users/:id (soft, is_active=false), GET /users/:id/activity. Required for HR/Settings frontend page.
+
+---
+
+## TASK-024: Notifications Settings API
+**Status:** planned
+**Priority:** medium
+**Agent:** backend-developer
+**Dependencies:** TASK-003
+**Notes:** GET /notifications/settings, PUT /notifications/settings, GET /notifications/history, POST /notifications/test. Uses notification_settings + notification_queue tables already in schema.
+
+---
+
+## TASK-025: Fix DB — notification_settings RLS + stock_movements FK
+**Status:** planned
+**Priority:** high
+**Agent:** database-engineer
+**Dependencies:** none (additive migration)
+**Notes:**
+1. Add RLS to notification_settings (via users.TenantId join — user has no direct TenantId on this table, need sub-select through users)
+2. Add FK constraints on stock_movements: product_id → catalog_products, from_store_id/to_store_id → stores
+3. Also add FK on write_offs: store_id → stores (currently missing)
+
+---
+
+## TASK-026: Seeder — v1 catalog/stock/stores test data
+**Status:** planned
+**Priority:** high
+**Agent:** backend-developer
+**Dependencies:** TASK-012, TASK-013
+**Notes:** DbSeeder currently only fills legacy Products table. Add seed data for:
+- 1 Store ("Магазин №1"), 3 StoreZones (shelf/fridge/freezer)
+- 1 Supplier, 5+ CatalogProducts with categories
+- 10+ ProductStock batches (mix of safe/warning/critical/expired statuses)
+This is required for frontend development with real data.
+
+---
+
+## TASK-011b: Web products page (/products)
+**Status:** planned
+**Priority:** medium
+**Agent:** frontend-developer
+**Dependencies:** TASK-006 ✅, TASK-026
+**Notes:** Catalog products CRUD using GET /catalog. List + create form + edit.
+
+---
+
+## TASK-027: Web stock page (/stock) — frontend
+**Status:** planned
+**Priority:** high
+**Agent:** frontend-developer
+**Dependencies:** TASK-007 ✅, TASK-026
+**Notes:** Dense table: product name / barcode / zone / batch / qty / expiry / days left / status badge / actions. Filters: store/zone/status/category. Multi-select for bulk actions.
+
+---
+
+## TASK-028: Web receipts pages (/receipts, /receipts/:id) — frontend
+**Status:** planned
+**Priority:** medium
+**Agent:** frontend-developer
+**Dependencies:** TASK-014 ✅, TASK-026
+
+---
+
+## TASK-029: Web transfers page (/transfers) — frontend
+**Status:** planned
+**Priority:** medium
+**Agent:** frontend-developer
+**Dependencies:** TASK-015 ✅, TASK-026
+
+---
+
+## TASK-030: Web write-offs page (/write-offs) — frontend
+**Status:** planned
+**Priority:** medium
+**Agent:** frontend-developer
+**Dependencies:** TASK-016 ✅, TASK-026
+
+---
+
+## TASK-031: Web analytics page (/analytics) — frontend
+**Status:** planned
+**Priority:** medium
+**Agent:** frontend-developer
+**Dependencies:** TASK-019 ✅, TASK-026
+**Notes:** Recharts graphs. Expiry summary donut, write-off losses bar chart, movements timeline, by-zone heatmap, by-category table.

@@ -23,7 +23,7 @@ public sealed class JwtService : IJwtService
         _accessTokenMinutes = int.Parse(config["Jwt:AccessTokenMinutes"] ?? "15");
     }
 
-    public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId)
+    public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -36,6 +36,8 @@ public sealed class JwtService : IJwtService
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 
+        if (!string.IsNullOrWhiteSpace(fullName))
+            claims.Add(new Claim("full_name", fullName));
         if (tenantId.HasValue)
             claims.Add(new Claim("tenant_id", tenantId.Value.ToString()));
         if (storeId.HasValue)
@@ -46,6 +48,32 @@ public sealed class JwtService : IJwtService
             audience: _audience,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(_accessTokenMinutes),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <inheritdoc/>
+    public string GenerateImpersonationToken(Guid providerId, string providerEmail, Guid targetTenantId)
+    {
+        var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub,   providerId.ToString()),
+            new(JwtRegisteredClaimNames.Email, providerEmail),
+            new(ClaimTypes.Role,               "enterprise_admin"),   // scoped-down from provider
+            new("tenant_id",                   targetTenantId.ToString()),
+            new("impersonated",                "true"),
+            new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
+        };
+
+        var token = new JwtSecurityToken(
+            issuer:             _issuer,
+            audience:           _audience,
+            claims:             claims,
+            expires:            DateTime.UtcNow.AddMinutes(60),  // short-lived impersonation window
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

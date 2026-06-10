@@ -14,4 +14,8 @@ public sealed class StockTransfer
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public ICollection<StockTransferItem> Items { get; init; } = new List<StockTransferItem>();
+
+    // Navigation properties
+    public Store? FromStore { get; set; }
+    public Store? ToStore { get; set; }
 }

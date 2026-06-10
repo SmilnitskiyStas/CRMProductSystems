@@ -1,0 +1,88 @@
+using ShelfGuard.Application.Features.Notifications.Dtos;
+using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Interfaces;
+
+namespace ShelfGuard.Application.Features.Notifications;
+
+public sealed class NotificationService : INotificationService
+{
+    private readonly INotificationRepository _repo;
+
+    public NotificationService(INotificationRepository repo) => _repo = repo;
+
+    public async Task<IReadOnlyList<NotificationSettingDto>> GetSettingsAsync(
+        Guid userId, CancellationToken ct = default)
+    {
+        var settings = await _repo.GetSettingsByUserAsync(userId, ct);
+        return settings
+            .Select(s => new NotificationSettingDto(s.Id, s.EventType, s.Channel, s.IsEnabled))
+            .ToList();
+    }
+
+    public Task UpsertSettingAsync(
+        Guid userId, UpsertNotificationSettingRequest request, CancellationToken ct = default)
+    {
+        ValidateEventType(request.EventType);
+        ValidateChannel(request.Channel);
+        return _repo.UpsertSettingAsync(userId, request.EventType, request.Channel, request.IsEnabled, ct);
+    }
+
+    public async Task<IReadOnlyList<NotificationHistoryDto>> GetHistoryAsync(
+        Guid tenantId, CancellationToken ct = default)
+    {
+        var items = await _repo.GetHistoryAsync(tenantId, limit: 100, ct);
+        return items
+            .Select(q => new NotificationHistoryDto(
+                q.Id,
+                q.EventType ?? string.Empty,
+                q.Channel,
+                q.Status,
+                q.Payload,
+                q.CreatedAt))
+            .ToList();
+    }
+
+    public Task SendTestAsync(
+        Guid tenantId, Guid userId, TestNotificationRequest request, CancellationToken ct = default)
+    {
+        ValidateChannel(request.Channel);
+
+        var item = new NotificationQueue
+        {
+            TenantId  = tenantId,
+            UserId    = userId,
+            Channel   = request.Channel,
+            EventType = request.EventType,
+            Payload   = $"{{\"message\":\"Тестове сповіщення\",\"eventType\":\"{request.EventType}\"}}",
+            Status    = "pending",
+        };
+
+        return _repo.EnqueueAsync(item, ct);
+    }
+
+    // ── validation ────────────────────────────────────────────────────────────
+
+    private static readonly HashSet<string> ValidEventTypes =
+    [
+        "stock.expiry_warning",
+        "stock.expiry_critical",
+        "stock.expired",
+        "stock.needs_verification",
+        "weekly_report",
+    ];
+
+    private static readonly HashSet<string> ValidChannels =
+        ["telegram", "push", "email", "webhook"];
+
+    private static void ValidateEventType(string value)
+    {
+        if (!ValidEventTypes.Contains(value))
+            throw new ArgumentException($"Unknown event type: {value}");
+    }
+
+    private static void ValidateChannel(string value)
+    {
+        if (!ValidChannels.Contains(value))
+            throw new ArgumentException($"Unknown channel: {value}");
+    }
+}

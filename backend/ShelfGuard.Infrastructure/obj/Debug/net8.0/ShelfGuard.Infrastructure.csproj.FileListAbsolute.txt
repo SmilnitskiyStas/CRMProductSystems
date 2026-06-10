@@ -17,3 +17,12 @@ C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Infrastructure\obj\De
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Infrastructure\obj\Debug\net8.0\ShelfGuard.Infrastructure.pdb
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Infrastructure\obj\Debug\net8.0\ShelfGuard.Infrastructure.genruntimeconfig.cache
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Infrastructure\obj\Debug\net8.0\ref\ShelfGuard.Infrastructure.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Infrastructure\obj\Debug\net8.0\ShelfGuard.Infrastructure.sourcelink.json
+C:\Temp\sg-build-check\ShelfGuard.Infrastructure.deps.json
+C:\Temp\sg-build-check\ShelfGuard.Infrastructure.runtimeconfig.json
+C:\Temp\sg-build-check\ShelfGuard.Infrastructure.dll
+C:\Temp\sg-build-check\ShelfGuard.Infrastructure.pdb
+C:\Temp\sg-provider-check\ShelfGuard.Infrastructure.deps.json
+C:\Temp\sg-provider-check\ShelfGuard.Infrastructure.runtimeconfig.json
+C:\Temp\sg-provider-check\ShelfGuard.Infrastructure.dll
+C:\Temp\sg-provider-check\ShelfGuard.Infrastructure.pdb

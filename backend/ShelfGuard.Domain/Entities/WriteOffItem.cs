@@ -11,4 +11,6 @@ public sealed class WriteOffItem
     public decimal? LossAmount { get; init; }
 
     public WriteOff? WriteOff { get; init; }
+    public CatalogProduct? Product { get; set; }
+    public ProductStock? ProductStock { get; set; }
 }

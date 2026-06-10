@@ -6,40 +6,62 @@ import {
   LayoutDashboard,
   Package,
   ShoppingCart,
+  ClipboardList,
   ArrowLeftRight,
   Trash2,
   BarChart2,
-  Bell,
+  Users,
   Settings,
-  LogOut,
+  Shield,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
-import { useLogout } from "@/features/auth/hooks/useAuth";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { AT_LEAST_STORE_MANAGER, CAN_RECEIVE_STOCK, CAN_VIEW_ANALYTICS, PROVIDER_ONLY, TENANT_ROLES, type AppRole } from "@/lib/roles";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  roles?: Set<AppRole>;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Дашборд", icon: <LayoutDashboard size={18} /> },
-  { href: "/inventory", label: "Каталог", icon: <Package size={18} /> },
-  { href: "/stock", label: "Залишки", icon: <ShoppingCart size={18} /> },
-  { href: "/transfers", label: "Переміщення", icon: <ArrowLeftRight size={18} /> },
-  { href: "/write-offs", label: "Списання", icon: <Trash2 size={18} /> },
-  { href: "/analytics", label: "Аналітика", icon: <BarChart2 size={18} /> },
-  { href: "/notifications", label: "Сповіщення", icon: <Bell size={18} /> },
-  { href: "/settings", label: "Налаштування", icon: <Settings size={18} /> },
+  // Tenant-scoped pages — hidden from provider (no tenant context → API returns 403/empty)
+  { href: "/dashboard",  label: "Дашборд",     icon: <LayoutDashboard size={18} />, roles: TENANT_ROLES },
+  { href: "/inventory",  label: "Каталог",      icon: <Package size={18} />,         roles: TENANT_ROLES },
+  { href: "/stock",      label: "Залишки",      icon: <ShoppingCart size={18} />,    roles: TENANT_ROLES },
+  { href: "/receipts",   label: "Прийомка",     icon: <ClipboardList size={18} />,   roles: CAN_RECEIVE_STOCK },
+  { href: "/transfers",  label: "Переміщення",  icon: <ArrowLeftRight size={18} />,  roles: CAN_RECEIVE_STOCK },
+  { href: "/write-offs", label: "Списання",     icon: <Trash2 size={18} />,          roles: TENANT_ROLES },
+  { href: "/analytics",  label: "Аналітика",    icon: <BarChart2 size={18} />,       roles: CAN_VIEW_ANALYTICS },
+  { href: "/users",      label: "Персонал",     icon: <Users size={18} />,           roles: AT_LEAST_STORE_MANAGER },
+  // Provider-only pages
+  { href: "/provider",   label: "Провайдер",    icon: <Shield size={18} />,          roles: PROVIDER_ONLY },
+  // Shared
+  { href: "/settings",   label: "Налаштування", icon: <Settings size={18} /> },
 ];
 
-export function Sidebar() {
+interface Props {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export function Sidebar({ collapsed, onToggle }: Props) {
   const pathname = usePathname();
-  const logout = useLogout();
+  const { data: me } = useMe();
+  const userRole = (me?.role ?? "") as AppRole;
+
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => !item.roles || item.roles.has(userRole),
+  );
+
+  const W = collapsed ? 64 : 240;
 
   return (
     <aside
       style={{
-        width: 240,
+        width: W,
         minHeight: "100vh",
         background: "#0D1117",
         borderRight: "1px solid #1F2937",
@@ -50,15 +72,18 @@ export function Sidebar() {
         top: 0,
         height: "100vh",
         overflowY: "auto",
+        overflowX: "hidden",
+        transition: "width 0.2s ease",
       }}
     >
       {/* Logo */}
       <div
         style={{
-          padding: "20px 20px 16px",
+          padding: collapsed ? "20px 0 16px" : "20px 20px 16px",
           borderBottom: "1px solid #1F2937",
           display: "flex",
           alignItems: "center",
+          justifyContent: collapsed ? "center" : "flex-start",
           gap: 10,
         }}
       >
@@ -77,26 +102,30 @@ export function Sidebar() {
         >
           🛡️
         </div>
-        <div>
-          <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700 }}>ShelfGuard</div>
-          <div style={{ color: "#4B5563", fontSize: 11 }}>v1.0</div>
-        </div>
+        {!collapsed && (
+          <div>
+            <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700 }}>ShelfGuard</div>
+            <div style={{ color: "#4B5563", fontSize: 11 }}>v1.0</div>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav style={{ flex: 1, padding: "12px 10px" }}>
+      <nav style={{ flex: 1, padding: collapsed ? "12px 8px" : "12px 10px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {NAV_ITEMS.map((item) => {
+          {visibleItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                title={collapsed ? item.label : undefined}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
-                  padding: "9px 12px",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  gap: collapsed ? 0 : 10,
+                  padding: collapsed ? "9px 0" : "9px 12px",
                   borderRadius: 8,
                   background: active ? "#1D3461" : "transparent",
                   color: active ? "#93C5FD" : "#6B7280",
@@ -118,44 +147,53 @@ export function Sidebar() {
                   }
                 }}
               >
-                <span style={{ opacity: active ? 1 : 0.7 }}>{item.icon}</span>
-                {item.label}
+                <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{item.icon}</span>
+                {!collapsed && item.label}
               </Link>
             );
           })}
         </div>
       </nav>
 
-      {/* Logout */}
-      <div style={{ padding: "12px 10px", borderTop: "1px solid #1F2937" }}>
+      {/* Collapse / Expand toggle */}
+      <div
+        style={{
+          padding: collapsed ? "12px 8px" : "12px 10px",
+          borderTop: "1px solid #1F2937",
+        }}
+      >
         <button
-          onClick={() => logout.mutate()}
+          onClick={onToggle}
+          title={collapsed ? "Розгорнути меню" : "Приховати меню"}
           style={{
             width: "100%",
             display: "flex",
             alignItems: "center",
-            gap: 10,
-            padding: "9px 12px",
+            justifyContent: collapsed ? "center" : "flex-start",
+            gap: collapsed ? 0 : 10,
+            padding: collapsed ? "9px 0" : "9px 12px",
             borderRadius: 8,
             background: "transparent",
             border: "none",
-            color: "#6B7280",
+            color: "#4B5563",
             fontSize: 13,
             cursor: "pointer",
             textAlign: "left",
             transition: "background 0.1s, color 0.1s",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "#2a0a0a";
-            (e.currentTarget as HTMLElement).style.color = "#EF4444";
+            (e.currentTarget as HTMLElement).style.background = "#111827";
+            (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.background = "transparent";
-            (e.currentTarget as HTMLElement).style.color = "#6B7280";
+            (e.currentTarget as HTMLElement).style.color = "#4B5563";
           }}
         >
-          <LogOut size={18} style={{ opacity: 0.7 }} />
-          Вийти
+          {collapsed
+            ? <PanelLeftOpen size={18} style={{ opacity: 0.7 }} />
+            : <><PanelLeftClose size={18} style={{ opacity: 0.7 }} />Приховати</>
+          }
         </button>
       </div>
     </aside>

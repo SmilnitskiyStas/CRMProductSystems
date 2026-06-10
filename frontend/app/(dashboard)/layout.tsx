@@ -26,31 +26,24 @@ const Loading = () => (
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { error, isLoading } = useMe();
-  // Prevent hydration mismatch: server has no localStorage, so first render must
-  // always be the loading state on both server and client.
   const [mounted, setMounted] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted && !getToken()) {
-      router.replace("/login");
-    }
+    if (mounted && !getToken()) router.replace("/login");
   }, [mounted, router]);
 
   useEffect(() => {
-    if (error) {
-      router.replace("/login");
-    }
+    if (error) router.replace("/login");
   }, [error, router]);
 
   if (!mounted || isLoading) return <Loading />;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117" }}>
-      <Sidebar />
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <TopBar />
         <main style={{ flex: 1, overflowY: "auto" }}>{children}</main>

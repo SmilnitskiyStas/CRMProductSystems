@@ -1,0 +1,167 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { useUpdateProfile } from "../hooks/useProfile";
+import { ROLE_LABELS } from "../types";
+import { Btn } from "@/components/ui/Btn";
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "#0D1117",
+  border: "1px solid #374151",
+  borderRadius: 8,
+  padding: "9px 12px",
+  color: "#E8EDF5",
+  fontSize: 13,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  color: "#9CA3AF",
+  fontSize: 12,
+  fontWeight: 500,
+  marginBottom: 6,
+};
+
+const readonlyInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  borderColor: "#1F2937",
+  color: "#4B5563",
+  cursor: "default",
+};
+
+export function ProfileInfoForm() {
+  const { data: me } = useMe();
+  const update = useUpdateProfile();
+
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone]       = useState("");
+  const [nameError, setNameError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (me) {
+      setFullName(me.fullName ?? "");
+    }
+  }, [me]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!fullName.trim()) { setNameError("Введіть ім'я"); return; }
+    setNameError("");
+
+    await update.mutateAsync({ fullName: fullName.trim(), phone: phone.trim() || undefined });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Avatar placeholder */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+        <div
+          style={{
+            width: 64, height: 64, borderRadius: "50%",
+            background: "linear-gradient(135deg, #3B82F6, #6366F1)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontSize: 22, fontWeight: 700, flexShrink: 0,
+          }}
+        >
+          {me?.fullName
+            ? me.fullName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()
+            : "?"}
+        </div>
+        <div>
+          <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>
+            {me?.fullName ?? "—"}
+          </div>
+          <div style={{ color: "#4B5563", fontSize: 12, marginTop: 3 }}>
+            {ROLE_LABELS[me?.role ?? ""] ?? me?.role ?? ""}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        {/* Full name */}
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={labelStyle}>
+            Повне ім'я <span style={{ color: "#EF4444" }}>*</span>
+          </label>
+          <input
+            value={fullName}
+            onChange={(e) => { setFullName(e.target.value); setNameError(""); }}
+            placeholder="Іван Петренко"
+            style={{ ...inputStyle, borderColor: nameError ? "#EF4444" : "#374151" }}
+          />
+          {nameError && (
+            <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{nameError}</p>
+          )}
+        </div>
+
+        {/* Email — readonly */}
+        <div>
+          <label style={labelStyle}>Email</label>
+          <input
+            value={me?.email ?? ""}
+            readOnly
+            style={readonlyInputStyle}
+            title="Email змінюється через підтримку"
+          />
+          <p style={{ color: "#374151", fontSize: 11, marginTop: 4 }}>
+            Зверніться до адміна для зміни email
+          </p>
+        </div>
+
+        {/* Phone */}
+        <div>
+          <label style={labelStyle}>Телефон</label>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+380 99 123 45 67"
+            style={inputStyle}
+            type="tel"
+          />
+        </div>
+
+        {/* Role — readonly */}
+        <div>
+          <label style={labelStyle}>Роль</label>
+          <input
+            value={ROLE_LABELS[me?.role ?? ""] ?? me?.role ?? ""}
+            readOnly
+            style={readonlyInputStyle}
+            title="Роль призначається адміністратором"
+          />
+        </div>
+
+        {/* Store — readonly */}
+        <div>
+          <label style={labelStyle}>Магазин</label>
+          <input
+            value={me?.storeId ? `Магазин #${me.storeId.slice(0, 6)}` : "Не прив'язано"}
+            readOnly
+            style={readonlyInputStyle}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Btn type="submit" disabled={update.isPending}>
+          {update.isPending ? "Збереження…" : "Зберегти зміни"}
+        </Btn>
+        {saved && (
+          <span style={{ color: "#4ADE80", fontSize: 13 }}>✓ Збережено</span>
+        )}
+        {update.isError && (
+          <span style={{ color: "#F87171", fontSize: 13 }}>
+            Помилка збереження (API не реалізовано)
+          </span>
+        )}
+      </div>
+    </form>
+  );
+}

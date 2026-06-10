@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { Btn } from "@/components/ui/Btn";
 import { ProductForm } from "@/features/inventory/components/ProductForm";
 import { ProductsTable } from "@/features/inventory/components/ProductsTable";
 import {
@@ -41,7 +41,7 @@ export default function InventoryPage() {
   const handleCreate = (payload: CreateProductPayload) => {
     createProduct.mutate(payload, {
       onSuccess: () => {
-        toast.success("Product added");
+        toast.success("Товар додано");
         handleClose();
       },
       onError: (err) => toast.error(err.message),
@@ -53,7 +53,7 @@ export default function InventoryPage() {
       { id, payload },
       {
         onSuccess: () => {
-          toast.success("Product updated");
+          toast.success("Товар оновлено");
           handleClose();
         },
         onError: (err) => toast.error(err.message),
@@ -63,36 +63,45 @@ export default function InventoryPage() {
 
   const handleDelete = (id: string) => {
     deleteProduct.mutate(id, {
-      onSuccess: () => toast.success("Product deleted"),
+      onSuccess: () => toast.success("Товар видалено"),
       onError: (err) => toast.error(err.message),
     });
   };
 
   if (isError) {
     return (
-      <div className="p-6 text-destructive">
-        Failed to load products. Check the API connection and try again.
+      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
+        Помилка завантаження каталогу. Перевірте підключення до API.
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div style={{ padding: "28px 32px" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 28,
+        }}
+      >
         <div>
-          <h1 className="text-2xl font-semibold">Product Catalog</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {products.length} product{products.length !== 1 ? "s" : ""}
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+            Каталог товарів
+          </h1>
+          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+            {isLoading ? "Завантаження…" : `${products.length} товар${products.length === 1 ? "" : "ів"}`}
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add product
-        </Button>
+        <Btn icon={<Plus size={15} />} onClick={openCreate}>
+          Додати товар
+        </Btn>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</p>
       ) : (
         <ProductsTable
           products={products}

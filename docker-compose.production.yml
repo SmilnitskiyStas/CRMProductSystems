@@ -1,0 +1,41 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shelfguard_api
+    restart: unless-stopped
+    ports:
+      - '5100:5100'
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL}
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
+      Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
+    external_links:
+      - shelfguard_postgres
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: shelfguard_web
+    restart: unless-stopped
+    ports:
+      - '3100:3100'
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    depends_on:
+      - api
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: shelfguard_worker
+    restart: unless-stopped
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://localhost:6379}
+      DATABASE_URL: ${DATABASE_URL}
+    network_mode: host

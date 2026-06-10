@@ -16,11 +16,11 @@ export default function DashboardPage() {
   const { data: zones, isLoading: zonesLoading } = useStoreZones();
 
   return (
-    <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Page title */}
       <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>Дашборд</h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 4, marginBottom: 0 }}>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Дашборд</h1>
+        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
           Огляд магазину — терміни придатності та залишки
         </p>
       </div>

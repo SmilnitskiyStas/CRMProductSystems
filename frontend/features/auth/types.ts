@@ -5,6 +5,8 @@ export interface AuthUserDto {
   role: string;
   tenantId: string | null;
   storeId: string | null;
+  phone?: string | null;
+  telegramChatId?: string | null;
 }
 
 export interface LoginRequest {

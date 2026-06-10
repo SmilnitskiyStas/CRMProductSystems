@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { UserMenu } from "./UserMenu";
 
 interface Props {
   title?: string;
@@ -11,14 +13,6 @@ export function TopBar({ title }: Props) {
   const { data: user } = useMe();
 
   const storeName = user?.storeId ? "Магазин #1" : "ShelfGuard";
-  const initials = user?.fullName
-    ? user.fullName
-        .split(" ")
-        .slice(0, 2)
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-    : "?";
 
   return (
     <header
@@ -36,6 +30,7 @@ export function TopBar({ title }: Props) {
         zIndex: 10,
       }}
     >
+      {/* Left — store name / breadcrumb */}
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <span style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>{storeName}</span>
         {title && (
@@ -46,9 +41,11 @@ export function TopBar({ title }: Props) {
         )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      {/* Right — bell + user menu */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {/* Notification bell */}
-        <button
+        <Link
+          href="/notifications"
           style={{
             background: "transparent",
             border: "1px solid #1F2937",
@@ -59,6 +56,7 @@ export function TopBar({ title }: Props) {
             display: "flex",
             alignItems: "center",
             position: "relative",
+            textDecoration: "none",
           }}
         >
           <Bell size={16} />
@@ -73,34 +71,10 @@ export function TopBar({ title }: Props) {
               borderRadius: "50%",
             }}
           />
-        </button>
+        </Link>
 
-        {/* User avatar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #3B82F6, #6366F1)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 700,
-              flexShrink: 0,
-            }}
-          >
-            {initials}
-          </div>
-          <div>
-            <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
-              {user?.fullName ?? "…"}
-            </div>
-            <div style={{ color: "#4B5563", fontSize: 11 }}>{user?.role ?? ""}</div>
-          </div>
-        </div>
+        {/* User dropdown */}
+        <UserMenu />
       </div>
     </header>
   );

@@ -16,6 +16,21 @@ public sealed class User
     public DateTime? LastActiveAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
+    /// <summary>
+    /// Per-user page-access overrides on top of role defaults.
+    /// Key = page slug (e.g. "analytics"), Value = true (grant) / false (deny).
+    /// Null / missing key → use role default.
+    /// Stored as jsonb in PostgreSQL.
+    /// </summary>
+    public Dictionary<string, bool>? Permissions { get; private set; }
+
+    /// <summary>
+    /// Display name of the user who created/invited this account.
+    /// Null for seed/self-registered users.
+    /// Denormalized for fast read — not a FK to avoid cascades.
+    /// </summary>
+    public string? InvitedByName { get; private set; }
+
     public Tenant? Tenant { get; private set; }
     public ICollection<RefreshToken> RefreshTokens { get; private set; } = new List<RefreshToken>();
 
@@ -27,7 +42,8 @@ public sealed class User
         string fullName,
         string passwordHash,
         string role,
-        Guid? storeId = null) => new()
+        Guid? storeId = null,
+        string? invitedByName = null) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenantId,
@@ -38,6 +54,7 @@ public sealed class User
         StoreId = storeId,
         IsActive = true,
         CreatedAt = DateTime.UtcNow,
+        InvitedByName = invitedByName,
     };
 
     public void UpdateLastActive() => LastActiveAt = DateTime.UtcNow;
@@ -45,4 +62,26 @@ public sealed class User
     public void UpdatePushToken(string? token) => PushToken = token;
 
     public void LinkTelegram(string chatId) => TelegramChatId = chatId;
+
+    public void UpdateProfile(string fullName, string? phone)
+    {
+        FullName = fullName;
+        Phone    = phone;
+    }
+
+    public void ChangePassword(string newHash) => PasswordHash = newHash;
+
+    public void Deactivate() => IsActive = false;
+
+    public void Activate() => IsActive = true;
+
+    public void SetRole(string role) => Role = role;
+
+    public void SetStore(Guid? storeId) => StoreId = storeId;
+
+    /// <summary>
+    /// Replaces per-user page-access overrides.
+    /// Pass null to clear all overrides (revert to role defaults).
+    /// </summary>
+    public void SetPermissions(Dictionary<string, bool>? permissions) => Permissions = permissions;
 }

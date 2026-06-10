@@ -1,10 +1,9 @@
 # Architecture
 
 **Owner:** project-architect
-**Updated:** 2026-06-03
+**Updated:** 2026-06-04
 
 ## Approach
-
 Modular monolith. Services are split only when there is a concrete operational reason (independent scaling, separate deployment cadence, team boundary). Avoid premature distribution.
 
 ## Layer Responsibilities
@@ -16,41 +15,54 @@ Modular monolith. Services are split only when there is a concrete operational r
 | `ShelfGuard.Domain` | Entities, value objects, domain events, repository interfaces |
 | `ShelfGuard.Infrastructure` | EF Core, repositories, PostgreSQL, external services, AI integrations |
 
-> Note: backend projects are currently named `CRM.*` — rename is tracked in TASK-001.
-
 ## Domain Modules
 
-| Module | Responsibility |
-|---|---|
-| Inventory | Product catalog, stock levels, warehouse locations |
-| Shelf | Expiry tracking, FEFO batches, statuses, suggestions |
-| Suppliers | Supplier catalog, purchase orders, lead times |
-| Transfers | Store-to-store stock movements |
-| WriteOffs | Write-off documents and audit |
-| Notifications | Settings, delivery queue |
-| Auth | JWT, roles, tenant context |
-| Analytics | Reports, summaries |
+| Module | Status | Responsibility |
+|---|---|---|
+| Auth | ✅ implemented | JWT, roles, tenant context, refresh tokens |
+| Inventory | ⚠️ POC only | POC product catalog (legacy `Products` table) |
+| Catalog | ✅ implemented | Tenant-aware product catalog (`catalog_products`), MOQ/USQ |
+| Shelf / Stock | ✅ implemented | FEFO batches, expiry statuses, suggestions, fefo-consume |
+| Suppliers | ✅ implemented | Supplier CRUD |
+| Stores / Zones | ✅ implemented | Store CRUD, zone CRUD, floor-plan |
+| Receipts | ✅ implemented | Stock receiving documents, pre-populated workflow |
+| Transfers | ✅ implemented | Store-to-store transfers, FEFO-safe copy |
+| WriteOffs | ✅ implemented | Write-off documents, approve/reject |
+| Movements | ❌ missing | Audit trail read endpoint (TASK-021) |
+| Discounts | ❌ missing | Discount CRUD + approve/cancel (TASK-022) |
+| Users / HR | ❌ missing | User management, invite, activity log (TASK-023) |
+| Notifications | ❌ missing | Settings API + history (TASK-024) |
+| Analytics | ✅ implemented | Expiry summary, write-offs, movements, by-zone, by-category, losses |
+| Provider | ✅ implemented | Tenant list, health (stub) |
 
 ## Background Worker (BullMQ)
+Separate Node.js service at `/worker`. Communicates with the API via Redis queues. See ADR-001.
 
-Separate Node.js service at `/worker`. Communicates with the API via Redis queues.
-See ADR-001 and ADR-005.
-
-| Queue | Trigger | Handler |
+| Queue | Trigger | Status |
 |---|---|---|
-| `expiry-check` | Cron: every hour | Update batch statuses, enqueue notifications |
-| `notifications` | Queue (pushed by API) | Send Telegram / push / email |
-| `weekly-report` | Cron: Sunday 08:00 | Generate and send weekly analytics |
-| `cleanup` | Cron: daily 03:00 | Archive old events and logs |
+| `expiry-check` | Cron: every hour | 🕐 stub only (TASK-008) |
+| `notifications` | Queue (pushed by API) | 🕐 stub only (TASK-017) |
+| `weekly-report` | Cron: Sunday 08:00 | 🕐 stub only |
+| `cleanup` | Cron: daily 03:00 | 🕐 stub only |
 
 ## AI Integration
-
-All AI/ML logic is isolated in `ShelfGuard.Infrastructure/AI`. The application layer calls AI services through interfaces — never directly through provider SDKs. This keeps provider details replaceable without touching business logic.
+All AI/ML logic isolated in `ShelfGuard.Infrastructure/AI`. Application layer calls through interfaces — never directly through provider SDKs. Status: **v2.0 — not started**.
 
 ## Multi-Tenancy
+Row Level Security (RLS) on every tenant table. Tenant isolation enforced at the database level via `app.tenant_id` PostgreSQL session variable, set by `TenantConnectionInterceptor` on every DB connection open.
 
-Row Level Security (RLS) on every tenant table. Tenant isolation enforced at the database level via `app.tenant_id` PostgreSQL session variable set by `TenantInterceptor` middleware.
+RLS pattern: see `database-schema.md`.
+ADR: see ADR-008 (column names must be double-quoted).
+
+## Current Infrastructure State
+| Component | Status | Notes |
+|---|---|---|
+| PostgreSQL (Docker) | ✅ running | Port 5435, DB: crm |
+| Redis (Docker) | ✅ running | Port 6380 |
+| Backend API | ✅ running | dotnet run, port 5000 |
+| Frontend | ✅ running | npm run dev, port 3000 |
+| Worker | ⚠️ scaffold | stubs only, not required for v1 dev |
+| Mobile | 🕐 not started | Expo SDK 56, pending TASK-020+ |
 
 ## Decisions
-
-See `.claude/docs/decisions.md` for full ADR log.
+See `.claude/docs/decisions.md` for full ADR log (ADR-001 through ADR-008).

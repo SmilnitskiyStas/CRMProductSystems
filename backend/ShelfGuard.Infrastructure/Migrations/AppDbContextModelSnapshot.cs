@@ -54,7 +54,7 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("Meta")
-                        .HasColumnType("jsonb");
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
@@ -203,11 +203,17 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("ApprovedBy")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("AutoApplied")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uuid");
@@ -260,7 +266,57 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("TenantId");
+
                     b.ToTable("discounts", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.IntegrationConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Config")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{}");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Service")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Service")
+                        .IsUnique();
+
+                    b.ToTable("integration_configs", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.NotificationQueue", b =>
@@ -1129,6 +1185,10 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("InvitedByName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1141,6 +1201,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Permissions")
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
@@ -1301,6 +1364,42 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Parent");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.Discount", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "Approver")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Approver");
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.IntegrationConfig", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Tenant");
                 });

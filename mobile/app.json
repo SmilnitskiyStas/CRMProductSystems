@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "ShelfGuard",
+    "slug": "shelfguard",
+    "version": "1.0.0",
+    "scheme": "shelfguard",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.shelfguard.mobile"
+    },
+    "android": {
+      "package": "com.shelfguard.mobile",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ShelfGuard потребує доступ до камери для сканування штрихкодів."
+        }
+      ],
+      "expo-notifications",
+      "expo-status-bar"
+    ],
+    "experiments": {},
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "f7c5029e-c970-4f8e-86fb-9b7ff25ca1e7"
+      }
+    }
+  }
+}

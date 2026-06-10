@@ -13,3 +13,10 @@ C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\refint\ShelfGuard.Application.dll
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.pdb
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ref\ShelfGuard.Application.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Application\obj\Debug\net8.0\ShelfGuard.Application.sourcelink.json
+C:\Temp\sg-build-check\ShelfGuard.Application.deps.json
+C:\Temp\sg-build-check\ShelfGuard.Application.dll
+C:\Temp\sg-build-check\ShelfGuard.Application.pdb
+C:\Temp\sg-provider-check\ShelfGuard.Application.deps.json
+C:\Temp\sg-provider-check\ShelfGuard.Application.dll
+C:\Temp\sg-provider-check\ShelfGuard.Application.pdb

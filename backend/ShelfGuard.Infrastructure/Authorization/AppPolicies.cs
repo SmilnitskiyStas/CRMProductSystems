@@ -25,6 +25,7 @@ public static class AppPolicies
     public const string AtLeastStoreManager    = "AtLeastStoreManager";
     public const string CanReceiveStock        = "CanReceiveStock";
     public const string CanViewStock           = "CanViewStock";
+    public const string CanViewAnalytics       = "CanViewAnalytics";
 
     // Role sets per policy — the single source of truth referenced by both registration and tests.
     internal static readonly string[] ProviderOnlyRoles =
@@ -47,6 +48,10 @@ public static class AppPolicies
     internal static readonly string[] CanViewStockRoles =
         [AppRoles.Provider, AppRoles.EnterpriseAdmin, AppRoles.NetworkManager, AppRoles.StoreManager, AppRoles.Merchandiser, AppRoles.Storekeeper];
 
+    // Analytics: managers and above (v1-spec.md §3.2)
+    internal static readonly string[] CanViewAnalyticsRoles =
+        [AppRoles.Provider, AppRoles.EnterpriseAdmin, AppRoles.NetworkManager, AppRoles.StoreManager];
+
     /// <summary>
     /// Registers all named policies into the AuthorizationOptions.
     /// Call: services.AddAuthorization(AppPolicies.Configure)
@@ -59,5 +64,6 @@ public static class AppPolicies
         options.AddPolicy(AtLeastStoreManager,    p => p.RequireRole(AtLeastStoreManagerRoles));
         options.AddPolicy(CanReceiveStock,        p => p.RequireRole(CanReceiveStockRoles));
         options.AddPolicy(CanViewStock,           p => p.RequireRole(CanViewStockRoles));
+        options.AddPolicy(CanViewAnalytics,       p => p.RequireRole(CanViewAnalyticsRoles));
     }
 }

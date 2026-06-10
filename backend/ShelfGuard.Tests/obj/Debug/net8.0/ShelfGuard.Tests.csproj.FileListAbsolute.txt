@@ -116,3 +116,4 @@ C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\ShelfGuard.Infrastructure.dll
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\ShelfGuard.Infrastructure.pdb
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\obj\Debug\net8.0\ShelfGuard.Tests.sourcelink.json

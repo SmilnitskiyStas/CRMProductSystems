@@ -44,6 +44,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<NotificationSetting> NotificationSettings => Set<NotificationSetting>();
     public DbSet<NotificationQueue> NotificationQueues => Set<NotificationQueue>();
 
+    // Integrations
+    public DbSet<IntegrationConfig> IntegrationConfigs => Set<IntegrationConfig>();
+
     // Logs
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
@@ -79,6 +82,18 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.TelegramChatId).HasMaxLength(100);
             e.Property(u => u.IsActive).HasDefaultValue(true);
             e.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(u => u.InvitedByName).HasMaxLength(255).IsRequired(false);
+            e.Property(u => u.Permissions)
+             .HasColumnType("jsonb")
+             .HasConversion(
+                 v => v == null ? null : System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                 v => v == null ? null : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, bool>>(v, (System.Text.Json.JsonSerializerOptions?)null))
+             .IsRequired(false)
+             .Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<Dictionary<string, bool>?>(
+                 (a, b) => System.Text.Json.JsonSerializer.Serialize(a, (System.Text.Json.JsonSerializerOptions?)null) ==
+                            System.Text.Json.JsonSerializer.Serialize(b, (System.Text.Json.JsonSerializerOptions?)null),
+                 v => v == null ? 0 : System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
+                 v => v == null ? null : new Dictionary<string, bool>(v)));
             e.HasOne(u => u.Tenant).WithMany(t => t.Users)
              .HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         });
@@ -378,6 +393,12 @@ public sealed class AppDbContext : DbContext
             e.Property(d => d.Reason).HasMaxLength(50).HasDefaultValue("expiry");
             e.Property(d => d.Status).HasMaxLength(20).HasDefaultValue("pending");
             e.Property(d => d.ValidFrom).HasDefaultValueSql("NOW()");
+            e.HasOne(d => d.Tenant).WithMany()
+             .HasForeignKey(d => d.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(d => d.Creator).WithMany()
+             .HasForeignKey(d => d.CreatedBy).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(d => d.Approver).WithMany()
+             .HasForeignKey(d => d.ApprovedBy).OnDelete(DeleteBehavior.SetNull);
         });
 
         // ── NotificationSetting ─────────────────────────────────────────────
@@ -407,6 +428,22 @@ public sealed class AppDbContext : DbContext
             e.Property(n => n.CreatedAt).HasDefaultValueSql("NOW()");
         });
 
+        // ── IntegrationConfig ───────────────────────────────────────────────
+        builder.Entity<IntegrationConfig>(e =>
+        {
+            e.ToTable("integration_configs");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.Service).HasMaxLength(50).IsRequired();
+            e.Property(i => i.Config).HasColumnType("jsonb").HasDefaultValue("{}");
+            e.Property(i => i.IsEnabled).HasDefaultValue(true);
+            e.Property(i => i.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(i => i.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(i => new { i.TenantId, i.Service }).IsUnique();
+            e.HasOne(i => i.Tenant).WithMany()
+             .HasForeignKey(i => i.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         // ── ActivityLog ─────────────────────────────────────────────────────
         builder.Entity<ActivityLog>(e =>
         {
@@ -416,7 +453,7 @@ public sealed class AppDbContext : DbContext
             e.Property(a => a.Action).HasMaxLength(100).IsRequired();
             e.Property(a => a.EntityType).HasMaxLength(50);
             e.Property(a => a.IpAddress).HasMaxLength(50);
-            e.Property(a => a.Meta).HasColumnType("jsonb");
+            e.Property(a => a.Meta).HasColumnType("text");
             e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
         });
     }

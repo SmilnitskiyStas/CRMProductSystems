@@ -13,4 +13,5 @@ public sealed class StockReceiptItem
     public string? DiscrepancyNotes { get; set; }
 
     public StockReceipt? Receipt { get; init; }
+    public CatalogProduct? Product { get; set; }
 }

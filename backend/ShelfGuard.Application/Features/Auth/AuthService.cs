@@ -42,7 +42,7 @@ public sealed class AuthService : IAuthService
         _users.Update(user);
         await _users.SaveChangesAsync(ct);
 
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName);
 
         return (new LoginResponse(accessToken, rawToken, ToDto(user)), null);
     }
@@ -68,7 +68,7 @@ public sealed class AuthService : IAuthService
         await _refreshTokens.AddAsync(newToken, ct);
         await _refreshTokens.SaveChangesAsync(ct);
 
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName);
 
         return (new LoginResponse(accessToken, newRaw, ToDto(user)), null);
     }

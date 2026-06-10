@@ -1,57 +1,50 @@
-import { getToken } from "@/lib/api";
-import type { Product } from "@/features/inventory/types";
+import { api } from "@/lib/api";
 import type { AttentionItem, DashboardStats, ItemStatus, StoreZone } from "../types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-    ...init,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(body || `HTTP ${res.status}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+interface ProductStockDto {
+  id: string;
+  productId: string;
+  productName: string;
+  productBarcode: string | null;
+  storeId: string;
+  storeName: string;
+  zoneId: string | null;
+  zoneName: string | null;
+  shelfNumber: number | null;
+  batchNumber: string | null;
+  quantity: number;
+  quantityInitial: number;
+  expiryDate: string;
+  daysLeft: number;
+  status: string;
+  sourceType: string | null;
+  addedAt: string;
+  lastCheckedAt: string;
 }
 
-function deriveStatus(product: Product): ItemStatus {
-  if (product.stockQuantity === 0) return "expired"; // placeholder until expiry tracking endpoint
-  if (product.stockQuantity <= product.reorderLevel * 0.5) return "critical";
-  if (product.stockQuantity <= product.reorderLevel) return "warning";
-  return "safe";
-}
-
-// Derives dashboard stats from products until /api/analytics/dashboard is implemented
 async function getDashboardStats(): Promise<DashboardStats> {
-  const products = await apiFetch<Product[]>("/api/products");
+  const batches = await api.get<ProductStockDto[]>("/api/stock");
   const stats: DashboardStats = { safe: 0, warning: 0, critical: 0, expired: 0 };
-  for (const p of products) {
-    stats[deriveStatus(p)]++;
+  for (const b of batches) {
+    const s = b.status as keyof DashboardStats;
+    if (s in stats) stats[s]++;
   }
   return stats;
 }
 
 async function getAttentionItems(): Promise<AttentionItem[]> {
-  const products = await apiFetch<Product[]>("/api/products");
-  return products
-    .filter((p) => deriveStatus(p) !== "safe")
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku,
-      category: p.category,
-      zone: "—", // zone data available once /api/stock is implemented
-      quantity: p.stockQuantity,
-      reorderLevel: p.reorderLevel,
-      status: deriveStatus(p),
+  const batches = await api.get<ProductStockDto[]>("/api/stock");
+  return batches
+    .filter((b) => b.status !== "safe")
+    .map((b) => ({
+      id: b.id,
+      name: b.productName,
+      sku: b.batchNumber ?? b.productBarcode ?? "—",
+      category: b.zoneName ?? "—",
+      zone: b.zoneName ?? "—",
+      quantity: b.quantity,
+      reorderLevel: 0,
+      status: b.status as ItemStatus,
     }))
     .sort((a, b) => {
       const order: ItemStatus[] = ["expired", "critical", "warning", "safe"];

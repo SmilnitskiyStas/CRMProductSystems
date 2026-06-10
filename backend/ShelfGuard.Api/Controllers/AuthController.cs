@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Auth;
 using ShelfGuard.Application.Features.Auth.Dtos;
+using ShelfGuard.Application.Features.Users;
+using ShelfGuard.Application.Features.Users.Dtos;
 using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
@@ -11,9 +13,14 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
+    private readonly IUserService _users;
     private const string RefreshTokenCookie = "refreshToken";
 
-    public AuthController(IAuthService auth) => _auth = auth;
+    public AuthController(IAuthService auth, IUserService users)
+    {
+        _auth  = auth;
+        _users = users;
+    }
 
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
@@ -69,17 +76,66 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Me(CancellationToken ct)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
 
-        if (!Guid.TryParse(userId, out var id))
-            return Unauthorized();
-
-        var user = await _auth.GetCurrentUserAsync(id, ct);
+        var user = await _auth.GetCurrentUserAsync(userId.Value, ct);
         return user is null ? Unauthorized() : Ok(user);
     }
 
+    /// <summary>Updates the currently authenticated user's own profile.</summary>
+    [HttpPut("me")]
+    [Authorize]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateMe(
+        [FromBody] UpdateMyProfileRequest request, CancellationToken ct)
+    {
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
+
+        var (user, error) = await _users.UpdateMyProfileAsync(userId.Value, request, ct);
+        return user is null ? BadRequest(new { error }) : Ok(user);
+    }
+
+    /// <summary>Changes the password for the currently authenticated user.</summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ChangePassword(
+        [FromBody] ChangePasswordRequest request, CancellationToken ct)
+    {
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
+
+        var error = await _users.ChangePasswordAsync(userId.Value, request, ct);
+        return error is null ? NoContent() : BadRequest(new { error });
+    }
+
+    /// <summary>Links a Telegram chat to the current user.</summary>
+    [HttpPost("telegram/link")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> LinkTelegram(
+        [FromBody] LinkTelegramRequest request, CancellationToken ct)
+    {
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
+
+        var error = await _users.LinkTelegramAsync(userId.Value, request.ChatId, ct);
+        return error is null ? NoContent() : BadRequest(new { error });
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
+
+    private Guid? ResolveUserId()
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
+               ?? User.FindFirstValue("sub");
+        return Guid.TryParse(raw, out var id) && id != Guid.Empty ? id : null;
+    }
 
     private void SetRefreshTokenCookie(string rawToken)
     {

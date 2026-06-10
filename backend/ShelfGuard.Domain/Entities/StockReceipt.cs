@@ -16,4 +16,8 @@ public sealed class StockReceipt
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public ICollection<StockReceiptItem> Items { get; init; } = new List<StockReceiptItem>();
+
+    // Navigation properties
+    public Supplier? Supplier { get; set; }
+    public Store? DestinationStore { get; set; }
 }

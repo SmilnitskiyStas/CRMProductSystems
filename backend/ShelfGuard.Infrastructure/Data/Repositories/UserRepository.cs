@@ -16,6 +16,12 @@ public sealed class UserRepository : IUserRepository
     public Task<User?> GetByEmailAsync(string email, CancellationToken ct = default) =>
         _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
 
+    public async Task<IReadOnlyList<User>> GetAllByTenantAsync(Guid tenantId, CancellationToken ct = default) =>
+        await _db.Users
+            .Where(u => u.TenantId == tenantId)
+            .OrderBy(u => u.FullName)
+            .ToListAsync(ct);
+
     public async Task AddAsync(User user, CancellationToken ct = default) =>
         await _db.Users.AddAsync(user, ct);
 
