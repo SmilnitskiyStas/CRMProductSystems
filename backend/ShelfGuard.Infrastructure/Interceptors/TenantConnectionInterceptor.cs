@@ -43,7 +43,13 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
     private string? GetSetSql()
     {
         var user = _http.HttpContext?.User;
-        if (user?.Identity?.IsAuthenticated != true) return null;
+
+        // Unauthenticated requests (login, health) must RESET session variables so that
+        // a pooled connection's stale app.tenant_id cannot leak into the query.
+        // The users-table RLS policy allows full visibility when app.tenant_id IS NULL,
+        // which is the correct behaviour for the login lookup.
+        if (user?.Identity?.IsAuthenticated != true)
+            return "RESET app.tenant_id; RESET app.role;";
 
         var tenantId = user.FindFirstValue("tenant_id");
         var role     = user.FindFirstValue(ClaimTypes.Role);
