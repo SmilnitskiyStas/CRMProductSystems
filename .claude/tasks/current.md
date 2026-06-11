@@ -1,14 +1,14 @@
-# Current Sprint — v2.5 «AI Agent» (started 2026-06-11)
+# Current Sprint — v2.5 «AI Agent» ✅ COMPLETE (2026-06-12) — v2 DONE
+
+## TASK-060 — Web: AI orders dashboard ✅ done (2026-06-12)
+Log: `.claude/logs/tasks/060_2026-06-12_ai-orders-dashboard_frontend-developer.md`
+/ai-orders per spec §7 mockup: base/AI/final + reasoning, inline edit, accept/reject.
+Claude key manageable via Налаштування → Інтеграції. Live e2e pending Anthropic credits.
 
 ## TASK-058 + TASK-059 — Claude advisor + AI orders API + daily job ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/058-059_2026-06-11_ai-order-agent_backend-developer.md`
 ClaudeOrderAdvisor (Infrastructure/AI, official SDK, structured outputs), 6 endpoints,
 worker cron 05:00 + Telegram notify. Awaiting CLAUDE_API_KEY for live e2e.
-
-## TASK-060 — Web: AI order dashboard
-**Status:** planned · **Agent:** frontend-developer
-/ai-orders: list + review table (base vs AI vs final, reasoning, confidence),
-inline edit, accept/reject.
 
 ---
 # Previous sprint — v2.4 «Cannibalization» ✅ COMPLETE (2026-06-11)
