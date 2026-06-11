@@ -47,11 +47,15 @@ async function apiFetch<T>(
 ): Promise<T> {
   const token = getToken();
 
+  // FormData bodies set their own multipart Content-Type (with boundary) —
+  // forcing application/json would break uploads.
+  const isFormData = options.body instanceof FormData;
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: "include", // sends HttpOnly refreshToken cookie
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
@@ -94,6 +98,10 @@ export const api = {
   get:    <T>(path: string, opts?: RequestInit) => apiFetch<T>(path, { ...opts, method: "GET" }),
   post:   <T>(path: string, body?: unknown, opts?: RequestInit) =>
     apiFetch<T>(path, { ...opts, method: "POST", body: body != null ? JSON.stringify(body) : undefined }),
+  // Multipart upload: apiFetch detects the FormData body and skips Content-Type
+  // so the browser adds the multipart boundary itself.
+  postForm: <T>(path: string, form: FormData) =>
+    apiFetch<T>(path, { method: "POST", body: form }),
   put:    <T>(path: string, body?: unknown, opts?: RequestInit) =>
     apiFetch<T>(path, { ...opts, method: "PUT", body: body != null ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string, opts?: RequestInit) => apiFetch<T>(path, { ...opts, method: "DELETE" }),
