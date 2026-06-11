@@ -37,6 +37,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProviderService, ProviderService>();
         services.AddScoped<IMovementService, MovementService>();
         services.AddScoped<Features.Sales.IDailySalesService, Features.Sales.DailySalesService>();
+        services.AddScoped<Features.Adu.IAduService, Features.Adu.AduService>();
         return services;
     }
 }
