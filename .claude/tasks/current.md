@@ -7,10 +7,10 @@ Spec: v2-spec.md §1 (ADU), §8 (schema), §9 (API), Phase 1.
 Log: `.claude/logs/tasks/046_2026-06-11_v2-data-foundation-schema_database-engineer.md`
 Migration V2DataFoundation applied to production. RLS verified (6 policies).
 
-## TASK-047 — Daily Sales API
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046
-GET /daily-sales (?store_id ?product_id ?from ?to), POST (manual entry),
-POST /daily-sales/import (CSV), PUT /:id/mark-anomaly. Validation at boundary.
+## TASK-047 — Daily Sales API ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/047_2026-06-11_daily-sales-api_backend-developer.md`
+GET/POST /daily-sales (upsert), POST /import (CSV by barcode), PUT /:id/mark-anomaly.
+Verified on production. Tests 5/5.
 
 ## TASK-048 — ADU calculation engine
 **Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046, TASK-047
