@@ -37,7 +37,7 @@ async function runExpiryCheck(): Promise<void> {
              "StoreId"            AS store_id,
              "BatchNumber"        AS batch_number,
              "Quantity"           AS quantity,
-             "ExpiryDate"         AS expiry_date,
+             "ExpiryDate"::text   AS expiry_date,
              "Status"             AS status,
              "NotifiedWarningAt"  AS notified_warning_at,
              "NotifiedCriticalAt" AS notified_critical_at
