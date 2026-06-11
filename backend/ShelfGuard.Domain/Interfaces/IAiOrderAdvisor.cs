@@ -46,8 +46,8 @@ public sealed record AiAdviceResult(
 /// </summary>
 public interface IAiOrderAdvisor
 {
-    /// <summary>True when an API key is configured — callers can fail fast with a clear error.</summary>
-    bool IsConfigured { get; }
+    /// <summary>True when an API key is available (tenant integration config or environment).</summary>
+    Task<bool> IsConfiguredAsync(CancellationToken ct = default);
 
     Task<AiAdviceResult> AdviseAsync(AiOrderContext context, CancellationToken ct = default);
 }

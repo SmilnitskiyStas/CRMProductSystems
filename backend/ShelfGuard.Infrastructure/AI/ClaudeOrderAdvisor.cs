@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Anthropic;
 using Anthropic.Models.Messages;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ShelfGuard.Domain.Interfaces;
+using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.AI;
 
@@ -10,30 +12,60 @@ namespace ShelfGuard.Infrastructure.AI;
 /// Claude-backed order advisor (v2-spec §7). Prompt template and provider wiring live
 /// here per the architecture rule: AI integrations never couple to business logic.
 /// Uses structured outputs so the response is guaranteed-valid JSON.
+/// Key resolution: tenant's integration_configs (service='claude', managed via web UI)
+/// → fallback to Claude:ApiKey env. RLS scopes the lookup to the caller's tenant.
 /// </summary>
 public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
 {
-    private readonly string? _apiKey;
-    private readonly string _model;
+    private readonly AppDbContext _db;
+    private readonly string? _envApiKey;
+    private readonly string _defaultModel;
 
-    public ClaudeOrderAdvisor(IConfiguration config)
+    public ClaudeOrderAdvisor(AppDbContext db, IConfiguration config)
     {
-        _apiKey = config["Claude:ApiKey"];
-        _model = config["Claude:Model"] ?? "claude-sonnet-4-6";
+        _db = db;
+        _envApiKey = config["Claude:ApiKey"];
+        _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey);
+    public async Task<bool> IsConfiguredAsync(CancellationToken ct = default) =>
+        (await ResolveAsync(ct)).ApiKey is not null;
+
+    private async Task<(string? ApiKey, string Model)> ResolveAsync(CancellationToken ct)
+    {
+        var row = await _db.IntegrationConfigs
+            .Where(i => i.Service == "claude" && i.IsEnabled)
+            .Select(i => i.Config)
+            .FirstOrDefaultAsync(ct);
+
+        if (row is not null)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(row);
+                var key = doc.RootElement.TryGetProperty("api_key", out var k) ? k.GetString() : null;
+                var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(key))
+                    return (key, string.IsNullOrWhiteSpace(model) ? _defaultModel : model!);
+            }
+            catch (JsonException) { /* malformed config — fall through to env */ }
+        }
+
+        return (string.IsNullOrWhiteSpace(_envApiKey) ? null : _envApiKey, _defaultModel);
+    }
 
     public async Task<AiAdviceResult> AdviseAsync(AiOrderContext context, CancellationToken ct = default)
     {
-        if (!IsConfigured)
-            throw new InvalidOperationException("Claude:ApiKey is not configured.");
+        var (apiKey, model) = await ResolveAsync(ct);
+        if (apiKey is null)
+            throw new InvalidOperationException(
+                "Claude API key is not configured. Add it in Налаштування → Інтеграції → Claude AI.");
 
-        var client = new AnthropicClient { ApiKey = _apiKey };
+        var client = new AnthropicClient { ApiKey = apiKey };
 
         var parameters = new MessageCreateParams
         {
-            Model = _model,
+            Model = model,
             MaxTokens = 8192,
             System = BuildSystemPrompt(),
             Messages = [new() { Role = Role.User, Content = BuildUserPrompt(context) }],
@@ -55,7 +87,7 @@ public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
         var items = ParseAdvice(text);
         var tokens = (int)(response.Usage.InputTokens + response.Usage.OutputTokens);
 
-        return new AiAdviceResult(items, _model, tokens);
+        return new AiAdviceResult(items, model, tokens);
     }
 
     // ── prompt (v2-spec §7 template) ───────────────────────────────────────

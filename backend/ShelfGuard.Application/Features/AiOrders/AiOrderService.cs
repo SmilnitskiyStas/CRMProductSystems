@@ -91,8 +91,8 @@ public sealed class AiOrderService : IAiOrderService
     public async Task<(AiOrderDto? Order, string? Error)> GenerateAsync(
         Guid tenantId, Guid storeId, CancellationToken ct = default)
     {
-        if (!_advisor.IsConfigured)
-            return (null, "Claude API key is not configured (Claude:ApiKey).");
+        if (!await _advisor.IsConfiguredAsync(ct))
+            return (null, "Claude API key не налаштовано. Додайте його: Налаштування → Інтеграції → Claude AI.");
 
         var storeName = await _repo.GetStoreNameAsync(storeId, ct);
         if (storeName is null)

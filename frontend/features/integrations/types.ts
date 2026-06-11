@@ -1,4 +1,4 @@
-export type IntegrationService = "telegram" | "resend" | "webhook" | "prro" | "iot";
+export type IntegrationService = "telegram" | "resend" | "webhook" | "prro" | "iot" | "claude";
 
 export interface IntegrationSummary {
   service: IntegrationService;
@@ -39,6 +39,16 @@ export interface ServiceMeta {
 }
 
 export const SERVICE_META: Record<IntegrationService, ServiceMeta> = {
+  claude: {
+    service: "claude",
+    label: "Claude AI",
+    description: "AI-агент автозамовлень: щоденні пропозиції з обґрунтуванням (v2).",
+    icon: "🤖",
+    fields: [
+      { key: "api_key", label: "API Key", placeholder: "sk-ant-api03-...", type: "password", required: true, hint: "Створіть на console.anthropic.com → API Keys" },
+      { key: "model",   label: "Модель",  placeholder: "claude-sonnet-4-6", type: "text",    required: false, hint: "За замовчуванням claude-sonnet-4-6" },
+    ],
+  },
   telegram: {
     service: "telegram",
     label: "Telegram Bot",
@@ -94,4 +104,4 @@ export const SERVICE_META: Record<IntegrationService, ServiceMeta> = {
   },
 };
 
-export const ALL_SERVICES: IntegrationService[] = ["telegram", "resend", "webhook", "prro", "iot"];
+export const ALL_SERVICES: IntegrationService[] = ["claude", "telegram", "resend", "webhook", "prro", "iot"];

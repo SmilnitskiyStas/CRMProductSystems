@@ -9,9 +9,9 @@ public sealed class IntegrationService : IIntegrationService
 {
     private readonly IIntegrationRepository _repo;
 
-    // Known service identifiers — validated on write, not on read.
+    // Known service identifiers â€” validated on write, not on read.
     private static readonly HashSet<string> KnownServices =
-        ["telegram", "resend", "webhook", "prro", "iot"];
+        ["telegram", "resend", "webhook", "prro", "iot", "claude"];
 
     public IntegrationService(IIntegrationRepository repo) => _repo = repo;
 
@@ -32,7 +32,7 @@ public sealed class IntegrationService : IIntegrationService
 
         var config = await _repo.GetByServiceAsync(tenantId, service, ct);
         if (config is null)
-            return (null, null); // 404 — not configured yet
+            return (null, null); // 404 â€” not configured yet
 
         var jsonObj = ParseConfigSafe(config.Config);
         return (new IntegrationConfigDto(config.Id, config.Service, jsonObj, config.IsEnabled, config.UpdatedAt), null);
@@ -61,7 +61,7 @@ public sealed class IntegrationService : IIntegrationService
             : (false, $"Integration '{service}' is not configured for this tenant.");
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────
+    // â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static JsonObject? ParseConfigSafe(string json)
     {
