@@ -9,6 +9,9 @@
       "distribution": "internal",
       "android": {
         "image": "ubuntu-24.04-jdk-17-ndk-r27b"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://93.127.143.98:10053/api"
       }
     },
     "preview": {
@@ -16,12 +19,18 @@
       "android": {
         "image": "ubuntu-24.04-jdk-17-ndk-r27b",
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://93.127.143.98:10053/api"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "image": "ubuntu-24.04-jdk-17-ndk-r27b"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://93.127.143.98:10053/api"
       }
     }
   },
