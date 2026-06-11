@@ -31,11 +31,18 @@ async function runExpiryCheck(): Promise<void> {
       notified_warning_at: string | null;
       notified_critical_at: string | null;
     }>(`
-      SELECT id, tenant_id, product_id, store_id, batch_number,
-             quantity, expiry_date, status,
-             notified_warning_at, notified_critical_at
+      SELECT "Id"                 AS id,
+             "TenantId"           AS tenant_id,
+             "ProductId"          AS product_id,
+             "StoreId"            AS store_id,
+             "BatchNumber"        AS batch_number,
+             "Quantity"           AS quantity,
+             "ExpiryDate"         AS expiry_date,
+             "Status"             AS status,
+             "NotifiedWarningAt"  AS notified_warning_at,
+             "NotifiedCriticalAt" AS notified_critical_at
       FROM product_stock
-      WHERE quantity > 0
+      WHERE "Quantity" > 0
     `);
 
     const today = new Date();
@@ -64,11 +71,11 @@ async function runExpiryCheck(): Promise<void> {
       if (statusChanged || shouldNotifyWarning || shouldNotifyCritical || shouldNotifyExpired) {
         await client.query(
           `UPDATE product_stock
-           SET status             = $1,
-               last_checked_at    = $2,
-               notified_warning_at  = CASE WHEN $3 THEN $2 ELSE notified_warning_at  END,
-               notified_critical_at = CASE WHEN $4 THEN $2 ELSE notified_critical_at END
-           WHERE id = $5`,
+           SET "Status"             = $1,
+               "LastCheckedAt"      = $2,
+               "NotifiedWarningAt"  = CASE WHEN $3 THEN $2::timestamptz ELSE "NotifiedWarningAt"  END,
+               "NotifiedCriticalAt" = CASE WHEN $4 THEN $2::timestamptz ELSE "NotifiedCriticalAt" END
+           WHERE "Id" = $5`,
           [
             newStatus,
             now,

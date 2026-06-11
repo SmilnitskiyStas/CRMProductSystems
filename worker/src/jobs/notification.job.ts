@@ -84,11 +84,11 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
     // Fetch product name and store name for readable messages
     const metaRes = await client.query<{ product_name: string; store_name: string }>(
       `SELECT
-         cp.name  AS product_name,
-         s.name   AS store_name
+         cp."Name" AS product_name,
+         s."Name"  AS store_name
        FROM catalog_products cp
-       JOIN stores s ON s.id = $2
-       WHERE cp.id = $1`,
+       JOIN stores s ON s."Id" = $2
+       WHERE cp."Id" = $1`,
       [payload.productId, payload.storeId]
     );
     const productName = metaRes.rows[0]?.product_name ?? "Невідомий товар";
@@ -103,12 +103,17 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
       telegram_chat_id: string | null;
       push_token: string | null;
     }>(
-      `SELECT id, email, full_name, role, telegram_chat_id, push_token
+      `SELECT "Id"             AS id,
+              "Email"          AS email,
+              "FullName"       AS full_name,
+              "Role"           AS role,
+              "TelegramChatId" AS telegram_chat_id,
+              "PushToken"      AS push_token
        FROM users
-       WHERE tenant_id = $1
-         AND role = ANY($2::text[])
-         AND is_active = true
-         AND (telegram_chat_id IS NOT NULL OR push_token IS NOT NULL OR email IS NOT NULL)`,
+       WHERE "TenantId" = $1
+         AND "Role" = ANY($2::text[])
+         AND "IsActive" = true
+         AND ("TelegramChatId" IS NOT NULL OR "PushToken" IS NOT NULL OR "Email" IS NOT NULL)`,
       [payload.tenantId, roles]
     );
 
@@ -116,11 +121,11 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
 
     // Check notification_settings — only send if user has enabled this event+channel
     const settingsRes = await client.query<{ user_id: string; channel: string }>(
-      `SELECT user_id, channel
+      `SELECT "UserId" AS user_id, "Channel" AS channel
        FROM notification_settings
-       WHERE user_id = ANY($1::uuid[])
-         AND event_type = 'product.' || $2
-         AND is_enabled = true`,
+       WHERE "UserId" = ANY($1::uuid[])
+         AND "EventType" = 'product.' || $2
+         AND "IsEnabled" = true`,
       [usersRes.rows.map((u) => u.id), payload.status]
     );
 
@@ -160,8 +165,8 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
       // Log to notification_queue
       await client.query(
         `INSERT INTO notification_queue
-           (tenant_id, user_id, channel, event_type, payload, status, sent_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, 'sent', NOW())`,
+           ("TenantId", "UserId", "Channel", "EventType", "Payload", "Status", "RetryCount", "SentAt")
+         VALUES ($1, $2, $3, $4, $5::jsonb, 'sent', 0, NOW())`,
         [
           payload.tenantId,
           user.id,

@@ -7,6 +7,9 @@ import { startCleanupWorker } from "./jobs/cleanup.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
+  // Drop the legacy scheduler id left in Redis by an older worker version —
+  // otherwise the job fires twice every hour.
+  await expiryQueue.removeJobScheduler("expiry-check-hourly").catch(() => {});
   await expiryQueue.upsertJobScheduler("expiry-check-cron", { pattern: "0 * * * *" }, { name: "expiry-check" });
 
   const weeklyQueue = new Queue("weekly-report", { connection: redisConnection });
