@@ -149,7 +149,7 @@ DEL  /api/products/{id}     -> 204 | 404
 | POST /api/transfers | TASK-014 | Store-to-store movement |
 | GET /api/write-offs | TASK-015 | Write-offs page |
 | POST /api/write-offs | TASK-015 | Write-off document |
-| GET /api/analytics/dashboard | TASK-016 | Real dashboard stats |
+| GET /api/analytics/expiry-summary | TASK-019 | Real dashboard stats (also: write-offs, movements, by-zone, by-category, losses) |
 | GET /api/notifications/settings | TASK-017 | Notification settings |
 | GET /api/users | future | User management |
 | POST /api/catalog | TASK-003b | Replace POC products API |

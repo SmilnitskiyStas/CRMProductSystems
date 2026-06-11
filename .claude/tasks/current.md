@@ -69,6 +69,14 @@ Endpoints: GET /discounts, GET /discounts/:id, POST /discounts, PUT /discounts/:
 
 ---
 
+## BUG-003 — GET /api/analytics/summary ✅ closed: not a bug (2026-06-11)
+Log: `.claude/logs/reviews/bug003-resolution_2026-06-11.md`
+Route never existed — smoke test probed a guessed name. Real endpoint is
+`/api/analytics/expiry-summary`; all 6 analytics routes verified 200 on production.
+Stale `/api/analytics/dashboard` row in api-contracts.md corrected.
+
+---
+
 ## BUG-002 — GET /api/stock/summary ✅ fixed (2026-06-11)
 Log: `.claude/logs/tasks/bug002_2026-06-11_stock-summary-endpoint_backend-developer.md`
 Response: `{safe, warning, critical, expired, needsVerification, total}`. Optional `?store_id` filter.
