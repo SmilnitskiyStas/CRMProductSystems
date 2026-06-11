@@ -17,9 +17,10 @@ Log: `.claude/logs/tasks/048_2026-06-11_adu-engine_backend-developer.md`
 Pure AduCalculator (9 unit tests) + eligibility query + upsert. Verified on production:
 recalculate → 2 products with adu_effective 10.9167 (group 3, 30 valid days).
 
-## TASK-049 — Supply schedules CRUD
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046
-GET/POST/PUT/DELETE /supply-schedules. day_of_week[], order_lead_days.
+## TASK-049 — Supply schedules CRUD ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/049_2026-06-11_supply-schedules-crud_backend-developer.md`
+Full CRUD + one-active-per-pair rule (409), ISO day validation, soft delete.
+Verified on production (6/6 e2e checks). Tests 11/11.
 
 ## TASK-050 — Web: sales entry page
 **Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-047
