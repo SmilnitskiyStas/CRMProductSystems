@@ -1,4 +1,17 @@
-# Current Sprint — v2.4 «Cannibalization» ✅ COMPLETE (2026-06-11)
+# Current Sprint — v2.5 «AI Agent» (started 2026-06-11)
+
+## TASK-058 + TASK-059 — Claude advisor + AI orders API + daily job ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/058-059_2026-06-11_ai-order-agent_backend-developer.md`
+ClaudeOrderAdvisor (Infrastructure/AI, official SDK, structured outputs), 6 endpoints,
+worker cron 05:00 + Telegram notify. Awaiting CLAUDE_API_KEY for live e2e.
+
+## TASK-060 — Web: AI order dashboard
+**Status:** planned · **Agent:** frontend-developer
+/ai-orders: list + review table (base vs AI vs final, reasoning, confidence),
+inline edit, accept/reject.
+
+---
+# Previous sprint — v2.4 «Cannibalization» ✅ COMPLETE (2026-06-11)
 
 ## TASK-057 — Promo cannibalization ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/057_2026-06-11_cannibalization_backend-developer.md`
