@@ -59,6 +59,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<DemandEventCoefficient> DemandEventCoefficients => Set<DemandEventCoefficient>();
     public DbSet<WeatherData> WeatherData => Set<WeatherData>();
     public DbSet<WeatherCoefficient> WeatherCoefficients => Set<WeatherCoefficient>();
+    public DbSet<PromoCannibalization> PromoCannibalizations => Set<PromoCannibalization>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -523,6 +524,23 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(b => b.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(b => b.Store).WithMany()
              .HasForeignKey(b => b.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── PromoCannibalization (v2) ───────────────────────────────────────
+        builder.Entity<PromoCannibalization>(e =>
+        {
+            e.ToTable("promo_cannibalization");
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(p => p.OrderCoefficient).HasColumnType("decimal(5,2)").IsRequired();
+            e.Property(p => p.Source).HasMaxLength(20).HasDefaultValue("ai_suggested");
+            e.Property(p => p.IsApplied).HasDefaultValue(false);
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(p => new { p.DiscountId, p.AffectedProductId }).IsUnique();
+            e.HasOne(p => p.Discount).WithMany()
+             .HasForeignKey(p => p.DiscountId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.AffectedProduct).WithMany()
+             .HasForeignKey(p => p.AffectedProductId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── DemandEvent (v2) ────────────────────────────────────────────────

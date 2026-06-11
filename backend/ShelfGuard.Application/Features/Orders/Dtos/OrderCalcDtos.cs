@@ -16,6 +16,7 @@ public sealed record OrderLineDto(
     decimal QuantityRaw,
     decimal EventCoefficient,
     decimal WeatherCoefficient,
+    decimal PromoCoefficient,
     decimal QuantityToOrder,
     decimal Moq,
     decimal Usq,

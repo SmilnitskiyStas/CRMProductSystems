@@ -43,6 +43,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.Orders.IOrderCalcService, Features.Orders.OrderCalcService>();
         services.AddScoped<Features.Events.IEventService, Features.Events.EventService>();
         services.AddScoped<Features.Weather.IWeatherService, Features.Weather.WeatherService>();
+        services.AddScoped<Features.Cannibalization.ICannibalizationService, Features.Cannibalization.CannibalizationService>();
         return services;
     }
 }

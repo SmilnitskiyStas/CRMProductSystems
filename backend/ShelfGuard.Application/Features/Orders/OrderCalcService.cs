@@ -9,12 +9,16 @@ public sealed class OrderCalcService : IOrderCalcService
     private readonly IOrderCalcRepository _repo;
     private readonly IEventRepository _events;
     private readonly IWeatherRepository _weather;
+    private readonly ICannibalizationRepository _promo;
 
-    public OrderCalcService(IOrderCalcRepository repo, IEventRepository events, IWeatherRepository weather)
+    public OrderCalcService(
+        IOrderCalcRepository repo, IEventRepository events,
+        IWeatherRepository weather, ICannibalizationRepository promo)
     {
         _repo = repo;
         _events = events;
         _weather = weather;
+        _promo = promo;
     }
 
     public async Task<(OrderCalcResult? Result, string? Error)> CalculateAsync(
@@ -36,6 +40,7 @@ public sealed class OrderCalcService : IOrderCalcService
         var activeEvents = await _events.GetCandidatesForDateAsync(storeId, today, ct);
         var todayWeather = await _weather.GetForDateAsync(storeId, today, ct);
         var weatherRules = await _weather.GetCoefficientsAsync(ct);
+        var promoCoefs = await _promo.GetActivePromoCoefficientsAsync(storeId, DateTime.UtcNow, ct);
 
         var lines = new List<OrderLineDto>();
 
@@ -49,11 +54,12 @@ public sealed class OrderCalcService : IOrderCalcService
                 activeEvents, buffer.ProductId, buffer.Product?.SegmentId, buffer.Product?.CategoryId);
             var weatherCoef = Features.Weather.WeatherCoefficientResolver.Resolve(
                 todayWeather, weatherRules, buffer.Product?.SegmentId, buffer.Product?.CategoryId);
+            var promoCoef = promoCoefs.TryGetValue(buffer.ProductId, out var pk) ? pk : 1m;
 
             var safetyBuffer = buffer.Product?.SafetyBuffer ?? 0m;
             var calc = OrderFormula.Compute(
                 buffer.BufferTotal, safetyBuffer, onHand, transit, moq, usq,
-                demandMultiplier: eventCoef * weatherCoef);
+                demandMultiplier: eventCoef * weatherCoef * promoCoef);
 
             lines.Add(new OrderLineDto(
                 buffer.ProductId,
@@ -69,6 +75,7 @@ public sealed class OrderCalcService : IOrderCalcService
                 calc.Raw,
                 eventCoef,
                 weatherCoef,
+                promoCoef,
                 calc.ToOrder,
                 moq,
                 usq,
