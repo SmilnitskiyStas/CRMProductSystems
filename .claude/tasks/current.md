@@ -5,9 +5,10 @@ Log: `.claude/logs/tasks/051_2026-06-11_cda-buffer-engine_backend-developer.md`
 product_buffer table + RLS, pure CdaBufferCalculator (9 tests), GET/recalculate endpoints.
 Verified on production: Total 51.97 = G 36.03 + Y 5.02 + R 10.92 (hand-checked).
 
-## TASK-052 — Order formula
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-051
-Замовлення = Buffer + SafetyBuffer − Stock − InTransit; MOQ floor + USQ rounding.
+## TASK-052 — Order formula ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/052_2026-06-11_order-formula_backend-developer.md`
+POST /api/orders/calculate. Full chain verified on production:
+Вода Моршинська 51.97+24−0−0 → ORDER 76. Tests 9/9.
 
 ## TASK-053 — Web: buffer funnel + orders page
 **Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-052
