@@ -1,4 +1,9 @@
-# Current Sprint — v2.2 «Buffer & Formula» (started 2026-06-11)
+# Current Sprint — v2.2 «Buffer & Formula» ✅ COMPLETE (2026-06-11)
+
+## TASK-053 — Web: orders page + buffer funnel ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/053_2026-06-11_orders-page-buffer-funnel_frontend-developer.md`
+/orders: one-click chain ADU→buffers→order, funnel viz, MOQ/USQ tags. Deployed, 200 OK.
+Next sprint: v2.3 «Events & Weather» (TASK-054..056).
 
 ## TASK-051 — CDA buffer engine ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/051_2026-06-11_cda-buffer-engine_backend-developer.md`
@@ -9,9 +14,6 @@ Verified on production: Total 51.97 = G 36.03 + Y 5.02 + R 10.92 (hand-checked).
 Log: `.claude/logs/tasks/052_2026-06-11_order-formula_backend-developer.md`
 POST /api/orders/calculate. Full chain verified on production:
 Вода Моршинська 51.97+24−0−0 → ORDER 76. Tests 9/9.
-
-## TASK-053 — Web: buffer funnel + orders page
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-052
 
 ---
 # Previous sprint — v2.1 «Data Foundation» ✅ COMPLETE (2026-06-11)
