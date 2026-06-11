@@ -1,10 +1,16 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { cssInterop } from 'nativewind';
 import { getProductByBarcode } from '@/features/stock/api/stockApi';
+
+// CameraView is a third-party native component — NativeWind silently drops
+// className on it unless the interop is registered. Without this the camera
+// gets no flex style (zero height) and the screen renders black.
+cssInterop(CameraView, { className: 'style' });
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -12,6 +18,14 @@ export default function ScanScreen() {
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ name: string; id: string } | null>(null);
+
+  // Ask for camera access as soon as the screen opens instead of waiting
+  // for a button tap.
+  useEffect(() => {
+    if (permission && !permission.granted && permission.canAskAgain) {
+      requestPermission();
+    }
+  }, [permission, requestPermission]);
 
   if (!permission) {
     return (
