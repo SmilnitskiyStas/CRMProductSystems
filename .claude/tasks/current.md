@@ -1,6 +1,19 @@
-# Current Sprint — v2.1 «Data Foundation» ✅ COMPLETE (2026-06-11)
+# Current Sprint — v2.2 «Buffer & Formula» (started 2026-06-11)
 
-All 5 tasks done in one day. Next sprint: v2.2 «Buffer & Formula» (TASK-051..053).
+## TASK-051 — CDA buffer engine ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/051_2026-06-11_cda-buffer-engine_backend-developer.md`
+product_buffer table + RLS, pure CdaBufferCalculator (9 tests), GET/recalculate endpoints.
+Verified on production: Total 51.97 = G 36.03 + Y 5.02 + R 10.92 (hand-checked).
+
+## TASK-052 — Order formula
+**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-051
+Замовлення = Buffer + SafetyBuffer − Stock − InTransit; MOQ floor + USQ rounding.
+
+## TASK-053 — Web: buffer funnel + orders page
+**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-052
+
+---
+# Previous sprint — v2.1 «Data Foundation» ✅ COMPLETE (2026-06-11)
 
 ## TASK-046 — v2 schema: daily_sales, product_adu, supply_schedules ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/046_2026-06-11_v2-data-foundation-schema_database-engineer.md`
