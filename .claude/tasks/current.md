@@ -1,4 +1,12 @@
-# Current Sprint — v2.3 «Events & Weather» ✅ COMPLETE (2026-06-11)
+# Current Sprint — v2.4 «Cannibalization» ✅ COMPLETE (2026-06-11)
+
+## TASK-057 — Promo cannibalization ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/057_2026-06-11_cannibalization_backend-developer.md`
+Auto-suggestions (promo ×2.0, siblings ×0.7), apply flow, promo coefficient in formula.
+E2e: Вода k_event 2.0 × k_promo 2.0 → ORDER 304. Next: v2.5 AI Agent (TASK-058..060).
+
+---
+# Previous sprint — v2.3 «Events & Weather» ✅ COMPLETE (2026-06-11)
 
 ## TASK-056 — Web: events calendar ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/056_2026-06-11_events-calendar_frontend-developer.md`
