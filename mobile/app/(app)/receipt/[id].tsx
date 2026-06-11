@@ -1,14 +1,16 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useReceipt, useConfirmReceipt } from '@/features/receipt/hooks/useReceipts';
+import { useReceipt, useConfirmReceipt, useProcessItem } from '@/features/receipt/hooks/useReceipts';
 import { ReceiptItemRow } from '@/features/receipt/components/ReceiptItemRow';
+import { receiptNumber } from '@/features/receipt/types';
 
 export default function ReceiptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data: receipt, isLoading } = useReceipt(id);
   const { mutate: confirm, isPending } = useConfirmReceipt();
+  const { mutate: process } = useProcessItem();
 
   if (isLoading) {
     return (
@@ -35,11 +37,13 @@ export default function ReceiptDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <Stack.Screen
-        options={{ headerShown: true, title: `Прийомка №${receipt.number}`, headerBackTitle: '' }}
+        options={{ headerShown: true, title: `Прийомка №${receiptNumber(receipt)}`, headerBackTitle: '' }}
       />
 
       <View className="px-4 py-3 bg-white border-b border-gray-100">
-        <Text className="text-sm text-gray-500">{receipt.supplierName}</Text>
+        <Text className="text-sm text-gray-500">
+          {receipt.supplierName ?? 'Без постачальника'} → {receipt.destinationStoreName}
+        </Text>
         <View className="flex-row items-center mt-1">
           <Text className="text-sm text-gray-700">
             Оброблено: {processedCount} / {receipt.items.length}
@@ -54,14 +58,33 @@ export default function ReceiptDetailScreen() {
         </View>
       </View>
 
+      {receipt.status === 'draft' && (
+        <Text className="text-xs text-gray-400 px-4 py-2">
+          Торкніться позиції, щоб прийняти її із замовленою кількістю
+        </Text>
+      )}
+
       <FlatList
         data={receipt.items}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ReceiptItemRow item={item} />}
+        renderItem={({ item }) => (
+          <ReceiptItemRow
+            item={item}
+            onPress={
+              receipt.status === 'draft' && !item.isProcessed
+                ? () => process({
+                    receiptId: receipt.id,
+                    itemId: item.id,
+                    quantityReceived: item.quantityOrdered,
+                  })
+                : undefined
+            }
+          />
+        )}
         contentContainerClassName="pb-32"
       />
 
-      {receipt.status !== 'completed' && (
+      {receipt.status === 'draft' && (
         <View className="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-4 bg-white border-t border-gray-100">
           <TouchableOpacity
             onPress={() => confirm(receipt.id, { onSuccess: () => router.back() })}

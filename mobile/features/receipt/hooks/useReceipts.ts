@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getReceipts, getReceipt, confirmReceipt } from '../api/receiptApi';
+import { getReceipts, getReceipt, confirmReceipt, processItem } from '../api/receiptApi';
 
 export function useReceipts() {
   return useQuery({
@@ -20,6 +20,16 @@ export function useConfirmReceipt() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => confirmReceipt(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['receipts'] }),
+  });
+}
+
+export function useProcessItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ receiptId, itemId, quantityReceived }: {
+      receiptId: string; itemId: string; quantityReceived: number;
+    }) => processItem(receiptId, itemId, quantityReceived),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['receipts'] }),
   });
 }

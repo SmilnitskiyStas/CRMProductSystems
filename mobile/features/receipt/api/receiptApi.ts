@@ -15,3 +15,15 @@ export async function confirmReceipt(id: string): Promise<Receipt> {
   const { data } = await apiClient.put<Receipt>(`/receipts/${id}/receive`);
   return data;
 }
+
+/** Quick-accept a line: received = ordered. */
+export async function processItem(
+  receiptId: string,
+  itemId: string,
+  quantityReceived: number,
+): Promise<Receipt> {
+  const { data } = await apiClient.put<Receipt>(`/receipts/${receiptId}/items`, {
+    items: [{ itemId, quantityReceived }],
+  });
+  return data;
+}

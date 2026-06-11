@@ -1,20 +1,26 @@
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReceiptItem } from '../types';
 
 interface Props {
   item: ReceiptItem;
+  onPress?: () => void;
 }
 
-export function ReceiptItemRow({ item }: Props) {
+export function ReceiptItemRow({ item, onPress }: Props) {
   return (
-    <View className="flex-row items-center py-3 px-4 bg-white border-b border-gray-100">
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={!onPress}
+      className="flex-row items-center py-3 px-4 bg-white border-b border-gray-100">
       <View className="flex-1">
         <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>
           {item.productName}
         </Text>
         <Text className="text-xs text-gray-500 mt-0.5">
-          {item.receivedQty} / {item.orderedQty} {item.unit}
+          {item.quantityReceived ?? 0} / {item.quantityOrdered}
+          {item.batchNumber ? ` · партія ${item.batchNumber}` : ''}
+          {item.expiryDate ? ` · до ${item.expiryDate}` : ''}
         </Text>
       </View>
       {item.isProcessed ? (
@@ -22,6 +28,6 @@ export function ReceiptItemRow({ item }: Props) {
       ) : (
         <Ionicons name="ellipse-outline" size={22} color="#d1d5db" />
       )}
-    </View>
+    </TouchableOpacity>
   );
 }

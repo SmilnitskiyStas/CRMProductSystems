@@ -2,19 +2,19 @@ import { View, Text, FlatList, ActivityIndicator, TouchableOpacity } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useReceipts } from '@/features/receipt/hooks/useReceipts';
-import type { Receipt } from '@/features/receipt/types';
+import { receiptNumber, type Receipt } from '@/features/receipt/types';
 
 function ReceiptCard({ item, onPress }: { item: Receipt; onPress: () => void }) {
   const statusLabel: Record<Receipt['status'], string> = {
-    draft: 'Чернетка',
-    receiving: 'Приймається',
-    completed: 'Завершено',
+    draft: 'Очікує прийомки',
+    in_transit: 'В дорозі',
+    received: 'Прийнято',
     cancelled: 'Скасовано',
   };
   const statusColor: Record<Receipt['status'], string> = {
-    draft: 'text-gray-500 bg-gray-100',
-    receiving: 'text-amber-700 bg-amber-100',
-    completed: 'text-green-700 bg-green-100',
+    draft: 'text-amber-700 bg-amber-100',
+    in_transit: 'text-blue-700 bg-blue-100',
+    received: 'text-green-700 bg-green-100',
     cancelled: 'text-red-700 bg-red-100',
   };
 
@@ -22,11 +22,13 @@ function ReceiptCard({ item, onPress }: { item: Receipt; onPress: () => void }) 
     <TouchableOpacity onPress={onPress} className="bg-white rounded-xl p-4">
       <View className="flex-row items-start justify-between">
         <View className="flex-1">
-          <Text className="text-base font-semibold text-gray-900">№{item.number}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">{item.supplierName}</Text>
+          <Text className="text-base font-semibold text-gray-900">№{receiptNumber(item)}</Text>
+          <Text className="text-sm text-gray-500 mt-0.5">
+            {item.supplierName ?? 'Без постачальника'} → {item.destinationStoreName}
+          </Text>
         </View>
-        <View className={`px-2 py-1 rounded-full ${statusColor[item.status]}`}>
-          <Text className={`text-xs font-medium`}>{statusLabel[item.status]}</Text>
+        <View className={`px-2 py-1 rounded-full ${statusColor[item.status] ?? 'text-gray-500 bg-gray-100'}`}>
+          <Text className="text-xs font-medium">{statusLabel[item.status] ?? item.status}</Text>
         </View>
       </View>
       <Text className="text-xs text-gray-400 mt-2">

@@ -1,10 +1,21 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useAuthStore } from '@/features/auth/store';
 import { logout } from '@/features/auth/api/authApi';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
+
+const ROLE_LABELS: Record<string, string> = {
+  enterprise_admin: 'Адміністратор підприємства',
+  network_manager: 'Менеджер мережі',
+  store_manager: 'Менеджер магазину',
+  merchandiser: 'Мерчандайзер',
+  storekeeper: 'Комірник',
+  cashier: 'Касир',
+  provider: 'Провайдер',
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -12,14 +23,51 @@ export default function ProfileScreen() {
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await logout();
-    } finally {
-      await clearAuth();
-      router.replace('/(auth)/login');
-    }
+  const handleLogout = () => {
+    Alert.alert('Вийти з акаунту?', 'Потрібно буде увійти знову.', [
+      { text: 'Скасувати', style: 'cancel' },
+      {
+        text: 'Вийти',
+        style: 'destructive',
+        onPress: async () => {
+          setIsLoggingOut(true);
+          try {
+            await logout();
+          } finally {
+            await clearAuth();
+            router.replace('/(auth)/login');
+          }
+        },
+      },
+    ]);
+  };
+
+  const openNotifications = () => {
+    Alert.alert(
+      'Сповіщення',
+      'Критичні терміни придатності та AI-замовлення надходять у Telegram. Відкрити бота і натиснути Start?',
+      [
+        { text: 'Скасувати', style: 'cancel' },
+        { text: 'Відкрити бота', onPress: () => { void Linking.openURL('https://t.me/shelfguard_bot'); } },
+      ],
+    );
+  };
+
+  const openSupport = () => {
+    Alert.alert('Підтримка', 'Як зручніше звʼязатися?', [
+      { text: 'Скасувати', style: 'cancel' },
+      { text: 'Telegram', onPress: () => { void Linking.openURL('https://t.me/shelfguard_bot'); } },
+      { text: 'Email', onPress: () => { void Linking.openURL('mailto:support@shelfguard.app?subject=ShelfGuard%20Mobile'); } },
+    ]);
+  };
+
+  const openAbout = () => {
+    const version = Constants.expoConfig?.version ?? '1.0.0';
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'не задано';
+    Alert.alert(
+      'Про застосунок',
+      `ShelfGuard Mobile v${version}\n\nAPI: ${apiUrl}\nКористувач: ${user?.email ?? '—'}`,
+    );
   };
 
   return (
@@ -38,14 +86,16 @@ export default function ProfileScreen() {
         <Text className="text-lg font-semibold text-gray-900">{user?.fullName}</Text>
         <Text className="text-sm text-gray-500">{user?.email}</Text>
         <View className="mt-2 px-2 py-0.5 bg-gray-100 rounded-full self-start">
-          <Text className="text-xs text-gray-600 font-medium">{user?.role}</Text>
+          <Text className="text-xs text-gray-600 font-medium">
+            {ROLE_LABELS[user?.role ?? ''] ?? user?.role}
+          </Text>
         </View>
       </View>
 
       <View className="mx-4 mt-4 bg-white rounded-2xl overflow-hidden">
-        <MenuItem icon="notifications-outline" label="Сповіщення" />
-        <MenuItem icon="shield-outline" label="Безпека" />
-        <MenuItem icon="help-circle-outline" label="Підтримка" />
+        <MenuItem icon="notifications-outline" label="Сповіщення (Telegram)" onPress={openNotifications} />
+        <MenuItem icon="help-circle-outline" label="Підтримка" onPress={openSupport} />
+        <MenuItem icon="information-circle-outline" label="Про застосунок" onPress={openAbout} />
       </View>
 
       <View className="mx-4 mt-4">
@@ -65,9 +115,15 @@ export default function ProfileScreen() {
   );
 }
 
-function MenuItem({ icon, label }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string }) {
+function MenuItem({
+  icon, label, onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity className="flex-row items-center px-4 py-3.5 border-b border-gray-50">
+    <TouchableOpacity onPress={onPress} className="flex-row items-center px-4 py-3.5 border-b border-gray-50">
       <Ionicons name={icon} size={20} color="#6b7280" />
       <Text className="text-base text-gray-700 ml-3 flex-1">{label}</Text>
       <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
