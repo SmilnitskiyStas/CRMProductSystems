@@ -17,19 +17,6 @@ API layer exists (auth/dashboard/receipt/stock) — verify screens are wired to 
 
 ---
 
-## TASK-033: Notifications end-to-end verification (TASK-017 closure)
-**Status:** planned
-**Priority:** high
-**Agent:** devops-engineer + qa-tester
-**Dependencies:** none
-**Notes:** Worker jobs exist (expiry-check, notification, weekly-report, cleanup) and
-shelfguard_worker container runs in production. Verify: (1) expiry-check actually updates
-batch statuses hourly against prod DB; (2) notification.job delivers — needs
-TELEGRAM_BOT_TOKEN / Resend key in production env; (3) POST /api/notifications/test works
-end-to-end. Configure missing env vars.
-
----
-
 ## TASK-034: Fix 2 failing AuthServiceTests
 **Status:** planned
 **Priority:** medium

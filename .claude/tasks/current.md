@@ -1,5 +1,12 @@
 # Current Sprint
 
+## TASK-033 — Notifications e2e ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/033_2026-06-11_notifications-e2e_devops-engineer.md`
+Fixed 5 pipeline breaks (pg URL format, PascalCase SQL, Redis collision with another
+project, DATE→NaN statuses, duplicate scheduler). Verified live: statuses recompute
+hourly, 23 notifications queued. Delivery needs TELEGRAM_BOT_TOKEN / RESEND_API_KEY (user).
+
+
 ## TASK-018 — Mobile App Scaffolding ✅ done (2026-06-07)
 Log: `.claude/logs/tasks/018_2026-06-07_mobile-scaffolding_mobile-developer.md`
 
