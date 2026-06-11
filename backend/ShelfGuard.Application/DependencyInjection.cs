@@ -40,6 +40,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.Adu.IAduService, Features.Adu.AduService>();
         services.AddScoped<Features.SupplySchedules.ISupplyScheduleService, Features.SupplySchedules.SupplyScheduleService>();
         services.AddScoped<Features.Buffer.IBufferService, Features.Buffer.BufferService>();
+        services.AddScoped<Features.Orders.IOrderCalcService, Features.Orders.OrderCalcService>();
         return services;
     }
 }
