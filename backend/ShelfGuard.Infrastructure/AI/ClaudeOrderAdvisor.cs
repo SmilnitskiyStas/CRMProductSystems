@@ -1,0 +1,148 @@
+using System.Text.Json;
+using Anthropic;
+using Anthropic.Models.Messages;
+using Microsoft.Extensions.Configuration;
+using ShelfGuard.Domain.Interfaces;
+
+namespace ShelfGuard.Infrastructure.AI;
+
+/// <summary>
+/// Claude-backed order advisor (v2-spec §7). Prompt template and provider wiring live
+/// here per the architecture rule: AI integrations never couple to business logic.
+/// Uses structured outputs so the response is guaranteed-valid JSON.
+/// </summary>
+public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
+{
+    private readonly string? _apiKey;
+    private readonly string _model;
+
+    public ClaudeOrderAdvisor(IConfiguration config)
+    {
+        _apiKey = config["Claude:ApiKey"];
+        _model = config["Claude:Model"] ?? "claude-sonnet-4-6";
+    }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey);
+
+    public async Task<AiAdviceResult> AdviseAsync(AiOrderContext context, CancellationToken ct = default)
+    {
+        if (!IsConfigured)
+            throw new InvalidOperationException("Claude:ApiKey is not configured.");
+
+        var client = new AnthropicClient { ApiKey = _apiKey };
+
+        var parameters = new MessageCreateParams
+        {
+            Model = _model,
+            MaxTokens = 8192,
+            System = BuildSystemPrompt(),
+            Messages = [new() { Role = Role.User, Content = BuildUserPrompt(context) }],
+            OutputConfig = new OutputConfig
+            {
+                Format = new JsonOutputFormat { Schema = ResponseSchema() },
+            },
+        };
+
+        var response = await client.Messages.Create(parameters, cancellationToken: ct);
+
+        var text = response.Content
+            .Select(b => b.Value)
+            .OfType<TextBlock>()
+            .Select(t => t.Text)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException("Claude returned no text content.");
+
+        var items = ParseAdvice(text);
+        var tokens = (int)(response.Usage.InputTokens + response.Usage.OutputTokens);
+
+        return new AiAdviceResult(items, _model, tokens);
+    }
+
+    // ── prompt (v2-spec §7 template) ───────────────────────────────────────
+
+    private static string BuildSystemPrompt() =>
+        "Ти — AI асистент менеджера продуктового магазину в Україні. " +
+        "Проаналізуй дані та скоригуй автоматично розраховане замовлення. " +
+        "Для кожного товару де base_order_qty > 0: скоригуй кількість якщо є вагомі причини " +
+        "(погода, події, акції); напиши коротке обґрунтування одним реченням українською; " +
+        "вкажи confidence (high/medium/low) та фактори-множники. " +
+        "Якщо причин коригувати немає — поверни base_order_qty без змін з фактором 1.0. " +
+        "Кількості округляй до цілих. Відповідай ТІЛЬКИ JSON за заданою схемою.";
+
+    private static string BuildUserPrompt(AiOrderContext c)
+    {
+        var opts = new JsonSerializerOptions { WriteIndented = false };
+        return
+            $"КОНТЕКСТ МАГАЗИНУ:\n" +
+            $"  Назва: {c.StoreName}\n" +
+            $"  Дата замовлення: {c.OrderDate:yyyy-MM-dd}\n" +
+            $"  Наступна поставка: {c.NextDeliveryDate?.ToString("yyyy-MM-dd") ?? "невідомо"}\n\n" +
+            $"ПОГОДА (прогноз):\n{JsonSerializer.Serialize(c.WeatherForecast, opts)}\n\n" +
+            $"ПОДІЇ КАЛЕНДАРЯ (наступні 14 днів):\n{JsonSerializer.Serialize(c.UpcomingEvents, opts)}\n\n" +
+            $"АКТИВНІ АКЦІЇ:\n{JsonSerializer.Serialize(c.ActivePromos, opts)}\n\n" +
+            $"ДАНІ ПО ТОВАРАХ:\n{JsonSerializer.Serialize(c.StockLines, opts)}";
+    }
+
+    private static Dictionary<string, JsonElement> ResponseSchema()
+    {
+        const string schemaJson = """
+        {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "product_id": { "type": "string" },
+                  "quantity_suggested": { "type": "number" },
+                  "reasoning": { "type": "string" },
+                  "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+                  "factors": {
+                    "type": "object",
+                    "properties": {
+                      "weather": { "type": "number" },
+                      "event": { "type": "number" },
+                      "promo": { "type": "number" }
+                    },
+                    "required": ["weather", "event", "promo"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["product_id", "quantity_suggested", "reasoning", "confidence", "factors"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["items"],
+          "additionalProperties": false
+        }
+        """;
+
+        using var doc = JsonDocument.Parse(schemaJson);
+        return doc.RootElement.EnumerateObject()
+            .ToDictionary(p => p.Name, p => p.Value.Clone());
+    }
+
+    /// <summary>Internal+static so unit tests can exercise parsing without an API call.</summary>
+    internal static List<AiAdviceItem> ParseAdvice(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var result = new List<AiAdviceItem>();
+
+        foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
+        {
+            if (!Guid.TryParse(item.GetProperty("product_id").GetString(), out var productId))
+                continue; // AI hallucinated an id — skip the line, base qty stays
+
+            result.Add(new AiAdviceItem(
+                productId,
+                Math.Round(item.GetProperty("quantity_suggested").GetDecimal(), 2),
+                item.GetProperty("reasoning").GetString() ?? "",
+                item.GetProperty("confidence").GetString() ?? "medium",
+                item.GetProperty("factors").GetRawText()));
+        }
+
+        return result;
+    }
+}

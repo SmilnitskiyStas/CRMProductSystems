@@ -14,6 +14,8 @@ services:
       Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
       Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
       Cors__Origins: ${Cors__Origins:-http://localhost:3000}
+      Claude__ApiKey: ${CLAUDE_API_KEY:-}
+      Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
     external_links:
       - shelfguard_postgres
 
@@ -51,11 +53,14 @@ services:
       - redis
     environment:
       REDIS_URL: ${REDIS_URL:-redis://localhost:6380}
-      # node-pg needs a postgres:// URL — DATABASE_URL is the .NET-format string for the API
+      # node-pg needs a postgres:// URL - DATABASE_URL is the .NET-format string for the API
       DATABASE_URL: ${WORKER_DATABASE_URL}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       FROM_EMAIL: ${FROM_EMAIL:-noreply@shelfguard.app}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:5100}
+      WORKER_API_EMAIL: ${WORKER_API_EMAIL:-}
+      WORKER_API_PASSWORD: ${WORKER_API_PASSWORD:-}
     network_mode: host
 
 volumes:

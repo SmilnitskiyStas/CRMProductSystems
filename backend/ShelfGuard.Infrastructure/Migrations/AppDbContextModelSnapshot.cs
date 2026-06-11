@@ -68,6 +68,109 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("activity_logs", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.AiOrderSuggestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AcceptedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AiModel")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ContextSnapshot")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateOnly>("OrderDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("pending");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("TokensUsed")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("TenantId", "StoreId", "OrderDate");
+
+                    b.ToTable("ai_order_suggestions", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.AiOrderSuggestionItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Confidence")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("EditReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Factors")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("QuantityBase")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("QuantityFinal")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("QuantitySuggested")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Reasoning")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SuggestionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("WasEdited")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("SuggestionId");
+
+                    b.ToTable("ai_order_suggestion_items", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.CatalogProduct", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1779,6 +1882,36 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("write_off_items", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.AiOrderSuggestion", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.AiOrderSuggestionItem", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.CatalogProduct", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.AiOrderSuggestion", "Suggestion")
+                        .WithMany("Items")
+                        .HasForeignKey("SuggestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Suggestion");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.CatalogProduct", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Category", "Category")
@@ -2245,6 +2378,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("ProductStock");
 
                     b.Navigation("WriteOff");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.AiOrderSuggestion", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.DemandEvent", b =>

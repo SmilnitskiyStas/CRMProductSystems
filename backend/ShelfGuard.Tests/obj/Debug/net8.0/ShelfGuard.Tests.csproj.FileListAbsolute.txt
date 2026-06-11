@@ -117,3 +117,10 @@ C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\ShelfGuard.Infrastructure.dll
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\ShelfGuard.Infrastructure.pdb
 C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\obj\Debug\net8.0\ShelfGuard.Tests.sourcelink.json
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\Anthropic.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\Microsoft.Extensions.AI.Abstractions.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\System.IO.Pipelines.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\System.Net.ServerSentEvents.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\System.Text.Encodings.Web.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\System.Text.Json.dll
+C:\Users\stass\source\CRMProductSystems\backend\ShelfGuard.Tests\bin\Debug\net8.0\runtimes\browser\lib\net8.0\System.Text.Encodings.Web.dll

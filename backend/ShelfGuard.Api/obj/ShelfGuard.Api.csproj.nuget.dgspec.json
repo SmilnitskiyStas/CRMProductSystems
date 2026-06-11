@@ -292,6 +292,10 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "Anthropic": {
+              "target": "Package",
+              "version": "[12.29.0, )"
+            },
             "BCrypt.Net-Next": {
               "target": "Package",
               "version": "[4.0.3, )"

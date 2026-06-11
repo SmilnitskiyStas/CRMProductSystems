@@ -60,6 +60,8 @@ public sealed class AppDbContext : DbContext
     public DbSet<WeatherData> WeatherData => Set<WeatherData>();
     public DbSet<WeatherCoefficient> WeatherCoefficients => Set<WeatherCoefficient>();
     public DbSet<PromoCannibalization> PromoCannibalizations => Set<PromoCannibalization>();
+    public DbSet<AiOrderSuggestion> AiOrderSuggestions => Set<AiOrderSuggestion>();
+    public DbSet<AiOrderSuggestionItem> AiOrderSuggestionItems => Set<AiOrderSuggestionItem>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -524,6 +526,39 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(b => b.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(b => b.Store).WithMany()
              .HasForeignKey(b => b.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── AiOrderSuggestion (v2) ──────────────────────────────────────────
+        builder.Entity<AiOrderSuggestion>(e =>
+        {
+            e.ToTable("ai_order_suggestions");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.GeneratedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.ContextSnapshot).HasColumnType("jsonb");
+            e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("pending");
+            e.Property(s => s.AiModel).HasMaxLength(50);
+            e.HasIndex(s => new { s.TenantId, s.StoreId, s.OrderDate });
+            e.HasOne(s => s.Store).WithMany()
+             .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(s => s.Items).WithOne(i => i.Suggestion)
+             .HasForeignKey(i => i.SuggestionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AiOrderSuggestionItem>(e =>
+        {
+            e.ToTable("ai_order_suggestion_items");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.QuantityBase).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(i => i.QuantitySuggested).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(i => i.QuantityFinal).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(i => i.Confidence).HasMaxLength(10);
+            e.Property(i => i.Factors).HasColumnType("jsonb");
+            e.Property(i => i.WasEdited).HasDefaultValue(false);
+            e.HasIndex(i => i.SuggestionId);
+            e.HasOne(i => i.Product).WithMany()
+             .HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── PromoCannibalization (v2) ───────────────────────────────────────

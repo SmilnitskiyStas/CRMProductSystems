@@ -79,6 +79,8 @@ public static class DependencyInjection
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IWeatherRepository, WeatherRepository>();
         services.AddScoped<ICannibalizationRepository, CannibalizationRepository>();
+        services.AddScoped<IAiOrderRepository, AiOrderRepository>();
+        services.AddSingleton<IAiOrderAdvisor, AI.ClaudeOrderAdvisor>();
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
 
         // Provider panel (super admin)
