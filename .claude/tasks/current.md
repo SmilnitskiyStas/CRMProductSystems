@@ -12,10 +12,10 @@ Log: `.claude/logs/tasks/047_2026-06-11_daily-sales-api_backend-developer.md`
 GET/POST /daily-sales (upsert), POST /import (CSV by barcode), PUT /:id/mark-anomaly.
 Verified on production. Tests 5/5.
 
-## TASK-048 — ADU calculation engine
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046, TASK-047
-Valid-day rules + 3 product groups (v2-spec §1), adu_30/60/90 + effective,
-GET /adu/:storeId/:productId, POST /adu/recalculate. Unit tests for formula.
+## TASK-048 — ADU calculation engine ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/048_2026-06-11_adu-engine_backend-developer.md`
+Pure AduCalculator (9 unit tests) + eligibility query + upsert. Verified on production:
+recalculate → 2 products with adu_effective 10.9167 (group 3, 30 valid days).
 
 ## TASK-049 — Supply schedules CRUD
 **Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046
