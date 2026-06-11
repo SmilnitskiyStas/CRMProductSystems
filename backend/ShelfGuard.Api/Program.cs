@@ -2,6 +2,9 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using ShelfGuard.Api.Infrastructure;
 using ShelfGuard.Application;
 using ShelfGuard.Infrastructure;
 using ShelfGuard.Infrastructure.Authorization;
@@ -9,7 +12,20 @@ using ShelfGuard.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+// All error responses follow the { "error": "..." } contract (api-contracts.md):
+// - InvalidModelStateResponseFactory covers automatic 400s from model binding/validation
+// - ErrorBodyClientErrorFactory covers body-less results (bare NotFound(), Forbid(), ...)
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var message = context.ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m)) ?? "Invalid request.";
+            return new BadRequestObjectResult(new { error = message });
+        });
+builder.Services.AddSingleton<IClientErrorFactory, ErrorBodyClientErrorFactory>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
