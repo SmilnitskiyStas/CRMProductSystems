@@ -4,6 +4,7 @@ import { startExpiryCheckWorker } from "./jobs/expiry-check.job";
 import { startNotificationWorker } from "./jobs/notification.job";
 import { startWeeklyReportWorker } from "./jobs/weekly-report.job";
 import { startCleanupWorker } from "./jobs/cleanup.job";
+import { startWeatherFetchWorker } from "./jobs/weather-fetch.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -17,6 +18,10 @@ async function scheduleRecurringJobs(): Promise<void> {
 
   const cleanupQueue = new Queue("cleanup", { connection: redisConnection });
   await cleanupQueue.upsertJobScheduler("cleanup-cron", { pattern: "0 3 * * *" }, { name: "cleanup" });
+
+  // v2-spec §6: daily 06:00 — fetch 7-day forecast for every store with coordinates
+  const weatherQueue = new Queue("weather-fetch", { connection: redisConnection });
+  await weatherQueue.upsertJobScheduler("weather-fetch-cron", { pattern: "0 6 * * *" }, { name: "weather-fetch" });
 }
 
 async function main(): Promise<void> {
@@ -28,6 +33,7 @@ async function main(): Promise<void> {
   startNotificationWorker();
   startWeeklyReportWorker();
   startCleanupWorker();
+  startWeatherFetchWorker();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

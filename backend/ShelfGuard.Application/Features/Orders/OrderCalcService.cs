@@ -8,11 +8,13 @@ public sealed class OrderCalcService : IOrderCalcService
 {
     private readonly IOrderCalcRepository _repo;
     private readonly IEventRepository _events;
+    private readonly IWeatherRepository _weather;
 
-    public OrderCalcService(IOrderCalcRepository repo, IEventRepository events)
+    public OrderCalcService(IOrderCalcRepository repo, IEventRepository events, IWeatherRepository weather)
     {
         _repo = repo;
         _events = events;
+        _weather = weather;
     }
 
     public async Task<(OrderCalcResult? Result, string? Error)> CalculateAsync(
@@ -32,6 +34,8 @@ public sealed class OrderCalcService : IOrderCalcService
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var activeEvents = await _events.GetCandidatesForDateAsync(storeId, today, ct);
+        var todayWeather = await _weather.GetForDateAsync(storeId, today, ct);
+        var weatherRules = await _weather.GetCoefficientsAsync(ct);
 
         var lines = new List<OrderLineDto>();
 
@@ -43,10 +47,13 @@ public sealed class OrderCalcService : IOrderCalcService
 
             var eventCoef = EventCoefficientResolver.Resolve(
                 activeEvents, buffer.ProductId, buffer.Product?.SegmentId, buffer.Product?.CategoryId);
+            var weatherCoef = Features.Weather.WeatherCoefficientResolver.Resolve(
+                todayWeather, weatherRules, buffer.Product?.SegmentId, buffer.Product?.CategoryId);
 
             var safetyBuffer = buffer.Product?.SafetyBuffer ?? 0m;
             var calc = OrderFormula.Compute(
-                buffer.BufferTotal, safetyBuffer, onHand, transit, moq, usq, eventCoef);
+                buffer.BufferTotal, safetyBuffer, onHand, transit, moq, usq,
+                demandMultiplier: eventCoef * weatherCoef);
 
             lines.Add(new OrderLineDto(
                 buffer.ProductId,
@@ -61,6 +68,7 @@ public sealed class OrderCalcService : IOrderCalcService
                 transit,
                 calc.Raw,
                 eventCoef,
+                weatherCoef,
                 calc.ToOrder,
                 moq,
                 usq,

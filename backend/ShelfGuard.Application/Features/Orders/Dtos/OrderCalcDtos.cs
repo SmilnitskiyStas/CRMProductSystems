@@ -15,6 +15,7 @@ public sealed record OrderLineDto(
     decimal InTransit,
     decimal QuantityRaw,
     decimal EventCoefficient,
+    decimal WeatherCoefficient,
     decimal QuantityToOrder,
     decimal Moq,
     decimal Usq,
