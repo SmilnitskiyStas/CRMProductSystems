@@ -5,10 +5,10 @@ Log: `.claude/logs/tasks/054_2026-06-11_demand-events_backend-developer.md`
 4 tables + RLS, full CRUD, 5 seeded holidays, event coefficient wired into order
 formula (most-specific scope wins, events multiply). E2e: Вода ×2 → ORDER 152.
 
-## TASK-055 — Open-Meteo integration + weather coefficients
-**Status:** planned · **Agent:** backend-developer + devops-engineer
-Open-Meteo client in Infrastructure/Integrations, daily worker cron 06:00,
-weather coefficient into order formula. Tables already exist.
+## TASK-055 — Open-Meteo integration ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/055_2026-06-11_open-meteo-weather_backend-developer.md`
+Client + 6 endpoints + worker cron 06:00 + weather coefficient in formula.
+E2e on real Kyiv forecast: k_event 2.0 × k_weather 1.5 → ORDER 228.
 
 ## TASK-056 — Web: events calendar
 **Status:** planned · **Agent:** frontend-developer
