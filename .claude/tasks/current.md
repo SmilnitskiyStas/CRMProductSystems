@@ -1,4 +1,20 @@
-# Current Sprint — v2.2 «Buffer & Formula» ✅ COMPLETE (2026-06-11)
+# Current Sprint — v2.3 «Events & Weather» (started 2026-06-11)
+
+## TASK-054 — Demand events calendar ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/054_2026-06-11_demand-events_backend-developer.md`
+4 tables + RLS, full CRUD, 5 seeded holidays, event coefficient wired into order
+formula (most-specific scope wins, events multiply). E2e: Вода ×2 → ORDER 152.
+
+## TASK-055 — Open-Meteo integration + weather coefficients
+**Status:** planned · **Agent:** backend-developer + devops-engineer
+Open-Meteo client in Infrastructure/Integrations, daily worker cron 06:00,
+weather coefficient into order formula. Tables already exist.
+
+## TASK-056 — Web: events calendar
+**Status:** planned · **Agent:** frontend-developer
+
+---
+# Previous sprint — v2.2 «Buffer & Formula» ✅ COMPLETE (2026-06-11)
 
 ## TASK-053 — Web: orders page + buffer funnel ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/053_2026-06-11_orders-page-buffer-funnel_frontend-developer.md`
