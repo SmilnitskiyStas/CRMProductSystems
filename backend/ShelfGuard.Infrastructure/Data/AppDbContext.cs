@@ -50,6 +50,11 @@ public sealed class AppDbContext : DbContext
     // Logs
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
+    // v2 — Auto Order data foundation
+    public DbSet<DailySale> DailySales => Set<DailySale>();
+    public DbSet<ProductAdu> ProductAdus => Set<ProductAdu>();
+    public DbSet<SupplySchedule> SupplySchedules => Set<SupplySchedule>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -455,6 +460,60 @@ public sealed class AppDbContext : DbContext
             e.Property(a => a.IpAddress).HasMaxLength(50);
             e.Property(a => a.Meta).HasColumnType("text");
             e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── DailySale (v2) ──────────────────────────────────────────────────
+        builder.Entity<DailySale>(e =>
+        {
+            e.ToTable("daily_sales");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(d => d.QuantitySold).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(d => d.QuantityEndOfDay).HasColumnType("decimal(10,2)");
+            e.Property(d => d.IsPromoDay).HasDefaultValue(false);
+            e.Property(d => d.IsAnomaly).HasDefaultValue(false);
+            e.Property(d => d.Source).HasMaxLength(20).HasDefaultValue("manual");
+            e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(d => new { d.StoreId, d.ProductId, d.Date }).IsUnique();
+            e.HasIndex(d => new { d.TenantId, d.Date });
+            e.HasOne(d => d.Product).WithMany()
+             .HasForeignKey(d => d.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(d => d.Store).WithMany()
+             .HasForeignKey(d => d.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProductAdu (v2) ─────────────────────────────────────────────────
+        builder.Entity<ProductAdu>(e =>
+        {
+            e.ToTable("product_adu");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.Adu30d).HasColumnType("decimal(10,4)");
+            e.Property(a => a.Adu60d).HasColumnType("decimal(10,4)");
+            e.Property(a => a.Adu90d).HasColumnType("decimal(10,4)");
+            e.Property(a => a.AduEffective).HasColumnType("decimal(10,4)");
+            e.Property(a => a.CalculatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(a => new { a.StoreId, a.ProductId }).IsUnique();
+            e.HasOne(a => a.Product).WithMany()
+             .HasForeignKey(a => a.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Store).WithMany()
+             .HasForeignKey(a => a.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupplySchedule (v2) ─────────────────────────────────────────────
+        builder.Entity<SupplySchedule>(e =>
+        {
+            e.ToTable("supply_schedules");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.DayOfWeek).HasColumnType("integer[]");
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(s => new { s.StoreId, s.SupplierId });
+            e.HasOne(s => s.Store).WithMany()
+             .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Supplier).WithMany()
+             .HasForeignKey(s => s.SupplierId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
