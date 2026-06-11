@@ -73,6 +73,7 @@ public static class DependencyInjection
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
         services.AddScoped<IAduRepository, AduRepository>();
+        services.AddScoped<ISupplyScheduleRepository, SupplyScheduleRepository>();
 
         // Provider panel (super admin)
         services.AddScoped<ITenantRepository, TenantRepository>();
