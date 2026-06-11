@@ -10,3 +10,7 @@ expo-env.d.ts
 # folder switches EAS to bare workflow and skips prebuild entirely.
 /android
 /ios
+
+# Local env (EXPO_PUBLIC_* baked into dev bundles) — never commit real values
+.env
+.env.local
