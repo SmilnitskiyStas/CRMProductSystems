@@ -1,7 +1,6 @@
-# Current Sprint — v2.1 «Data Foundation» (started 2026-06-11)
+# Current Sprint — v2.1 «Data Foundation» ✅ COMPLETE (2026-06-11)
 
-Goal: data layer for Auto Order — sales history, ADU engine, supply schedules.
-Spec: v2-spec.md §1 (ADU), §8 (schema), §9 (API), Phase 1.
+All 5 tasks done in one day. Next sprint: v2.2 «Buffer & Formula» (TASK-051..053).
 
 ## TASK-046 — v2 schema: daily_sales, product_adu, supply_schedules ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/046_2026-06-11_v2-data-foundation-schema_database-engineer.md`
@@ -22,9 +21,9 @@ Log: `.claude/logs/tasks/049_2026-06-11_supply-schedules-crud_backend-developer.
 Full CRUD + one-active-per-pair rule (409), ISO day validation, soft delete.
 Verified on production (6/6 e2e checks). Tests 11/11.
 
-## TASK-050 — Web: sales entry page
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-047
-features/sales/: manual daily entry grid + CSV upload + anomaly toggle.
+## TASK-050 — Web: sales entry page ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/050_2026-06-11_sales-entry-page_frontend-developer.md`
+/sales: filters + manual entry form + CSV import dialog + anomaly toggle. Deployed, 200 OK.
 
 ---
 # v1 maintenance (parallel)
