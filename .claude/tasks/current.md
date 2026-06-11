@@ -3,10 +3,9 @@
 Goal: data layer for Auto Order — sales history, ADU engine, supply schedules.
 Spec: v2-spec.md §1 (ADU), §8 (schema), §9 (API), Phase 1.
 
-## TASK-046 — v2 schema: daily_sales, product_adu, supply_schedules
-**Status:** planned · **Agent:** database-engineer
-EF Core migration: 3 tables per v2-spec §8 + RLS policies (tenant_id) + indexes.
-daily_sales UNIQUE(store_id, product_id, date). FK → stores, catalog_products.
+## TASK-046 — v2 schema: daily_sales, product_adu, supply_schedules ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/046_2026-06-11_v2-data-foundation-schema_database-engineer.md`
+Migration V2DataFoundation applied to production. RLS verified (6 policies).
 
 ## TASK-047 — Daily Sales API
 **Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046

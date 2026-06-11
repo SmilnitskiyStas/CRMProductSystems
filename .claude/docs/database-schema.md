@@ -121,6 +121,18 @@ idx_movements_created_at    ON stock_movements("TenantId", "CreatedAt" DESC)
 
 > Note: These FK constraints exist in the DB but NOT in EF Core's model snapshot (pure SQL migration). If navigation properties are added to entities later, the corresponding HasForeignKey() calls will conflict — drop and re-add the constraint in the migration. See ADR-009 for rationale.
 
+## v2 — Auto Order Data Foundation (V2DataFoundation migration, 2026-06-11)
+
+| Table | Purpose | Key constraints |
+|---|---|---|
+| `daily_sales` | Per-day sales per product+store; ADU source data | UNIQUE(StoreId, ProductId, Date); FK → catalog_products, stores (CASCADE); idx (TenantId, Date) |
+| `product_adu` | Cached ADU 30/60/90d + effective + product group (1-3) | UNIQUE(StoreId, ProductId); FK CASCADE |
+| `supply_schedules` | Supplier delivery weekdays (`DayOfWeek integer[]`) + order lead days | idx (StoreId, SupplierId); FK CASCADE |
+
+All three: RLS enabled — `tenant_isolation` (strict, no IS-NULL branch) + `provider_bypass`.
+`daily_sales.Source`: manual / pos / import. `IsAnomaly=true` rows are excluded from ADU.
+Entities: `ShelfGuard.Domain/Entities/{DailySale,ProductAdu,SupplySchedule}.cs`.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data
