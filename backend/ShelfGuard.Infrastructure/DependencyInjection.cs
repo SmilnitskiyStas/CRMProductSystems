@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShelfGuard.Application.Services;
@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
         services.AddScoped<IAduRepository, AduRepository>();
         services.AddScoped<ISupplyScheduleRepository, SupplyScheduleRepository>();
+        services.AddScoped<IBufferRepository, BufferRepository>();
 
         // Provider panel (super admin)
         services.AddScoped<ITenantRepository, TenantRepository>();

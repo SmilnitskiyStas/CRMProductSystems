@@ -54,6 +54,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<DailySale> DailySales => Set<DailySale>();
     public DbSet<ProductAdu> ProductAdus => Set<ProductAdu>();
     public DbSet<SupplySchedule> SupplySchedules => Set<SupplySchedule>();
+    public DbSet<ProductBuffer> ProductBuffers => Set<ProductBuffer>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -498,6 +499,26 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(a => a.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(a => a.Store).WithMany()
              .HasForeignKey(a => a.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProductBuffer (v2) ──────────────────────────────────────────────
+        builder.Entity<ProductBuffer>(e =>
+        {
+            e.ToTable("product_buffer");
+            e.HasKey(b => b.Id);
+            e.Property(b => b.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(b => b.BufferTotal).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(b => b.BufferGreen).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(b => b.BufferYellow).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(b => b.BufferRed).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(b => b.LeadTimeDays).HasColumnType("decimal(5,1)").IsRequired();
+            e.Property(b => b.OrderCycleDays).HasColumnType("decimal(5,1)").IsRequired();
+            e.Property(b => b.CalculatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(b => new { b.StoreId, b.ProductId }).IsUnique();
+            e.HasOne(b => b.Product).WithMany()
+             .HasForeignKey(b => b.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(b => b.Store).WithMany()
+             .HasForeignKey(b => b.StoreId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── SupplySchedule (v2) ─────────────────────────────────────────────

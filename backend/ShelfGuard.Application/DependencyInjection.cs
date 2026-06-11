@@ -1,4 +1,4 @@
-﻿using ShelfGuard.Application.Features.Auth;
+using ShelfGuard.Application.Features.Auth;
 using ShelfGuard.Application.Features.Catalog;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Application.Features.Stores;
@@ -39,6 +39,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.Sales.IDailySalesService, Features.Sales.DailySalesService>();
         services.AddScoped<Features.Adu.IAduService, Features.Adu.AduService>();
         services.AddScoped<Features.SupplySchedules.ISupplyScheduleService, Features.SupplySchedules.SupplyScheduleService>();
+        services.AddScoped<Features.Buffer.IBufferService, Features.Buffer.BufferService>();
         return services;
     }
 }
