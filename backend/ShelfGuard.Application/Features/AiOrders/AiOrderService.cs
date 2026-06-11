@@ -130,8 +130,19 @@ public sealed class AiOrderService : IAiOrderService
                 adu30.TryGetValue(l.ProductId, out var a) ? a : null,
                 l.BufferTotal, l.SafetyBuffer, l.InTransit, l.Moq, l.Usq, l.QuantityToOrder)).ToList());
 
-        // 3. Claude
-        var advice = await _advisor.AdviseAsync(context, ct);
+        // 3. Claude — provider failures become readable errors, not 500s
+        AiAdviceResult advice;
+        try
+        {
+            advice = await _advisor.AdviseAsync(context, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var detail = ex.Message.Contains("credit balance", StringComparison.OrdinalIgnoreCase)
+                ? "Недостатньо кредитів на Anthropic акаунті. Поповніть баланс: console.anthropic.com → Plans & Billing."
+                : $"AI сервіс недоступний: {ex.Message}";
+            return (null, detail);
+        }
         var adviceByProduct = advice.Items.ToDictionary(i => i.ProductId);
 
         // 4. Persist: AI quantity when provided, base otherwise

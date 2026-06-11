@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ShelfGuard.Application")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f08bdfec24611332de0888920540e84140c487fb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+691da7f0c7d7985303b253a0e804b7f4d1eaef82")]
 [assembly: System.Reflection.AssemblyProductAttribute("ShelfGuard.Application")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ShelfGuard.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
