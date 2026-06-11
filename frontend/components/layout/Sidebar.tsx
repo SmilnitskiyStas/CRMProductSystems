@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   ClipboardList,
   ArrowLeftRight,
+  Calculator,
   Trash2,
   TrendingUp,
   BarChart2,
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/transfers",  label: "Переміщення",  icon: <ArrowLeftRight size={18} />,  roles: CAN_RECEIVE_STOCK },
   { href: "/write-offs", label: "Списання",     icon: <Trash2 size={18} />,          roles: TENANT_ROLES },
   { href: "/sales",      label: "Продажі",      icon: <TrendingUp size={18} />,      roles: AT_LEAST_STORE_MANAGER },
+  { href: "/orders",     label: "Замовлення",   icon: <Calculator size={18} />,      roles: AT_LEAST_STORE_MANAGER },
   { href: "/analytics",  label: "Аналітика",    icon: <BarChart2 size={18} />,       roles: CAN_VIEW_ANALYTICS },
   { href: "/users",      label: "Персонал",     icon: <Users size={18} />,           roles: AT_LEAST_STORE_MANAGER },
   // Provider-only pages
