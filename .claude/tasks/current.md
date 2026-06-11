@@ -69,6 +69,13 @@ Endpoints: GET /discounts, GET /discounts/:id, POST /discounts, PUT /discounts/:
 
 ---
 
+## BUG-004 — Inconsistent 404 error format ✅ fixed (2026-06-11)
+Log: `.claude/logs/tasks/bug004_2026-06-11_error-format-standardization_backend-developer.md`
+Central fix: custom IClientErrorFactory + InvalidModelStateResponseFactory in ShelfGuard.Api.
+All error bodies now follow `{error: "..."}`. Verified on production. All 4 smoke-test bugs closed.
+
+---
+
 ## BUG-003 — GET /api/analytics/summary ✅ closed: not a bug (2026-06-11)
 Log: `.claude/logs/reviews/bug003-resolution_2026-06-11.md`
 Route never existed — smoke test probed a guessed name. Real endpoint is
