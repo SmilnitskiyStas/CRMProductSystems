@@ -1,4 +1,38 @@
-# Current Sprint
+# Current Sprint — v2.1 «Data Foundation» (started 2026-06-11)
+
+Goal: data layer for Auto Order — sales history, ADU engine, supply schedules.
+Spec: v2-spec.md §1 (ADU), §8 (schema), §9 (API), Phase 1.
+
+## TASK-046 — v2 schema: daily_sales, product_adu, supply_schedules
+**Status:** planned · **Agent:** database-engineer
+EF Core migration: 3 tables per v2-spec §8 + RLS policies (tenant_id) + indexes.
+daily_sales UNIQUE(store_id, product_id, date). FK → stores, catalog_products.
+
+## TASK-047 — Daily Sales API
+**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046
+GET /daily-sales (?store_id ?product_id ?from ?to), POST (manual entry),
+POST /daily-sales/import (CSV), PUT /:id/mark-anomaly. Validation at boundary.
+
+## TASK-048 — ADU calculation engine
+**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046, TASK-047
+Valid-day rules + 3 product groups (v2-spec §1), adu_30/60/90 + effective,
+GET /adu/:storeId/:productId, POST /adu/recalculate. Unit tests for formula.
+
+## TASK-049 — Supply schedules CRUD
+**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-046
+GET/POST/PUT/DELETE /supply-schedules. day_of_week[], order_lead_days.
+
+## TASK-050 — Web: sales entry page
+**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-047
+features/sales/: manual daily entry grid + CSV upload + anomaly toggle.
+
+---
+# v1 maintenance (parallel)
+TASK-045 (mobile profile+receipt wiring) · TASK-034 (auth tests) · TASK-035 (bin/obj)
+TASK-038 (impersonation verify) · TASK-039 (bot /start) — see backlog.md
+
+---
+# Done
 
 ## TASK-033 — Notifications e2e ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/033_2026-06-11_notifications-e2e_devops-engineer.md`

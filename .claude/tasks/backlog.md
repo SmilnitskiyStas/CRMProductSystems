@@ -8,13 +8,20 @@ has all 8 spec endpoints and /provider page exists; replaced with verification t
 
 ## v1 — remaining before release
 
-## TASK-032: Mobile — device smoke test (in progress)
-**Status:** in_progress
-**Priority:** high
-**Agent:** qa-tester + user
-**Notes:** Dev build installed, login works, Telegram delivery confirmed. Remaining:
-verify on device — scanner (after cssInterop fix), stock list, receipt flow, profile.
-User drives the phone; fixes hot-reload via `npx expo start`.
+## TASK-032: Mobile — device smoke test ✅ done (2026-06-11)
+**Status:** done
+**Result (user-verified on device):** login ✓, dashboard ✓, scanner camera opens and
+scans products ✓ (cssInterop fix confirmed). Findings → TASK-045.
+
+## TASK-045: Mobile polish — profile actions + receipt screen wiring
+**Status:** planned
+**Priority:** medium
+**Agent:** mobile-developer
+**Notes:** From device smoke (2026-06-11):
+1. Profile screen shows auth info but no action works (logout? settings? — wire buttons).
+2. Receipt screen shows nothing — production DB has 4 seeded receipts, so either the
+   screen isn't wired to GET /receipts or it filters to a status the seeds don't have.
+   Diagnose and wire.
 
 ## TASK-038: Provider panel — verify impersonation e2e
 **Status:** planned
@@ -79,12 +86,26 @@ usesCleartextTraffic=true as a workaround — remove after HTTPS.
 
 ---
 
-# v2 (next phase) — per v2-spec.md
+# v2 — Auto Order + AI Forecasting (per v2-spec.md)
 
-Auto Order + AI Forecasting:
-- ADU/CDA calculation engine
-- Claude API forecasting client (ShelfGuard.Infrastructure/AI)
-- Auto-order suggestions + supplier flow
-- Open-Meteo weather correlation
+Decomposed 2026-06-11 (PM). Sprint v2.1 (Phase 1 — Data Foundation) moved to current.md.
+
+## Phase 2 — Buffer & Formula
+- **TASK-051** (backend): CDA buffer engine — green/yellow/red zones, dynamic lead_time/order_cycle, product_buffer table+migration, GET/POST /buffer endpoints (v2-spec §2)
+- **TASK-052** (backend): order formula — Buffer + SafetyBuffer − Stock − InTransit, USQ/MOQ rounding from product_supplier_settings (v2-spec §3)
+- **TASK-053** (frontend): buffer funnel indicator per product + basic orders page
+
+## Phase 3 — Events & Weather
+- **TASK-054** (backend+db): demand_events + coefficients tables, CRUD API, pre-seeded holidays (v2-spec §4)
+- **TASK-055** (backend+devops): Open-Meteo client in Infrastructure/Integrations, weather_data + weather_coefficients, daily fetch cron in worker (v2-spec §6)
+- **TASK-056** (frontend): events calendar (week/month view)
+
+## Phase 4 — Promotions & Cannibalization
+- **TASK-057** (backend+frontend): promo_cannibalization, auto-generation on discount create, confirm/edit UI, formula impact (v2-spec §5)
+
+## Phase 5 — AI Agent
+- **TASK-058** (backend): Claude API client — isolated in ShelfGuard.Infrastructure/AI, prompt template from v2-spec §7, context snapshot builder
+- **TASK-059** (backend+devops): ai_order_suggestions(+items) tables, /ai-orders API, BullMQ daily job 05:00, "order ready" notification
+- **TASK-060** (frontend): AI order dashboard — review/edit/accept flow, was_edited tracking
 
 Email channel (Resend) — deferred by user, revisit during v2.
