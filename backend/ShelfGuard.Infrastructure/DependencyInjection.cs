@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShelfGuard.Application.Services;
@@ -69,6 +69,9 @@ public static class DependencyInjection
 
         // Activity log
         services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
+
+        // v2 - Daily sales (ADU source data)
+        services.AddScoped<IDailySalesRepository, DailySalesRepository>();
 
         // Provider panel (super admin)
         services.AddScoped<ITenantRepository, TenantRepository>();
