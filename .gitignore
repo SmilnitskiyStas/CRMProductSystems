@@ -28,3 +28,6 @@ Thumbs.db
 *.log
 .idea/
 .vscode/settings.json
+
+# Private credentials - NEVER commit
+.claude/private/
