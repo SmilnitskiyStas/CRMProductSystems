@@ -14,6 +14,7 @@ public sealed record OrderLineDto(
     decimal StockOnHand,
     decimal InTransit,
     decimal QuantityRaw,
+    decimal EventCoefficient,
     decimal QuantityToOrder,
     decimal Moq,
     decimal Usq,

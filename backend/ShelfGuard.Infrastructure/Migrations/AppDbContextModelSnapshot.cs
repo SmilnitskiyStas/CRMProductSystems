@@ -256,6 +256,108 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("daily_sales", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.DemandEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("EndsAt")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("custom");
+
+                    b.Property<bool>("IsRecurring")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RecurrenceRule")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("network");
+
+                    b.Property<DateOnly>("StartsAt")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("TenantId", "StartsAt", "EndsAt");
+
+                    b.ToTable("demand_events", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.DemandEventCoefficient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("Coefficient")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(1.00m);
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ScopeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ScopeType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("manual");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("demand_event_coefficients", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Discount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1452,6 +1554,98 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.WeatherCoefficient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Coefficient")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid?>("SegmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("manual");
+
+                    b.Property<decimal?>("TempAbove")
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<decimal?>("TempBelow")
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("WeatherCode")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("SegmentId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("weather_coefficients", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.WeatherData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("FetchedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<bool>("IsForecast")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal?>("Precipitation")
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("TempAvg")
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<decimal?>("TempMax")
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<decimal?>("TempMin")
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<int?>("WeatherCode")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("weather_data", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.WriteOff", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1606,6 +1800,27 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.DemandEvent", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.DemandEventCoefficient", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.DemandEvent", "Event")
+                        .WithMany("Coefficients")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Discount", b =>
@@ -1903,6 +2118,34 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.WeatherCoefficient", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.ProductSegment", "Segment")
+                        .WithMany()
+                        .HasForeignKey("SegmentId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Segment");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.WeatherData", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Store");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.WriteOff", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Store", "Store")
@@ -1937,6 +2180,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("ProductStock");
 
                     b.Navigation("WriteOff");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.DemandEvent", b =>
+                {
+                    b.Navigation("Coefficients");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.StockReceipt", b =>

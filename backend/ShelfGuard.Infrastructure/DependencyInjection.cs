@@ -76,6 +76,7 @@ public static class DependencyInjection
         services.AddScoped<ISupplyScheduleRepository, SupplyScheduleRepository>();
         services.AddScoped<IBufferRepository, BufferRepository>();
         services.AddScoped<IOrderCalcRepository, OrderCalcRepository>();
+        services.AddScoped<IEventRepository, EventRepository>();
 
         // Provider panel (super admin)
         services.AddScoped<ITenantRepository, TenantRepository>();

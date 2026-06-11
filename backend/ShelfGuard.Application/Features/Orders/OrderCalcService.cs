@@ -1,4 +1,5 @@
 using ShelfGuard.Application.Features.Orders.Dtos;
+using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Application.Features.Orders;
@@ -6,8 +7,13 @@ namespace ShelfGuard.Application.Features.Orders;
 public sealed class OrderCalcService : IOrderCalcService
 {
     private readonly IOrderCalcRepository _repo;
+    private readonly IEventRepository _events;
 
-    public OrderCalcService(IOrderCalcRepository repo) => _repo = repo;
+    public OrderCalcService(IOrderCalcRepository repo, IEventRepository events)
+    {
+        _repo = repo;
+        _events = events;
+    }
 
     public async Task<(OrderCalcResult? Result, string? Error)> CalculateAsync(
         Guid storeId, CancellationToken ct = default)
@@ -24,6 +30,9 @@ public sealed class OrderCalcService : IOrderCalcService
         var inTransit = await _repo.GetInTransitAsync(storeId, productIds, ct);
         var moqUsq = await _repo.GetMoqUsqAsync(productIds, ct);
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var activeEvents = await _events.GetCandidatesForDateAsync(storeId, today, ct);
+
         var lines = new List<OrderLineDto>();
 
         foreach (var buffer in buffers)
@@ -32,9 +41,12 @@ public sealed class OrderCalcService : IOrderCalcService
             inTransit.TryGetValue(buffer.ProductId, out var transit);
             var (moq, usq) = moqUsq.TryGetValue(buffer.ProductId, out var mu) ? mu : (1m, 1m);
 
+            var eventCoef = EventCoefficientResolver.Resolve(
+                activeEvents, buffer.ProductId, buffer.Product?.SegmentId, buffer.Product?.CategoryId);
+
             var safetyBuffer = buffer.Product?.SafetyBuffer ?? 0m;
             var calc = OrderFormula.Compute(
-                buffer.BufferTotal, safetyBuffer, onHand, transit, moq, usq);
+                buffer.BufferTotal, safetyBuffer, onHand, transit, moq, usq, eventCoef);
 
             lines.Add(new OrderLineDto(
                 buffer.ProductId,
@@ -48,6 +60,7 @@ public sealed class OrderCalcService : IOrderCalcService
                 onHand,
                 transit,
                 calc.Raw,
+                eventCoef,
                 calc.ToOrder,
                 moq,
                 usq,
@@ -82,9 +95,13 @@ internal static class OrderFormula
 
     internal static OrderQty Compute(
         decimal buffer, decimal safetyBuffer, decimal stockOnHand, decimal inTransit,
-        decimal moq, decimal usq)
+        decimal moq, decimal usq, decimal demandMultiplier = 1m)
     {
         var raw = buffer + safetyBuffer - stockOnHand - inTransit;
+
+        // Event/weather/promo multipliers scale the demand (v2-spec §3) before rounding.
+        if (raw > 0 && demandMultiplier != 1m)
+            raw = Math.Round(raw * demandMultiplier, 2);
 
         if (raw <= 0)
             return new OrderQty(raw, 0m, "none");
@@ -99,5 +116,38 @@ internal static class OrderFormula
         if (rounded < moq) rounded = moq;
 
         return new OrderQty(raw, rounded, "usq_rounded");
+    }
+}
+
+/// <summary>
+/// Resolves the event multiplier for a product (v2-spec §4).
+/// Within one event the most specific matching coefficient wins
+/// (product > segment > category; null ScopeId = whole scope class).
+/// Multipliers from different events multiply (independent factors, §3).
+/// </summary>
+internal static class EventCoefficientResolver
+{
+    internal static decimal Resolve(
+        IReadOnlyList<DemandEvent> activeEvents,
+        Guid productId, Guid? segmentId, Guid? categoryId)
+    {
+        var total = 1m;
+
+        foreach (var ev in activeEvents)
+        {
+            var best =
+                ev.Coefficients.FirstOrDefault(c => c.ScopeType == "product" && c.ScopeId == productId)
+                ?? (segmentId is not null
+                    ? ev.Coefficients.FirstOrDefault(c => c.ScopeType == "segment" && c.ScopeId == segmentId)
+                    : null)
+                ?? (categoryId is not null
+                    ? ev.Coefficients.FirstOrDefault(c => c.ScopeType == "category" && c.ScopeId == categoryId)
+                    : null);
+
+            if (best is not null)
+                total *= best.Coefficient;
+        }
+
+        return Math.Round(total, 2);
     }
 }

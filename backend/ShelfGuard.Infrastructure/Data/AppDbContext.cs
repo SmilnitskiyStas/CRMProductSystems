@@ -55,6 +55,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<ProductAdu> ProductAdus => Set<ProductAdu>();
     public DbSet<SupplySchedule> SupplySchedules => Set<SupplySchedule>();
     public DbSet<ProductBuffer> ProductBuffers => Set<ProductBuffer>();
+    public DbSet<DemandEvent> DemandEvents => Set<DemandEvent>();
+    public DbSet<DemandEventCoefficient> DemandEventCoefficients => Set<DemandEventCoefficient>();
+    public DbSet<WeatherData> WeatherData => Set<WeatherData>();
+    public DbSet<WeatherCoefficient> WeatherCoefficients => Set<WeatherCoefficient>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -519,6 +523,70 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(b => b.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(b => b.Store).WithMany()
              .HasForeignKey(b => b.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── DemandEvent (v2) ────────────────────────────────────────────────
+        builder.Entity<DemandEvent>(e =>
+        {
+            e.ToTable("demand_events");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(d => d.Name).HasMaxLength(255).IsRequired();
+            e.Property(d => d.EventType).HasMaxLength(50).HasDefaultValue("custom");
+            e.Property(d => d.Scope).HasMaxLength(50).HasDefaultValue("network");
+            e.Property(d => d.RecurrenceRule).HasMaxLength(100);
+            e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(d => new { d.TenantId, d.StartsAt, d.EndsAt });
+            e.HasOne(d => d.Store).WithMany()
+             .HasForeignKey(d => d.StoreId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(d => d.Coefficients).WithOne(c => c.Event)
+             .HasForeignKey(c => c.EventId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── DemandEventCoefficient (v2) ─────────────────────────────────────
+        builder.Entity<DemandEventCoefficient>(e =>
+        {
+            e.ToTable("demand_event_coefficients");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.ScopeType).HasMaxLength(20).IsRequired();
+            e.Property(c => c.Coefficient).HasColumnType("decimal(5,2)").HasDefaultValue(1.00m);
+            e.Property(c => c.Source).HasMaxLength(20).HasDefaultValue("manual");
+            e.HasIndex(c => c.EventId);
+        });
+
+        // ── WeatherData (v2) ────────────────────────────────────────────────
+        builder.Entity<WeatherData>(e =>
+        {
+            e.ToTable("weather_data");
+            e.HasKey(w => w.Id);
+            e.Property(w => w.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(w => w.TempMin).HasColumnType("decimal(5,1)");
+            e.Property(w => w.TempMax).HasColumnType("decimal(5,1)");
+            e.Property(w => w.TempAvg).HasColumnType("decimal(5,1)");
+            e.Property(w => w.Precipitation).HasColumnType("decimal(6,2)");
+            e.Property(w => w.IsForecast).HasDefaultValue(true);
+            e.Property(w => w.FetchedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(w => new { w.StoreId, w.Date }).IsUnique();
+            e.HasOne(w => w.Store).WithMany()
+             .HasForeignKey(w => w.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── WeatherCoefficient (v2) ─────────────────────────────────────────
+        builder.Entity<WeatherCoefficient>(e =>
+        {
+            e.ToTable("weather_coefficients");
+            e.HasKey(w => w.Id);
+            e.Property(w => w.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(w => w.TempAbove).HasColumnType("decimal(5,1)");
+            e.Property(w => w.TempBelow).HasColumnType("decimal(5,1)");
+            e.Property(w => w.Coefficient).HasColumnType("decimal(5,2)").IsRequired();
+            e.Property(w => w.Source).HasMaxLength(20).HasDefaultValue("manual");
+            e.HasIndex(w => w.TenantId);
+            e.HasOne(w => w.Segment).WithMany()
+             .HasForeignKey(w => w.SegmentId).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
+            e.HasOne(w => w.Category).WithMany()
+             .HasForeignKey(w => w.CategoryId).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
         });
 
         // ── SupplySchedule (v2) ─────────────────────────────────────────────
