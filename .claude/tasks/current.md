@@ -1,4 +1,9 @@
-# Current Sprint — v2.3 «Events & Weather» (started 2026-06-11)
+# Current Sprint — v2.3 «Events & Weather» ✅ COMPLETE (2026-06-11)
+
+## TASK-056 — Web: events calendar ✅ done (2026-06-11)
+Log: `.claude/logs/tasks/056_2026-06-11_events-calendar_frontend-developer.md`
+/events: month grid, recurring projection, CRUD + coefficient editor, seed button. 200 OK.
+Next: v2.4 Cannibalization (TASK-057) → v2.5 AI Agent (TASK-058..060).
 
 ## TASK-054 — Demand events calendar ✅ done (2026-06-11)
 Log: `.claude/logs/tasks/054_2026-06-11_demand-events_backend-developer.md`
@@ -9,9 +14,6 @@ formula (most-specific scope wins, events multiply). E2e: Вода ×2 → ORDER
 Log: `.claude/logs/tasks/055_2026-06-11_open-meteo-weather_backend-developer.md`
 Client + 6 endpoints + worker cron 06:00 + weather coefficient in formula.
 E2e on real Kyiv forecast: k_event 2.0 × k_weather 1.5 → ORDER 228.
-
-## TASK-056 — Web: events calendar
-**Status:** planned · **Agent:** frontend-developer
 
 ---
 # Previous sprint — v2.2 «Buffer & Formula» ✅ COMPLETE (2026-06-11)
