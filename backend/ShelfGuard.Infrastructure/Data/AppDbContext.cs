@@ -62,6 +62,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<PromoCannibalization> PromoCannibalizations => Set<PromoCannibalization>();
     public DbSet<AiOrderSuggestion> AiOrderSuggestions => Set<AiOrderSuggestion>();
     public DbSet<AiOrderSuggestionItem> AiOrderSuggestionItems => Set<AiOrderSuggestionItem>();
+    public DbSet<TelegramLinkCode> TelegramLinkCodes => Set<TelegramLinkCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -526,6 +527,19 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(b => b.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(b => b.Store).WithMany()
              .HasForeignKey(b => b.StoreId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── TelegramLinkCode ────────────────────────────────────────────────
+        builder.Entity<TelegramLinkCode>(e =>
+        {
+            e.ToTable("telegram_link_codes");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.Code).HasMaxLength(16).IsRequired();
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(t => t.Code).IsUnique();
+            e.HasOne(t => t.User).WithMany()
+             .HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── AiOrderSuggestion (v2) ──────────────────────────────────────────

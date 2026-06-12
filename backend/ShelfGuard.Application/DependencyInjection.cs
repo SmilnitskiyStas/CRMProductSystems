@@ -45,6 +45,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.Weather.IWeatherService, Features.Weather.WeatherService>();
         services.AddScoped<Features.Cannibalization.ICannibalizationService, Features.Cannibalization.CannibalizationService>();
         services.AddScoped<Features.AiOrders.IAiOrderService, Features.AiOrders.AiOrderService>();
+        services.AddScoped<Features.Telegram.ITelegramLinkService, Features.Telegram.TelegramLinkService>();
         return services;
     }
 }

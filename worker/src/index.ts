@@ -6,6 +6,7 @@ import { startWeeklyReportWorker } from "./jobs/weekly-report.job";
 import { startCleanupWorker } from "./jobs/cleanup.job";
 import { startWeatherFetchWorker } from "./jobs/weather-fetch.job";
 import { startAiOrderWorker } from "./jobs/ai-order.job";
+import { startTelegramListener } from "./jobs/telegram-listener";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -40,6 +41,7 @@ async function main(): Promise<void> {
   startCleanupWorker();
   startWeatherFetchWorker();
   startAiOrderWorker();
+  startTelegramListener();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

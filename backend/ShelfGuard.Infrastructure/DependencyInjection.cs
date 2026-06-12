@@ -80,6 +80,7 @@ public static class DependencyInjection
         services.AddScoped<IWeatherRepository, WeatherRepository>();
         services.AddScoped<ICannibalizationRepository, CannibalizationRepository>();
         services.AddScoped<IAiOrderRepository, AiOrderRepository>();
+        services.AddScoped<ITelegramLinkRepository, TelegramLinkRepository>();
         services.AddScoped<IAiOrderAdvisor, AI.ClaudeOrderAdvisor>();
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
 

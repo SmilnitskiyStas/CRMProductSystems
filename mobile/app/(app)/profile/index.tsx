@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Linking } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/features/auth/store';
 import { logout } from '@/features/auth/api/authApi';
 import { useState } from 'react';
@@ -45,10 +46,20 @@ export default function ProfileScreen() {
   const openNotifications = () => {
     Alert.alert(
       'Сповіщення',
-      'Критичні терміни придатності та AI-замовлення надходять у Telegram. Відкрити бота і натиснути Start?',
+      'Привʼязати ваш Telegram? Бот відкриється з одноразовим кодом — натисніть у ньому Start.',
       [
         { text: 'Скасувати', style: 'cancel' },
-        { text: 'Відкрити бота', onPress: () => { void Linking.openURL('https://t.me/shelfguard_bot'); } },
+        {
+          text: 'Привʼязати Telegram',
+          onPress: async () => {
+            try {
+              const { data } = await apiClient.post<{ deepLink: string }>('/telegram/link-code');
+              await Linking.openURL(data.deepLink);
+            } catch {
+              Alert.alert('Помилка', 'Не вдалося згенерувати код. Спробуйте пізніше.');
+            }
+          },
+        },
       ],
     );
   };
