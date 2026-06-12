@@ -14,3 +14,5 @@ expo-env.d.ts
 # Local env (EXPO_PUBLIC_* baked into dev bundles) — never commit real values
 .env
 .env.local
+# Expo local state
+.expo/
