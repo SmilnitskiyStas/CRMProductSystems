@@ -11,14 +11,15 @@ function getClient(): Resend {
   return resend;
 }
 
+// Returns "skipped" when the channel is not configured; throws on delivery error.
 export async function sendEmail(params: {
   to: string;
   subject: string;
   html: string;
-}): Promise<void> {
+}): Promise<"sent" | "skipped"> {
   if (!RESEND_API_KEY) {
     console.warn("[email] RESEND_API_KEY not set — skipping send");
-    return;
+    return "skipped";
   }
 
   const { error } = await getClient().emails.send({
@@ -29,4 +30,5 @@ export async function sendEmail(params: {
   });
 
   if (error) throw new Error(`Resend error: ${error.message}`);
+  return "sent";
 }

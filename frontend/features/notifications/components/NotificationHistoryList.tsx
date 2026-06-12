@@ -21,6 +21,7 @@ function formatDate(iso: string): string {
 const STATUS_COLOR: Record<string, { bg: string; text: string; label: string }> = {
   sent: { bg: "#052e16", text: "#4ADE80", label: "Надіслано" },
   failed: { bg: "#450a0a", text: "#F87171", label: "Помилка" },
+  skipped: { bg: "#1f2937", text: "#9CA3AF", label: "Пропущено" },
   pending: { bg: "#1c1917", text: "#FACC15", label: "Очікує" },
 };
 

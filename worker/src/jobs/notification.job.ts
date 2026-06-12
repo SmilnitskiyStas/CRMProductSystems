@@ -3,6 +3,7 @@ import { redisConnection } from "../redis";
 import { db } from "../db";
 import { sendTelegramMessage } from "../services/telegram";
 import { sendEmail } from "../services/email";
+import { deliver, logNotifications, type DeliveryOutcome } from "../services/notification-log";
 
 // ── Payload types ──────────────────────────────────────────────────────────
 
@@ -141,40 +142,41 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
     for (const user of usersRes.rows) {
       // If user has explicit settings, respect them; if no settings row → apply role defaults
       const userChannels = enabledMap.get(user.id) ?? new Set(channels);
+      const activeChannels = Array.from(userChannels).filter((c) => channels.includes(c));
 
-      const sendPromises: Promise<void>[] = [];
+      const outcomes: DeliveryOutcome[] = [];
+      for (const channel of activeChannels) {
+        if (channel === "telegram") {
+          outcomes.push(
+            user.telegram_chat_id
+              ? await deliver("telegram", () => sendTelegramMessage(user.telegram_chat_id!, telegramText))
+              : { channel: "telegram", status: "skipped", error: "no telegram_chat_id" }
+          );
+        } else if (channel === "email") {
+          outcomes.push(
+            user.email
+              ? await deliver("email", () => sendEmail({ to: user.email, ...emailContent }))
+              : { channel: "email", status: "skipped", error: "no email" }
+          );
+        } else if (channel === "push") {
+          outcomes.push({ channel: "push", status: "skipped", error: "push channel not implemented" });
+        }
+      }
+      if (outcomes.length === 0) continue;
 
-      if (userChannels.has("telegram") && user.telegram_chat_id && channels.includes("telegram")) {
-        sendPromises.push(
-          sendTelegramMessage(user.telegram_chat_id, telegramText).catch((e) =>
-            console.error(`[notifications] telegram send failed for user ${user.id}:`, e.message)
-          )
-        );
+      for (const o of outcomes) {
+        if (o.status === "failed") {
+          console.error(`[notifications] ${o.channel} send failed for user ${user.id}: ${o.error}`);
+        }
       }
 
-      if (userChannels.has("email") && channels.includes("email")) {
-        sendPromises.push(
-          sendEmail({ to: user.email, ...emailContent }).catch((e) =>
-            console.error(`[notifications] email send failed for user ${user.id}:`, e.message)
-          )
-        );
-      }
-
-      await Promise.all(sendPromises);
-
-      // Log to notification_queue
-      await client.query(
-        `INSERT INTO notification_queue
-           ("TenantId", "UserId", "Channel", "EventType", "Payload", "Status", "RetryCount", "SentAt")
-         VALUES ($1, $2, $3, $4, $5::jsonb, 'sent', 0, NOW())`,
-        [
-          payload.tenantId,
-          user.id,
-          Array.from(userChannels).join(","),
-          `product.${payload.status}`,
-          JSON.stringify(payload),
-        ]
-      );
+      await logNotifications(client, {
+        tenantId: payload.tenantId,
+        userId: user.id,
+        eventType: `product.${payload.status}`,
+        payload,
+        outcomes,
+      });
     }
   } finally {
     client.release();

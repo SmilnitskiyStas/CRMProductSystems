@@ -3,6 +3,7 @@ import { redisConnection } from "../redis";
 import { db } from "../db";
 import { sendTelegramMessage } from "../services/telegram";
 import { sendEmail } from "../services/email";
+import { deliver, logNotifications, type DeliveryOutcome } from "../services/notification-log";
 
 // v1-spec §8.2/8.3: weekly_report — cron Sunday 08:00, recipients Store Manager +
 // Director, channel Email. Email needs RESEND_API_KEY (deferred by user) and is
@@ -175,39 +176,38 @@ async function runWeeklyReport(): Promise<void> {
 
       for (const user of usersRes.rows) {
         const userChannels = enabledMap.get(user.id) ?? new Set(DEFAULT_CHANNELS);
-        const sendPromises: Promise<void>[] = [];
 
-        if (userChannels.has("telegram") && user.telegram_chat_id) {
-          sendPromises.push(
-            sendTelegramMessage(user.telegram_chat_id, telegramText).catch((e) =>
-              console.error(`[weekly-report] telegram send failed for user ${user.id}:`, e.message)
-            )
+        const outcomes: DeliveryOutcome[] = [];
+        if (userChannels.has("telegram")) {
+          outcomes.push(
+            user.telegram_chat_id
+              ? await deliver("telegram", () => sendTelegramMessage(user.telegram_chat_id!, telegramText))
+              : { channel: "telegram", status: "skipped", error: "no telegram_chat_id" }
           );
         }
-
-        if (userChannels.has("email") && user.email) {
-          sendPromises.push(
-            sendEmail({ to: user.email, ...emailContent }).catch((e) =>
-              console.error(`[weekly-report] email send failed for user ${user.id}:`, e.message)
-            )
+        if (userChannels.has("email")) {
+          outcomes.push(
+            user.email
+              ? await deliver("email", () => sendEmail({ to: user.email!, ...emailContent }))
+              : { channel: "email", status: "skipped", error: "no email" }
           );
         }
+        if (outcomes.length === 0) continue;
 
-        if (sendPromises.length === 0) continue;
-        await Promise.all(sendPromises);
+        for (const o of outcomes) {
+          if (o.status === "failed") {
+            console.error(`[weekly-report] ${o.channel} send failed for user ${user.id}: ${o.error}`);
+          }
+        }
 
-        await client.query(
-          `INSERT INTO notification_queue
-             ("TenantId", "UserId", "Channel", "EventType", "Payload", "Status", "RetryCount", "SentAt")
-           VALUES ($1, $2, $3, 'weekly_report', $4::jsonb, 'sent', 0, NOW())`,
-          [
-            stats.tenantId,
-            user.id,
-            Array.from(userChannels).join(","),
-            JSON.stringify(stats),
-          ]
-        );
-        sentCount++;
+        await logNotifications(client, {
+          tenantId: stats.tenantId,
+          userId: user.id,
+          eventType: "weekly_report",
+          payload: stats,
+          outcomes,
+        });
+        if (outcomes.some((o) => o.status === "sent")) sentCount++;
       }
     }
 

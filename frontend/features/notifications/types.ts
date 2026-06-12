@@ -24,7 +24,7 @@ export interface NotificationHistoryItem {
   id: string;
   eventType: NotificationEventType;
   channel: NotificationChannel;
-  status: "sent" | "failed" | "pending";
+  status: "sent" | "failed" | "skipped" | "pending";
   payload: string;
   createdAt: string;
 }
