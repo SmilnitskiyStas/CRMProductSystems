@@ -7,10 +7,6 @@ Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md.
 
 ## v1 — remaining (none block production demo)
 
-## TASK-040: weekly-report.job + cleanup.job implementations
-**Status:** planned · **Priority:** low · **Agent:** backend-developer
-Both placeholders. weekly-report blocked on Resend key (deferred by user).
-
 ## TASK-041: Web floor-plan constructor (/stores/:id/floor-plan)
 **Status:** planned · **Priority:** low (v1.1) · **Agent:** frontend-developer
 v1-spec §6.4 — dnd-kit canvas. Only unimplemented web page from the spec.
@@ -33,6 +29,7 @@ API/web on plain http IP:ports; mobile ships usesCleartextTraffic=true as workar
 ---
 
 ## Done (recent)
+- TASK-040 weekly-report + cleanup jobs ✅ (2026-06-12) — log: 040_2026-06-12_weekly-report-cleanup-jobs_backend-developer.md
 - TASK-035 bin/obj untracked ✅ (2026-06-12) — 473 files, git status clean after builds
 - TASK-034 auth tests fixed ✅ (2026-06-12) — suite 249/249 green
 - TASK-039 Telegram /start linking ✅ (2026-06-12) — deep-link codes + worker listener
