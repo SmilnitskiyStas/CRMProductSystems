@@ -11,14 +11,14 @@ Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md.
 
 ---
 
-## Infrastructure polish (Phase 7)
+## Infrastructure polish (Phase 7) — deferred by user 2026-06-12
 
 ## TASK-043: Domain + HTTPS (Let's Encrypt) + drop cleartext from mobile
-**Priority:** high before real clients
+**Status:** deferred · **Priority:** high before real clients · Updated: 2026-06-12
 API/web on plain http IP:ports; mobile ships usesCleartextTraffic=true as workaround.
 
 ## TASK-044: CI (GitHub Actions: build + test on PR), DB backups
-**Priority:** medium
+**Status:** deferred · **Priority:** medium · Updated: 2026-06-12
 
 ---
 
