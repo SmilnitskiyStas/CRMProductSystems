@@ -1,15 +1,11 @@
 # Backlog
 
 Tasks waiting to be picked up. Ordered by priority.
-Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md; mobile polish done.
+Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md.
 
 ---
 
 ## v1 — remaining (none block production demo)
-
-## TASK-035: Untrack bin/obj from git
-**Status:** planned · **Priority:** medium · **Agent:** devops-engineer
-~70 phantom modified files per build; caused a stash conflict on 2026-06-11.
 
 ## TASK-040: weekly-report.job + cleanup.job implementations
 **Status:** planned · **Priority:** low · **Agent:** backend-developer
@@ -37,9 +33,14 @@ API/web on plain http IP:ports; mobile ships usesCleartextTraffic=true as workar
 ---
 
 ## Done (recent)
+- TASK-035 bin/obj untracked ✅ (2026-06-12) — 473 files, git status clean after builds
 - TASK-034 auth tests fixed ✅ (2026-06-12) — suite 249/249 green
 - TASK-039 Telegram /start linking ✅ (2026-06-12) — deep-link codes + worker listener
-- TASK-038 impersonation e2e ✅ PASS 12/12 (2026-06-12) — log in .claude/logs/reviews/
+- TASK-038 impersonation e2e ✅ PASS 12/12 (2026-06-12)
 - TASK-032 device smoke ✅ (2026-06-11) · TASK-045 mobile polish ✅ (2026-06-12)
 - v2 complete: TASK-046..060 ✅ — logs in .claude/logs/tasks/
 - Pending external: Anthropic credits for live AI e2e; Resend key for email channel.
+
+## Process note (for all agents)
+NEVER edit markdown/source files via PowerShell Get-Content/-replace/Set-Content —
+it mojibakes UTF-8 (happened 3×). Use the Write/Edit tools.
