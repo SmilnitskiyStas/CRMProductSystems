@@ -26,8 +26,9 @@ if [ ! -f "$DEPLOY_DIR/.env" ]; then
   exit 1
 fi
 
-# Load env
-set -a && source "$DEPLOY_DIR/.env" && set +a
+# Do NOT `source .env` here: unquoted values with `;` (the .NET connection
+# string) get truncated by bash, and the exported shell vars then OVERRIDE
+# --env-file in compose interpolation. compose reads .env itself.
 
 echo ">>> Building and starting containers..."
 cd "$DEPLOY_DIR"
