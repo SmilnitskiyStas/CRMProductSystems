@@ -7,11 +7,6 @@ Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md; mobile p
 
 ## v1 — remaining (none block production demo)
 
-## TASK-038: Provider panel — verify impersonation e2e
-**Status:** planned · **Priority:** medium · **Agent:** qa-tester
-All 8 /provider endpoints + /provider page exist. Verify: tenants list, impersonate
-issues tenant-scoped JWT, actions logged, DELETE impersonate restores provider context.
-
 ## TASK-039: Telegram bot account linking (/start flow)
 **Status:** planned · **Priority:** medium · **Agent:** backend-developer
 v1-spec §8.1. Sending works; missing telegraf listener: /start <link-code> →
@@ -51,6 +46,7 @@ API/web on plain http IP:ports; mobile ships usesCleartextTraffic=true as workar
 ---
 
 ## Done (recent)
+- TASK-038 impersonation e2e ✅ PASS 12/12 (2026-06-12) — log in .claude/logs/reviews/
 - TASK-032 device smoke ✅ (2026-06-11) · TASK-045 mobile polish ✅ (2026-06-12)
 - v2 complete: TASK-046..060 ✅ — logs in .claude/logs/tasks/
 - Pending external: Anthropic credits for live AI e2e; Resend key for email channel.
