@@ -24,7 +24,7 @@ type DeviceRow = {
   store_id: string;
   zone_id: string | null;
   device_type: string;
-  config: string | null;
+  config: unknown; // jsonb — pg returns it as a parsed object
 };
 
 // v3-spec §1/§4 payloads. Sensors send either weight or temperature fields.

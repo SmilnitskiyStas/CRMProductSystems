@@ -37,8 +37,8 @@ export async function logNotifications(
     await client.query(
       `INSERT INTO notification_queue
          ("TenantId", "UserId", "Channel", "EventType", "Payload", "Status", "RetryCount", "SentAt", "Error")
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, 0,
-               CASE WHEN $6 = 'sent' THEN NOW() ELSE NULL END, $7)`,
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::text, 0,
+               CASE WHEN $6::text = 'sent' THEN NOW() ELSE NULL END, $7)`,
       [
         params.tenantId,
         params.userId,

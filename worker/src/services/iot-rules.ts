@@ -41,8 +41,11 @@ export type DeviceConfig = {
   unit_weight_grams?: number;
 };
 
-export function parseDeviceConfig(raw: string | null): DeviceConfig {
+// pg returns jsonb columns as parsed objects; raw strings appear via tests/other drivers
+export function parseDeviceConfig(raw: unknown): DeviceConfig {
   if (!raw) return {};
+  if (typeof raw === "object") return raw as DeviceConfig;
+  if (typeof raw !== "string") return {};
   try {
     return JSON.parse(raw) as DeviceConfig;
   } catch {

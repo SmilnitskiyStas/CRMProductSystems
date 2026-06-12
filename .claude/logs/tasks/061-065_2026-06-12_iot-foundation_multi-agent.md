@@ -2,7 +2,7 @@
 task_id: TASK-061..065
 date: 2026-06-12
 agent: project-architect + database-engineer + devops-engineer + backend-developer + frontend-developer
-status: review (code complete; live e2e pending local Docker)
+status: done (live e2e passed on local stack 2026-06-12)
 ---
 
 # Sprint v3.1 «IoT Foundation» — v3-spec §6 Фаза 1
@@ -47,7 +47,19 @@ ADR-010 (decisions.md): MQTT ingestion lives in the Node worker, API is CRUD/rea
 - Page `/iot` with store switcher; sidebar «IoT пристрої» (AT_LEAST_STORE_MANAGER)
 - `next build` green — route 12.9 kB
 
-## Pending verification (blocked on local Docker engine, WSL stuck)
-1. `dotnet ef database update` → RLS check
-2. `docker compose up` → mosquitto smoke (mosquitto_pub to shelfguard/#)
-3. e2e: register temp device → publish temp >8°C → reading row + TG notification queued
+## Live e2e — PASSED (local stack, 2026-06-12)
+Docker engine recovered via `wsl --shutdown` + Docker Desktop restart.
+1. ✅ Migration applied; RLS verified: 3 tables rowsecurity=t, 6 policies
+2. ✅ Mosquitto pub/sub smoke on shelfguard/# (healthcheck green)
+3. ✅ temp 9.5°C (profile fridge, поріг 8) → temperature_readings IsAlert=true;
+   notification job → per-channel rows `telegram / iot.temp_alert / skipped (no chat_id)`
+4. ✅ weight delta −490 г (unit 245) → confidence 85, units 2 → stock_event 'sensor'
+   QuantityDelta −2 → FEFO: найстарша партія (exp 2026-06-08) 18→16
+5. ✅ last_seen_at + battery оновлюються з кожним повідомленням
+Test data cleaned up afterwards (devices, events, queue rows; quantity restored).
+
+## Bugs found & fixed during e2e
+- `parseDeviceConfig`: pg повертає jsonb як object, не string → JSON.parse падав,
+  конфіг ставав {} (поріг/вага не застосовувались). Fix: приймає object|string.
+- `logNotifications` SQL: параметр $6 у двох контекстах → "inconsistent types
+  deduced for parameter $6". Fix: явний `$6::text` cast.
