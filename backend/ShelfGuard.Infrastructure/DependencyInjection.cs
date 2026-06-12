@@ -87,6 +87,28 @@ public static class DependencyInjection
         services.AddScoped<IAiOrderAdvisor, AI.ClaudeOrderAdvisor>();
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
 
+        // v3.2 - ПРРО fiscalization (ADR-012): Checkbox client only when configured,
+        // otherwise Noop keeps the offline-first sale flow running without a provider.
+        services.Configure<Integrations.Prro.PrroOptions>(
+            configuration.GetSection(Integrations.Prro.PrroOptions.SectionName));
+        var prroProvider = configuration["PRRO:PROVIDER"];
+        if (string.Equals(prroProvider, "checkbox", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<Integrations.Prro.CheckboxTokenStore>();
+            services.AddHttpClient<Application.Features.Pos.Fiscal.IFiscalService,
+                                   Integrations.Prro.CheckboxFiscalClient>((sp, http) =>
+            {
+                var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Integrations.Prro.PrroOptions>>().Value;
+                http.BaseAddress = new Uri(opts.BaseUrl.TrimEnd('/') + "/");
+                http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+            });
+        }
+        else
+        {
+            services.AddSingleton<Application.Features.Pos.Fiscal.IFiscalService,
+                                  Application.Features.Pos.Fiscal.NoopFiscalService>();
+        }
+
         // Provider panel (super admin)
         services.AddScoped<ITenantRepository, TenantRepository>();
 

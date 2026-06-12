@@ -16,6 +16,12 @@ services:
       Cors__Origins: ${Cors__Origins:-http://localhost:3000}
       Claude__ApiKey: ${CLAUDE_API_KEY:-}
       Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      PRRO__PROVIDER: ${PRRO__PROVIDER:-}
+      PRRO__BASEURL: ${PRRO__BASEURL:-https://api.checkbox.in.ua/api/v1}
+      PRRO__LICENSEKEY: ${PRRO__LICENSEKEY:-}
+      PRRO__CASHIER__PINCODE: ${PRRO__CASHIER__PINCODE:-}
+      PRRO__CASHIER__LOGIN: ${PRRO__CASHIER__LOGIN:-}
+      PRRO__CASHIER__PASSWORD: ${PRRO__CASHIER__PASSWORD:-}
     external_links:
       - shelfguard_postgres
 

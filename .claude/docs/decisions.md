@@ -3,6 +3,29 @@
 **Owner:** project-architect
 **Updated:** 2026-06-12
 
+## ADR-012: Checkbox as fiscal provider behind IFiscalService
+Date: 2026-06-12
+Status: accepted
+
+Context: ADR-011 planned direct integration with the ДПС fiscal server (fs.tax.gov.ua) with our own КЕП signing. КЕП + 1-ПРРО registration is still blocked on the user, which blocks any real fiscalization. The user registered a test cash register with Checkbox (checkbox.ua) — a Ukrainian SaaS ПРРО provider (фіскальний номер TEST582378, test mode). Checkbox handles КЕП signing server-side, fiscalization, offline numbering, and ДПС submission; we talk to its REST API. Auth model: `X-License-Key` header identifies the cash register; a cashier signs in (login/password or PIN) to obtain a bearer token; receipts and shifts go through that token.
+
+Decision:
+1. Checkbox becomes the fiscal provider. ADR-011's isolation rule stands: everything Checkbox-specific (HTTP client, DTOs, auth/token handling) lives in `ShelfGuard.Infrastructure/Integrations/Prro`; the Application layer sees only `IFiscalService` and never Checkbox shapes.
+2. `IKepSigner` is NOT needed for the Checkbox path — Checkbox signs documents server-side with its own КЕП. The interface stays in the codebase only if/when a direct-ДПС provider is added.
+3. The offline-first rule from ADR-011 stays unchanged: sale committed locally first (pos_transaction + items + FEFO write-down in one DB transaction), fiscalization is async with a retry job; `Status = 'pending_fiscalization'` until Checkbox returns a fiscal number.
+4. Provider is pluggable behind `IFiscalService`: a future direct-ДПС client (with a real KEP signer) can be added via config switch without any flow changes in Application/API/worker.
+5. Config via env (secrets only in `.env`, never committed): `PRRO__PROVIDER=checkbox`, `PRRO__BASEURL` (test: `https://dev-api.checkbox.in.ua/api/v1`, prod: `https://api.checkbox.ua/api/v1`), `PRRO__LICENSEKEY`, `PRRO__CASHIER__LOGIN` / `PRRO__CASHIER__PINCODE`. License key is stored in `.claude/private/access.md`.
+
+Consequences:
++ No ПРРО certification / КЕП burden on our side — Checkbox is already certified with ДПС
++ Demo-able today: test cash register works without waiting for КЕП / 1-ПРРО registration
++ Checkbox handles offline numbering per ПРРО rules — we don't reimplement it
++ Flow (offline-first, async fiscalization, retry job) identical regardless of provider
+- Vendor dependency + per-receipt cost on the production plan
+- Cashier credentials (login/PIN) still pending from the user — token flow can't be live-tested end-to-end yet
+
+Supersedes: ADR-011 points 2 (IKepSigner/StubKepSigner) for the Checkbox path; points 1, 3, 4 remain in force.
+
 ## ADR-011: PRRO fiscal integration — isolated client, pluggable signer, offline-first
 Date: 2026-06-12
 Status: accepted

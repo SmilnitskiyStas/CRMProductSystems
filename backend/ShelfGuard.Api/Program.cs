@@ -12,6 +12,11 @@ using ShelfGuard.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Local secrets (gitignored) — e.g. PRRO license key / cashier creds for dev runs.
+// Env vars (PRRO__*, Claude__* etc.) still take precedence in Docker/production.
+builder.Configuration.AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: true);
+builder.Configuration.AddEnvironmentVariables();
+
 // All error responses follow the { "error": "..." } contract (api-contracts.md):
 // - InvalidModelStateResponseFactory covers automatic 400s from model binding/validation
 // - ErrorBodyClientErrorFactory covers body-less results (bare NotFound(), Forbid(), ...)

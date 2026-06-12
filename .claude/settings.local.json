@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(5432..5440 | ForEach-Object { $port = $_; $conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { \"$port — ЗАЙНЯТИЙ \\(PID $\\($conn.OwningProcess\\), $\\($\\(Get-Process -Id $conn.OwningProcess -EA SilentlyContinue\\).Name\\)\\)\" } else { \"$port — вільний\" } })"
+      "PowerShell(5432..5440 | ForEach-Object { $port = $_; $conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { \"$port — ЗАЙНЯТИЙ \\(PID $\\($conn.OwningProcess\\), $\\($\\(Get-Process -Id $conn.OwningProcess -EA SilentlyContinue\\).Name\\)\\)\" } else { \"$port — вільний\" } })",
+      "Bash(git push origin main)",
+      "PowerShell(git push origin main)"
     ]
   }
 }

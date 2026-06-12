@@ -1,18 +1,31 @@
 # Current Sprint — v3.2 «ПРРО Каса» (started 2026-06-12)
 
-Scope: v3-spec §3 + §6 Фаза 4. ADR-011: isolated Prro client, IKepSigner, offline-first.
-ДПС fiscal server reachable (ServerState 200). Blocked externally: КЕП + 1-ПРРО реєстрація (user).
+Scope: v3-spec §3 + §6 Фаза 4. ADR-012: Checkbox (SaaS ПРРО) as fiscal provider behind
+IFiscalService, offline-first (ADR-011 flow stays). Test cash register registered in
+Checkbox cabinet (фіскальний номер TEST582378; license key in .claude/private/access.md).
+Blocked externally: cashier login/PIN pending from user.
 
 ## TASK-066 — DB: pos_shifts, pos_transactions, pos_transaction_items
-**Status:** planned · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-12
+**Status:** done · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-12
 v3-spec §5 + Status/'pending_fiscalization', OfflineNumber; RLS (TenantId direct);
 FK product_stock SET NULL (яка партія списана). Accept: migration + RLS verified, build green.
+Committed as 6d7a5082 «feat(pos): v3.2 POS schema».
 
-## TASK-067 — Infrastructure: PRRO fiscal client + IKepSigner
-**Status:** planned · **Agent:** backend-developer · **Depends:** — · Updated: 2026-06-12
-Integrations/Prro: FiscalServerClient (ServerState, Shifts open/close, SendDocument),
-IKepSigner + StubKepSigner (test mode), config PRRO__* (.env). Accept: ServerState
-live-test green; signed paths covered by stub tests.
+## TASK-067 — Infrastructure: Checkbox fiscal client (IFiscalService)
+**Status:** review · **Agent:** backend-developer · **Depends:** — · Updated: 2026-06-12
+Done: IFiscalService + DTOs (Application/Features/Pos/Fiscal), CheckboxFiscalClient +
+PrroOptions + token store (Infrastructure/Integrations/Prro), Noop fallback, DI switch,
+27 unit tests (290/290 green). Live: license key valid on api.checkbox.in.ua
+(⚠️ dev-api host from docs does NOT resolve — docs corrected); signin probes → 403
+cashier.invalid_credentials as expected. Blocker stays: cashier login/PIN pending (user).
+Log: 067_2026-06-12_checkbox-fiscal-client_backend-developer.md
+ADR-012. Integrations/Prro: CheckboxFiscalClient implementing IFiscalService —
+cashier signin (login/password or PIN → bearer token), shift open/close, sell receipt,
+receipt status; DTOs; config binding PRRO__* (PROVIDER/BASEURL/LICENSEKEY/CASHIER__*,
+secrets in .env only); error mapping + timeouts; unit tests with fake HTTP handler.
+Accept: unit tests green (fake handler); live: dev-api.checkbox.in.ua reachability green
++ license-key flow as far as possible without cashier creds (blocker: cashier login/PIN
+pending from user).
 
 ## TASK-068 — API: POS endpoints (shifts, sales → FEFO + stock_events)
 **Status:** planned · **Agent:** backend-developer · **Depends:** 066, 067 · Updated: 2026-06-12
@@ -23,9 +36,10 @@ fiscalization async (Status). Accept: service tests (FEFO, expired block, totals
 
 ## TASK-069 — Worker: fiscalization retry job
 **Status:** planned · **Agent:** backend-developer (worker) · **Depends:** 067, 068 · Updated: 2026-06-12
-Cron */5 min: pending_fiscalization docs → FiscalServerClient via API або напряму ДПС;
-update FiscalNumber/Status; offline numbering per ПРРО rules (stub until КЕП).
-Accept: tsc green; retry/backoff covered.
+Cron */5 min: pending_fiscalization docs → submit/poll receipt status via Checkbox
+(through API endpoint backed by IFiscalService); update FiscalNumber/Status on DONE.
+Offline numbering handled by Checkbox itself (ADR-012). Accept: tsc green;
+retry/backoff covered.
 
 ## TASK-070 — Mobile: POS screens (tablet) in Expo app
 **Status:** planned · **Agent:** mobile-developer · **Depends:** 068 · Updated: 2026-06-12

@@ -3,6 +3,28 @@
 **Owner:** project-architect
 **Updated:** 2026-06-12
 
+## Checkbox — ПРРО fiscal provider (v3.2)
+Provider: Checkbox (checkbox.ua), SaaS ПРРО — handles КЕП signing, fiscalization,
+offline numbering, ДПС submission (ADR-012)
+Base URL: test `https://api.checkbox.in.ua/api/v1` · prod `https://api.checkbox.ua/api/v1`
+(⚠️ docs mention dev-api.checkbox.in.ua — that host does NOT resolve; verified live
+2026-06-12 that the working test host is api.checkbox.in.ua)
+Auth: `X-License-Key` header identifies the cash register; cashier signin
+(POST cashier/signin login/password, or cashier/signinPinCode pin_code + X-License-Key)
+→ bearer token; receipts/shifts use that token. Missing/expired token → 403
+`{"message":"Not authenticated","code":null}` (not 401) — client re-auths on both.
+Endpoints used: cashier signin, POST shifts / shifts/close, POST receipts/sell,
+GET receipts/{id}, GET cash-registers/info (license-key-only health check)
+Wire units: money = integer kopecks; quantity = integer thousandths (1 шт = 1000,
+2.25 кг = 2250); shift statuses CREATED/OPENING/OPENED/CLOSING/CLOSED;
+receipt statuses CREATED/DONE/ERROR/CANCELLATION/CANCELLED;
+errors `{"code","message"}` (403/4xx) or FastAPI `{"detail":[...]}` (422)
+Location: ShelfGuard.Infrastructure/Integrations/Prro (CheckboxFiscalClient → IFiscalService)
+Rule: Checkbox client NEVER referenced outside Integrations/Prro; Application sees IFiscalService only
+Env: PRRO__PROVIDER=checkbox, PRRO__BASEURL, PRRO__LICENSEKEY,
+PRRO__CASHIER__LOGIN / PRRO__CASHIER__PINCODE — secrets only in .env, never committed
+Test register: фіскальний номер TEST582378 (test mode; receipts non-fiscal)
+
 ## MQTT / Mosquitto (v3.1)
 Broker: eclipse-mosquitto:2 in docker-compose (`mosquitto` service, host port 1884 → 1883)
 Config: `infra/mosquitto/mosquitto.conf` (dev: allow_anonymous; prod needs password_file)
