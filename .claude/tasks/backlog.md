@@ -7,11 +7,6 @@ Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md; mobile p
 
 ## v1 — remaining (none block production demo)
 
-## TASK-039: Telegram bot account linking (/start flow)
-**Status:** planned · **Priority:** medium · **Agent:** backend-developer
-v1-spec §8.1. Sending works; missing telegraf listener: /start <link-code> →
-binds users.TelegramChatId automatically (today bound manually via SQL).
-
 ## TASK-034: Fix 2 failing AuthServiceTests
 **Status:** planned · **Priority:** medium · **Agent:** backend-developer
 Mock token generator returns "" (setup signature mismatch). Suite must be green.
@@ -46,6 +41,7 @@ API/web on plain http IP:ports; mobile ships usesCleartextTraffic=true as workar
 ---
 
 ## Done (recent)
+- TASK-039 Telegram /start linking ✅ (2026-06-12) — deep-link codes + worker listener
 - TASK-038 impersonation e2e ✅ PASS 12/12 (2026-06-12) — log in .claude/logs/reviews/
 - TASK-032 device smoke ✅ (2026-06-11) · TASK-045 mobile polish ✅ (2026-06-12)
 - v2 complete: TASK-046..060 ✅ — logs in .claude/logs/tasks/
