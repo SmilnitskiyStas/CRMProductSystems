@@ -3,6 +3,25 @@
 **Owner:** project-architect
 **Updated:** 2026-06-12
 
+## ADR-011: PRRO fiscal integration — isolated client, pluggable signer, offline-first
+Date: 2026-06-12
+Status: accepted
+
+Context: v3 Phase 4 needs integration with the ДПС fiscal server (ПРРО). Connectivity confirmed: POST fs.tax.gov.ua:8609/fs/cmd `{"Command":"ServerState"}` → 200 unsigned. All fiscal documents (checks, Z-reports, shift open/close) must be signed with КЕП, which is not yet available (user registering 1-ПРРО). Legal flow also requires offline mode (ПРРО must keep selling when ДПС is unreachable, with offline fiscal numbers).
+
+Decision:
+1. Fiscal client lives in `ShelfGuard.Infrastructure/Integrations/Prro` only (same isolation rule as Claude API). Application layer talks to `IFiscalService`; controllers never see ДПС shapes.
+2. Signing behind `IKepSigner` (`SignAsync(byte[] document)`). Until КЕП arrives, `StubKepSigner` runs the pipeline in test mode: documents get local numbers, `FiscalNumber = null`, `Status = 'pending_fiscalization'`.
+3. Offline-first: every sale is committed locally first (pos_transactions + stock_events + FEFO write-down in one DB transaction); fiscalization is a follow-up step that updates FiscalNumber. A BullMQ retry job re-submits unfiscalized documents.
+4. POS UI = new screens in the existing Expo app (tablet layout), not a separate app. Same auth, same API client.
+
+Consequences:
++ Sales never blocked by ДПС availability or missing КЕП — demo-able today
++ КЕП drop-in later: implement real signer + config, no flow changes
++ Single mobile codebase
+- Fiscal numbers arrive asynchronously — receipt print/SMS must handle "fiscalization pending"
+- Test mode receipts are legally non-fiscal — clearly marked in UI until КЕП configured
+
 ## ADR-010: MQTT ingestion lives in the Node worker
 Date: 2026-06-12
 Status: accepted

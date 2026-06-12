@@ -69,6 +69,11 @@ public sealed class AppDbContext : DbContext
     public DbSet<TemperatureReading> TemperatureReadings => Set<TemperatureReading>();
     public DbSet<WeightReading> WeightReadings => Set<WeightReading>();
 
+    // v3 — POS (ПРРО Каса)
+    public DbSet<PosShift> PosShifts => Set<PosShift>();
+    public DbSet<PosTransaction> PosTransactions => Set<PosTransaction>();
+    public DbSet<PosTransactionItem> PosTransactionItems => Set<PosTransactionItem>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -728,6 +733,67 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(r => r.Processed).HasFilter("\"Processed\" = false");
             e.HasOne(r => r.Device).WithMany()
              .HasForeignKey(r => r.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── PosShift (v3 Phase 4) ───────────────────────────────────────────
+        builder.Entity<PosShift>(e =>
+        {
+            e.ToTable("pos_shifts");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.FiscalShiftNumber).HasMaxLength(50);
+            e.Property(s => s.OpeningCash).HasColumnType("decimal(12,2)");
+            e.Property(s => s.ClosingCash).HasColumnType("decimal(12,2)");
+            e.Property(s => s.TotalSales).HasColumnType("decimal(12,2)").HasDefaultValue(0m);
+            e.Property(s => s.OpenedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(s => new { s.TenantId, s.StoreId, s.OpenedAt });
+            // one open shift per store at a time
+            e.HasIndex(s => s.StoreId).IsUnique().HasFilter("\"ClosedAt\" IS NULL");
+            e.HasOne(s => s.Store).WithMany()
+             .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Cashier).WithMany()
+             .HasForeignKey(s => s.CashierId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── PosTransaction (v3 Phase 4) ─────────────────────────────────────
+        builder.Entity<PosTransaction>(e =>
+        {
+            e.ToTable("pos_transactions");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.ReceiptNumber).HasMaxLength(50).IsRequired();
+            e.Property(t => t.FiscalNumber).HasMaxLength(100);
+            e.Property(t => t.PaymentType).HasMaxLength(20).HasDefaultValue("cash");
+            e.Property(t => t.TotalAmount).HasColumnType("decimal(12,2)");
+            e.Property(t => t.TaxAmount).HasColumnType("decimal(12,2)");
+            e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("pending_fiscalization");
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(t => new { t.TenantId, t.StoreId, t.CreatedAt });
+            e.HasIndex(t => t.Status).HasFilter("\"Status\" = 'pending_fiscalization'");
+            e.HasIndex(t => new { t.TenantId, t.ReceiptNumber }).IsUnique();
+            e.HasOne(t => t.Store).WithMany()
+             .HasForeignKey(t => t.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.Shift).WithMany()
+             .HasForeignKey(t => t.ShiftId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(t => t.Items).WithOne(i => i.Transaction)
+             .HasForeignKey(i => i.TransactionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── PosTransactionItem (v3 Phase 4) ─────────────────────────────────
+        builder.Entity<PosTransactionItem>(e =>
+        {
+            e.ToTable("pos_transaction_items");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.Quantity).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(i => i.PriceRetail).HasColumnType("decimal(12,2)");
+            e.Property(i => i.DiscountAmount).HasColumnType("decimal(12,2)").HasDefaultValue(0m);
+            e.Property(i => i.PriceFinal).HasColumnType("decimal(12,2)");
+            e.HasIndex(i => i.TransactionId);
+            e.HasOne(i => i.Product).WithMany()
+             .HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ProductStock>().WithMany()
+             .HasForeignKey(i => i.ProductStockId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
     }
 }

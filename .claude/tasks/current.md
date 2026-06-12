@@ -1,4 +1,40 @@
-# Current Sprint — v3.1 «IoT Foundation» (started 2026-06-12)
+# Current Sprint — v3.2 «ПРРО Каса» (started 2026-06-12)
+
+Scope: v3-spec §3 + §6 Фаза 4. ADR-011: isolated Prro client, IKepSigner, offline-first.
+ДПС fiscal server reachable (ServerState 200). Blocked externally: КЕП + 1-ПРРО реєстрація (user).
+
+## TASK-066 — DB: pos_shifts, pos_transactions, pos_transaction_items
+**Status:** planned · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-12
+v3-spec §5 + Status/'pending_fiscalization', OfflineNumber; RLS (TenantId direct);
+FK product_stock SET NULL (яка партія списана). Accept: migration + RLS verified, build green.
+
+## TASK-067 — Infrastructure: PRRO fiscal client + IKepSigner
+**Status:** planned · **Agent:** backend-developer · **Depends:** — · Updated: 2026-06-12
+Integrations/Prro: FiscalServerClient (ServerState, Shifts open/close, SendDocument),
+IKepSigner + StubKepSigner (test mode), config PRRO__* (.env). Accept: ServerState
+live-test green; signed paths covered by stub tests.
+
+## TASK-068 — API: POS endpoints (shifts, sales → FEFO + stock_events)
+**Status:** planned · **Agent:** backend-developer · **Depends:** 066, 067 · Updated: 2026-06-12
+POST /api/pos/shifts/open|close, POST /api/pos/sales (items by barcode; critical → auto
+discount price, expired → 423 block per spec §3), GET /api/pos/shifts/current, sales list.
+Sale = one DB tx: pos_transaction + items + FEFO write-down + stock_events('pos_sale');
+fiscalization async (Status). Accept: service tests (FEFO, expired block, totals), build green.
+
+## TASK-069 — Worker: fiscalization retry job
+**Status:** planned · **Agent:** backend-developer (worker) · **Depends:** 067, 068 · Updated: 2026-06-12
+Cron */5 min: pending_fiscalization docs → FiscalServerClient via API або напряму ДПС;
+update FiscalNumber/Status; offline numbering per ПРРО rules (stub until КЕП).
+Accept: tsc green; retry/backoff covered.
+
+## TASK-070 — Mobile: POS screens (tablet) in Expo app
+**Status:** planned · **Agent:** mobile-developer · **Depends:** 068 · Updated: 2026-06-12
+Зміна (open/close + PIN), продаж: скан штрихкоду (expo-camera) → кошик → ціна з акцією,
+critical/expired badge, оплата cash/card (терминал SDK / принтер — Phase 4.1, поза скоупом),
+чек зі статусом фіскалізації. Accept: tsc green; flow проти прод-API.
+
+---
+# Previous sprint — v3.1 «IoT Foundation» (started 2026-06-12)
 
 Scope: v3-spec §6 Фаза 1. ADR-010: MQTT ingestion in worker. pos_* tables → Phase 4.
 **✅ COMPLETE 2026-06-12** — log: 061-065_2026-06-12_iot-foundation_multi-agent.md
