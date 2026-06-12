@@ -7,10 +7,6 @@ Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md; mobile p
 
 ## v1 — remaining (none block production demo)
 
-## TASK-034: Fix 2 failing AuthServiceTests
-**Status:** planned · **Priority:** medium · **Agent:** backend-developer
-Mock token generator returns "" (setup signature mismatch). Suite must be green.
-
 ## TASK-035: Untrack bin/obj from git
 **Status:** planned · **Priority:** medium · **Agent:** devops-engineer
 ~70 phantom modified files per build; caused a stash conflict on 2026-06-11.
@@ -41,6 +37,7 @@ API/web on plain http IP:ports; mobile ships usesCleartextTraffic=true as workar
 ---
 
 ## Done (recent)
+- TASK-034 auth tests fixed ✅ (2026-06-12) — suite 249/249 green
 - TASK-039 Telegram /start linking ✅ (2026-06-12) — deep-link codes + worker listener
 - TASK-038 impersonation e2e ✅ PASS 12/12 (2026-06-12) — log in .claude/logs/reviews/
 - TASK-032 device smoke ✅ (2026-06-11) · TASK-045 mobile polish ✅ (2026-06-12)
