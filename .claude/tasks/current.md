@@ -6,8 +6,11 @@ Builds/tests green (backend 15/15 IoT tests, worker tsc, next build).
 Live e2e PASSED on local stack: migration+RLS ✓, mosquitto pub/sub ✓,
 temp alert → notification rows ✓, weight −490г → FEFO −2 units ✓.
 2 bugs caught & fixed in e2e (jsonb config parsing; $6 type cast in notification log).
-Remaining for prod: deploy (compose has new mosquitto service + worker MQTT_URL),
-`dotnet ef database update` on prod DB.
+**DEPLOYED to production 2026-06-12** (93.127.143.98): mosquitto healthy (port 1884),
+V3IotFoundation migration applied (auto on API start), RLS 6 policies verified,
+worker «[mqtt] connected, subscribed to shelfguard/#», /iot and /floor-plan → 200.
+Deploy bug fixed on the way: deploy.sh sourced unquoted .env → truncated DB
+connection string overrode --env-file → API crash loop (fix: 95f5586d + quoted .env).
 
 ## TASK-061 — DB: IoT schema (iot_devices, temperature_readings, weight_readings)
 **Status:** done · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-12
