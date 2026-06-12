@@ -70,6 +70,9 @@ public static class DependencyInjection
         // Activity log
         services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
 
+        // v3 - IoT devices
+        services.AddScoped<IIotDeviceRepository, IotDeviceRepository>();
+
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
         services.AddScoped<IAduRepository, AduRepository>();

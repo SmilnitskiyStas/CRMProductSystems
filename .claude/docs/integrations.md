@@ -1,7 +1,18 @@
 ﻿# Integrations
 
 **Owner:** project-architect
-**Updated:** 2026-06-03
+**Updated:** 2026-06-12
+
+## MQTT / Mosquitto (v3.1)
+Broker: eclipse-mosquitto:2 in docker-compose (`mosquitto` service, host port 1884 → 1883)
+Config: `infra/mosquitto/mosquitto.conf` (dev: allow_anonymous; prod needs password_file)
+Consumer: worker `jobs/mqtt-listener.ts` subscribes `shelfguard/#` (ADR-010)
+Payloads (v3-spec §1/§4): `{device_id, delta, weight_before/after, timestamp}` |
+`{device_id, temperature, humidity, battery, timestamp}` — routed by registered device_type
+Pipeline: resolve device → last_seen_at/battery → readings table → stock_events →
+notifications queue (temp_alert / iot_offline). Pure rules in `services/iot-rules.ts`
+(confidence 95/85/60, auto write-down ≥70; fridge alert >+8°C, freezer >-12°C;
+offline >30 min; sustained 2h violation → product_stock.status='temp_violation')
 
 ## Claude API (v2.0)
 Provider: Anthropic

@@ -44,6 +44,7 @@ Separate Node.js service at `/worker`. Communicates with the API via Redis queue
 | `notifications` | Queue (pushed by expiry-check) | ✅ implemented (TASK-033) |
 | `weekly-report` | Cron: Sunday 08:00 | ✅ implemented (TASK-040) — per-tenant summary, Telegram + email (email skipped until RESEND_API_KEY) |
 | `cleanup` | Cron: daily 03:00 | ✅ implemented (TASK-040) — archive sold_out >30d; purge notification_queue 90d, stock_events/activity_logs 180d |
+| `mqtt-listener` | MQTT subscribe `shelfguard/#` (not a queue) | ✅ implemented (TASK-064, ADR-010) — readings, FEFO write-down, temp/offline alerts |
 
 ## AI Integration
 All AI/ML logic isolated in `ShelfGuard.Infrastructure/AI`. Application layer calls through interfaces — never directly through provider SDKs. Status: **v2.0 — not started**.

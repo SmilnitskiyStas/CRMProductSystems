@@ -1,7 +1,22 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-06-04
+**Updated:** 2026-06-12
+
+## ADR-010: MQTT ingestion lives in the Node worker
+Date: 2026-06-12
+Status: accepted
+
+Context: v3 Phase 1 needs an MQTT consumer for weight/temperature sensors (v3-spec §1, §4). Options: (a) MQTT client hosted inside ASP.NET Core API; (b) a dedicated subscriber in the existing Node worker service.
+
+Decision: The worker subscribes to Mosquitto (`mqtt` npm package, topic `shelfguard/{tenant_id}/{store_id}/#`) and owns the full ingestion path: validate device → write temperature_readings / weight_readings → derive stock_events → enqueue notifications via the existing BullMQ pipeline. The ASP.NET API never talks to MQTT; it only serves CRUD for iot_devices and read endpoints for readings. Mosquitto runs as a docker-compose service.
+
+Consequences:
++ Reuses the worker's existing always-on process, pg pool, notification queue, and Telegram path (same pattern as telegram-listener)
++ API stays request/response only — no hosted background services
++ Ingestion can be scaled/restarted independently of the API
+- Sensor business rules (confidence, alert thresholds) live in TypeScript, not C# — acceptable: they are stream-processing rules, not request-path domain logic
+- Worker now requires MQTT_URL env; local dev needs Mosquitto up for IoT features
 
 ## ADR-009: IAnalyticsRepository in Application layer
 Date: 2026-06-04

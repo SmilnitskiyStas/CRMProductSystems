@@ -18,7 +18,25 @@ export type ExpiryAlertPayload = {
   quantity: number;
 };
 
-type NotificationPayload = ExpiryAlertPayload;
+export type TempAlertPayload = {
+  type: "temp_alert";
+  tenantId: string;
+  storeId: string;
+  zoneId: string | null;
+  deviceId: string;
+  temperature: number;
+  threshold: number | null;
+};
+
+export type IotOfflinePayload = {
+  type: "iot_offline";
+  tenantId: string;
+  storeId: string;
+  deviceId: string;
+  deviceName: string;
+};
+
+type NotificationPayload = ExpiryAlertPayload | TempAlertPayload | IotOfflinePayload;
 
 // ── Role → event subscription matrix (from v1-spec section 8.2) ────────────
 
@@ -183,6 +201,67 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
   }
 }
 
+// ── IoT alerts (v3-spec §4) ────────────────────────────────────────────────
+
+// Send a plain telegram alert to the given roles and log per-channel outcomes
+async function handleIotAlert(
+  tenantId: string,
+  storeId: string,
+  roles: string[],
+  eventType: string,
+  text: string,
+  payload: unknown
+): Promise<void> {
+  const client = await db.connect();
+  try {
+    const storeRes = await client.query<{ name: string }>(
+      `SELECT "Name" AS name FROM stores WHERE "Id" = $1`, [storeId]);
+    const storeName = storeRes.rows[0]?.name ?? "Невідомий магазин";
+    const fullText = `${text}\n<b>Магазин:</b> ${storeName}`;
+
+    const usersRes = await client.query<{ id: string; telegram_chat_id: string | null }>(
+      `SELECT "Id" AS id, "TelegramChatId" AS telegram_chat_id
+       FROM users
+       WHERE "TenantId" = $1 AND "Role" = ANY($2::text[]) AND "IsActive" = true`,
+      [tenantId, roles]
+    );
+
+    for (const user of usersRes.rows) {
+      const outcome = user.telegram_chat_id
+        ? await deliver("telegram", () => sendTelegramMessage(user.telegram_chat_id!, fullText))
+        : { channel: "telegram", status: "skipped" as const, error: "no telegram_chat_id" };
+
+      if (outcome.status === "failed") {
+        console.error(`[notifications] ${eventType} telegram failed for user ${user.id}: ${outcome.error}`);
+      }
+      await logNotifications(client, {
+        tenantId, userId: user.id, eventType, payload, outcomes: [outcome],
+      });
+    }
+  } finally {
+    client.release();
+  }
+}
+
+function handleTempAlert(p: TempAlertPayload): Promise<void> {
+  const text =
+    `🌡 <b>ShelfGuard — ТЕМПЕРАТУРНИЙ АЛЕРТ</b>\n\n` +
+    `<b>Температура:</b> ${p.temperature}°C (поріг ${p.threshold ?? "—"}°C)`;
+  return handleIotAlert(
+    p.tenantId, p.storeId,
+    ["store_manager", "network_manager", "enterprise_admin"],
+    "iot.temp_alert", text, p
+  );
+}
+
+function handleIotOffline(p: IotOfflinePayload): Promise<void> {
+  const text =
+    `📵 <b>ShelfGuard — пристрій офлайн</b>\n\n` +
+    `<b>Пристрій:</b> ${p.deviceName}\n` +
+    `Немає даних понад 30 хвилин.`;
+  return handleIotAlert(p.tenantId, p.storeId, ["store_manager"], "iot.offline", text, p);
+}
+
 // ── Worker ─────────────────────────────────────────────────────────────────
 
 export function startNotificationWorker(): Worker {
@@ -193,6 +272,10 @@ export function startNotificationWorker(): Worker {
 
       if (job.data.type === "expiry_alert") {
         await handleExpiryAlert(job.data);
+      } else if (job.data.type === "temp_alert") {
+        await handleTempAlert(job.data);
+      } else if (job.data.type === "iot_offline") {
+        await handleIotOffline(job.data);
       } else {
         console.warn(`[notifications] unknown job type: ${(job.data as any).type}`);
       }

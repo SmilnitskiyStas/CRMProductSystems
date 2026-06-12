@@ -133,6 +133,19 @@ All three: RLS enabled — `tenant_isolation` (strict, no IS-NULL branch) + `pro
 `daily_sales.Source`: manual / pos / import. `IsAnomaly=true` rows are excluded from ADU.
 Entities: `ShelfGuard.Domain/Entities/{DailySale,ProductAdu,SupplySchedule}.cs`.
 
+## v3 — IoT Foundation (V3IotFoundation migration, 2026-06-12)
+
+| Table | Purpose | Key constraints |
+|---|---|---|
+| `iot_devices` | Registered sensors/cameras per store/zone | UNIQUE(TenantId, DeviceId); FK stores RESTRICT, store_zones SET NULL; Config jsonb |
+| `temperature_readings` | Temp/humidity stream from temp_sensors | FK iot_devices CASCADE; idx (DeviceId, RecordedAt DESC) |
+| `weight_readings` | Weight deltas from shelf sensors | FK iot_devices CASCADE; idx (DeviceId, RecordedAt DESC) + partial idx Processed=false |
+
+RLS: `iot_devices` — standard tenant_isolation + provider_bypass (TenantId direct).
+Readings tables — tenant via `EXISTS (SELECT 1 FROM iot_devices d WHERE d."Id" = "DeviceId" AND d."TenantId" = …)` + provider_bypass.
+Entities: `ShelfGuard.Domain/Entities/{IotDevice,TemperatureReading,WeightReading}.cs`.
+`iot_devices.Config` (jsonb): temp sensors `{profile: fridge|freezer, alert_above?}`; weight sensors `{product_id, unit_weight_grams}`.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

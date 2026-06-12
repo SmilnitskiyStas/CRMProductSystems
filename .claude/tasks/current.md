@@ -1,4 +1,49 @@
-# Current Sprint — v2.5 «AI Agent» ✅ COMPLETE (2026-06-12) — v2 DONE
+# Current Sprint — v3.1 «IoT Foundation» (started 2026-06-12)
+
+Scope: v3-spec §6 Фаза 1. ADR-010: MQTT ingestion in worker. pos_* tables → Phase 4.
+**All 5 tasks code-complete 2026-06-12** — log: 061-065_2026-06-12_iot-foundation_multi-agent.md
+Builds/tests green (backend 15/15 IoT tests, worker tsc, next build).
+Live e2e pending: local Docker engine refused to start (WSL docker-desktop stuck) —
+needs `dotnet ef database update` + mosquitto smoke + sensor e2e when stack is up.
+
+## TASK-061 — DB: IoT schema (iot_devices, temperature_readings, weight_readings)
+**Status:** review · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-12
+v3-spec §5: 3 tables + RLS (tenant via iot_devices.tenant_id; readings join device),
+FKs to stores/store_zones, idx_temp_readings_device_time + device_id unique.
+Accept: migration applies cleanly; RLS verified cross-tenant; dotnet build green.
+
+## TASK-062 — DevOps: Mosquitto MQTT broker in docker-compose
+**Status:** review · **Agent:** devops-engineer · **Depends:** — · Updated: 2026-06-12
+Service `mosquitto` (eclipse-mosquitto:2), port 1883, allow_anonymous for dev,
+persistent volume, MQTT_URL env wired to worker. Accept: `docker compose up` →
+pub/sub smoke test on shelfguard/# passes.
+
+## TASK-063 — API: iot_devices CRUD + readings endpoints
+**Status:** review · **Agent:** backend-developer · **Depends:** 061 · Updated: 2026-06-12
+GET/POST /api/iot/devices, GET/PUT/DELETE(soft) /api/iot/devices/:id,
+GET /api/iot/devices/:id/readings (temp, paged), GET /api/iot/temperature?store_id=
+(latest per device). Thin controllers, service in Application/Features/IoT.
+Accept: tests for service rules (device_id unique per tenant, soft delete); build+tests green.
+
+## TASK-064 — Worker: MQTT listener → readings + stock_events + temp alerts
+**Status:** review · **Agent:** backend-developer (worker) · **Depends:** 061, 062 · Updated: 2026-06-12
+Subscribe shelfguard/#; resolve device by device_id; update last_seen_at/battery.
+temp payload → temperature_readings + threshold check (fridge >+8°C, freezer >-12°C
+from device config) → is_alert + notification queue (critical → manager/director).
+weight payload → weight_readings + confidence calc (95/85/60, <70 = log only) →
+stock_events (type sensor) + FEFO write-down for confident deltas.
+Offline cron: last_seen_at > 30 min → alert. Accept: tsc green; unit-testable pure
+funcs for confidence/thresholds; e2e via mosquitto_pub on local stack.
+
+## TASK-065 — Web: IoT devices dashboard (/iot)
+**Status:** review · **Agent:** frontend-developer · **Depends:** 063 (+064 for live data) · Updated: 2026-06-12
+Devices table: type icon, zone, online/offline (last_seen_at), battery, firmware;
+register/edit/deactivate dialogs; temperature tab: recharts line per device,
+alert badges. Sidebar «IoT пристрої» (AT_LEAST_STORE_MANAGER).
+Accept: tsc + next build green; CRUD flow works against API.
+
+---
+# Previous sprint — v2.5 «AI Agent» ✅ COMPLETE (2026-06-12) — v2 DONE
 
 ## TASK-060 — Web: AI orders dashboard ✅ done (2026-06-12)
 Log: `.claude/logs/tasks/060_2026-06-12_ai-orders-dashboard_frontend-developer.md`

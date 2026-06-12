@@ -64,6 +64,11 @@ public sealed class AppDbContext : DbContext
     public DbSet<AiOrderSuggestionItem> AiOrderSuggestionItems => Set<AiOrderSuggestionItem>();
     public DbSet<TelegramLinkCode> TelegramLinkCodes => Set<TelegramLinkCode>();
 
+    // v3 — IoT foundation
+    public DbSet<IotDevice> IotDevices => Set<IotDevice>();
+    public DbSet<TemperatureReading> TemperatureReadings => Set<TemperatureReading>();
+    public DbSet<WeightReading> WeightReadings => Set<WeightReading>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -670,6 +675,59 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(s => s.Supplier).WithMany()
              .HasForeignKey(s => s.SupplierId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── IotDevice (v3) ──────────────────────────────────────────────────
+        builder.Entity<IotDevice>(e =>
+        {
+            e.ToTable("iot_devices");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(d => d.DeviceType).HasMaxLength(50).IsRequired();
+            e.Property(d => d.DeviceId).HasMaxLength(100).IsRequired();
+            e.Property(d => d.Name).HasMaxLength(255);
+            e.Property(d => d.MqttTopic).HasMaxLength(255);
+            e.Property(d => d.Config).HasColumnType("jsonb");
+            e.Property(d => d.IsActive).HasDefaultValue(true);
+            e.Property(d => d.FirmwareVersion).HasMaxLength(50);
+            e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(d => new { d.TenantId, d.DeviceId }).IsUnique();
+            e.HasIndex(d => new { d.TenantId, d.StoreId });
+            e.HasOne(d => d.Store).WithMany()
+             .HasForeignKey(d => d.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(d => d.Zone).WithMany()
+             .HasForeignKey(d => d.ZoneId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── TemperatureReading (v3) ─────────────────────────────────────────
+        builder.Entity<TemperatureReading>(e =>
+        {
+            e.ToTable("temperature_readings");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.Temperature).HasColumnType("decimal(5,1)").IsRequired();
+            e.Property(r => r.Humidity).HasColumnType("decimal(5,1)");
+            e.Property(r => r.IsAlert).HasDefaultValue(false);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => new { r.DeviceId, r.RecordedAt }).IsDescending(false, true);
+            e.HasOne(r => r.Device).WithMany()
+             .HasForeignKey(r => r.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── WeightReading (v3) ──────────────────────────────────────────────
+        builder.Entity<WeightReading>(e =>
+        {
+            e.ToTable("weight_readings");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.WeightBefore).HasColumnType("decimal(10,2)");
+            e.Property(r => r.WeightAfter).HasColumnType("decimal(10,2)");
+            e.Property(r => r.DeltaWeight).HasColumnType("decimal(10,2)");
+            e.Property(r => r.Processed).HasDefaultValue(false);
+            e.HasIndex(r => new { r.DeviceId, r.RecordedAt }).IsDescending(false, true);
+            e.HasIndex(r => r.Processed).HasFilter("\"Processed\" = false");
+            e.HasOne(r => r.Device).WithMany()
+             .HasForeignKey(r => r.DeviceId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

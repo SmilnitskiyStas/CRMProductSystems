@@ -153,3 +153,30 @@ DEL  /api/products/{id}     -> 204 | 404
 | GET /api/notifications/settings | TASK-017 | Notification settings |
 | GET /api/users | future | User management |
 | POST /api/catalog | TASK-003b | Replace POC products API |
+
+---
+
+### IoT (v3.1 — TASK-063)
+```
+GET    /api/iot/devices?store_id=          [CanViewStock]        -> IotDeviceDto[]
+GET    /api/iot/devices/{id}               [CanViewStock]        -> IotDeviceDto | 404
+POST   /api/iot/devices                    [AtLeastStoreManager] -> 201 IotDeviceDto | 400 { error }
+PUT    /api/iot/devices/{id}               [AtLeastStoreManager] -> IotDeviceDto | 400 | 404
+DELETE /api/iot/devices/{id}               [AtLeastStoreManager] -> 204 (soft, IsActive=false) | 404
+GET    /api/iot/devices/{id}/readings?hours=24&limit=500         -> TemperatureReadingDto[] | 404
+GET    /api/iot/temperature?store_id=      [CanViewStock]        -> LatestTemperatureDto[]
+```
+
+#### IotDeviceDto
+```json
+{
+  "id": "uuid", "storeId": "uuid", "storeName": "string|null",
+  "zoneId": "uuid|null", "zoneName": "string|null",
+  "deviceType": "weight_sensor|camera|temp_sensor|barcode_reader",
+  "deviceId": "shelf-A1-3", "name": "string|null", "mqttTopic": "string|null",
+  "config": "jsonb string|null", "isActive": true,
+  "isOnline": true, "lastSeenAt": "ISO8601|null",
+  "batteryLevel": 80, "firmwareVersion": "string|null", "createdAt": "ISO8601"
+}
+```
+isOnline = lastSeenAt within 30 minutes.
