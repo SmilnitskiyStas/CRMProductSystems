@@ -22,7 +22,7 @@ public sealed class AuthServiceTests
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
         _jwt.HashToken("raw_token").Returns("hashed_token");
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<Guid?>(), Arg.Any<Guid?>()).Returns("access_token");
+            Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>()).Returns("access_token");
     }
 
     [Fact]
