@@ -32,6 +32,14 @@ public sealed class NoopFiscalService : IFiscalService
             OpenedAt: null,
             ClosedAt: null));
 
+    public Task<FiscalShiftResult> GetShiftStatusAsync(string providerShiftId, CancellationToken ct = default) =>
+        Task.FromResult(new FiscalShiftResult(
+            ProviderShiftId: providerShiftId,
+            Status: FiscalShiftStatus.PendingFiscalization,
+            Serial: null,
+            OpenedAt: null,
+            ClosedAt: null));
+
     public Task<FiscalReceiptResult> CreateReceiptAsync(FiscalReceiptRequest request, CancellationToken ct = default) =>
         Task.FromResult(new FiscalReceiptResult(
             ProviderReceiptId: null,

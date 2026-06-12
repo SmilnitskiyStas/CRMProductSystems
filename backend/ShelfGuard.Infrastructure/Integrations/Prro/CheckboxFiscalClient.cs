@@ -79,6 +79,13 @@ public sealed class CheckboxFiscalClient : IFiscalService
         return MapShift(shift);
     }
 
+    public async Task<FiscalShiftResult> GetShiftStatusAsync(string providerShiftId, CancellationToken ct = default)
+    {
+        var shift = await SendAuthorizedAsync<ShiftModel>(
+            () => NewRequest(HttpMethod.Get, $"shifts/{providerShiftId}"), ct);
+        return MapShift(shift);
+    }
+
     public async Task<FiscalReceiptResult> CreateReceiptAsync(FiscalReceiptRequest request, CancellationToken ct = default)
     {
         var payload = new ReceiptSellPayload

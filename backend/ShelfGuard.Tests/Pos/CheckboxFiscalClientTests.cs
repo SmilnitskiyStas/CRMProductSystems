@@ -211,6 +211,23 @@ public sealed class CheckboxFiscalClientTests
         Assert.NotNull(result.ClosedAt);
     }
 
+    [Fact]
+    public async Task GetShiftStatus_gets_shift_by_id_and_maps_status()
+    {
+        var (client, handler, tokens) = Build();
+        tokens.Set("tok-1");
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"id":"shift-1","serial":7,"status":"CREATED","opened_at":null,"closed_at":null}""");
+
+        var result = await client.GetShiftStatusAsync("shift-1");
+
+        Assert.Equal("/api/v1/shifts/shift-1", handler.Requests[0].Path);
+        Assert.Equal("tok-1", handler.Requests[0].Bearer);
+        Assert.Equal(FiscalShiftStatus.Created, result.Status);
+        Assert.Equal("shift-1", result.ProviderShiftId);
+        Assert.Equal(7, result.Serial);
+    }
+
     // ── receipts ───────────────────────────────────────────────────────────
 
     [Fact]

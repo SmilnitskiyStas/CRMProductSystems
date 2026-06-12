@@ -1,6 +1,6 @@
 # TASK-067 — Infrastructure: Checkbox fiscal client (IFiscalService)
 
-**Agent:** backend-developer · **Date:** 2026-06-12 · **Status:** review
+**Agent:** backend-developer · **Date:** 2026-06-12 · **Status:** done
 **ADR:** ADR-012 (Checkbox behind IFiscalService), ADR-011 (offline-first flow unchanged)
 
 ## What was built
@@ -73,12 +73,42 @@ kopeck/quantity rounding theories, Noop behavior.
 5. `POST /shifts` with license key but no bearer → **403**
    `{"message":"Not authenticated","code":null}` — drove the extended re-auth trigger.
 
-## Blocker
-Cashier login/PIN still pending from the user → shift open / sell receipt / receipt status
-cannot be exercised live end-to-end. Everything past signin is covered by unit tests against
-the OpenAPI-verified shapes. Once creds arrive: put PINCODE (or LOGIN/PASSWORD) into
-`appsettings.Secrets.json` / prod `.env`, set `PRRO__PROVIDER=checkbox`, run PingAsync +
-OpenShift → sell → status as e2e (fits TASK-068/069 verification).
+## Blocker — RESOLVED 2026-06-12
+Cashier creds received (test cashier «Тестовий касир», Старший касир — see
+.claude/private/access.md §«Касир»). PINCODE/LOGIN/PASSWORD added to the gitignored
+`backend/ShelfGuard.Api/appsettings.Secrets.json`. Full live e2e executed — see below.
+
+## Live e2e (with cashier creds) — 2026-06-12, api.checkbox.in.ua — ALL GREEN
+
+**Harness:** new `ShelfGuard.Tests/Pos/CheckboxLiveE2ETests.cs` — drives the real
+`CheckboxFiscalClient` (not raw curl) against the live test register. Gated: passes
+trivially unless env `PRRO_LIVE_E2E=1`, so CI / normal `dotnet test` never touch the
+network. Config: PRRO__* env vars win, fallback to `appsettings.Secrets.json` (found by
+walking up from the test bin dir). Run:
+`PRRO_LIVE_E2E=1 dotnet test --filter "FullyQualifiedName~CheckboxLiveE2E"`
+
+Results (single run, total ~6 s; poll interval 2 s, timeout 60 s):
+
+| Step | Result |
+|---|---|
+| a. PingAsync (X-License-Key only) | reachable=true, fiscal_number=**TEST582378**, is_test=**true**, has_shift=false |
+| b. Cashier signin | PIN signin (`cashier/signinPinCode`) succeeded on first try — bearer token issued; login/password fallback not needed |
+| c. Open shift | `POST shifts` → 202, shift id **60f890d6-9f1c-4acc-8d86-c95849df4fa5**, serial 1, status **CREATED** → polled `GET shifts/{id}` → **OPENED** on poll #2 (~2 s), opened_at 2026-06-12T19:56:42Z |
+| d. Sell receipt | «Тестовий товар» ×1 шт @ 5.50 грн, CASH 5.50; LocalReceiptId (uuid) sent as receipt id and **honored by Checkbox** (provider id == our uuid **928f04f3-6ac3-4c8a-8da8-a16be8a1316b**) → status CREATED |
+| e. GetReceiptStatusAsync poll | **DONE** on poll #2 (~2 s): fiscal_code **TEST-KcEsEF**, fiscal_date 2026-06-12T19:56:45Z, total 5.50 UAH (kopeck round-trip correct), tax_url `https://cabinet.tax.gov.ua/cashregs/check?id=TEST-KcEsEF&date=20260612&...&fn=TEST582378&sm=5.50&mac=...` |
+| f. Close shift (Z-report) | `POST shifts/close` → status **CLOSING** → polled → **CLOSED** on poll #1, closed_at 2026-06-12T19:56:47Z |
+
+**Client fix made during e2e prep:** `IFiscalService` had no way to poll shift state —
+Checkbox opens/closes shifts asynchronously (CREATED→OPENED, CLOSING→CLOSED), so polling
+is mandatory. Added `GetShiftStatusAsync(providerShiftId)` to `IFiscalService`,
+`CheckboxFiscalClient` (`GET shifts/{id}`) and `NoopFiscalService`, + unit test.
+No other client bugs surfaced — field names, status mapping, kopecks/quantity units and
+idempotency id all verified correct against the live API.
+
+**Build:** green (0 warnings) · **Tests:** 292/292 pass (290 + GetShiftStatus unit + live e2e)
+
+**Note for TASK-068:** shift open/close endpoints must poll `GetShiftStatusAsync` (or let
+the worker do it) — the 202 response status is CREATED/CLOSING, not the final state.
 
 ## Handoff
 TASK-068 (POS endpoints) can consume `IFiscalService` directly; inject it in the sale flow as

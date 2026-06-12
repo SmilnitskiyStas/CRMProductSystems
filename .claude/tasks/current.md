@@ -2,8 +2,8 @@
 
 Scope: v3-spec §3 + §6 Фаза 4. ADR-012: Checkbox (SaaS ПРРО) as fiscal provider behind
 IFiscalService, offline-first (ADR-011 flow stays). Test cash register registered in
-Checkbox cabinet (фіскальний номер TEST582378; license key in .claude/private/access.md).
-Blocked externally: cashier login/PIN pending from user.
+Checkbox cabinet (фіскальний номер TEST582378; license key + cashier creds in
+.claude/private/access.md — blocker resolved 2026-06-12).
 
 ## TASK-066 — DB: pos_shifts, pos_transactions, pos_transaction_items
 **Status:** done · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-12
@@ -12,12 +12,15 @@ FK product_stock SET NULL (яка партія списана). Accept: migratio
 Committed as 6d7a5082 «feat(pos): v3.2 POS schema».
 
 ## TASK-067 — Infrastructure: Checkbox fiscal client (IFiscalService)
-**Status:** review · **Agent:** backend-developer · **Depends:** — · Updated: 2026-06-12
+**Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-06-12
 Done: IFiscalService + DTOs (Application/Features/Pos/Fiscal), CheckboxFiscalClient +
 PrroOptions + token store (Infrastructure/Integrations/Prro), Noop fallback, DI switch,
-27 unit tests (290/290 green). Live: license key valid on api.checkbox.in.ua
-(⚠️ dev-api host from docs does NOT resolve — docs corrected); signin probes → 403
-cashier.invalid_credentials as expected. Blocker stays: cashier login/PIN pending (user).
+unit tests 292/292 green. Live: license key valid on api.checkbox.in.ua
+(⚠️ dev-api host from docs does NOT resolve — docs corrected). Cashier creds received →
+**full live e2e GREEN** (CheckboxLiveE2ETests, gated by PRRO_LIVE_E2E=1): PIN signin →
+shift CREATED→OPENED → sell receipt DONE (fiscal_code TEST-KcEsEF + tax_url) → Z-report
+CLOSED, ~6s total. Added IFiscalService.GetShiftStatusAsync (shift opening is async —
+needed for polling; TASK-068 must poll after open/close).
 Log: 067_2026-06-12_checkbox-fiscal-client_backend-developer.md
 ADR-012. Integrations/Prro: CheckboxFiscalClient implementing IFiscalService —
 cashier signin (login/password or PIN → bearer token), shift open/close, sell receipt,

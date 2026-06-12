@@ -15,6 +15,10 @@ public interface IFiscalService
 
     Task<FiscalShiftResult> CloseShiftAsync(CancellationToken ct = default);
 
+    /// <summary>Polls shift state — Checkbox opens/closes shifts asynchronously
+    /// (CREATED → OPENED, CLOSING → CLOSED), so callers must poll after Open/Close.</summary>
+    Task<FiscalShiftResult> GetShiftStatusAsync(string providerShiftId, CancellationToken ct = default);
+
     /// <summary>Submits a sale receipt for fiscalization.</summary>
     Task<FiscalReceiptResult> CreateReceiptAsync(FiscalReceiptRequest request, CancellationToken ct = default);
 
