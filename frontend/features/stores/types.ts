@@ -10,6 +10,30 @@ export interface StoreZoneDto {
   isActive: boolean;
 }
 
+// Layout stored in stores.floor_plan (jsonb). Zones not listed here are "unplaced".
+export interface FloorPlanZonePlacement {
+  zoneId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface FloorPlanLayout {
+  version: 1;
+  grid: number;
+  zones: FloorPlanZonePlacement[];
+}
+
+export type ZoneStatus = "safe" | "warning" | "critical" | "expired";
+
+export interface ZoneStatusCounts {
+  safe: number;
+  warning: number;
+  critical: number;
+  expired: number;
+}
+
 export interface StoreDto {
   id: string;
   name: string;

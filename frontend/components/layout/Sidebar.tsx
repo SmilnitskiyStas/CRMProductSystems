@@ -17,6 +17,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Map,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -44,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/ai-orders",  label: "AI Замовлення", icon: <Sparkles size={18} />,       roles: AT_LEAST_STORE_MANAGER },
   { href: "/analytics",  label: "Аналітика",    icon: <BarChart2 size={18} />,       roles: CAN_VIEW_ANALYTICS },
   { href: "/users",      label: "Персонал",     icon: <Users size={18} />,           roles: AT_LEAST_STORE_MANAGER },
+  { href: "/floor-plan", label: "План магазину", icon: <Map size={18} />,            roles: AT_LEAST_STORE_MANAGER },
   // Provider-only pages
   { href: "/provider",   label: "Провайдер",    icon: <Shield size={18} />,          roles: PROVIDER_ONLY },
   // Shared
