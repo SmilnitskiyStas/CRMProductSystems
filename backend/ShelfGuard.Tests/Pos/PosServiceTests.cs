@@ -51,6 +51,15 @@ file sealed class FakePosRepo : IPosRepository
         return Task.CompletedTask;
     }
 
+    public Task<List<PosTransaction>> GetPendingFiscalizationAsync(
+        int maxRetries, DateTime createdBefore, CancellationToken ct = default) =>
+        Task.FromResult(Transactions
+            .Where(t =>
+                t.Status == "pending_fiscalization" &&
+                t.RetryCount < maxRetries &&
+                t.CreatedAt < createdBefore)
+            .ToList());
+
     public Task SaveChangesAsync(CancellationToken ct = default)
     {
         SaveCount++;

@@ -828,6 +828,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("ShiftId")
                         .HasColumnType("uuid");
 

@@ -49,6 +49,19 @@ public sealed class PosRepository : IPosRepository
 
     public void UpdateTransaction(PosTransaction tx) => _db.PosTransactions.Update(tx);
 
+    public Task<List<PosTransaction>> GetPendingFiscalizationAsync(
+        int maxRetries,
+        DateTime createdBefore,
+        CancellationToken ct = default) =>
+        _db.PosTransactions
+            .Include(t => t.Items).ThenInclude(i => i.Product)
+            .Where(t =>
+                t.Status == "pending_fiscalization" &&
+                t.RetryCount < maxRetries &&
+                t.CreatedAt < createdBefore)
+            .OrderBy(t => t.CreatedAt)
+            .ToListAsync(ct);
+
     // ── Stock events ────────────────────────────────────────────────────────
 
     public Task AddStockEventAsync(StockEvent ev, CancellationToken ct = default) =>

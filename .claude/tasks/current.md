@@ -40,7 +40,7 @@ Sale = one DB tx: pos_transaction + items + FEFO write-down + stock_events('pos_
 fiscalization async (Status). Accept: service tests (FEFO, expired block, totals), build green.
 
 ## TASK-069 — Worker: fiscalization retry job
-**Status:** planned · **Agent:** backend-developer (worker) · **Depends:** 067, 068 · Updated: 2026-06-12
+**Status:** review · **Agent:** backend-developer (worker) · **Depends:** 067, 068 · Updated: 2026-06-13
 Cron */5 min: pending_fiscalization docs → submit/poll receipt status via Checkbox
 (through API endpoint backed by IFiscalService); update FiscalNumber/Status on DONE.
 Offline numbering handled by Checkbox itself (ADR-012). Accept: tsc green;

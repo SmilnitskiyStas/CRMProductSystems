@@ -125,6 +125,43 @@ public sealed class PosController : ControllerBase
         return Ok(result);
     }
 
+    // ── Fiscalization retry (worker-facing) ────────────────────────────────
+
+    /// <summary>
+    /// Returns all pos_transactions with FiscalStatus='pending_fiscalization'
+    /// older than 30 seconds and with fewer than 5 retry attempts.
+    /// Used by the fiscalization-retry worker job (TASK-069).
+    /// Auth: AtLeastStoreManager (same service account the worker uses to login).
+    /// </summary>
+    [HttpGet("sales/pending-fiscalization")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(IReadOnlyList<PendingFiscalizationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPendingFiscalization(CancellationToken ct)
+    {
+        var result = await _pos.GetPendingFiscalizationAsync(maxRetries: 5, olderThanSeconds: 30, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Re-attempts fiscalization for a single pos_transaction.
+    /// Increments RetryCount; sets fiscalization_failed when RetryCount reaches 5.
+    /// Used by the fiscalization-retry worker job (TASK-069).
+    /// Auth: AtLeastStoreManager (same service account the worker uses to login).
+    /// </summary>
+    [HttpPost("sales/{id:guid}/fiscalize")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(FiscalizeResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> FiscalizeTransaction(Guid id, CancellationToken ct)
+    {
+        var result = await _pos.FiscalizeTransactionAsync(id, ct);
+
+        if (!result.Ok && result.Error == "Transaction not found.")
+            return NotFound(new { error = result.Error });
+
+        return Ok(result);
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
 
     private (Guid? TenantId, Guid? UserId) GetContext()

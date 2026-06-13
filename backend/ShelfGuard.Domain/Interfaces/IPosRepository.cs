@@ -25,6 +25,16 @@ public interface IPosRepository
 
     Task<List<PosTransaction>> GetTransactionsByShiftAsync(Guid shiftId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Returns transactions across all tenants that need fiscalization retries.
+    /// Conditions: Status='pending_fiscalization', RetryCount &lt; maxRetries, CreatedAt &lt; cutoff.
+    /// Worker-facing (bypasses tenant RLS): caller must set app.role='worker'.
+    /// </summary>
+    Task<List<PosTransaction>> GetPendingFiscalizationAsync(
+        int maxRetries,
+        DateTime createdBefore,
+        CancellationToken ct = default);
+
     Task AddTransactionAsync(PosTransaction tx, CancellationToken ct = default);
 
     void UpdateTransaction(PosTransaction tx);

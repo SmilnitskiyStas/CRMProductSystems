@@ -378,6 +378,126 @@ public sealed class PosService : IPosService
         return (dto, null, null);
     }
 
+    // ── Pending fiscalization (retry worker) ───────────────────────────────
+
+    public async Task<IReadOnlyList<PendingFiscalizationDto>> GetPendingFiscalizationAsync(
+        int maxRetries = 5,
+        int olderThanSeconds = 30,
+        CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow.AddSeconds(-olderThanSeconds);
+        var txs = await _pos.GetPendingFiscalizationAsync(maxRetries, cutoff, ct);
+
+        return txs.Select(t => new PendingFiscalizationDto(
+            Id: t.Id,
+            ShiftId: t.ShiftId ?? Guid.Empty,
+            TenantId: t.TenantId,
+            CreatedAt: t.CreatedAt,
+            RetryCount: t.RetryCount,
+            Items: t.Items.Select(i => new SaleItemDto(
+                ProductId: i.ProductId,
+                ProductName: i.Product?.Name ?? "—",
+                Barcode: i.Product?.Barcode ?? string.Empty,
+                Quantity: i.Quantity,
+                UnitPrice: i.PriceRetail,
+                DiscountAmount: i.DiscountAmount,
+                Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
+            Total: t.TotalAmount)).ToList();
+    }
+
+    // ── Fiscalize single transaction (retry worker) ────────────────────────
+
+    private const int MaxRetries = 5;
+
+    public async Task<FiscalizeResultDto> FiscalizeTransactionAsync(
+        Guid transactionId,
+        CancellationToken ct = default)
+    {
+        var tx = await _pos.GetTransactionByIdAsync(transactionId, ct);
+        if (tx is null)
+            return new FiscalizeResultDto(Ok: false, Error: "Transaction not found.");
+
+        if (tx.Status == "fiscalized")
+            return new FiscalizeResultDto(Ok: true, FiscalNumber: tx.FiscalNumber);
+
+        // Always increment retry count, regardless of outcome
+        tx.RetryCount++;
+
+        try
+        {
+            var fiscal = await _fiscalFactory.GetForTenantAsync(tx.TenantId, ct);
+
+            var fiscalRequest = new FiscalReceiptRequest(
+                Items: tx.Items.Select(i => new FiscalReceiptItem(
+                    Code: i.ProductId.ToString(),
+                    Name: i.Product?.Name ?? i.ProductId.ToString(),
+                    UnitPrice: i.PriceRetail - i.DiscountAmount,
+                    Quantity: i.Quantity,
+                    Barcode: i.Product?.Barcode)).ToList(),
+                Payments: [new FiscalPayment(
+                    string.Equals(tx.PaymentType, "card", StringComparison.OrdinalIgnoreCase)
+                        ? FiscalPaymentKind.Cashless : FiscalPaymentKind.Cash,
+                    tx.TotalAmount)],
+                LocalReceiptId: tx.Id.ToString());
+
+            var receipt = await fiscal.CreateReceiptAsync(fiscalRequest, ct);
+
+            if (receipt.Status == FiscalReceiptStatus.Done)
+            {
+                tx.FiscalNumber = receipt.FiscalNumber;
+                tx.Status = "fiscalized";
+                _pos.UpdateTransaction(tx);
+                await _pos.SaveChangesAsync(ct);
+
+                _log.LogInformation(
+                    "Fiscalization succeeded for tx {TxId}: fiscal_code={FiscalCode}",
+                    tx.Id, tx.FiscalNumber);
+
+                return new FiscalizeResultDto(Ok: true, FiscalNumber: tx.FiscalNumber);
+            }
+
+            // Provider accepted but not yet DONE (Created/PendingFiscalization)
+            // Stay pending_fiscalization, let next cron run pick it up if still under limit.
+            var errorMsg = $"Provider returned status {receipt.Status}.";
+
+            if (tx.RetryCount >= MaxRetries)
+            {
+                tx.Status = "fiscalization_failed";
+                _log.LogWarning(
+                    "Fiscalization permanently failed for tx {TxId} after {Count} retries: {Reason}",
+                    tx.Id, tx.RetryCount, errorMsg);
+            }
+
+            _pos.UpdateTransaction(tx);
+            await _pos.SaveChangesAsync(ct);
+
+            return new FiscalizeResultDto(Ok: false, Error: errorMsg);
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = ex.Message;
+
+            if (tx.RetryCount >= MaxRetries)
+            {
+                tx.Status = "fiscalization_failed";
+                _log.LogWarning(ex,
+                    "Fiscalization permanently failed for tx {TxId} after {Count} retries",
+                    tx.Id, tx.RetryCount);
+            }
+            else
+            {
+                _log.LogWarning(ex,
+                    "Fiscalization attempt #{Count} failed for tx {TxId} — will retry",
+                    tx.RetryCount, tx.Id);
+            }
+
+            _pos.UpdateTransaction(tx);
+            await _pos.SaveChangesAsync(ct);
+
+            return new FiscalizeResultDto(Ok: false, Error: errorMsg);
+        }
+    }
+
     // ── List sales for shift ───────────────────────────────────────────────
 
     public async Task<SalesListDto> GetSalesForShiftAsync(

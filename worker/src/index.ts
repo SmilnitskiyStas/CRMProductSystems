@@ -8,6 +8,7 @@ import { startWeatherFetchWorker } from "./jobs/weather-fetch.job";
 import { startAiOrderWorker } from "./jobs/ai-order.job";
 import { startTelegramListener } from "./jobs/telegram-listener";
 import { startMqttListener } from "./jobs/mqtt-listener";
+import { startFiscalizationRetryWorker } from "./jobs/fiscalization-retry.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -29,6 +30,14 @@ async function scheduleRecurringJobs(): Promise<void> {
   // v2-spec §7: daily 05:00 — AI order suggestion per store + manager notification
   const aiOrderQueue = new Queue("ai-order", { connection: redisConnection });
   await aiOrderQueue.upsertJobScheduler("ai-order-cron", { pattern: "0 5 * * *" }, { name: "ai-order" });
+
+  // v3-spec §3: every 5 min — retry pending_fiscalization transactions (TASK-069)
+  const fiscalRetryQueue = new Queue("fiscalization-retry", { connection: redisConnection });
+  await fiscalRetryQueue.upsertJobScheduler(
+    "fiscalization-retry-cron",
+    { pattern: "*/5 * * * *" },
+    { name: "fiscalization-retry" }
+  );
 }
 
 async function main(): Promise<void> {
@@ -44,6 +53,7 @@ async function main(): Promise<void> {
   startAiOrderWorker();
   startTelegramListener();
   startMqttListener();
+  startFiscalizationRetryWorker();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

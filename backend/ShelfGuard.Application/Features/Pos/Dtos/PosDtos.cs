@@ -54,3 +54,21 @@ public sealed record SaleItemDto(
 public sealed record SalesListDto(
     IReadOnlyList<SaleDto> Items,
     decimal TotalAmount);
+
+// ── Fiscalization retry DTOs ───────────────────────────────────────────────
+
+/// <summary>Slim summary of a transaction awaiting fiscalization retry.</summary>
+public sealed record PendingFiscalizationDto(
+    Guid Id,
+    Guid ShiftId,
+    Guid TenantId,
+    DateTime CreatedAt,
+    int RetryCount,
+    IReadOnlyList<SaleItemDto> Items,
+    decimal Total);
+
+/// <summary>Result of a single fiscalization attempt (for retry endpoint response).</summary>
+public sealed record FiscalizeResultDto(
+    bool Ok,
+    string? FiscalNumber = null,
+    string? Error = null);

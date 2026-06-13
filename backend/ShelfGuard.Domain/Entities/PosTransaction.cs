@@ -14,8 +14,14 @@ public sealed class PosTransaction
     public string PaymentType { get; init; } = "cash"; // cash / card / mixed
     public decimal TotalAmount { get; set; }
     public decimal TaxAmount { get; set; }
-    // completed / pending_fiscalization / fiscalized / cancelled
+    // completed / pending_fiscalization / fiscalized / fiscalization_failed / cancelled
     public string Status { get; set; } = "pending_fiscalization";
+    /// <summary>
+    /// Number of fiscalization attempts made so far (0 = never attempted).
+    /// Incremented on each attempt regardless of outcome.
+    /// When it reaches 5 the status is set to fiscalization_failed and no further retries are made.
+    /// </summary>
+    public int RetryCount { get; set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public ICollection<PosTransactionItem> Items { get; init; } = new List<PosTransactionItem>();

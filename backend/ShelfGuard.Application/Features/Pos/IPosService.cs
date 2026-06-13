@@ -27,4 +27,23 @@ public interface IPosService
         Guid tenantId, Guid cashierId, CreateSaleRequest request, CancellationToken ct = default);
 
     Task<SalesListDto> GetSalesForShiftAsync(Guid tenantId, Guid shiftId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns all transactions in status 'pending_fiscalization' with RetryCount &lt; maxRetries
+    /// that were created before the given cutoff. Intended for the retry worker (no tenant scope).
+    /// </summary>
+    Task<IReadOnlyList<PendingFiscalizationDto>> GetPendingFiscalizationAsync(
+        int maxRetries = 5,
+        int olderThanSeconds = 30,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Re-attempts fiscalization for a single transaction.
+    /// Increments RetryCount regardless of outcome.
+    /// Sets Status='fiscalization_failed' when RetryCount reaches maxRetries.
+    /// Returns (ok=true, fiscalNumber) on success; (ok=false, error) on failure.
+    /// </summary>
+    Task<FiscalizeResultDto> FiscalizeTransactionAsync(
+        Guid transactionId,
+        CancellationToken ct = default);
 }
