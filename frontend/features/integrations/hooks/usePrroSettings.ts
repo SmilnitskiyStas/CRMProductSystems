@@ -34,10 +34,12 @@ export function useUpdatePrroSettings() {
 
 /**
  * POST /api/settings/prro/test — fires a live connection test.
+ * Pass the current form state so the test uses just-entered credentials
+ * without requiring a save first. Masked values keep the stored secret.
  * This is NOT a query (no caching); result is shown inline in the modal.
  */
 export function useTestPrroConnection() {
   return useMutation({
-    mutationFn: testPrroConnection,
+    mutationFn: (body?: UpdatePrroSettingsRequest) => testPrroConnection(body),
   });
 }

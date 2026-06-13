@@ -40,8 +40,8 @@ export async function updatePrroSettings(body: UpdatePrroSettingsRequest): Promi
   return api.put<PrroSettings>("/api/settings/prro", body);
 }
 
-export async function testPrroConnection(): Promise<PrroTestResult> {
-  return api.post<PrroTestResult>("/api/settings/prro/test");
+export async function testPrroConnection(body?: UpdatePrroSettingsRequest): Promise<PrroTestResult> {
+  return api.post<PrroTestResult>("/api/settings/prro/test", body ?? null);
 }
 
 // ── Checkbox base URL options ──────────────────────────────────────────────

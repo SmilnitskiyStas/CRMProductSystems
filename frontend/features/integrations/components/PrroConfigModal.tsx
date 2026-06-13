@@ -144,11 +144,30 @@ export function PrroConfigModal({ onClose }: Props) {
   }
 
   // ── Test connection ───────────────────────────────────────────────────────
+  // Always pass the current form state so the test uses just-entered credentials
+  // without requiring a save first. The backend merges masked placeholders with
+  // stored secrets, so unchanged fields keep their stored value.
   async function handleTest() {
     setTestResult(null);
     setTestError(null);
     try {
-      const result = await testConn.mutateAsync();
+      const result = await testConn.mutateAsync({
+        provider,
+        baseUrl: provider === "checkbox" ? CHECKBOX_BASE_URLS[checkboxEnv] : "",
+        licenseKey: licenseKey || MASKED_UNCHANGED,
+        cashierPinCode:
+          provider === "checkbox" && cashierAuthMode === "pin"
+            ? cashierPin || MASKED_UNCHANGED
+            : "",
+        cashierLogin:
+          provider === "checkbox" && cashierAuthMode === "loginPassword"
+            ? cashierLogin || MASKED_UNCHANGED
+            : "",
+        cashierPassword:
+          provider === "checkbox" && cashierAuthMode === "loginPassword"
+            ? cashierPassword || MASKED_UNCHANGED
+            : "",
+      });
       setTestResult(result);
     } catch (err) {
       setTestError(err instanceof Error ? err.message : "Помилка підключення");

@@ -104,6 +104,12 @@ public sealed class PrroSettingsService : IPrroSettingsService
                 FiscalNumber: null, IsTest: null, HasOpenShift: null, CashierOk: false,
                 Error: "ПРРО провайдер не налаштований або вимкнений.");
 
+        if (string.IsNullOrWhiteSpace(effective.LicenseKey))
+            return new PrroTestResult(
+                Ok: false, Provider: effective.Provider,
+                FiscalNumber: null, IsTest: null, HasOpenShift: null, CashierOk: false,
+                Error: "License key не вказано. Введіть ключ ліцензії каси з кабінету Checkbox.");
+
         var client = _factory.Create(tenantId, effective);
 
         var health = await client.PingAsync(ct);
