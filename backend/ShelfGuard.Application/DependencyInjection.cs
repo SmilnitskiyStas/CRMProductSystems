@@ -32,6 +32,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IIntegrationService, IntegrationService>();
+        services.AddScoped<IPrroSettingsService, PrroSettingsService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IDiscountService, DiscountService>();
         services.AddScoped<IProviderService, ProviderService>();

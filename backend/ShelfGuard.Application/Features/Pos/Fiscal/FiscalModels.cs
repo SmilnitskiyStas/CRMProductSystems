@@ -73,3 +73,9 @@ public sealed record FiscalHealthResult(
     bool? IsTestRegister,
     bool? HasOpenShift,
     string? Error);
+
+/// <summary>Result of a cashier credential check (signin + profile read, no shift side effects).</summary>
+public sealed record FiscalCashierResult(
+    bool Ok,
+    string? CashierName,
+    string? Error);

@@ -64,6 +64,28 @@ public sealed class CheckboxFiscalClient : IFiscalService
         }
     }
 
+    public async Task<FiscalCashierResult> CheckCashierAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var token = _tokens.Token ?? await SigninAsync(ct);
+            using var request = NewRequest(HttpMethod.Get, "cashier/profile");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await SendRawAsync(request, ct);
+            await EnsureSuccessAsync(response, ct);
+            var profile = await ReadAsync<CashierProfile>(response, ct);
+            return new FiscalCashierResult(Ok: true, CashierName: profile.FullName, Error: null);
+        }
+        catch (FiscalProviderException ex)
+        {
+            return new FiscalCashierResult(Ok: false, CashierName: null, Error: ex.Message);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return new FiscalCashierResult(Ok: false, CashierName: null, Error: ex.Message);
+        }
+    }
+
     public async Task<FiscalShiftResult> OpenShiftAsync(CancellationToken ct = default)
     {
         // POST shifts requires both the bearer token and X-License-Key. 202 → async opening.
@@ -334,6 +356,11 @@ public sealed class CheckboxFiscalClient : IFiscalService
     private sealed class AccessTokenResponse
     {
         [JsonPropertyName("access_token")] public string? AccessToken { get; set; }
+    }
+
+    private sealed class CashierProfile
+    {
+        [JsonPropertyName("full_name")] public string? FullName { get; set; }
     }
 
     private sealed class CashRegisterInfo

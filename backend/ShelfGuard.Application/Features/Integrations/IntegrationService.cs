@@ -35,6 +35,11 @@ public sealed class IntegrationService : IIntegrationService
             return (null, null); // 404 â€” not configured yet
 
         var jsonObj = ParseConfigSafe(config.Config);
+
+        // ПРРО secrets are write-only (ADR-013 p.4) — the generic read path masks them too.
+        if (service == "prro" && jsonObj is not null)
+            PrroSecrets.MaskInPlace(jsonObj);
+
         return (new IntegrationConfigDto(config.Id, config.Service, jsonObj, config.IsEnabled, config.UpdatedAt), null);
     }
 
@@ -43,6 +48,15 @@ public sealed class IntegrationService : IIntegrationService
     {
         if (!KnownServices.Contains(service))
             return $"Unknown service: '{service}'. Allowed: {string.Join(", ", KnownServices)}.";
+
+        // A round-tripped masked GET payload must never overwrite stored ПРРО secrets.
+        if (service == "prro")
+        {
+            var existing = await _repo.GetByServiceAsync(tenantId, service, ct);
+            PrroSecrets.MergeMaskedFromStored(
+                request.Config,
+                existing is null ? null : ParseConfigSafe(existing.Config));
+        }
 
         var configJson = request.Config.ToJsonString();
         await _repo.UpsertAsync(tenantId, service, configJson, request.IsEnabled, ct);

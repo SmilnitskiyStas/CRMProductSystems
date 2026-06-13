@@ -389,6 +389,39 @@ public sealed class CheckboxFiscalClientTests
         Assert.True(ex.IsTransient);
     }
 
+    // ── CheckCashierAsync ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CheckCashier_signs_in_and_reads_cashier_profile()
+    {
+        var (client, handler, _) = Build(pinCode: "9876");
+        handler.Enqueue(HttpStatusCode.OK, TokenJson);
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"id":"c-1","full_name":"Тест Касир","login":"kasir"}""");
+
+        var result = await client.CheckCashierAsync();
+
+        Assert.True(result.Ok);
+        Assert.Equal("Тест Касир", result.CashierName);
+        Assert.Null(result.Error);
+        Assert.Equal("/api/v1/cashier/profile", handler.Requests[1].Path);
+        Assert.Equal("tok-1", handler.Requests[1].Bearer);
+    }
+
+    [Fact]
+    public async Task CheckCashier_returns_error_on_bad_credentials()
+    {
+        var (client, handler, _) = Build(pinCode: "0000");
+        handler.Enqueue(HttpStatusCode.Forbidden,
+            """{"code":"cashier.invalid_credentials","message":"Невірний пінкод"}""");
+
+        var result = await client.CheckCashierAsync();
+
+        Assert.False(result.Ok);
+        Assert.Null(result.CashierName);
+        Assert.Contains("Невірний пінкод", result.Error);
+    }
+
     // ── unit conversion ────────────────────────────────────────────────────
 
     [Theory]

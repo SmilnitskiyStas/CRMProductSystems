@@ -1,8 +1,9 @@
 namespace ShelfGuard.Infrastructure.Integrations.Prro;
 
 /// <summary>
-/// Singleton cache for the cashier bearer token. The typed HttpClient is transient,
-/// so the token must live outside it; one cashier session is shared process-wide.
+/// Cache for one cash register's cashier bearer token. Clients are created per call
+/// (IFiscalServiceFactory), so the token must live outside them; instances are held
+/// per tenant + register in <see cref="CheckboxTokenStoreRegistry"/> (ADR-013).
 /// </summary>
 public sealed class CheckboxTokenStore
 {

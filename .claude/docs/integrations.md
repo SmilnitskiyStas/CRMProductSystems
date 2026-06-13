@@ -21,8 +21,13 @@ receipt statuses CREATED/DONE/ERROR/CANCELLATION/CANCELLED;
 errors `{"code","message"}` (403/4xx) or FastAPI `{"detail":[...]}` (422)
 Location: ShelfGuard.Infrastructure/Integrations/Prro (CheckboxFiscalClient → IFiscalService)
 Rule: Checkbox client NEVER referenced outside Integrations/Prro; Application sees IFiscalService only
-Env: PRRO__PROVIDER=checkbox, PRRO__BASEURL, PRRO__LICENSEKEY,
-PRRO__CASHIER__LOGIN / PRRO__CASHIER__PINCODE — secrets only in .env, never committed
+Config resolution (ADR-013): tenant DB settings first — integration_configs row
+service='prro' (managed via Налаштування → Інтеграції, GET/PUT /api/settings/prro,
+secrets write-only/masked) → fallback to deployment env PRRO__PROVIDER=checkbox,
+PRRO__BASEURL, PRRO__LICENSEKEY, PRRO__CASHIER__LOGIN / PRRO__CASHIER__PINCODE
+(secrets only in .env, never committed) → NoopFiscalService if neither configured.
+Per-tenant resolution via IFiscalServiceFactory (TASK-071); same pattern as the
+Claude key (ClaudeOrderAdvisor.ResolveAsync)
 Test register: фіскальний номер TEST582378 (test mode; receipts non-fiscal)
 
 ## MQTT / Mosquitto (v3.1)

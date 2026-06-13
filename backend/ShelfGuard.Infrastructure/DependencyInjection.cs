@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Domain.Interfaces;
 using ShelfGuard.Infrastructure.Data;
 using ShelfGuard.Infrastructure.Data.Repositories;
 using ShelfGuard.Infrastructure.Interceptors;
+using ShelfGuard.Infrastructure.Integrations.Prro;
 using ShelfGuard.Infrastructure.Services;
 
 namespace ShelfGuard.Infrastructure;
@@ -87,27 +89,18 @@ public static class DependencyInjection
         services.AddScoped<IAiOrderAdvisor, AI.ClaudeOrderAdvisor>();
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
 
-        // v3.2 - ПРРО fiscalization (ADR-012): Checkbox client only when configured,
-        // otherwise Noop keeps the offline-first sale flow running without a provider.
-        services.Configure<Integrations.Prro.PrroOptions>(
-            configuration.GetSection(Integrations.Prro.PrroOptions.SectionName));
-        var prroProvider = configuration["PRRO:PROVIDER"];
-        if (string.Equals(prroProvider, "checkbox", StringComparison.OrdinalIgnoreCase))
+        // v3.2 - ПРРО fiscalization (ADR-013): per-tenant factory replaces the startup-time
+        // PRRO:PROVIDER switch. The factory reads each tenant's integration_configs row and
+        // falls back to PRRO__* env vars → NoopFiscalService (offline-first, ADR-011).
+        services.Configure<PrroOptions>(configuration.GetSection(PrroOptions.SectionName));
+        services.AddSingleton<CheckboxTokenStoreRegistry>();
+        // Named HttpClient for Checkbox — the factory creates instances from this pool.
+        services.AddHttpClient("checkbox", (sp, http) =>
         {
-            services.AddSingleton<Integrations.Prro.CheckboxTokenStore>();
-            services.AddHttpClient<Application.Features.Pos.Fiscal.IFiscalService,
-                                   Integrations.Prro.CheckboxFiscalClient>((sp, http) =>
-            {
-                var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Integrations.Prro.PrroOptions>>().Value;
-                http.BaseAddress = new Uri(opts.BaseUrl.TrimEnd('/') + "/");
-                http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-            });
-        }
-        else
-        {
-            services.AddSingleton<Application.Features.Pos.Fiscal.IFiscalService,
-                                  Application.Features.Pos.Fiscal.NoopFiscalService>();
-        }
+            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PrroOptions>>().Value;
+            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds > 0 ? opts.TimeoutSeconds : 30);
+        });
+        services.AddSingleton<IFiscalServiceFactory, FiscalServiceFactory>();
 
         // Provider panel (super admin)
         services.AddScoped<ITenantRepository, TenantRepository>();

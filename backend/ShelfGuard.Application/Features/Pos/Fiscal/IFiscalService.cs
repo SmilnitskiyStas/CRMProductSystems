@@ -11,6 +11,10 @@ public interface IFiscalService
     /// <summary>Provider reachability + cash register info. Never throws — errors land in the result.</summary>
     Task<FiscalHealthResult> PingAsync(CancellationToken ct = default);
 
+    /// <summary>Validates cashier credentials (signin + profile read). No shift side effects.
+    /// Never throws — errors land in the result.</summary>
+    Task<FiscalCashierResult> CheckCashierAsync(CancellationToken ct = default);
+
     Task<FiscalShiftResult> OpenShiftAsync(CancellationToken ct = default);
 
     Task<FiscalShiftResult> CloseShiftAsync(CancellationToken ct = default);

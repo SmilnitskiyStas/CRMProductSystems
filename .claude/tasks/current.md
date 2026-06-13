@@ -32,6 +32,8 @@ pending from user).
 
 ## TASK-068 — API: POS endpoints (shifts, sales → FEFO + stock_events)
 **Status:** planned · **Agent:** backend-developer · **Depends:** 066, 067 · Updated: 2026-06-12
+⚠️ ADR-013: must resolve fiscalization through the per-tenant IFiscalServiceFactory
+(TASK-071), not the startup-time IFiscalService DI registration.
 POST /api/pos/shifts/open|close, POST /api/pos/sales (items by barcode; critical → auto
 discount price, expired → 423 block per spec §3), GET /api/pos/shifts/current, sales list.
 Sale = one DB tx: pos_transaction + items + FEFO write-down + stock_events('pos_sale');
@@ -43,6 +45,31 @@ Cron */5 min: pending_fiscalization docs → submit/poll receipt status via Chec
 (through API endpoint backed by IFiscalService); update FiscalNumber/Status on DONE.
 Offline numbering handled by Checkbox itself (ADR-012). Accept: tsc green;
 retry/backoff covered.
+
+## TASK-071 — Settings: ПРРО провайдер (Checkbox) у Налаштування → Інтеграції
+**Status:** in_progress · **Agent:** backend-developer + frontend-developer · **Depends:** 067 · Updated: 2026-06-13
+ADR-013. Per-tenant fiscal provider config, same mechanism as the Claude key
+(integration_configs service='claude' → ClaudeOrderAdvisor.ResolveAsync; web UI
+features/integrations + IntegrationsTab).
+**Backend:** storage in integration_configs (service='prro', JSONB: provider
+[checkbox|disabled, extensible], base_url [test/prod], license_key, cashier_login,
+cashier_password, cashier_pin_code; RLS already on table — verify tenant isolation).
+Endpoints: GET/PUT /api/settings/prro (GET masks secrets: ••••+last 4; PUT with
+masked/unchanged secret keeps stored value — secrets are write-only),
+POST /api/settings/prro/test (ping cash-registers/info via X-License-Key + cashier
+signin, no shift side effects). Per-tenant IFiscalServiceFactory
+(Infrastructure/Integrations/Prro): tenant DB config → PRRO__* env fallback →
+NoopFiscalService; replaces startup DI switch; CheckboxTokenStore keyed per
+tenant+license key. TASK-068/069 consume the factory.
+**Frontend:** rework SERVICE_META.prro (features/integrations/types.ts — current
+fields are stale placeholders) → provider select («Checkbox» / «вимкнено»),
+credential form (license key, login/password or PIN, base URL test/prod toggle),
+«Перевірити з'єднання» button calling /test, status badge (connected/error/disabled)
+in IntegrationsTab card.
+**Accept:** backend unit tests (resolution order DB→env→noop, masking, keep-on-masked
+PUT, factory per-tenant); test endpoint green against live Checkbox test register;
+cross-tenant isolation verified; tsc + next build green; full UI flow: select provider
+→ enter creds → test → save → re-open shows masked secrets.
 
 ## TASK-070 — Mobile: POS screens (tablet) in Expo app
 **Status:** planned · **Agent:** mobile-developer · **Depends:** 068 · Updated: 2026-06-12

@@ -80,16 +80,16 @@ export const SERVICE_META: Record<IntegrationService, ServiceMeta> = {
       { key: "secret", label: "Secret",        placeholder: "my-webhook-secret",           type: "password", required: false, hint: "Підписується заголовок X-ShelfGuard-Signature" },
     ],
   },
+  // NOTE: ПРРО uses a dedicated PrroConfigModal (not the generic IntegrationConfigModal).
+  // The fields array here is intentionally empty; the real UI lives in
+  // frontend/features/integrations/components/PrroConfigModal.tsx which talks directly to
+  // GET/PUT /api/settings/prro instead of the generic /api/integrations/:service endpoint.
   prro: {
     service: "prro",
     label: "ПРРО Каса",
     description: "Інтеграція з програмним РРО для реєстрації продажів (v3).",
     icon: "🖨️",
-    fields: [
-      { key: "api_url",    label: "URL API каси",  placeholder: "https://prro.example.com/api", type: "url",      required: true },
-      { key: "api_key",    label: "API Key",        placeholder: "prro-api-key",                 type: "password", required: true },
-      { key: "cashier_id", label: "ID касира",      placeholder: "cashier-001",                  type: "text",     required: false },
-    ],
+    fields: [],
   },
   iot: {
     service: "iot",

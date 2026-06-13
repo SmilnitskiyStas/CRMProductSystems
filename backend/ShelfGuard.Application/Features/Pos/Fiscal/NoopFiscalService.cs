@@ -16,6 +16,12 @@ public sealed class NoopFiscalService : IFiscalService
             HasOpenShift: null,
             Error: "No fiscal provider configured (PRRO__PROVIDER is not set)."));
 
+    public Task<FiscalCashierResult> CheckCashierAsync(CancellationToken ct = default) =>
+        Task.FromResult(new FiscalCashierResult(
+            Ok: false,
+            CashierName: null,
+            Error: "No fiscal provider configured."));
+
     public Task<FiscalShiftResult> OpenShiftAsync(CancellationToken ct = default) =>
         Task.FromResult(new FiscalShiftResult(
             ProviderShiftId: null,
