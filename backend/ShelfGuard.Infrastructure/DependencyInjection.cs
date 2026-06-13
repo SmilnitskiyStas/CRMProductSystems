@@ -75,6 +75,9 @@ public static class DependencyInjection
         // v3 - IoT devices
         services.AddScoped<IIotDeviceRepository, IotDeviceRepository>();
 
+        // v3.2 - POS (TASK-068)
+        services.AddScoped<IPosRepository, PosRepository>();
+
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
         services.AddScoped<IAduRepository, AduRepository>();

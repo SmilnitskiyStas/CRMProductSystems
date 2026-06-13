@@ -48,6 +48,10 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.AiOrders.IAiOrderService, Features.AiOrders.AiOrderService>();
         services.AddScoped<Features.Telegram.ITelegramLinkService, Features.Telegram.TelegramLinkService>();
         services.AddScoped<Features.IoT.IIotDeviceService, Features.IoT.IotDeviceService>();
+
+        // v3.2 - POS (TASK-068)
+        services.AddScoped<Features.Pos.IPosService, Features.Pos.PosService>();
+
         return services;
     }
 }

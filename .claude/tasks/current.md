@@ -31,7 +31,7 @@ Accept: unit tests green (fake handler); live: dev-api.checkbox.in.ua reachabili
 pending from user).
 
 ## TASK-068 — API: POS endpoints (shifts, sales → FEFO + stock_events)
-**Status:** planned · **Agent:** backend-developer · **Depends:** 066, 067 · Updated: 2026-06-12
+**Status:** review · **Agent:** backend-developer · **Depends:** 066, 067 · Updated: 2026-06-13
 ⚠️ ADR-013: must resolve fiscalization through the per-tenant IFiscalServiceFactory
 (TASK-071), not the startup-time IFiscalService DI registration.
 POST /api/pos/shifts/open|close, POST /api/pos/sales (items by barcode; critical → auto
