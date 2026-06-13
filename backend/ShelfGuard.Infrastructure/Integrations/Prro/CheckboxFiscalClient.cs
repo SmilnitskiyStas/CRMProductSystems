@@ -58,7 +58,14 @@ public sealed class CheckboxFiscalClient : IFiscalService
                 HasOpenShift: info.HasShift,
                 Error: null);
         }
-        catch (Exception ex) when (ex is FiscalProviderException or HttpRequestException or TaskCanceledException)
+        catch (FiscalProviderException ex)
+        {
+            var error = ex.HttpStatus == 404
+                ? "Касу не знайдено. Перевірте ключ ліцензії та вибране середовище (тест/виробничий)."
+                : ex.Message;
+            return new FiscalHealthResult(false, "checkbox", null, null, null, error);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             return new FiscalHealthResult(false, "checkbox", null, null, null, ex.Message);
         }
@@ -78,7 +85,10 @@ public sealed class CheckboxFiscalClient : IFiscalService
         }
         catch (FiscalProviderException ex)
         {
-            return new FiscalCashierResult(Ok: false, CashierName: null, Error: ex.Message);
+            var error = ex.HttpStatus == 404
+                ? "Касира не знайдено у Checkbox. Перевірте PIN-код або логін/пароль."
+                : ex.Message;
+            return new FiscalCashierResult(Ok: false, CashierName: null, Error: error);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {

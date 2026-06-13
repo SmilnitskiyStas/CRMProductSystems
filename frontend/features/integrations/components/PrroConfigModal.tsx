@@ -495,8 +495,34 @@ export function PrroConfigModal({ onClose }: Props) {
                       </div>
                     )}
 
-                    {/* ok=false */}
-                    {testResult && !testResult.ok && (
+                    {/* ok=false but register was found — cashier credentials failed */}
+                    {testResult && !testResult.ok && testResult.fiscalNumber && (
+                      <div style={{ fontSize: 12, color: "#F87171" }}>
+                        <span style={{ color: "#4ADE80", fontWeight: 700 }}>✓</span>{" "}
+                        <span style={{ color: "#9CA3AF" }}>Каса</span>{" "}
+                        <span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>{testResult.fiscalNumber}</span>
+                        {testResult.isTest && (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              background: "#052e16",
+                              color: "#86efac",
+                              fontSize: 10,
+                            }}
+                          >
+                            тест
+                          </span>
+                        )}
+                        {" · "}
+                        <span style={{ fontWeight: 700 }}>✗</span>{" "}
+                        {testResult.error ?? "Помилка авторизації касира"}
+                      </div>
+                    )}
+
+                    {/* ok=false, no register info — register not found or network error */}
+                    {testResult && !testResult.ok && !testResult.fiscalNumber && (
                       <div style={{ fontSize: 12, color: "#F87171" }}>
                         <span style={{ fontWeight: 700 }}>✗</span>{" "}
                         {testResult.error ?? "Сервіс недоступний"}

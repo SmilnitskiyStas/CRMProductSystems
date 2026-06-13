@@ -1,13 +1,15 @@
 #!/bin/bash
 # setup-ssl.sh — obtain Let's Encrypt certificate for agrusystems.pp.ua
 # Run once on the server after DNS propagation is confirmed.
-# Prerequisites: nginx running, port 80 open, webroot dir exists.
+# Prerequisites: nginx running, port 80 open.
 
 set -e
 
 DOMAIN="agrusystems.pp.ua"
 EMAIL="stassmilnitskiy@gmail.com"
 WEBROOT="/var/www/certbot"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TEMP_CONF="/etc/nginx/conf.d/shelfguard-acme.conf"
 
 echo "=== ShelfGuard SSL Setup ==="
 
@@ -21,12 +23,23 @@ fi
 # Create webroot directory for ACME challenges
 mkdir -p "$WEBROOT"
 
-# Deploy nginx config (HTTP-only first pass is already in shelfguard.conf)
-echo ">>> Deploying nginx config..."
-cp "$(dirname "$0")/shelfguard.conf" /etc/nginx/sites-available/shelfguard
-ln -sf /etc/nginx/sites-available/shelfguard /etc/nginx/sites-enabled/shelfguard
+# Phase 1: temporary HTTP-only config just for ACME challenge
+# (shelfguard.conf has HTTPS blocks that require certs to exist first)
+echo ">>> Phase 1: deploying temporary HTTP config for ACME challenge..."
+cat > "$TEMP_CONF" << EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN www.$DOMAIN api.$DOMAIN;
+    location /.well-known/acme-challenge/ {
+        root $WEBROOT;
+    }
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+EOF
 
-# Test and reload nginx
 nginx -t
 systemctl reload nginx
 
@@ -41,7 +54,12 @@ certbot certonly \
     -d "www.$DOMAIN" \
     -d "api.$DOMAIN"
 
-echo ">>> Certificate obtained. Reloading nginx with SSL config..."
+# Phase 2: remove temp config, deploy full HTTPS config
+echo ">>> Phase 2: enabling full HTTPS config..."
+rm -f "$TEMP_CONF"
+cp "$SCRIPT_DIR/shelfguard.conf" /etc/nginx/sites-available/shelfguard
+ln -sf /etc/nginx/sites-available/shelfguard /etc/nginx/sites-enabled/shelfguard
+
 nginx -t
 systemctl reload nginx
 

@@ -346,6 +346,32 @@ public sealed class CheckboxFiscalClientTests
         Assert.Contains("Невірний ключ ліцензії", result.Error);
     }
 
+    [Fact]
+    public async Task Ping_404_returns_descriptive_register_not_found_message()
+    {
+        var (client, handler, _) = Build();
+        handler.Enqueue(HttpStatusCode.NotFound, """{"message":"Not found"}""");
+
+        var result = await client.PingAsync();
+
+        Assert.False(result.Reachable);
+        Assert.Contains("Касу не знайдено", result.Error);
+        Assert.Contains("ключ ліцензії", result.Error);
+    }
+
+    [Fact]
+    public async Task CheckCashier_404_returns_descriptive_cashier_not_found_message()
+    {
+        var (client, handler, _) = Build(pinCode: "1234");
+        handler.Enqueue(HttpStatusCode.OK, TokenJson);
+        handler.Enqueue(HttpStatusCode.NotFound, """{"message":"Not found"}""");
+
+        var result = await client.CheckCashierAsync();
+
+        Assert.False(result.Ok);
+        Assert.Contains("Касира не знайдено", result.Error);
+    }
+
     // ── error mapping ──────────────────────────────────────────────────────
 
     [Fact]
