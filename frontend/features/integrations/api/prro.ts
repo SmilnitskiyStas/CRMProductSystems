@@ -17,7 +17,7 @@ export interface UpdatePrroSettingsRequest {
   provider: PrroProvider;
   baseUrl: string;
   licenseKey: string;         // send masked placeholder to keep existing secret
-  cashierLogin: string;
+  cashierLogin: string | null; // null = keep stored value (not a secret, no mask needed)
   cashierPassword: string;
   cashierPinCode: string;
 }
