@@ -23,11 +23,13 @@ export interface UpdatePrroSettingsRequest {
 }
 
 export interface PrroTestResult {
-  reachable: boolean;
-  fiscalNumber: string;
-  isTest: boolean;
+  ok: boolean;
+  provider: string;
+  fiscalNumber: string | null;
+  isTest: boolean | null;
+  hasOpenShift: boolean | null;
   cashierOk: boolean;
-  error?: string;
+  error?: string | null;
 }
 
 // ── API functions ──────────────────────────────────────────────────────────

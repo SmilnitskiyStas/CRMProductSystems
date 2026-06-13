@@ -72,7 +72,7 @@ public sealed class FiscalServiceFactory : IFiscalServiceFactory
         {
             Provider = config.Provider,
             BaseUrl = baseUrl,
-            LicenseKey = config.LicenseKey ?? string.Empty,
+            LicenseKey = config.LicenseKey?.Trim() ?? string.Empty,
             Cashier = new PrroOptions.CashierOptions
             {
                 Login = config.CashierLogin ?? string.Empty,

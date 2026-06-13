@@ -469,7 +469,7 @@ export function PrroConfigModal({ onClose }: Props) {
                     </button>
 
                     {/* Success result */}
-                    {testResult && testResult.reachable && (
+                    {testResult && testResult.ok && (
                       <div style={{ fontSize: 12, color: "#4ADE80" }}>
                         <span style={{ fontWeight: 700 }}>✓</span> Каса{" "}
                         <span style={{ fontFamily: "monospace" }}>{testResult.fiscalNumber}</span>
@@ -495,8 +495,8 @@ export function PrroConfigModal({ onClose }: Props) {
                       </div>
                     )}
 
-                    {/* Reachable=false */}
-                    {testResult && !testResult.reachable && (
+                    {/* ok=false */}
+                    {testResult && !testResult.ok && (
                       <div style={{ fontSize: 12, color: "#F87171" }}>
                         <span style={{ fontWeight: 700 }}>✗</span>{" "}
                         {testResult.error ?? "Сервіс недоступний"}

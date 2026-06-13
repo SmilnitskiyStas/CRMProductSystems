@@ -92,6 +92,20 @@ public sealed class PrroSettingsService : IPrroSettingsService
                 ?? stored?.Provider
                 ?? PrroConnectionConfig.ProviderDisabled;
             effective = MergeWithStored(provider, candidate, stored);
+
+            // Masked placeholders with no stored value → fall back to env secrets so
+            // "test without save" works when the form pre-fills from the env config.
+            if (_factory.EnvFallback is { } env)
+            {
+                effective = effective with
+                {
+                    LicenseKey    = effective.LicenseKey    ?? env.LicenseKey,
+                    CashierLogin  = effective.CashierLogin  ?? env.CashierLogin,
+                    CashierPassword = effective.CashierPassword ?? env.CashierPassword,
+                    CashierPinCode  = effective.CashierPinCode  ?? env.CashierPinCode,
+                    BaseUrl       = effective.BaseUrl       ?? env.BaseUrl,
+                };
+            }
         }
         else
         {
