@@ -129,8 +129,8 @@ export function PrroConfigModal({ onClose }: Props) {
           : "",
       cashierLogin:
         provider === "checkbox" && cashierAuthMode === "loginPassword"
-          ? cashierLogin || MASKED_UNCHANGED
-          : "",
+          ? cashierLogin || null
+          : null,
       cashierPassword:
         provider === "checkbox" && cashierAuthMode === "loginPassword"
           ? cashierPassword || MASKED_UNCHANGED
@@ -159,10 +159,12 @@ export function PrroConfigModal({ onClose }: Props) {
           provider === "checkbox" && cashierAuthMode === "pin"
             ? cashierPin || MASKED_UNCHANGED
             : "",
+        // cashierLogin is not a secret (returned unmasked by GET) — send null when
+        // empty so the backend ?? merge falls through to the stored value.
         cashierLogin:
           provider === "checkbox" && cashierAuthMode === "loginPassword"
-            ? cashierLogin || MASKED_UNCHANGED
-            : "",
+            ? cashierLogin || null
+            : null,
         cashierPassword:
           provider === "checkbox" && cashierAuthMode === "loginPassword"
             ? cashierPassword || MASKED_UNCHANGED

@@ -11,7 +11,7 @@
         "image": "ubuntu-24.04-jdk-17-ndk-r27b"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.agrusystems.pp.ua/api"
+        "EXPO_PUBLIC_API_URL": "https://api.agrusystems.pp.ua:10054/api"
       }
     },
     "preview": {
@@ -21,7 +21,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.agrusystems.pp.ua/api"
+        "EXPO_PUBLIC_API_URL": "https://api.agrusystems.pp.ua:10054/api"
       }
     },
     "production": {
@@ -30,7 +30,7 @@
         "image": "ubuntu-24.04-jdk-17-ndk-r27b"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.agrusystems.pp.ua/api"
+        "EXPO_PUBLIC_API_URL": "https://api.agrusystems.pp.ua:10054/api"
       }
     }
   },

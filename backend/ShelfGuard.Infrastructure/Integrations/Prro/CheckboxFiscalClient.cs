@@ -73,15 +73,13 @@ public sealed class CheckboxFiscalClient : IFiscalService
 
     public async Task<FiscalCashierResult> CheckCashierAsync(CancellationToken ct = default)
     {
+        // Checkbox v1 does not expose a cashier/profile endpoint — the only reliable
+        // way to verify cashier credentials is a successful signin itself.
+        // A token in the store means we already signed in successfully this session.
         try
         {
-            var token = _tokens.Token ?? await SigninAsync(ct);
-            using var request = NewRequest(HttpMethod.Get, "cashier/profile");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            using var response = await SendRawAsync(request, ct);
-            await EnsureSuccessAsync(response, ct);
-            var profile = await ReadAsync<CashierProfile>(response, ct);
-            return new FiscalCashierResult(Ok: true, CashierName: profile.FullName, Error: null);
+            await (_tokens.Token is null ? SigninAsync(ct) : Task.FromResult(_tokens.Token));
+            return new FiscalCashierResult(Ok: true, CashierName: null, Error: null);
         }
         catch (FiscalProviderException ex)
         {
@@ -366,11 +364,6 @@ public sealed class CheckboxFiscalClient : IFiscalService
     private sealed class AccessTokenResponse
     {
         [JsonPropertyName("access_token")] public string? AccessToken { get; set; }
-    }
-
-    private sealed class CashierProfile
-    {
-        [JsonPropertyName("full_name")] public string? FullName { get; set; }
     }
 
     private sealed class CashRegisterInfo
