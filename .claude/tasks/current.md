@@ -72,7 +72,7 @@ cross-tenant isolation verified; tsc + next build green; full UI flow: select pr
 → enter creds → test → save → re-open shows masked secrets.
 
 ## TASK-070 — Mobile: POS screens (tablet) in Expo app
-**Status:** planned · **Agent:** mobile-developer · **Depends:** 068 · Updated: 2026-06-12
+**Status:** review · **Agent:** mobile-developer · **Depends:** 068 · Updated: 2026-06-13
 Зміна (open/close + PIN), продаж: скан штрихкоду (expo-camera) → кошик → ціна з акцією,
 critical/expired badge, оплата cash/card (терминал SDK / принтер — Phase 4.1, поза скоупом),
 чек зі статусом фіскалізації. Accept: tsc green; flow проти прод-API.

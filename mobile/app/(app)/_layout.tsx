@@ -3,10 +3,15 @@ import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/features/auth/store';
 
+const CASHIER_ROLES = ['cashier', 'store_manager', 'director', 'admin'];
+
 export default function AppLayout() {
   const token = useAuthStore((s) => s.accessToken);
+  const user = useAuthStore((s) => s.user);
 
   if (!token) return <Redirect href="/(auth)/login" />;
+
+  const canAccessPos = user ? CASHIER_ROLES.includes(user.role) : false;
 
   return (
     <Tabs
@@ -51,6 +56,16 @@ export default function AppLayout() {
             </View>
           ),
           tabBarLabel: () => null,
+        }}
+      />
+      <Tabs.Screen
+        name="pos"
+        options={{
+          title: 'Каса',
+          href: canAccessPos ? '/(app)/pos' : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cash-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
