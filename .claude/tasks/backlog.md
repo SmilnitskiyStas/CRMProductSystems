@@ -14,7 +14,7 @@ Rewritten 2026-06-12: v2 (TASK-046..060) fully done — see current.md.
 ## Infrastructure polish (Phase 7) — deferred by user 2026-06-12
 
 ## TASK-043: Domain + HTTPS (Let's Encrypt) + drop cleartext from mobile
-**Status:** in_progress · **Priority:** high before real clients · Updated: 2026-06-13
+**Status:** done · **Priority:** high before real clients · Updated: 2026-06-13
 API/web on plain http IP:ports; mobile ships usesCleartextTraffic=true as workaround.
 Domain: agrusystems.pp.ua (valid until 2026-09-13). DNS A-records updated 2026-06-13:
 @ + www + mail → 93.127.143.98. NS: ns10/11/12.uadns.com.

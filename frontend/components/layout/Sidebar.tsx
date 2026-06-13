@@ -19,6 +19,7 @@ import {
   Sparkles,
   Map,
   Cpu,
+  CreditCard,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/stock",      label: "Залишки",      icon: <ShoppingCart size={18} />,    roles: TENANT_ROLES },
   { href: "/receipts",   label: "Прийомка",     icon: <ClipboardList size={18} />,   roles: CAN_RECEIVE_STOCK },
   { href: "/transfers",  label: "Переміщення",  icon: <ArrowLeftRight size={18} />,  roles: CAN_RECEIVE_STOCK },
+  { href: "/pos",        label: "Каса",         icon: <CreditCard size={18} />,      roles: CAN_RECEIVE_STOCK },
   { href: "/write-offs", label: "Списання",     icon: <Trash2 size={18} />,          roles: TENANT_ROLES },
   { href: "/sales",      label: "Продажі",      icon: <TrendingUp size={18} />,      roles: AT_LEAST_STORE_MANAGER },
   { href: "/orders",     label: "Замовлення",   icon: <Calculator size={18} />,      roles: AT_LEAST_STORE_MANAGER },

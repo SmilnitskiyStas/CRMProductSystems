@@ -77,6 +77,19 @@ cross-tenant isolation verified; tsc + next build green; full UI flow: select pr
 critical/expired badge, оплата cash/card (терминал SDK / принтер — Phase 4.1, поза скоупом),
 чек зі статусом фіскалізації. Accept: tsc green; flow проти прод-API.
 
+## TASK-072 — Web: POS dashboard (зміни, транзакції, Z-звіти)
+**Status:** review · **Agent:** frontend-developer · **Depends:** 068 · Updated: 2026-06-13
+Веб-інтерфейс для десктоп касира/менеджера — аналог TASK-070 (mobile) але для Next.js.
+Route `/pos`. Функціонал: поточна зміна (відкрити/закрити + статус фіскалізації),
+список продажів зміни (чек-деталі), Z-звіт після закриття, sidebar «Каса» (CanReceiveStock).
+Використовує існуючі ендпоінти TASK-068:
+  GET  /api/pos/shifts/current
+  POST /api/pos/shifts/open  (body: { storeId, openingCash? })
+  POST /api/pos/shifts/close
+  GET  /api/pos/sales?shiftId=
+Не включає: продаж через сканер (мобільна функція), оплата терміналом — Phase 4.1.
+Accept: tsc + next build green; shift open/close/list-sales flow проти API.
+
 ---
 # Previous sprint — v3.1 «IoT Foundation» (started 2026-06-12)
 
