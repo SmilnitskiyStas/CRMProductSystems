@@ -31,7 +31,7 @@ Accept: unit tests green (fake handler); live: dev-api.checkbox.in.ua reachabili
 pending from user).
 
 ## TASK-068 — API: POS endpoints (shifts, sales → FEFO + stock_events)
-**Status:** review · **Agent:** backend-developer · **Depends:** 066, 067 · Updated: 2026-06-13
+**Status:** done · **Agent:** backend-developer · **Depends:** 066, 067 · Updated: 2026-06-13
 ⚠️ ADR-013: must resolve fiscalization through the per-tenant IFiscalServiceFactory
 (TASK-071), not the startup-time IFiscalService DI registration.
 POST /api/pos/shifts/open|close, POST /api/pos/sales (items by barcode; critical → auto
@@ -40,14 +40,14 @@ Sale = one DB tx: pos_transaction + items + FEFO write-down + stock_events('pos_
 fiscalization async (Status). Accept: service tests (FEFO, expired block, totals), build green.
 
 ## TASK-069 — Worker: fiscalization retry job
-**Status:** review · **Agent:** backend-developer (worker) · **Depends:** 067, 068 · Updated: 2026-06-13
+**Status:** done · **Agent:** backend-developer (worker) · **Depends:** 067, 068 · Updated: 2026-06-13
 Cron */5 min: pending_fiscalization docs → submit/poll receipt status via Checkbox
 (through API endpoint backed by IFiscalService); update FiscalNumber/Status on DONE.
 Offline numbering handled by Checkbox itself (ADR-012). Accept: tsc green;
 retry/backoff covered.
 
 ## TASK-071 — Settings: ПРРО провайдер (Checkbox) у Налаштування → Інтеграції
-**Status:** in_progress · **Agent:** backend-developer + frontend-developer · **Depends:** 067 · Updated: 2026-06-13
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** 067 · Updated: 2026-06-13
 ADR-013. Per-tenant fiscal provider config, same mechanism as the Claude key
 (integration_configs service='claude' → ClaudeOrderAdvisor.ResolveAsync; web UI
 features/integrations + IntegrationsTab).
@@ -72,7 +72,7 @@ cross-tenant isolation verified; tsc + next build green; full UI flow: select pr
 → enter creds → test → save → re-open shows masked secrets.
 
 ## TASK-070 — Mobile: POS screens (tablet) in Expo app
-**Status:** review · **Agent:** mobile-developer · **Depends:** 068 · Updated: 2026-06-13
+**Status:** done · **Agent:** mobile-developer · **Depends:** 068 · Updated: 2026-06-13
 Зміна (open/close + PIN), продаж: скан штрихкоду (expo-camera) → кошик → ціна з акцією,
 critical/expired badge, оплата cash/card (терминал SDK / принтер — Phase 4.1, поза скоупом),
 чек зі статусом фіскалізації. Accept: tsc green; flow проти прод-API.
