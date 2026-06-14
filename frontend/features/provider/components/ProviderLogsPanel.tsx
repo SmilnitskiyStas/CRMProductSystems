@@ -127,10 +127,10 @@ function DateInput({ label, value, onChange }: { label: string; value: string; o
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export function ProviderLogsPanel() {
+export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: string }) {
   const { data: tenants } = useTenants();
 
-  const [tenantId, setTenantId] = useState("");
+  const [tenantId, setTenantId] = useState(initialTenantId ?? "");
   const [action,   setAction]   = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo,   setDateTo]   = useState("");

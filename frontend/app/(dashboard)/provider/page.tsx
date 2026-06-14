@@ -16,9 +16,10 @@ export default function ProviderPage() {
   const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = useTenants();
   const { data: health }  = useProviderHealth();
 
-  const [search,     setSearch]     = useState("");
-  const [activeTab,  setActiveTab]  = useState<"tenants" | "logs">("tenants");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search,         setSearch]         = useState("");
+  const [activeTab,      setActiveTab]      = useState<"tenants" | "logs">("tenants");
+  const [selectedId,     setSelectedId]     = useState<string | null>(null);
+  const [logsForTenant,  setLogsForTenant]  = useState<string | undefined>(undefined);
 
   // Role guard — redirect non-provider users
   useEffect(() => {
@@ -238,7 +239,7 @@ export default function ProviderPage() {
               padding: "16px 20px",
             }}
           >
-            <ProviderLogsPanel />
+            <ProviderLogsPanel initialTenantId={logsForTenant} />
           </div>
         )}
       </div>{/* end main content */}
@@ -249,6 +250,11 @@ export default function ProviderPage() {
           tenantId={selectedId}
           onClose={() => setSelectedId(null)}
           onImpersonated={() => setSelectedId(null)}
+          onViewLogs={(tid) => {
+            setLogsForTenant(tid);
+            setActiveTab("logs");
+            setSelectedId(null);
+          }}
         />
       )}
 

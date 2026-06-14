@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { X, LogIn, Save } from "lucide-react";
+import { X, LogIn, Save, ScrollText } from "lucide-react";
 import {
   PLAN_COLORS, PLAN_LABELS, MODULE_LABELS,
   ALL_MODULES, ALL_PLANS,
@@ -16,6 +16,7 @@ interface Props {
   tenantId: string;
   onClose: () => void;
   onImpersonated: () => void;
+  onViewLogs: (tenantId: string) => void;
 }
 
 function formatDate(iso: string | null) {
@@ -26,7 +27,7 @@ function formatDate(iso: string | null) {
   });
 }
 
-export function TenantDetailPanel({ tenantId, onClose, onImpersonated }: Props) {
+export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLogs }: Props) {
   const { data: tenant, isLoading } = useTenant(tenantId, true);
   const updatePlan    = useUpdatePlan(tenantId);
   const updateModules = useUpdateModules(tenantId);
@@ -368,10 +369,10 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated }: Props) 
             )}
           </div>
 
-          {/* Impersonation */}
+          {/* Actions */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-              ВХІД ЯК КЛІЄНТ
+              ДІЇ
             </div>
             <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 12 }}>
               Увійдіть від імені адміністратора цього клієнта на 60 хвилин. Сесія записується в журнал.
@@ -379,22 +380,40 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated }: Props) 
             {impersonateErr && (
               <div style={{ color: "#F87171", fontSize: 12, marginBottom: 10 }}>{impersonateErr}</div>
             )}
-            <button
-              onClick={handleImpersonate}
-              disabled={impersonating || !tenant.isActive}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "9px 18px", borderRadius: 8,
-                background: impersonating || !tenant.isActive ? "#1A1F2C" : "#1D3461",
-                border: `1px solid ${impersonating || !tenant.isActive ? "#374151" : "#3B82F6"}`,
-                color: impersonating || !tenant.isActive ? "#4B5563" : "#93C5FD",
-                fontSize: 13, fontWeight: 600,
-                cursor: impersonating || !tenant.isActive ? "default" : "pointer",
-              }}
-            >
-              <LogIn size={15} />
-              {impersonating ? "Підключення…" : "Увійти як клієнт"}
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={handleImpersonate}
+                disabled={impersonating || !tenant.isActive}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "9px 18px", borderRadius: 8,
+                  background: impersonating || !tenant.isActive ? "#1A1F2C" : "#1D3461",
+                  border: `1px solid ${impersonating || !tenant.isActive ? "#374151" : "#3B82F6"}`,
+                  color: impersonating || !tenant.isActive ? "#4B5563" : "#93C5FD",
+                  fontSize: 13, fontWeight: 600,
+                  cursor: impersonating || !tenant.isActive ? "default" : "pointer",
+                }}
+              >
+                <LogIn size={15} />
+                {impersonating ? "Підключення…" : "Увійти як клієнт"}
+              </button>
+
+              <button
+                onClick={() => onViewLogs(tenantId)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "9px 18px", borderRadius: 8,
+                  background: "transparent",
+                  border: "1px solid #374151",
+                  color: "#9CA3AF",
+                  fontSize: 13, fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <ScrollText size={15} />
+                Логи
+              </button>
+            </div>
             {!tenant.isActive && (
               <div style={{ color: "#4B5563", fontSize: 11, marginTop: 6 }}>
                 Клієнт деактивований — вхід як клієнт недоступний
