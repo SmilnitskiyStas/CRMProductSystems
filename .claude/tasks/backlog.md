@@ -20,7 +20,7 @@ Domain: agrusystems.pp.ua (valid until 2026-09-13). DNS A-records updated 2026-0
 @ + www + mail → 93.127.143.98. NS: ns10/11/12.uadns.com.
 
 ## TASK-044: CI (GitHub Actions: build + test on PR), DB backups
-**Status:** deferred · **Priority:** medium · Updated: 2026-06-12
+**Status:** review · **Priority:** high · **Agent:** devops-engineer · Updated: 2026-06-14
 
 ---
 
