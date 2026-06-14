@@ -64,8 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Каса",
     icon: <CreditCard size={18} />,
     items: [
-      { href: "/pos",          label: "Каса",          icon: <CreditCard size={16} />, roles: CAN_ACCESS_POS },
-      { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={16} />,  roles: CAN_VIEW_ANALYTICS },
+      { href: "/pos", label: "Каса", icon: <CreditCard size={16} />, roles: CAN_ACCESS_POS },
     ],
   },
   {
