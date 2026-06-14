@@ -31,6 +31,7 @@ export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
         clearToken();
       }
       sessionStorage.removeItem("sg_impersonation");
+      window.dispatchEvent(new Event("sg-impersonation-changed"));
     }
 
     // Refresh useMe() so Sidebar reflects the restored provider role

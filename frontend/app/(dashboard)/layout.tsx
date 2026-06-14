@@ -49,6 +49,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     setMounted(true);
     setImpersonation(readImpersonation());
+
+    // Layout does not remount on navigation — listen for explicit events instead
+    const handler = () => setImpersonation(readImpersonation());
+    window.addEventListener("sg-impersonation-changed", handler);
+    return () => window.removeEventListener("sg-impersonation-changed", handler);
   }, []);
 
   useEffect(() => {

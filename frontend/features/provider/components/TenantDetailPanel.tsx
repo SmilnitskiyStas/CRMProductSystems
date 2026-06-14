@@ -79,6 +79,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated }: Props) 
           tenantName: resp.tenantName,
           tenantId: resp.tenantId,
         }));
+        window.dispatchEvent(new Event("sg-impersonation-changed"));
       }
       setToken(resp.accessToken);
       // Force useMe() to refetch with the new token so Sidebar reflects the tenant's role.
