@@ -7,6 +7,8 @@ namespace ShelfGuard.Domain.Constants;
 public static class AppRoles
 {
     public const string Provider        = "provider";
+    public const string ProviderAdmin   = "provider_admin";
+    public const string ProviderAgent   = "provider_agent";
     public const string EnterpriseAdmin = "enterprise_admin";
     public const string NetworkManager  = "network_manager";
     public const string StoreManager    = "store_manager";
@@ -14,9 +16,13 @@ public static class AppRoles
     public const string Storekeeper     = "storekeeper";
     public const string Cashier         = "cashier";
 
+    public static readonly IReadOnlySet<string> ProviderTeamRoles =
+        new HashSet<string> { Provider, ProviderAdmin, ProviderAgent };
+
     /// <summary>All roles that can be assigned to a user, ordered highest to lowest privilege.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
-        Provider, EnterpriseAdmin, NetworkManager, StoreManager, Merchandiser, Storekeeper, Cashier,
+        Provider, ProviderAdmin, ProviderAgent,
+        EnterpriseAdmin, NetworkManager, StoreManager, Merchandiser, Storekeeper, Cashier,
     };
 }

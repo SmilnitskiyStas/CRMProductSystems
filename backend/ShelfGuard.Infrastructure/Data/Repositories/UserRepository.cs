@@ -22,6 +22,15 @@ public sealed class UserRepository : IUserRepository
             .OrderBy(u => u.FullName)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<User>> GetByRolesAsync(IEnumerable<string> roles, CancellationToken ct = default)
+    {
+        var roleList = roles.ToList();
+        return await _db.Users
+            .Where(u => roleList.Contains(u.Role))
+            .OrderBy(u => u.FullName)
+            .ToListAsync(ct);
+    }
+
     public async Task AddAsync(User user, CancellationToken ct = default) =>
         await _db.Users.AddAsync(user, ct);
 

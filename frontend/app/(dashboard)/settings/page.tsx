@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Settings, Bell, Link as LinkIcon } from "lucide-react";
+import { Settings, Bell, Link as LinkIcon, MessageSquare } from "lucide-react";
 import { NotificationsTab } from "@/features/settings/components/NotificationsTab";
 import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab";
+import { SupportTab } from "@/features/settings/components/SupportTab";
 
-type Tab = "general" | "notifications" | "integrations";
+type Tab = "general" | "notifications" | "integrations" | "support";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "general",       label: "Загальні",   icon: <Settings size={15} /> },
   { id: "notifications", label: "Сповіщення", icon: <Bell size={15} /> },
   { id: "integrations",  label: "Інтеграції", icon: <LinkIcon size={15} /> },
+  { id: "support",       label: "Підтримка",  icon: <MessageSquare size={15} /> },
 ];
 
 export default function SettingsPage() {
@@ -88,6 +90,7 @@ export default function SettingsPage() {
         {activeTab === "general"       && <GeneralTab />}
         {activeTab === "notifications" && <NotificationsTab />}
         {activeTab === "integrations"  && <IntegrationsTab />}
+        {activeTab === "support"       && <SupportTab />}
       </div>
     </div>
   );

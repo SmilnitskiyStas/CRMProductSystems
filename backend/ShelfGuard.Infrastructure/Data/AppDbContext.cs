@@ -74,6 +74,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<PosTransaction> PosTransactions => Set<PosTransaction>();
     public DbSet<PosTransactionItem> PosTransactionItems => Set<PosTransactionItem>();
 
+    // Support
+    public DbSet<SupportTicket>  SupportTickets  => Set<SupportTicket>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -794,6 +798,32 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ProductStock>().WithMany()
              .HasForeignKey(i => i.ProductStockId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── SupportTicket ───────────────────────────────────────────────────
+        builder.Entity<SupportTicket>(e =>
+        {
+            e.ToTable("support_tickets");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.Subject).HasMaxLength(255).IsRequired();
+            e.Property(t => t.Status).HasMaxLength(30).IsRequired();
+            e.Property(t => t.Priority).HasMaxLength(20).IsRequired();
+            e.HasIndex(t => t.TenantId);
+            e.HasIndex(t => t.Status);
+            e.HasIndex(t => t.AssignedTo);
+            e.HasMany(t => t.Messages).WithOne(m => m.Ticket)
+             .HasForeignKey(m => m.TicketId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupportMessage ──────────────────────────────────────────────────
+        builder.Entity<SupportMessage>(e =>
+        {
+            e.ToTable("support_messages");
+            e.HasKey(m => m.Id);
+            e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.Body).IsRequired();
+            e.HasIndex(m => m.TicketId);
         });
     }
 }

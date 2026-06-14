@@ -114,6 +114,10 @@ public static class DependencyInjection
         // Movements audit log
         services.AddScoped<IMovementRepository, MovementRepository>();
 
+        // Support tickets
+        services.AddScoped<ISupportTicketRepository,  SupportTicketRepository>();
+        services.AddScoped<ISupportMessageRepository, SupportMessageRepository>();
+
         return services;
     }
 }

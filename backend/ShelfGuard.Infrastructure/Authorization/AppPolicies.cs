@@ -24,6 +24,8 @@ public static class AppPolicies
 {
     // Policy name constants (used on [Authorize(Policy = ...)] attributes)
     public const string ProviderOnly            = "ProviderOnly";
+    public const string ProviderTeamMember      = "ProviderTeamMember";
+    public const string ProviderCanInvite       = "ProviderCanInvite";
     public const string AtLeastEnterpriseAdmin  = "AtLeastEnterpriseAdmin";
     public const string AtLeastNetworkManager   = "AtLeastNetworkManager";
     public const string AtLeastStoreManager     = "AtLeastStoreManager";
@@ -37,6 +39,12 @@ public static class AppPolicies
     // Role sets per policy — the single source of truth referenced by both registration and tests.
     internal static readonly string[] ProviderOnlyRoles =
         [AppRoles.Provider];
+
+    internal static readonly string[] ProviderTeamMemberRoles =
+        [AppRoles.Provider, AppRoles.ProviderAdmin, AppRoles.ProviderAgent];
+
+    internal static readonly string[] ProviderCanInviteRoles =
+        [AppRoles.Provider, AppRoles.ProviderAdmin];
 
     internal static readonly string[] AtLeastEnterpriseAdminRoles =
         [AppRoles.Provider, AppRoles.EnterpriseAdmin];
@@ -78,6 +86,8 @@ public static class AppPolicies
     public static void Configure(AuthorizationOptions options)
     {
         options.AddPolicy(ProviderOnly,            p => p.RequireRole(ProviderOnlyRoles));
+        options.AddPolicy(ProviderTeamMember,      p => p.RequireRole(ProviderTeamMemberRoles));
+        options.AddPolicy(ProviderCanInvite,       p => p.RequireRole(ProviderCanInviteRoles));
         options.AddPolicy(AtLeastEnterpriseAdmin,  p => p.RequireRole(AtLeastEnterpriseAdminRoles));
         options.AddPolicy(AtLeastNetworkManager,   p => p.RequireRole(AtLeastNetworkManagerRoles));
         options.AddPolicy(AtLeastStoreManager,     p => p.RequireRole(AtLeastStoreManagerRoles));
