@@ -1,8 +1,10 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 import { setToken, clearToken } from "@/lib/api";
 import { providerApi } from "../api/provider";
+import { ME_KEY } from "@/features/auth/hooks/useAuth";
 
 interface Props {
   tenantName: string;
@@ -11,6 +13,8 @@ interface Props {
 }
 
 export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
+  const queryClient = useQueryClient();
+
   async function handleExit() {
     try {
       await providerApi.endImpersonate(tenantId);
@@ -18,7 +22,6 @@ export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
       // Ignore — server just logs; we restore the token regardless
     }
 
-    // Restore original provider token from sessionStorage
     if (typeof window !== "undefined") {
       const original = sessionStorage.getItem("sg_provider_token");
       if (original) {
@@ -27,8 +30,11 @@ export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
       } else {
         clearToken();
       }
+      sessionStorage.removeItem("sg_impersonation");
     }
 
+    // Refresh useMe() so Sidebar reflects the restored provider role
+    await queryClient.invalidateQueries({ queryKey: ME_KEY });
     onExit();
   }
 

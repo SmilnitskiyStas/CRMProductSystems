@@ -6,6 +6,22 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { getToken } from "@/lib/api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
+import { ImpersonationBanner } from "@/features/provider/components/ImpersonationBanner";
+
+interface ImpersonationInfo {
+  tenantName: string;
+  tenantId: string;
+}
+
+function readImpersonation(): ImpersonationInfo | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem("sg_impersonation");
+    return raw ? (JSON.parse(raw) as ImpersonationInfo) : null;
+  } catch {
+    return null;
+  }
+}
 
 const Loading = () => (
   <div
@@ -28,8 +44,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { error, isLoading } = useMe();
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [impersonation, setImpersonation] = useState<ImpersonationInfo | null>(null);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    setImpersonation(readImpersonation());
+  }, []);
 
   useEffect(() => {
     if (mounted && !getToken()) router.replace("/login");
@@ -42,12 +62,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!mounted || isLoading) return <Loading />;
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117" }}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <TopBar />
-        <main style={{ flex: 1, overflowY: "auto" }}>{children}</main>
+    <>
+      {impersonation && (
+        <ImpersonationBanner
+          tenantName={impersonation.tenantName}
+          tenantId={impersonation.tenantId}
+          onExit={() => {
+            setImpersonation(null);
+            router.replace("/provider");
+          }}
+        />
+      )}
+      <div
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          background: "#0F1117",
+          paddingTop: impersonation ? 44 : 0,
+        }}
+      >
+        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <TopBar />
+          <main style={{ flex: 1, overflowY: "auto" }}>{children}</main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

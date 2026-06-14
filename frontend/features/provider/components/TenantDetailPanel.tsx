@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { X, LogIn, Save } from "lucide-react";
 import {
   PLAN_COLORS, PLAN_LABELS, MODULE_LABELS,
@@ -9,11 +10,12 @@ import {
 import type { TenantDetailDto } from "../types";
 import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate } from "../hooks/useProvider";
 import { setToken, getToken } from "@/lib/api";
+import { ME_KEY } from "@/features/auth/hooks/useAuth";
 
 interface Props {
   tenantId: string;
   onClose: () => void;
-  onImpersonated: (info: { tenantName: string; tenantId: string }) => void;
+  onImpersonated: () => void;
 }
 
 function formatDate(iso: string | null) {
@@ -29,6 +31,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated }: Props) 
   const updatePlan    = useUpdatePlan(tenantId);
   const updateModules = useUpdateModules(tenantId);
   const impersonate   = useImpersonate();
+  const queryClient   = useQueryClient();
 
   const [editingPlan,    setEditingPlan]    = useState(false);
   const [editingModules, setEditingModules] = useState(false);
@@ -68,13 +71,20 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated }: Props) 
     setImpersonating(true);
     try {
       const resp = await impersonate.mutateAsync(tenantId);
-      // Save the original provider token so we can restore it later
       if (typeof window !== "undefined") {
         const original = getToken();
         if (original) sessionStorage.setItem("sg_provider_token", original);
+        // Persist banner state so DashboardLayout can show it after redirect
+        sessionStorage.setItem("sg_impersonation", JSON.stringify({
+          tenantName: resp.tenantName,
+          tenantId: resp.tenantId,
+        }));
       }
       setToken(resp.accessToken);
-      onImpersonated({ tenantName: resp.tenantName, tenantId: resp.tenantId });
+      // Force useMe() to refetch with the new token so Sidebar reflects the tenant's role.
+      // This also triggers the role guard on /provider to redirect → /dashboard.
+      await queryClient.invalidateQueries({ queryKey: ME_KEY });
+      onImpersonated();
     } catch (err) {
       setImpersonateErr((err as Error)?.message ?? "Помилка imersonation");
     } finally {

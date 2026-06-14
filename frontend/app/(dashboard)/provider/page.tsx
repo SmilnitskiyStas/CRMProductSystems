@@ -7,13 +7,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useTenants, useProviderHealth } from "@/features/provider/hooks/useProvider";
 import { TenantCard } from "@/features/provider/components/TenantCard";
 import { TenantDetailPanel } from "@/features/provider/components/TenantDetailPanel";
-import { ImpersonationBanner } from "@/features/provider/components/ImpersonationBanner";
 import { ProviderLogsPanel } from "@/features/provider/components/ProviderLogsPanel";
-
-interface ImpersonationState {
-  tenantName: string;
-  tenantId: string;
-}
 
 export default function ProviderPage() {
   const router = useRouter();
@@ -22,10 +16,9 @@ export default function ProviderPage() {
   const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = useTenants();
   const { data: health }  = useProviderHealth();
 
-  const [search,       setSearch]       = useState("");
-  const [activeTab,    setActiveTab]    = useState<"tenants" | "logs">("tenants");
-  const [selectedId,   setSelectedId]   = useState<string | null>(null);
-  const [impersonation, setImpersonation] = useState<ImpersonationState | null>(null);
+  const [search,     setSearch]     = useState("");
+  const [activeTab,  setActiveTab]  = useState<"tenants" | "logs">("tenants");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Role guard — redirect non-provider users
   useEffect(() => {
@@ -78,19 +71,6 @@ export default function ProviderPage() {
 
   return (
     <>
-      {/* Impersonation banner sits above everything */}
-      {impersonation && (
-        <ImpersonationBanner
-          tenantName={impersonation.tenantName}
-          tenantId={impersonation.tenantId}
-          onExit={() => {
-            setImpersonation(null);
-            setSelectedId(null);
-            refetchTenants();
-          }}
-        />
-      )}
-
       {/* Flex row: main content + inline detail panel */}
       <div style={{ display: "flex", alignItems: "flex-start", minHeight: "100vh" }}>
 
@@ -98,7 +78,7 @@ export default function ProviderPage() {
         style={{
           flex: 1,
           minWidth: 0,
-          padding: impersonation ? "68px 32px 28px" : "28px 32px",
+          padding: "28px 32px",
         }}
       >
         {/* Header */}
@@ -268,10 +248,7 @@ export default function ProviderPage() {
         <TenantDetailPanel
           tenantId={selectedId}
           onClose={() => setSelectedId(null)}
-          onImpersonated={(info) => {
-            setImpersonation(info);
-            setSelectedId(null);
-          }}
+          onImpersonated={() => setSelectedId(null)}
         />
       )}
 
