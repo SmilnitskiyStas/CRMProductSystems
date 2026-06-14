@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.JsonWebTokens;
 using ShelfGuard.Application.Features.Auth;
 using ShelfGuard.Application.Features.Auth.Dtos;
 using ShelfGuard.Application.Features.Users;
@@ -78,6 +79,21 @@ public sealed class AuthController : ControllerBase
     {
         var userId = ResolveUserId();
         if (userId is null) return Unauthorized();
+
+        // Impersonation tokens embed role/tenant_id in claims but keep sub = providerId.
+        // Fetching by sub would return the provider's DB row (role: "provider") — wrong.
+        // Read the already-verified JWT claims directly instead.
+        if (User.FindFirstValue("impersonated") == "true")
+        {
+            var role     = User.FindFirstValue(ClaimTypes.Role) ?? "enterprise_admin";
+            var email    = User.FindFirstValue(ClaimTypes.Email)
+                        ?? User.FindFirstValue(JwtRegisteredClaimNames.Email)
+                        ?? string.Empty;
+            var tenantIdRaw = User.FindFirstValue("tenant_id");
+            Guid? tenantId  = Guid.TryParse(tenantIdRaw, out var tid) ? tid : null;
+
+            return Ok(new AuthUserDto(userId.Value, email, email, role, tenantId, StoreId: null));
+        }
 
         var user = await _auth.GetCurrentUserAsync(userId.Value, ct);
         return user is null ? Unauthorized() : Ok(user);
