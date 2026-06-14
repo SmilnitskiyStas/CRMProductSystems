@@ -9,7 +9,6 @@ import {
   ClipboardList,
   ArrowLeftRight,
   CalendarDays,
-  Calculator,
   Trash2,
   TrendingUp,
   BarChart2,
@@ -23,9 +22,24 @@ import {
   CreditCard,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronDown,
+  ChevronRight,
+  Calculator,
 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { AT_LEAST_STORE_MANAGER, CAN_RECEIVE_STOCK, CAN_VIEW_ANALYTICS, PROVIDER_ONLY, TENANT_ROLES, type AppRole } from "@/lib/roles";
+import {
+  AT_LEAST_STORE_MANAGER,
+  CAN_ACCESS_POS,
+  CAN_MANAGE_WAREHOUSE,
+  CAN_VIEW_ANALYTICS,
+  CAN_VIEW_WAREHOUSE,
+  PROVIDER_ONLY,
+  TENANT_ROLES,
+  type AppRole,
+} from "@/lib/roles";
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface NavItem {
   href: string;
@@ -35,30 +49,227 @@ interface NavItem {
   exact?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  // Tenant-scoped pages — hidden from provider (no tenant context → API returns 403/empty)
-  { href: "/dashboard",  label: "Дашборд",     icon: <LayoutDashboard size={18} />, roles: TENANT_ROLES },
-  { href: "/inventory",  label: "Каталог",      icon: <Package size={18} />,         roles: TENANT_ROLES },
-  { href: "/stock",      label: "Залишки",      icon: <ShoppingCart size={18} />,    roles: TENANT_ROLES },
-  { href: "/receipts",   label: "Прийомка",     icon: <ClipboardList size={18} />,   roles: CAN_RECEIVE_STOCK },
-  { href: "/transfers",  label: "Переміщення",  icon: <ArrowLeftRight size={18} />,  roles: CAN_RECEIVE_STOCK },
-  { href: "/pos",        label: "Каса",         icon: <CreditCard size={18} />,      roles: CAN_RECEIVE_STOCK },
-  { href: "/write-offs", label: "Списання",     icon: <Trash2 size={18} />,          roles: TENANT_ROLES },
-  { href: "/sales",      label: "Продажі",      icon: <TrendingUp size={18} />,      roles: AT_LEAST_STORE_MANAGER },
-  { href: "/orders",     label: "Замовлення",   icon: <Calculator size={18} />,      roles: AT_LEAST_STORE_MANAGER },
-  { href: "/events",     label: "Події",        icon: <CalendarDays size={18} />,    roles: AT_LEAST_STORE_MANAGER },
-  { href: "/ai-orders",  label: "AI Замовлення", icon: <Sparkles size={18} />,       roles: AT_LEAST_STORE_MANAGER },
-  { href: "/analytics",     label: "Аналітика",    icon: <BarChart2 size={18} />,  roles: CAN_VIEW_ANALYTICS, exact: true },
-  { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={18} />, roles: CAN_VIEW_ANALYTICS },
-  { href: "/users",      label: "Персонал",     icon: <Users size={18} />,           roles: AT_LEAST_STORE_MANAGER },
-  { href: "/floor-plan", label: "План магазину", icon: <Map size={18} />,            roles: AT_LEAST_STORE_MANAGER },
-  { href: "/iot",        label: "IoT пристрої", icon: <Cpu size={18} />,             roles: AT_LEAST_STORE_MANAGER },
-  // Provider-only pages
-  { href: "/provider",   label: "Провайдер",    icon: <Shield size={18} />,          roles: PROVIDER_ONLY },
-  { href: "/admin",      label: "Адмін",        icon: <Settings size={18} />,        roles: PROVIDER_ONLY },
-  // Shared
-  { href: "/settings",   label: "Налаштування", icon: <Settings size={18} /> },
+interface NavGroup {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  items: NavItem[];
+}
+
+// ── Navigation definition ──────────────────────────────────────────────────────
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    key: "pos",
+    label: "Каса",
+    icon: <CreditCard size={18} />,
+    items: [
+      { href: "/pos",          label: "Каса",          icon: <CreditCard size={16} />, roles: CAN_ACCESS_POS },
+      { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={16} />,  roles: CAN_VIEW_ANALYTICS },
+    ],
+  },
+  {
+    key: "warehouse",
+    label: "Склад",
+    icon: <Package size={18} />,
+    items: [
+      { href: "/inventory",  label: "Каталог",      icon: <Package size={16} />,      roles: CAN_VIEW_WAREHOUSE },
+      { href: "/stock",      label: "Залишки",      icon: <ShoppingCart size={16} />, roles: CAN_VIEW_WAREHOUSE },
+      { href: "/receipts",   label: "Прийомка",     icon: <ClipboardList size={16} />, roles: CAN_MANAGE_WAREHOUSE },
+      { href: "/transfers",  label: "Переміщення",  icon: <ArrowLeftRight size={16} />, roles: CAN_MANAGE_WAREHOUSE },
+      { href: "/write-offs", label: "Списання",     icon: <Trash2 size={16} />,       roles: CAN_VIEW_WAREHOUSE },
+    ],
+  },
+  {
+    key: "sales",
+    label: "Продажі",
+    icon: <TrendingUp size={18} />,
+    items: [
+      { href: "/sales",     label: "Продажі",      icon: <TrendingUp size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      { href: "/orders",    label: "Замовлення",   icon: <Calculator size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      { href: "/ai-orders", label: "AI Замовлення", icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/events",    label: "Події",        icon: <CalendarDays size={16} />, roles: AT_LEAST_STORE_MANAGER },
+    ],
+  },
+  {
+    key: "analytics",
+    label: "Аналітика",
+    icon: <BarChart2 size={18} />,
+    items: [
+      { href: "/analytics",     label: "Аналітика",    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true },
+      { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS },
+    ],
+  },
+  {
+    key: "management",
+    label: "Управління",
+    icon: <Users size={18} />,
+    items: [
+      { href: "/users",      label: "Персонал",      icon: <Users size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      { href: "/floor-plan", label: "План магазину",  icon: <Map size={16} />,    roles: AT_LEAST_STORE_MANAGER },
+      { href: "/iot",        label: "IoT пристрої",   icon: <Cpu size={16} />,    roles: AT_LEAST_STORE_MANAGER },
+    ],
+  },
+  {
+    key: "admin",
+    label: "Адмін",
+    icon: <Shield size={18} />,
+    items: [
+      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_ONLY },
+      { href: "/admin",    label: "Адмін",     icon: <Settings size={16} />, roles: PROVIDER_ONLY },
+    ],
+  },
 ];
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function isActive(pathname: string, href: string, exact?: boolean): boolean {
+  if (exact) return pathname === href;
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+interface NavLinkProps {
+  item: NavItem;
+  pathname: string;
+  collapsed: boolean;
+  indented?: boolean;
+}
+
+function NavLink({ item, pathname, collapsed, indented }: NavLinkProps) {
+  const active = isActive(pathname, item.href, item.exact);
+
+  return (
+    <Link
+      href={item.href}
+      title={collapsed ? item.label : undefined}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: collapsed ? "center" : "flex-start",
+        gap: collapsed ? 0 : 8,
+        padding: collapsed ? "8px 0" : indented ? "7px 12px 7px 32px" : "8px 12px",
+        borderRadius: 8,
+        background: active ? "#1D3461" : "transparent",
+        color: active ? "#93C5FD" : "#6B7280",
+        fontSize: 13,
+        fontWeight: active ? 600 : 400,
+        textDecoration: "none",
+        transition: "background 0.1s, color 0.1s",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          (e.currentTarget as HTMLElement).style.background = "#111827";
+          (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          (e.currentTarget as HTMLElement).style.background = "transparent";
+          (e.currentTarget as HTMLElement).style.color = "#6B7280";
+        }
+      }}
+    >
+      <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{item.icon}</span>
+      {!collapsed && item.label}
+    </Link>
+  );
+}
+
+interface NavGroupSectionProps {
+  group: NavGroup;
+  visibleItems: NavItem[];
+  pathname: string;
+  collapsed: boolean;
+}
+
+function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupSectionProps) {
+  const hasActive = visibleItems.some((item) => isActive(pathname, item.href, item.exact));
+  const [expanded, setExpanded] = useState(hasActive);
+
+  // Auto-expand when navigating to a child route
+  useEffect(() => {
+    if (hasActive) setExpanded(true);
+  }, [hasActive]);
+
+  // In collapsed mode — show only group icon with tooltip (no children)
+  if (collapsed) {
+    const groupActive = hasActive;
+    return (
+      <div
+        title={group.label}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "9px 0",
+          borderRadius: 8,
+          color: groupActive ? "#93C5FD" : "#6B7280",
+          opacity: groupActive ? 1 : 0.7,
+          cursor: "default",
+        }}
+      >
+        {group.icon}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Group header — toggle button */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          padding: "8px 12px",
+          borderRadius: 8,
+          background: "transparent",
+          border: "none",
+          color: hasActive ? "#CBD5E1" : "#4B5563",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+          transition: "background 0.1s, color 0.1s",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "#111827";
+          (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "transparent";
+          (e.currentTarget as HTMLElement).style.color = hasActive ? "#CBD5E1" : "#4B5563";
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ opacity: 0.8 }}>{group.icon}</span>
+          {group.label}
+        </span>
+        {expanded
+          ? <ChevronDown size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
+          : <ChevronRight size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
+        }
+      </button>
+
+      {/* Children */}
+      {expanded && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 1 }}>
+          {visibleItems.map((item) => (
+            <NavLink key={item.href + group.key} item={item} pathname={pathname} collapsed={false} indented />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Sidebar ───────────────────────────────────────────────────────────────
 
 interface Props {
   collapsed: boolean;
@@ -70,9 +281,28 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.roles || item.roles.has(userRole),
-  );
+  // Standalone top item: Dashboard
+  const dashboardItem: NavItem = {
+    href: "/dashboard",
+    label: "Дашборд",
+    icon: <LayoutDashboard size={18} />,
+    roles: TENANT_ROLES,
+    exact: true,
+  };
+  // Standalone bottom item: Settings
+  const settingsItem: NavItem = {
+    href: "/settings",
+    label: "Налаштування",
+    icon: <Settings size={18} />,
+  };
+
+  const showDashboard = !dashboardItem.roles || dashboardItem.roles.has(userRole);
+
+  // Filter groups and their items by role
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    group,
+    visibleItems: group.items.filter((item) => !item.roles || item.roles.has(userRole)),
+  })).filter(({ visibleItems }) => visibleItems.length > 0);
 
   const W = collapsed ? 64 : 240;
 
@@ -131,57 +361,40 @@ export function Sidebar({ collapsed, onToggle }: Props) {
       {/* Navigation */}
       <nav style={{ flex: 1, padding: collapsed ? "12px 8px" : "12px 10px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {visibleItems.map((item) => {
-            const active = item.exact
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={collapsed ? item.label : undefined}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: collapsed ? "center" : "flex-start",
-                  gap: collapsed ? 0 : 10,
-                  padding: collapsed ? "9px 0" : "9px 12px",
-                  borderRadius: 8,
-                  background: active ? "#1D3461" : "transparent",
-                  color: active ? "#93C5FD" : "#6B7280",
-                  fontSize: 13,
-                  fontWeight: active ? 600 : 400,
-                  textDecoration: "none",
-                  transition: "background 0.1s, color 0.1s",
-                }}
-                onMouseEnter={(e) => {
-                  if (!active) {
-                    (e.currentTarget as HTMLElement).style.background = "#111827";
-                    (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) {
-                    (e.currentTarget as HTMLElement).style.background = "transparent";
-                    (e.currentTarget as HTMLElement).style.color = "#6B7280";
-                  }
-                }}
-              >
-                <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{item.icon}</span>
-                {!collapsed && item.label}
-              </Link>
-            );
-          })}
+
+          {/* Standalone: Dashboard */}
+          {showDashboard && (
+            <NavLink item={dashboardItem} pathname={pathname} collapsed={collapsed} />
+          )}
+
+          {/* Grouped nav items */}
+          {visibleGroups.map(({ group, visibleItems }) => (
+            <NavGroupSection
+              key={group.key}
+              group={group}
+              visibleItems={visibleItems}
+              pathname={pathname}
+              collapsed={collapsed}
+            />
+          ))}
+
         </div>
       </nav>
 
-      {/* Collapse / Expand toggle */}
+      {/* Bottom area: Settings + Toggle */}
       <div
         style={{
           padding: collapsed ? "12px 8px" : "12px 10px",
           borderTop: "1px solid #1F2937",
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
         }}
       >
+        {/* Settings */}
+        <NavLink item={settingsItem} pathname={pathname} collapsed={collapsed} />
+
+        {/* Collapse / Expand toggle */}
         <button
           onClick={onToggle}
           title={collapsed ? "Розгорнути меню" : "Приховати меню"}

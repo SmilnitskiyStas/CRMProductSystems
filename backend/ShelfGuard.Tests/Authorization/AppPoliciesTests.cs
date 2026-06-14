@@ -28,6 +28,7 @@ public sealed class AppPoliciesTests
     [InlineData(AppRoles.StoreManager)]
     [InlineData(AppRoles.Merchandiser)]
     [InlineData(AppRoles.Storekeeper)]
+    [InlineData(AppRoles.Cashier)]
     public void ProviderOnly_denies_all_other_roles(string role)
         => Assert.DoesNotContain(role, RolesFor(AppPolicies.ProviderOnly));
 
@@ -90,9 +91,11 @@ public sealed class AppPoliciesTests
     public void CanReceiveStock_allows_correct_roles(string role)
         => Assert.Contains(role, RolesFor(AppPolicies.CanReceiveStock));
 
-    [Fact]
-    public void CanReceiveStock_denies_merchandiser()
-        => Assert.DoesNotContain(AppRoles.Merchandiser, RolesFor(AppPolicies.CanReceiveStock));
+    [Theory]
+    [InlineData(AppRoles.Merchandiser)]
+    [InlineData(AppRoles.Cashier)]
+    public void CanReceiveStock_denies_merchandiser_and_cashier(string role)
+        => Assert.DoesNotContain(role, RolesFor(AppPolicies.CanReceiveStock));
 
     // ── CanViewStock ────────────────────────────────────────────────────────
 
@@ -106,6 +109,56 @@ public sealed class AppPoliciesTests
     public void CanViewStock_allows_all_staff_roles(string role)
         => Assert.Contains(role, RolesFor(AppPolicies.CanViewStock));
 
+    // ── CanAccessPos ────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(AppRoles.Provider)]
+    [InlineData(AppRoles.EnterpriseAdmin)]
+    [InlineData(AppRoles.NetworkManager)]
+    [InlineData(AppRoles.StoreManager)]
+    [InlineData(AppRoles.Storekeeper)]
+    [InlineData(AppRoles.Cashier)]
+    public void CanAccessPos_allows_correct_roles(string role)
+        => Assert.Contains(role, RolesFor(AppPolicies.CanAccessPos));
+
+    [Fact]
+    public void CanAccessPos_denies_merchandiser()
+        => Assert.DoesNotContain(AppRoles.Merchandiser, RolesFor(AppPolicies.CanAccessPos));
+
+    // ── CanManageStore ──────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(AppRoles.Provider)]
+    [InlineData(AppRoles.EnterpriseAdmin)]
+    [InlineData(AppRoles.NetworkManager)]
+    [InlineData(AppRoles.StoreManager)]
+    public void CanManageStore_allows_correct_roles(string role)
+        => Assert.Contains(role, RolesFor(AppPolicies.CanManageStore));
+
+    [Theory]
+    [InlineData(AppRoles.Storekeeper)]
+    [InlineData(AppRoles.Merchandiser)]
+    [InlineData(AppRoles.Cashier)]
+    public void CanManageStore_denies_lower_roles(string role)
+        => Assert.DoesNotContain(role, RolesFor(AppPolicies.CanManageStore));
+
+    // ── CanViewNetworkAnalytics ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(AppRoles.Provider)]
+    [InlineData(AppRoles.EnterpriseAdmin)]
+    [InlineData(AppRoles.NetworkManager)]
+    public void CanViewNetworkAnalytics_allows_correct_roles(string role)
+        => Assert.Contains(role, RolesFor(AppPolicies.CanViewNetworkAnalytics));
+
+    [Theory]
+    [InlineData(AppRoles.StoreManager)]
+    [InlineData(AppRoles.Storekeeper)]
+    [InlineData(AppRoles.Merchandiser)]
+    [InlineData(AppRoles.Cashier)]
+    public void CanViewNetworkAnalytics_denies_lower_roles(string role)
+        => Assert.DoesNotContain(role, RolesFor(AppPolicies.CanViewNetworkAnalytics));
+
     // ── All policies are registered ─────────────────────────────────────────
 
     [Theory]
@@ -115,6 +168,9 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.AtLeastStoreManager)]
     [InlineData(AppPolicies.CanReceiveStock)]
     [InlineData(AppPolicies.CanViewStock)]
+    [InlineData(AppPolicies.CanAccessPos)]
+    [InlineData(AppPolicies.CanManageStore)]
+    [InlineData(AppPolicies.CanViewNetworkAnalytics)]
     public void All_policies_are_registered(string policyName)
         => Assert.NotNull(_options.GetPolicy(policyName));
 

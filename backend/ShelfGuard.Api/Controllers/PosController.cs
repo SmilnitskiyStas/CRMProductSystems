@@ -9,13 +9,13 @@ namespace ShelfGuard.Api.Controllers;
 
 /// <summary>
 /// POS endpoints: shift management and sales.
-/// All endpoints require at least the CanReceiveStock role (storekeeper and above).
+/// All endpoints require CanAccessPos (cashier, storekeeper, store_manager, network_manager, enterprise_admin).
 /// Offline-first: sale DB commit succeeds even when fiscal provider is unavailable;
 /// fiscalization status is returned in every response.
 /// </summary>
 [ApiController]
 [Route("api/pos")]
-[Authorize(Policy = AppPolicies.CanReceiveStock)]
+[Authorize(Policy = AppPolicies.CanAccessPos)]
 public sealed class PosController : ControllerBase
 {
     private readonly IPosService _pos;

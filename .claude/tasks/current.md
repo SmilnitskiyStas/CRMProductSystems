@@ -1,4 +1,54 @@
-# Current Sprint — v3.2 «ПРРО Каса» (started 2026-06-12)
+# Current Sprint — v3.3 «Menu RBAC» (started 2026-06-14) + v3.2 carry-over
+
+---
+
+## TASK-075 — Architect: Menu groups + Role matrix
+**Status:** done · **Agent:** project-manager · **Depends:** — · Updated: 2026-06-14
+Визначити логічні групи навігації та матрицю доступу ролей до меню.
+Нова роль: Касир (cashier) — тільки /pos.
+Уточнено: StoreManager → менеджмент магазину; NetworkManager → мережева картина.
+Accept: задокументована матриця, TASK-076 + TASK-077 готові до виконання.
+
+## TASK-076 — Backend: Cashier role + оновлені AppPolicies
+**Status:** done · **Agent:** backend-developer · **Depends:** 075 · Updated: 2026-06-14
+Додати роль `cashier` до AppRoles enum (C#), оновити AppPolicies:
+- CanAccessPos: cashier + storekeeper + store_manager + network_manager + enterprise_admin
+- CanManageStore: store_manager + network_manager + enterprise_admin (без cashier/storekeeper/merchandiser)
+- CanViewNetworkAnalytics: network_manager + enterprise_admin
+Оновити UserInviteDto/UserUpdateDto валідацію нових ролей.
+Accept: dotnet build green; тести авторизації з cashier роллю проходять.
+
+## TASK-077 — Frontend: Згрупований Sidebar + RBAC видимість
+**Status:** done · **Agent:** frontend-developer · **Depends:** 075, 076 · Updated: 2026-06-14
+Переробити Sidebar.tsx: групи зі стрілкою expand/collapse, роль-based видимість.
+
+**Групи та доступ:**
+1. Головна: Дашборд — TENANT_ROLES
+2. Каса (expand): Каса (/pos), POS Аналітика — CAN_ACCESS_POS (cashier + managers)
+3. Склад (expand): Каталог, Залишки, Прийомка, Переміщення, Списання — CAN_RECEIVE_STOCK + TENANT_ROLES
+4. Продажі (expand): Продажі, Замовлення, AI Замовлення, Події — AT_LEAST_STORE_MANAGER
+5. Аналітика (expand): Аналітика загальна, POS Аналітика — CAN_VIEW_ANALYTICS
+6. Управління (expand): Персонал, План магазину, IoT пристрої — AT_LEAST_STORE_MANAGER
+7. Адмін: Провайдер, Адмін — PROVIDER_ONLY
+8. Налаштування — all
+
+**Нові role sets у frontend/lib/roles.ts:**
+- CAN_ACCESS_POS: cashier + CAN_RECEIVE_STOCK
+- CAN_MANAGE_STORE: AT_LEAST_STORE_MANAGER (без cashier/storekeeper)
+- CAN_VIEW_NETWORK: network_manager + enterprise_admin
+
+**Правила видимості по ролях:**
+- cashier: тільки Каса (група Каса), Налаштування
+- storekeeper: Склад, Каса (без POS Аналітики), Налаштування
+- merchandiser: Склад (Каталог + Залишки, без Прийомки/Переміщень), Налаштування
+- store_manager: Каса, Склад, Продажі, Аналітика, Управління, Налаштування
+- network_manager: Каса (POS Аналітика), Продажі, Аналітика, Управління, Налаштування
+- enterprise_admin: все крім Provider/Admin
+Accept: tsc + next build green; кожна роль бачить тільки свої групи; collapse/expand працює.
+
+---
+
+# Carry-over from v3.2 «ПРРО Каса» (started 2026-06-12)
 
 Scope: v3-spec §3 + §6 Фаза 4. ADR-012: Checkbox (SaaS ПРРО) as fiscal provider behind
 IFiscalService, offline-first (ADR-011 flow stays). Test cash register registered in

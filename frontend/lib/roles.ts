@@ -10,6 +10,7 @@ export const AppRoles = {
   StoreManager: "store_manager",
   Merchandiser: "merchandiser",
   Storekeeper: "storekeeper",
+  Cashier: "cashier",
 } as const;
 
 export type AppRole = (typeof AppRoles)[keyof typeof AppRoles];
@@ -26,6 +27,35 @@ export const CAN_VIEW_STOCK = new Set<AppRole>([
   AppRoles.StoreManager,
   AppRoles.Merchandiser,
   AppRoles.Storekeeper,
+]);
+
+/** Can access POS / cash register — cashier + storekeeper + store_manager + enterprise_admin */
+export const CAN_ACCESS_POS = new Set<AppRole>([
+  AppRoles.Cashier,
+  AppRoles.Storekeeper,
+  AppRoles.StoreManager,
+  AppRoles.EnterpriseAdmin,
+]);
+
+/** Can view warehouse pages — storekeeper + merchandiser + store_manager + enterprise_admin */
+export const CAN_VIEW_WAREHOUSE = new Set<AppRole>([
+  AppRoles.Storekeeper,
+  AppRoles.Merchandiser,
+  AppRoles.StoreManager,
+  AppRoles.EnterpriseAdmin,
+]);
+
+/** Can manage warehouse (receipts, transfers) — excludes merchandiser */
+export const CAN_MANAGE_WAREHOUSE = new Set<AppRole>([
+  AppRoles.Storekeeper,
+  AppRoles.StoreManager,
+  AppRoles.EnterpriseAdmin,
+]);
+
+/** Network manager and above — network_manager + enterprise_admin */
+export const AT_LEAST_NETWORK_MANAGER = new Set<AppRole>([
+  AppRoles.NetworkManager,
+  AppRoles.EnterpriseAdmin,
 ]);
 
 /** Can receive stock / create transfers — excludes merchandiser */
@@ -64,6 +94,7 @@ export const TENANT_ROLES = new Set<AppRole>([
   AppRoles.StoreManager,
   AppRoles.Merchandiser,
   AppRoles.Storekeeper,
+  AppRoles.Cashier,
 ]);
 
 // ── Helper ────────────────────────────────────────────────────────────────────
