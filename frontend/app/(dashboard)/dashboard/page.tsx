@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { StatsCards } from "@/features/dashboard/components/StatsCards";
 import { AttentionTable } from "@/features/dashboard/components/AttentionTable";
 import { QuickActions } from "@/features/dashboard/components/QuickActions";
@@ -9,11 +11,18 @@ import {
   useDashboardStats,
   useStoreZones,
 } from "@/features/dashboard/hooks/useDashboard";
+import { useMe } from "@/features/auth/hooks/useAuth";
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { data: me } = useMe();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: attentionItems, isLoading: attentionLoading } = useAttentionItems();
   const { data: zones, isLoading: zonesLoading } = useStoreZones();
+
+  useEffect(() => {
+    if (me?.role === "provider") router.replace("/provider");
+  }, [me, router]);
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>

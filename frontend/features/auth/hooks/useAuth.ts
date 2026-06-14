@@ -28,7 +28,7 @@ export function useLogin() {
     mutationFn: authApi.login,
     onSuccess: (data) => {
       queryClient.setQueryData(ME_KEY, data.user);
-      router.push("/dashboard");
+      router.push(data.user.role === "provider" ? "/provider" : "/dashboard");
     },
   });
 }
