@@ -13,6 +13,7 @@ using ShelfGuard.Application.Features.Users;
 using ShelfGuard.Application.Features.Discounts;
 using ShelfGuard.Application.Features.Provider;
 using ShelfGuard.Application.Features.Movements;
+using ShelfGuard.Application.Features.Admin;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -51,6 +52,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v3.2 - POS (TASK-068)
         services.AddScoped<Features.Pos.IPosService, Features.Pos.PosService>();
+
+        // SaaS Admin Panel (TASK-074)
+        services.AddScoped<ITenantAdminService, TenantAdminService>();
 
         return services;
     }

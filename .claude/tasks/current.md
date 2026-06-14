@@ -80,6 +80,15 @@ critical/expired badge, оплата cash/card (терминал SDK / прин�
 ## TASK-072 — Web: POS dashboard (зміни, транзакції, Z-звіти)
 **Status:** done · **Agent:** frontend-developer · **Depends:** 068 · Updated: 2026-06-14
 
+## TASK-074 — SaaS Admin Panel: tenant onboarding + управління
+**Status:** in_progress · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-14
+Provider-only панель: список тенантів, створення (назва+slug+план+перший адмін),
+статус active/inactive, зміна плану (basic/standard/enterprise/trial), модулі,
+usage stats (users/stores/products/sales). Route /admin, policy ProviderOnly.
+Backend: GET|POST /api/admin/tenants, GET|PATCH|POST /api/admin/tenants/{id}/...
+Frontend: /admin сторінка з таблицею тенантів + create modal + detail drawer.
+Accept: dotnet build+test green; tsc green; CRUD flow проти API.
+
 ## TASK-073 — POS Аналітика: API + Web дашборд
 **Status:** in_progress · **Agent:** backend-developer + frontend-developer · **Depends:** 068 · Updated: 2026-06-14
 Нові ендпоінти GET /api/analytics/pos/* + веб-дашборд /analytics/pos.

@@ -108,6 +108,9 @@ public static class DependencyInjection
         // Provider panel (super admin)
         services.AddScoped<ITenantRepository, TenantRepository>();
 
+        // SaaS Admin Panel (TASK-074)
+        services.AddScoped<ITenantAdminRepository, TenantAdminRepository>();
+
         // Movements audit log
         services.AddScoped<IMovementRepository, MovementRepository>();
 

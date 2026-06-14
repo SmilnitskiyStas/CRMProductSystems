@@ -55,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/iot",        label: "IoT пристрої", icon: <Cpu size={18} />,             roles: AT_LEAST_STORE_MANAGER },
   // Provider-only pages
   { href: "/provider",   label: "Провайдер",    icon: <Shield size={18} />,          roles: PROVIDER_ONLY },
+  { href: "/admin",      label: "Адмін",        icon: <Settings size={18} />,        roles: PROVIDER_ONLY },
   // Shared
   { href: "/settings",   label: "Налаштування", icon: <Settings size={18} /> },
 ];
