@@ -6,6 +6,7 @@ import {
   openShift,
   closeShift,
   createSale,
+  getStores,
 } from '../api/posApi';
 import type { SaleRequest } from '../types';
 
@@ -35,7 +36,7 @@ export function useCurrentShift() {
 export function useOpenShift() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: openShift,
+    mutationFn: (storeId: string) => openShift(storeId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos', 'shift'] });
     },

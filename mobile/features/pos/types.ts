@@ -1,6 +1,12 @@
 // ─── Shift ───────────────────────────────────────────────────────────────────
 
-export type ShiftStatus = 'open' | 'closed';
+export type ShiftStatus =
+  | 'Opening'
+  | 'Open'
+  | 'OpenFailed'
+  | 'Closing'
+  | 'Closed'
+  | 'CloseFailed';
 export type FiscalStatus =
   | 'fiscalized'
   | 'pending_fiscalization'

@@ -18,8 +18,18 @@ export async function getCurrentShift(): Promise<PosShift | null> {
   }
 }
 
-export async function openShift(): Promise<PosShift> {
-  const { data } = await apiClient.post<PosShift>('/pos/shifts/open');
+export interface StoreOption {
+  id: string;
+  name: string;
+}
+
+export async function getStores(): Promise<StoreOption[]> {
+  const { data } = await apiClient.get<StoreOption[]>('/stores');
+  return data;
+}
+
+export async function openShift(storeId: string): Promise<PosShift> {
+  const { data } = await apiClient.post<PosShift>('/pos/shifts/open', { storeId });
   return data;
 }
 

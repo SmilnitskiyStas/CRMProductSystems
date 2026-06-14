@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/features/auth/store';
 
-const CASHIER_ROLES = ['cashier', 'store_manager', 'director', 'admin'];
+const CASHIER_ROLES = ['Cashier', 'StoreManager', 'Director', 'Admin'];
 
 export default function AppLayout() {
   const token = useAuthStore((s) => s.accessToken);

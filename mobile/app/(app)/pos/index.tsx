@@ -8,6 +8,7 @@ import {
   useOpenShift,
   useCloseShift,
 } from '@/features/pos/hooks/usePosApi';
+import { getStores } from '@/features/pos/api/posApi';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -26,13 +27,39 @@ export default function PosHomeScreen() {
   const openMutation = useOpenShift();
   const closeMutation = useCloseShift();
 
-  const handleOpenShift = () => {
-    openMutation.mutate(undefined, {
-      onSuccess: () => refetch(),
-      onError: () => {
-        Alert.alert('Помилка', 'Не вдалося відкрити зміну. Спробуйте ще раз.');
-      },
-    });
+  const handleOpenShift = async () => {
+    try {
+      const stores = await getStores();
+      if (!stores || stores.length === 0) {
+        Alert.alert('Помилка', 'Немає доступних магазинів.');
+        return;
+      }
+      if (stores.length === 1) {
+        openMutation.mutate(stores[0].id, {
+          onSuccess: () => refetch(),
+          onError: () => Alert.alert('Помилка', 'Не вдалося відкрити зміну. Спробуйте ще раз.'),
+        });
+      } else {
+        Alert.alert(
+          'Оберіть магазин',
+          'У вас кілька магазинів. Оберіть один для відкриття зміни.',
+          [
+            ...stores.map((store) => ({
+              text: store.name,
+              onPress: () => {
+                openMutation.mutate(store.id, {
+                  onSuccess: () => refetch(),
+                  onError: () => Alert.alert('Помилка', 'Не вдалося відкрити зміну. Спробуйте ще раз.'),
+                });
+              },
+            })),
+            { text: 'Скасувати', style: 'cancel' as const },
+          ]
+        );
+      }
+    } catch {
+      Alert.alert('Помилка', 'Не вдалося отримати список магазинів.');
+    }
   };
 
   const handleCloseShift = () => {
@@ -73,7 +100,7 @@ export default function PosHomeScreen() {
             <ActivityIndicator size="large" color="#16a34a" />
             <Text className="text-gray-500 mt-3 text-base">Завантаження...</Text>
           </View>
-        ) : shift && shift.status === 'open' ? (
+        ) : shift && (shift.status === 'Open' || shift.status === 'Opening') ? (
           /* ── Open shift card ── */
           <View className="gap-4">
             <View className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
