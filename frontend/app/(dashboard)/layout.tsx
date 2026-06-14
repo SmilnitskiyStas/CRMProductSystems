@@ -83,7 +83,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           display: "flex",
           minHeight: "100vh",
           background: "#0F1117",
-          paddingTop: impersonation ? 44 : 0,
         }}
       >
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
