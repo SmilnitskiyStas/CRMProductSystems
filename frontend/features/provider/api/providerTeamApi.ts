@@ -16,13 +16,13 @@ export interface InviteProviderMemberRequest {
 }
 
 export function getTeam(): Promise<ProviderTeamMemberDto[]> {
-  return api.get<ProviderTeamMemberDto[]>("/provider/team");
+  return api.get<ProviderTeamMemberDto[]>("/api/provider/team");
 }
 
 export function inviteMember(req: InviteProviderMemberRequest): Promise<ProviderTeamMemberDto> {
-  return api.post<ProviderTeamMemberDto>("/provider/team/invite", req);
+  return api.post<ProviderTeamMemberDto>("/api/provider/team/invite", req);
 }
 
 export function deactivateMember(memberId: string): Promise<void> {
-  return api.delete<void>(`/provider/team/${memberId}`);
+  return api.delete<void>(`/api/provider/team/${memberId}`);
 }
