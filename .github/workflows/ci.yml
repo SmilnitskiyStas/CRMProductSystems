@@ -113,10 +113,10 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: 93.127.143.98
+          port: 10048
+          username: administrator
+          key: ${{ secrets.AUTO_DEPLOY_DATABASEMATE }}
           script: |
             cd ~/shelfguard
             bash deploy.sh
