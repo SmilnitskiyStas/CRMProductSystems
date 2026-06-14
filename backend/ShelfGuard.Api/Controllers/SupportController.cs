@@ -2,14 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Support;
 using ShelfGuard.Application.Features.Support.Dtos;
-using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
 
 [ApiController]
 [Route("api/support")]
-[Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+[Authorize]
 public sealed class SupportController(ISupportService supportService) : ControllerBase
 {
     [HttpGet("tickets")]
