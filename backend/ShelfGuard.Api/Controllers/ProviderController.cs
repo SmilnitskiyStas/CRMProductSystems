@@ -133,15 +133,21 @@ public sealed class ProviderController : ControllerBase
         return Ok(health);
     }
 
-    /// <summary>Returns recent cross-tenant activity log entries.</summary>
+    /// <summary>Returns filtered + paginated cross-tenant activity log entries.</summary>
     [HttpGet("logs")]
-    [ProducesResponseType(typeof(IReadOnlyList<ProviderLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProviderLogsPageDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLogs(
-        [FromQuery] int limit = 100,
-        CancellationToken ct  = default)
+        [FromQuery] Guid?     tenantId  = null,
+        [FromQuery] Guid?     userId    = null,
+        [FromQuery] string?   action    = null,
+        [FromQuery] DateTime? dateFrom  = null,
+        [FromQuery] DateTime? dateTo    = null,
+        [FromQuery] int       page      = 1,
+        [FromQuery] int       pageSize  = 50,
+        CancellationToken ct            = default)
     {
-        limit = Math.Clamp(limit, 1, 500);
-        var logs = await _provider.GetLogsAsync(limit, ct);
-        return Ok(logs);
+        var query = new ProviderLogsQuery(tenantId, userId, action, dateFrom, dateTo, page, pageSize);
+        var result = await _provider.GetLogsAsync(query, ct);
+        return Ok(result);
     }
 }

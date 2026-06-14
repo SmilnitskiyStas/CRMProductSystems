@@ -35,7 +35,24 @@ export interface ProviderLogDto {
   ipAddress: string | null;
   userId: string;
   tenantId: string | null;
+  isImpersonated: boolean;
   createdAt: string;
+}
+
+export interface ProviderLogsPageDto {
+  items: ProviderLogDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ProviderLogsFilter {
+  tenantId?: string;
+  action?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page: number;
+  pageSize: number;
 }
 
 export interface ImpersonateResponse {

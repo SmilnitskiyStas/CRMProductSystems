@@ -67,4 +67,22 @@ public record ProviderLogDto(
     string?  IpAddress,
     Guid     UserId,
     Guid?    TenantId,
+    bool     IsImpersonated,
     DateTime CreatedAt);
+
+/// <summary>Query parameters for GET /provider/logs</summary>
+public record ProviderLogsQuery(
+    Guid?     TenantId   = null,
+    Guid?     UserId     = null,
+    string?   Action     = null,
+    DateTime? DateFrom   = null,
+    DateTime? DateTo     = null,
+    int       Page       = 1,
+    int       PageSize   = 50);
+
+/// <summary>Paginated response for GET /provider/logs</summary>
+public record ProviderLogsPageDto(
+    IReadOnlyList<ProviderLogDto> Items,
+    int Total,
+    int Page,
+    int PageSize);

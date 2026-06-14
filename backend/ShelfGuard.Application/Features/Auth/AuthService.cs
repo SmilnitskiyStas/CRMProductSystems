@@ -11,17 +11,20 @@ public sealed class AuthService : IAuthService
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtService _jwt;
+    private readonly IActivityLogRepository _activityLogs;
 
     public AuthService(
         IUserRepository users,
         IRefreshTokenRepository refreshTokens,
         IPasswordHasher passwordHasher,
-        IJwtService jwt)
+        IJwtService jwt,
+        IActivityLogRepository activityLogs)
     {
         _users = users;
         _refreshTokens = refreshTokens;
         _passwordHasher = passwordHasher;
         _jwt = jwt;
+        _activityLogs = activityLogs;
     }
 
     public async Task<(LoginResponse? Response, string? Error)> LoginAsync(
@@ -41,6 +44,17 @@ public sealed class AuthService : IAuthService
         user.UpdateLastActive();
         _users.Update(user);
         await _users.SaveChangesAsync(ct);
+
+        await _activityLogs.LogAsync(new ActivityLog
+        {
+            TenantId   = user.TenantId,
+            UserId     = user.Id,
+            Action     = "user.login",
+            EntityType = "user",
+            EntityId   = user.Id,
+            Meta       = $"{user.Email} ({user.Role})",
+        }, ct);
+        await _activityLogs.SaveChangesAsync(ct);
 
         var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName);
 

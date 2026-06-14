@@ -38,6 +38,43 @@ public sealed class ActivityLogRepository : IActivityLogRepository
             .Take(limit)
             .ToListAsync(ct);
 
+    public async Task<(IReadOnlyList<ActivityLog> Items, int Total)> GetFilteredAsync(
+        Guid?     tenantId,
+        Guid?     userId,
+        string?   action,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        int       page,
+        int       pageSize,
+        CancellationToken ct = default)
+    {
+        var query = _db.ActivityLogs.AsQueryable();
+
+        if (tenantId.HasValue)
+            query = query.Where(a => a.TenantId == tenantId);
+
+        if (userId.HasValue)
+            query = query.Where(a => a.UserId == userId);
+
+        if (!string.IsNullOrEmpty(action))
+            query = query.Where(a => a.Action == action);
+
+        if (dateFrom.HasValue)
+            query = query.Where(a => a.CreatedAt >= dateFrom.Value);
+
+        if (dateTo.HasValue)
+            query = query.Where(a => a.CreatedAt <= dateTo.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public async Task LogAsync(ActivityLog entry, CancellationToken ct = default) =>
         await _db.ActivityLogs.AddAsync(entry, ct);
 

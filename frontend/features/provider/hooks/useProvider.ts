@@ -2,13 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { providerApi } from "../api/provider";
-import type { TenantSummaryDto, ProviderHealthDto, ProviderLogDto, TenantDetailDto } from "../types";
+import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto } from "../types";
 
 // ── Query keys ───────────────────────────────────────────────────────────────
 
 export const TENANTS_KEY    = ["provider", "tenants"] as const;
 export const HEALTH_KEY     = ["provider", "health"]  as const;
-export const LOGS_KEY       = ["provider", "logs"]    as const;
+const logsKey = (f: ProviderLogsFilter) => ["provider", "logs", f] as const;
 const tenantKey = (id: string) => ["provider", "tenants", id] as const;
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -59,17 +59,17 @@ export function useProviderHealth() {
   });
 }
 
-export function useProviderLogs(limit = 100) {
+export function useProviderLogs(filter: ProviderLogsFilter) {
   return useQuery({
-    queryKey: LOGS_KEY,
-    queryFn: async (): Promise<ProviderLogDto[]> => {
+    queryKey: logsKey(filter),
+    queryFn: async (): Promise<ProviderLogsPageDto> => {
       try {
-        return await providerApi.getLogs(limit);
+        return await providerApi.getLogs(filter);
       } catch {
-        return [];
+        return { items: [], total: 0, page: filter.page, pageSize: filter.pageSize };
       }
     },
-    staleTime: 30_000,
+    staleTime: 15_000,
     retry: false,
   });
 }

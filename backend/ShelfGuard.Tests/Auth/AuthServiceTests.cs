@@ -14,11 +14,12 @@ public sealed class AuthServiceTests
     private readonly IRefreshTokenRepository _tokens = Substitute.For<IRefreshTokenRepository>();
     private readonly IPasswordHasher _hasher = Substitute.For<IPasswordHasher>();
     private readonly IJwtService _jwt = Substitute.For<IJwtService>();
+    private readonly IActivityLogRepository _activityLogs = Substitute.For<IActivityLogRepository>();
     private readonly AuthService _sut;
 
     public AuthServiceTests()
     {
-        _sut = new AuthService(_users, _tokens, _hasher, _jwt);
+        _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs);
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
         _jwt.HashToken("raw_token").Returns("hashed_token");
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),

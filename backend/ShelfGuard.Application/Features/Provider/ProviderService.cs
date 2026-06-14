@@ -150,10 +150,22 @@ public sealed class ProviderService : IProviderService
             Timestamp:           DateTime.UtcNow);
     }
 
-    public async Task<IReadOnlyList<ProviderLogDto>> GetLogsAsync(int limit, CancellationToken ct)
+    public async Task<ProviderLogsPageDto> GetLogsAsync(ProviderLogsQuery query, CancellationToken ct)
     {
-        var logs = await _logs.GetAllTenantsAsync(limit, ct);
-        return logs.Select(l => new ProviderLogDto(
+        var pageSize = Math.Clamp(query.PageSize, 1, 200);
+        var page     = Math.Max(query.Page, 1);
+
+        var (items, total) = await _logs.GetFilteredAsync(
+            query.TenantId,
+            query.UserId,
+            query.Action,
+            query.DateFrom,
+            query.DateTo,
+            page,
+            pageSize,
+            ct);
+
+        var dtos = items.Select(l => new ProviderLogDto(
             l.Id,
             l.Action,
             l.EntityType ?? string.Empty,
@@ -162,7 +174,10 @@ public sealed class ProviderService : IProviderService
             l.IpAddress,
             l.UserId ?? Guid.Empty,
             l.TenantId,
+            l.IsImpersonated,
             l.CreatedAt)).ToList();
+
+        return new ProviderLogsPageDto(dtos, total, page, pageSize);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

@@ -1,69 +1,387 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, Filter, RefreshCw } from "lucide-react";
 import { useProviderLogs } from "../hooks/useProvider";
+import { useTenants } from "../hooks/useProvider";
+import type { ProviderLogsFilter } from "../types";
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 50;
+
+const KNOWN_ACTIONS = [
+  "user.login",
+  "user.invited",
+  "user.updated",
+  "user.deactivated",
+  "user.profile_updated",
+  "user.password_changed",
+  "user.telegram_linked",
+  "user.permissions_updated",
+  "provider.impersonate",
+];
+
+const ACTION_COLOR: Record<string, { dot: string; badge: string; text: string }> = {
+  "user.login":               { dot: "#6EE7B7", badge: "#052E16", text: "#6EE7B7" },
+  "user.invited":             { dot: "#93C5FD", badge: "#0F172A", text: "#93C5FD" },
+  "user.updated":             { dot: "#FCD34D", badge: "#1C1500", text: "#FCD34D" },
+  "user.deactivated":         { dot: "#F87171", badge: "#2A0A0A", text: "#F87171" },
+  "user.profile_updated":     { dot: "#A5F3FC", badge: "#0A1F22", text: "#A5F3FC" },
+  "user.password_changed":    { dot: "#FDA4AF", badge: "#2A0A10", text: "#FDA4AF" },
+  "user.telegram_linked":     { dot: "#67E8F9", badge: "#051214", text: "#67E8F9" },
+  "user.permissions_updated": { dot: "#C4B5FD", badge: "#1A0F2E", text: "#C4B5FD" },
+  "provider.impersonate":     { dot: "#F9A8D4", badge: "#2D0A1A", text: "#F9A8D4" },
+};
+
+const DEFAULT_COLOR = { dot: "#374151", badge: "#111827", text: "#6B7280" };
+
+function getColor(action: string) {
+  return ACTION_COLOR[action] ?? DEFAULT_COLOR;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("uk-UA", {
     day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 }
 
-const ACTION_COLORS: Record<string, string> = {
-  "provider.impersonate": "#C4B5FD",
-  "user.invited":         "#93C5FD",
-  "user.deactivated":     "#F87171",
-  "user.updated":         "#6EE7B7",
-};
+function actionLabel(action: string) {
+  const map: Record<string, string> = {
+    "user.login":               "Вхід",
+    "user.invited":             "Запрошено",
+    "user.updated":             "Оновлено",
+    "user.deactivated":         "Деактивовано",
+    "user.profile_updated":     "Профіль змінено",
+    "user.password_changed":    "Пароль змінено",
+    "user.telegram_linked":     "Telegram підключено",
+    "user.permissions_updated": "Права змінено",
+    "provider.impersonate":     "Imitation",
+  };
+  return map[action] ?? action;
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function FilterSelect({
+  label, value, onChange, children,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          background: "#0D1117",
+          border: "1px solid #1F2937",
+          borderRadius: 7,
+          color: value ? "#E8EDF5" : "#4B5563",
+          fontSize: 12,
+          padding: "7px 10px",
+          outline: "none",
+          cursor: "pointer",
+          minWidth: 160,
+        }}
+      >
+        {children}
+      </select>
+    </div>
+  );
+}
+
+function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {label}
+      </span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          background: "#0D1117",
+          border: "1px solid #1F2937",
+          borderRadius: 7,
+          color: value ? "#E8EDF5" : "#4B5563",
+          fontSize: 12,
+          padding: "7px 10px",
+          outline: "none",
+          colorScheme: "dark",
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
 
 export function ProviderLogsPanel() {
-  const { data: logs, isLoading } = useProviderLogs(50);
+  const { data: tenants } = useTenants();
 
-  if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження…</div>;
+  const [tenantId, setTenantId] = useState("");
+  const [action,   setAction]   = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo,   setDateTo]   = useState("");
+  const [page,     setPage]     = useState(1);
+
+  const filter: ProviderLogsFilter = {
+    tenantId: tenantId || undefined,
+    action:   action   || undefined,
+    dateFrom: dateFrom ? `${dateFrom}T00:00:00Z` : undefined,
+    dateTo:   dateTo   ? `${dateTo}T23:59:59Z`   : undefined,
+    page,
+    pageSize: PAGE_SIZE,
+  };
+
+  const { data, isLoading, refetch } = useProviderLogs(filter);
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+
+  function resetFilters() {
+    setTenantId("");
+    setAction("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
   }
 
-  if (!logs?.length) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Логів немає</div>;
-  }
+  const hasFilter = tenantId || action || dateFrom || dateTo;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      {logs.map((log) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Filter bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 12,
+          flexWrap: "wrap",
+          padding: "14px 16px",
+          background: "#080D14",
+          border: "1px solid #1F2937",
+          borderRadius: 10,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#4B5563", marginBottom: 2 }}>
+          <Filter size={13} />
+          <span style={{ fontSize: 12, fontWeight: 600 }}>Фільтри</span>
+        </div>
+
+        <FilterSelect label="Клієнт" value={tenantId} onChange={(v) => { setTenantId(v); setPage(1); }}>
+          <option value="">Всі клієнти</option>
+          {(tenants ?? []).map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </FilterSelect>
+
+        <FilterSelect label="Дія" value={action} onChange={(v) => { setAction(v); setPage(1); }}>
+          <option value="">Всі дії</option>
+          {KNOWN_ACTIONS.map((a) => (
+            <option key={a} value={a}>{actionLabel(a)}</option>
+          ))}
+        </FilterSelect>
+
+        <DateInput label="Від" value={dateFrom} onChange={(v) => { setDateFrom(v); setPage(1); }} />
+        <DateInput label="До"  value={dateTo}   onChange={(v) => { setDateTo(v);   setPage(1); }} />
+
+        <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+          {hasFilter && (
+            <button
+              onClick={resetFilters}
+              style={{
+                padding: "7px 12px", borderRadius: 7, fontSize: 12,
+                background: "transparent", border: "1px solid #374151",
+                color: "#6B7280", cursor: "pointer",
+              }}
+            >
+              Скинути
+            </button>
+          )}
+          <button
+            onClick={() => refetch()}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 12px", borderRadius: 7, fontSize: 12,
+              background: "transparent", border: "1px solid #1F2937",
+              color: "#6B7280", cursor: "pointer",
+            }}
+          >
+            <RefreshCw size={12} />
+            Оновити
+          </button>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      {data && (
+        <div style={{ color: "#4B5563", fontSize: 12 }}>
+          Знайдено: <span style={{ color: "#E8EDF5", fontWeight: 600 }}>{data.total}</span> записів
+          {totalPages > 1 && (
+            <span> · сторінка {page} з {totalPages}</span>
+          )}
+        </div>
+      )}
+
+      {/* Log rows */}
+      {isLoading ? (
+        <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження…</div>
+      ) : !data?.items.length ? (
+        <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>
+          {hasFilter ? "Немає записів за вибраними фільтрами" : "Логів немає"}
+        </div>
+      ) : (
         <div
-          key={log.id}
           style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-            padding: "10px 0",
-            borderBottom: "1px solid #111827",
+            background: "#080D14",
+            border: "1px solid #1F2937",
+            borderRadius: 10,
+            overflow: "hidden",
           }}
         >
-          <div
-            style={{
-              width: 8, height: 8,
-              borderRadius: "50%",
-              background: ACTION_COLORS[log.action] ?? "#374151",
-              flexShrink: 0,
-              marginTop: 5,
-            }}
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 500 }}>
-              {log.action}
-            </div>
-            {log.meta && (
-              <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2, wordBreak: "break-word" }}>
-                {log.meta}
+          {data.items.map((log, i) => {
+            const color = getColor(log.action);
+            const tenantName = tenants?.find((t) => t.id === log.tenantId)?.name;
+            return (
+              <div
+                key={log.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "8px 1fr auto",
+                  alignItems: "start",
+                  gap: 12,
+                  padding: "12px 16px",
+                  borderBottom: i < data.items.length - 1 ? "1px solid #0D1117" : "none",
+                }}
+              >
+                {/* Dot */}
+                <div
+                  style={{
+                    width: 8, height: 8,
+                    borderRadius: "50%",
+                    background: color.dot,
+                    marginTop: 4,
+                    flexShrink: 0,
+                  }}
+                />
+
+                {/* Content */}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+                    {/* Action badge */}
+                    <span
+                      style={{
+                        fontSize: 11, fontWeight: 700,
+                        padding: "2px 7px", borderRadius: 4,
+                        background: color.badge,
+                        color: color.text,
+                        border: `1px solid ${color.dot}22`,
+                        letterSpacing: "0.02em",
+                      }}
+                    >
+                      {actionLabel(log.action)}
+                    </span>
+
+                    {/* Impersonated badge */}
+                    {log.isImpersonated && (
+                      <span
+                        style={{
+                          fontSize: 10, fontWeight: 600,
+                          padding: "2px 6px", borderRadius: 4,
+                          background: "#2D1B69",
+                          color: "#C4B5FD",
+                          border: "1px solid #7C3AED44",
+                        }}
+                      >
+                        👁 Imitation
+                      </span>
+                    )}
+
+                    {/* Tenant name */}
+                    {tenantName && (
+                      <span style={{ color: "#4B5563", fontSize: 11 }}>
+                        {tenantName}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Meta */}
+                  {log.meta && (
+                    <div style={{ color: "#6B7280", fontSize: 12, marginTop: 1, wordBreak: "break-word" }}>
+                      {log.meta}
+                    </div>
+                  )}
+
+                  {/* IP */}
+                  {log.ipAddress && (
+                    <div style={{ color: "#374151", fontSize: 11, marginTop: 2 }}>
+                      IP: {log.ipAddress}
+                    </div>
+                  )}
+                </div>
+
+                {/* Timestamp */}
+                <div style={{ color: "#374151", fontSize: 11, textAlign: "right", whiteSpace: "nowrap", marginTop: 3 }}>
+                  {formatDate(log.createdAt)}
+                </div>
               </div>
-            )}
-          </div>
-          <div style={{ color: "#374151", fontSize: 11, flexShrink: 0, marginTop: 2, textAlign: "right" }}>
-            {formatDate(log.createdAt)}
-          </div>
+            );
+          })}
         </div>
-      ))}
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "7px 12px", borderRadius: 7, fontSize: 12,
+              background: "transparent",
+              border: `1px solid ${page === 1 ? "#1F2937" : "#374151"}`,
+              color: page === 1 ? "#1F2937" : "#9CA3AF",
+              cursor: page === 1 ? "default" : "pointer",
+            }}
+          >
+            <ChevronLeft size={14} />
+            Назад
+          </button>
+
+          <span style={{ color: "#4B5563", fontSize: 12, padding: "0 8px" }}>
+            {page} / {totalPages}
+          </span>
+
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "7px 12px", borderRadius: 7, fontSize: 12,
+              background: "transparent",
+              border: `1px solid ${page === totalPages ? "#1F2937" : "#374151"}`,
+              color: page === totalPages ? "#1F2937" : "#9CA3AF",
+              cursor: page === totalPages ? "default" : "pointer",
+            }}
+          >
+            Вперед
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

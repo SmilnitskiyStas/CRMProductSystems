@@ -3,7 +3,8 @@ import type {
   TenantSummaryDto,
   TenantDetailDto,
   ProviderHealthDto,
-  ProviderLogDto,
+  ProviderLogsPageDto,
+  ProviderLogsFilter,
   ImpersonateResponse,
 } from "../types";
 
@@ -36,7 +37,15 @@ export const providerApi = {
   getHealth: (): Promise<ProviderHealthDto> =>
     api.get<ProviderHealthDto>("/api/provider/health"),
 
-  /** GET /api/provider/logs?limit=N */
-  getLogs: (limit = 100): Promise<ProviderLogDto[]> =>
-    api.get<ProviderLogDto[]>(`/api/provider/logs?limit=${limit}`),
+  /** GET /api/provider/logs?... (filtered + paginated) */
+  getLogs: (filter: ProviderLogsFilter): Promise<ProviderLogsPageDto> => {
+    const params = new URLSearchParams();
+    params.set("page",     String(filter.page));
+    params.set("pageSize", String(filter.pageSize));
+    if (filter.tenantId) params.set("tenantId", filter.tenantId);
+    if (filter.action)   params.set("action",   filter.action);
+    if (filter.dateFrom) params.set("dateFrom", filter.dateFrom);
+    if (filter.dateTo)   params.set("dateTo",   filter.dateTo);
+    return api.get<ProviderLogsPageDto>(`/api/provider/logs?${params.toString()}`);
+  },
 };

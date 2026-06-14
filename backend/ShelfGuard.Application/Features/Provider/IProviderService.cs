@@ -18,5 +18,5 @@ public interface IProviderService
 
     // Health & observability
     Task<ProviderHealthDto> GetHealthAsync(CancellationToken ct);
-    Task<IReadOnlyList<ProviderLogDto>> GetLogsAsync(int limit, CancellationToken ct);
+    Task<ProviderLogsPageDto> GetLogsAsync(ProviderLogsQuery query, CancellationToken ct);
 }
