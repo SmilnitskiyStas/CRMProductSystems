@@ -82,9 +82,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated }: Props) 
         window.dispatchEvent(new Event("sg-impersonation-changed"));
       }
       setToken(resp.accessToken);
-      // Force useMe() to refetch with the new token so Sidebar reflects the tenant's role.
-      // This also triggers the role guard on /provider to redirect → /dashboard.
-      await queryClient.invalidateQueries({ queryKey: ME_KEY });
+      // Await the actual network call so the new tenant role is in cache before navigation.
+      // invalidateQueries only marks stale; refetchQueries awaits the response.
+      await queryClient.refetchQueries({ queryKey: ME_KEY });
       onImpersonated();
     } catch (err) {
       setImpersonateErr((err as Error)?.message ?? "Помилка imersonation");

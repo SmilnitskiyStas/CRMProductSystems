@@ -34,8 +34,8 @@ export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
       window.dispatchEvent(new Event("sg-impersonation-changed"));
     }
 
-    // Refresh useMe() so Sidebar reflects the restored provider role
-    await queryClient.invalidateQueries({ queryKey: ME_KEY });
+    // Await the actual network call so the provider role is in cache before onExit() navigates.
+    await queryClient.refetchQueries({ queryKey: ME_KEY });
     onExit();
   }
 
