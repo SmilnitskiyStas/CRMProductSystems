@@ -85,3 +85,53 @@ export interface LossesDto {
   averageLossPerWriteOff: number;
   byStore: LossByStoreDto[];
 }
+
+// ── POS Analytics ──────────────────────────────────────────────────────────────
+
+export interface PosAnalyticsSummaryDto {
+  totalRevenue: number;
+  transactionCount: number;
+  averageTicket: number;
+  cashRevenue: number;
+  cardRevenue: number;
+  shiftCount: number;
+  from: string;
+  to: string;
+}
+
+export interface PosRevenueTrendPoint {
+  date: string;
+  revenue: number;
+  transactions: number;
+}
+
+export interface PosRevenueTrendDto {
+  points: PosRevenueTrendPoint[];
+  groupBy: "day" | "week";
+}
+
+export interface PosTopProductItem {
+  productId: string;
+  productName: string;
+  barcode: string;
+  totalRevenue: number;
+  totalQuantity: number;
+  transactionCount: number;
+}
+
+export interface PosTopProductsDto {
+  items: PosTopProductItem[];
+}
+
+export interface PosCashierStat {
+  cashierId: string;
+  cashierName: string;
+  totalRevenue: number;
+  transactionCount: number;
+  averageTicket: number;
+  shiftCount: number;
+}
+
+export interface PosCashierStatsDto {
+  cashiers: PosCashierStat[];
+}

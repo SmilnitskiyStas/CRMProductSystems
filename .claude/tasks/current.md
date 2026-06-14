@@ -78,7 +78,14 @@ critical/expired badge, оплата cash/card (терминал SDK / прин�
 чек зі статусом фіскалізації. Accept: tsc green; flow проти прод-API.
 
 ## TASK-072 — Web: POS dashboard (зміни, транзакції, Z-звіти)
-**Status:** review · **Agent:** frontend-developer · **Depends:** 068 · Updated: 2026-06-13
+**Status:** done · **Agent:** frontend-developer · **Depends:** 068 · Updated: 2026-06-14
+
+## TASK-073 — POS Аналітика: API + Web дашборд
+**Status:** in_progress · **Agent:** backend-developer + frontend-developer · **Depends:** 068 · Updated: 2026-06-14
+Нові ендпоінти GET /api/analytics/pos/* + веб-дашборд /analytics/pos.
+Метрики: виручка за період, динаміка по днях, топ товарів, ефективність касирів,
+середній чек, розбивка cash/card. Дані з pos_transactions + pos_transaction_items.
+Accept: backend тести зелені; tsc + next build green; графіки відображають реальні дані.
 Веб-інтерфейс для десктоп касира/менеджера — аналог TASK-070 (mobile) але для Next.js.
 Route `/pos`. Функціонал: поточна зміна (відкрити/закрити + статус фіскалізації),
 список продажів зміни (чек-деталі), Z-звіт після закриття, sidebar «Каса» (CanReceiveStock).

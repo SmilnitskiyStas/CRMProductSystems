@@ -102,7 +102,84 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
+    // ── POS analytics ─────────────────────────────────────────────────────
+
+    [HttpGet("pos/summary")]
+    [ProducesResponseType(typeof(PosAnalyticsSummaryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPosSummary(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var result = await _analytics.GetPosSummaryAsync(tenantId, store_id, resolvedFrom, resolvedTo, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("pos/revenue-trend")]
+    [ProducesResponseType(typeof(PosRevenueTrendDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPosRevenueTrend(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] string group_by = "day",
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var result = await _analytics.GetPosRevenueTrendAsync(tenantId, store_id, resolvedFrom, resolvedTo, group_by, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("pos/top-products")]
+    [ProducesResponseType(typeof(PosTopProductsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPosTopProducts(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] int limit = 10,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        if (limit is < 1 or > 100) limit = 10;
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var result = await _analytics.GetPosTopProductsAsync(tenantId, store_id, resolvedFrom, resolvedTo, limit, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("pos/cashiers")]
+    [ProducesResponseType(typeof(PosCashierStatsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPosCashierStats(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var result = await _analytics.GetPosCashierStatsAsync(tenantId, store_id, resolvedFrom, resolvedTo, ct);
+        return Ok(result);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────
+
+    private static (DateOnly From, DateOnly To) ResolveDateRange(DateOnly? from, DateOnly? to)
+    {
+        var resolvedTo   = to   ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var resolvedFrom = from ?? resolvedTo.AddDays(-30);
+        return (resolvedFrom, resolvedTo);
+    }
 
     // Returns the tenant_id from JWT claim, or null for provider (cross-tenant access).
     private Guid? ResolveTenantId()

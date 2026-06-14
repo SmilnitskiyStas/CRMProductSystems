@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Application.Features.Analytics.Dtos;
+using ShelfGuard.Domain.Entities;
 
 namespace ShelfGuard.Infrastructure.Data.Repositories;
 
@@ -301,5 +302,188 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             AverageLossPerWriteOff: count > 0 ? totalLoss / count : 0m,
             ByStore:               byStore
         );
+    }
+
+    // ── POS analytics ─────────────────────────────────────────────────────
+
+    public async Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(
+        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var fromDt = from.ToDateTime(TimeOnly.MinValue);
+        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+
+        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
+
+        var txData = await txQuery
+            .Select(t => new { t.TotalAmount, t.PaymentType })
+            .ToListAsync(ct);
+
+        var shiftQuery = _db.PosShifts.AsQueryable();
+        if (tenantId.HasValue)
+            shiftQuery = shiftQuery.Where(s => s.TenantId == tenantId.Value);
+        if (storeId.HasValue)
+            shiftQuery = shiftQuery.Where(s => s.StoreId == storeId.Value);
+        shiftQuery = shiftQuery.Where(s => s.OpenedAt >= fromDt && s.OpenedAt <= toDt);
+
+        var shiftCount = await shiftQuery.CountAsync(ct);
+
+        var totalRevenue = txData.Sum(t => t.TotalAmount);
+        var count        = txData.Count;
+
+        return new PosAnalyticsSummaryDto(
+            TotalRevenue:     totalRevenue,
+            TransactionCount: count,
+            AverageTicket:    count > 0 ? totalRevenue / count : 0m,
+            CashRevenue:      txData.Where(t => t.PaymentType.Equals("Cash", StringComparison.OrdinalIgnoreCase))
+                                    .Sum(t => t.TotalAmount),
+            CardRevenue:      txData.Where(t => t.PaymentType.Equals("Card", StringComparison.OrdinalIgnoreCase))
+                                    .Sum(t => t.TotalAmount),
+            ShiftCount:       shiftCount,
+            From:             from,
+            To:               to);
+    }
+
+    public async Task<PosRevenueTrendDto> GetPosRevenueTrendAsync(
+        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
+    {
+        var fromDt = from.ToDateTime(TimeOnly.MinValue);
+        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+
+        var txData = await BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt)
+            .Select(t => new { t.TotalAmount, t.CreatedAt })
+            .ToListAsync(ct);
+
+        List<RevenueTrendPointDto> points;
+
+        if (groupBy == "week")
+        {
+            points = txData
+                .GroupBy(t => IsoWeekStart(t.CreatedAt))
+                .OrderBy(g => g.Key)
+                .Select(g => new RevenueTrendPointDto(
+                    Date:         DateOnly.FromDateTime(g.Key),
+                    Revenue:      g.Sum(t => t.TotalAmount),
+                    Transactions: g.Count()))
+                .ToList();
+        }
+        else
+        {
+            points = txData
+                .GroupBy(t => DateOnly.FromDateTime(t.CreatedAt.Date))
+                .OrderBy(g => g.Key)
+                .Select(g => new RevenueTrendPointDto(
+                    Date:         g.Key,
+                    Revenue:      g.Sum(t => t.TotalAmount),
+                    Transactions: g.Count()))
+                .ToList();
+        }
+
+        return new PosRevenueTrendDto(Points: points, GroupBy: groupBy == "week" ? "week" : "day");
+    }
+
+    public async Task<PosTopProductsDto> GetPosTopProductsAsync(
+        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)
+    {
+        var fromDt = from.ToDateTime(TimeOnly.MinValue);
+        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+
+        var txIds = await BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt)
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+
+        var items = await _db.PosTransactionItems
+            .Where(i => txIds.Contains(i.TransactionId))
+            .Join(_db.CatalogProducts,
+                  i => i.ProductId,
+                  p => p.Id,
+                  (i, p) => new
+                  {
+                      i.ProductId,
+                      p.Name,
+                      p.Barcode,
+                      i.PriceFinal,
+                      i.Quantity,
+                      i.TransactionId
+                  })
+            .ToListAsync(ct);
+
+        var topItems = items
+            .GroupBy(i => i.ProductId)
+            .Select(g => new TopProductDto(
+                ProductId:        g.Key,
+                ProductName:      g.First().Name,
+                Barcode:          g.First().Barcode ?? string.Empty,
+                TotalRevenue:     g.Sum(i => i.PriceFinal * i.Quantity),
+                TotalQuantity:    g.Sum(i => i.Quantity),
+                TransactionCount: g.Select(i => i.TransactionId).Distinct().Count()))
+            .OrderByDescending(p => p.TotalRevenue)
+            .Take(limit)
+            .ToList();
+
+        return new PosTopProductsDto(Items: topItems);
+    }
+
+    public async Task<PosCashierStatsDto> GetPosCashierStatsAsync(
+        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var fromDt = from.ToDateTime(TimeOnly.MinValue);
+        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+
+        var txData = await BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt)
+            .Where(t => t.CashierId.HasValue)
+            .Join(_db.Users,
+                  t => t.CashierId!.Value,
+                  u => u.Id,
+                  (t, u) => new { t.CashierId, u.FullName, t.TotalAmount, t.ShiftId })
+            .ToListAsync(ct);
+
+        var cashiers = txData
+            .GroupBy(t => t.CashierId!.Value)
+            .Select(g =>
+            {
+                var revenue = g.Sum(t => t.TotalAmount);
+                var count   = g.Count();
+                return new CashierStatDto(
+                    CashierId:        g.Key,
+                    CashierName:      g.First().FullName,
+                    TotalRevenue:     revenue,
+                    TransactionCount: count,
+                    AverageTicket:    count > 0 ? revenue / count : 0m,
+                    ShiftCount:       g.Where(t => t.ShiftId.HasValue)
+                                       .Select(t => t.ShiftId!.Value)
+                                       .Distinct()
+                                       .Count());
+            })
+            .OrderByDescending(c => c.TotalRevenue)
+            .ToList();
+
+        return new PosCashierStatsDto(Cashiers: cashiers);
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────
+
+    private IQueryable<Domain.Entities.PosTransaction> BuildPosTransactionQuery(
+        Guid? tenantId, Guid? storeId, DateTime fromDt, DateTime toDt)
+    {
+        var query = _db.PosTransactions
+            .Where(t => t.Status != "fiscalization_failed"
+                     && t.CreatedAt >= fromDt
+                     && t.CreatedAt <= toDt);
+
+        if (tenantId.HasValue)
+            query = query.Where(t => t.TenantId == tenantId.Value);
+
+        if (storeId.HasValue)
+            query = query.Where(t => t.StoreId == storeId.Value);
+
+        return query;
+    }
+
+    private static DateTime IsoWeekStart(DateTime dt)
+    {
+        var dow = (int)dt.DayOfWeek;
+        // ISO week: Monday = 1, Sunday = 7
+        var offset = dow == 0 ? -6 : 1 - dow;
+        return dt.Date.AddDays(offset);
     }
 }

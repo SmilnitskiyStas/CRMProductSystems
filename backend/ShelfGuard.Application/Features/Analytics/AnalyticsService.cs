@@ -25,4 +25,16 @@ public sealed class AnalyticsService : IAnalyticsService
 
     public Task<LossesDto> GetLossesAsync(Guid? tenantId, Guid? storeId, DateOnly? from, DateOnly? to, CancellationToken ct = default)
         => _repo.GetLossesAsync(tenantId, storeId, from, to, ct);
+
+    public Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
+        => _repo.GetPosSummaryAsync(tenantId, storeId, from, to, ct);
+
+    public Task<PosRevenueTrendDto> GetPosRevenueTrendAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
+        => _repo.GetPosRevenueTrendAsync(tenantId, storeId, from, to, groupBy, ct);
+
+    public Task<PosTopProductsDto> GetPosTopProductsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)
+        => _repo.GetPosTopProductsAsync(tenantId, storeId, from, to, limit, ct);
+
+    public Task<PosCashierStatsDto> GetPosCashierStatsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
+        => _repo.GetPosCashierStatsAsync(tenantId, storeId, from, to, ct);
 }

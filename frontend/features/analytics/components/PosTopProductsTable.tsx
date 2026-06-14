@@ -1,0 +1,95 @@
+"use client";
+
+import type { PosTopProductsDto } from "../types";
+
+interface Props {
+  data: PosTopProductsDto;
+}
+
+const ROW_BORDER = "1px solid #1F2937";
+
+const baseTd: React.CSSProperties = {
+  padding: "10px 16px",
+  fontSize: 13,
+  borderBottom: ROW_BORDER,
+  borderRight: "1px solid #1F2937",
+};
+
+const tdText: React.CSSProperties = { ...baseTd, color: "#E8EDF5", fontWeight: 500 };
+const tdMuted: React.CSSProperties = { ...baseTd, color: "#6B7280", fontFamily: "monospace" };
+const tdNum: React.CSSProperties = { ...baseTd, color: "#9CA3AF", fontFamily: "monospace", textAlign: "right" };
+const tdRevenue: React.CSSProperties = { ...tdNum, color: "#4ADE80" };
+
+function thStyle(): React.CSSProperties {
+  return {
+    padding: "10px 16px",
+    color: "#4B5563",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    borderBottom: "1px solid #374151",
+    borderRight: "1px solid #374151",
+    background: "#0A0F1A",
+    textAlign: "left",
+  };
+}
+
+export function PosTopProductsTable({ data }: Props) {
+  if (!data || data.items.length === 0) {
+    return (
+      <div
+        style={{
+          background: "#0D1117",
+          border: "1px solid #1F2937",
+          borderRadius: 10,
+          padding: "20px 16px",
+          color: "#4B5563",
+          fontSize: 13,
+          textAlign: "center",
+        }}
+      >
+        Немає даних
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #1F2937" }}>
+        <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>Топ товари</div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ ...thStyle(), width: 32, textAlign: "center" }}>#</th>
+              <th style={thStyle()}>Назва</th>
+              <th style={thStyle()}>Штрихкод</th>
+              <th style={{ ...thStyle(), textAlign: "right" }}>Виручка</th>
+              <th style={{ ...thStyle(), textAlign: "right" }}>Кількість</th>
+              <th style={{ ...thStyle(), textAlign: "right" }}>Чеків</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((item, idx) => (
+              <tr
+                key={item.productId}
+                style={{ transition: "background 0.1s" }}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+              >
+                <td style={{ ...tdMuted, textAlign: "center", color: "#374151" }}>{idx + 1}</td>
+                <td style={tdText}>{item.productName}</td>
+                <td style={tdMuted}>{item.barcode}</td>
+                <td style={tdRevenue}>{item.totalRevenue.toLocaleString("uk-UA")} ₴</td>
+                <td style={tdNum}>{item.totalQuantity.toLocaleString("uk-UA")}</td>
+                <td style={tdNum}>{item.transactionCount.toLocaleString("uk-UA")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

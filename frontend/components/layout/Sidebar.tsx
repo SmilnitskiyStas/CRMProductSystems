@@ -13,6 +13,7 @@ import {
   Trash2,
   TrendingUp,
   BarChart2,
+  BarChart3,
   Users,
   Settings,
   Shield,
@@ -31,6 +32,7 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   roles?: Set<AppRole>;
+  exact?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -46,7 +48,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/orders",     label: "Замовлення",   icon: <Calculator size={18} />,      roles: AT_LEAST_STORE_MANAGER },
   { href: "/events",     label: "Події",        icon: <CalendarDays size={18} />,    roles: AT_LEAST_STORE_MANAGER },
   { href: "/ai-orders",  label: "AI Замовлення", icon: <Sparkles size={18} />,       roles: AT_LEAST_STORE_MANAGER },
-  { href: "/analytics",  label: "Аналітика",    icon: <BarChart2 size={18} />,       roles: CAN_VIEW_ANALYTICS },
+  { href: "/analytics",     label: "Аналітика",    icon: <BarChart2 size={18} />,  roles: CAN_VIEW_ANALYTICS, exact: true },
+  { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={18} />, roles: CAN_VIEW_ANALYTICS },
   { href: "/users",      label: "Персонал",     icon: <Users size={18} />,           roles: AT_LEAST_STORE_MANAGER },
   { href: "/floor-plan", label: "План магазину", icon: <Map size={18} />,            roles: AT_LEAST_STORE_MANAGER },
   { href: "/iot",        label: "IoT пристрої", icon: <Cpu size={18} />,             roles: AT_LEAST_STORE_MANAGER },
@@ -128,7 +131,9 @@ export function Sidebar({ collapsed, onToggle }: Props) {
       <nav style={{ flex: 1, padding: collapsed ? "12px 8px" : "12px 10px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {visibleItems.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            const active = item.exact
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
