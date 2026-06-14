@@ -9,7 +9,7 @@ namespace ShelfGuard.Api.Controllers;
 
 [ApiController]
 [Route("api/support")]
-[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[Authorize(Policy = AppPolicies.AtLeastStoreManager)]
 public sealed class SupportController(ISupportService supportService) : ControllerBase
 {
     [HttpGet("tickets")]
