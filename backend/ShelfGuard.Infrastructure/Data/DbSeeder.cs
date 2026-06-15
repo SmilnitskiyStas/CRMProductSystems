@@ -54,53 +54,53 @@ public static class DbSeeder
         };
         db.Suppliers.Add(supplier);
 
-        // ── Store ─────────────────────────────────────────────────────────────
-        var store = new Store
+        // ── Location ──────────────────────────────────────────────────────────
+        var store = new Location
         {
             TenantId = tenant.Id,
             Name     = "Магазин №1 — Центральний",
             Address  = "вул. Хрещатик, 1, Київ",
             Type     = "shop",
         };
-        db.Stores.Add(store);
+        db.Locations.Add(store);
 
-        // ── Store Zones ───────────────────────────────────────────────────────
-        var zoneShelf = new StoreZone
+        // ── Location Zones ────────────────────────────────────────────────────
+        var zoneShelf = new LocationZone
         {
-            StoreId      = store.Id,
+            LocationId   = store.Id,
             Name         = "Стелаж A — Молочні",
             Type         = "shelf",
             ShelvesCount = 4,
             TempMin      = 2,
             TempMax      = 6,
         };
-        var zoneFridge = new StoreZone
+        var zoneFridge = new LocationZone
         {
-            StoreId      = store.Id,
+            LocationId   = store.Id,
             Name         = "Холодильник — М'ясо",
             Type         = "fridge",
             ShelvesCount = 3,
             TempMin      = 0,
             TempMax      = 4,
         };
-        var zoneFreezer = new StoreZone
+        var zoneFreezer = new LocationZone
         {
-            StoreId      = store.Id,
+            LocationId   = store.Id,
             Name         = "Морозильна камера",
             Type         = "freezer",
             ShelvesCount = 2,
             TempMin      = -20,
             TempMax      = -15,
         };
-        var zoneDry = new StoreZone
+        var zoneDry = new LocationZone
         {
-            StoreId      = store.Id,
+            LocationId   = store.Id,
             Name         = "Стелаж B — Бакалія",
             Type         = "shelf",
             ShelvesCount = 6,
         };
 
-        db.StoreZones.AddRange(zoneShelf, zoneFridge, zoneFreezer, zoneDry);
+        db.LocationZones.AddRange(zoneShelf, zoneFridge, zoneFreezer, zoneDry);
 
         // ── Catalog Products ──────────────────────────────────────────────────
         var cpMilk    = MakeCatalog(tenant.Id, "4820001234501", "Молоко 2,5% Галичина",         catDairy.Id,  supplier.Id, "л",   18.5m,  24.9m,  30, 120, shelfLife: 7);

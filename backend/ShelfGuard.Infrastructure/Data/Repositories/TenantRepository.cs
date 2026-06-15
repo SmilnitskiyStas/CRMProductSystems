@@ -36,7 +36,7 @@ public sealed class TenantRepository : ITenantRepository
 
     /// <summary>Active store count per tenant in a single GROUP BY query.</summary>
     public async Task<Dictionary<Guid, int>> GetStoreCountsAsync(CancellationToken ct) =>
-        await _db.Stores
+        await _db.Locations
             .Where(s => s.IsActive)
             .GroupBy(s => s.TenantId)
             .Select(g => new { TenantId = g.Key, Count = g.Count() })

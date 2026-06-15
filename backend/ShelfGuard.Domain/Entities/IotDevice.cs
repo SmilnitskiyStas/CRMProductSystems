@@ -20,6 +20,6 @@ public sealed class IotDevice
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     // Navigation properties
-    public Store? Store { get; init; }
-    public StoreZone? Zone { get; init; }
+    public Location? Store { get; init; }
+    public LocationZone? Zone { get; init; }
 }

@@ -1,7 +1,7 @@
 using ShelfGuard.Application.Features.Auth;
 using ShelfGuard.Application.Features.Catalog;
 using ShelfGuard.Application.Features.Stock;
-using ShelfGuard.Application.Features.Stores;
+using ShelfGuard.Application.Features.Locations;
 using ShelfGuard.Application.Features.Suppliers;
 using ShelfGuard.Application.Features.Receipts;
 using ShelfGuard.Application.Features.Transfers;
@@ -26,7 +26,7 @@ public static class DependencyInjection
 services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ICatalogProductService, CatalogProductService>();
         services.AddScoped<IStockService, StockService>();
-        services.AddScoped<IStoreService, StoreService>();
+        services.AddScoped<ILocationService, LocationService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IReceiptService, ReceiptService>();
         services.AddScoped<ITransferService, TransferService>();

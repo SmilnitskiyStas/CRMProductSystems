@@ -92,7 +92,7 @@ file sealed class FakeStockRepo : IStockRepository
     public Task<List<ProductStock>> GetNeedsCheckAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetActionRequiredAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
-    public Task<List<Store>> GetProductionStoresAsync(CancellationToken ct = default) => Task.FromResult(new List<Store>());
+    public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) => Task.FromResult(new List<Location>());
     public Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new Dictionary<string, int>());
     public Task AddAsync(ProductStock stock, CancellationToken ct = default) => Task.CompletedTask;
     public Task AddMovementAsync(StockMovement movement, CancellationToken ct = default) => Task.CompletedTask;

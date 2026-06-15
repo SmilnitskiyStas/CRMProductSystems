@@ -17,6 +17,6 @@ public sealed class PosShift
     public string? ZReportUrl { get; set; }
 
     // Navigation properties
-    public Store? Store { get; init; }
+    public Location? Store { get; init; }
     public User? Cashier { get; init; }
 }

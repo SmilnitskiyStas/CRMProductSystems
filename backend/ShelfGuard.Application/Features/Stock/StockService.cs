@@ -221,7 +221,7 @@ public sealed class StockService : IStockService
     // ── suggestions ────────────────────────────────────────────────────────
 
     private async Task<List<StockAction>> BuildActionsAsync(
-        ProductStock batch, List<Store> productionStores, CancellationToken ct)
+        ProductStock batch, List<Location> productionStores, CancellationToken ct)
     {
         var actions = new List<StockAction>();
 

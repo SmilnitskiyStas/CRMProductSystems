@@ -44,7 +44,7 @@ public sealed class TenantAdminRepository : ITenantAdminRepository
         _db.Users.CountAsync(u => u.TenantId == tenantId, ct);
 
     public Task<int> CountStoresAsync(Guid tenantId, CancellationToken ct) =>
-        _db.Stores.CountAsync(s => s.TenantId == tenantId, ct);
+        _db.Locations.CountAsync(s => s.TenantId == tenantId, ct);
 
     public Task<int> CountProductsAsync(Guid tenantId, CancellationToken ct) =>
         _db.CatalogProducts.CountAsync(p => p.TenantId == tenantId, ct);

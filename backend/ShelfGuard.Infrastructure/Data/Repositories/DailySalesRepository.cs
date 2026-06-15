@@ -49,7 +49,7 @@ public sealed class DailySalesRepository : IDailySalesRepository
     }
 
     public Task<bool> StoreExistsAsync(Guid storeId, CancellationToken ct = default) =>
-        _db.Stores.AnyAsync(s => s.Id == storeId && s.IsActive, ct);
+        _db.Locations.AnyAsync(s => s.Id == storeId && s.IsActive, ct);
 
     public Task<bool> ProductExistsAsync(Guid productId, CancellationToken ct = default) =>
         _db.CatalogProducts.AnyAsync(p => p.Id == productId && p.IsActive, ct);

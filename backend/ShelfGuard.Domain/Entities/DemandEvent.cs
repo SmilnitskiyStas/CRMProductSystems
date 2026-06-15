@@ -23,7 +23,7 @@ public sealed class DemandEvent
     public Guid? CreatedBy { get; init; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
-    public Store? Store { get; init; }
+    public Location? Store { get; init; }
     public ICollection<DemandEventCoefficient> Coefficients { get; init; } = new List<DemandEventCoefficient>();
 
     /// <summary>

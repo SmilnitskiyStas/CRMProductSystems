@@ -27,6 +27,6 @@ public sealed class PosTransaction
     public ICollection<PosTransactionItem> Items { get; init; } = new List<PosTransactionItem>();
 
     // Navigation properties
-    public Store? Store { get; init; }
+    public Location? Store { get; init; }
     public PosShift? Shift { get; init; }
 }

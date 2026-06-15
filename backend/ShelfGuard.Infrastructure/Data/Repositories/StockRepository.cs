@@ -131,8 +131,8 @@ public sealed class StockRepository : IStockRepository
                 && s.Quantity < s.Product.MinStock)
             .ToListAsync(ct);
 
-    public Task<List<Store>> GetProductionStoresAsync(CancellationToken ct = default) =>
-        _db.Stores
+    public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) =>
+        _db.Locations
             .Where(s => s.IsActive && (s.Type == "production" || s.Type == "distribution"))
             .ToListAsync(ct);
 

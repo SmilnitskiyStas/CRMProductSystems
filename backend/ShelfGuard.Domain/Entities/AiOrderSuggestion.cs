@@ -17,7 +17,7 @@ public sealed class AiOrderSuggestion
     public string AiModel { get; set; } = string.Empty;
     public int? TokensUsed { get; set; }
 
-    public Store? Store { get; init; }
+    public Location? Store { get; init; }
     public ICollection<AiOrderSuggestionItem> Items { get; init; } = new List<AiOrderSuggestionItem>();
 }
 

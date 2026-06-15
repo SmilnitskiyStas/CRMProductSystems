@@ -27,7 +27,7 @@ EF Core migration:
 Accept: migration applies cleanly; dotnet build green; RLS verified cross-tenant.
 
 #### TASK-201 — Backend: Store → Location entity + API rename
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-200 · **Priority:** critical
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-200 · **Priority:** critical · **Updated:** 2026-06-15
 - Rename Domain entity `Store` → `Location`; add `LocationType` enum
 - Rename `StoreZone` → `LocationZone`
 - Видалити POC `Product` entity + `Products` table (ADR-006 нарешті!)

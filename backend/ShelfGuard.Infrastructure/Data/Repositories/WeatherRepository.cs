@@ -29,8 +29,8 @@ public sealed class WeatherRepository : IWeatherRepository
     public Task<WeatherData?> GetForDateAsync(Guid storeId, DateOnly date, CancellationToken ct = default) =>
         _db.WeatherData.FirstOrDefaultAsync(w => w.StoreId == storeId && w.Date == date, ct);
 
-    public Task<List<Store>> GetStoresWithCoordinatesAsync(CancellationToken ct = default) =>
-        _db.Stores
+    public Task<List<Location>> GetStoresWithCoordinatesAsync(CancellationToken ct = default) =>
+        _db.Locations
             .Where(s => s.IsActive && s.Latitude != null && s.Longitude != null)
             .ToListAsync(ct);
 

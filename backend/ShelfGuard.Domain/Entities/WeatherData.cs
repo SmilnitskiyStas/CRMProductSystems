@@ -14,5 +14,5 @@ public sealed class WeatherData
     public bool IsForecast { get; set; } = true;
     public DateTime FetchedAt { get; set; } = DateTime.UtcNow;
 
-    public Store? Store { get; init; }
+    public Location? Store { get; init; }
 }

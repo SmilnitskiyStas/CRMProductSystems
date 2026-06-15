@@ -43,7 +43,7 @@ public sealed class AiOrderRepository : IAiOrderRepository
     }
 
     public Task<string?> GetStoreNameAsync(Guid storeId, CancellationToken ct = default) =>
-        _db.Stores.Where(s => s.Id == storeId).Select(s => (string?)s.Name).FirstOrDefaultAsync(ct);
+        _db.Locations.Where(s => s.Id == storeId).Select(s => (string?)s.Name).FirstOrDefaultAsync(ct);
 
     public async Task AddAsync(AiOrderSuggestion suggestion, CancellationToken ct = default) =>
         await _db.AiOrderSuggestions.AddAsync(suggestion, ct);

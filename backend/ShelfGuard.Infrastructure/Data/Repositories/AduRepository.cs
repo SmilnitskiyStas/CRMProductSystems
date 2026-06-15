@@ -57,7 +57,7 @@ public sealed class AduRepository : IAduRepository
             .ToDictionaryAsync(a => a.ProductId, ct);
 
     public Task<bool> StoreExistsAsync(Guid storeId, CancellationToken ct = default) =>
-        _db.Stores.AnyAsync(s => s.Id == storeId && s.IsActive, ct);
+        _db.Locations.AnyAsync(s => s.Id == storeId && s.IsActive, ct);
 
     public async Task AddAsync(ProductAdu adu, CancellationToken ct = default) =>
         await _db.ProductAdus.AddAsync(adu, ct);

@@ -17,5 +17,5 @@ public sealed class WriteOff
     public ICollection<WriteOffItem> Items { get; init; } = new List<WriteOffItem>();
 
     // Navigation properties
-    public Store? Store { get; set; }
+    public Location? Store { get; set; }
 }

@@ -21,5 +21,5 @@ public sealed class DailySale
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public CatalogProduct? Product { get; init; }
-    public Store? Store { get; init; }
+    public Location? Store { get; init; }
 }

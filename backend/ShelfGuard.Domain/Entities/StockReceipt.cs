@@ -19,5 +19,5 @@ public sealed class StockReceipt
 
     // Navigation properties
     public Supplier? Supplier { get; set; }
-    public Store? DestinationStore { get; set; }
+    public Location? DestinationStore { get; set; }
 }

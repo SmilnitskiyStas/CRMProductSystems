@@ -16,8 +16,8 @@ public sealed class AppDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
 
     // Structure
-    public DbSet<Store> Stores => Set<Store>();
-    public DbSet<StoreZone> StoreZones => Set<StoreZone>();
+    public DbSet<Location> Locations => Set<Location>();
+    public DbSet<LocationZone> LocationZones => Set<LocationZone>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<ProductSegment> ProductSegments => Set<ProductSegment>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
@@ -158,8 +158,8 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.ReorderLevel).HasColumnType("numeric(18,4)");
         });
 
-        // ── Store (v4: mapped to "locations" table) ─────────────────────────
-        builder.Entity<Store>(e =>
+        // ── Location (v4: mapped to "locations" table) ──────────────────────
+        builder.Entity<Location>(e =>
         {
             e.ToTable("locations");
             e.HasKey(s => s.Id);
@@ -176,8 +176,8 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ── StoreZone (v4: mapped to "location_zones" table) ────────────────
-        builder.Entity<StoreZone>(e =>
+        // ── LocationZone (v4: mapped to "location_zones" table) ─────────────
+        builder.Entity<LocationZone>(e =>
         {
             e.ToTable("location_zones");
             e.HasKey(z => z.Id);
@@ -189,9 +189,9 @@ public sealed class AppDbContext : DbContext
             e.Property(z => z.TempMax).HasColumnType("decimal(5,1)");
             e.Property(z => z.ShelvesCount).HasDefaultValue(1);
             e.Property(z => z.IsActive).HasDefaultValue(true);
-            e.Property(z => z.StoreId).HasColumnName("LocationId");
-            e.HasOne(z => z.Store).WithMany(s => s.Zones)
-             .HasForeignKey(z => z.StoreId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(z => z.LocationId).HasColumnName("LocationId");
+            e.HasOne(z => z.Location).WithMany(s => s.Zones)
+             .HasForeignKey(z => z.LocationId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── Category ────────────────────────────────────────────────────────

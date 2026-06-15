@@ -28,7 +28,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             .ToListAsync(ct);
 
         var storeIds = batches.Select(b => b.StoreId).Distinct().ToHashSet();
-        var stores = await _db.Stores
+        var stores = await _db.Locations
             .Where(s => storeIds.Contains(s.Id))
             .Select(s => new { s.Id, s.Name })
             .ToListAsync(ct);
@@ -163,12 +163,12 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         var zoneIds = batches.Select(b => b.ZoneId!.Value).Distinct().ToHashSet();
         var storeIds = batches.Select(b => b.StoreId).Distinct().ToHashSet();
 
-        var zones = await _db.StoreZones
+        var zones = await _db.LocationZones
             .Where(z => zoneIds.Contains(z.Id))
-            .Select(z => new { z.Id, z.Name, z.Type, z.StoreId })
+            .Select(z => new { z.Id, z.Name, z.Type, StoreId = z.LocationId })
             .ToListAsync(ct);
 
-        var storeNames = await _db.Stores
+        var storeNames = await _db.Locations
             .Where(s => storeIds.Contains(s.Id))
             .Select(s => new { s.Id, s.Name })
             .ToDictionaryAsync(s => s.Id, s => s.Name, ct);
@@ -277,7 +277,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             .ToListAsync(ct);
 
         var storeIds = writeOffs.Select(w => w.StoreId).Distinct().ToHashSet();
-        var storeNames = await _db.Stores
+        var storeNames = await _db.Locations
             .Where(s => storeIds.Contains(s.Id))
             .Select(s => new { s.Id, s.Name })
             .ToDictionaryAsync(s => s.Id, s => s.Name, ct);

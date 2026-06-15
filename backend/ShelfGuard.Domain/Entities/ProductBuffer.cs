@@ -24,5 +24,5 @@ public sealed class ProductBuffer
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
 
     public CatalogProduct? Product { get; init; }
-    public Store? Store { get; init; }
+    public Location? Store { get; init; }
 }

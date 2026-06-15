@@ -16,6 +16,6 @@ public sealed class StockTransfer
     public ICollection<StockTransferItem> Items { get; init; } = new List<StockTransferItem>();
 
     // Navigation properties
-    public Store? FromStore { get; set; }
-    public Store? ToStore { get; set; }
+    public Location? FromStore { get; set; }
+    public Location? ToStore { get; set; }
 }

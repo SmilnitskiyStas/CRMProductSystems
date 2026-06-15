@@ -53,5 +53,5 @@ public sealed class OrderCalcRepository : IOrderCalcRepository
     }
 
     public Task<bool> StoreExistsAsync(Guid storeId, CancellationToken ct = default) =>
-        _db.Stores.AnyAsync(s => s.Id == storeId && s.IsActive, ct);
+        _db.Locations.AnyAsync(s => s.Id == storeId && s.IsActive, ct);
 }

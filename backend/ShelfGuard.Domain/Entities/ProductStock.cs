@@ -22,6 +22,6 @@ public sealed class ProductStock
     public DateTime? NotifiedCriticalAt { get; set; }
 
     public CatalogProduct? Product { get; init; }
-    public Store? Store { get; init; }
-    public StoreZone? Zone { get; init; }
+    public Location? Store { get; init; }
+    public LocationZone? Zone { get; init; }
 }

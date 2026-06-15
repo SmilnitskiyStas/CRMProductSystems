@@ -28,8 +28,8 @@ public interface IStockRepository
     /// <summary>Returns stock with deficit (quantity below min_stock) for a product across all stores.</summary>
     Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default);
 
-    /// <summary>Returns stores of type 'production' or 'distribution' for the tenant.</summary>
-    Task<List<Store>> GetProductionStoresAsync(CancellationToken ct = default);
+    /// <summary>Returns locations of type 'production' or 'distribution' for the tenant.</summary>
+    Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default);
 
     Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default);
 
