@@ -30,15 +30,20 @@ fi
 # string) get truncated by bash, and the exported shell vars then OVERRIDE
 # --env-file in compose interpolation. compose reads .env itself.
 
-echo ">>> Building and starting containers..."
+echo ">>> Stopping existing containers..."
 cd "$DEPLOY_DIR"
+docker compose -f docker-compose.production.yml --env-file .env down --remove-orphans 2>/dev/null || true
+
+# shelfguard_postgres is external (not in compose) — ensure it's in the network after compose recreates it
+echo ">>> Ensuring postgres is reachable..."
+docker network connect shelfguard_default shelfguard_postgres 2>/dev/null || true
+
+echo ">>> Building and starting containers..."
 docker compose -f docker-compose.production.yml --env-file .env up -d --build
 
 echo ">>> Waiting for API to start..."
-sleep 10
-
-echo ">>> Running DB migrations..."
-docker exec shelfguard_api dotnet ShelfGuard.Api.dll --migrate 2>/dev/null || true
+sleep 15
+echo ">>> Migrations run automatically on container startup (EF Core)"
 
 echo "=== Deploy complete ==="
 echo "API:     http://$(curl -s ifconfig.me):5100"
