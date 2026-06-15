@@ -1,6 +1,45 @@
-# Current Sprint — v3.3 «Menu RBAC» (started 2026-06-14) + v3.2 carry-over
+# Current Sprint — v3.4 «Mobile Complete» (started 2026-06-15) + v3.3 carry-over
 
 ---
+
+## TASK-078 — Mobile: Write-offs screen
+**Status:** done · **Agent:** mobile-developer · **Depends:** — · Updated: 2026-06-15
+Екран списання для мобільного працівника:
+- Список власних списань (GET /api/write-offs)
+- Кнопка «+ Списання» → scan штрихкод (expo-camera) → підтягнути назву товару → вибір причини (expired/damaged/theft/other) → кількість → коментар → підтвердження
+- Detail екран окремого списання
+- Тільки для ролей: storekeeper, store_manager і вище
+Accept: tsc green; flow проти API (create + list); scan штрихкоду відкриває форму з назвою товару.
+
+## TASK-079 — Mobile: Transfers screen
+**Status:** done · **Agent:** mobile-developer · **Depends:** — · Updated: 2026-06-15
+Екран переміщень між магазинами/зонами:
+- Список переміщень (GET /api/transfers)
+- Кнопка «+ Переміщення» → scan штрихкод → кількість → вибір destination store → підтвердження
+- Статуси: pending / in_transit / completed
+- Тільки для ролей: storekeeper, store_manager і вище
+Accept: tsc green; create + list flow проти API.
+
+## TASK-080 — Mobile: Notifications screen
+**Status:** done · **Agent:** mobile-developer · **Depends:** — · Updated: 2026-06-15
+Сповіщення на мобільному:
+- Bell icon у (app)/_layout.tsx header з badge кількості непрочитаних
+- Екран /notifications: список (GET /api/notifications/history), тип іконкою (expiry/stock/system), read/unread стилі
+- Tap → mark as read
+Accept: tsc green; список підвантажується з API; badge оновлюється.
+
+## TASK-081 — Mobile: Dashboard з реальними даними
+**Status:** done · **Agent:** mobile-developer · **Depends:** — · Updated: 2026-06-15
+Підключити index.tsx до реальних API:
+- Картки Safe/Warning/Critical/Expired → GET /api/stock/summary
+- Секція «AI замовлення» → GET /api/ai-orders (pending suggestions, count)
+- Секція «Останні події» → GET /api/stock/events?limit=5 (або /api/activity-logs)
+- Pull-to-refresh
+Accept: tsc green; реальні числа замість заглушок; pull-to-refresh працює.
+
+---
+
+## v3.3 carry-over
 
 ## TASK-075 — Architect: Menu groups + Role matrix
 **Status:** done · **Agent:** project-manager · **Depends:** — · Updated: 2026-06-14
@@ -131,7 +170,7 @@ critical/expired badge, оплата cash/card (терминал SDK / прин�
 **Status:** done · **Agent:** frontend-developer · **Depends:** 068 · Updated: 2026-06-14
 
 ## TASK-074 — SaaS Admin Panel: tenant onboarding + управління
-**Status:** in_progress · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-14
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-15
 Provider-only панель: список тенантів, створення (назва+slug+план+перший адмін),
 статус active/inactive, зміна плану (basic/standard/enterprise/trial), модулі,
 usage stats (users/stores/products/sales). Route /admin, policy ProviderOnly.
@@ -140,7 +179,7 @@ Frontend: /admin сторінка з таблицею тенантів + create 
 Accept: dotnet build+test green; tsc green; CRUD flow проти API.
 
 ## TASK-073 — POS Аналітика: API + Web дашборд
-**Status:** in_progress · **Agent:** backend-developer + frontend-developer · **Depends:** 068 · Updated: 2026-06-14
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** 068 · Updated: 2026-06-15
 Нові ендпоінти GET /api/analytics/pos/* + веб-дашборд /analytics/pos.
 Метрики: виручка за період, динаміка по днях, топ товарів, ефективність касирів,
 середній чек, розбивка cash/card. Дані з pos_transactions + pos_transaction_items.

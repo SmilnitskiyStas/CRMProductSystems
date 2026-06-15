@@ -2,6 +2,7 @@ import { Tabs, Redirect } from 'expo-router';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/features/auth/store';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 const CASHIER_ROLES = ['Cashier', 'StoreManager', 'Director', 'Admin'];
 
@@ -32,6 +33,10 @@ export default function AppLayout() {
         name="index"
         options={{
           title: 'Дашборд',
+          headerShown: true,
+          headerRight: () => <NotificationBell />,
+          headerStyle: { backgroundColor: '#ffffff' },
+          headerShadowVisible: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
@@ -87,9 +92,16 @@ export default function AppLayout() {
         }}
       />
       {/* Hidden screens (no tab) */}
+      <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="stock/[id]" options={{ href: null }} />
       <Tabs.Screen name="receipt/[id]" options={{ href: null }} />
       <Tabs.Screen name="inventory/[zoneId]" options={{ href: null }} />
+      <Tabs.Screen name="write-offs/index" options={{ href: null }} />
+      <Tabs.Screen name="write-offs/[id]" options={{ href: null }} />
+      <Tabs.Screen name="write-offs/create" options={{ href: null }} />
+      <Tabs.Screen name="transfers/index" options={{ href: null }} />
+      <Tabs.Screen name="transfers/[id]" options={{ href: null }} />
+      <Tabs.Screen name="transfers/create" options={{ href: null }} />
     </Tabs>
   );
 }

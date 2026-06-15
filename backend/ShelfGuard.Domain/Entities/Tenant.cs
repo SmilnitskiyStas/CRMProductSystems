@@ -7,6 +7,8 @@ public sealed class Tenant
     public string Slug { get; private set; } = string.Empty;
     public string Plan { get; private set; } = "basic";
     public string Modules { get; private set; } = "[]";
+    // v4: business domain (retail / auto_service / warehouse / restaurant / production / distribution)
+    public string BusinessType { get; private set; } = "retail";
     public bool IsActive { get; private set; } = true;
     public DateTime CreatedAt { get; private set; }
 
@@ -38,11 +40,27 @@ public sealed class Tenant
     /// <summary>Replaces the enabled modules list (provider-only).</summary>
     public string? UpdateModules(IReadOnlyList<string> modules)
     {
-        var valid = new[] { "shelf_manager", "crm", "notifications", "auto_order", "iot", "cv_camera" };
+        var valid = new[]
+        {
+            // legacy
+            "shelf_manager", "crm", "notifications", "auto_order", "iot", "cv_camera",
+            // v4 module-based activation
+            "inventory", "procurement", "pos", "auto_service", "production", "marketplace"
+        };
         var unknown = modules.Where(m => !valid.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
         if (unknown.Count > 0)
             return $"Unknown modules: {string.Join(", ", unknown)}.";
         Modules = System.Text.Json.JsonSerializer.Serialize(modules);
+        return null;
+    }
+
+    /// <summary>Sets the business type (provider-only, determines default module set).</summary>
+    public string? UpdateBusinessType(string businessType)
+    {
+        var valid = new[] { "retail", "auto_service", "warehouse", "restaurant", "production", "distribution" };
+        if (!valid.Contains(businessType, StringComparer.OrdinalIgnoreCase))
+            return $"Unknown business type '{businessType}'. Valid: {string.Join(", ", valid)}.";
+        BusinessType = businessType.ToLowerInvariant();
         return null;
     }
 

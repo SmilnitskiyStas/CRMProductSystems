@@ -117,15 +117,27 @@ export default function ScanScreen() {
             ) : result ? (
               <>
                 <Text className="text-lg font-bold text-gray-900">{result.name}</Text>
-                <View className="flex-row gap-3 mt-6">
+                <View className="gap-3 mt-6">
                   <TouchableOpacity
                     onPress={() => {
                       setScanned(false);
                       router.push(`/(app)/stock/${result.id}`);
                     }}
-                    className="flex-1 bg-primary-600 py-3.5 rounded-xl items-center"
+                    className="bg-primary-600 py-3.5 rounded-xl items-center"
                   >
                     <Text className="text-white font-semibold">Переглянути залишки</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setScanned(false);
+                      router.push({
+                        pathname: '/(app)/write-offs/create',
+                        params: { barcode: result.id },
+                      });
+                    }}
+                    className="border border-red-300 py-3.5 rounded-xl items-center"
+                  >
+                    <Text className="text-red-600 font-semibold">Списати товар</Text>
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity

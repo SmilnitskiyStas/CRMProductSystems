@@ -91,6 +91,7 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(t => t.Slug).IsUnique();
             e.Property(t => t.Plan).HasMaxLength(50).HasDefaultValue("basic");
             e.Property(t => t.Modules).HasColumnType("jsonb").HasDefaultValue("[]");
+            e.Property(t => t.BusinessType).HasMaxLength(50).HasDefaultValue("retail");
             e.Property(t => t.IsActive).HasDefaultValue(true);
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
         });
@@ -157,14 +158,15 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.ReorderLevel).HasColumnType("numeric(18,4)");
         });
 
-        // ── Store ───────────────────────────────────────────────────────────
+        // ── Store (v4: mapped to "locations" table) ─────────────────────────
         builder.Entity<Store>(e =>
         {
-            e.ToTable("stores");
+            e.ToTable("locations");
             e.HasKey(s => s.Id);
             e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(s => s.Name).HasMaxLength(255).IsRequired();
             e.Property(s => s.Type).HasMaxLength(50).IsRequired();
+            e.Property(s => s.LocationType).HasMaxLength(50).HasDefaultValue("retail_store");
             e.Property(s => s.FloorPlan).HasColumnType("jsonb");
             e.Property(s => s.Latitude).HasColumnType("decimal(10,7)");
             e.Property(s => s.Longitude).HasColumnType("decimal(10,7)");
@@ -174,10 +176,10 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ── StoreZone ───────────────────────────────────────────────────────
+        // ── StoreZone (v4: mapped to "location_zones" table) ────────────────
         builder.Entity<StoreZone>(e =>
         {
-            e.ToTable("store_zones");
+            e.ToTable("location_zones");
             e.HasKey(z => z.Id);
             e.Property(z => z.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(z => z.Name).HasMaxLength(255).IsRequired();
@@ -187,6 +189,7 @@ public sealed class AppDbContext : DbContext
             e.Property(z => z.TempMax).HasColumnType("decimal(5,1)");
             e.Property(z => z.ShelvesCount).HasDefaultValue(1);
             e.Property(z => z.IsActive).HasDefaultValue(true);
+            e.Property(z => z.StoreId).HasColumnName("LocationId");
             e.HasOne(z => z.Store).WithMany(s => s.Zones)
              .HasForeignKey(z => z.StoreId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -298,6 +301,7 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.SourceType).HasMaxLength(50);
             e.Property(s => s.AddedAt).HasDefaultValueSql("NOW()");
             e.Property(s => s.LastCheckedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.StoreId).HasColumnName("LocationId");
             e.HasOne(s => s.Product).WithMany()
              .HasForeignKey(s => s.ProductId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(s => s.Store).WithMany()
@@ -312,6 +316,8 @@ public sealed class AppDbContext : DbContext
             e.ToTable("stock_movements");
             e.HasKey(m => m.Id);
             e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.FromStoreId).HasColumnName("FromLocationId");
+            e.Property(m => m.ToStoreId).HasColumnName("ToLocationId");
             e.Property(m => m.MovementType).HasMaxLength(50).IsRequired();
             e.Property(m => m.Quantity).HasColumnType("decimal(10,2)").IsRequired();
             e.Property(m => m.QuantityBefore).HasColumnType("decimal(10,2)");
@@ -344,6 +350,7 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(r => r.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(r => r.DestinationStoreId).HasColumnName("DestinationLocationId");
         });
 
         // ── StockReceiptItem ────────────────────────────────────────────────
@@ -369,6 +376,8 @@ public sealed class AppDbContext : DbContext
             e.Property(t => t.TransferType).HasMaxLength(50);
             e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(t => t.FromStoreId).HasColumnName("FromLocationId");
+            e.Property(t => t.ToStoreId).HasColumnName("ToLocationId");
         });
 
         // ── StockTransferItem ───────────────────────────────────────────────
@@ -394,6 +403,7 @@ public sealed class AppDbContext : DbContext
             e.Property(w => w.Reason).HasMaxLength(50);
             e.Property(w => w.TotalLossAmount).HasColumnType("decimal(12,2)");
             e.Property(w => w.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(w => w.StoreId).HasColumnName("LocationId");
         });
 
         // ── WriteOffItem ────────────────────────────────────────────────────
@@ -421,6 +431,7 @@ public sealed class AppDbContext : DbContext
             e.Property(d => d.Reason).HasMaxLength(50).HasDefaultValue("expiry");
             e.Property(d => d.Status).HasMaxLength(20).HasDefaultValue("pending");
             e.Property(d => d.ValidFrom).HasDefaultValueSql("NOW()");
+            e.Property(d => d.StoreId).HasColumnName("LocationId");
             e.HasOne(d => d.Tenant).WithMany()
              .HasForeignKey(d => d.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(d => d.Creator).WithMany()
@@ -497,6 +508,7 @@ public sealed class AppDbContext : DbContext
             e.Property(d => d.IsAnomaly).HasDefaultValue(false);
             e.Property(d => d.Source).HasMaxLength(20).HasDefaultValue("manual");
             e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(d => d.StoreId).HasColumnName("LocationId");
             e.HasIndex(d => new { d.StoreId, d.ProductId, d.Date }).IsUnique();
             e.HasIndex(d => new { d.TenantId, d.Date });
             e.HasOne(d => d.Product).WithMany()
@@ -516,6 +528,7 @@ public sealed class AppDbContext : DbContext
             e.Property(a => a.Adu90d).HasColumnType("decimal(10,4)");
             e.Property(a => a.AduEffective).HasColumnType("decimal(10,4)");
             e.Property(a => a.CalculatedAt).HasDefaultValueSql("NOW()");
+            e.Property(a => a.StoreId).HasColumnName("LocationId");
             e.HasIndex(a => new { a.StoreId, a.ProductId }).IsUnique();
             e.HasOne(a => a.Product).WithMany()
              .HasForeignKey(a => a.ProductId).OnDelete(DeleteBehavior.Cascade);
@@ -536,6 +549,7 @@ public sealed class AppDbContext : DbContext
             e.Property(b => b.LeadTimeDays).HasColumnType("decimal(5,1)").IsRequired();
             e.Property(b => b.OrderCycleDays).HasColumnType("decimal(5,1)").IsRequired();
             e.Property(b => b.CalculatedAt).HasDefaultValueSql("NOW()");
+            e.Property(b => b.StoreId).HasColumnName("LocationId");
             e.HasIndex(b => new { b.StoreId, b.ProductId }).IsUnique();
             e.HasOne(b => b.Product).WithMany()
              .HasForeignKey(b => b.ProductId).OnDelete(DeleteBehavior.Cascade);
@@ -566,6 +580,7 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.ContextSnapshot).HasColumnType("jsonb");
             e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("pending");
             e.Property(s => s.AiModel).HasMaxLength(50);
+            e.Property(s => s.StoreId).HasColumnName("LocationId");
             e.HasIndex(s => new { s.TenantId, s.StoreId, s.OrderDate });
             e.HasOne(s => s.Store).WithMany()
              .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Cascade);
@@ -617,6 +632,7 @@ public sealed class AppDbContext : DbContext
             e.Property(d => d.Scope).HasMaxLength(50).HasDefaultValue("network");
             e.Property(d => d.RecurrenceRule).HasMaxLength(100);
             e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(d => d.StoreId).HasColumnName("LocationId");
             e.HasIndex(d => new { d.TenantId, d.StartsAt, d.EndsAt });
             e.HasOne(d => d.Store).WithMany()
              .HasForeignKey(d => d.StoreId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
@@ -648,6 +664,7 @@ public sealed class AppDbContext : DbContext
             e.Property(w => w.Precipitation).HasColumnType("decimal(6,2)");
             e.Property(w => w.IsForecast).HasDefaultValue(true);
             e.Property(w => w.FetchedAt).HasDefaultValueSql("NOW()");
+            e.Property(w => w.StoreId).HasColumnName("LocationId");
             e.HasIndex(w => new { w.StoreId, w.Date }).IsUnique();
             e.HasOne(w => w.Store).WithMany()
              .HasForeignKey(w => w.StoreId).OnDelete(DeleteBehavior.Cascade);
@@ -679,6 +696,7 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.DayOfWeek).HasColumnType("integer[]");
             e.Property(s => s.IsActive).HasDefaultValue(true);
             e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.StoreId).HasColumnName("LocationId");
             e.HasIndex(s => new { s.StoreId, s.SupplierId });
             e.HasOne(s => s.Store).WithMany()
              .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Cascade);
@@ -700,6 +718,7 @@ public sealed class AppDbContext : DbContext
             e.Property(d => d.IsActive).HasDefaultValue(true);
             e.Property(d => d.FirmwareVersion).HasMaxLength(50);
             e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(d => d.StoreId).HasColumnName("LocationId");
             e.HasIndex(d => new { d.TenantId, d.DeviceId }).IsUnique();
             e.HasIndex(d => new { d.TenantId, d.StoreId });
             e.HasOne(d => d.Store).WithMany()
@@ -718,6 +737,7 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.Humidity).HasColumnType("decimal(5,1)");
             e.Property(r => r.IsAlert).HasDefaultValue(false);
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(r => r.StoreId).HasColumnName("LocationId");
             e.HasIndex(r => new { r.DeviceId, r.RecordedAt }).IsDescending(false, true);
             e.HasOne(r => r.Device).WithMany()
              .HasForeignKey(r => r.DeviceId).OnDelete(DeleteBehavior.Cascade);
@@ -750,8 +770,9 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.ClosingCash).HasColumnType("decimal(12,2)");
             e.Property(s => s.TotalSales).HasColumnType("decimal(12,2)").HasDefaultValue(0m);
             e.Property(s => s.OpenedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.StoreId).HasColumnName("LocationId");
             e.HasIndex(s => new { s.TenantId, s.StoreId, s.OpenedAt });
-            // one open shift per store at a time
+            // one open shift per location at a time
             e.HasIndex(s => s.StoreId).IsUnique().HasFilter("\"ClosedAt\" IS NULL");
             e.HasOne(s => s.Store).WithMany()
              .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Restrict);
@@ -772,6 +793,7 @@ public sealed class AppDbContext : DbContext
             e.Property(t => t.TaxAmount).HasColumnType("decimal(12,2)");
             e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("pending_fiscalization");
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(t => t.StoreId).HasColumnName("LocationId");
             e.HasIndex(t => new { t.TenantId, t.StoreId, t.CreatedAt });
             e.HasIndex(t => t.Status).HasFilter("\"Status\" = 'pending_fiscalization'");
             e.HasIndex(t => new { t.TenantId, t.ReceiptNumber }).IsUnique();
