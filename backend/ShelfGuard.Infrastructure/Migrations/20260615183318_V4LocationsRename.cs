@@ -418,22 +418,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                 onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_stock_transfers_locations_FromLocationId",
-                table: "stock_transfers",
-                column: "FromLocationId",
-                principalTable: "locations",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_stock_transfers_locations_ToLocationId",
-                table: "stock_transfers",
-                column: "ToLocationId",
-                principalTable: "locations",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
-
-            migrationBuilder.AddForeignKey(
                 name: "FK_supply_schedules_locations_LocationId",
                 table: "supply_schedules",
                 column: "LocationId",
@@ -559,14 +543,6 @@ namespace ShelfGuard.Infrastructure.Migrations
             migrationBuilder.DropForeignKey(
                 name: "FK_product_stock_locations_LocationId",
                 table: "product_stock");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_stock_transfers_locations_FromLocationId",
-                table: "stock_transfers");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_stock_transfers_locations_ToLocationId",
-                table: "stock_transfers");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_supply_schedules_locations_LocationId",
