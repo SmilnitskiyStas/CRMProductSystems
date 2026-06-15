@@ -71,19 +71,29 @@ public sealed class SupportService(
         return MapMsg(msg);
     }
 
+    public async Task MarkReadByTenantAsync(Guid ticketId, Guid tenantId, CancellationToken ct)
+    {
+        var ticket = await tickets.GetByIdAsync(ticketId, ct)
+            ?? throw new KeyNotFoundException("Ticket not found");
+        if (ticket.TenantId != tenantId) throw new UnauthorizedAccessException();
+        ticket.LastReadByTenantAt = DateTime.UtcNow;
+        tickets.Update(ticket);
+        await tickets.SaveChangesAsync(ct);
+    }
+
     // ── Provider ─────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<SupportTicketDto>> GetAllTicketsAsync(
         string? status, Guid? assignedTo, CancellationToken ct)
     {
         var list = await tickets.GetAllAsync(status, assignedTo, ct);
-        return list.Select(Map).ToList();
+        return list.Select(MapForProvider).ToList();
     }
 
     public async Task<SupportTicketDto?> GetTicketByIdAsync(Guid ticketId, CancellationToken ct)
     {
         var t = await tickets.GetByIdAsync(ticketId, ct);
-        return t is null ? null : Map(t);
+        return t is null ? null : MapForProvider(t);
     }
 
     public async Task AssignTicketAsync(Guid ticketId, Guid agentId, CancellationToken ct)
@@ -129,13 +139,44 @@ public sealed class SupportService(
         return MapMsg(msg);
     }
 
+    public async Task MarkReadByProviderAsync(Guid ticketId, CancellationToken ct)
+    {
+        var ticket = await tickets.GetByIdAsync(ticketId, ct)
+            ?? throw new KeyNotFoundException("Ticket not found");
+        ticket.LastReadByProviderAt = DateTime.UtcNow;
+        tickets.Update(ticket);
+        await tickets.SaveChangesAsync(ct);
+    }
+
     // ── Mapping ───────────────────────────────────────────────────────────────
 
     private static SupportTicketDto Map(SupportTicket t) => new(
         t.Id, t.TenantId, t.CreatedBy, t.AssignedTo,
         t.Subject, t.Status, t.Priority,
         t.CreatedAt, t.UpdatedAt,
+        IsUnreadForTenant(t),
         t.Messages.OrderBy(m => m.CreatedAt).Select(MapMsg).ToList());
+
+    private static bool IsUnreadForTenant(SupportTicket t)
+    {
+        var lastProviderMsg = t.Messages.Where(m => m.IsProviderMessage).MaxBy(m => m.CreatedAt);
+        if (lastProviderMsg is null) return false;
+        return lastProviderMsg.CreatedAt > (t.LastReadByTenantAt ?? DateTime.MinValue);
+    }
+
+    private static SupportTicketDto MapForProvider(SupportTicket t) => new(
+        t.Id, t.TenantId, t.CreatedBy, t.AssignedTo,
+        t.Subject, t.Status, t.Priority,
+        t.CreatedAt, t.UpdatedAt,
+        IsUnreadForProvider(t),
+        t.Messages.OrderBy(m => m.CreatedAt).Select(MapMsg).ToList());
+
+    private static bool IsUnreadForProvider(SupportTicket t)
+    {
+        var lastClientMsg = t.Messages.Where(m => !m.IsProviderMessage).MaxBy(m => m.CreatedAt);
+        if (lastClientMsg is null) return false;
+        return lastClientMsg.CreatedAt > (t.LastReadByProviderAt ?? DateTime.MinValue);
+    }
 
     private static SupportMessageDto MapMsg(SupportMessage m) => new(
         m.Id, m.SenderId, m.IsProviderMessage, m.Body, m.CreatedAt);

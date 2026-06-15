@@ -9,8 +9,10 @@ public sealed class SupportTicket
     public string Subject    { get; init; }  = string.Empty;
     public string Status     { get; set;  }  = SupportTicketStatus.Open;
     public string Priority   { get; init; }  = SupportTicketPriority.Normal;
-    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set;  } = DateTime.UtcNow;
+    public DateTime  CreatedAt           { get; init; } = DateTime.UtcNow;
+    public DateTime  UpdatedAt           { get; set;  } = DateTime.UtcNow;
+    public DateTime? LastReadByTenantAt  { get; set;  }
+    public DateTime? LastReadByProviderAt{ get; set;  }
 
     public ICollection<SupportMessage> Messages { get; init; } = [];
 }

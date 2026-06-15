@@ -104,5 +104,7 @@ export const api = {
     apiFetch<T>(path, { method: "POST", body: form }),
   put:    <T>(path: string, body?: unknown, opts?: RequestInit) =>
     apiFetch<T>(path, { ...opts, method: "PUT", body: body != null ? JSON.stringify(body) : undefined }),
+  patch:  <T>(path: string, body?: unknown, opts?: RequestInit) =>
+    apiFetch<T>(path, { ...opts, method: "PATCH", body: body != null ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string, opts?: RequestInit) => apiFetch<T>(path, { ...opts, method: "DELETE" }),
 };

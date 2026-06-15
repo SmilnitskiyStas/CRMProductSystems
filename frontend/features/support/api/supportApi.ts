@@ -24,6 +24,10 @@ export function addClientMessage(ticketId: string, body: string): Promise<Suppor
   return api.post<SupportMessageDto>(`/api/support/tickets/${ticketId}/messages`, { body });
 }
 
+export function markTicketRead(ticketId: string): Promise<void> {
+  return api.patch<void>(`/api/support/tickets/${ticketId}/read`, {});
+}
+
 // ── Provider endpoints ────────────────────────────────────────────────────────
 
 export function getAllTickets(params: {
@@ -51,4 +55,8 @@ export function updateTicketStatus(ticketId: string, status: string): Promise<vo
 
 export function addProviderMessage(ticketId: string, body: string): Promise<SupportMessageDto> {
   return api.post<SupportMessageDto>(`/api/provider/support/tickets/${ticketId}/messages`, { body });
+}
+
+export function markProviderTicketRead(ticketId: string): Promise<void> {
+  return api.patch<void>(`/api/provider/support/tickets/${ticketId}/read`, {});
 }

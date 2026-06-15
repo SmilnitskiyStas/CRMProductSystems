@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, ChevronLeft, Send } from "lucide-react";
-import { useMyTickets, useMyTicket, useCreateTicket, useAddClientMessage } from "@/features/support/hooks/useSupport";
+import { useMyTickets, useMyTicket, useCreateTicket, useAddClientMessage, useMarkTicketRead } from "@/features/support/hooks/useSupport";
 import {
   STATUS_LABELS,
   STATUS_COLORS,
@@ -17,6 +17,12 @@ export function SupportTab() {
   const [showCreate,   setShowCreate]   = useState(false);
 
   const { data: tickets, isLoading } = useMyTickets();
+  const markRead = useMarkTicketRead();
+
+  function openTicket(id: string, isUnread: boolean) {
+    setOpenTicketId(id);
+    if (isUnread) markRead.mutate(id);
+  }
 
   if (showCreate) {
     return <CreateTicketForm onBack={() => setShowCreate(false)} onCreated={(id) => { setShowCreate(false); setOpenTicketId(id); }} />;
@@ -61,7 +67,7 @@ export function SupportTab() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {tickets.map((t) => (
-            <ClientTicketRow key={t.id} ticket={t} onClick={() => setOpenTicketId(t.id)} />
+            <ClientTicketRow key={t.id} ticket={t} onClick={() => openTicket(t.id, t.isUnread)} />
           ))}
         </div>
       )}
@@ -75,17 +81,35 @@ function ClientTicketRow({ ticket, onClick }: { ticket: SupportTicketDto; onClic
       onClick={onClick}
       style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#111827", border: "1px solid #1F2937",
+        background: ticket.isUnread ? "#0D1B2A" : "#111827",
+        border: `1px solid ${ticket.isUnread ? "#1D4ED8" : "#1F2937"}`,
         borderRadius: 10, padding: "12px 16px", cursor: "pointer",
+        transition: "border-color 0.15s",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 500 }}>{ticket.subject}</span>
-        <span style={{ color: "#4B5563", fontSize: 12 }}>
-          {new Date(ticket.updatedAt).toLocaleDateString("uk-UA")} · {ticket.messages.length} повідомлень
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {ticket.isUnread && (
+          <span style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: "#3B82F6", flexShrink: 0, display: "inline-block",
+          }} />
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={{
+            color: "#E8EDF5", fontSize: 14,
+            fontWeight: ticket.isUnread ? 700 : 500,
+          }}>
+            {ticket.subject}
+          </span>
+          <span style={{ color: "#4B5563", fontSize: 12 }}>
+            {new Date(ticket.updatedAt).toLocaleDateString("uk-UA")} · {ticket.messages.length} повідомлень
+          </span>
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {ticket.isUnread && (
+          <span style={{ color: "#60A5FA", fontSize: 11, fontWeight: 600 }}>Нова відповідь</span>
+        )}
         <StatusBadge status={ticket.status} />
       </div>
     </div>

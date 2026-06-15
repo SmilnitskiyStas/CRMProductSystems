@@ -40,6 +40,14 @@ export function useAddClientMessage(ticketId: string) {
   });
 }
 
+export function useMarkTicketRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ticketId: string) => api.markTicketRead(ticketId),
+    onSuccess:  (_, ticketId) => qc.invalidateQueries({ queryKey: TICKETS_KEY }),
+  });
+}
+
 // ── Provider hooks ────────────────────────────────────────────────────────────
 
 export function useAllTickets(params: { status?: string; assignedTo?: string }) {
@@ -85,5 +93,13 @@ export function useAddProviderMessage(ticketId: string) {
   return useMutation({
     mutationFn: (body: string) => api.addProviderMessage(ticketId, body),
     onSuccess:  () => qc.invalidateQueries({ queryKey: provTicketKey(ticketId) }),
+  });
+}
+
+export function useMarkProviderTicketRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ticketId: string) => api.markProviderTicketRead(ticketId),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: PROV_KEY }),
   });
 }

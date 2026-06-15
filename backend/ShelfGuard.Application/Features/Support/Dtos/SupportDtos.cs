@@ -18,6 +18,7 @@ public record SupportTicketDto(
     string                    Priority,
     DateTime                  CreatedAt,
     DateTime                  UpdatedAt,
+    bool                      IsUnread,
     IReadOnlyList<SupportMessageDto> Messages
 );
 

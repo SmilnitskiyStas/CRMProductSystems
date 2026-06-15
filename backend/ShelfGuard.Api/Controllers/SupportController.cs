@@ -39,6 +39,20 @@ public sealed class SupportController(ISupportService supportService) : Controll
         return Created($"/api/support/tickets/{ticket.Id}", ticket);
     }
 
+    [HttpPatch("tickets/{id:guid}/read")]
+    public async Task<IActionResult> MarkRead(Guid id, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+        try
+        {
+            await supportService.MarkReadByTenantAsync(id, tenantId.Value, ct);
+            return NoContent();
+        }
+        catch (KeyNotFoundException) { return NotFound(); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
     [HttpPost("tickets/{id:guid}/messages")]
     public async Task<IActionResult> AddMessage(Guid id, [FromBody] AddMessageRequest req, CancellationToken ct)
     {

@@ -19,6 +19,7 @@ export interface SupportTicketDto {
   priority: TicketPriority;
   createdAt: string;
   updatedAt: string;
+  isUnread: boolean;
   messages: SupportMessageDto[];
 }
 

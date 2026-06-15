@@ -51,6 +51,17 @@ public sealed class ProviderSupportController(ISupportService supportService) : 
         catch (KeyNotFoundException) { return NotFound(); }
     }
 
+    [HttpPatch("tickets/{id:guid}/read")]
+    public async Task<IActionResult> MarkRead(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            await supportService.MarkReadByProviderAsync(id, ct);
+            return NoContent();
+        }
+        catch (KeyNotFoundException) { return NotFound(); }
+    }
+
     [HttpPost("tickets/{id:guid}/messages")]
     public async Task<IActionResult> AddMessage(Guid id, [FromBody] AddMessageRequest req, CancellationToken ct)
     {

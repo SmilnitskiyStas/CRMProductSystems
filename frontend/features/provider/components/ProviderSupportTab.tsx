@@ -7,6 +7,7 @@ import {
   useProviderTicket,
   useUpdateTicketStatus,
   useAddProviderMessage,
+  useMarkProviderTicketRead,
 } from "@/features/support/hooks/useSupport";
 import {
   STATUS_LABELS,
@@ -24,6 +25,12 @@ export function ProviderSupportTab() {
   const [openTicketId, setOpenTicketId]  = useState<string | null>(null);
 
   const { data: tickets, isLoading } = useAllTickets({ status: statusFilter });
+  const markRead = useMarkProviderTicketRead();
+
+  function openTicket(id: string, isUnread: boolean) {
+    setOpenTicketId(id);
+    if (isUnread) markRead.mutate(id);
+  }
 
   if (openTicketId) {
     return (
@@ -70,7 +77,7 @@ export function ProviderSupportTab() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {tickets.map((t) => (
-            <TicketRow key={t.id} ticket={t} onClick={() => setOpenTicketId(t.id)} />
+            <TicketRow key={t.id} ticket={t} onClick={() => openTicket(t.id, t.isUnread)} />
           ))}
         </div>
       )}
@@ -84,17 +91,32 @@ function TicketRow({ ticket, onClick }: { ticket: SupportTicketDto; onClick: () 
       onClick={onClick}
       style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#111827", border: "1px solid #1F2937",
+        background: ticket.isUnread ? "#0D1B2A" : "#111827",
+        border: `1px solid ${ticket.isUnread ? "#1D4ED8" : "#1F2937"}`,
         borderRadius: 10, padding: "12px 16px", cursor: "pointer",
+        transition: "border-color 0.15s",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-        <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 500 }}>{ticket.subject}</span>
-        <span style={{ color: "#4B5563", fontSize: 12 }}>
-          {new Date(ticket.createdAt).toLocaleDateString("uk-UA")} · {ticket.messages.length} повідомлень
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        {ticket.isUnread && (
+          <span style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: "#3B82F6", flexShrink: 0, display: "inline-block",
+          }} />
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: ticket.isUnread ? 700 : 500 }}>
+            {ticket.subject}
+          </span>
+          <span style={{ color: "#4B5563", fontSize: 12 }}>
+            {new Date(ticket.createdAt).toLocaleDateString("uk-UA")} · {ticket.messages.length} повідомлень
+          </span>
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {ticket.isUnread && (
+          <span style={{ color: "#60A5FA", fontSize: 11, fontWeight: 600 }}>Нове повідомлення</span>
+        )}
         <span style={badge(PRIORITY_COLORS[ticket.priority])}>
           {PRIORITY_LABELS[ticket.priority]}
         </span>
