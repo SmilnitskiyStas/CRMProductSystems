@@ -8,6 +8,7 @@ public sealed record TenantDto(
     string Name,
     string Slug,
     string Plan,
+    string BusinessType,
     IReadOnlyList<string> Modules,
     bool IsActive,
     DateTime CreatedAt,
@@ -22,14 +23,19 @@ public sealed record TenantUsageDto(
 
 // ── Mutations ───────────────────────────────────────────────────────────────
 
-/// <summary>POST /api/admin/tenants — create a tenant and its first EnterpriseAdmin.</summary>
+/// <summary>
+/// POST /api/admin/tenants — create a tenant and its first EnterpriseAdmin.
+/// BusinessType defaults to "retail" when omitted; it determines the tenant's
+/// initial module set (ADR-015 — see Tenant.DefaultModulesForBusinessType).
+/// </summary>
 public sealed record CreateTenantRequest(
     string Name,
     string Slug,
     string Plan,
     string AdminEmail,
     string AdminFullName,
-    string AdminPassword);
+    string AdminPassword,
+    string? BusinessType = null);
 
 /// <summary>PATCH /api/admin/tenants/{id}/plan</summary>
 public sealed record UpdatePlanRequest(string Plan);

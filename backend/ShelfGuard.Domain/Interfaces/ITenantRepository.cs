@@ -3,8 +3,9 @@ using ShelfGuard.Domain.Entities;
 namespace ShelfGuard.Domain.Interfaces;
 
 /// <summary>
-/// Provider-level repository — bypasses RLS to access all tenants.
-/// Only used by ProviderService (role = provider).
+/// Tenant data access. RLS-scoped per the caller's connection role: a provider-role caller
+/// (ProviderService) sees all tenants via the provider_bypass policy; any other role sees
+/// only its own tenant row via tenant_isolation (e.g. ModulesSettingsService, RequireModuleFilter).
 /// </summary>
 public interface ITenantRepository
 {

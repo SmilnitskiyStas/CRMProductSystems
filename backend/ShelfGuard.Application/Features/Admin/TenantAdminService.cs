@@ -55,11 +55,21 @@ public sealed class TenantAdminService : ITenantAdminService
         if (await _repo.SlugExistsAsync(slugNormalized, ct))
             return (null, $"Slug '{slugNormalized}' is already taken.");
 
-        // 2. Create tenant and set plan
+        // 2. Create tenant, set plan and business type
         var tenant = Tenant.Create(req.Name.Trim(), slugNormalized);
         var planError = tenant.UpdatePlan(req.Plan);
         if (planError is not null)
             return (null, planError);
+
+        var businessType = string.IsNullOrWhiteSpace(req.BusinessType) ? "retail" : req.BusinessType.Trim();
+        var businessTypeError = tenant.UpdateBusinessType(businessType);
+        if (businessTypeError is not null)
+            return (null, businessTypeError);
+
+        // Default module set follows business_type (ADR-015) unless overridden later via PATCH .../modules
+        var modulesError = tenant.UpdateModules(Tenant.DefaultModulesForBusinessType(businessType));
+        if (modulesError is not null)
+            return (null, modulesError);
 
         // 3. Create first EnterpriseAdmin user
         var passwordHash = _hasher.Hash(req.AdminPassword);
@@ -153,20 +163,9 @@ public sealed class TenantAdminService : ITenantAdminService
             t.Name,
             t.Slug,
             t.Plan,
-            ParseModules(t.Modules),
+            t.BusinessType,
+            t.GetModules(),
             t.IsActive,
             t.CreatedAt,
             usage);
-
-    private static IReadOnlyList<string> ParseModules(string json)
-    {
-        try
-        {
-            return System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? [];
-        }
-        catch
-        {
-            return [];
-        }
-    }
 }

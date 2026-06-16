@@ -15,6 +15,7 @@ using ShelfGuard.Application.Features.Provider;
 using ShelfGuard.Application.Features.Support;
 using ShelfGuard.Application.Features.Movements;
 using ShelfGuard.Application.Features.Admin;
+using ShelfGuard.Application.Features.Settings;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -58,6 +59,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // SaaS Admin Panel (TASK-074)
         services.AddScoped<ITenantAdminService, TenantAdminService>();
+
+        // v4 - Module activation (TASK-208)
+        services.AddScoped<IModulesSettingsService, ModulesSettingsService>();
 
         return services;
     }

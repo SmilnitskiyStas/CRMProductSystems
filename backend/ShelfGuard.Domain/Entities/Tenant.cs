@@ -64,6 +64,39 @@ public sealed class Tenant
         return null;
     }
 
+    /// <summary>Parses the Modules JSON array. Returns an empty list on null/invalid JSON.</summary>
+    public IReadOnlyList<string> GetModules()
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<string[]>(Modules) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    /// <summary>True when the given module key is in the enabled-modules list (case-insensitive).</summary>
+    public bool HasModule(string key) =>
+        GetModules().Contains(key, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Default module set applied when a tenant is created (ADR-015), keyed by business_type.
+    /// Unknown/unmapped business types fall back to a minimal {inventory} set.
+    /// </summary>
+    public static IReadOnlyList<string> DefaultModulesForBusinessType(string businessType) =>
+        businessType.ToLowerInvariant() switch
+        {
+            "retail"       => ["inventory", "procurement", "pos"],
+            "auto_service" => ["auto_service", "procurement"],
+            "restaurant"   => ["inventory", "pos", "production"],
+            "warehouse"    => ["inventory", "procurement"],
+            "production"   => ["inventory", "procurement", "production"],
+            "distribution" => ["inventory", "procurement", "marketplace"],
+            _              => ["inventory"],
+        };
+
     /// <summary>Soft-deactivates the tenant (provider-only).</summary>
     public void Deactivate() => IsActive = false;
 

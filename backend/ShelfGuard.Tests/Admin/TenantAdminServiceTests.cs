@@ -74,6 +74,72 @@ public sealed class TenantAdminServiceTests
         await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+    // ── CreateTenant_DefaultModules_FollowBusinessType (TASK-208) ──────────
+
+    [Fact]
+    public async Task CreateTenant_NoBusinessType_DefaultsToRetailModules()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        var req = new CreateTenantRequest(
+            Name:          "Acme Corp",
+            Slug:          "acme2",
+            Plan:          "basic",
+            AdminEmail:    "admin@acme2.com",
+            AdminFullName: "Admin User",
+            AdminPassword: "SecurePass123");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        Assert.Equal("retail", tenant.BusinessType);
+        Assert.Equal(new[] { "inventory", "procurement", "pos" }, tenant.Modules);
+    }
+
+    [Fact]
+    public async Task CreateTenant_ExplicitBusinessType_AppliesMatchingDefaultModules()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        var req = new CreateTenantRequest(
+            Name:          "Joe's Garage",
+            Slug:          "joes-garage",
+            Plan:          "basic",
+            AdminEmail:    "admin@joesgarage.com",
+            AdminFullName: "Admin User",
+            AdminPassword: "SecurePass123",
+            BusinessType:  "auto_service");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        Assert.Equal("auto_service", tenant.BusinessType);
+        Assert.Equal(new[] { "auto_service", "procurement" }, tenant.Modules);
+    }
+
+    [Fact]
+    public async Task CreateTenant_InvalidBusinessType_ReturnsError()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        var req = new CreateTenantRequest(
+            Name:          "Acme Corp",
+            Slug:          "acme3",
+            Plan:          "basic",
+            AdminEmail:    "admin@acme3.com",
+            AdminFullName: "Admin User",
+            AdminPassword: "SecurePass123",
+            BusinessType:  "spaceship_repair");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(tenant);
+        Assert.NotNull(error);
+        await _repo.DidNotReceive().AddTenantAsync(Arg.Any<Tenant>(), Arg.Any<CancellationToken>());
+    }
+
     // ── UpdatePlan_InvalidPlan_ReturnsError ────────────────────────────────
 
     [Fact]

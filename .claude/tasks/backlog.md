@@ -84,7 +84,7 @@ Accept: tsc + next build green.
 Accept: tsc green.
 
 #### TASK-208 — Backend: Tenant business_type + Module activation API
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-200 · **Priority:** high
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-200 · **Priority:** high · **Updated:** 2026-06-16
 ADR-015 Module activation pattern:
 - `[RequireModule("key")]` attribute + IAsyncActionFilter
 - `GET /api/settings/modules` (enterprise_admin — власний тенант)
