@@ -2,6 +2,20 @@
 
 ---
 
+## BUG-005 — pos_transactions.RetryCount missing on production
+**Status:** done · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-16
+Flagged in TASK-204 log: prod threw `column p.RetryCount does not exist` in
+`PosService.GetPendingFiscalizationAsync`. Root cause: migration
+`20260613000000_AddPosTransactionRetryCount` (TASK-069, committed 2026-06-13) was never
+actually deployed to prod. Fix: regenerated as `20260616151654_AddPosTransactionRetryCount`
+(same single AddColumn, fresh timestamp so it lands after the v4 rename migrations on next
+deploy). Build green, Pos tests 76/76 green.
+Log: `bug005_2026-06-16_pos-retrycount-missing-column_database-engineer.md`
+**Next:** verify on next prod deploy that the migration applies and fiscalization retry
+worker stops erroring.
+
+---
+
 ## TASK-078 — Mobile: Write-offs screen
 **Status:** done · **Agent:** mobile-developer · **Depends:** — · Updated: 2026-06-15
 Екран списання для мобільного працівника:
