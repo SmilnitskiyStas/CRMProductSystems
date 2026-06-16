@@ -1,7 +1,7 @@
 namespace ShelfGuard.Domain.Entities;
 
 /// <summary>
-/// Tenant-aware v1 product catalog. Maps to "catalog_products" table.
+/// Tenant-aware v1 product catalog. Maps to "items" table.
 /// Distinct from the POC "Products" table (Product entity) used by the existing catalog API.
 /// </summary>
 public sealed class CatalogProduct
@@ -25,6 +25,7 @@ public sealed class CatalogProduct
     public decimal? PricePurchase { get; set; }
     public decimal? PriceRetail { get; set; }
     public string? ImageUrl { get; set; }
+    public string ItemType { get; set; } = "product";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 

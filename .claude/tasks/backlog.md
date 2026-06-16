@@ -52,7 +52,7 @@ Accept: tsc + next build green; CRUD локацій працює.
 Accept: tsc green; мобільний додаток компілюється і підключається до нового API.
 
 #### TASK-204 — DB: catalog_products → items + item_type
-**Status:** planned · **Agent:** database-engineer · **Depends:** TASK-200 · **Priority:** critical
+**Status:** done · **Agent:** database-engineer · **Depends:** TASK-200 · **Priority:** critical · **Updated:** 2026-06-16
 EF Core migration:
 - Rename table `catalog_products` → `items`
 - Add PostgreSQL enum `item_type`: `product | service | spare_part | consumable | raw_material | kit` (default `product`)

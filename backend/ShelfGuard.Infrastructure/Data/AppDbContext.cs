@@ -242,13 +242,14 @@ public sealed class AppDbContext : DbContext
         // ── CatalogProduct ──────────────────────────────────────────────────
         builder.Entity<CatalogProduct>(e =>
         {
-            e.ToTable("catalog_products");
+            e.ToTable("items");
             e.HasKey(p => p.Id);
             e.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(p => p.Barcode).HasMaxLength(100);
             e.Property(p => p.Name).HasMaxLength(255).IsRequired();
             e.Property(p => p.Unit).HasMaxLength(20).HasDefaultValue("шт");
             e.Property(p => p.ManagementType).HasMaxLength(10).HasDefaultValue("MTS");
+            e.Property(p => p.ItemType).HasMaxLength(50).HasDefaultValue("product");
             e.Property(p => p.MinStock).HasColumnType("decimal(10,2)");
             e.Property(p => p.MaxStock).HasColumnType("decimal(10,2)");
             e.Property(p => p.SafetyBuffer).HasColumnType("decimal(10,2)");
