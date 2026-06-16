@@ -2,22 +2,30 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Settings, Bell, Link as LinkIcon, MessageSquare } from "lucide-react";
+import { Settings, Bell, Link as LinkIcon, MessageSquare, Blocks } from "lucide-react";
 import { NotificationsTab } from "@/features/settings/components/NotificationsTab";
 import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab";
 import { SupportTab } from "@/features/settings/components/SupportTab";
+import { ModulesTab } from "@/features/settings/components/ModulesTab";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { hasRole, ENTERPRISE_ADMIN_ONLY } from "@/lib/roles";
 
-type Tab = "general" | "notifications" | "integrations" | "support";
+type Tab = "general" | "notifications" | "integrations" | "modules" | "support";
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "general",       label: "Загальні",   icon: <Settings size={15} /> },
   { id: "notifications", label: "Сповіщення", icon: <Bell size={15} /> },
   { id: "integrations",  label: "Інтеграції", icon: <LinkIcon size={15} /> },
+  { id: "modules",       label: "Модулі",     icon: <Blocks size={15} /> },
   { id: "support",       label: "Підтримка",  icon: <MessageSquare size={15} /> },
 ];
 
 export default function SettingsPage() {
   const searchParams = useSearchParams();
+  const { data: me } = useMe();
+  const canViewModules = hasRole(me?.role, ENTERPRISE_ADMIN_ONLY);
+  const TABS = ALL_TABS.filter((t) => t.id !== "modules" || canViewModules);
+
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams.get("tab") as Tab | null;
     return TABS.some((tb) => tb.id === t) ? (t as Tab) : "general";
@@ -26,7 +34,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const t = searchParams.get("tab") as Tab | null;
     if (t && TABS.some((tb) => tb.id === t)) setActiveTab(t);
-  }, [searchParams]);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 900 }}>
@@ -90,6 +98,7 @@ export default function SettingsPage() {
         {activeTab === "general"       && <GeneralTab />}
         {activeTab === "notifications" && <NotificationsTab />}
         {activeTab === "integrations"  && <IntegrationsTab />}
+        {activeTab === "modules" && canViewModules && <ModulesTab />}
         {activeTab === "support"       && <SupportTab />}
       </div>
     </div>

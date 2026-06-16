@@ -97,7 +97,7 @@ ADR-015 Module activation pattern:
 Accept: dotnet build green; тест: [RequireModule] → 403 якщо модуль вимкнений.
 
 #### TASK-209 — Frontend: Module activation settings UI
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-208 · **Priority:** medium
+**Status:** done (sidebar gating deferred — see task log) · **Agent:** frontend-developer · **Depends:** TASK-208 · **Priority:** medium · **Updated:** 2026-06-16
 - Нова вкладка «Модулі» у Налаштуваннях (enterprise_admin)
 - Toggle-список активних модулів з описами
 - `useModules()` hook

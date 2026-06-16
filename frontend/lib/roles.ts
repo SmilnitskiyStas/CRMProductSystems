@@ -84,6 +84,12 @@ export const AT_LEAST_STORE_MANAGER = new Set<AppRole>([
 export const PROVIDER_ONLY = new Set<AppRole>([AppRoles.Provider]);
 
 /**
+ * Enterprise admin only — used for the Settings "Модулі" tab (GET /api/settings/modules
+ * is tenant-scoped and 403s for provider, which has no tenant_id outside impersonation).
+ */
+export const ENTERPRISE_ADMIN_ONLY = new Set<AppRole>([AppRoles.EnterpriseAdmin]);
+
+/**
  * All tenant roles (all except provider).
  * Use this for pages that make tenant-scoped API calls — provider has no
  * tenant_id and will get 403/empty from every tenant endpoint.
