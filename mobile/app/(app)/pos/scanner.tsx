@@ -17,13 +17,14 @@ import type { SaleItem } from '@/features/pos/types';
 
 cssInterop(CameraView, { className: 'style' });
 
-// Product info returned from /products/by-barcode/:barcode
+// Product info returned from /items/by-barcode/:barcode
 interface ProductInfo {
   id: string;
   name: string;
   barcode: string;
   price?: number;
   status?: string;
+  itemType?: string;
 }
 
 // Cart item enriched with product info

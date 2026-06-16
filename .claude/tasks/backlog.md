@@ -71,14 +71,14 @@ Accept: migration green; dotnet build green.
 Accept: dotnet build green; /api/items → 200; FEFO через item_id стабільне.
 
 #### TASK-206 — Frontend: catalog/products → items
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-205 · **Priority:** high
+**Status:** in_progress · **Agent:** frontend-developer · **Depends:** TASK-205 · **Priority:** high · **Updated:** 2026-06-16
 - Update API calls (catalog → items)
 - Rename UI: «Каталог продуктів» → «Каталог»; додати колонку «Тип товару»
 - Форма create/edit: selector `item_type`
 Accept: tsc + next build green.
 
 #### TASK-207 — Mobile: products → items
-**Status:** planned · **Agent:** mobile-developer · **Depends:** TASK-205 · **Priority:** medium
+**Status:** done · **Agent:** mobile-developer · **Depends:** TASK-205 · **Priority:** medium · **Updated:** 2026-06-16
 - Update API client
 - Update сканування штрихкодів (barcode → item lookup)
 Accept: tsc green.

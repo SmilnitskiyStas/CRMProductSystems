@@ -25,6 +25,6 @@ export async function verifyBatch(id: string): Promise<void> {
 }
 
 export async function getProductByBarcode(barcode: string) {
-  const { data } = await apiClient.get(`/products/by-barcode/${barcode}`);
+  const { data } = await apiClient.get(`/items/by-barcode/${barcode}`);
   return data;
 }
