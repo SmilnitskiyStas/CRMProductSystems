@@ -8,7 +8,7 @@ import {
   useOpenShift,
   useCloseShift,
 } from '@/features/pos/hooks/usePosApi';
-import { getStores } from '@/features/pos/api/posApi';
+import { getLocations } from '@/features/pos/api/posApi';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -29,25 +29,25 @@ export default function PosHomeScreen() {
 
   const handleOpenShift = async () => {
     try {
-      const stores = await getStores();
-      if (!stores || stores.length === 0) {
-        Alert.alert('Помилка', 'Немає доступних магазинів.');
+      const locations = await getLocations();
+      if (!locations || locations.length === 0) {
+        Alert.alert('Помилка', 'Немає доступних локацій.');
         return;
       }
-      if (stores.length === 1) {
-        openMutation.mutate(stores[0].id, {
+      if (locations.length === 1) {
+        openMutation.mutate(locations[0].id, {
           onSuccess: () => refetch(),
           onError: () => Alert.alert('Помилка', 'Не вдалося відкрити зміну. Спробуйте ще раз.'),
         });
       } else {
         Alert.alert(
-          'Оберіть магазин',
-          'У вас кілька магазинів. Оберіть один для відкриття зміни.',
+          'Оберіть локацію',
+          'У вас кілька локацій. Оберіть одну для відкриття зміни.',
           [
-            ...stores.map((store) => ({
-              text: store.name,
+            ...locations.map((location) => ({
+              text: location.name,
               onPress: () => {
-                openMutation.mutate(store.id, {
+                openMutation.mutate(location.id, {
                   onSuccess: () => refetch(),
                   onError: () => Alert.alert('Помилка', 'Не вдалося відкрити зміну. Спробуйте ще раз.'),
                 });
@@ -58,7 +58,7 @@ export default function PosHomeScreen() {
         );
       }
     } catch {
-      Alert.alert('Помилка', 'Не вдалося отримати список магазинів.');
+      Alert.alert('Помилка', 'Не вдалося отримати список локацій.');
     }
   };
 

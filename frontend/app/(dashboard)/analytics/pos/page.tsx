@@ -43,8 +43,8 @@ interface StoreOption {
 
 function useStores() {
   return useQuery<StoreOption[]>({
-    queryKey: ["stores-list"],
-    queryFn: () => api.get<StoreOption[]>("/api/stores"),
+    queryKey: ["locations"],
+    queryFn: () => api.get<StoreOption[]>("/api/locations"),
     staleTime: 5 * 60 * 1000,
   });
 }

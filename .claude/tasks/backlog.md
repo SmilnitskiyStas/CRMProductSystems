@@ -38,7 +38,7 @@ Accept: migration applies cleanly; dotnet build green; RLS verified cross-tenant
 Accept: dotnet build green; тести оновлені; /api/locations → 200; legacy /api/stores → 301.
 
 #### TASK-202 — Frontend: stores → locations
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-201 · **Priority:** high
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-201 · **Priority:** high · **Updated:** 2026-06-16
 - Update всі API calls (stores → locations)
 - Rename UI labels: «Магазин» → «Локація», «Тип» selector з `location_type` values
 - Форми create/edit: додати вибір типу локації
@@ -46,7 +46,7 @@ Accept: dotnet build green; тести оновлені; /api/locations → 200;
 Accept: tsc + next build green; CRUD локацій працює.
 
 #### TASK-203 — Mobile: stores → locations
-**Status:** planned · **Agent:** mobile-developer · **Depends:** TASK-201 · **Priority:** medium
+**Status:** done · **Agent:** mobile-developer · **Depends:** TASK-201 · **Priority:** medium · **Updated:** 2026-06-16
 - Update API client (всі store endpoints → location)
 - Update UI references (labels, selectors)
 Accept: tsc green; мобільний додаток компілюється і підключається до нового API.

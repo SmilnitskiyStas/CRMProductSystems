@@ -89,7 +89,7 @@ export default function WriteOffDetailScreen() {
           <Text className="text-lg font-bold text-gray-900">
             #{data.id.slice(0, 8).toUpperCase()}
           </Text>
-          <Text className="text-xs text-gray-500">{data.storeName}</Text>
+          <Text className="text-xs text-gray-500">{data.locationName}</Text>
         </View>
         <View className={`px-3 py-1 rounded-full ${statusStyle}`}>
           <Text className="text-xs font-semibold">{statusLabel}</Text>

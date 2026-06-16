@@ -5,14 +5,14 @@ import {
   createTransfer,
   confirmTransfer,
   cancelTransfer,
-  getStores,
+  getLocations,
 } from '../api/transferApi';
 import type { CreateTransferPayload } from '../types';
 
-export function useTransfers(storeId?: string) {
+export function useTransfers(locationId?: string) {
   return useQuery({
-    queryKey: ['transfers', storeId ?? 'all'],
-    queryFn: () => getTransfers(storeId),
+    queryKey: ['transfers', locationId ?? 'all'],
+    queryFn: () => getTransfers(locationId),
   });
 }
 
@@ -24,10 +24,10 @@ export function useTransfer(id: string) {
   });
 }
 
-export function useStores() {
+export function useLocations() {
   return useQuery({
-    queryKey: ['stores'],
-    queryFn: getStores,
+    queryKey: ['locations'],
+    queryFn: getLocations,
     staleTime: 5 * 60 * 1000,
   });
 }

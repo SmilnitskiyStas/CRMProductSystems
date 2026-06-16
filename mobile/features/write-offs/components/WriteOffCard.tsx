@@ -20,7 +20,7 @@ export function WriteOffCard({ item, onPress }: Props) {
           <Text className="text-base font-semibold text-gray-900">
             #{item.id.slice(0, 8).toUpperCase()}
           </Text>
-          <Text className="text-sm text-gray-500 mt-0.5">{item.storeName}</Text>
+          <Text className="text-sm text-gray-500 mt-0.5">{item.locationName}</Text>
           {reasonLabel && (
             <View className="flex-row items-center mt-1 gap-1">
               <Ionicons name="alert-circle-outline" size={13} color="#9ca3af" />

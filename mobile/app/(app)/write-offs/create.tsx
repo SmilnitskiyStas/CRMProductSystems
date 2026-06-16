@@ -88,8 +88,8 @@ export default function CreateWriteOffScreen() {
   }
 
   function handleSubmit() {
-    if (!user?.storeId) {
-      Alert.alert('Помилка', 'Магазин не призначено для вашого профілю.');
+    if (!user?.locationId) {
+      Alert.alert('Помилка', 'Локацію не призначено для вашого профілю.');
       return;
     }
     if (items.length === 0) {
@@ -99,7 +99,7 @@ export default function CreateWriteOffScreen() {
 
     createWriteOff.mutate(
       {
-        storeId: user.storeId,
+        locationId: user.locationId,
         reason,
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
       },

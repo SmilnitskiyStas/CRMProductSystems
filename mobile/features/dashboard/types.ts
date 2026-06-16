@@ -9,8 +9,8 @@ export interface DashboardStats {
 
 export interface AiOrderListItem {
   id: string;
-  storeId: string;
-  storeName: string;
+  locationId: string;
+  locationName: string;
   generatedAt: string;
   orderDate: string;
   status: string;
@@ -24,10 +24,10 @@ export interface RecentMovement {
   movementType: string;
   productId: string;
   productName: string | null;
-  fromStoreId: string | null;
-  fromStoreName: string | null;
-  toStoreId: string | null;
-  toStoreName: string | null;
+  fromLocationId: string | null;
+  fromLocationName: string | null;
+  toLocationId: string | null;
+  toLocationName: string | null;
   quantity: number;
   referenceType: string | null;
   notes: string | null;

@@ -16,8 +16,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { cssInterop } from 'nativewind';
-import { useCreateTransfer, useStores } from '@/features/transfers/hooks/useTransfers';
-import type { DraftTransferItem, StoreOption } from '@/features/transfers/types';
+import { useCreateTransfer, useLocations } from '@/features/transfers/hooks/useTransfers';
+import type { DraftTransferItem, LocationOption } from '@/features/transfers/types';
 import { getProductByBarcode } from '@/features/stock/api/stockApi';
 import { getStock } from '@/features/stock/api/stockApi';
 import { useAuthStore } from '@/features/auth/store';
@@ -30,11 +30,11 @@ export default function CreateTransferScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const createTransfer = useCreateTransfer();
-  const { data: stores } = useStores();
+  const { data: locations } = useLocations();
 
   const [step, setStep] = useState<Step>('items');
   const [items, setItems] = useState<DraftTransferItem[]>([]);
-  const [toStoreId, setToStoreId] = useState<string | null>(null);
+  const [toLocationId, setToLocationId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
 
   // Scanner state
@@ -49,11 +49,11 @@ export default function CreateTransferScreen() {
     { id: string; batchNumber: string | null; expiryDate: string; quantity: number; productId: string; productName: string }[]
   >([]);
 
-  // Store picker state
-  const [storePickerVisible, setStorePickerVisible] = useState(false);
+  // Location picker state
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
 
-  const destinationStores = (stores ?? []).filter((s) => s.id !== user?.storeId);
-  const selectedStore = destinationStores.find((s) => s.id === toStoreId);
+  const destinationLocations = (locations ?? []).filter((l) => l.id !== user?.locationId);
+  const selectedLocation = destinationLocations.find((l) => l.id === toLocationId);
 
   function openScanner() {
     if (!permission?.granted) {
@@ -70,7 +70,7 @@ export default function CreateTransferScreen() {
     setScanLoading(true);
     try {
       const product = await getProductByBarcode(data);
-      const allStock = await getStock({ storeId: user?.storeId ?? undefined });
+      const allStock = await getStock({ locationId: user?.locationId ?? undefined });
       const batches = allStock
         .filter((s) => s.productId === product.id && s.quantity > 0)
         .map((s) => ({
@@ -135,12 +135,12 @@ export default function CreateTransferScreen() {
   }
 
   function handleSubmit() {
-    if (!user?.storeId) {
-      Alert.alert('Помилка', 'Магазин не призначено для вашого профілю.');
+    if (!user?.locationId) {
+      Alert.alert('Помилка', 'Локацію не призначено для вашого профілю.');
       return;
     }
-    if (!toStoreId) {
-      Alert.alert('Оберіть магазин призначення');
+    if (!toLocationId) {
+      Alert.alert('Оберіть локацію призначення');
       return;
     }
     if (items.length === 0) {
@@ -150,8 +150,8 @@ export default function CreateTransferScreen() {
 
     createTransfer.mutate(
       {
-        fromStoreId: user.storeId,
-        toStoreId,
+        fromLocationId: user.locationId,
+        toLocationId,
         transferType: 'store_to_store',
         notes: notes.trim() || undefined,
         items: items.map((i) => ({ productStockId: i.productStockId, quantity: i.quantity })),
@@ -186,15 +186,15 @@ export default function CreateTransferScreen() {
           <Text className="text-lg font-bold text-gray-900 flex-1">Нове переміщення</Text>
         </View>
 
-        {/* Destination store selector */}
+        {/* Destination location selector */}
         <TouchableOpacity
-          onPress={() => setStorePickerVisible(true)}
+          onPress={() => setLocationPickerVisible(true)}
           className="mx-4 mt-4 bg-white rounded-xl px-4 py-3.5 flex-row items-center justify-between border border-gray-200"
         >
           <View>
-            <Text className="text-xs text-gray-400 mb-0.5">Магазин призначення</Text>
-            <Text className={`text-sm font-semibold ${toStoreId ? 'text-gray-900' : 'text-gray-400'}`}>
-              {selectedStore?.name ?? 'Оберіть магазин…'}
+            <Text className="text-xs text-gray-400 mb-0.5">Локація призначення</Text>
+            <Text className={`text-sm font-semibold ${toLocationId ? 'text-gray-900' : 'text-gray-400'}`}>
+              {selectedLocation?.name ?? 'Оберіть локацію…'}
             </Text>
           </View>
           <Ionicons name="chevron-down" size={18} color="#9ca3af" />
@@ -291,9 +291,9 @@ export default function CreateTransferScreen() {
 
           <TouchableOpacity
             onPress={handleSubmit}
-            disabled={createTransfer.isPending || items.length === 0 || !toStoreId}
+            disabled={createTransfer.isPending || items.length === 0 || !toLocationId}
             className={`rounded-xl py-3.5 items-center ${
-              items.length === 0 || !toStoreId ? 'bg-gray-200' : 'bg-primary-600'
+              items.length === 0 || !toLocationId ? 'bg-gray-200' : 'bg-primary-600'
             }`}
           >
             {createTransfer.isPending ? (
@@ -301,7 +301,7 @@ export default function CreateTransferScreen() {
             ) : (
               <Text
                 className={`font-bold text-base ${
-                  items.length === 0 || !toStoreId ? 'text-gray-400' : 'text-white'
+                  items.length === 0 || !toLocationId ? 'text-gray-400' : 'text-white'
                 }`}
               >
                 Відправити
@@ -359,7 +359,7 @@ export default function CreateTransferScreen() {
             <Text className="text-lg font-bold text-gray-900 mb-1">
               {availableBatches[0]?.productName ?? 'Виберіть партію'}
             </Text>
-            <Text className="text-sm text-gray-500 mb-4">Доступні партії у вашому магазині</Text>
+            <Text className="text-sm text-gray-500 mb-4">Доступні партії у вашій локації</Text>
             {availableBatches.map((batch) => (
               <TouchableOpacity
                 key={batch.id}
@@ -389,28 +389,28 @@ export default function CreateTransferScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Store picker modal */}
-      <Modal visible={storePickerVisible} transparent animationType="slide">
+      {/* Location picker modal */}
+      <Modal visible={locationPickerVisible} transparent animationType="slide">
         <TouchableOpacity
           activeOpacity={1}
-          onPress={() => setStorePickerVisible(false)}
+          onPress={() => setLocationPickerVisible(false)}
           className="flex-1 justify-end bg-black/50"
         >
           <View className="bg-white rounded-t-3xl p-6" onStartShouldSetResponder={() => true}>
-            <Text className="text-lg font-bold text-gray-900 mb-4">Магазин призначення</Text>
-            {destinationStores.length === 0 ? (
-              <Text className="text-gray-400 text-center py-4">Немає доступних магазинів</Text>
+            <Text className="text-lg font-bold text-gray-900 mb-4">Локація призначення</Text>
+            {destinationLocations.length === 0 ? (
+              <Text className="text-gray-400 text-center py-4">Немає доступних локацій</Text>
             ) : (
-              destinationStores.map((store) => (
+              destinationLocations.map((location) => (
                 <TouchableOpacity
-                  key={store.id}
-                  onPress={() => { setToStoreId(store.id); setStorePickerVisible(false); }}
+                  key={location.id}
+                  onPress={() => { setToLocationId(location.id); setLocationPickerVisible(false); }}
                   className="flex-row items-center justify-between py-3.5 border-b border-gray-50"
                 >
-                  <Text className={`text-base ${store.id === toStoreId ? 'font-semibold text-primary-700' : 'text-gray-700'}`}>
-                    {store.name}
+                  <Text className={`text-base ${location.id === toLocationId ? 'font-semibold text-primary-700' : 'text-gray-700'}`}>
+                    {location.name}
                   </Text>
-                  {store.id === toStoreId && (
+                  {location.id === toLocationId && (
                     <Ionicons name="checkmark" size={20} color="#15803d" />
                   )}
                 </TouchableOpacity>

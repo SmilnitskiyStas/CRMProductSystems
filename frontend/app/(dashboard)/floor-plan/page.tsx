@@ -1,23 +1,23 @@
 "use client";
 
-// Sidebar entry point: resolves the first store and forwards to its floor plan.
+// Sidebar entry point: resolves the first location and forwards to its floor plan.
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useStores } from "@/features/stores/hooks/useStores";
+import { useLocations } from "@/features/locations/hooks/useLocations";
 
 export default function FloorPlanIndexPage() {
   const router = useRouter();
-  const { data: stores, isLoading } = useStores();
+  const { data: locations, isLoading } = useLocations();
 
   useEffect(() => {
-    if (stores && stores.length > 0) {
-      router.replace(`/stores/${stores[0].id}/floor-plan`);
+    if (locations && locations.length > 0) {
+      router.replace(`/locations/${locations[0].id}/floor-plan`);
     }
-  }, [stores, router]);
+  }, [locations, router]);
 
   return (
     <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-      {isLoading ? "Завантаження…" : stores?.length === 0 ? "Немає магазинів" : "Перенаправлення…"}
+      {isLoading ? "Завантаження…" : locations?.length === 0 ? "Немає локацій" : "Перенаправлення…"}
     </div>
   );
 }

@@ -24,7 +24,7 @@ function ReceiptCard({ item, onPress }: { item: Receipt; onPress: () => void }) 
         <View className="flex-1">
           <Text className="text-base font-semibold text-gray-900">№{receiptNumber(item)}</Text>
           <Text className="text-sm text-gray-500 mt-0.5">
-            {item.supplierName ?? 'Без постачальника'} → {item.destinationStoreName}
+            {item.supplierName ?? 'Без постачальника'} → {item.destinationLocationName}
           </Text>
         </View>
         <View className={`px-2 py-1 rounded-full ${statusColor[item.status] ?? 'text-gray-500 bg-gray-100'}`}>

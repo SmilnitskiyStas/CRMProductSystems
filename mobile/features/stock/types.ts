@@ -11,7 +11,7 @@ export interface StockBatch {
   expiryDate: string;
   daysLeft: number;
   status: StockStatus;
-  storeId: string;
+  locationId: string;
   zoneName: string | null;
   shelfNumber: string | null;
   lastCheckedAt: string;
@@ -22,7 +22,7 @@ export interface CreateStockBatchRequest {
   batchNumber?: string;
   quantity: number;
   expiryDate: string;
-  storeId: string;
+  locationId: string;
   zoneId?: string;
   shelfNumber?: string;
 }

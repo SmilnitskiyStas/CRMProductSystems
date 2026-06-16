@@ -1,9 +1,9 @@
 import { apiClient } from '@/lib/api-client';
-import type { Transfer, CreateTransferPayload, StoreOption } from '../types';
+import type { Transfer, CreateTransferPayload, LocationOption } from '../types';
 
-export async function getTransfers(storeId?: string, status?: string): Promise<Transfer[]> {
+export async function getTransfers(locationId?: string, status?: string): Promise<Transfer[]> {
   const { data } = await apiClient.get<Transfer[]>('/transfers', {
-    params: { store_id: storeId, status },
+    params: { location_id: locationId, status },
   });
   return data;
 }
@@ -28,7 +28,7 @@ export async function cancelTransfer(id: string): Promise<Transfer> {
   return data;
 }
 
-export async function getStores(): Promise<StoreOption[]> {
-  const { data } = await apiClient.get<StoreOption[]>('/stores');
+export async function getLocations(): Promise<LocationOption[]> {
+  const { data } = await apiClient.get<LocationOption[]>('/locations');
   return data;
 }

@@ -20,9 +20,9 @@ export function TransferCard({ item, onPress }: Props) {
             #{item.id.slice(0, 8).toUpperCase()}
           </Text>
           <View className="flex-row items-center gap-1.5 mt-1">
-            <Text className="text-sm text-gray-600 font-medium">{item.fromStoreName}</Text>
+            <Text className="text-sm text-gray-600 font-medium">{item.fromLocationName}</Text>
             <Ionicons name="arrow-forward" size={14} color="#9ca3af" />
-            <Text className="text-sm text-gray-600 font-medium">{item.toStoreName}</Text>
+            <Text className="text-sm text-gray-600 font-medium">{item.toLocationName}</Text>
           </View>
         </View>
         <View className={`px-2 py-1 rounded-full ${statusStyle}`}>

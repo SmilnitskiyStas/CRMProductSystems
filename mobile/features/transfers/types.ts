@@ -13,10 +13,10 @@ export interface TransferItem {
 
 export interface Transfer {
   id: string;
-  fromStoreId: string;
-  fromStoreName: string;
-  toStoreId: string;
-  toStoreName: string;
+  fromLocationId: string;
+  fromLocationName: string;
+  toLocationId: string;
+  toLocationName: string;
   transferType: TransferType | null;
   status: TransferStatus;
   notes: string | null;
@@ -30,16 +30,17 @@ export interface CreateTransferItemPayload {
 }
 
 export interface CreateTransferPayload {
-  fromStoreId: string;
-  toStoreId: string;
+  fromLocationId: string;
+  toLocationId: string;
   transferType?: TransferType;
   notes?: string;
   items: CreateTransferItemPayload[];
 }
 
-export interface StoreOption {
+export interface LocationOption {
   id: string;
   name: string;
+  locationType?: string;
 }
 
 export const STATUS_LABELS: Record<TransferStatus, string> = {

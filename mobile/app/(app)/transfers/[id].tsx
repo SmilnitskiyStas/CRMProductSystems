@@ -73,7 +73,7 @@ export default function TransferDetailScreen() {
   const statusStyle = STATUS_COLORS[data.status] ?? 'text-gray-600 bg-gray-100';
   const statusLabel = STATUS_LABELS[data.status] ?? data.status;
 
-  const canConfirm = data.status === 'in_transit' && user?.storeId === data.toStoreId;
+  const canConfirm = data.status === 'in_transit' && user?.locationId === data.toLocationId;
   const canCancel = isManager && data.status === 'in_transit';
 
   return (
@@ -92,9 +92,9 @@ export default function TransferDetailScreen() {
               #{data.id.slice(0, 8).toUpperCase()}
             </Text>
             <View className="flex-row items-center gap-1.5 mt-0.5">
-              <Text className="text-xs text-gray-500">{data.fromStoreName}</Text>
+              <Text className="text-xs text-gray-500">{data.fromLocationName}</Text>
               <Ionicons name="arrow-forward" size={11} color="#9ca3af" />
-              <Text className="text-xs text-gray-500">{data.toStoreName}</Text>
+              <Text className="text-xs text-gray-500">{data.toLocationName}</Text>
             </View>
           </View>
           <View className={`px-3 py-1 rounded-full ${statusStyle}`}>
@@ -106,8 +106,8 @@ export default function TransferDetailScreen() {
       <ScrollView contentContainerClassName="p-4 gap-4">
         {/* Meta */}
         <View className="bg-white rounded-xl p-4 gap-3">
-          <Row label="Звідки" value={data.fromStoreName} />
-          <Row label="Куди" value={data.toStoreName} />
+          <Row label="Звідки" value={data.fromLocationName} />
+          <Row label="Куди" value={data.toLocationName} />
           <Row
             label="Дата"
             value={new Date(data.createdAt).toLocaleString('uk-UA')}

@@ -1,17 +1,2 @@
-import { useQuery } from "@tanstack/react-query";
-import { storesApi } from "../api/stores";
-
-export function useStores() {
-  return useQuery({
-    queryKey: ["stores"],
-    queryFn: () => storesApi.getAll(),
-  });
-}
-
-export function useStore(id: string | null) {
-  return useQuery({
-    queryKey: ["stores", id],
-    queryFn: () => storesApi.getById(id!),
-    enabled: !!id,
-  });
-}
+// Re-export aliases for backward compatibility — use features/locations/hooks/useLocations instead.
+export { useLocations as useStores, useLocation as useStore } from "@/features/locations/hooks/useLocations";

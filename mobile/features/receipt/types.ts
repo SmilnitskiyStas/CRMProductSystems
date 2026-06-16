@@ -19,8 +19,8 @@ export interface Receipt {
   id: string;
   supplierId: string | null;
   supplierName: string | null;
-  destinationStoreId: string;
-  destinationStoreName: string;
+  destinationLocationId: string;
+  destinationLocationName: string;
   viaCentralStore: boolean;
   status: ReceiptStatus;
   expectedAt: string | null;

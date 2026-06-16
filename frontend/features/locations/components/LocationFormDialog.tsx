@@ -1,0 +1,240 @@
+"use client";
+
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { LOCATION_TYPE_LABELS, type LocationDto, type LocationType } from "../types";
+
+// ── Schema ─────────────────────────────────────────────────────────────────────
+
+const schema = z.object({
+  name: z.string().min(1, "Назва обов'язкова").max(255),
+  address: z.string().max(500).optional(),
+  locationType: z.enum([
+    "retail_store",
+    "warehouse",
+    "auto_service",
+    "office",
+    "production",
+    "restaurant",
+  ] as const),
+  isActive: z.boolean(),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+// ── Props ──────────────────────────────────────────────────────────────────────
+
+interface Props {
+  /** null = create mode */
+  location: LocationDto | null;
+  isPending: boolean;
+  onClose: () => void;
+  onSubmit: (values: {
+    name: string;
+    address: string | null;
+    locationType: LocationType;
+    isActive: boolean;
+  }) => void;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+const LOCATION_TYPES = Object.entries(LOCATION_TYPE_LABELS) as [LocationType, string][];
+
+// ── Component ──────────────────────────────────────────────────────────────────
+
+export function LocationFormDialog({ location, isPending, onClose, onSubmit }: Props) {
+  const isEdit = location !== null;
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: "",
+      address: "",
+      locationType: "retail_store",
+      isActive: true,
+    },
+  });
+
+  // Populate form when editing
+  useEffect(() => {
+    if (location) {
+      reset({
+        name: location.name,
+        address: location.address ?? "",
+        locationType: location.locationType,
+        isActive: location.isActive,
+      });
+    } else {
+      reset({
+        name: "",
+        address: "",
+        locationType: "retail_store",
+        isActive: true,
+      });
+    }
+  }, [location, reset]);
+
+  function onValid(values: FormValues) {
+    onSubmit({
+      name: values.name,
+      address: values.address?.trim() || null,
+      locationType: values.locationType,
+      isActive: values.isActive,
+    });
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        zIndex: 50,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#161B26",
+          border: "1px solid #1F2937",
+          borderRadius: 12,
+          padding: "24px 28px",
+          width: 460,
+          maxWidth: "90vw",
+          display: "flex",
+          flexDirection: "column",
+          gap: 18,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Title */}
+        <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
+          {isEdit ? "Редагувати локацію" : "Нова локація"}
+        </h2>
+
+        <form
+          onSubmit={handleSubmit(onValid)}
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+        >
+          {/* Name */}
+          <Field label="Назва" error={errors.name?.message}>
+            <input
+              {...register("name")}
+              placeholder="Наприклад: Магазин №1"
+              style={inputStyle}
+            />
+          </Field>
+
+          {/* Location type */}
+          <Field label="Тип локації" error={errors.locationType?.message}>
+            <select {...register("locationType")} style={inputStyle}>
+              {LOCATION_TYPES.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          {/* Address */}
+          <Field label="Адреса (необов'язково)" error={errors.address?.message}>
+            <input
+              {...register("address")}
+              placeholder="вул. Шевченка, 1, Київ"
+              style={inputStyle}
+            />
+          </Field>
+
+          {/* Active */}
+          {isEdit && (
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "#9CA3AF", fontSize: 13 }}
+            >
+              <input type="checkbox" {...register("isActive")} />
+              Активна
+            </label>
+          )}
+
+          {/* Buttons */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: "transparent",
+                border: "1px solid #374151",
+                color: "#9CA3AF",
+                borderRadius: 8,
+                padding: "8px 16px",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Скасувати
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              style={{
+                background: "#2563EB",
+                border: "none",
+                color: "#fff",
+                borderRadius: 8,
+                padding: "8px 20px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: isPending ? "default" : "pointer",
+                opacity: isPending ? 0.7 : 1,
+              }}
+            >
+              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared styles ──────────────────────────────────────────────────────────────
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <label style={{ color: "#9CA3AF", fontSize: 12 }}>{label}</label>
+      {children}
+      {error && <span style={{ color: "#ef4444", fontSize: 11 }}>{error}</span>}
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "#111827",
+  border: "1px solid #1F2937",
+  borderRadius: 8,
+  color: "#E8EDF5",
+  fontSize: 13,
+  padding: "8px 12px",
+  outline: "none",
+  boxSizing: "border-box",
+};

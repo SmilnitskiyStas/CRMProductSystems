@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getStock, getStockBatch, createStockBatch, verifyBatch } from '../api/stockApi';
 import type { CreateStockBatchRequest } from '../types';
 
-export function useStock(params?: { status?: string; storeId?: string; zone_id?: string }) {
+export function useStock(params?: { status?: string; locationId?: string; zone_id?: string }) {
   return useQuery({
     queryKey: ['stock', params],
     queryFn: () => getStock(params),

@@ -4,7 +4,7 @@ export interface AuthUser {
   fullName: string;
   role: string;
   tenantId: string | null;
-  storeId: string | null;
+  locationId: string | null;
 }
 
 export interface LoginRequest {

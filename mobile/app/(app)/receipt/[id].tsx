@@ -42,7 +42,7 @@ export default function ReceiptDetailScreen() {
 
       <View className="px-4 py-3 bg-white border-b border-gray-100">
         <Text className="text-sm text-gray-500">
-          {receipt.supplierName ?? 'Без постачальника'} → {receipt.destinationStoreName}
+          {receipt.supplierName ?? 'Без постачальника'} → {receipt.destinationLocationName}
         </Text>
         <View className="flex-row items-center mt-1">
           <Text className="text-sm text-gray-700">

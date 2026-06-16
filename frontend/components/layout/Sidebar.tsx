@@ -105,7 +105,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: <Users size={18} />,
     items: [
       { href: "/users",      label: "Персонал",      icon: <Users size={16} />,  roles: AT_LEAST_STORE_MANAGER },
-      { href: "/floor-plan", label: "План магазину",  icon: <Map size={16} />,    roles: AT_LEAST_STORE_MANAGER },
+      { href: "/locations", label: "Локації",        icon: <Map size={16} />,    roles: AT_LEAST_STORE_MANAGER },
       { href: "/iot",        label: "IoT пристрої",   icon: <Cpu size={16} />,    roles: AT_LEAST_STORE_MANAGER },
     ],
   },

@@ -8,10 +8,10 @@ import {
 } from '../api/writeOffApi';
 import type { CreateWriteOffPayload } from '../types';
 
-export function useWriteOffs(storeId?: string) {
+export function useWriteOffs(locationId?: string) {
   return useQuery({
-    queryKey: ['write-offs', storeId ?? 'all'],
-    queryFn: () => getWriteOffs(storeId),
+    queryKey: ['write-offs', locationId ?? 'all'],
+    queryFn: () => getWriteOffs(locationId),
   });
 }
 

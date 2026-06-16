@@ -9,7 +9,7 @@ import { useAuthStore } from '@/features/auth/store';
 export default function TransfersScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { data, isLoading, isError, refetch } = useTransfers(user?.storeId ?? undefined);
+  const { data, isLoading, isError, refetch } = useTransfers(user?.locationId ?? undefined);
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">

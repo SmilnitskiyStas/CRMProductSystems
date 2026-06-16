@@ -1,9 +1,9 @@
 import { apiClient } from '@/lib/api-client';
 import type { WriteOff, CreateWriteOffPayload } from '../types';
 
-export async function getWriteOffs(storeId?: string, status?: string): Promise<WriteOff[]> {
+export async function getWriteOffs(locationId?: string, status?: string): Promise<WriteOff[]> {
   const { data } = await apiClient.get<WriteOff[]>('/write-offs', {
-    params: { store_id: storeId, status },
+    params: { location_id: locationId, status },
   });
   return data;
 }

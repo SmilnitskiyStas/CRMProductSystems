@@ -3,7 +3,7 @@ import type { StockBatch, CreateStockBatchRequest } from '../types';
 
 export async function getStock(params?: {
   status?: string;
-  storeId?: string;
+  locationId?: string;
   zone_id?: string;
 }): Promise<StockBatch[]> {
   const { data } = await apiClient.get<StockBatch[]>('/stock', { params });

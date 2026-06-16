@@ -15,8 +15,8 @@ export interface WriteOffItem {
 
 export interface WriteOff {
   id: string;
-  storeId: string;
-  storeName: string;
+  locationId: string;
+  locationName: string;
   status: WriteOffStatus;
   reason: WriteOffReason | null;
   totalLossAmount: number | null;
@@ -34,7 +34,7 @@ export interface CreateWriteOffItemPayload {
 }
 
 export interface CreateWriteOffPayload {
-  storeId: string;
+  locationId: string;
   reason: WriteOffReason;
   notes?: string;
   items: CreateWriteOffItemPayload[];

@@ -38,7 +38,7 @@ function formatDate(iso: string): string {
 function MovementRow({ item }: { item: RecentMovement }) {
   const iconName = MOVEMENT_ICONS[item.movementType] ?? 'ellipse-outline';
   const label = MOVEMENT_LABELS[item.movementType] ?? item.movementType;
-  const store = item.toStoreName ?? item.fromStoreName ?? '';
+  const store = item.toLocationName ?? item.fromLocationName ?? '';
 
   return (
     <View className="flex-row items-center gap-3 py-3">
