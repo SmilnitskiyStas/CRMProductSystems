@@ -31,5 +31,13 @@ Also removed:
 ## Lesson reinforced
 Same lesson as TASK-200: **never trust EF's generated migration as the full picture for table renames.** Always query `pg_constraint` / `information_schema` for the ACTUAL FK set before applying, especially for FKs on entities that lack a `HasOne()` navigation in `AppDbContext` (EF won't manage those at all, so it won't include them in the diff — but they still break the migration when the underlying table is renamed and `DropPrimaryKey` is attempted while a stray FK still points at it).
 
+## Production deploy verification (2026-06-16)
+Before pushing, checked prod's actual `pg_constraint` for `catalog_products` via SSH — found the exact same 10-FK set as local (including `discounts` and `stock_movements`, excluding `stock_receipt_items`/`stock_transfer_items`/`write_off_items`), and confirmed `stock_movements` columns were already `FromLocationId`/`ToLocationId` on prod too. Pushed with confidence; deploy succeeded cleanly:
+- `shelfguard_api` restarted without crash-loop
+- Migration log shows `Applying migration '20260616042437_V4ItemsRename'` followed by all expected DDL, then `Now listening on: http://[::]:5100`
+- `items` table + `ItemType` column confirmed present on prod
+
+Noticed an unrelated pre-existing bug while reading prod logs: `PosService.GetPendingFiscalizationAsync` (`ShelfGuard.Application/Features/Pos/PosService.cs:389`) throws `column p.RetryCount does not exist` — looks like a missing migration/column for a retry-count field on `pos_transactions` (or similar), unrelated to TASK-204. Flagged separately, not fixed here.
+
 ## Next
 TASK-205 — Backend: CatalogProduct → Item entity + API rename (depends on this).
