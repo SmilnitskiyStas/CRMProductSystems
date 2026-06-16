@@ -7,11 +7,25 @@ import { z } from "zod";
 import { Btn } from "@/components/ui/Btn";
 import type { CreateProductPayload, Product, UpdateProductPayload } from "../types";
 
+export const ITEM_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "product",      label: "Товар" },
+  { value: "service",      label: "Послуга" },
+  { value: "spare_part",   label: "Запчастина" },
+  { value: "consumable",   label: "Розхідник" },
+  { value: "raw_material", label: "Сировина" },
+  { value: "kit",          label: "Комплект" },
+];
+
+export const ITEM_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  ITEM_TYPE_OPTIONS.map((o) => [o.value, o.label]),
+);
+
 const productSchema = z.object({
   name:          z.string().min(1, "Обов'язкове поле").max(200),
   barcode:       z.string().max(100).optional(),
   unit:          z.string().min(1, "Обов'язкове поле").max(50),
   managementType:z.enum(["MTS", "MTO"]),
+  itemType:      z.string().min(1),
   minStock:      z.coerce.number().min(0),
   maxStock:      z.coerce.number().min(0),
   safetyBuffer:  z.coerce.number().min(0),
@@ -25,7 +39,7 @@ const productSchema = z.object({
 type FormValues = z.infer<typeof productSchema>;
 
 const defaultValues: FormValues = {
-  name: "", barcode: "", unit: "шт", managementType: "MTS",
+  name: "", barcode: "", unit: "шт", managementType: "MTS", itemType: "product",
   minStock: 0, maxStock: 100, safetyBuffer: 5,
   shelfLifeDays: "", vatRate: 20,
   pricePurchase: "", priceRetail: "",
@@ -82,6 +96,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             barcode:        product.barcode ?? "",
             unit:           product.unit,
             managementType: (product.managementType as "MTS" | "MTO") ?? "MTS",
+            itemType:       product.itemType ?? "product",
             minStock:       product.minStock,
             maxStock:       product.maxStock,
             safetyBuffer:   product.safetyBuffer,
@@ -103,6 +118,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
       barcode:         values.barcode || undefined,
       unit:            values.unit,
       managementType:  values.managementType,
+      itemType:        values.itemType,
       minStock:        values.minStock,
       maxStock:        values.maxStock,
       safetyBuffer:    values.safetyBuffer,
@@ -205,8 +221,8 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
               </div>
             </div>
 
-            {/* ManagementType + ShelfLife + VatRate */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            {/* ManagementType + ItemType */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <label style={labelStyle}>Тип управління</label>
                 <select {...register("managementType")} style={{ ...inputStyle, cursor: "pointer" }}>
@@ -214,6 +230,18 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                   <option value="MTO">MTO — на замовлення</option>
                 </select>
               </div>
+              <div>
+                <label style={labelStyle}>Тип товару</label>
+                <select {...register("itemType")} style={{ ...inputStyle, cursor: "pointer" }}>
+                  {ITEM_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* ShelfLife + VatRate */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <label style={labelStyle}>Термін придатності (днів)</label>
                 <input {...register("shelfLifeDays")} type="number" min="1" placeholder="7" style={inputStyle} />

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Eye, Pencil, Trash2, Tag, Thermometer } from "lucide-react";
 import type { Product } from "../types";
+import { ITEM_TYPE_LABELS } from "./ProductForm";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import {
   DetailDrawer,
@@ -141,6 +142,7 @@ function ProductDetail({ p }: { p: Product }) {
           <DrawerField label="Категорія" value={p.categoryName ?? "—"} />
           <DrawerField label="Сегмент" value={p.segmentName ?? "—"} />
           <DrawerField label="Тип управління" value={p.managementType} />
+          <DrawerField label="Тип товару" value={ITEM_TYPE_LABELS[p.itemType] ?? p.itemType} />
           <DrawerField
             label="Статус"
             value={
@@ -270,7 +272,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
           <thead>
             <tr>
               {[
-                "Штрихкод", "Назва", "Категорія", "Одиниця",
+                "Штрихкод", "Назва", "Категорія", "Тип товару", "Одиниця",
                 "Закупівля", "Роздриб", "Мін.", "Макс.",
                 "Статус", "Дії",
               ].map((h) => (
@@ -284,7 +286,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
             {products.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   style={{
                     padding: "40px 0",
                     textAlign: "center",
@@ -321,6 +323,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                     {product.name}
                   </td>
                   <td style={tdStyle}>{product.categoryName ?? "—"}</td>
+                  <td style={tdStyle}>{ITEM_TYPE_LABELS[product.itemType] ?? product.itemType ?? "—"}</td>
                   <td style={tdStyle}>{product.unit}</td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>
                     {product.pricePurchase != null

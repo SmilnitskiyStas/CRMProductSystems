@@ -8,6 +8,7 @@ export interface CatalogProductDto {
   segmentName: string | null;
   unit: string;
   managementType: "MTS" | "MTO" | "NA" | "NM";
+  itemType: string;
   minStock: number;
   maxStock: number;
   safetyBuffer: number;

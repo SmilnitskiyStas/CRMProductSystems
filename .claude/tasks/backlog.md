@@ -71,7 +71,7 @@ Accept: migration green; dotnet build green.
 Accept: dotnet build green; /api/items → 200; FEFO через item_id стабільне.
 
 #### TASK-206 — Frontend: catalog/products → items
-**Status:** in_progress · **Agent:** frontend-developer · **Depends:** TASK-205 · **Priority:** high · **Updated:** 2026-06-16
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-205 · **Priority:** high · **Updated:** 2026-06-16
 - Update API calls (catalog → items)
 - Rename UI: «Каталог продуктів» → «Каталог»; додати колонку «Тип товару»
 - Форма create/edit: selector `item_type`

@@ -1,4 +1,4 @@
-// Matches CatalogProductDto from the backend API
+// Matches ItemDto from the backend API
 export interface Product {
   id: string;
   barcode: string | null;
@@ -9,6 +9,7 @@ export interface Product {
   segmentName: string | null;
   unit: string;
   managementType: string;
+  itemType: string;
   minStock: number;
   maxStock: number;
   safetyBuffer: number;
@@ -32,6 +33,7 @@ export interface CreateProductPayload {
   segmentId?: string;
   unit: string;
   managementType: string;
+  itemType?: string;
   minStock: number;
   maxStock: number;
   safetyBuffer: number;
