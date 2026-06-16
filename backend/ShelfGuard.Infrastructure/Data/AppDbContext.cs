@@ -23,7 +23,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<Supplier> Suppliers => Set<Supplier>();
 
     // Products (v1 tenant-aware)
-    public DbSet<CatalogProduct> CatalogProducts => Set<CatalogProduct>();
+    public DbSet<Item> Items => Set<Item>();
     public DbSet<ProductSupplierSetting> ProductSupplierSettings => Set<ProductSupplierSetting>();
 
     // Stock
@@ -239,8 +239,8 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ── CatalogProduct ──────────────────────────────────────────────────
-        builder.Entity<CatalogProduct>(e =>
+        // ── Item ──────────────────────────────────────────────────
+        builder.Entity<Item>(e =>
         {
             e.ToTable("items");
             e.HasKey(p => p.Id);

@@ -27,7 +27,7 @@ public sealed class AduRepository : IAduRepository
                 && (d.ValidUntil == null || d.ValidUntil >= now))
             .Select(d => d.ProductId);
 
-        return await _db.CatalogProducts
+        return await _db.Items
             .Where(p => p.IsActive
                 && p.ManagementType == "MTS"
                 && p.DefaultSupplierId != null

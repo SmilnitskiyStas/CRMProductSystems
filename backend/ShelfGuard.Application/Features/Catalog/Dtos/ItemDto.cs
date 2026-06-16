@@ -1,6 +1,6 @@
 namespace ShelfGuard.Application.Features.Catalog.Dtos;
 
-public sealed record CatalogProductDto(
+public sealed record ItemDto(
     Guid Id,
     string? Barcode,
     string Name,

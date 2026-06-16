@@ -63,7 +63,7 @@ EF Core migration:
 Accept: migration green; dotnet build green.
 
 #### TASK-205 — Backend: CatalogProduct → Item entity + API rename
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-204 · **Priority:** critical
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-204 · **Priority:** critical · **Updated:** 2026-06-16
 - Rename `CatalogProduct` → `Item`; add `ItemType` enum
 - Update services/repositories/DTOs (Catalog → Items naming)
 - Routes: `/api/catalog` → `/api/items`; тимчасові 301-redirect

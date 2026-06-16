@@ -19,7 +19,7 @@ public sealed class PosService : IPosService
 
     private readonly IPosRepository _pos;
     private readonly IStockRepository _stock;
-    private readonly ICatalogProductRepository _catalog;
+    private readonly IItemRepository _catalog;
     private readonly IDiscountRepository _discounts;
     private readonly IFiscalServiceFactory _fiscalFactory;
     private readonly ILogger<PosService> _log;
@@ -27,7 +27,7 @@ public sealed class PosService : IPosService
     public PosService(
         IPosRepository pos,
         IStockRepository stock,
-        ICatalogProductRepository catalog,
+        IItemRepository catalog,
         IDiscountRepository discounts,
         IFiscalServiceFactory fiscalFactory,
         ILogger<PosService> log)
@@ -576,7 +576,7 @@ public sealed class PosService : IPosService
     // ── Private types ──────────────────────────────────────────────────────
 
     private sealed record ResolvedSaleItem(
-        CatalogProduct Product,
+        Item Product,
         List<ProductStock> Batches,
         decimal Quantity,
         decimal PriceRetail,

@@ -11,5 +11,5 @@ public sealed class StockTransferItem
     public string? BatchNumber { get; init; }  // copied from ProductStock, never changes
 
     public StockTransfer? Transfer { get; init; }
-    public CatalogProduct? Product { get; set; }
+    public Item? Product { get; set; }
 }

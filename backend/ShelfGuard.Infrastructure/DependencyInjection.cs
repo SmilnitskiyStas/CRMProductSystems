@@ -37,7 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IProductRepository, ProductRepository>();
 
         // Catalog (v1 tenant-aware)
-        services.AddScoped<ICatalogProductRepository, CatalogProductRepository>();
+        services.AddScoped<IItemRepository, ItemRepository>();
 
         // Stock
         services.AddScoped<IStockRepository, StockRepository>();

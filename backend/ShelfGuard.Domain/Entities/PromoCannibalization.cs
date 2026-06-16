@@ -20,5 +20,5 @@ public sealed class PromoCannibalization
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public Discount? Discount { get; init; }
-    public CatalogProduct? AffectedProduct { get; init; }
+    public Item? AffectedProduct { get; init; }
 }

@@ -7,13 +7,13 @@ using Xunit;
 
 namespace ShelfGuard.Tests.Catalog;
 
-public sealed class CatalogProductServiceTests
+public sealed class ItemServiceTests
 {
-    private readonly ICatalogProductRepository _repo = Substitute.For<ICatalogProductRepository>();
-    private readonly CatalogProductService _sut;
+    private readonly IItemRepository _repo = Substitute.For<IItemRepository>();
+    private readonly ItemService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
 
-    public CatalogProductServiceTests() => _sut = new CatalogProductService(_repo);
+    public ItemServiceTests() => _sut = new ItemService(_repo);
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ public sealed class CatalogProductServiceTests
         Assert.NotNull(product);
         Assert.Equal("Молоко 2.5% 1л", product.Name);
         Assert.Equal("MTS", product.ManagementType);
-        await _repo.Received(1).AddAsync(Arg.Is<CatalogProduct>(p => p.TenantId == _tenantId), Arg.Any<CancellationToken>());
+        await _repo.Received(1).AddAsync(Arg.Is<Item>(p => p.TenantId == _tenantId), Arg.Any<CancellationToken>());
         await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
@@ -89,7 +89,7 @@ public sealed class CatalogProductServiceTests
     public async Task UpdateAsync_ProductNotFound_ReturnsError()
     {
         var id = Guid.NewGuid();
-        _repo.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((CatalogProduct?)null);
+        _repo.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((Item?)null);
 
         var req = new UpdateProductRequest(
             "Name", null, null, null, "шт", "MTS",
@@ -104,7 +104,7 @@ public sealed class CatalogProductServiceTests
     [Fact]
     public async Task UpdateAsync_ValidRequest_UpdatesProduct()
     {
-        var existing = new CatalogProduct
+        var existing = new Item
         {
             TenantId = _tenantId,
             Name = "Old Name",
@@ -133,7 +133,7 @@ public sealed class CatalogProductServiceTests
     public async Task DeleteAsync_ProductNotFound_ReturnsFalse()
     {
         var id = Guid.NewGuid();
-        _repo.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((CatalogProduct?)null);
+        _repo.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((Item?)null);
 
         var result = await _sut.DeleteAsync(id);
 
@@ -143,7 +143,7 @@ public sealed class CatalogProductServiceTests
     [Fact]
     public async Task DeleteAsync_ExistingProduct_SetsInactiveSavesReturnTrue()
     {
-        var existing = new CatalogProduct { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
+        var existing = new Item { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
         _repo.GetByIdAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
 
         var result = await _sut.DeleteAsync(existing.Id);
@@ -160,7 +160,7 @@ public sealed class CatalogProductServiceTests
     public async Task AddSupplierAsync_ProductNotFound_ReturnsError()
     {
         var productId = Guid.NewGuid();
-        _repo.GetByIdAsync(productId, Arg.Any<CancellationToken>()).Returns((CatalogProduct?)null);
+        _repo.GetByIdAsync(productId, Arg.Any<CancellationToken>()).Returns((Item?)null);
 
         var req = new AddProductSupplierRequest(Guid.NewGuid(), 12, 6, null, 3, true);
         var (setting, error) = await _sut.AddSupplierAsync(productId, _tenantId, req);
@@ -172,7 +172,7 @@ public sealed class CatalogProductServiceTests
     [Fact]
     public async Task AddSupplierAsync_DuplicateSetting_ReturnsError()
     {
-        var product = new CatalogProduct { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
+        var product = new Item { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
         _repo.GetByIdAsync(product.Id, Arg.Any<CancellationToken>()).Returns(product);
         _repo.SupplierSettingExistsAsync(product.Id, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
 
@@ -188,7 +188,7 @@ public sealed class CatalogProductServiceTests
     [InlineData(-1)]
     public async Task AddSupplierAsync_InvalidMoq_ReturnsError(decimal moq)
     {
-        var product = new CatalogProduct { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
+        var product = new Item { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
         _repo.GetByIdAsync(product.Id, Arg.Any<CancellationToken>()).Returns(product);
         _repo.SupplierSettingExistsAsync(product.Id, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
 
@@ -202,7 +202,7 @@ public sealed class CatalogProductServiceTests
     [Fact]
     public async Task AddSupplierAsync_ValidRequest_AddsAndSaves()
     {
-        var product = new CatalogProduct { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
+        var product = new Item { TenantId = _tenantId, Name = "Test", ManagementType = "MTS" };
         var supplierId = Guid.NewGuid();
         _repo.GetByIdAsync(product.Id, Arg.Any<CancellationToken>()).Returns(product);
         _repo.SupplierSettingExistsAsync(product.Id, supplierId, Arg.Any<CancellationToken>()).Returns(false);

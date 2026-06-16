@@ -7,14 +7,14 @@ public interface ICannibalizationRepository
     Task<Discount?> GetDiscountAsync(Guid discountId, CancellationToken ct = default);
 
     /// <summary>The catalog product the discount targets (for segment lookup).</summary>
-    Task<CatalogProduct?> GetDiscountProductAsync(Guid discountId, CancellationToken ct = default);
+    Task<Item?> GetDiscountProductAsync(Guid discountId, CancellationToken ct = default);
 
     Task<List<PromoCannibalization>> GetByDiscountAsync(Guid discountId, CancellationToken ct = default);
 
     Task<PromoCannibalization?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>Active products sharing the segment, excluding the discounted one.</summary>
-    Task<List<CatalogProduct>> GetSegmentSiblingsAsync(
+    Task<List<Item>> GetSegmentSiblingsAsync(
         Guid segmentId, Guid excludeProductId, CancellationToken ct = default);
 
     /// <summary>

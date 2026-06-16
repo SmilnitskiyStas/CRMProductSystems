@@ -4,7 +4,7 @@ namespace ShelfGuard.Domain.Entities;
 /// Tenant-aware v1 product catalog. Maps to "items" table.
 /// Distinct from the POC "Products" table (Product entity) used by the existing catalog API.
 /// </summary>
-public sealed class CatalogProduct
+public sealed class Item
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid TenantId { get; init; }

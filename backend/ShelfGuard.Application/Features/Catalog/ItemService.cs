@@ -4,13 +4,13 @@ using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Application.Features.Catalog;
 
-public sealed class CatalogProductService : ICatalogProductService
+public sealed class ItemService : IItemService
 {
-    private readonly ICatalogProductRepository _repo;
+    private readonly IItemRepository _repo;
 
-    public CatalogProductService(ICatalogProductRepository repo) => _repo = repo;
+    public ItemService(IItemRepository repo) => _repo = repo;
 
-    public async Task<List<CatalogProductDto>> GetAllAsync(
+    public async Task<List<ItemDto>> GetAllAsync(
         Guid tenantId,
         Guid? categoryId,
         Guid? segmentId,
@@ -21,19 +21,19 @@ public sealed class CatalogProductService : ICatalogProductService
         return products.Select(ToDto).ToList();
     }
 
-    public async Task<CatalogProductDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    public async Task<ItemDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var product = await _repo.GetByIdAsync(id, ct);
         return product is null ? null : ToDto(product);
     }
 
-    public async Task<CatalogProductDto?> GetByBarcodeAsync(string barcode, CancellationToken ct = default)
+    public async Task<ItemDto?> GetByBarcodeAsync(string barcode, CancellationToken ct = default)
     {
         var product = await _repo.GetByBarcodeAsync(barcode, ct);
         return product is null ? null : ToDto(product);
     }
 
-    public async Task<(CatalogProductDto? Product, string? Error)> CreateAsync(
+    public async Task<(ItemDto? Product, string? Error)> CreateAsync(
         Guid tenantId,
         CreateProductRequest request,
         CancellationToken ct = default)
@@ -44,7 +44,7 @@ public sealed class CatalogProductService : ICatalogProductService
         if (!IsValidManagementType(request.ManagementType))
             return (null, $"Invalid management type '{request.ManagementType}'. Valid values: MTS, MTO, NA, NM.");
 
-        var product = new CatalogProduct
+        var product = new Item
         {
             TenantId = tenantId,
             Name = request.Name.Trim(),
@@ -72,7 +72,7 @@ public sealed class CatalogProductService : ICatalogProductService
         return (ToDto(product), null);
     }
 
-    public async Task<(CatalogProductDto? Product, string? Error)> UpdateAsync(
+    public async Task<(ItemDto? Product, string? Error)> UpdateAsync(
         Guid id,
         UpdateProductRequest request,
         CancellationToken ct = default)
@@ -174,7 +174,7 @@ public sealed class CatalogProductService : ICatalogProductService
 
     // ── mapping ────────────────────────────────────────────────────────────
 
-    private static CatalogProductDto ToDto(CatalogProduct p) => new(
+    private static ItemDto ToDto(Item p) => new(
         p.Id,
         p.Barcode,
         p.Name,

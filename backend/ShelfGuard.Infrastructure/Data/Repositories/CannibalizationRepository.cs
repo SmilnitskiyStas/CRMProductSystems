@@ -13,7 +13,7 @@ public sealed class CannibalizationRepository : ICannibalizationRepository
     public Task<Discount?> GetDiscountAsync(Guid discountId, CancellationToken ct = default) =>
         _db.Discounts.FirstOrDefaultAsync(d => d.Id == discountId, ct);
 
-    public async Task<CatalogProduct?> GetDiscountProductAsync(Guid discountId, CancellationToken ct = default)
+    public async Task<Item?> GetDiscountProductAsync(Guid discountId, CancellationToken ct = default)
     {
         var productId = await _db.Discounts
             .Where(d => d.Id == discountId)
@@ -22,7 +22,7 @@ public sealed class CannibalizationRepository : ICannibalizationRepository
 
         return productId is null
             ? null
-            : await _db.CatalogProducts.FirstOrDefaultAsync(p => p.Id == productId, ct);
+            : await _db.Items.FirstOrDefaultAsync(p => p.Id == productId, ct);
     }
 
     public Task<List<PromoCannibalization>> GetByDiscountAsync(Guid discountId, CancellationToken ct = default) =>
@@ -36,9 +36,9 @@ public sealed class CannibalizationRepository : ICannibalizationRepository
             .Include(p => p.AffectedProduct)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-    public Task<List<CatalogProduct>> GetSegmentSiblingsAsync(
+    public Task<List<Item>> GetSegmentSiblingsAsync(
         Guid segmentId, Guid excludeProductId, CancellationToken ct = default) =>
-        _db.CatalogProducts
+        _db.Items
             .Where(p => p.IsActive && p.SegmentId == segmentId && p.Id != excludeProductId)
             .ToListAsync(ct);
 

@@ -131,7 +131,7 @@ public static class DbSeeder
         var cpBread   = MakeCatalog(tenant.Id, "4820001234551", "Хліб Дарницький Київхліб",     catBread.Id,  supplier.Id, "шт",  14.0m,  22.0m,  20,  20, shelfLife: 3);
         var cpBaton   = MakeCatalog(tenant.Id, "4820001234552", "Батон нарізний Кульчицький",   catBread.Id,  supplier.Id, "шт",  11.0m,  17.0m,  15,  15, shelfLife: 3);
 
-        db.CatalogProducts.AddRange(
+        db.Items.AddRange(
             cpMilk, cpKefir, cpSour, cpButter, cpCheese,
             cpTomato, cpCucumb, cpPepper, cpBanana,
             cpChicken, cpPork, cpSausage,
@@ -211,7 +211,7 @@ public static class DbSeeder
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static CatalogProduct MakeCatalog(
+    private static Item MakeCatalog(
         Guid tenantId, string barcode, string name,
         Guid categoryId, Guid supplierId, string unit,
         decimal pricePurchase, decimal priceRetail,
@@ -219,7 +219,7 @@ public static class DbSeeder
         int shelfLife,
         decimal? tempMin = null, decimal? tempMax = null)
     {
-        return new CatalogProduct
+        return new Item
         {
             TenantId          = tenantId,
             Barcode           = barcode,

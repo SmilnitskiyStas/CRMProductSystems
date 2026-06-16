@@ -17,5 +17,5 @@ public sealed class PosTransactionItem
 
     // Navigation properties
     public PosTransaction? Transaction { get; init; }
-    public CatalogProduct? Product { get; init; }
+    public Item? Product { get; init; }
 }

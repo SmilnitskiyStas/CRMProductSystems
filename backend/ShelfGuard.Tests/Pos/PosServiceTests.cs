@@ -99,24 +99,24 @@ file sealed class FakeStockRepo : IStockRepository
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
-file sealed class FakeCatalogRepo : ICatalogProductRepository
+file sealed class FakeCatalogRepo : IItemRepository
 {
-    public List<CatalogProduct> Products { get; } = [];
+    public List<Item> Products { get; } = [];
 
-    public Task<CatalogProduct?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) =>
+    public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) =>
         Task.FromResult(Products.FirstOrDefault(p => p.Barcode == barcode));
 
-    public Task<List<CatalogProduct>> GetAllAsync(Guid? categoryId, Guid? segmentId, string? managementType, CancellationToken ct = default) =>
+    public Task<List<Item>> GetAllAsync(Guid? categoryId, Guid? segmentId, string? managementType, CancellationToken ct = default) =>
         Task.FromResult(Products);
 
-    public Task<CatalogProduct?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+    public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult(Products.FirstOrDefault(p => p.Id == id));
 
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) => Task.FromResult(new List<ProductSupplierSetting>());
     public Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default) => Task.FromResult(false);
-    public Task AddAsync(CatalogProduct product, CancellationToken ct = default) => Task.CompletedTask;
+    public Task AddAsync(Item product, CancellationToken ct = default) => Task.CompletedTask;
     public Task AddSupplierSettingAsync(ProductSupplierSetting setting, CancellationToken ct = default) => Task.CompletedTask;
-    public void Update(CatalogProduct product) { }
+    public void Update(Item product) { }
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
@@ -159,7 +159,7 @@ public sealed class PosServiceTests
     private static PosService BuildService(
         IPosRepository? pos = null,
         IStockRepository? stock = null,
-        ICatalogProductRepository? catalog = null,
+        IItemRepository? catalog = null,
         IDiscountRepository? discounts = null,
         IFiscalService? fiscal = null)
     {
@@ -172,7 +172,7 @@ public sealed class PosServiceTests
             NullLogger<PosService>.Instance);
     }
 
-    private static CatalogProduct MakeProduct(string barcode = "123", decimal price = 10m) =>
+    private static Item MakeProduct(string barcode = "123", decimal price = 10m) =>
         new()
         {
             Id = Guid.NewGuid(),

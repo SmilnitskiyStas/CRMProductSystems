@@ -41,5 +41,5 @@ public sealed class AiOrderSuggestionItem
     public string? EditReason { get; set; }
 
     public AiOrderSuggestion? Suggestion { get; init; }
-    public CatalogProduct? Product { get; init; }
+    public Item? Product { get; init; }
 }

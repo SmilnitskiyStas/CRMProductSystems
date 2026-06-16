@@ -215,7 +215,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             .ToListAsync(ct);
 
         var productIds = batches.Select(b => b.ProductId).Distinct().ToHashSet();
-        var products = await _db.CatalogProducts
+        var products = await _db.Items
             .Where(p => productIds.Contains(p.Id))
             .Select(p => new { p.Id, p.CategoryId })
             .ToListAsync(ct);
@@ -393,7 +393,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
 
         var items = await _db.PosTransactionItems
             .Where(i => txIds.Contains(i.TransactionId))
-            .Join(_db.CatalogProducts,
+            .Join(_db.Items,
                   i => i.ProductId,
                   p => p.Id,
                   (i, p) => new

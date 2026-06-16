@@ -20,6 +20,6 @@ public sealed class DailySale
     public string Source { get; set; } = "manual";
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
-    public CatalogProduct? Product { get; init; }
+    public Item? Product { get; init; }
     public Location? Store { get; init; }
 }

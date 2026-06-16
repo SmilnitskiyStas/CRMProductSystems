@@ -2,25 +2,25 @@ using ShelfGuard.Application.Features.Catalog.Dtos;
 
 namespace ShelfGuard.Application.Features.Catalog;
 
-public interface ICatalogProductService
+public interface IItemService
 {
-    Task<List<CatalogProductDto>> GetAllAsync(
+    Task<List<ItemDto>> GetAllAsync(
         Guid tenantId,
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
         CancellationToken ct = default);
 
-    Task<CatalogProductDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<ItemDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
-    Task<CatalogProductDto?> GetByBarcodeAsync(string barcode, CancellationToken ct = default);
+    Task<ItemDto?> GetByBarcodeAsync(string barcode, CancellationToken ct = default);
 
-    Task<(CatalogProductDto? Product, string? Error)> CreateAsync(
+    Task<(ItemDto? Product, string? Error)> CreateAsync(
         Guid tenantId,
         CreateProductRequest request,
         CancellationToken ct = default);
 
-    Task<(CatalogProductDto? Product, string? Error)> UpdateAsync(
+    Task<(ItemDto? Product, string? Error)> UpdateAsync(
         Guid id,
         UpdateProductRequest request,
         CancellationToken ct = default);

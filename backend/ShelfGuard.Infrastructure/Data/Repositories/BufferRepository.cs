@@ -28,7 +28,7 @@ public sealed class BufferRepository : IBufferRepository
     public async Task<Dictionary<Guid, Guid>> GetProductSuppliersAsync(
         IReadOnlyCollection<Guid> productIds, CancellationToken ct = default)
     {
-        return await _db.CatalogProducts
+        return await _db.Items
             .Where(p => productIds.Contains(p.Id) && p.DefaultSupplierId != null)
             .ToDictionaryAsync(p => p.Id, p => p.DefaultSupplierId!.Value, ct);
     }

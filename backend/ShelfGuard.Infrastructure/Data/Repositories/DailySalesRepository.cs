@@ -43,7 +43,7 @@ public sealed class DailySalesRepository : IDailySalesRepository
     public async Task<Dictionary<string, Guid>> GetProductIdsByBarcodesAsync(
         IReadOnlyCollection<string> barcodes, CancellationToken ct = default)
     {
-        return await _db.CatalogProducts
+        return await _db.Items
             .Where(p => p.Barcode != null && barcodes.Contains(p.Barcode))
             .ToDictionaryAsync(p => p.Barcode!, p => p.Id, ct);
     }
@@ -52,7 +52,7 @@ public sealed class DailySalesRepository : IDailySalesRepository
         _db.Locations.AnyAsync(s => s.Id == storeId && s.IsActive, ct);
 
     public Task<bool> ProductExistsAsync(Guid productId, CancellationToken ct = default) =>
-        _db.CatalogProducts.AnyAsync(p => p.Id == productId && p.IsActive, ct);
+        _db.Items.AnyAsync(p => p.Id == productId && p.IsActive, ct);
 
     public async Task AddAsync(DailySale sale, CancellationToken ct = default) =>
         await _db.DailySales.AddAsync(sale, ct);

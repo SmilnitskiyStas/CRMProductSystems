@@ -13,6 +13,6 @@ public sealed class ProductSupplierSetting
     public bool IsPrimary { get; set; }
     public bool IsActive { get; set; } = true;
 
-    public CatalogProduct? Product { get; init; }
+    public Item? Product { get; init; }
     public Supplier? Supplier { get; init; }
 }

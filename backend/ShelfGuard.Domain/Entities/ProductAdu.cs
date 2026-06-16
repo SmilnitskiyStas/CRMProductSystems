@@ -20,6 +20,6 @@ public sealed class ProductAdu
     public int? ValidDays60d { get; set; }
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
 
-    public CatalogProduct? Product { get; init; }
+    public Item? Product { get; init; }
     public Location? Store { get; init; }
 }
