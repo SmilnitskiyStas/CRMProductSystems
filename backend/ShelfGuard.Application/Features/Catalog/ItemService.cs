@@ -44,6 +44,9 @@ public sealed class ItemService : IItemService
         if (!IsValidManagementType(request.ManagementType))
             return (null, $"Invalid management type '{request.ManagementType}'. Valid values: MTS, MTO, NA, NM.");
 
+        if (!string.IsNullOrWhiteSpace(request.ItemType) && !IsValidItemType(request.ItemType))
+            return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit.");
+
         var product = new Item
         {
             TenantId = tenantId,
@@ -53,6 +56,7 @@ public sealed class ItemService : IItemService
             SegmentId = request.SegmentId,
             Unit = string.IsNullOrWhiteSpace(request.Unit) ? "шт" : request.Unit.Trim(),
             ManagementType = request.ManagementType.ToUpperInvariant(),
+            ItemType = string.IsNullOrWhiteSpace(request.ItemType) ? "product" : request.ItemType.Trim(),
             MinStock = request.MinStock,
             MaxStock = request.MaxStock,
             SafetyBuffer = request.SafetyBuffer,
@@ -87,12 +91,17 @@ public sealed class ItemService : IItemService
         if (!IsValidManagementType(request.ManagementType))
             return (null, $"Invalid management type '{request.ManagementType}'. Valid values: MTS, MTO, NA, NM.");
 
+        if (!string.IsNullOrWhiteSpace(request.ItemType) && !IsValidItemType(request.ItemType))
+            return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit.");
+
         product.Name = request.Name.Trim();
         product.Barcode = request.Barcode?.Trim();
         product.CategoryId = request.CategoryId;
         product.SegmentId = request.SegmentId;
         product.Unit = string.IsNullOrWhiteSpace(request.Unit) ? "шт" : request.Unit.Trim();
         product.ManagementType = request.ManagementType.ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(request.ItemType))
+            product.ItemType = request.ItemType.Trim();
         product.MinStock = request.MinStock;
         product.MaxStock = request.MaxStock;
         product.SafetyBuffer = request.SafetyBuffer;
@@ -184,6 +193,7 @@ public sealed class ItemService : IItemService
         p.Segment?.Name,
         p.Unit,
         p.ManagementType,
+        p.ItemType,
         p.MinStock,
         p.MaxStock,
         p.SafetyBuffer,
@@ -226,4 +236,7 @@ public sealed class ItemService : IItemService
 
     private static bool IsValidManagementType(string type) =>
         type is "MTS" or "MTO" or "NA" or "NM";
+
+    private static bool IsValidItemType(string type) =>
+        type is "product" or "service" or "spare_part" or "consumable" or "raw_material" or "kit";
 }

@@ -21,7 +21,7 @@ public sealed class ItemServiceTests
     public async Task CreateAsync_ValidRequest_ReturnsProduct()
     {
         var req = new CreateProductRequest(
-            "Молоко 2.5% 1л", null, null, null, "шт", "MTS",
+            "Молоко 2.5% 1л", null, null, null, "шт", "MTS", null,
             0, 0, 0, null, null, null, null, 20, null, 45.00m, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
@@ -40,7 +40,7 @@ public sealed class ItemServiceTests
     public async Task CreateAsync_EmptyName_ReturnsError(string name)
     {
         var req = new CreateProductRequest(
-            name, null, null, null, "шт", "MTS",
+            name, null, null, null, "шт", "MTS", null,
             0, 0, 0, null, null, null, null, 20, null, null, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
@@ -56,7 +56,7 @@ public sealed class ItemServiceTests
     public async Task CreateAsync_InvalidManagementType_ReturnsError(string type)
     {
         var req = new CreateProductRequest(
-            "Test", null, null, null, "шт", type,
+            "Test", null, null, null, "шт", type, null,
             0, 0, 0, null, null, null, null, 20, null, null, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
@@ -73,7 +73,7 @@ public sealed class ItemServiceTests
     public async Task CreateAsync_AllValidManagementTypes_Succeed(string type)
     {
         var req = new CreateProductRequest(
-            "Test Product", null, null, null, "шт", type,
+            "Test Product", null, null, null, "шт", type, null,
             0, 0, 0, null, null, null, null, 20, null, null, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
@@ -92,7 +92,7 @@ public sealed class ItemServiceTests
         _repo.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((Item?)null);
 
         var req = new UpdateProductRequest(
-            "Name", null, null, null, "шт", "MTS",
+            "Name", null, null, null, "шт", "MTS", null,
             0, 0, 0, null, null, null, null, 20, null, null, null, true);
 
         var (product, error) = await _sut.UpdateAsync(id, req);
@@ -114,7 +114,7 @@ public sealed class ItemServiceTests
         _repo.GetByIdAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
 
         var req = new UpdateProductRequest(
-            "New Name", "1234567890", null, null, "кг", "MTO",
+            "New Name", "1234567890", null, null, "кг", "MTO", null,
             5, 100, 2, 0m, 8m, 14, null, 20, 30m, 50m, null, true);
 
         var (product, error) = await _sut.UpdateAsync(existing.Id, req);
