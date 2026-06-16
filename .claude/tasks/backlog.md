@@ -109,7 +109,7 @@ Accept: tsc green; toggle → зміна видимості sidebar-груп.
 ### Phase 2 — New Navigation & Menu Structure
 
 #### TASK-210 — Frontend: New v4 menu structure
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-209 · **Priority:** medium
+**Status:** done (Marketplace/Service Desk groups omitted — no pages yet; see task log) · **Agent:** frontend-developer · **Depends:** TASK-209 · **Priority:** medium · **Updated:** 2026-06-16
 Переробити sidebar відповідно до v4-spec:
 - **Dashboard** — всі ролі
 - **Operations** (expand): Каталог, Залишки, Переміщення, Списання — модуль `inventory`

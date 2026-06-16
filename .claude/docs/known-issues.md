@@ -53,13 +53,10 @@ Status: open
 Description: `/stock`, `/transfers`, `/write-offs`, `/analytics`, `/notifications`, `/settings` show a catch-all "in development" page. Not a bug — intended placeholder.
 Resolution: Implement each page per sprint plan.
 
-### KI-012: Existing tenants have stale legacy module keys, not v4 module keys
-Severity: medium
-Status: open
-Description: TASK-208 added `Tenant.HasModule()` and `[RequireModule("key")]` gated on the v4 module vocabulary (`inventory`, `procurement`, `pos`, `auto_service`, `production`, `marketplace`). New tenants created via `POST /api/admin/tenants` now get a default set based on `business_type`. But existing tenants (e.g. the seeded/production tenant "Свіжий Кут") still have legacy module keys in their `Modules` JSONB (`["shelf_manager", "crm", "notifications"]`) from before this feature existed — none of the v4 keys. `[RequireModule]` is not yet attached to any live controller, so this is currently harmless, but the moment any future task (Phase 4 Auto Service, Phase 5 Production, etc.) puts `[RequireModule(...)]` on a real endpoint, every pre-existing tenant will get 403 on it until backfilled.
-Resolution: Before attaching `[RequireModule]` to any live controller, run a one-time data migration/script that calls `tenant.UpdateModules(Tenant.DefaultModulesForBusinessType(tenant.BusinessType))` for every existing tenant (or merges the v4 defaults into their current list rather than overwriting, if legacy module flags still gate anything elsewhere).
-
 ## Resolved Issues
+
+### KI-012: Existing tenants have stale legacy module keys, not v4 module keys ✅ resolved (2026-06-16)
+Resolution: TASK-210 added migration `V4ModulesBackfill` — a one-time, idempotent data migration that sets `Modules` to `Tenant.DefaultModulesForBusinessType(tenant.BusinessType)` for any tenant whose `Modules` doesn't already contain at least one v4 key. Applied locally; verified the demo tenant went from `["shelf_manager","crm","notifications"]` to `["inventory","procurement","pos"]`. Sidebar (TASK-210) now gates the Operations/Sales/Procurement groups on these keys via `useModules()`.
 
 ### KI-001: Backend uses CRM.* project names ✅ resolved (2026-06-03)
 Resolution: All backend projects renamed to ShelfGuard.* as part of initial setup.

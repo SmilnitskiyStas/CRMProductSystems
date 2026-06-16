@@ -9,10 +9,13 @@ namespace ShelfGuard.Api.Controllers;
 /// <summary>
 /// Read-only module/business-type info for the calling tenant (ADR-015).
 /// Activation/deactivation is provider-only via /api/admin/tenants/{id}/modules.
+/// Open to any authenticated tenant role (not just enterprise_admin) — the Sidebar
+/// (TASK-210) needs this for every role to decide which nav groups to show, and
+/// module flags aren't sensitive data.
 /// </summary>
 [ApiController]
 [Route("api/settings/modules")]
-[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[Authorize]
 public sealed class ModulesSettingsController : ControllerBase
 {
     private readonly IModulesSettingsService _modules;

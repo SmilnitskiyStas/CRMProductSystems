@@ -25,9 +25,12 @@ import {
   ChevronDown,
   ChevronRight,
   Calculator,
+  Truck,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { useModules } from "@/features/modules/hooks/useModules";
+import type { ModuleKey } from "@/features/modules/types";
 import {
   AT_LEAST_STORE_MANAGER,
   CAN_ACCESS_POS,
@@ -53,41 +56,53 @@ interface NavGroup {
   key: string;
   label: string;
   icon: React.ReactNode;
+  /** When set, the whole group is hidden unless this module is active for the tenant. */
+  moduleKey?: ModuleKey;
   items: NavItem[];
 }
 
-// ── Navigation definition ──────────────────────────────────────────────────────
+// ── Navigation definition (v4 — ADR-014/015 module-gated groups) ───────────────
+//
+// Marketplace and Service Desk groups from the v4-spec menu structure are NOT
+// included here — there are no pages for them yet (Phase 3 Supplier Marketplace;
+// Service Desk only exists today as the "Підтримка" tab inside Settings). Add them
+// once their pages exist; don't render empty/dead-link groups.
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    key: "pos",
-    label: "Каса",
-    icon: <CreditCard size={18} />,
-    items: [
-      { href: "/pos", label: "Каса", icon: <CreditCard size={16} />, roles: CAN_ACCESS_POS },
-    ],
-  },
-  {
-    key: "warehouse",
-    label: "Склад",
+    key: "operations",
+    label: "Операції",
     icon: <Package size={18} />,
+    moduleKey: "inventory",
     items: [
       { href: "/inventory",  label: "Каталог",      icon: <Package size={16} />,      roles: CAN_VIEW_WAREHOUSE },
       { href: "/stock",      label: "Залишки",      icon: <ShoppingCart size={16} />, roles: CAN_VIEW_WAREHOUSE },
       { href: "/receipts",   label: "Прийомка",     icon: <ClipboardList size={16} />, roles: CAN_MANAGE_WAREHOUSE },
       { href: "/transfers",  label: "Переміщення",  icon: <ArrowLeftRight size={16} />, roles: CAN_MANAGE_WAREHOUSE },
       { href: "/write-offs", label: "Списання",     icon: <Trash2 size={16} />,       roles: CAN_VIEW_WAREHOUSE },
+      { href: "/locations",  label: "Локації",      icon: <Map size={16} />,          roles: AT_LEAST_STORE_MANAGER },
+      { href: "/iot",        label: "IoT пристрої", icon: <Cpu size={16} />,          roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
     key: "sales",
     label: "Продажі",
     icon: <TrendingUp size={18} />,
+    moduleKey: "pos",
     items: [
-      { href: "/sales",     label: "Продажі",      icon: <TrendingUp size={16} />,  roles: AT_LEAST_STORE_MANAGER },
-      { href: "/orders",    label: "Замовлення",   icon: <Calculator size={16} />,  roles: AT_LEAST_STORE_MANAGER },
-      { href: "/ai-orders", label: "AI Замовлення", icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
-      { href: "/events",    label: "Події",        icon: <CalendarDays size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/pos",    label: "Каса",    icon: <CreditCard size={16} />,  roles: CAN_ACCESS_POS },
+      { href: "/sales",  label: "Продажі", icon: <TrendingUp size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      { href: "/events", label: "Події",   icon: <CalendarDays size={16} />, roles: AT_LEAST_STORE_MANAGER },
+    ],
+  },
+  {
+    key: "procurement",
+    label: "Постачання",
+    icon: <Truck size={18} />,
+    moduleKey: "procurement",
+    items: [
+      { href: "/orders",    label: "Замовлення постачання", icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/ai-orders", label: "AI Постачання",          icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
@@ -100,13 +115,11 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    key: "management",
-    label: "Управління",
+    key: "workforce",
+    label: "Персонал",
     icon: <Users size={18} />,
     items: [
-      { href: "/users",      label: "Персонал",      icon: <Users size={16} />,  roles: AT_LEAST_STORE_MANAGER },
-      { href: "/locations", label: "Локації",        icon: <Map size={16} />,    roles: AT_LEAST_STORE_MANAGER },
-      { href: "/iot",        label: "IoT пристрої",   icon: <Cpu size={16} />,    roles: AT_LEAST_STORE_MANAGER },
+      { href: "/users", label: "Персонал", icon: <Users size={16} />, roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
@@ -119,6 +132,17 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/**
+ * True when the group should be visible given the tenant's active modules.
+ * `modulesSet === null` means "not loaded yet" — default to visible to avoid a
+ * flash-hide-then-show; groups with no `moduleKey` are never module-gated.
+ */
+function isModuleActive(moduleKey: ModuleKey | undefined, modulesSet: Set<string> | null): boolean {
+  if (!moduleKey) return true;
+  if (modulesSet === null) return true;
+  return modulesSet.has(moduleKey);
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -297,11 +321,19 @@ export function Sidebar({ collapsed, onToggle }: Props) {
 
   const showDashboard = !dashboardItem.roles || dashboardItem.roles.has(userRole);
 
-  // Filter groups and their items by role
-  const visibleGroups = NAV_GROUPS.map((group) => ({
-    group,
-    visibleItems: group.items.filter((item) => !item.roles || item.roles.has(userRole)),
-  })).filter(({ visibleItems }) => visibleItems.length > 0);
+  // Provider has no tenant_id outside impersonation — /api/settings/modules would 403.
+  // Module-gated groups are role-restricted away from provider anyway, so skip the call.
+  const { data: modulesData } = useModules(!!userRole && userRole !== "provider");
+  const modulesSet = modulesData ? new Set<string>(modulesData.modules) : null;
+
+  // Filter groups by module activation, then by role
+  const visibleGroups = NAV_GROUPS
+    .filter((group) => isModuleActive(group.moduleKey, modulesSet))
+    .map((group) => ({
+      group,
+      visibleItems: group.items.filter((item) => !item.roles || item.roles.has(userRole)),
+    }))
+    .filter(({ visibleItems }) => visibleItems.length > 0);
 
   const W = collapsed ? 64 : 240;
 
