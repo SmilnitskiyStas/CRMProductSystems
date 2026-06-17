@@ -2,29 +2,39 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Settings, Bell, Link as LinkIcon, MessageSquare, Blocks } from "lucide-react";
+import { Settings, Bell, Link as LinkIcon, MessageSquare, Blocks, Store } from "lucide-react";
 import { NotificationsTab } from "@/features/settings/components/NotificationsTab";
 import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab";
 import { SupportTab } from "@/features/settings/components/SupportTab";
 import { ModulesTab } from "@/features/settings/components/ModulesTab";
+import { MarketplaceProfileTab } from "@/features/settings/components/MarketplaceProfileTab";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, ENTERPRISE_ADMIN_ONLY } from "@/lib/roles";
+import { useModules } from "@/features/modules/hooks/useModules";
 
-type Tab = "general" | "notifications" | "integrations" | "modules" | "support";
+type Tab = "general" | "notifications" | "integrations" | "modules" | "marketplace-profile" | "support";
 
 const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "general",       label: "Загальні",   icon: <Settings size={15} /> },
-  { id: "notifications", label: "Сповіщення", icon: <Bell size={15} /> },
-  { id: "integrations",  label: "Інтеграції", icon: <LinkIcon size={15} /> },
-  { id: "modules",       label: "Модулі",     icon: <Blocks size={15} /> },
-  { id: "support",       label: "Підтримка",  icon: <MessageSquare size={15} /> },
+  { id: "general",             label: "Загальні",              icon: <Settings size={15} /> },
+  { id: "notifications",       label: "Сповіщення",            icon: <Bell size={15} /> },
+  { id: "integrations",        label: "Інтеграції",            icon: <LinkIcon size={15} /> },
+  { id: "modules",             label: "Модулі",                icon: <Blocks size={15} /> },
+  { id: "marketplace-profile", label: "Профіль маркетплейсу",  icon: <Store size={15} /> },
+  { id: "support",             label: "Підтримка",             icon: <MessageSquare size={15} /> },
 ];
 
 export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { data: me } = useMe();
   const canViewModules = hasRole(me?.role, ENTERPRISE_ADMIN_ONLY);
-  const TABS = ALL_TABS.filter((t) => t.id !== "modules" || canViewModules);
+  const { data: modulesData } = useModules(!!me?.role && me.role !== "provider");
+  const marketplaceActive = modulesData?.modules.includes("marketplace") ?? false;
+
+  const TABS = ALL_TABS.filter((t) => {
+    if (t.id === "modules") return canViewModules;
+    if (t.id === "marketplace-profile") return marketplaceActive;
+    return true;
+  });
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams.get("tab") as Tab | null;
@@ -95,11 +105,12 @@ export default function SettingsPage() {
           padding: 24,
         }}
       >
-        {activeTab === "general"       && <GeneralTab />}
-        {activeTab === "notifications" && <NotificationsTab />}
-        {activeTab === "integrations"  && <IntegrationsTab />}
+        {activeTab === "general"             && <GeneralTab />}
+        {activeTab === "notifications"       && <NotificationsTab />}
+        {activeTab === "integrations"        && <IntegrationsTab />}
         {activeTab === "modules" && canViewModules && <ModulesTab />}
-        {activeTab === "support"       && <SupportTab />}
+        {activeTab === "marketplace-profile" && marketplaceActive && <MarketplaceProfileTab />}
+        {activeTab === "support"             && <SupportTab />}
       </div>
     </div>
   );

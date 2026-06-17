@@ -147,7 +147,7 @@ Accept: migration green; RLS на supplier_reviews.
 Accept: dotnet build green; публічний listing → 200 без auth.
 
 #### TASK-222 — Frontend: Supplier Marketplace UI
-**Status:** in_progress · **Agent:** frontend-developer · **Depends:** TASK-221 · **Priority:** medium · **Note:** unblocked — TASK-221 API done
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-221 · **Priority:** medium · **Updated:** 2026-06-17 · **Log:** 222_2026-06-17_marketplace-ui_frontend-developer.md
 - `/marketplace` — grid постачальників, фільтри (регіон, категорія), search
 - `/marketplace/{id}` — профіль постачальника: метрики, каталог, відгуки
 - Premium badge + gating для premium-полів

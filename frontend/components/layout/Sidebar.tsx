@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Calculator,
   Truck,
+  Store,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -103,6 +104,15 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/orders",    label: "Замовлення постачання", icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER },
       { href: "/ai-orders", label: "AI Постачання",          icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+    ],
+  },
+  {
+    key: "marketplace",
+    label: "Маркетплейс",
+    icon: <Store size={18} />,
+    moduleKey: "marketplace",
+    items: [
+      { href: "/marketplace", label: "Постачальники", icon: <Store size={16} />, exact: true },
     ],
   },
   {
