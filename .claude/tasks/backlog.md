@@ -175,7 +175,7 @@ Accept: dotnet build green; Claude API відповідає рекомендац
 Accept: migration green; RLS cross-tenant verified.
 
 #### TASK-231 — Backend: Auto Service Module API
-**Status:** in_progress · **Agent:** backend-developer · **Depends:** TASK-230 · **Priority:** low
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-230 · **Priority:** low · **Updated:** 2026-06-17 · **Log:** 231_2026-06-17_auto-service-api_backend-developer.md
 - CRUD: customers, vehicles, service catalog, work orders
 - `POST /api/auto-service/work-orders/{id}/complete` — списує parts через FEFO (item_type=spare_part)
 - `GET /api/auto-service/work-orders` — kanban view (by status)
@@ -183,7 +183,7 @@ Accept: migration green; RLS cross-tenant verified.
 Accept: dotnet build green; FEFO write-down на spare_part при complete.
 
 #### TASK-232 — Frontend: Auto Service Module
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-231 · **Priority:** low
+**Status:** in_progress · **Agent:** frontend-developer · **Depends:** TASK-231 · **Priority:** low
 - `/auto-service` — kanban board (New / In Progress / Waiting Parts / Done)
 - Клієнти та автомобілі
 - Форма Work Order (клієнт + авто + послуги + запчастини)
@@ -191,7 +191,7 @@ Accept: dotnet build green; FEFO write-down на spare_part при complete.
 Accept: tsc + next build green.
 
 #### TASK-233 — Mobile: Auto Service screens
-**Status:** planned · **Agent:** mobile-developer · **Depends:** TASK-231 · **Priority:** low
+**Status:** in_progress · **Agent:** mobile-developer · **Depends:** TASK-231 · **Priority:** low
 - Work Order list + detail
 - Сканування VIN або штрихкод запчастини
 Accept: tsc green.
