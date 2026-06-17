@@ -201,7 +201,7 @@ Accept: tsc green.
 ### Phase 5 — Production Module
 
 #### TASK-240 — DB: Production schema
-**Status:** planned · **Agent:** database-engineer · **Depends:** Phase 1 · **Priority:** low
+**Status:** done · **Agent:** database-engineer · **Depends:** Phase 1 · **Priority:** low · **Updated:** 2026-06-17 · **Log:** 240_2026-06-17_production-schema_database-engineer.md
 Нові таблиці:
 - `recipes` (name, output_item_id, output_qty, unit, notes, tenant_id + RLS)
 - `recipe_ingredients` (recipe_id, item_id, qty, unit)

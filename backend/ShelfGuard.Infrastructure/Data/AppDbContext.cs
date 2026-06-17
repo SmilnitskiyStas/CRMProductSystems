@@ -91,6 +91,12 @@ public sealed class AppDbContext : DbContext
     public DbSet<AsWorkOrder>     AsWorkOrders     => Set<AsWorkOrder>();
     public DbSet<AsWorkOrderLine> AsWorkOrderLines => Set<AsWorkOrderLine>();
 
+    // v4 Phase 5 — Production Module
+    public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
+    public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
+    public DbSet<ProductionOrder>            ProductionOrders            => Set<ProductionOrder>();
+    public DbSet<ProductionOrderConsumption> ProductionOrderConsumptions => Set<ProductionOrderConsumption>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -1048,6 +1054,87 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(l => l.ServiceCatalogId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasOne(l => l.Item).WithMany()
              .HasForeignKey(l => l.ItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── Recipe (v4 Production) ───────────────────────────────────────────
+        builder.Entity<Recipe>(e =>
+        {
+            e.ToTable("recipes");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.Name).HasColumnType("text").IsRequired();
+            e.Property(r => r.OutputQty).HasColumnType("numeric(10,3)").IsRequired();
+            e.Property(r => r.Unit).HasColumnType("text").IsRequired();
+            e.Property(r => r.Notes).HasColumnType("text");
+            e.Property(r => r.IsActive).HasDefaultValue(true);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(r => r.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => r.TenantId);
+            e.HasOne(r => r.Tenant).WithMany()
+             .HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.OutputItem).WithMany()
+             .HasForeignKey(r => r.OutputItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(r => r.Ingredients).WithOne(i => i.Recipe)
+             .HasForeignKey(i => i.RecipeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── RecipeIngredient (v4 Production) ────────────────────────────────
+        builder.Entity<RecipeIngredient>(e =>
+        {
+            e.ToTable("recipe_ingredients");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.Qty).HasColumnType("numeric(10,3)").IsRequired();
+            e.Property(i => i.Unit).HasColumnType("text").IsRequired();
+            e.HasIndex(i => i.RecipeId);
+            // Recipe FK is wired via Recipe.HasMany above (Cascade)
+            e.HasOne(i => i.Item).WithMany()
+             .HasForeignKey(i => i.ItemId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── ProductionOrder (v4 Production) ─────────────────────────────────
+        builder.Entity<ProductionOrder>(e =>
+        {
+            e.ToTable("production_orders");
+            e.HasKey(o => o.Id);
+            e.Property(o => o.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(o => o.PlannedQty).HasColumnType("numeric(10,3)").IsRequired();
+            e.Property(o => o.Status)
+             .HasConversion<string>()
+             .HasMaxLength(30)
+             .HasDefaultValue(ProductionOrderStatus.Planned);
+            e.Property(o => o.Notes).HasColumnType("text");
+            e.Property(o => o.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(o => o.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(o => o.TenantId);
+            e.HasIndex(o => o.RecipeId);
+            e.HasIndex(o => o.Status);
+            e.HasOne(o => o.Tenant).WithMany()
+             .HasForeignKey(o => o.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(o => o.Recipe).WithMany()
+             .HasForeignKey(o => o.RecipeId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(o => o.Location).WithMany()
+             .HasForeignKey(o => o.LocationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(o => o.Creator).WithMany()
+             .HasForeignKey(o => o.CreatedBy).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(o => o.Consumptions).WithOne(c => c.ProductionOrder)
+             .HasForeignKey(c => c.ProductionOrderId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProductionOrderConsumption (v4 Production) ───────────────────────
+        builder.Entity<ProductionOrderConsumption>(e =>
+        {
+            e.ToTable("production_order_consumptions");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.QtyConsumed).HasColumnType("numeric(10,3)").IsRequired();
+            e.Property(c => c.ConsumedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(c => c.ProductionOrderId);
+            // ProductionOrder FK is wired via ProductionOrder.HasMany above (Cascade)
+            e.HasOne(c => c.Item).WithMany()
+             .HasForeignKey(c => c.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(c => c.ProductStock).WithMany()
+             .HasForeignKey(c => c.ProductStockId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
