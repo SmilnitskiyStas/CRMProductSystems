@@ -183,7 +183,7 @@ Accept: migration green; RLS cross-tenant verified.
 Accept: dotnet build green; FEFO write-down на spare_part при complete.
 
 #### TASK-232 — Frontend: Auto Service Module
-**Status:** in_progress · **Agent:** frontend-developer · **Depends:** TASK-231 · **Priority:** low
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-231 · **Priority:** low · **Updated:** 2026-06-17
 - `/auto-service` — kanban board (New / In Progress / Waiting Parts / Done)
 - Клієнти та автомобілі
 - Форма Work Order (клієнт + авто + послуги + запчастини)

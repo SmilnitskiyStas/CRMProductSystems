@@ -27,6 +27,9 @@ import {
   Calculator,
   Truck,
   Store,
+  Wrench,
+  Car,
+  BookOpen,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -113,6 +116,17 @@ const NAV_GROUPS: NavGroup[] = [
     moduleKey: "marketplace",
     items: [
       { href: "/marketplace", label: "Постачальники", icon: <Store size={16} />, exact: true },
+    ],
+  },
+  {
+    key: "auto_service",
+    label: "Auto Service",
+    icon: <Wrench size={18} />,
+    moduleKey: "auto_service",
+    items: [
+      { href: "/auto-service",                  label: "Наряди",          icon: <Wrench size={16} />,   roles: AT_LEAST_STORE_MANAGER, exact: true },
+      { href: "/auto-service/customers",         label: "Клієнти",         icon: <Car size={16} />,      roles: AT_LEAST_STORE_MANAGER },
+      { href: "/auto-service/service-catalog",   label: "Каталог послуг",  icon: <BookOpen size={16} />, roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
