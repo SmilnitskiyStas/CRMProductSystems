@@ -191,7 +191,7 @@ Accept: dotnet build green; FEFO write-down на spare_part при complete.
 Accept: tsc + next build green.
 
 #### TASK-233 — Mobile: Auto Service screens
-**Status:** in_progress · **Agent:** mobile-developer · **Depends:** TASK-231 · **Priority:** low
+**Status:** done · **Agent:** mobile-developer · **Depends:** TASK-231 · **Priority:** low · **Updated:** 2026-06-17 · **Log:** 233_2026-06-17_auto-service-mobile_mobile-developer.md
 - Work Order list + detail
 - Сканування VIN або штрихкод запчастини
 Accept: tsc green.
