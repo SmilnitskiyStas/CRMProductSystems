@@ -78,6 +78,12 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupportTicket>  SupportTickets  => Set<SupportTicket>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
 
+    // v4 Phase 3 — Supplier Marketplace
+    public DbSet<SupplierProfile> SupplierProfiles => Set<SupplierProfile>();
+    public DbSet<SupplierItem>    SupplierItems    => Set<SupplierItem>();
+    public DbSet<SupplierMetrics> SupplierMetrics  => Set<SupplierMetrics>();
+    public DbSet<SupplierReview>  SupplierReviews  => Set<SupplierReview>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -847,6 +853,91 @@ public sealed class AppDbContext : DbContext
             e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(m => m.Body).IsRequired();
             e.HasIndex(m => m.TicketId);
+        });
+
+        // ── SupplierProfile (v4 Marketplace) ───────────────────────────────
+        builder.Entity<SupplierProfile>(e =>
+        {
+            e.ToTable("supplier_profiles");
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(p => p.Region).HasColumnType("text");
+            e.Property(p => p.Categories).HasColumnType("jsonb");
+            e.Property(p => p.Website).HasColumnType("text");
+            e.Property(p => p.DeliveryRegions).HasColumnType("jsonb");
+            e.Property(p => p.WorkingHours).HasColumnType("text");
+            e.Property(p => p.PaymentTerms).HasColumnType("text");
+            e.Property(p => p.IsPublic).HasDefaultValue(false);
+            e.Property(p => p.Plan).HasMaxLength(50).HasDefaultValue("free");
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(p => p.UpdatedAt).HasDefaultValueSql("NOW()");
+            // 1-to-1: one profile per supplier
+            e.HasIndex(p => p.SupplierId).IsUnique();
+            e.HasIndex(p => p.TenantId);
+            e.HasOne(p => p.Supplier).WithMany()
+             .HasForeignKey(p => p.SupplierId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.Tenant).WithMany()
+             .HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── SupplierItem (v4 Marketplace) ──────────────────────────────────
+        builder.Entity<SupplierItem>(e =>
+        {
+            e.ToTable("supplier_items");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.CustomName).HasColumnType("text");
+            e.Property(i => i.Price).HasColumnType("numeric(12,2)");
+            e.Property(i => i.Unit).HasColumnType("text");
+            e.Property(i => i.IsAvailable).HasDefaultValue(true);
+            e.Property(i => i.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(i => new { i.SupplierId, i.TenantId });
+            e.HasIndex(i => i.ItemId);
+            e.HasOne(i => i.Supplier).WithMany()
+             .HasForeignKey(i => i.SupplierId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(i => i.Tenant).WithMany()
+             .HasForeignKey(i => i.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.Item).WithMany()
+             .HasForeignKey(i => i.ItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── SupplierMetrics (v4 Marketplace) ───────────────────────────────
+        builder.Entity<SupplierMetrics>(e =>
+        {
+            e.ToTable("supplier_metrics");
+            e.HasKey(m => m.Id);
+            e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.AvgDeliveryDays).HasColumnType("numeric(5,2)");
+            e.Property(m => m.OrderAccuracy).HasColumnType("numeric(5,4)");
+            e.Property(m => m.QualityScore).HasColumnType("numeric(5,4)");
+            e.Property(m => m.Rating).HasColumnType("numeric(3,2)");
+            e.Property(m => m.CancellationRate).HasColumnType("numeric(5,4)");
+            e.Property(m => m.ResponseTimeHours).HasColumnType("numeric(6,2)");
+            e.Property(m => m.UpdatedAt).HasDefaultValueSql("NOW()");
+            // 1-to-1: one metrics record per supplier
+            e.HasIndex(m => m.SupplierId).IsUnique();
+            e.HasIndex(m => m.TenantId);
+            e.HasOne(m => m.Supplier).WithMany()
+             .HasForeignKey(m => m.SupplierId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(m => m.Tenant).WithMany()
+             .HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── SupplierReview (v4 Marketplace) ────────────────────────────────
+        builder.Entity<SupplierReview>(e =>
+        {
+            e.ToTable("supplier_reviews");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.Rating).IsRequired();
+            e.Property(r => r.Comment).HasColumnType("text");
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            // One review per (supplier, tenant)
+            e.HasIndex(r => new { r.SupplierId, r.TenantId }).IsUnique();
+            e.HasOne(r => r.Supplier).WithMany()
+             .HasForeignKey(r => r.SupplierId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Tenant).WithMany()
+             .HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

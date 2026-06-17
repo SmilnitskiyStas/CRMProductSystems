@@ -127,7 +127,7 @@ Accept: tsc + next build green; кожна роль бачить правиль�
 ### Phase 3 — Supplier Marketplace
 
 #### TASK-220 — DB: Supplier Marketplace schema
-**Status:** planned · **Agent:** database-engineer · **Depends:** Phase 1 · **Priority:** medium
+**Status:** done · **Agent:** database-engineer · **Depends:** Phase 1 · **Priority:** medium · **Updated:** 2026-06-17
 Нові таблиці:
 - `supplier_profiles` (розширений профіль: region, categories JSONB, website, delivery_regions JSONB, working_hours, payment_terms, is_public, plan `free|premium`)
 - `supplier_items` (каталог постачальника: supplier_id, item_id або custom_name, price, min_qty, unit, is_available)
@@ -136,7 +136,7 @@ Accept: tsc + next build green; кожна роль бачить правиль�
 Accept: migration green; RLS на supplier_reviews.
 
 #### TASK-221 — Backend: Supplier Marketplace API
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-220 · **Priority:** medium
+**Status:** in_progress · **Agent:** backend-developer · **Depends:** TASK-220 · **Priority:** medium · **Updated:** 2026-06-17 · **Note:** unblocked — TASK-220 schema done
 - `GET /api/marketplace/suppliers` — публічний listing (без auth) з пагінацією + фільтрами (region, category, plan)
 - `GET /api/marketplace/suppliers/{id}` — профіль (premium поля тільки при plan=premium або auth)
 - `GET /api/marketplace/suppliers/{id}/items` — каталог постачальника
