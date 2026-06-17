@@ -16,6 +16,7 @@ using ShelfGuard.Application.Features.Support;
 using ShelfGuard.Application.Features.Movements;
 using ShelfGuard.Application.Features.Admin;
 using ShelfGuard.Application.Features.Settings;
+using ShelfGuard.Application.Features.Marketplace;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -62,6 +63,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 - Module activation (TASK-208)
         services.AddScoped<IModulesSettingsService, ModulesSettingsService>();
+
+        // v4 Phase 3 - Supplier Marketplace (TASK-221)
+        services.AddScoped<IMarketplaceService, MarketplaceService>();
 
         return services;
     }

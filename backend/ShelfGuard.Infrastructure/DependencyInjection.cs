@@ -118,6 +118,9 @@ public static class DependencyInjection
         services.AddScoped<ISupportTicketRepository,  SupportTicketRepository>();
         services.AddScoped<ISupportMessageRepository, SupportMessageRepository>();
 
+        // v4 Phase 3 - Supplier Marketplace (TASK-221)
+        services.AddScoped<IMarketplaceRepository, MarketplaceRepository>();
+
         return services;
     }
 }

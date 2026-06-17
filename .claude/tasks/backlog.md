@@ -136,7 +136,7 @@ Accept: tsc + next build green; кожна роль бачить правиль�
 Accept: migration green; RLS на supplier_reviews.
 
 #### TASK-221 — Backend: Supplier Marketplace API
-**Status:** in_progress · **Agent:** backend-developer · **Depends:** TASK-220 · **Priority:** medium · **Updated:** 2026-06-17 · **Note:** unblocked — TASK-220 schema done
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-220 · **Priority:** medium · **Updated:** 2026-06-17 · **Log:** 221_2026-06-17_marketplace-api_backend-developer.md
 - `GET /api/marketplace/suppliers` — публічний listing (без auth) з пагінацією + фільтрами (region, category, plan)
 - `GET /api/marketplace/suppliers/{id}` — профіль (premium поля тільки при plan=premium або auth)
 - `GET /api/marketplace/suppliers/{id}/items` — каталог постачальника
@@ -147,7 +147,7 @@ Accept: migration green; RLS на supplier_reviews.
 Accept: dotnet build green; публічний listing → 200 без auth.
 
 #### TASK-222 — Frontend: Supplier Marketplace UI
-**Status:** planned · **Agent:** frontend-developer · **Depends:** TASK-221 · **Priority:** medium
+**Status:** in_progress · **Agent:** frontend-developer · **Depends:** TASK-221 · **Priority:** medium · **Note:** unblocked — TASK-221 API done
 - `/marketplace` — grid постачальників, фільтри (регіон, категорія), search
 - `/marketplace/{id}` — профіль постачальника: метрики, каталог, відгуки
 - Premium badge + gating для premium-полів
@@ -155,7 +155,7 @@ Accept: dotnet build green; публічний listing → 200 без auth.
 Accept: tsc + next build green.
 
 #### TASK-223 — Backend: AI Supplier Recommendation
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-221 · **Priority:** low
+**Status:** in_progress · **Agent:** backend-developer · **Depends:** TASK-221 · **Priority:** low · **Note:** unblocked — TASK-221 API done
 - `POST /api/marketplace/ai-recommend` — Claude API: передати список постачальників + item_name → отримати рекомендацію з поясненням
 - Ізольовано в `Infrastructure/AI/SupplierAdvisor`
 Accept: dotnet build green; Claude API відповідає рекомендацією.
