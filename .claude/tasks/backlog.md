@@ -155,7 +155,7 @@ Accept: dotnet build green; публічний listing → 200 без auth.
 Accept: tsc + next build green.
 
 #### TASK-223 — Backend: AI Supplier Recommendation
-**Status:** in_progress · **Agent:** backend-developer · **Depends:** TASK-221 · **Priority:** low · **Note:** unblocked — TASK-221 API done
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-221 · **Priority:** low · **Updated:** 2026-06-17 · **Log:** 223_2026-06-17_ai-supplier-recommendation_backend-developer.md
 - `POST /api/marketplace/ai-recommend` — Claude API: передати список постачальників + item_name → отримати рекомендацію з поясненням
 - Ізольовано в `Infrastructure/AI/SupplierAdvisor`
 Accept: dotnet build green; Claude API відповідає рекомендацією.

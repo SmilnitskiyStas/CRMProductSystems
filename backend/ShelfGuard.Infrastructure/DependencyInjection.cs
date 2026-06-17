@@ -121,6 +121,10 @@ public static class DependencyInjection
         // v4 Phase 3 - Supplier Marketplace (TASK-221)
         services.AddScoped<IMarketplaceRepository, MarketplaceRepository>();
 
+        // v4 Phase 3 - AI Supplier Recommendation (TASK-223)
+        services.AddScoped<Application.Features.Marketplace.ISupplierAdvisor,
+            AI.SupplierAdvisor.SupplierAdvisor>();
+
         return services;
     }
 }

@@ -7,7 +7,8 @@ using ShelfGuard.Infrastructure.Authorization;
 namespace ShelfGuard.Api.Controllers;
 
 /// <summary>
-/// Supplier Marketplace — public listing and authenticated review submission.
+/// Supplier Marketplace — public listing, authenticated review submission,
+/// and AI-powered supplier recommendation.
 /// Public endpoints are explicitly [AllowAnonymous] so that unauthenticated
 /// callers can browse the marketplace.
 /// Module gate [RequireModule("marketplace")] is applied to all endpoints except
@@ -19,8 +20,13 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class MarketplaceController : ControllerBase
 {
     private readonly IMarketplaceService _marketplace;
+    private readonly ISupplierAdvisor _advisor;
 
-    public MarketplaceController(IMarketplaceService marketplace) => _marketplace = marketplace;
+    public MarketplaceController(IMarketplaceService marketplace, ISupplierAdvisor advisor)
+    {
+        _marketplace = marketplace;
+        _advisor     = advisor;
+    }
 
     // ── Public listing (no auth) ──────────────────────────────────────────────
 
@@ -112,6 +118,90 @@ public sealed class MarketplaceController : ControllerBase
             return isDuplicate ? Conflict(new { error }) : BadRequest(new { error });
 
         return StatusCode(StatusCodes.Status201Created, review);
+    }
+
+    // ── AI Supplier Recommendation (TASK-223) ─────────────────────────────────
+
+    /// <summary>
+    /// Accepts a natural-language procurement need and returns a ranked list of
+    /// recommended suppliers with Ukrainian-language reasoning, powered by Claude API.
+    /// Requires marketplace module and authentication.
+    /// </summary>
+    [HttpPost("ai-recommend")]
+    [Authorize]
+    [RequireModule("marketplace")]
+    [ProducesResponseType(typeof(AiRecommendResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> AiRecommend(
+        [FromBody] AiRecommendRequestDto dto,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.ItemName))
+            return BadRequest(new { error = "ItemName is required." });
+
+        if (!await _advisor.IsConfiguredAsync(ct))
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { error = "AI service not configured" });
+
+        // Load public supplier candidates, optionally pre-filtered by region
+        var all = await _marketplace.SearchSuppliersAsync(
+            new SupplierSearchDto(dto.ItemName, dto.Region), ct);
+
+        // Fallback: if search returned nothing, load full public listing (first 50)
+        IReadOnlyList<SupplierListItemDto> candidateList = all.Count > 0
+            ? all
+            : (await _marketplace.GetPublicSuppliersAsync(dto.Region, null, null, 1, 50, ct)).Items;
+
+        // Build compact candidate DTOs for the AI context
+        var candidateDtos = candidateList.Select(s => new SupplierCandidateDto(
+            s.Id,
+            s.Name,
+            s.Region,
+            s.Rating,
+            s.AvgDeliveryDays,
+            null,     // OrderAccuracy not in SupplierListItemDto — will be null in AI context
+            null,     // MatchedItemName enriched below
+            null,
+            null,
+            null)).ToList();
+
+        var request = new SupplierRecommendationRequest(
+            dto.ItemName, dto.Region, dto.RequiredQty, dto.Notes);
+
+        var result = await _advisor.RecommendAsync(request, candidateDtos, ct);
+
+        // Map AI result items back to the response DTO, enriching with supplier names
+        var nameMap = candidateList.ToDictionary(s => s.Id, s => s.Name);
+
+        var recommendations = result.Recommendations
+            .Select(r => new SupplierRecommendationDto(
+                r.SupplierId,
+                nameMap.TryGetValue(r.SupplierId, out var name) ? name : r.SupplierId.ToString(),
+                r.Rank,
+                r.Score,
+                r.Reasoning,
+                r.MatchedItemName is not null || r.MatchedItemPrice is not null
+                    ? new SupplierItemDto(
+                        Guid.Empty,
+                        null,
+                        r.MatchedItemName,
+                        r.MatchedItemName,
+                        r.MatchedItemPrice,
+                        null,
+                        null,
+                        true)
+                    : null,
+                candidateList.FirstOrDefault(s => s.Id == r.SupplierId) is { } supplier
+                    ? new SupplierMetricsDto(
+                        supplier.Rating,
+                        supplier.AvgDeliveryDays,
+                        null, null, null, null,
+                        DateTimeOffset.UtcNow)
+                    : null))
+            .ToList();
+
+        return Ok(new AiRecommendResultDto(recommendations, result.Prompt));
     }
 
     private Guid? ResolveTenantId()

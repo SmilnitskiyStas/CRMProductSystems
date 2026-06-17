@@ -66,3 +66,24 @@ public record SupplierProfileUpdateDto(
 
 /// <summary>Paginated list response.</summary>
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
+
+// ── AI Supplier Recommendation (TASK-223) ─────────────────────────────────────
+
+public record AiRecommendRequestDto(
+    string ItemName,
+    string? Region,
+    int? RequiredQty,
+    string? Notes);
+
+public record AiRecommendResultDto(
+    List<SupplierRecommendationDto> Recommendations,
+    string Prompt);
+
+public record SupplierRecommendationDto(
+    Guid SupplierId,
+    string SupplierName,
+    int Rank,
+    decimal Score,
+    string Reasoning,
+    SupplierItemDto? MatchedItem,
+    SupplierMetricsDto? Metrics);
