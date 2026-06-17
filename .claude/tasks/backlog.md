@@ -165,7 +165,7 @@ Accept: dotnet build green; Claude API відповідає рекомендац
 ### Phase 4 — Auto Service Module
 
 #### TASK-230 — DB: Auto Service schema
-**Status:** planned · **Agent:** database-engineer · **Depends:** Phase 1 · **Priority:** low
+**Status:** done · **Agent:** database-engineer · **Depends:** Phase 1 · **Priority:** low · **Updated:** 2026-06-17 · **Log:** 230_2026-06-17_auto-service-schema_database-engineer.md
 Нові таблиці (всі мають `tenant_id` + RLS):
 - `as_customers` (name, phone, email, notes)
 - `as_vehicles` (customer_id, brand, model, year, vin, license_plate, mileage, notes)
@@ -175,7 +175,7 @@ Accept: dotnet build green; Claude API відповідає рекомендац
 Accept: migration green; RLS cross-tenant verified.
 
 #### TASK-231 — Backend: Auto Service Module API
-**Status:** planned · **Agent:** backend-developer · **Depends:** TASK-230 · **Priority:** low
+**Status:** in_progress · **Agent:** backend-developer · **Depends:** TASK-230 · **Priority:** low
 - CRUD: customers, vehicles, service catalog, work orders
 - `POST /api/auto-service/work-orders/{id}/complete` — списує parts через FEFO (item_type=spare_part)
 - `GET /api/auto-service/work-orders` — kanban view (by status)

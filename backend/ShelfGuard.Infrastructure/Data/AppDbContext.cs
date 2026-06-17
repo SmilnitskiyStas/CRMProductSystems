@@ -84,6 +84,13 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierMetrics> SupplierMetrics  => Set<SupplierMetrics>();
     public DbSet<SupplierReview>  SupplierReviews  => Set<SupplierReview>();
 
+    // v4 Phase 4 — Auto Service Module
+    public DbSet<AsCustomer>      AsCustomers      => Set<AsCustomer>();
+    public DbSet<AsVehicle>       AsVehicles       => Set<AsVehicle>();
+    public DbSet<AsServiceCatalog> AsServiceCatalogs => Set<AsServiceCatalog>();
+    public DbSet<AsWorkOrder>     AsWorkOrders     => Set<AsWorkOrder>();
+    public DbSet<AsWorkOrderLine> AsWorkOrderLines => Set<AsWorkOrderLine>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -938,6 +945,109 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(r => r.SupplierId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(r => r.Tenant).WithMany()
              .HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── AsCustomer (v4 Auto Service) ────────────────────────────────────
+        builder.Entity<AsCustomer>(e =>
+        {
+            e.ToTable("as_customers");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.Name).HasColumnType("text").IsRequired();
+            e.Property(c => c.Phone).HasColumnType("text");
+            e.Property(c => c.Email).HasColumnType("text");
+            e.Property(c => c.Notes).HasColumnType("text");
+            e.Property(c => c.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(c => c.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(c => c.TenantId);
+            e.HasOne(c => c.Tenant).WithMany()
+             .HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(c => c.Vehicles).WithOne(v => v.Customer)
+             .HasForeignKey(v => v.CustomerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── AsVehicle (v4 Auto Service) ─────────────────────────────────────
+        builder.Entity<AsVehicle>(e =>
+        {
+            e.ToTable("as_vehicles");
+            e.HasKey(v => v.Id);
+            e.Property(v => v.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(v => v.Brand).HasColumnType("text").IsRequired();
+            e.Property(v => v.Model).HasColumnType("text").IsRequired();
+            e.Property(v => v.Year).HasColumnType("smallint");
+            e.Property(v => v.Vin).HasColumnType("text");
+            e.Property(v => v.LicensePlate).HasColumnType("text");
+            e.Property(v => v.Notes).HasColumnType("text");
+            e.Property(v => v.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(v => v.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(v => v.TenantId);
+            e.HasIndex(v => v.CustomerId);
+            e.HasOne(v => v.Tenant).WithMany()
+             .HasForeignKey(v => v.TenantId).OnDelete(DeleteBehavior.Restrict);
+            // Customer FK is wired via AsCustomer.HasMany above (Cascade)
+        });
+
+        // ── AsServiceCatalog (v4 Auto Service) ──────────────────────────────
+        builder.Entity<AsServiceCatalog>(e =>
+        {
+            e.ToTable("as_service_catalog");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Name).HasColumnType("text").IsRequired();
+            e.Property(s => s.Description).HasColumnType("text");
+            e.Property(s => s.DefaultPrice).HasColumnType("numeric(12,2)");
+            e.Property(s => s.DurationHours).HasColumnType("numeric(4,2)");
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(s => s.TenantId);
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Item).WithMany()
+             .HasForeignKey(s => s.ItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── AsWorkOrder (v4 Auto Service) ───────────────────────────────────
+        builder.Entity<AsWorkOrder>(e =>
+        {
+            e.ToTable("as_work_orders");
+            e.HasKey(w => w.Id);
+            e.Property(w => w.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(w => w.Status)
+             .HasConversion<string>()
+             .HasMaxLength(30)
+             .HasDefaultValue(WorkOrderStatus.New);
+            e.Property(w => w.Notes).HasColumnType("text");
+            e.Property(w => w.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(w => w.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(w => w.TenantId);
+            e.HasIndex(w => w.VehicleId);
+            e.HasIndex(w => w.Status);
+            e.HasOne(w => w.Tenant).WithMany()
+             .HasForeignKey(w => w.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(w => w.Vehicle).WithMany(v => v.WorkOrders)
+             .HasForeignKey(w => w.VehicleId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(w => w.Mechanic).WithMany()
+             .HasForeignKey(w => w.MechanicUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(w => w.Lines).WithOne(l => l.WorkOrder)
+             .HasForeignKey(l => l.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── AsWorkOrderLine (v4 Auto Service) ───────────────────────────────
+        builder.Entity<AsWorkOrderLine>(e =>
+        {
+            e.ToTable("as_work_order_lines");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(l => l.Type).HasMaxLength(20).IsRequired();
+            e.Property(l => l.Qty).HasColumnType("numeric(10,3)").HasDefaultValue(1m);
+            e.Property(l => l.Price).HasColumnType("numeric(12,2)").IsRequired();
+            e.Property(l => l.Discount).HasColumnType("numeric(12,2)").HasDefaultValue(0m);
+            e.HasIndex(l => l.WorkOrderId);
+            // WorkOrder FK is wired via AsWorkOrder.HasMany above (Cascade)
+            e.HasOne(l => l.ServiceCatalog).WithMany()
+             .HasForeignKey(l => l.ServiceCatalogId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(l => l.Item).WithMany()
+             .HasForeignKey(l => l.ItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
     }
 }
