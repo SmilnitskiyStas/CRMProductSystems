@@ -127,14 +127,14 @@ namespace ShelfGuard.Infrastructure.Migrations
             migrationBuilder.Sql("ALTER TABLE work_schedules ENABLE ROW LEVEL SECURITY;");
             migrationBuilder.Sql("""
                 CREATE POLICY work_schedules_tenant ON work_schedules
-                    USING (tenant_id = current_setting('app.tenant_id')::uuid);
+                    USING ("TenantId" = current_setting('app.tenant_id')::uuid);
                 """);
 
             // ── RLS: schedule_shifts ─────────────────────────────────────────
             migrationBuilder.Sql("ALTER TABLE schedule_shifts ENABLE ROW LEVEL SECURITY;");
             migrationBuilder.Sql("""
                 CREATE POLICY schedule_shifts_tenant ON schedule_shifts
-                    USING (tenant_id = current_setting('app.tenant_id')::uuid);
+                    USING ("TenantId" = current_setting('app.tenant_id')::uuid);
                 """);
         }
 

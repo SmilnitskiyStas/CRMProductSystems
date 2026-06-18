@@ -200,14 +200,14 @@ namespace ShelfGuard.Infrastructure.Migrations
             migrationBuilder.Sql("ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;");
             migrationBuilder.Sql("""
                 CREATE POLICY support_tickets_tenant ON support_tickets
-                    USING (tenant_id = current_setting('app.tenant_id')::uuid);
+                    USING ("TenantId" = current_setting('app.tenant_id')::uuid);
                 """);
 
             // ── RLS: ticket_comments ─────────────────────────────────────────
             migrationBuilder.Sql("ALTER TABLE ticket_comments ENABLE ROW LEVEL SECURITY;");
             migrationBuilder.Sql("""
                 CREATE POLICY ticket_comments_tenant ON ticket_comments
-                    USING (tenant_id = current_setting('app.tenant_id')::uuid);
+                    USING ("TenantId" = current_setting('app.tenant_id')::uuid);
                 """);
         }
 

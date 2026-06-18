@@ -79,7 +79,7 @@ namespace ShelfGuard.Infrastructure.Migrations
             migrationBuilder.Sql("ALTER TABLE customers ENABLE ROW LEVEL SECURITY;");
             migrationBuilder.Sql("""
                 CREATE POLICY customers_tenant_isolation ON customers
-                    USING (tenant_id = current_setting('app.tenant_id')::uuid);
+                    USING ("TenantId" = current_setting('app.tenant_id')::uuid);
                 """);
         }
 
