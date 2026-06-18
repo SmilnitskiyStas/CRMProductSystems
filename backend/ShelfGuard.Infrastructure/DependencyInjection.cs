@@ -125,6 +125,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IAutoServiceRepository,
             Data.Repositories.AutoServiceRepository>();
 
+        // v4 Phase 5 - Production Module (TASK-241)
+        services.AddScoped<Domain.Interfaces.IProductionRepository,
+            Data.Repositories.ProductionRepository>();
+
         // v4 Phase 3 - AI Supplier Recommendation (TASK-223)
         services.AddScoped<Application.Features.Marketplace.ISupplierAdvisor,
             AI.SupplierAdvisor.SupplierAdvisor>();

@@ -18,6 +18,7 @@ using ShelfGuard.Application.Features.Admin;
 using ShelfGuard.Application.Features.Settings;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.AutoService;
+using ShelfGuard.Application.Features.Production;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -70,6 +71,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<IAutoServiceService, AutoServiceService>();
+
+        // v4 Phase 5 - Production Module (TASK-241)
+        services.AddScoped<IProductionService, ProductionService>();
 
         return services;
     }
