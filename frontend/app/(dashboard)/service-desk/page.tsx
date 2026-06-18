@@ -1,0 +1,134 @@
+"use client";
+
+import { useState } from "react";
+import { Plus, Ticket } from "lucide-react";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { AT_LEAST_STORE_MANAGER } from "@/lib/roles";
+import type { AppRole } from "@/lib/roles";
+import { TicketList } from "@/features/service-desk/components/TicketList";
+import { MyTicketList } from "@/features/service-desk/components/MyTicketList";
+import { TicketDetail } from "@/features/service-desk/components/TicketDetail";
+import { CreateTicketForm } from "@/features/service-desk/components/CreateTicketForm";
+import type { TicketDto } from "@/features/service-desk/types";
+
+type Tab = "all" | "my";
+
+export default function ServiceDeskPage() {
+  const { data: me } = useMe();
+  const userRole = (me?.role ?? "") as AppRole;
+  const isManager = AT_LEAST_STORE_MANAGER.has(userRole as AppRole);
+
+  const [activeTab, setActiveTab] = useState<Tab>(isManager ? "all" : "my");
+  const [selectedTicket, setSelectedTicket] = useState<TicketDto | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const tabStyle = (active: boolean) => ({
+    background: "transparent",
+    border: "none",
+    borderBottom: `2px solid ${active ? "#3B82F6" : "transparent"}`,
+    color: active ? "#93C5FD" : "#4B5563",
+    fontSize: 13,
+    fontWeight: active ? 600 : 400,
+    padding: "10px 16px",
+    cursor: "pointer",
+    transition: "color 0.15s, border-color 0.15s",
+  });
+
+  return (
+    <div style={{ padding: "28px 32px", minHeight: "100vh" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 24,
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Ticket size={22} style={{ color: "#3B82F6" }} />
+            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+              Service Desk
+            </h1>
+          </div>
+          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+            Заявки та запити підтримки
+          </p>
+        </div>
+
+        <button
+          onClick={() => setCreateOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            background: "#1D3461",
+            border: "1px solid #3B82F6",
+            borderRadius: 8,
+            padding: "9px 16px",
+            color: "#93C5FD",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          <Plus size={15} />
+          Новий тікет
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div
+        style={{
+          borderBottom: "1px solid #1F2937",
+          marginBottom: 20,
+          display: "flex",
+          gap: 4,
+        }}
+      >
+        {isManager && (
+          <button
+            style={tabStyle(activeTab === "all")}
+            onClick={() => setActiveTab("all")}
+          >
+            Всі тікети
+          </button>
+        )}
+        <button
+          style={tabStyle(activeTab === "my")}
+          onClick={() => setActiveTab("my")}
+        >
+          Мої тікети
+        </button>
+      </div>
+
+      {/* Content */}
+      {activeTab === "all" && isManager ? (
+        <TicketList
+          selectedId={selectedTicket?.id}
+          onSelect={(ticket) => setSelectedTicket(ticket)}
+        />
+      ) : (
+        <MyTicketList
+          selectedId={selectedTicket?.id}
+          onSelect={(ticket) => setSelectedTicket(ticket)}
+        />
+      )}
+
+      {/* Detail sheet */}
+      {selectedTicket && (
+        <TicketDetail
+          ticketId={selectedTicket.id}
+          userRole={userRole}
+          onClose={() => setSelectedTicket(null)}
+        />
+      )}
+
+      {/* Create dialog */}
+      {createOpen && (
+        <CreateTicketForm onClose={() => setCreateOpen(false)} />
+      )}
+    </div>
+  );
+}

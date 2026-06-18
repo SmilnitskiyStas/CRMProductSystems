@@ -30,11 +30,14 @@ public sealed class SupportService(
     {
         var ticket = new SupportTicket
         {
-            TenantId  = tenantId,
-            CreatedBy = userId,
-            Subject   = req.Subject,
-            Priority  = req.Priority,
-            Status    = SupportTicketStatus.Open
+            TenantId    = tenantId,
+            CreatedBy   = userId,
+            Title       = req.Title,
+            Description = req.Body,
+            Category    = req.Category,
+            Priority    = req.Priority,
+            LocationId  = req.LocationId,
+            Status      = SupportTicketStatus.Open
         };
         var firstMsg = new SupportMessage
         {
@@ -65,7 +68,7 @@ public sealed class SupportService(
             Body              = req.Body
         };
         await messages.AddAsync(msg, ct);
-        ticket.UpdatedAt = DateTime.UtcNow;
+        ticket.UpdatedAt = DateTimeOffset.UtcNow;
         tickets.Update(ticket);
         await messages.SaveChangesAsync(ct);
         return MapMsg(msg);
@@ -76,7 +79,7 @@ public sealed class SupportService(
         var ticket = await tickets.GetByIdAsync(ticketId, ct)
             ?? throw new KeyNotFoundException("Ticket not found");
         if (ticket.TenantId != tenantId) throw new UnauthorizedAccessException();
-        ticket.LastReadByTenantAt = DateTime.UtcNow;
+        ticket.LastReadByTenantAt = DateTimeOffset.UtcNow;
         tickets.Update(ticket);
         await tickets.SaveChangesAsync(ct);
     }
@@ -101,7 +104,7 @@ public sealed class SupportService(
         var ticket = await tickets.GetByIdAsync(ticketId, ct)
             ?? throw new KeyNotFoundException("Ticket not found");
         ticket.AssignedTo = agentId;
-        ticket.UpdatedAt  = DateTime.UtcNow;
+        ticket.UpdatedAt  = DateTimeOffset.UtcNow;
         if (ticket.Status == SupportTicketStatus.Open)
             ticket.Status = SupportTicketStatus.InProgress;
         tickets.Update(ticket);
@@ -113,7 +116,7 @@ public sealed class SupportService(
         var ticket = await tickets.GetByIdAsync(ticketId, ct)
             ?? throw new KeyNotFoundException("Ticket not found");
         ticket.Status    = status;
-        ticket.UpdatedAt = DateTime.UtcNow;
+        ticket.UpdatedAt = DateTimeOffset.UtcNow;
         tickets.Update(ticket);
         await tickets.SaveChangesAsync(ct);
     }
@@ -131,7 +134,7 @@ public sealed class SupportService(
             Body              = req.Body
         };
         await messages.AddAsync(msg, ct);
-        ticket.UpdatedAt = DateTime.UtcNow;
+        ticket.UpdatedAt = DateTimeOffset.UtcNow;
         if (ticket.Status == SupportTicketStatus.Open)
             ticket.Status = SupportTicketStatus.InProgress;
         tickets.Update(ticket);
@@ -143,7 +146,7 @@ public sealed class SupportService(
     {
         var ticket = await tickets.GetByIdAsync(ticketId, ct)
             ?? throw new KeyNotFoundException("Ticket not found");
-        ticket.LastReadByProviderAt = DateTime.UtcNow;
+        ticket.LastReadByProviderAt = DateTimeOffset.UtcNow;
         tickets.Update(ticket);
         await tickets.SaveChangesAsync(ct);
     }
@@ -152,7 +155,7 @@ public sealed class SupportService(
 
     private static SupportTicketDto Map(SupportTicket t) => new(
         t.Id, t.TenantId, t.CreatedBy, t.AssignedTo,
-        t.Subject, t.Status, t.Priority,
+        t.Title, t.Status, t.Priority,
         t.CreatedAt, t.UpdatedAt,
         IsUnreadForTenant(t),
         t.Messages.OrderBy(m => m.CreatedAt).Select(MapMsg).ToList());
@@ -161,12 +164,12 @@ public sealed class SupportService(
     {
         var lastProviderMsg = t.Messages.Where(m => m.IsProviderMessage).MaxBy(m => m.CreatedAt);
         if (lastProviderMsg is null) return false;
-        return lastProviderMsg.CreatedAt > (t.LastReadByTenantAt ?? DateTime.MinValue);
+        return lastProviderMsg.CreatedAt > (t.LastReadByTenantAt ?? DateTimeOffset.MinValue);
     }
 
     private static SupportTicketDto MapForProvider(SupportTicket t) => new(
         t.Id, t.TenantId, t.CreatedBy, t.AssignedTo,
-        t.Subject, t.Status, t.Priority,
+        t.Title, t.Status, t.Priority,
         t.CreatedAt, t.UpdatedAt,
         IsUnreadForProvider(t),
         t.Messages.OrderBy(m => m.CreatedAt).Select(MapMsg).ToList());
@@ -175,7 +178,7 @@ public sealed class SupportService(
     {
         var lastClientMsg = t.Messages.Where(m => !m.IsProviderMessage).MaxBy(m => m.CreatedAt);
         if (lastClientMsg is null) return false;
-        return lastClientMsg.CreatedAt > (t.LastReadByProviderAt ?? DateTime.MinValue);
+        return lastClientMsg.CreatedAt > (t.LastReadByProviderAt ?? DateTimeOffset.MinValue);
     }
 
     private static SupportMessageDto MapMsg(SupportMessage m) => new(

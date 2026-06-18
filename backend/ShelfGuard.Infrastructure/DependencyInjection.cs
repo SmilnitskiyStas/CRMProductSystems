@@ -145,6 +145,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IScheduleRepository,
             Data.Repositories.ScheduleRepository>();
 
+        // TASK-251 - Service Desk
+        services.AddScoped<Domain.Interfaces.ITicketRepository,
+            Data.Repositories.TicketRepository>();
+
         return services;
     }
 }

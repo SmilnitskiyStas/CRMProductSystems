@@ -1,11 +1,11 @@
 namespace ShelfGuard.Application.Features.Support.Dtos;
 
 public record SupportMessageDto(
-    Guid     Id,
-    Guid     SenderId,
-    bool     IsProviderMessage,
-    string   Body,
-    DateTime CreatedAt
+    Guid            Id,
+    Guid            SenderId,
+    bool            IsProviderMessage,
+    string          Body,
+    DateTimeOffset  CreatedAt
 );
 
 public record SupportTicketDto(
@@ -13,19 +13,21 @@ public record SupportTicketDto(
     Guid                      TenantId,
     Guid                      CreatedBy,
     Guid?                     AssignedTo,
-    string                    Subject,
+    string                    Title,
     string                    Status,
     string                    Priority,
-    DateTime                  CreatedAt,
-    DateTime                  UpdatedAt,
+    DateTimeOffset            CreatedAt,
+    DateTimeOffset            UpdatedAt,
     bool                      IsUnread,
     IReadOnlyList<SupportMessageDto> Messages
 );
 
 public record CreateTicketRequest(
-    string Subject,
+    string Title,
     string Body,
-    string Priority = "normal"
+    string Priority  = "medium",
+    string Category  = "general",
+    Guid?  LocationId = null
 );
 
 public record AddMessageRequest(string Body);

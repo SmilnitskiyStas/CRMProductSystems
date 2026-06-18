@@ -77,6 +77,7 @@ public sealed class AppDbContext : DbContext
     // Support
     public DbSet<SupportTicket>  SupportTickets  => Set<SupportTicket>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
+    public DbSet<TicketComment>  TicketComments  => Set<TicketComment>();
 
     // v4 Phase 3 — Supplier Marketplace
     public DbSet<SupplierProfile> SupplierProfiles => Set<SupplierProfile>();
@@ -904,14 +905,40 @@ public sealed class AppDbContext : DbContext
             e.ToTable("support_tickets");
             e.HasKey(t => t.Id);
             e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
-            e.Property(t => t.Subject).HasMaxLength(255).IsRequired();
-            e.Property(t => t.Status).HasMaxLength(30).IsRequired();
-            e.Property(t => t.Priority).HasMaxLength(20).IsRequired();
-            e.HasIndex(t => t.TenantId);
-            e.HasIndex(t => t.Status);
-            e.HasIndex(t => t.AssignedTo);
+            e.Property(t => t.Number).ValueGeneratedOnAdd();
+            e.Property(t => t.Title).IsRequired();
+            e.Property(t => t.Description).IsRequired();
+            e.Property(t => t.Category).HasMaxLength(50).HasDefaultValue("general").IsRequired();
+            e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("open").IsRequired();
+            e.Property(t => t.Priority).HasMaxLength(20).HasDefaultValue("medium").IsRequired();
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(t => t.UpdatedAt).HasDefaultValueSql("NOW()");
+            // Composite: tenant + status + created_at DESC — main list query
+            e.HasIndex(t => new { t.TenantId, t.Status, t.CreatedAt })
+             .IsDescending(false, false, true)
+             .HasDatabaseName("idx_tickets_tenant_status");
+            // Assigned agent filter (partial: only assigned rows)
+            e.HasIndex(t => new { t.TenantId, t.AssignedTo })
+             .HasDatabaseName("idx_tickets_assigned")
+             .HasFilter("\"AssignedTo\" IS NOT NULL");
+            // Creator lookup
+            e.HasIndex(t => new { t.TenantId, t.CreatedBy })
+             .HasDatabaseName("idx_tickets_created_by");
+            // FK: creator
+            e.HasOne(t => t.CreatedByUser).WithMany()
+             .HasForeignKey(t => t.CreatedBy).OnDelete(DeleteBehavior.Cascade);
+            // FK: assignee
+            e.HasOne(t => t.AssignedToUser).WithMany()
+             .HasForeignKey(t => t.AssignedTo).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // FK: location
+            e.HasOne(t => t.Location).WithMany()
+             .HasForeignKey(t => t.LocationId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // Legacy messages
             e.HasMany(t => t.Messages).WithOne(m => m.Ticket)
              .HasForeignKey(m => m.TicketId).OnDelete(DeleteBehavior.Cascade);
+            // New comments
+            e.HasMany(t => t.Comments).WithOne(c => c.Ticket)
+             .HasForeignKey(c => c.TicketId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── SupportMessage ──────────────────────────────────────────────────
@@ -922,6 +949,23 @@ public sealed class AppDbContext : DbContext
             e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(m => m.Body).IsRequired();
             e.HasIndex(m => m.TicketId);
+        });
+
+        // ── TicketComment ───────────────────────────────────────────────────
+        builder.Entity<TicketComment>(e =>
+        {
+            e.ToTable("ticket_comments");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.Body).IsRequired();
+            e.Property(c => c.IsInternal).HasDefaultValue(false);
+            e.Property(c => c.CreatedAt).HasDefaultValueSql("NOW()");
+            // Load comments for a ticket ordered by time
+            e.HasIndex(c => new { c.TicketId, c.CreatedAt })
+             .HasDatabaseName("idx_ticket_comments_ticket");
+            // Ticket FK is wired via SupportTicket.HasMany above (Cascade)
+            e.HasOne(c => c.Author).WithMany()
+             .HasForeignKey(c => c.AuthorId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── SupplierProfile (v4 Marketplace) ───────────────────────────────

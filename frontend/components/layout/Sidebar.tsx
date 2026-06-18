@@ -33,6 +33,7 @@ import {
   FlaskConical,
   ListOrdered,
   Calendar,
+  LifeBuoy,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -159,6 +160,14 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/users",      label: "Персонал", icon: <Users size={16} />,    roles: AT_LEAST_STORE_MANAGER },
       { href: "/schedules",  label: "Розклад",  icon: <Calendar size={16} /> },
+    ],
+  },
+  {
+    key: "support",
+    label: "Підтримка",
+    icon: <LifeBuoy size={18} />,
+    items: [
+      { href: "/service-desk", label: "Service Desk", icon: <LifeBuoy size={16} /> },
     ],
   },
   {
