@@ -230,7 +230,7 @@ Accept: tsc + next build green.
 ### Phase 6 — AI Business Assistant
 
 #### TASK-250 — AI Business Assistant (cross-module)
-**Status:** planned · **Agent:** backend-developer · **Depends:** Phase 3-5 · **Priority:** low
+**Status:** done · **Agent:** backend-developer · **Depends:** Phase 3-5 · **Priority:** low · **Completed:** 2026-06-18
 - `POST /api/ai/assistant` — природна мова → агрегація даних з кількох модулів → Claude API → рекомендація
 - Контекст: поточні залишки + замовлення + продажі + постачальники
 - Isolated в `Infrastructure/AI/BusinessAssistant`

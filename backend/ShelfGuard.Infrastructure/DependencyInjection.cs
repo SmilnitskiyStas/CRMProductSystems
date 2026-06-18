@@ -133,6 +133,10 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.Marketplace.ISupplierAdvisor,
             AI.SupplierAdvisor.SupplierAdvisor>();
 
+        // v4 Phase 6 - AI Business Assistant (TASK-250)
+        services.AddScoped<Application.Features.AiAssistant.IBusinessAssistantAdvisor,
+            AI.BusinessAssistant.BusinessAssistantAdvisor>();
+
         return services;
     }
 }

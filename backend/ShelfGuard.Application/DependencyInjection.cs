@@ -19,6 +19,7 @@ using ShelfGuard.Application.Features.Settings;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.AutoService;
 using ShelfGuard.Application.Features.Production;
+using ShelfGuard.Application.Features.AiAssistant;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -74,6 +75,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 Phase 5 - Production Module (TASK-241)
         services.AddScoped<IProductionService, ProductionService>();
+
+        // v4 Phase 6 - AI Business Assistant (TASK-250)
+        services.AddScoped<IAiAssistantService, AiAssistantService>();
 
         return services;
     }
