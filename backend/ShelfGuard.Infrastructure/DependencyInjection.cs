@@ -141,6 +141,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.ICustomerRepository,
             Data.Repositories.CustomerRepository>();
 
+        // TASK-253 - Workforce Schedules
+        services.AddScoped<Domain.Interfaces.IScheduleRepository,
+            Data.Repositories.ScheduleRepository>();
+
         return services;
     }
 }

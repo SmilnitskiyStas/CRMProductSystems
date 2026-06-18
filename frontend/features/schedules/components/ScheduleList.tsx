@@ -1,0 +1,268 @@
+"use client";
+
+import { useState } from "react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import type { WorkScheduleDto, ScheduleStatus, CreateSchedulePayload, UpdateSchedulePayload } from "../types";
+import { ScheduleForm } from "./ScheduleForm";
+import {
+  useSchedules,
+  useCreateSchedule,
+  useUpdateSchedule,
+  useDeleteSchedule,
+} from "../hooks/useSchedules";
+
+const STATUS_STYLE: Record<ScheduleStatus, { bg: string; color: string; border: string; label: string }> = {
+  draft:     { bg: "#111827", color: "#6B7280", border: "#374151", label: "Чернетка"     },
+  published: { bg: "#052e16", color: "#4ADE80", border: "#16A34A", label: "Опубліковано" },
+  archived:  { bg: "#1F2937", color: "#4B5563", border: "#374151", label: "Архів"        },
+};
+
+function StatusBadge({ status }: { status: ScheduleStatus }) {
+  const s = STATUS_STYLE[status];
+  return (
+    <span
+      style={{
+        background: s.bg,
+        color: s.color,
+        border: `1px solid ${s.border}`,
+        borderRadius: 20,
+        padding: "2px 10px",
+        fontSize: 11,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+function formatWeek(weekStart: string): string {
+  const d = new Date(weekStart);
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  const fmt = (dt: Date) =>
+    `${String(dt.getDate()).padStart(2, "0")}.${String(dt.getMonth() + 1).padStart(2, "0")}`;
+  return `${fmt(d)}–${fmt(end)}.${end.getFullYear()}`;
+}
+
+interface Props {
+  selectedId: string | null;
+  onSelect: (schedule: WorkScheduleDto) => void;
+}
+
+export function ScheduleList({ selectedId, onSelect }: Props) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing]       = useState<WorkScheduleDto | null>(null);
+
+  const { data: schedules = [], isLoading } = useSchedules();
+  const createMutation = useCreateSchedule();
+  const updateMutation = useUpdateSchedule();
+  const deleteMutation = useDeleteSchedule();
+
+  function handleCreate(data: CreateSchedulePayload) {
+    createMutation.mutate(data, {
+      onSuccess: (created) => {
+        toast.success("Графік створено");
+        setCreateOpen(false);
+        onSelect(created);
+      },
+      onError: (err) => toast.error(err.message),
+    });
+  }
+
+  function handleUpdate(data: UpdateSchedulePayload) {
+    if (!editing) return;
+    updateMutation.mutate(
+      { id: editing.id, data },
+      {
+        onSuccess: () => { toast.success("Графік оновлено"); setEditing(null); },
+        onError: (err) => toast.error(err.message),
+      },
+    );
+  }
+
+  function handleDelete(schedule: WorkScheduleDto, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Видалити графік "${schedule.name}"?`)) return;
+    deleteMutation.mutate(schedule.id, {
+      onSuccess: () => toast.success("Графік видалено"),
+      onError:   (err) => toast.error(err.message),
+    });
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
+        <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700, margin: 0 }}>
+          Графіки ({schedules.length})
+        </h2>
+        <button
+          onClick={() => setCreateOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            background: "#1D3461",
+            border: "1px solid #3B82F6",
+            borderRadius: 8,
+            padding: "7px 12px",
+            color: "#93C5FD",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          <Plus size={14} />
+          Новий графік
+        </button>
+      </div>
+
+      {/* List */}
+      {isLoading ? (
+        <p style={{ color: "#4B5563", fontSize: 13, padding: "12px 0" }}>Завантаження…</p>
+      ) : schedules.length === 0 ? (
+        <p style={{ color: "#4B5563", fontSize: 13, padding: "12px 0" }}>Немає графіків</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {schedules.map((schedule) => {
+            const isSelected = schedule.id === selectedId;
+            return (
+              <div
+                key={schedule.id}
+                onClick={() => onSelect(schedule)}
+                style={{
+                  background: isSelected ? "#1D3461" : "#111827",
+                  border: `1px solid ${isSelected ? "#3B82F6" : "#1F2937"}`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  cursor: "pointer",
+                  transition: "background 0.1s, border-color 0.1s",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    (e.currentTarget as HTMLElement).style.background = "#161D2B";
+                    (e.currentTarget as HTMLElement).style.borderColor = "#374151";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    (e.currentTarget as HTMLElement).style.background = "#111827";
+                    (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+                  }
+                }}
+              >
+                {/* Top row */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        color: "#E8EDF5",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {schedule.name}
+                    </div>
+                    <div style={{ color: "#6B7280", fontSize: 11, marginTop: 2 }}>
+                      {schedule.locationName} · {formatWeek(schedule.weekStart)}
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditing(schedule); }}
+                      title="Редагувати"
+                      style={{
+                        background: "transparent",
+                        border: "1px solid #374151",
+                        borderRadius: 6,
+                        padding: "3px 6px",
+                        color: "#6B7280",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => handleDelete(schedule, e)}
+                      title="Видалити"
+                      style={{
+                        background: "transparent",
+                        border: "1px solid #374151",
+                        borderRadius: 6,
+                        padding: "3px 6px",
+                        color: "#6B7280",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bottom row */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 8,
+                  }}
+                >
+                  <StatusBadge status={schedule.status} />
+                  <span style={{ color: "#4B5563", fontSize: 11 }}>
+                    {schedule.shiftCount} змін
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create modal */}
+      {createOpen && (
+        <ScheduleForm
+          mode="create"
+          isPending={createMutation.isPending}
+          error={createMutation.error?.message ?? null}
+          onClose={() => { setCreateOpen(false); createMutation.reset(); }}
+          onSubmit={handleCreate}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editing && (
+        <ScheduleForm
+          mode="edit"
+          schedule={editing}
+          isPending={updateMutation.isPending}
+          error={updateMutation.error?.message ?? null}
+          onClose={() => { setEditing(null); updateMutation.reset(); }}
+          onSubmit={handleUpdate}
+        />
+      )}
+    </div>
+  );
+}

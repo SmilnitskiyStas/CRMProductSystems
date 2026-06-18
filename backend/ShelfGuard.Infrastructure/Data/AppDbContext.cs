@@ -94,6 +94,10 @@ public sealed class AppDbContext : DbContext
     // CRM Customers
     public DbSet<Customer> Customers => Set<Customer>();
 
+    // Workforce Schedules
+    public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
+    public DbSet<ScheduleShift> ScheduleShifts => Set<ScheduleShift>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -1227,6 +1231,54 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(t => t.CustomerId)
              .HasDatabaseName("idx_pos_tx_customer")
              .HasFilter("\"CustomerId\" IS NOT NULL");
+        });
+
+        // ── WorkSchedule (Workforce) ─────────────────────────────────────────
+        builder.Entity<WorkSchedule>(e =>
+        {
+            e.ToTable("work_schedules");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Name).HasColumnType("text").IsRequired();
+            e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("draft");
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.UpdatedAt).HasDefaultValueSql("NOW()");
+            // Weekly schedule browse: tenant + location + week
+            e.HasIndex(s => new { s.TenantId, s.LocationId, s.WeekStart })
+             .HasDatabaseName("idx_work_schedules_tenant_location");
+            e.HasOne(s => s.Location).WithMany()
+             .HasForeignKey(s => s.LocationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.CreatedByUser).WithMany()
+             .HasForeignKey(s => s.CreatedBy).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(s => s.Shifts).WithOne(sh => sh.Schedule)
+             .HasForeignKey(sh => sh.ScheduleId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ScheduleShift (Workforce) ────────────────────────────────────────
+        builder.Entity<ScheduleShift>(e =>
+        {
+            e.ToTable("schedule_shifts");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.RoleOverride).HasColumnType("text");
+            e.Property(s => s.Notes).HasColumnType("text");
+            e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("scheduled");
+            e.Property(s => s.BreakMinutes).HasDefaultValue(60);
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            // Shifts within a schedule
+            e.HasIndex(s => s.ScheduleId)
+             .HasDatabaseName("idx_schedule_shifts_schedule");
+            // Employee schedule lookup by date
+            e.HasIndex(s => new { s.TenantId, s.UserId, s.ShiftDate })
+             .HasDatabaseName("idx_schedule_shifts_user_date");
+            // Daily roster per location
+            e.HasIndex(s => new { s.TenantId, s.LocationId, s.ShiftDate })
+             .HasDatabaseName("idx_schedule_shifts_date");
+            // Schedule FK is wired via WorkSchedule.HasMany above (Cascade)
+            e.HasOne(s => s.User).WithMany()
+             .HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Location).WithMany()
+             .HasForeignKey(s => s.LocationId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

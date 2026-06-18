@@ -21,6 +21,7 @@ using ShelfGuard.Application.Features.AutoService;
 using ShelfGuard.Application.Features.Production;
 using ShelfGuard.Application.Features.AiAssistant;
 using ShelfGuard.Application.Features.Customers;
+using ShelfGuard.Application.Features.Schedules;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -82,6 +83,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // TASK-252 - CRM Customers
         services.AddScoped<ICustomerService, CustomerService>();
+
+        // TASK-253 - Workforce Schedules
+        services.AddScoped<IScheduleService, ScheduleService>();
 
         return services;
     }
