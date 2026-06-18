@@ -30,6 +30,8 @@ import {
   Wrench,
   Car,
   BookOpen,
+  FlaskConical,
+  ListOrdered,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -127,6 +129,16 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/auto-service",                  label: "Наряди",          icon: <Wrench size={16} />,   roles: AT_LEAST_STORE_MANAGER, exact: true },
       { href: "/auto-service/customers",         label: "Клієнти",         icon: <Car size={16} />,      roles: AT_LEAST_STORE_MANAGER },
       { href: "/auto-service/service-catalog",   label: "Каталог послуг",  icon: <BookOpen size={16} />, roles: AT_LEAST_STORE_MANAGER },
+    ],
+  },
+  {
+    key: "production",
+    label: "Виробництво",
+    icon: <FlaskConical size={18} />,
+    moduleKey: "production",
+    items: [
+      { href: "/production/recipes", label: "Рецепти",  icon: <FlaskConical size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/orders",  label: "Ордери",   icon: <ListOrdered size={16} />,  roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {

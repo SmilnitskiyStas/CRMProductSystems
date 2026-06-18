@@ -219,7 +219,7 @@ Accept: migration green; RLS verified.
 Accept: dotnet build green; FEFO списання raw_material при complete; finished product створюється як новий batch.
 
 #### TASK-242 — Frontend: Production Module
-**Status:** in_progress · **Agent:** frontend-developer · **Depends:** TASK-241 · **Priority:** low
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-241 · **Priority:** low · **Updated:** 2026-06-18 · **Log:** 242_2026-06-18_production-frontend_frontend-developer.md
 - `/production/recipes` — список рецептів + CRUD
 - `/production/orders` — список ордерів, запуск, завершення
 - `features/production/`
