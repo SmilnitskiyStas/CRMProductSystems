@@ -156,41 +156,34 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (storeId.HasValue)
             query = query.Where(s => s.StoreId == storeId.Value);
 
+        // Single query: join zone and store via navigation properties
         var batches = await query
-            .Select(s => new { s.ZoneId, s.StoreId, s.Status })
+            .Select(s => new
+            {
+                s.ZoneId,
+                ZoneName  = s.Zone!.Name,
+                ZoneType  = s.Zone!.Type,
+                StoreId   = s.Zone!.LocationId,
+                StoreName = s.Zone!.Location!.Name,
+                s.Status
+            })
             .ToListAsync(ct);
-
-        var zoneIds = batches.Select(b => b.ZoneId!.Value).Distinct().ToHashSet();
-        var storeIds = batches.Select(b => b.StoreId).Distinct().ToHashSet();
-
-        var zones = await _db.LocationZones
-            .Where(z => zoneIds.Contains(z.Id))
-            .Select(z => new { z.Id, z.Name, z.Type, StoreId = z.LocationId })
-            .ToListAsync(ct);
-
-        var storeNames = await _db.Locations
-            .Where(s => storeIds.Contains(s.Id))
-            .Select(s => new { s.Id, s.Name })
-            .ToDictionaryAsync(s => s.Id, s => s.Name, ct);
-
-        var zoneMap = zones.ToDictionary(z => z.Id);
 
         return batches
             .GroupBy(b => b.ZoneId!.Value)
-            .Where(g => zoneMap.ContainsKey(g.Key))
             .Select(g =>
             {
-                var zone = zoneMap[g.Key];
+                var first = g.First();
                 return new ZoneAnalyticsDto(
-                    ZoneId:      g.Key,
-                    ZoneName:    zone.Name,
-                    ZoneType:    zone.Type,
-                    StoreId:     zone.StoreId,
-                    StoreName:   storeNames.GetValueOrDefault(zone.StoreId, "Unknown"),
-                    Safe:        g.Count(b => b.Status == "safe"),
-                    Warning:     g.Count(b => b.Status == "warning"),
-                    Critical:    g.Count(b => b.Status == "critical"),
-                    Expired:     g.Count(b => b.Status == "expired"),
+                    ZoneId:       g.Key,
+                    ZoneName:     first.ZoneName,
+                    ZoneType:     first.ZoneType,
+                    StoreId:      first.StoreId,
+                    StoreName:    first.StoreName,
+                    Safe:         g.Count(b => b.Status == "safe"),
+                    Warning:      g.Count(b => b.Status == "warning"),
+                    Critical:     g.Count(b => b.Status == "critical"),
+                    Expired:      g.Count(b => b.Status == "expired"),
                     TotalBatches: g.Count()
                 );
             })
@@ -210,47 +203,35 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (storeId.HasValue)
             stockQuery = stockQuery.Where(s => s.StoreId == storeId.Value);
 
+        // Single query: join product and category via navigation properties
         var batches = await stockQuery
-            .Select(s => new { s.ProductId, s.Status, s.Quantity })
+            .Select(s => new
+            {
+                CategoryId   = s.Product!.CategoryId,
+                CategoryName = s.Product!.Category != null ? s.Product.Category.Name : null,
+                s.Status,
+                s.Quantity
+            })
             .ToListAsync(ct);
-
-        var productIds = batches.Select(b => b.ProductId).Distinct().ToHashSet();
-        var products = await _db.Items
-            .Where(p => productIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.CategoryId })
-            .ToListAsync(ct);
-
-        var categoryIds = products
-            .Where(p => p.CategoryId.HasValue)
-            .Select(p => p.CategoryId!.Value)
-            .Distinct()
-            .ToHashSet();
-
-        var categories = await _db.Categories
-            .Where(c => categoryIds.Contains(c.Id))
-            .Select(c => new { c.Id, c.Name })
-            .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
-
-        var productCategoryMap = products.ToDictionary(p => p.Id, p => p.CategoryId);
 
         return batches
-            .GroupBy(b => productCategoryMap.GetValueOrDefault(b.ProductId))
+            .GroupBy(b => b.CategoryId)
             .Select(g =>
             {
-                var categoryId = g.Key;
+                var categoryId   = g.Key;
                 var categoryName = categoryId.HasValue
-                    ? categories.GetValueOrDefault(categoryId.Value, "Unknown")
+                    ? (g.First().CategoryName ?? "Unknown")
                     : "Без категорії";
 
                 return new CategoryAnalyticsDto(
-                    CategoryId:     categoryId,
-                    CategoryName:   categoryName,
-                    Safe:           g.Count(b => b.Status == "safe"),
-                    Warning:        g.Count(b => b.Status == "warning"),
-                    Critical:       g.Count(b => b.Status == "critical"),
-                    Expired:        g.Count(b => b.Status == "expired"),
-                    TotalBatches:   g.Count(),
-                    TotalQuantity:  g.Sum(b => b.Quantity)
+                    CategoryId:    categoryId,
+                    CategoryName:  categoryName,
+                    Safe:          g.Count(b => b.Status == "safe"),
+                    Warning:       g.Count(b => b.Status == "warning"),
+                    Critical:      g.Count(b => b.Status == "critical"),
+                    Expired:       g.Count(b => b.Status == "expired"),
+                    TotalBatches:  g.Count(),
+                    TotalQuantity: g.Sum(b => b.Quantity)
                 );
             })
             .OrderByDescending(c => c.Critical + c.Expired)
@@ -272,22 +253,22 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (to.HasValue)
             query = query.Where(w => w.CreatedAt <= to.Value.ToDateTime(TimeOnly.MaxValue));
 
+        // Single query: join store name via navigation property
         var writeOffs = await query
-            .Select(w => new { w.StoreId, w.TotalLossAmount })
+            .Select(w => new
+            {
+                w.StoreId,
+                StoreName      = w.Store != null ? w.Store.Name : null,
+                w.TotalLossAmount
+            })
             .ToListAsync(ct);
-
-        var storeIds = writeOffs.Select(w => w.StoreId).Distinct().ToHashSet();
-        var storeNames = await _db.Locations
-            .Where(s => storeIds.Contains(s.Id))
-            .Select(s => new { s.Id, s.Name })
-            .ToDictionaryAsync(s => s.Id, s => s.Name, ct);
 
         var byStore = writeOffs
             .GroupBy(w => w.StoreId)
             .Select(g => new LossByStoreDto(
-                StoreId:      g.Key,
-                StoreName:    storeNames.GetValueOrDefault(g.Key, "Unknown"),
-                TotalLoss:    g.Sum(w => w.TotalLossAmount ?? 0m),
+                StoreId:       g.Key,
+                StoreName:     g.First().StoreName ?? "Unknown",
+                TotalLoss:     g.Sum(w => w.TotalLossAmount ?? 0m),
                 WriteOffCount: g.Count()
             ))
             .OrderByDescending(s => s.TotalLoss)
@@ -387,31 +368,27 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         var fromDt = from.ToDateTime(TimeOnly.MinValue);
         var toDt   = to.ToDateTime(TimeOnly.MaxValue);
 
-        var txIds = await BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt)
-            .Select(t => t.Id)
-            .ToListAsync(ct);
+        // Use IQueryable subquery instead of materialising txIds into memory
+        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
 
         var items = await _db.PosTransactionItems
-            .Where(i => txIds.Contains(i.TransactionId))
-            .Join(_db.Items,
-                  i => i.ProductId,
-                  p => p.Id,
-                  (i, p) => new
-                  {
-                      i.ProductId,
-                      p.Name,
-                      p.Barcode,
-                      i.PriceFinal,
-                      i.Quantity,
-                      i.TransactionId
-                  })
+            .Where(i => txQuery.Select(t => t.Id).Contains(i.TransactionId))
+            .Select(i => new
+            {
+                i.ProductId,
+                ProductName = i.Product!.Name,
+                Barcode     = i.Product!.Barcode,
+                i.PriceFinal,
+                i.Quantity,
+                i.TransactionId
+            })
             .ToListAsync(ct);
 
         var topItems = items
             .GroupBy(i => i.ProductId)
             .Select(g => new TopProductDto(
                 ProductId:        g.Key,
-                ProductName:      g.First().Name,
+                ProductName:      g.First().ProductName,
                 Barcode:          g.First().Barcode ?? string.Empty,
                 TotalRevenue:     g.Sum(i => i.PriceFinal * i.Quantity),
                 TotalQuantity:    g.Sum(i => i.Quantity),

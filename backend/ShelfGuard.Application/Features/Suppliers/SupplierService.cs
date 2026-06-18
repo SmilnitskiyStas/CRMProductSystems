@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Suppliers.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -14,6 +15,20 @@ public sealed class SupplierService : ISupplierService
     {
         var suppliers = await _repo.GetAllAsync(includeInactive, ct);
         return suppliers.Select(ToDto).ToList();
+    }
+
+    public async Task<PagedResult<SupplierDto>> GetPagedAsync(
+        bool includeInactive, int page, int pageSize,
+        CancellationToken ct = default)
+    {
+        var (suppliers, total) = await _repo.GetPagedAsync(includeInactive, page, pageSize, ct);
+        return new PagedResult<SupplierDto>
+        {
+            Items = suppliers.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<SupplierDto?> GetByIdAsync(Guid id, CancellationToken ct = default)

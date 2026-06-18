@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Suppliers.Dtos;
 
 namespace ShelfGuard.Application.Features.Suppliers;
@@ -5,6 +6,7 @@ namespace ShelfGuard.Application.Features.Suppliers;
 public interface ISupplierService
 {
     Task<List<SupplierDto>> GetAllAsync(bool includeInactive = false, CancellationToken ct = default);
+    Task<PagedResult<SupplierDto>> GetPagedAsync(bool includeInactive, int page, int pageSize, CancellationToken ct = default);
     Task<SupplierDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<(SupplierDto? Supplier, string? Error)> CreateAsync(

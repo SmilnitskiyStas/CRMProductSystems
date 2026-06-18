@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Receipts.Dtos;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Domain.Entities;
@@ -15,6 +16,20 @@ public sealed class ReceiptService : IReceiptService
     {
         var receipts = await _repo.GetAllAsync(storeId, status, ct);
         return receipts.Select(ToDto).ToList();
+    }
+
+    public async Task<PagedResult<ReceiptDto>> GetPagedAsync(
+        Guid? storeId, string? status, int page, int pageSize,
+        CancellationToken ct = default)
+    {
+        var (receipts, total) = await _repo.GetPagedAsync(storeId, status, page, pageSize, ct);
+        return new PagedResult<ReceiptDto>
+        {
+            Items = receipts.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<ReceiptDto?> GetByIdAsync(Guid id, CancellationToken ct = default)

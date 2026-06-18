@@ -92,6 +92,10 @@ file sealed class FakeStockRepo : IStockRepository
     public Task<List<ProductStock>> GetNeedsCheckAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetActionRequiredAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
+    public Task<Dictionary<Guid, ProductStock?>> GetDeficitStocksBulkAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default) =>
+        Task.FromResult(productIds.ToDictionary(id => id, _ => (ProductStock?)null));
+    public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid? storeId, string? status, Guid? zoneId, Guid? productId, int page, int pageSize, CancellationToken ct = default) =>
+        Task.FromResult((new List<ProductStock>(), 0));
     public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) => Task.FromResult(new List<Location>());
     public Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new Dictionary<string, int>());
     public Task AddAsync(ProductStock stock, CancellationToken ct = default) => Task.CompletedTask;
@@ -108,6 +112,9 @@ file sealed class FakeCatalogRepo : IItemRepository
 
     public Task<List<Item>> GetAllAsync(Guid? categoryId, Guid? segmentId, string? managementType, CancellationToken ct = default) =>
         Task.FromResult(Products);
+
+    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, int page, int pageSize, CancellationToken ct = default) =>
+        Task.FromResult((Products, Products.Count));
 
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult(Products.FirstOrDefault(p => p.Id == id));

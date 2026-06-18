@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.WriteOffs.Dtos;
 
 namespace ShelfGuard.Application.Features.WriteOffs;
@@ -5,6 +6,7 @@ namespace ShelfGuard.Application.Features.WriteOffs;
 public interface IWriteOffService
 {
     Task<List<WriteOffDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default);
+    Task<PagedResult<WriteOffDto>> GetPagedAsync(Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default);
     Task<WriteOffDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<(WriteOffDto? WriteOff, string? Error)> CreateAsync(

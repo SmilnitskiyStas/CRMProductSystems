@@ -27,6 +27,30 @@ public sealed class TransferRepository : ITransferRepository
         return await query.OrderByDescending(t => t.CreatedAt).ToListAsync(ct);
     }
 
+    public async Task<(List<StockTransfer> Items, int Total)> GetPagedAsync(
+        Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.StockTransfers
+            .Include(t => t.Items).ThenInclude(i => i.Product)
+            .Include(t => t.FromStore)
+            .Include(t => t.ToStore)
+            .AsQueryable();
+
+        if (storeId.HasValue)
+            query = query.Where(t => t.FromStoreId == storeId || t.ToStoreId == storeId);
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(t => t.Status == status);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(t => t.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task<StockTransfer?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.StockTransfers
             .Include(t => t.Items).ThenInclude(i => i.Product)

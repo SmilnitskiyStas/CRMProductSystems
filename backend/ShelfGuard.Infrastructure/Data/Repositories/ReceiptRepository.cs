@@ -29,6 +29,30 @@ public sealed class ReceiptRepository : IReceiptRepository
             .ToListAsync(ct);
     }
 
+    public async Task<(List<StockReceipt> Items, int Total)> GetPagedAsync(
+        Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.StockReceipts
+            .Include(r => r.Items).ThenInclude(i => i.Product)
+            .Include(r => r.Supplier)
+            .Include(r => r.DestinationStore)
+            .AsQueryable();
+
+        if (storeId.HasValue)
+            query = query.Where(r => r.DestinationStoreId == storeId);
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(r => r.Status == status);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task<StockReceipt?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.StockReceipts
             .Include(r => r.Items).ThenInclude(i => i.Product)

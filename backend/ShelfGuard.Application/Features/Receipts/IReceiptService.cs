@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Receipts.Dtos;
 
 namespace ShelfGuard.Application.Features.Receipts;
@@ -5,6 +6,7 @@ namespace ShelfGuard.Application.Features.Receipts;
 public interface IReceiptService
 {
     Task<List<ReceiptDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default);
+    Task<PagedResult<ReceiptDto>> GetPagedAsync(Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default);
     Task<ReceiptDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<(ReceiptDto? Receipt, string? Error)> CreateAsync(

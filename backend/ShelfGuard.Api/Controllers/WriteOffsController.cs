@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.WriteOffs;
 using ShelfGuard.Application.Features.WriteOffs.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
@@ -17,14 +18,17 @@ public sealed class WriteOffsController : ControllerBase
     public WriteOffsController(IWriteOffService writeOffs) => _writeOffs = writeOffs;
 
     [HttpGet]
-    [ProducesResponseType(typeof(List<WriteOffDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<WriteOffDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] Guid? store_id,
         [FromQuery] string? status,
-        CancellationToken ct)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
     {
-        var writeOffs = await _writeOffs.GetAllAsync(store_id, status, ct);
-        return Ok(writeOffs);
+        var query = new PagedQuery { Page = page, PageSize = pageSize };
+        var result = await _writeOffs.GetPagedAsync(store_id, status, query.ClampedPage, query.ClampedPageSize, ct);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

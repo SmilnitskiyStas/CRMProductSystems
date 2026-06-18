@@ -116,6 +116,10 @@ file sealed class RetryFakeStockRepo : IStockRepository
     public Task<List<ProductStock>> GetNeedsCheckAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetActionRequiredAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
+    public Task<Dictionary<Guid, ProductStock?>> GetDeficitStocksBulkAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default) =>
+        Task.FromResult(productIds.ToDictionary(id => id, _ => (ProductStock?)null));
+    public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid? storeId, string? status, Guid? zoneId, Guid? productId, int page, int pageSize, CancellationToken ct = default) =>
+        Task.FromResult((new List<ProductStock>(), 0));
     public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) => Task.FromResult(new List<Location>());
     public Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new Dictionary<string, int>());
     public Task AddAsync(ProductStock stock, CancellationToken ct = default) => Task.CompletedTask;
@@ -127,6 +131,8 @@ file sealed class RetryFakeCatalogRepo : IItemRepository
 {
     public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<List<Item>> GetAllAsync(Guid? c, Guid? s, string? m, CancellationToken ct = default) => Task.FromResult(new List<Item>());
+    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, int page, int pageSize, CancellationToken ct = default) =>
+        Task.FromResult((new List<Item>(), 0));
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) => Task.FromResult(new List<ProductSupplierSetting>());
     public Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default) => Task.FromResult(false);

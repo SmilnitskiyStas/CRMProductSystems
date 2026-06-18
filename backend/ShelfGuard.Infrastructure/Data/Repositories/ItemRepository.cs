@@ -36,6 +36,33 @@ public sealed class ItemRepository : IItemRepository
             .ToListAsync(ct);
     }
 
+    public async Task<(List<Item> Items, int Total)> GetPagedAsync(
+        Guid? categoryId, Guid? segmentId, string? managementType,
+        int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.Items
+            .Include(p => p.Category)
+            .Include(p => p.Segment)
+            .Include(p => p.DefaultSupplier)
+            .AsQueryable();
+
+        if (categoryId.HasValue)
+            query = query.Where(p => p.CategoryId == categoryId);
+        if (segmentId.HasValue)
+            query = query.Where(p => p.SegmentId == segmentId);
+        if (!string.IsNullOrWhiteSpace(managementType))
+            query = query.Where(p => p.ManagementType == managementType.ToUpperInvariant());
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(p => p.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.Items
             .Include(p => p.Category)

@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Stock.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -16,6 +17,21 @@ public sealed class StockService : IStockService
     {
         var batches = await _repo.GetAllAsync(storeId, status, zoneId, productId, ct);
         return batches.Select(ToDto).ToList();
+    }
+
+    public async Task<PagedResult<ProductStockDto>> GetPagedAsync(
+        Guid? storeId, string? status, Guid? zoneId, Guid? productId,
+        int page, int pageSize,
+        CancellationToken ct = default)
+    {
+        var (batches, total) = await _repo.GetPagedAsync(storeId, status, zoneId, productId, page, pageSize, ct);
+        return new PagedResult<ProductStockDto>
+        {
+            Items = batches.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<ProductStockDto?> GetByIdAsync(Guid id, CancellationToken ct = default)

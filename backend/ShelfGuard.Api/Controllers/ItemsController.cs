@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Catalog;
 using ShelfGuard.Application.Features.Catalog.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
@@ -16,18 +17,21 @@ public sealed class ItemsController : ControllerBase
     public ItemsController(IItemService catalog) => _catalog = catalog;
 
     [HttpGet]
-    [ProducesResponseType(typeof(List<ItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] Guid? category_id,
         [FromQuery] Guid? segment_id,
         [FromQuery] string? management_type,
-        CancellationToken ct)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
     {
         // tenantId is accepted by the service but not yet used for filtering (RLS handles isolation at DB level).
         // Provider users have no tenant_id claim — still allowed to view the global catalog.
         var tenantId = GetTenantId() ?? Guid.Empty;
-        var products = await _catalog.GetAllAsync(tenantId, category_id, segment_id, management_type, ct);
-        return Ok(products);
+        var query = new PagedQuery { Page = page, PageSize = pageSize };
+        var result = await _catalog.GetPagedAsync(tenantId, category_id, segment_id, management_type, query.ClampedPage, query.ClampedPageSize, ct);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

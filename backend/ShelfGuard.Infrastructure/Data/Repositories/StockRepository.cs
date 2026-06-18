@@ -38,6 +38,37 @@ public sealed class StockRepository : IStockRepository
             .ToListAsync(ct);
     }
 
+    public async Task<(List<ProductStock> Items, int Total)> GetPagedAsync(
+        Guid? storeId, string? status, Guid? zoneId, Guid? productId,
+        int page, int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = _db.ProductStocks
+            .Include(s => s.Product).ThenInclude(p => p!.DefaultSupplier)
+            .Include(s => s.Store)
+            .Include(s => s.Zone)
+            .AsQueryable();
+
+        if (storeId.HasValue)
+            query = query.Where(s => s.StoreId == storeId);
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(s => s.Status == status);
+        if (zoneId.HasValue)
+            query = query.Where(s => s.ZoneId == zoneId);
+        if (productId.HasValue)
+            query = query.Where(s => s.ProductId == productId);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(s => s.ExpiryDate)
+            .ThenBy(s => s.Product!.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task<ProductStock?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.ProductStocks
             .Include(s => s.Product).ThenInclude(p => p!.DefaultSupplier)
@@ -130,6 +161,32 @@ public sealed class StockRepository : IStockRepository
                 && s.Product != null
                 && s.Quantity < s.Product.MinStock)
             .ToListAsync(ct);
+
+    public async Task<Dictionary<Guid, ProductStock?>> GetDeficitStocksBulkAsync(
+        IReadOnlyCollection<Guid> productIds, CancellationToken ct = default)
+    {
+        // One query: load first deficit batch per product across all stores.
+        // We order by ExpiryDate so FirstOrDefault gives the FEFO-nearest deficit.
+        var rows = await _db.ProductStocks
+            .Include(s => s.Store)
+            .Include(s => s.Product)
+            .Where(s => productIds.Contains(s.ProductId)
+                && s.Quantity > 0
+                && s.Product != null
+                && s.Quantity < s.Product.MinStock)
+            .OrderBy(s => s.ExpiryDate)
+            .ToListAsync(ct);
+
+        // Build a lookup: productId → first matching row (null when absent).
+        var lookup = rows.GroupBy(s => s.ProductId)
+            .ToDictionary(g => g.Key, g => (ProductStock?)g.First());
+
+        // Ensure every requested productId has an entry so callers can do lookup[id].
+        foreach (var id in productIds)
+            lookup.TryAdd(id, null);
+
+        return lookup;
+    }
 
     public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) =>
         _db.Locations

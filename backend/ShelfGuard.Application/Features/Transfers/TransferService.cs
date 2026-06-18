@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Application.Features.Transfers.Dtos;
 using ShelfGuard.Domain.Entities;
@@ -15,6 +16,20 @@ public sealed class TransferService : ITransferService
     {
         var transfers = await _repo.GetAllAsync(storeId, status, ct);
         return transfers.Select(ToDto).ToList();
+    }
+
+    public async Task<PagedResult<TransferDto>> GetPagedAsync(
+        Guid? storeId, string? status, int page, int pageSize,
+        CancellationToken ct = default)
+    {
+        var (transfers, total) = await _repo.GetPagedAsync(storeId, status, page, pageSize, ct);
+        return new PagedResult<TransferDto>
+        {
+            Items = transfers.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<TransferDto?> GetByIdAsync(Guid id, CancellationToken ct = default)

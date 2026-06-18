@@ -18,6 +18,23 @@ public sealed class SupplierRepository : ISupplierRepository
         return query.OrderBy(s => s.Name).ToListAsync(ct);
     }
 
+    public async Task<(List<Supplier> Items, int Total)> GetPagedAsync(
+        bool includeInactive, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.Suppliers.AsQueryable();
+        if (!includeInactive)
+            query = query.Where(s => s.IsActive);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(s => s.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task<Supplier?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.Suppliers.FirstOrDefaultAsync(s => s.Id == id, ct);
 

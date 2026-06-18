@@ -221,6 +221,9 @@ public sealed class AppDbContext : DbContext
             e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(c => c.Name).HasMaxLength(255).IsRequired();
             e.Property(c => c.IsActive).HasDefaultValue(true);
+            // Hierarchical category tree navigation per tenant
+            e.HasIndex(c => new { c.TenantId, c.ParentId, c.IsActive })
+             .HasDatabaseName("idx_categories_tenant_parent_active");
             e.HasOne(c => c.Tenant).WithMany()
              .HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(c => c.Parent).WithMany()
@@ -279,6 +282,13 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.PriceRetail).HasColumnType("decimal(12,2)");
             e.Property(p => p.IsActive).HasDefaultValue(true);
             e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW()");
+            // Catalog browse: filter by category + segment + active status
+            e.HasIndex(p => new { p.TenantId, p.CategoryId, p.SegmentId, p.IsActive })
+             .HasDatabaseName("idx_items_tenant_category_segment_active");
+            // Barcode lookup — partial: only active items
+            e.HasIndex(p => p.Barcode)
+             .HasDatabaseName("idx_items_barcode_active")
+             .HasFilter("\"IsActive\" = true");
             e.HasOne(p => p.Tenant).WithMany()
              .HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(p => p.Category).WithMany()
@@ -322,6 +332,22 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.AddedAt).HasDefaultValueSql("NOW()");
             e.Property(s => s.LastCheckedAt).HasDefaultValueSql("NOW()");
             e.Property(s => s.StoreId).HasColumnName("LocationId");
+            // FEFO active stock — most critical query path
+            e.HasIndex(s => new { s.TenantId, s.StoreId, s.ProductId, s.ExpiryDate })
+             .HasDatabaseName("idx_stock_fefo_active")
+             .HasFilter("\"Quantity\" > 0");
+            // Store dashboard — covering index includes Status + Quantity
+            e.HasIndex(s => new { s.TenantId, s.StoreId })
+             .HasDatabaseName("idx_stock_tenant_store_covering")
+             .IncludeProperties(s => new { s.Status, s.Quantity });
+            // Status filter for analytics — AddedAt is the creation timestamp
+            e.HasIndex(s => new { s.TenantId, s.Status, s.AddedAt })
+             .IsDescending(false, false, true)
+             .HasDatabaseName("idx_stock_tenant_status_addedat");
+            // Zone analytics — active stock only
+            e.HasIndex(s => new { s.TenantId, s.ZoneId })
+             .HasDatabaseName("idx_stock_tenant_zone_active")
+             .HasFilter("\"Quantity\" > 0");
             e.HasOne(s => s.Product).WithMany()
              .HasForeignKey(s => s.ProductId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(s => s.Store).WithMany()
@@ -424,6 +450,9 @@ public sealed class AppDbContext : DbContext
             e.Property(w => w.TotalLossAmount).HasColumnType("decimal(12,2)");
             e.Property(w => w.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(w => w.StoreId).HasColumnName("LocationId");
+            e.HasIndex(w => new { w.TenantId, w.StoreId, w.Status, w.CreatedAt })
+             .IsDescending(false, false, false, true)
+             .HasDatabaseName("idx_write_offs_tenant_store_status");
         });
 
         // ── WriteOffItem ────────────────────────────────────────────────────
@@ -452,6 +481,10 @@ public sealed class AppDbContext : DbContext
             e.Property(d => d.Status).HasMaxLength(20).HasDefaultValue("pending");
             e.Property(d => d.ValidFrom).HasDefaultValueSql("NOW()");
             e.Property(d => d.StoreId).HasColumnName("LocationId");
+            // Active discounts by validity window
+            e.HasIndex(d => new { d.TenantId, d.Status, d.ValidFrom, d.ValidUntil })
+             .HasDatabaseName("idx_discounts_active")
+             .HasFilter("\"Status\" = 'active'");
             e.HasOne(d => d.Tenant).WithMany()
              .HasForeignKey(d => d.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(d => d.Creator).WithMany()
@@ -485,6 +518,9 @@ public sealed class AppDbContext : DbContext
             e.Property(n => n.Payload).HasColumnType("jsonb");
             e.Property(n => n.Status).HasMaxLength(20).HasDefaultValue("pending");
             e.Property(n => n.CreatedAt).HasDefaultValueSql("NOW()");
+            // Worker queue polling: find pending items by tenant, ordered by time
+            e.HasIndex(n => new { n.TenantId, n.Status, n.CreatedAt })
+             .HasDatabaseName("idx_notification_queue_tenant_status");
         });
 
         // ── IntegrationConfig ───────────────────────────────────────────────
@@ -531,6 +567,10 @@ public sealed class AppDbContext : DbContext
             e.Property(d => d.StoreId).HasColumnName("LocationId");
             e.HasIndex(d => new { d.StoreId, d.ProductId, d.Date }).IsUnique();
             e.HasIndex(d => new { d.TenantId, d.Date });
+            // ADU source data: fetch recent sales per product+store
+            e.HasIndex(d => new { d.TenantId, d.StoreId, d.ProductId, d.Date })
+             .IsDescending(false, false, false, true)
+             .HasDatabaseName("idx_daily_sales_tenant_store_product_date");
             e.HasOne(d => d.Product).WithMany()
              .HasForeignKey(d => d.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(d => d.Store).WithMany()
@@ -817,6 +857,11 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(t => new { t.TenantId, t.StoreId, t.CreatedAt });
             e.HasIndex(t => t.Status).HasFilter("\"Status\" = 'pending_fiscalization'");
             e.HasIndex(t => new { t.TenantId, t.ReceiptNumber }).IsUnique();
+            // Reporting: exclude failed fiscalization records from dashboard queries
+            e.HasIndex(t => new { t.TenantId, t.StoreId, t.CreatedAt })
+             .IsDescending(false, false, true)
+             .HasDatabaseName("idx_pos_transactions_excl_failed")
+             .HasFilter("\"Status\" <> 'fiscalization_failed'");
             e.HasOne(t => t.Store).WithMany()
              .HasForeignKey(t => t.StoreId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.Shift).WithMany()
@@ -836,6 +881,10 @@ public sealed class AppDbContext : DbContext
             e.Property(i => i.DiscountAmount).HasColumnType("decimal(12,2)").HasDefaultValue(0m);
             e.Property(i => i.PriceFinal).HasColumnType("decimal(12,2)");
             e.HasIndex(i => i.TransactionId);
+            // Covering index: load receipt lines without heap fetch
+            e.HasIndex(i => i.TransactionId)
+             .HasDatabaseName("idx_pos_transaction_items_txn_covering")
+             .IncludeProperties(i => new { i.ProductId, i.PriceFinal, i.Quantity });
             e.HasOne(i => i.Product).WithMany()
              .HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ProductStock>().WithMany()

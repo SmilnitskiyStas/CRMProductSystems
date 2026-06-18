@@ -20,10 +20,20 @@ Returns typed DTO directly in body.
 { "error": "Human-readable message" }
 ```
 
-### Pagination (not yet implemented — planned)
+### Pagination
+All LIST endpoints return a `PagedResult<T>` envelope. Default: `page=1`, `pageSize=50`. Max `pageSize=200` (clamped silently).
 ```json
-{ "items": [...], "total": N, "page": N, "pageSize": N }
+{ "items": [...], "totalCount": N, "page": N, "pageSize": N, "totalPages": N }
 ```
+Query params: `?page=1&pageSize=50`
+
+Paginated endpoints:
+- `GET /api/stock` — `PagedResult<ProductStockDto>`
+- `GET /api/receipts` — `PagedResult<ReceiptDto>`
+- `GET /api/write-offs` — `PagedResult<WriteOffDto>`
+- `GET /api/transfers` — `PagedResult<TransferDto>`
+- `GET /api/items` — `PagedResult<ItemDto>`
+- `GET /api/suppliers` — `PagedResult<SupplierDto>`
 
 ---
 

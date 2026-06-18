@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Receipts;
 using ShelfGuard.Application.Features.Receipts.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
@@ -17,14 +18,17 @@ public sealed class ReceiptsController : ControllerBase
     public ReceiptsController(IReceiptService receipts) => _receipts = receipts;
 
     [HttpGet]
-    [ProducesResponseType(typeof(List<ReceiptDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ReceiptDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] Guid? store_id,
         [FromQuery] string? status,
-        CancellationToken ct)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
     {
-        var receipts = await _receipts.GetAllAsync(store_id, status, ct);
-        return Ok(receipts);
+        var query = new PagedQuery { Page = page, PageSize = pageSize };
+        var result = await _receipts.GetPagedAsync(store_id, status, query.ClampedPage, query.ClampedPageSize, ct);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

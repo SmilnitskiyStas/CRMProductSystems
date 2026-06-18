@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Suppliers;
 using ShelfGuard.Application.Features.Suppliers.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
@@ -16,13 +17,16 @@ public sealed class SuppliersController : ControllerBase
     public SuppliersController(ISupplierService suppliers) => _suppliers = suppliers;
 
     [HttpGet]
-    [ProducesResponseType(typeof(List<SupplierDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<SupplierDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] bool include_inactive = false,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var suppliers = await _suppliers.GetAllAsync(include_inactive, ct);
-        return Ok(suppliers);
+        var query = new PagedQuery { Page = page, PageSize = pageSize };
+        var result = await _suppliers.GetPagedAsync(include_inactive, query.ClampedPage, query.ClampedPageSize, ct);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

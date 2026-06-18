@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Catalog.Dtos;
 
 namespace ShelfGuard.Application.Features.Catalog;
@@ -9,6 +10,15 @@ public interface IItemService
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
+        CancellationToken ct = default);
+
+    Task<PagedResult<ItemDto>> GetPagedAsync(
+        Guid tenantId,
+        Guid? categoryId,
+        Guid? segmentId,
+        string? managementType,
+        int page,
+        int pageSize,
         CancellationToken ct = default);
 
     Task<ItemDto?> GetByIdAsync(Guid id, CancellationToken ct = default);

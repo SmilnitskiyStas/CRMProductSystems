@@ -27,6 +27,30 @@ public sealed class WriteOffRepository : IWriteOffRepository
         return await query.OrderByDescending(w => w.CreatedAt).ToListAsync(ct);
     }
 
+    public async Task<(List<WriteOff> Items, int Total)> GetPagedAsync(
+        Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.WriteOffs
+            .Include(w => w.Items).ThenInclude(i => i.Product)
+            .Include(w => w.Items).ThenInclude(i => i.ProductStock)
+            .Include(w => w.Store)
+            .AsQueryable();
+
+        if (storeId.HasValue)
+            query = query.Where(w => w.StoreId == storeId);
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(w => w.Status == status);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(w => w.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task<WriteOff?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.WriteOffs
             .Include(w => w.Items).ThenInclude(i => i.Product)

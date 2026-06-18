@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Catalog.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -19,6 +20,25 @@ public sealed class ItemService : IItemService
     {
         var products = await _repo.GetAllAsync(categoryId, segmentId, managementType, ct);
         return products.Select(ToDto).ToList();
+    }
+
+    public async Task<PagedResult<ItemDto>> GetPagedAsync(
+        Guid tenantId,
+        Guid? categoryId,
+        Guid? segmentId,
+        string? managementType,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var (products, total) = await _repo.GetPagedAsync(categoryId, segmentId, managementType, page, pageSize, ct);
+        return new PagedResult<ItemDto>
+        {
+            Items = products.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<ItemDto?> GetByIdAsync(Guid id, CancellationToken ct = default)

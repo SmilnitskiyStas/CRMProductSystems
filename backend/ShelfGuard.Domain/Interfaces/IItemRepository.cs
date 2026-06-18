@@ -10,6 +10,14 @@ public interface IItemRepository
         string? managementType,
         CancellationToken ct = default);
 
+    Task<(List<Item> Items, int Total)> GetPagedAsync(
+        Guid? categoryId,
+        Guid? segmentId,
+        string? managementType,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
+
     Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default);
 

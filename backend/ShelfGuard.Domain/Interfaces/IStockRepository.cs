@@ -11,6 +11,15 @@ public interface IStockRepository
         Guid? productId,
         CancellationToken ct = default);
 
+    Task<(List<ProductStock> Items, int Total)> GetPagedAsync(
+        Guid? storeId,
+        string? status,
+        Guid? zoneId,
+        Guid? productId,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
+
     Task<ProductStock?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<List<ProductStock>> GetExpiringAsync(Guid? storeId, int days, CancellationToken ct = default);
@@ -27,6 +36,13 @@ public interface IStockRepository
 
     /// <summary>Returns stock with deficit (quantity below min_stock) for a product across all stores.</summary>
     Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Bulk variant: returns deficit stocks for many products in one query.
+    /// Key = productId, Value = first deficit batch (or null when none).
+    /// </summary>
+    Task<Dictionary<Guid, ProductStock?>> GetDeficitStocksBulkAsync(
+        IReadOnlyCollection<Guid> productIds, CancellationToken ct = default);
 
     /// <summary>Returns locations of type 'production' or 'distribution' for the tenant.</summary>
     Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default);

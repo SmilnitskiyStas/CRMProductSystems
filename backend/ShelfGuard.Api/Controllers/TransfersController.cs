@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Transfers;
 using ShelfGuard.Application.Features.Transfers.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
@@ -18,14 +19,17 @@ public sealed class TransfersController : ControllerBase
 
     [HttpGet]
     [Authorize(Policy = AppPolicies.CanViewStock)]
-    [ProducesResponseType(typeof(List<TransferDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<TransferDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] Guid? store_id,
         [FromQuery] string? status,
-        CancellationToken ct)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
     {
-        var transfers = await _transfers.GetAllAsync(store_id, status, ct);
-        return Ok(transfers);
+        var query = new PagedQuery { Page = page, PageSize = pageSize };
+        var result = await _transfers.GetPagedAsync(store_id, status, query.ClampedPage, query.ClampedPageSize, ct);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

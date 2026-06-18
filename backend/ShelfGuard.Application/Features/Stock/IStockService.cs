@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Stock.Dtos;
 using ShelfGuard.Domain.Entities;
 
@@ -10,6 +11,15 @@ public interface IStockService
         string? status,
         Guid? zoneId,
         Guid? productId,
+        CancellationToken ct = default);
+
+    Task<PagedResult<ProductStockDto>> GetPagedAsync(
+        Guid? storeId,
+        string? status,
+        Guid? zoneId,
+        Guid? productId,
+        int page,
+        int pageSize,
         CancellationToken ct = default);
 
     Task<ProductStockDto?> GetByIdAsync(Guid id, CancellationToken ct = default);

@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Application.Features.WriteOffs.Dtos;
 using ShelfGuard.Domain.Entities;
@@ -18,6 +19,20 @@ public sealed class WriteOffService : IWriteOffService
     {
         var writeOffs = await _repo.GetAllAsync(storeId, status, ct);
         return writeOffs.Select(ToDto).ToList();
+    }
+
+    public async Task<PagedResult<WriteOffDto>> GetPagedAsync(
+        Guid? storeId, string? status, int page, int pageSize,
+        CancellationToken ct = default)
+    {
+        var (writeOffs, total) = await _repo.GetPagedAsync(storeId, status, page, pageSize, ct);
+        return new PagedResult<WriteOffDto>
+        {
+            Items = writeOffs.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<WriteOffDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
