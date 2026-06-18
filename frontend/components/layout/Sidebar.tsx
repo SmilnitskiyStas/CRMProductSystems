@@ -171,8 +171,9 @@ const NAV_GROUPS: NavGroup[] = [
 
 /**
  * True when the group should be visible given the tenant's active modules.
- * `modulesSet === null` means "not loaded yet" — default to visible to avoid a
- * flash-hide-then-show; groups with no `moduleKey` are never module-gated.
+ * `modulesSet === null` means either "not loaded yet" or "bypass gating" (provider /
+ * enterprise_admin) — default to visible in both cases to avoid flash-hide-then-show.
+ * Groups with no `moduleKey` are never module-gated.
  */
 function isModuleActive(moduleKey: ModuleKey | undefined, modulesSet: Set<string> | null): boolean {
   if (!moduleKey) return true;
@@ -358,9 +359,15 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   const showDashboard = !dashboardItem.roles || dashboardItem.roles.has(userRole);
 
   // Provider has no tenant_id outside impersonation — /api/settings/modules would 403.
-  // Module-gated groups are role-restricted away from provider anyway, so skip the call.
-  const { data: modulesData } = useModules(!!userRole && userRole !== "provider");
-  const modulesSet = modulesData ? new Set<string>(modulesData.modules) : null;
+  // enterprise_admin manages modules, so they bypass gating and see all groups.
+  const isModuleAdmin = userRole === "provider" || userRole === "enterprise_admin";
+  const { data: modulesData } = useModules(!!userRole && !isModuleAdmin);
+  // null = not loaded yet (show all) OR user is a module admin (always show all)
+  const modulesSet = isModuleAdmin
+    ? null
+    : modulesData
+    ? new Set<string>(modulesData.modules)
+    : null;
 
   // Filter groups by module activation, then by role
   const visibleGroups = NAV_GROUPS
