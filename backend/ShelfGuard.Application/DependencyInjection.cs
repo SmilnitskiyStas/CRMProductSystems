@@ -20,6 +20,7 @@ using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.AutoService;
 using ShelfGuard.Application.Features.Production;
 using ShelfGuard.Application.Features.AiAssistant;
+using ShelfGuard.Application.Features.Customers;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -78,6 +79,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 Phase 6 - AI Business Assistant (TASK-250)
         services.AddScoped<IAiAssistantService, AiAssistantService>();
+
+        // TASK-252 - CRM Customers
+        services.AddScoped<ICustomerService, CustomerService>();
 
         return services;
     }

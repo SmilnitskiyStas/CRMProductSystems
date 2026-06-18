@@ -91,6 +91,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<AsWorkOrder>     AsWorkOrders     => Set<AsWorkOrder>();
     public DbSet<AsWorkOrderLine> AsWorkOrderLines => Set<AsWorkOrderLine>();
 
+    // CRM Customers
+    public DbSet<Customer> Customers => Set<Customer>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -1184,6 +1187,46 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(c => c.ItemId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(c => c.ProductStock).WithMany()
              .HasForeignKey(c => c.ProductStockId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Customer (CRM) ───────────────────────────────────────────────────
+        builder.Entity<Customer>(e =>
+        {
+            e.ToTable("customers");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.Name).HasColumnType("text").IsRequired();
+            e.Property(c => c.Phone).HasColumnType("text");
+            e.Property(c => c.Email).HasColumnType("text");
+            e.Property(c => c.Notes).HasColumnType("text");
+            e.Property(c => c.Tags).HasColumnType("text[]");
+            e.Property(c => c.TotalOrders).HasDefaultValue(0);
+            e.Property(c => c.TotalSpent).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+            e.Property(c => c.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(c => c.UpdatedAt).HasDefaultValueSql("NOW()");
+            // Tenant isolation (RLS)
+            e.HasIndex(c => c.TenantId)
+             .HasDatabaseName("idx_customers_tenant");
+            // Phone lookup — partial: only rows with a phone number
+            e.HasIndex(c => new { c.TenantId, c.Phone })
+             .HasDatabaseName("idx_customers_phone")
+             .HasFilter("\"Phone\" IS NOT NULL");
+            // Email lookup — partial
+            e.HasIndex(c => new { c.TenantId, c.Email })
+             .HasDatabaseName("idx_customers_email")
+             .HasFilter("\"Email\" IS NOT NULL");
+            e.HasOne(c => c.Tenant).WithMany()
+             .HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(c => c.Transactions).WithOne(t => t.Customer)
+             .HasForeignKey(t => t.CustomerId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── PosTransaction — customer FK index ──────────────────────────────
+        builder.Entity<PosTransaction>(e =>
+        {
+            e.HasIndex(t => t.CustomerId)
+             .HasDatabaseName("idx_pos_tx_customer")
+             .HasFilter("\"CustomerId\" IS NOT NULL");
         });
     }
 }

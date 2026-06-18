@@ -137,6 +137,10 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.AiAssistant.IBusinessAssistantAdvisor,
             AI.BusinessAssistant.BusinessAssistantAdvisor>();
 
+        // TASK-252 - CRM Customers
+        services.AddScoped<Domain.Interfaces.ICustomerRepository,
+            Data.Repositories.CustomerRepository>();
+
         return services;
     }
 }

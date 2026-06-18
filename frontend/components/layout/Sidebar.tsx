@@ -96,9 +96,10 @@ const NAV_GROUPS: NavGroup[] = [
     icon: <TrendingUp size={18} />,
     moduleKey: "pos",
     items: [
-      { href: "/pos",    label: "Каса",    icon: <CreditCard size={16} />,  roles: CAN_ACCESS_POS },
-      { href: "/sales",  label: "Продажі", icon: <TrendingUp size={16} />,  roles: AT_LEAST_STORE_MANAGER },
-      { href: "/events", label: "Події",   icon: <CalendarDays size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/pos",       label: "Каса",     icon: <CreditCard size={16} />,   roles: CAN_ACCESS_POS },
+      { href: "/sales",     label: "Продажі",  icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/customers", label: "Клієнти",  icon: <Users size={16} />,        roles: AT_LEAST_STORE_MANAGER },
+      { href: "/events",    label: "Події",    icon: <CalendarDays size={16} />,  roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {

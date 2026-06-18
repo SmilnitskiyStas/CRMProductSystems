@@ -24,9 +24,13 @@ public sealed class PosTransaction
     public int RetryCount { get; set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
+    /// <summary>Optional CRM customer linked to this transaction.</summary>
+    public Guid? CustomerId { get; set; }
+
     public ICollection<PosTransactionItem> Items { get; init; } = new List<PosTransactionItem>();
 
     // Navigation properties
     public Location? Store { get; init; }
     public PosShift? Shift { get; init; }
+    public Customer? Customer { get; init; }
 }
