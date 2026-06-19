@@ -106,6 +106,9 @@ export default function AppLayout() {
       <Tabs.Screen name="auto-service/index" options={{ href: null }} />
       <Tabs.Screen name="auto-service/[id]" options={{ href: null }} />
       <Tabs.Screen name="auto-service/customers" options={{ href: null }} />
+      {/* Customers — hidden routes (no tab) */}
+      <Tabs.Screen name="customers/index" options={{ href: null }} />
+      <Tabs.Screen name="customers/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
