@@ -1287,9 +1287,12 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(s => s.UpdatedAt).HasDefaultValueSql("NOW()");
-            // Weekly schedule browse: tenant + location + week
+            // Unique active schedule per (tenant, location, week) — archived schedules are excluded via filter.
+            // This prevents duplicate schedules for the same week and location.
             e.HasIndex(s => new { s.TenantId, s.LocationId, s.WeekStart })
-             .HasDatabaseName("idx_work_schedules_tenant_location");
+             .IsUnique()
+             .HasFilter("\"Status\" <> 'archived'")
+             .HasDatabaseName("uq_work_schedules_tenant_location_week");
             e.HasOne(s => s.Location).WithMany()
              .HasForeignKey(s => s.LocationId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(s => s.CreatedByUser).WithMany()

@@ -110,4 +110,13 @@ public sealed class ScheduleRepository : IScheduleRepository
 
     public async Task<bool> LocationExistsAsync(Guid locationId, Guid tenantId, CancellationToken ct) =>
         await _db.Locations.AnyAsync(l => l.Id == locationId && l.TenantId == tenantId, ct);
+
+    public async Task<bool> ScheduleExistsForWeekAsync(
+        Guid tenantId, Guid locationId, DateOnly weekStart, CancellationToken ct) =>
+        await _db.WorkSchedules.AnyAsync(
+            s => s.TenantId == tenantId
+              && s.LocationId == locationId
+              && s.WeekStart == weekStart
+              && s.Status != "archived",
+            ct);
 }

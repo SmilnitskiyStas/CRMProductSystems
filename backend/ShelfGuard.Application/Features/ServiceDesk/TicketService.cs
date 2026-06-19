@@ -81,6 +81,27 @@ public sealed class TicketService : ITicketService
         if (string.IsNullOrWhiteSpace(dto.Description))
             return (null, "Description is required.");
 
+        var validCategories = new[]
+        {
+            SupportTicketCategory.General,
+            SupportTicketCategory.Technical,
+            SupportTicketCategory.Billing,
+            SupportTicketCategory.FeatureRequest,
+            SupportTicketCategory.Bug,
+        };
+        if (!string.IsNullOrWhiteSpace(dto.Category) && !validCategories.Contains(dto.Category))
+            return (null, $"Invalid category '{dto.Category}'. Allowed: {string.Join(", ", validCategories)}.");
+
+        var validPriorities = new[]
+        {
+            SupportTicketPriority.Low,
+            SupportTicketPriority.Medium,
+            SupportTicketPriority.High,
+            SupportTicketPriority.Critical,
+        };
+        if (!string.IsNullOrWhiteSpace(dto.Priority) && !validPriorities.Contains(dto.Priority))
+            return (null, $"Invalid priority '{dto.Priority}'. Allowed: {string.Join(", ", validPriorities)}.");
+
         var ticket = new SupportTicket
         {
             TenantId    = tenantId,

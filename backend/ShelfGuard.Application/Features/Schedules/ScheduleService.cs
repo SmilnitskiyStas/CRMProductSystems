@@ -30,8 +30,14 @@ public sealed class ScheduleService : IScheduleService
         if (string.IsNullOrWhiteSpace(dto.Name))
             return (null, "Schedule name is required.");
 
+        if (dto.WeekStart.DayOfWeek != DayOfWeek.Monday)
+            return (null, "WeekStart must be a Monday.");
+
         if (!await _repo.LocationExistsAsync(dto.LocationId, tenantId, ct))
             return (null, "Location not found.");
+
+        if (await _repo.ScheduleExistsForWeekAsync(tenantId, dto.LocationId, dto.WeekStart, ct))
+            return (null, "A schedule for this location and week already exists.");
 
         var schedule = new WorkSchedule
         {
