@@ -57,6 +57,7 @@ public sealed class TicketRepository : ITicketRepository
             .Include(t => t.AssignedToUser)
             .Include(t => t.Location)
             .Include(t => t.Comments)
+                .ThenInclude(c => c.Author)
             .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId, ct);
 
     public async Task<SupportTicket?> GetByIdWithCommentsAsync(Guid id, Guid tenantId, CancellationToken ct) =>

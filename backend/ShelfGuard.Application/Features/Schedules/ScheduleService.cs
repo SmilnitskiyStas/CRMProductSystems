@@ -30,6 +30,9 @@ public sealed class ScheduleService : IScheduleService
         if (string.IsNullOrWhiteSpace(dto.Name))
             return (null, "Schedule name is required.");
 
+        if (!await _repo.LocationExistsAsync(dto.LocationId, tenantId, ct))
+            return (null, "Location not found.");
+
         var schedule = new WorkSchedule
         {
             TenantId   = tenantId,
@@ -94,6 +97,9 @@ public sealed class ScheduleService : IScheduleService
         var schedule = await _repo.GetByIdAsync(scheduleId, tenantId, ct);
         if (schedule is null)
             return (null, "Schedule not found.");
+
+        if (!await _repo.LocationExistsAsync(dto.LocationId, tenantId, ct))
+            return (null, "Location not found.");
 
         if (dto.EndTime <= dto.StartTime)
             return (null, "EndTime must be after StartTime.");

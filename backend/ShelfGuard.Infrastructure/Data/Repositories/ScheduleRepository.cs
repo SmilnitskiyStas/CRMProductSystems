@@ -107,4 +107,7 @@ public sealed class ScheduleRepository : IScheduleRepository
             .OrderBy(sh => sh.ShiftDate)
             .ThenBy(sh => sh.StartTime)
             .ToListAsync(ct);
+
+    public async Task<bool> LocationExistsAsync(Guid locationId, Guid tenantId, CancellationToken ct) =>
+        await _db.Locations.AnyAsync(l => l.Id == locationId && l.TenantId == tenantId, ct);
 }

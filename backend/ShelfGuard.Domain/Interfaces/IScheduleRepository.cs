@@ -15,4 +15,5 @@ public interface IScheduleRepository
     Task UpdateShiftAsync(ScheduleShift shift, CancellationToken ct);
     Task DeleteShiftAsync(Guid shiftId, Guid tenantId, CancellationToken ct);
     Task<List<ScheduleShift>> GetShiftsByUserAsync(Guid userId, Guid tenantId, DateOnly from, DateOnly to, CancellationToken ct);
+    Task<bool> LocationExistsAsync(Guid locationId, Guid tenantId, CancellationToken ct);
 }
