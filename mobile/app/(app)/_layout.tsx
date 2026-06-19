@@ -112,6 +112,9 @@ export default function AppLayout() {
       {/* Service Desk — hidden routes (no tab) */}
       <Tabs.Screen name="service-desk/index" options={{ href: null }} />
       <Tabs.Screen name="service-desk/[id]" options={{ href: null }} />
+      {/* Schedules — hidden routes (no tab) */}
+      <Tabs.Screen name="schedules/index" options={{ href: null }} />
+      <Tabs.Screen name="schedules/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
