@@ -123,6 +123,8 @@ export default function AppLayout() {
       <Tabs.Screen name="production/index" options={{ href: null }} />
       <Tabs.Screen name="production/[id]" options={{ href: null }} />
       <Tabs.Screen name="production/recipes/index" options={{ href: null }} />
+      {/* AI Assistant — hidden route (no tab) */}
+      <Tabs.Screen name="ai-assistant" options={{ href: null }} />
     </Tabs>
   );
 }

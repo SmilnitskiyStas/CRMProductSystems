@@ -240,6 +240,30 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* AI Assistant */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/ai-assistant')}
+          activeOpacity={0.85}
+          className="rounded-2xl p-4 flex-row items-center gap-3"
+          style={{ backgroundColor: '#0d1117', borderWidth: 1, borderColor: '#1f2937' }}
+        >
+          <View
+            className="w-10 h-10 rounded-full items-center justify-center"
+            style={{ backgroundColor: '#1d4ed820' }}
+          >
+            <Ionicons name="sparkles-outline" size={20} color="#60a5fa" />
+          </View>
+          <View className="flex-1">
+            <Text style={{ color: '#e8edf5', fontSize: 14, fontWeight: '600' }}>
+              AI Бізнес-Асистент
+            </Text>
+            <Text style={{ color: '#4b5563', fontSize: 12, marginTop: 1 }}>
+              Запитай про залишки, продажі та замовлення
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#374151" />
+        </TouchableOpacity>
+
         {/* AI Orders — only for managers+ */}
         {isManager && pendingAiCount > 0 && (
           <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex-row items-center gap-3">

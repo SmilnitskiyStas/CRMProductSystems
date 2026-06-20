@@ -38,6 +38,13 @@ const MODULES: ModuleItem[] = [
     color: '#7c3aed',
   },
   {
+    icon: 'sparkles-outline',
+    label: 'AI Асистент',
+    description: 'Запитай про бізнес-показники',
+    href: '/(app)/ai-assistant',
+    color: '#60a5fa',
+  },
+  {
     icon: 'people-outline',
     label: 'Клієнти',
     description: 'База клієнтів та контакти',
