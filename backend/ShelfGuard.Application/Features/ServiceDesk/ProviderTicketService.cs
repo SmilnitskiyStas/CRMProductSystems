@@ -78,6 +78,7 @@ public sealed class ProviderTicketService : IProviderTicketService
             TenantId:          t.TenantId,
             TenantName:        tenantName,
             Title:             t.Title,
+            Description:       t.Description,
             Category:          t.Category,
             Priority:          t.Priority,
             Status:            t.Status,

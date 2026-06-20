@@ -6,6 +6,7 @@ public record ProviderTicketListItemDto(
     Guid TenantId,
     string TenantName,
     string Title,
+    string Description,
     string Category,
     string Priority,
     string Status,

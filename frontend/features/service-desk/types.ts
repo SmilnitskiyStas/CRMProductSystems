@@ -77,6 +77,38 @@ export interface AddCommentPayload {
   isInternal: boolean;
 }
 
+// ── Provider cross-tenant types (TASK-271) ──────────────────────────────────
+
+export interface ProviderTicketListItemDto {
+  id: string;
+  number: number;
+  tenantId: string;
+  tenantName: string;
+  title: string;
+  description: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  status: TicketStatus;
+  createdBy: string;
+  createdByName: string;
+  createdByProvider: boolean;
+  createdAt: string;
+  commentCount: number;
+}
+
+export interface CreateProviderTicketPayload {
+  targetTenantId: string;
+  title: string;
+  description: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+}
+
+export interface ProviderTicketFilters {
+  status?: TicketStatus | "";
+  tenantId?: string;
+}
+
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
   open: "Відкритий",
   in_progress: "В роботі",
