@@ -31,6 +31,13 @@ const MODULES: ModuleItem[] = [
     color: '#16a34a',
   },
   {
+    icon: 'flask-outline',
+    label: 'Виробництво',
+    description: 'Рецепти та виробничі ордери',
+    href: '/(app)/production',
+    color: '#7c3aed',
+  },
+  {
     icon: 'people-outline',
     label: 'Клієнти',
     description: 'База клієнтів та контакти',
