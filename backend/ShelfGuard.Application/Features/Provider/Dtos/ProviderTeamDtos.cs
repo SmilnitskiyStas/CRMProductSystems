@@ -14,3 +14,8 @@ public record InviteProviderMemberRequest(
     string FullName,
     string Role
 );
+
+public record UpdateProviderMemberRequest(
+    string FullName,
+    string Role
+);

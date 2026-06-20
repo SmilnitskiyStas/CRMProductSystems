@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "../api/providerTeamApi";
-import type { InviteProviderMemberRequest } from "../api/providerTeamApi";
+import type { InviteProviderMemberRequest, UpdateProviderMemberRequest } from "../api/providerTeamApi";
 
 const TEAM_KEY = ["provider", "team"];
 
@@ -19,10 +19,27 @@ export function useInviteProviderMember() {
   });
 }
 
+export function useUpdateMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, req }: { memberId: string; req: UpdateProviderMemberRequest }) =>
+      api.updateMember(memberId, req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TEAM_KEY }),
+  });
+}
+
 export function useDeactivateMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (memberId: string) => api.deactivateMember(memberId),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: TEAM_KEY }),
+  });
+}
+
+export function useReactivateMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) => api.reactivateMember(memberId),
     onSuccess:  () => qc.invalidateQueries({ queryKey: TEAM_KEY }),
   });
 }

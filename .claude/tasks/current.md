@@ -2,6 +2,18 @@
 
 ---
 
+## TASK-272 — Provider HR: управління власним персоналом
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-20
+Розширення команди провайдера: редагування учасника + реактивація.
+Backend: `PUT /api/provider/team/{id}` + `POST /api/provider/team/{id}/reactivate` ([ProviderCanInvite]).
+Frontend: `EditMemberModal.tsx` (нова) + оновлений `TeamTab.tsx` з кнопками Edit/Відновити.
+Guard: роль власника (`provider`) не може бути змінена через API.
+Build green, tsc green.
+Log: `272_2026-06-20_provider-hr-staff-management_backend-developer.md`
+**Next:** TASK-273 (employee performance stats), TASK-274 (schedule/calendar UI).
+
+---
+
 ## TASK-271 — Backend: Provider cross-tenant Service Desk
 **Status:** done · **Agent:** backend-developer · **Depends:** TASK-251 · Updated: 2026-06-20
 Provider може бачити тікети з усіх тенантів та створювати тікети від імені клієнта.

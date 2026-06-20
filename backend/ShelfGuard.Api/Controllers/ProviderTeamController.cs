@@ -27,11 +27,28 @@ public sealed class ProviderTeamController(IProviderTeamService teamService) : C
         return Created($"/api/provider/team", member);
     }
 
+    [HttpPut("{memberId:guid}")]
+    [Authorize(Policy = AppPolicies.ProviderCanInvite)]
+    public async Task<IActionResult> Update(Guid memberId, [FromBody] UpdateProviderMemberRequest req, CancellationToken ct)
+    {
+        var (member, error) = await teamService.UpdateMemberAsync(memberId, req, ct);
+        if (error is not null) return BadRequest(new { error });
+        return Ok(member);
+    }
+
     [HttpDelete("{memberId:guid}")]
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Deactivate(Guid memberId, CancellationToken ct)
     {
         var success = await teamService.DeactivateMemberAsync(memberId, ct);
+        return success ? NoContent() : NotFound();
+    }
+
+    [HttpPost("{memberId:guid}/reactivate")]
+    [Authorize(Policy = AppPolicies.ProviderCanInvite)]
+    public async Task<IActionResult> Reactivate(Guid memberId, CancellationToken ct)
+    {
+        var success = await teamService.ReactivateMemberAsync(memberId, ct);
         return success ? NoContent() : NotFound();
     }
 }
