@@ -46,6 +46,7 @@ import {
   CAN_VIEW_ANALYTICS,
   CAN_VIEW_WAREHOUSE,
   PROVIDER_ONLY,
+  PROVIDER_TEAM,
   TENANT_ROLES,
   type AppRole,
 } from "@/lib/roles";
@@ -158,8 +159,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Персонал",
     icon: <Users size={18} />,
     items: [
-      { href: "/users",      label: "Персонал", icon: <Users size={16} />,    roles: AT_LEAST_STORE_MANAGER },
-      { href: "/schedules",  label: "Розклад",  icon: <Calendar size={16} /> },
+      { href: "/users",          label: "Персонал", icon: <Users size={16} />,    roles: AT_LEAST_STORE_MANAGER },
+      { href: "/schedules",      label: "Розклад",  icon: <Calendar size={16} /> },
+      { href: "/provider/team",  label: "Команда",  icon: <Users size={16} />,    roles: PROVIDER_TEAM },
     ],
   },
   {

@@ -2,16 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Users, Building2, AlertTriangle, Activity, RefreshCw, MessageSquare, BarChart2, Calendar } from "lucide-react";
+import { Shield, Building2, AlertTriangle, Activity, RefreshCw, Users } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useTenants, useProviderHealth } from "@/features/provider/hooks/useProvider";
 import { TenantCard } from "@/features/provider/components/TenantCard";
 import { TenantDetailPanel } from "@/features/provider/components/TenantDetailPanel";
 import { ProviderLogsPanel } from "@/features/provider/components/ProviderLogsPanel";
-import { TeamTab } from "@/features/provider/components/TeamTab";
-import { ProviderSupportTab } from "@/features/provider/components/ProviderSupportTab";
-import { StatsTab } from "@/features/provider/components/StatsTab";
-import { ScheduleTab } from "@/features/provider/components/ScheduleTab";
 
 const PROVIDER_ROLES = ["provider", "provider_admin", "provider_agent"];
 
@@ -23,7 +19,7 @@ export default function ProviderPage() {
   const { data: health }  = useProviderHealth();
 
   const [search,         setSearch]         = useState("");
-  const [activeTab,      setActiveTab]      = useState<"tenants" | "logs" | "team" | "support" | "schedule" | "stats">("tenants");
+  const [activeTab,      setActiveTab]      = useState<"tenants" | "logs">("tenants");
   const [selectedId,     setSelectedId]     = useState<string | null>(null);
   const [logsForTenant,  setLogsForTenant]  = useState<string | undefined>(undefined);
 
@@ -156,12 +152,8 @@ export default function ProviderPage() {
         <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
           {(
             [
-              { key: "tenants",  label: `Клієнти (${tenants?.length ?? 0})`, icon: <Building2 size={14} /> },
-              { key: "logs",     label: "Логи",       icon: <Activity size={14} /> },
-              { key: "team",     label: "Команда",    icon: <Users size={14} /> },
-              { key: "schedule", label: "Розклад",    icon: <Calendar size={14} /> },
-              { key: "stats",    label: "Статистика", icon: <BarChart2 size={14} /> },
-              { key: "support",  label: "Підтримка",  icon: <MessageSquare size={14} /> },
+              { key: "tenants", label: `Клієнти (${tenants?.length ?? 0})`, icon: <Building2 size={14} /> },
+              { key: "logs",    label: "Логи",                               icon: <Activity size={14} /> },
             ] as const
           ).map(({ key, label, icon }) => (
             <button
@@ -251,17 +243,6 @@ export default function ProviderPage() {
           </div>
         )}
 
-        {/* Team tab */}
-        {activeTab === "team" && <TeamTab />}
-
-        {/* Schedule tab */}
-        {activeTab === "schedule" && <ScheduleTab />}
-
-        {/* Stats tab */}
-        {activeTab === "stats" && <StatsTab />}
-
-        {/* Support tab */}
-        {activeTab === "support" && <ProviderSupportTab />}
       </div>{/* end main content */}
 
       {/* Inline detail panel — takes its own column in the flex row */}

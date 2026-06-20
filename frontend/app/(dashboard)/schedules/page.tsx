@@ -7,9 +7,10 @@ import { WeekGrid } from "@/features/schedules/components/WeekGrid";
 import { MyShifts } from "@/features/schedules/components/MyShifts";
 import { useSchedule } from "@/features/schedules/hooks/useSchedules";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { AT_LEAST_STORE_MANAGER } from "@/lib/roles";
+import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM } from "@/lib/roles";
 import type { WorkScheduleDto } from "@/features/schedules/types";
 import type { AppRole } from "@/lib/roles";
+import { ScheduleTab } from "@/features/provider/components/ScheduleTab";
 
 type Tab = "schedules" | "my-shifts";
 
@@ -40,6 +41,26 @@ export default function SchedulesPage() {
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
   const canManage = AT_LEAST_STORE_MANAGER.has(userRole);
+
+  // Provider team → own weekly slot schedule (not tenant-based WorkSchedule)
+  if (PROVIDER_TEAM.has(userRole)) {
+    return (
+      <div style={{ padding: "28px 32px" }}>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <Calendar size={20} style={{ color: "#3B82F6" }} />
+            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+              Розклад команди
+            </h1>
+          </div>
+          <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>
+            Тижнева доступність агентів підтримки
+          </p>
+        </div>
+        <ScheduleTab />
+      </div>
+    );
+  }
 
   const tabStyle = (tab: Tab): React.CSSProperties => ({
     padding: "8px 18px",

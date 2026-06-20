@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { Plus, Ticket } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { AT_LEAST_STORE_MANAGER } from "@/lib/roles";
+import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
 import { TicketList } from "@/features/service-desk/components/TicketList";
 import { MyTicketList } from "@/features/service-desk/components/MyTicketList";
 import { TicketDetail } from "@/features/service-desk/components/TicketDetail";
 import { CreateTicketForm } from "@/features/service-desk/components/CreateTicketForm";
 import type { TicketDto } from "@/features/service-desk/types";
+import { ProviderSupportTab } from "@/features/provider/components/ProviderSupportTab";
 
 type Tab = "all" | "my";
 
@@ -17,6 +18,26 @@ export default function ServiceDeskPage() {
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
   const isManager = AT_LEAST_STORE_MANAGER.has(userRole as AppRole);
+
+  // Provider team → cross-tenant Service Desk view
+  if (PROVIDER_TEAM.has(userRole)) {
+    return (
+      <div style={{ padding: "28px 32px" }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Ticket size={22} style={{ color: "#3B82F6" }} />
+            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+              Service Desk
+            </h1>
+          </div>
+          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+            Тікети всіх клієнтів платформи
+          </p>
+        </div>
+        <ProviderSupportTab />
+      </div>
+    );
+  }
 
   const [activeTab, setActiveTab] = useState<Tab>(isManager ? "all" : "my");
   const [selectedTicket, setSelectedTicket] = useState<TicketDto | null>(null);

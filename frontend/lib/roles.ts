@@ -4,13 +4,15 @@
  */
 
 export const AppRoles = {
-  Provider: "provider",
+  Provider:      "provider",
+  ProviderAdmin: "provider_admin",
+  ProviderAgent: "provider_agent",
   EnterpriseAdmin: "enterprise_admin",
-  NetworkManager: "network_manager",
-  StoreManager: "store_manager",
-  Merchandiser: "merchandiser",
-  Storekeeper: "storekeeper",
-  Cashier: "cashier",
+  NetworkManager:  "network_manager",
+  StoreManager:    "store_manager",
+  Merchandiser:    "merchandiser",
+  Storekeeper:     "storekeeper",
+  Cashier:         "cashier",
 } as const;
 
 export type AppRole = (typeof AppRoles)[keyof typeof AppRoles];
@@ -82,6 +84,13 @@ export const AT_LEAST_STORE_MANAGER = new Set<AppRole>([
 
 /** Provider-only — super admin access */
 export const PROVIDER_ONLY = new Set<AppRole>([AppRoles.Provider]);
+
+/** All provider team roles (provider + provider_admin + provider_agent) */
+export const PROVIDER_TEAM = new Set<AppRole>([
+  AppRoles.Provider,
+  AppRoles.ProviderAdmin,
+  AppRoles.ProviderAgent,
+]);
 
 /**
  * Enterprise admin only — used for the Settings "Модулі" tab (GET /api/settings/modules
