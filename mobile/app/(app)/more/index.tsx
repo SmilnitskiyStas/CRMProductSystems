@@ -24,6 +24,13 @@ type ModuleItem = {
 
 const MODULES: ModuleItem[] = [
   {
+    icon: 'storefront-outline',
+    label: 'Маркетплейс',
+    description: 'Каталог постачальників',
+    href: '/(app)/marketplace',
+    color: '#16a34a',
+  },
+  {
     icon: 'people-outline',
     label: 'Клієнти',
     description: 'База клієнтів та контакти',
