@@ -99,6 +99,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
     public DbSet<ScheduleShift> ScheduleShifts => Set<ScheduleShift>();
 
+    // Provider team schedules (TASK-274)
+    public DbSet<ProviderScheduleSlot> ProviderScheduleSlots => Set<ProviderScheduleSlot>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -1327,6 +1330,21 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(s => s.Location).WithMany()
              .HasForeignKey(s => s.LocationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProviderScheduleSlot (TASK-274) ──────────────────────────────────
+        builder.Entity<ProviderScheduleSlot>(e =>
+        {
+            e.ToTable("provider_schedule_slots");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.DayOfWeek).IsRequired();
+            e.Property(s => s.StartTime).IsRequired();
+            e.Property(s => s.EndTime).IsRequired();
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasOne(s => s.User).WithMany()
+             .HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -2,6 +2,23 @@
 
 ---
 
+## TASK-274 — Provider Schedule (розклад команди)
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** TASK-272 · Updated: 2026-06-20
+Тижневий розклад доступності для агентів: recurring slots (DayOfWeek 0-6 + time range).
+Backend: entity `ProviderScheduleSlot` + migration `AddProviderScheduleSlots` + `ProviderScheduleController`
+(GET ?userId=, POST, DELETE/{id}; ProviderTeamMember/ProviderCanInvite policies).
+Frontend: `ScheduleTab.tsx` — 7-колонковий weekly grid + AddSlotModal.
+Build green, migration green, tsc green.
+Log: `274_2026-06-20_provider-schedule_backend-developer.md`
+
+## TASK-273 — Provider Employee Statistics
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** TASK-272 · Updated: 2026-06-20
+Статистика продуктивності команди (без нової схеми): assigned/resolved tickets, created-by-provider, comments, avg resolution time.
+Backend: `IProviderStatsRepository` + `ProviderStatsRepository` (cross-tenant) + `ProviderStatsService` + `GET /api/provider/team/stats`.
+Frontend: `StatsTab.tsx` — таблиця з прогрес-баром resolve rate + кольоровими метриками.
+Build green, tsc green.
+Log: `273_2026-06-20_provider-employee-stats_backend-developer.md`
+
 ## TASK-272 — Provider HR: управління власним персоналом
 **Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-20
 Розширення команди провайдера: редагування учасника + реактивація.

@@ -153,6 +153,14 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IProviderTicketRepository,
             Data.Repositories.ProviderTicketRepository>();
 
+        // TASK-273 - Provider employee statistics
+        services.AddScoped<Domain.Interfaces.IProviderStatsRepository,
+            Data.Repositories.ProviderStatsRepository>();
+
+        // TASK-274 - Provider schedule slots
+        services.AddScoped<Domain.Interfaces.IProviderScheduleRepository,
+            Data.Repositories.ProviderScheduleRepository>();
+
         return services;
     }
 }

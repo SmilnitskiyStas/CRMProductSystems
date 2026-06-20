@@ -94,6 +94,12 @@ services.AddScoped<IAuthService, AuthService>();
         // TASK-271 - Provider cross-tenant Service Desk
         services.AddScoped<IProviderTicketService, ProviderTicketService>();
 
+        // TASK-273 - Provider employee statistics
+        services.AddScoped<IProviderStatsService, ProviderStatsService>();
+
+        // TASK-274 - Provider schedule
+        services.AddScoped<IProviderScheduleService, ProviderScheduleService>();
+
         return services;
     }
 }

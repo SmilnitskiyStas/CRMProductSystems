@@ -19,3 +19,15 @@ public record UpdateProviderMemberRequest(
     string FullName,
     string Role
 );
+
+public record ProviderMemberStatsDto(
+    Guid   MemberId,
+    string FullName,
+    string Role,
+    bool   IsActive,
+    int    TicketsAssigned,
+    int    TicketsResolved,
+    int    TicketsCreatedByProvider,
+    int    CommentsWritten,
+    double? AvgResolutionHours
+);

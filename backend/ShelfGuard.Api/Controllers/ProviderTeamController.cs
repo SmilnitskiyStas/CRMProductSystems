@@ -9,8 +9,17 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Route("api/provider/team")]
 [Authorize(Policy = AppPolicies.ProviderTeamMember)]
-public sealed class ProviderTeamController(IProviderTeamService teamService) : ControllerBase
+public sealed class ProviderTeamController(
+    IProviderTeamService teamService,
+    IProviderStatsService statsService) : ControllerBase
 {
+    [HttpGet("stats")]
+    public async Task<IActionResult> GetStats(CancellationToken ct)
+    {
+        var stats = await statsService.GetTeamStatsAsync(ct);
+        return Ok(stats);
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetTeam(CancellationToken ct)
     {
