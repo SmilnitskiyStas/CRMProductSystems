@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Bell, LifeBuoy } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { TENANT_ROLES } from "@/lib/roles";
+import type { AppRole } from "@/lib/roles";
 import { UserMenu } from "./UserMenu";
 
 interface Props {
@@ -13,6 +15,8 @@ export function TopBar({ title }: Props) {
   const { data: user } = useMe();
 
   const storeName = user?.storeId ? "Магазин #1" : "ShelfGuard";
+  const isTenant = TENANT_ROLES.has((user?.role ?? "") as AppRole);
+  const supportHref = isTenant ? "/service-desk" : "/provider";
 
   return (
     <header
@@ -41,11 +45,40 @@ export function TopBar({ title }: Props) {
         )}
       </div>
 
-      {/* Right — bell + user menu */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      {/* Right — support + bell + user menu */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Support button */}
+        <Link
+          href={supportHref}
+          title="Підтримка"
+          style={{
+            background: "transparent",
+            border: "1px solid #1F2937",
+            borderRadius: 8,
+            padding: "6px 8px",
+            cursor: "pointer",
+            color: "#6B7280",
+            display: "flex",
+            alignItems: "center",
+            textDecoration: "none",
+            transition: "border-color 0.15s, color 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "#374151";
+            (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+            (e.currentTarget as HTMLElement).style.color = "#6B7280";
+          }}
+        >
+          <LifeBuoy size={16} />
+        </Link>
+
         {/* Notification bell */}
         <Link
           href="/notifications"
+          title="Сповіщення"
           style={{
             background: "transparent",
             border: "1px solid #1F2937",
@@ -57,6 +90,15 @@ export function TopBar({ title }: Props) {
             alignItems: "center",
             position: "relative",
             textDecoration: "none",
+            transition: "border-color 0.15s, color 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "#374151";
+            (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+            (e.currentTarget as HTMLElement).style.color = "#6B7280";
           }}
         >
           <Bell size={16} />

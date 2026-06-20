@@ -2,17 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Settings, Bell, Link as LinkIcon, MessageSquare, Blocks, Store } from "lucide-react";
+import { Settings, Bell, Link as LinkIcon, Blocks, Store } from "lucide-react";
 import { NotificationsTab } from "@/features/settings/components/NotificationsTab";
 import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab";
-import { SupportTab } from "@/features/settings/components/SupportTab";
 import { ModulesTab } from "@/features/settings/components/ModulesTab";
 import { MarketplaceProfileTab } from "@/features/settings/components/MarketplaceProfileTab";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, ENTERPRISE_ADMIN_ONLY } from "@/lib/roles";
 import { useModules } from "@/features/modules/hooks/useModules";
 
-type Tab = "general" | "notifications" | "integrations" | "modules" | "marketplace-profile" | "support";
+type Tab = "general" | "notifications" | "integrations" | "modules" | "marketplace-profile";
 
 const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "general",             label: "Загальні",              icon: <Settings size={15} /> },
@@ -20,7 +19,6 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "integrations",        label: "Інтеграції",            icon: <LinkIcon size={15} /> },
   { id: "modules",             label: "Модулі",                icon: <Blocks size={15} /> },
   { id: "marketplace-profile", label: "Профіль маркетплейсу",  icon: <Store size={15} /> },
-  { id: "support",             label: "Підтримка",             icon: <MessageSquare size={15} /> },
 ];
 
 export default function SettingsPage() {
@@ -110,7 +108,6 @@ export default function SettingsPage() {
         {activeTab === "integrations"        && <IntegrationsTab />}
         {activeTab === "modules" && canViewModules && <ModulesTab />}
         {activeTab === "marketplace-profile" && marketplaceActive && <MarketplaceProfileTab />}
-        {activeTab === "support"             && <SupportTab />}
       </div>
     </div>
   );
