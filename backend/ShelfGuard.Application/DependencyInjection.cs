@@ -91,6 +91,9 @@ services.AddScoped<IAuthService, AuthService>();
         // TASK-251 - Service Desk
         services.AddScoped<ITicketService, TicketService>();
 
+        // TASK-271 - Provider cross-tenant Service Desk
+        services.AddScoped<IProviderTicketService, ProviderTicketService>();
+
         return services;
     }
 }

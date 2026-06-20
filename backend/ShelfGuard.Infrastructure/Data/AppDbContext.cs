@@ -911,6 +911,7 @@ public sealed class AppDbContext : DbContext
             e.Property(t => t.Category).HasMaxLength(50).HasDefaultValue("general").IsRequired();
             e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("open").IsRequired();
             e.Property(t => t.Priority).HasMaxLength(20).HasDefaultValue("medium").IsRequired();
+            e.Property(t => t.CreatedByProvider).HasDefaultValue(false);
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(t => t.UpdatedAt).HasDefaultValueSql("NOW()");
             // Composite: tenant + status + created_at DESC — main list query

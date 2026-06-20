@@ -1,0 +1,61 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Features.ServiceDesk;
+using ShelfGuard.Infrastructure.Authorization;
+
+namespace ShelfGuard.Api.Controllers;
+
+/// <summary>
+/// Provider cross-tenant Service Desk.
+/// All endpoints require ProviderOnly policy — no tenant scoping.
+/// </summary>
+[ApiController]
+[Route("api/admin/service-desk")]
+[Authorize(Policy = AppPolicies.ProviderOnly)]
+public sealed class AdminServiceDeskController : ControllerBase
+{
+    private readonly IProviderTicketService _tickets;
+
+    public AdminServiceDeskController(IProviderTicketService tickets) => _tickets = tickets;
+
+    // ── GET /api/admin/service-desk ──────────────────────────────────────────
+
+    [HttpGet]
+    [ProducesResponseType(typeof(List<ProviderTicketListItemDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? status,
+        [FromQuery] Guid? tenantId,
+        CancellationToken ct)
+    {
+        var result = await _tickets.GetAllAsync(status, tenantId, ct);
+        return Ok(result);
+    }
+
+    // ── POST /api/admin/service-desk ─────────────────────────────────────────
+
+    [HttpPost]
+    [ProducesResponseType(typeof(ProviderTicketListItemDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Create(
+        CreateProviderTicketDto dto,
+        CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId is null) return Forbid();
+
+        var (ticket, error) = await _tickets.CreateAsync(userId.Value, dto, ct);
+        if (error is not null) return BadRequest(new { error });
+
+        return StatusCode(StatusCodes.Status201Created, ticket);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private Guid? GetUserId()
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                 ?? User.FindFirstValue("sub");
+        return Guid.TryParse(claim, out var id) ? id : null;
+    }
+}

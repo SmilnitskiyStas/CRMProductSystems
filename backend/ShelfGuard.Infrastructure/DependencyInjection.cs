@@ -149,6 +149,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.ITicketRepository,
             Data.Repositories.TicketRepository>();
 
+        // TASK-271 - Provider cross-tenant Service Desk
+        services.AddScoped<Domain.Interfaces.IProviderTicketRepository,
+            Data.Repositories.ProviderTicketRepository>();
+
         return services;
     }
 }

@@ -2,6 +2,23 @@
 
 ---
 
+## TASK-271 — Backend: Provider cross-tenant Service Desk
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-251 · Updated: 2026-06-20
+Provider може бачити тікети з усіх тенантів та створювати тікети від імені клієнта.
+Нові ендпоінти (ProviderOnly policy):
+- `GET  /api/admin/service-desk?status=&tenantId=` — всі тікети cross-tenant
+- `POST /api/admin/service-desk` — створити тікет для клієнтського тенанту
+Нові файли: `IProviderTicketRepository`, `ProviderTicketRepository`, `IProviderTicketService`,
+`ProviderTicketService`, `ProviderServiceDeskDtos`, `AdminServiceDeskController`.
+Migration `AddTicketCreatedByProvider` — `CreatedByProvider bool DEFAULT false` на `support_tickets`.
+Тікет зберігається з `TenantId = client tenant` + `CreatedByProvider = true` → клієнт бачить у
+своєму Service Desk, Провайдер бачить у cross-tenant запиті.
+Build green, 459/459 тестів.
+Log: `271_2026-06-20_provider-service-desk-backend_backend-developer.md`
+**Next:** TASK-272 Provider HR (власний персонал), TASK-270 chat button in header.
+
+---
+
 ## BUG-005 — pos_transactions.RetryCount missing on production
 **Status:** done · **Agent:** database-engineer · **Depends:** — · Updated: 2026-06-16
 Flagged in TASK-204 log: prod threw `column p.RetryCount does not exist` in

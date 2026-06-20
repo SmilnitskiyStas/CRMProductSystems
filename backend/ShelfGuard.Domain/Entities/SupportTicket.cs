@@ -27,6 +27,9 @@ public sealed class SupportTicket
     public DateTimeOffset   CreatedAt             { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset   UpdatedAt             { get; set;  } = DateTimeOffset.UtcNow;
 
+    // Set true when a Provider agent creates this ticket on behalf of a client tenant
+    public bool CreatedByProvider { get; init; } = false;
+
     // Kept for backward compat with existing SupportMessage read-tracking
     public DateTimeOffset? LastReadByTenantAt   { get; set;  }
     public DateTimeOffset? LastReadByProviderAt { get; set;  }
