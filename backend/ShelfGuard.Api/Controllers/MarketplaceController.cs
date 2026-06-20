@@ -33,7 +33,6 @@ public sealed class MarketplaceController : ControllerBase
     /// <summary>Paginated public supplier listing, filterable by region/category/plan.</summary>
     [HttpGet("suppliers")]
     [AllowAnonymous]
-    [RequireModule("marketplace")]
     [ProducesResponseType(typeof(PagedResult<SupplierListItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSuppliers(
         [FromQuery] string? region,
@@ -56,7 +55,6 @@ public sealed class MarketplaceController : ControllerBase
     /// </summary>
     [HttpGet("suppliers/{id:guid}")]
     [AllowAnonymous]
-    [RequireModule("marketplace")]
     [ProducesResponseType(typeof(SupplierProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSupplierById(Guid id, CancellationToken ct)
@@ -69,7 +67,6 @@ public sealed class MarketplaceController : ControllerBase
     /// <summary>Supplier's item catalog.</summary>
     [HttpGet("suppliers/{id:guid}/items")]
     [AllowAnonymous]
-    [RequireModule("marketplace")]
     [ProducesResponseType(typeof(IReadOnlyList<SupplierItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSupplierItems(Guid id, CancellationToken ct)
     {
@@ -80,7 +77,6 @@ public sealed class MarketplaceController : ControllerBase
     /// <summary>Search suppliers by item name and optional region.</summary>
     [HttpPost("search")]
     [AllowAnonymous]
-    [RequireModule("marketplace")]
     [ProducesResponseType(typeof(IReadOnlyList<SupplierListItemDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Search(

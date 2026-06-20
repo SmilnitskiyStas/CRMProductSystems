@@ -22,6 +22,19 @@ import {
   type RecentMovement,
 } from '@/features/dashboard/types';
 
+const MODULE_SHORTCUTS: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  href: string;
+  color: string;
+}[] = [
+  { icon: 'people-outline',           label: 'Клієнти',      href: '/(app)/customers',    color: '#3b82f6' },
+  { icon: 'headset-outline',          label: 'Service Desk', href: '/(app)/service-desk', color: '#8b5cf6' },
+  { icon: 'calendar-outline',         label: 'Розклад',      href: '/(app)/schedules',    color: '#f59e0b' },
+  { icon: 'trash-outline',            label: 'Списання',     href: '/(app)/write-offs',   color: '#ef4444' },
+  { icon: 'swap-horizontal-outline',  label: 'Переміщення',  href: '/(app)/transfers',    color: '#10b981' },
+];
+
 const MOVEMENT_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
   receipt:    'download-outline',
   transfer:   'swap-horizontal-outline',
@@ -200,6 +213,30 @@ export default function DashboardScreen() {
               </View>
               <Text className="text-sm font-semibold text-gray-700 text-center">Нове списання</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Module shortcuts */}
+        <View>
+          <Text className="text-sm font-semibold text-gray-500 mb-2">Розділи</Text>
+          <View className="flex-row flex-wrap gap-3">
+            {MODULE_SHORTCUTS.map((item) => (
+              <TouchableOpacity
+                key={item.href}
+                onPress={() => router.push(item.href as Parameters<typeof router.push>[0])}
+                activeOpacity={0.7}
+                className="bg-white rounded-xl border border-gray-100 p-3.5 flex-row items-center gap-3"
+                style={{ width: '47.5%' }}
+              >
+                <View
+                  className="w-9 h-9 rounded-xl items-center justify-center"
+                  style={{ backgroundColor: `${item.color}1a` }}
+                >
+                  <Ionicons name={item.icon} size={18} color={item.color} />
+                </View>
+                <Text className="text-sm font-semibold text-gray-700 flex-1 flex-wrap">{item.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 

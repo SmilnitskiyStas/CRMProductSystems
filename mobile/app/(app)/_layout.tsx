@@ -83,15 +83,16 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile/index"
+        name="more/index"
         options={{
-          title: 'Профіль',
+          title: 'Ще',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="grid-outline" size={size} color={color} />
           ),
         }}
       />
       {/* Hidden screens (no tab) */}
+      <Tabs.Screen name="profile/index" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="stock/[id]" options={{ href: null }} />
       <Tabs.Screen name="receipt/[id]" options={{ href: null }} />
