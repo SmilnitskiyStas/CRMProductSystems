@@ -8,16 +8,22 @@ import { useSupplier } from "@/features/marketplace/hooks/useMarketplace";
 import { SupplierMetrics } from "@/features/marketplace/components/SupplierMetrics";
 import { SupplierItemsTab } from "@/features/marketplace/components/SupplierItemsTab";
 import { SupplierReviewsTab } from "@/features/marketplace/components/SupplierReviewsTab";
+import { AddSupplierItemModal } from "@/features/marketplace/components/AddSupplierItemModal";
 import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
 import { StarRating } from "@/features/marketplace/components/StarRating";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { PROVIDER_TEAM } from "@/lib/roles";
 
 type ActiveTab = "catalog" | "reviews";
 
 export default function SupplierProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<ActiveTab>("catalog");
+  const [addItemModalOpen, setAddItemModalOpen] = useState(false);
 
   const { data: supplier, isLoading, isError } = useSupplier(id);
+  const { data: me } = useMe();
+  const isProviderTeam = PROVIDER_TEAM.has(me?.role as any);
 
   if (isLoading) {
     return (
@@ -221,14 +227,36 @@ export default function SupplierProfilePage() {
           borderBottom: "1px solid #1F2937",
           marginBottom: 24,
           display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
-        <button style={tabStyle("catalog")} onClick={() => setActiveTab("catalog")}>
-          Каталог
-        </button>
-        <button style={tabStyle("reviews")} onClick={() => setActiveTab("reviews")}>
-          Відгуки
-        </button>
+        <div style={{ display: "flex" }}>
+          <button style={tabStyle("catalog")} onClick={() => setActiveTab("catalog")}>
+            Каталог
+          </button>
+          <button style={tabStyle("reviews")} onClick={() => setActiveTab("reviews")}>
+            Відгуки
+          </button>
+        </div>
+        {isProviderTeam && activeTab === "catalog" && (
+          <button
+            onClick={() => setAddItemModalOpen(true)}
+            style={{
+              padding: "7px 16px",
+              borderRadius: 8,
+              border: "none",
+              background: "#1D4ED8",
+              color: "#E8EDF5",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              marginBottom: 1,
+            }}
+          >
+            + Додати товар
+          </button>
+        )}
       </div>
 
       {/* Tab content */}
@@ -243,6 +271,13 @@ export default function SupplierProfilePage() {
         {activeTab === "catalog" && <SupplierItemsTab supplierId={supplier.id} />}
         {activeTab === "reviews" && <SupplierReviewsTab supplierId={supplier.id} />}
       </div>
+
+      {addItemModalOpen && (
+        <AddSupplierItemModal
+          supplierId={supplier.id}
+          onClose={() => setAddItemModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

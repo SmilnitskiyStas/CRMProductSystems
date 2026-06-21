@@ -44,4 +44,16 @@ public interface IMarketplaceService
 
     Task<(SupplierProfileDto? Profile, string? Error)> UpdateOwnProfileAsync(
         Guid tenantId, SupplierProfileUpdateDto request, CancellationToken ct = default);
+
+    // ── Platform admin (ProviderOnly) ─────────────────────────────────────────
+
+    Task<(SupplierProfileDto Profile, string? Error)> AdminCreateSupplierAsync(
+        AdminCreateSupplierDto request, CancellationToken ct = default);
+
+    Task<(SupplierItemDto? Item, string? Error)> AdminAddSupplierItemAsync(
+        Guid supplierId, AdminAddSupplierItemDto request, CancellationToken ct = default);
+
+    /// <summary>Returns null on success, error string on failure.</summary>
+    Task<string?> AdminDeleteSupplierItemAsync(
+        Guid supplierId, Guid itemId, CancellationToken ct = default);
 }

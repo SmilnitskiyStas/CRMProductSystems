@@ -8,6 +8,8 @@ import type {
   CreateReviewRequest,
   SupplierProfileUpdateRequest,
   SupplierPlan,
+  CreateSupplierRequest,
+  AddSupplierItemRequest,
 } from "../types";
 
 export const marketplaceApi = {
@@ -60,4 +62,23 @@ export const marketplaceApi = {
   /** PUT /api/settings/supplier-profile */
   updateMyProfile: (body: SupplierProfileUpdateRequest) =>
     api.put<SupplierProfileDto>("/api/settings/supplier-profile", body),
+
+  // ── Admin / platform endpoints (TASK-275) ─────────────────────────────────
+
+  /** POST /api/admin/marketplace/suppliers */
+  adminCreateSupplier: (body: CreateSupplierRequest) =>
+    api.post<SupplierProfileDto>("/api/admin/marketplace/suppliers", body),
+
+  /** POST /api/admin/marketplace/suppliers/{id}/items */
+  adminAddSupplierItem: (supplierId: string, body: AddSupplierItemRequest) =>
+    api.post<SupplierItemDto>(
+      `/api/admin/marketplace/suppliers/${supplierId}/items`,
+      body
+    ),
+
+  /** DELETE /api/admin/marketplace/suppliers/{id}/items/{itemId} */
+  adminDeleteSupplierItem: (supplierId: string, itemId: string) =>
+    api.delete<void>(
+      `/api/admin/marketplace/suppliers/${supplierId}/items/${itemId}`
+    ),
 };

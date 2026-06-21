@@ -55,4 +55,21 @@ public interface IMarketplaceRepository
     void UpdateProfile(SupplierProfile profile);
 
     Task SaveChangesAsync(CancellationToken ct = default);
+
+    // ── Platform admin operations (ProviderOnly) ─────────────────────────────
+
+    Task AddSupplierAsync(Supplier supplier, CancellationToken ct = default);
+
+    Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct = default);
+
+    Task AddSupplierItemAsync(SupplierItem item, CancellationToken ct = default);
+
+    /// <summary>Returns a supplier item only if it belongs to the given supplier.</summary>
+    Task<SupplierItem?> GetSupplierItemByIdAsync(
+        Guid supplierId, Guid itemId, CancellationToken ct = default);
+
+    void RemoveSupplierItem(SupplierItem item);
+
+    /// <summary>Returns a supplier by its Id (no tenant filter).</summary>
+    Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default);
 }

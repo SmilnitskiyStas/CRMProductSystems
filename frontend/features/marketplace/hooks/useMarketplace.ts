@@ -5,6 +5,8 @@ import type {
   MarketplaceSearchRequest,
   CreateReviewRequest,
   SupplierProfileUpdateRequest,
+  CreateSupplierRequest,
+  AddSupplierItemRequest,
 } from "../types";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -106,6 +108,46 @@ export function useUpdateMySupplierProfile() {
       marketplaceApi.updateMyProfile(body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MARKETPLACE_KEYS.myProfile });
+    },
+  });
+}
+
+// ─── Admin / platform hooks (TASK-275) ───────────────────────────────────────
+
+export function useCreateSupplier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateSupplierRequest) =>
+      marketplaceApi.adminCreateSupplier(body),
+    onSuccess: () => {
+      // Invalidate all supplier list queries so the new supplier appears
+      queryClient.invalidateQueries({ queryKey: ["marketplace", "suppliers"] });
+    },
+  });
+}
+
+export function useAddSupplierItem(supplierId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AddSupplierItemRequest) =>
+      marketplaceApi.adminAddSupplierItem(supplierId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: MARKETPLACE_KEYS.supplierItems(supplierId),
+      });
+    },
+  });
+}
+
+export function useDeleteSupplierItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ supplierId, itemId }: { supplierId: string; itemId: string }) =>
+      marketplaceApi.adminDeleteSupplierItem(supplierId, itemId),
+    onSuccess: (_data, { supplierId }) => {
+      queryClient.invalidateQueries({
+        queryKey: MARKETPLACE_KEYS.supplierItems(supplierId),
+      });
     },
   });
 }
