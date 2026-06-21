@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Users, BarChart2 } from "lucide-react";
+import { Shield } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { PROVIDER_TEAM } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
 import { TeamTab } from "@/features/provider/components/TeamTab";
 import { StatsTab } from "@/features/provider/components/StatsTab";
+import { RolesSection } from "@/features/provider/components/RolesSection";
 
-type Tab = "team" | "stats";
+type Tab = "team" | "stats" | "roles";
 
 export default function ProviderTeamPage() {
   const router = useRouter();
@@ -40,6 +42,7 @@ export default function ProviderTeamPage() {
     background: activeTab === key ? "#1D3461" : "transparent",
     border: `1px solid ${activeTab === key ? "#3B82F6" : "transparent"}`,
     color: activeTab === key ? "#93C5FD" : "#6B7280",
+    whiteSpace: "nowrap" as const,
   });
 
   return (
@@ -65,10 +68,14 @@ export default function ProviderTeamPage() {
         <button style={tabStyle("stats")} onClick={() => setActiveTab("stats")}>
           <BarChart2 size={14} /> Статистика
         </button>
+        <button style={tabStyle("roles")} onClick={() => setActiveTab("roles")}>
+          <Shield size={14} /> Ролі
+        </button>
       </div>
 
       {activeTab === "team"  && <TeamTab />}
       {activeTab === "stats" && <StatsTab />}
+      {activeTab === "roles" && <RolesSection standalone />}
     </div>
   );
 }
