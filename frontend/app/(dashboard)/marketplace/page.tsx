@@ -183,6 +183,7 @@ export default function MarketplacePage() {
               fontWeight: 600,
               cursor: "pointer",
               whiteSpace: "nowrap",
+              marginLeft: "auto",
             }}
           >
             + Створити постачальника
