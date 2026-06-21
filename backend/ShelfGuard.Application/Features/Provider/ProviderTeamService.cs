@@ -29,8 +29,10 @@ public sealed class ProviderTeamService(
         if (existing is not null)
             return (null, $"Email '{req.Email}' is already registered.");
 
-        var tempPassword = Guid.NewGuid().ToString("N")[..12];
-        var hash = hasher.Hash(tempPassword);
+        var password = !string.IsNullOrWhiteSpace(req.Password)
+            ? req.Password
+            : Guid.NewGuid().ToString("N")[..12];
+        var hash = hasher.Hash(password);
 
         var user = User.Create(
             tenantId:     null,

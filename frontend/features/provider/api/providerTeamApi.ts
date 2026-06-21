@@ -13,6 +13,7 @@ export interface InviteProviderMemberRequest {
   email: string;
   fullName: string;
   role: string;
+  password?: string;
 }
 
 export function getTeam(): Promise<ProviderTeamMemberDto[]> {

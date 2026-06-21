@@ -1,6 +1,84 @@
-# Current Sprint — v3.4 «Mobile Complete» (started 2026-06-15) + v3.3 carry-over
+# Current Sprint — v3.5 «Provider UX» (started 2026-06-21)
 
 ---
+
+## TASK-278 — Live Chat: живий чат провайдер ↔ клієнт
+**Status:** planned · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
+Різниця між тікетом і чатом: тікет — для довгострокових задач (налаштування компанії), чат — миттєве спілкування.
+**DB (міграція AddChatFeature):**
+- `chat_sessions` (id, tenant_id, created_by_user_id, subject TEXT, status open/closed, created_at, updated_at; RLS на tenant_id)
+- `chat_messages` (id, session_id, sender_user_id, sender_name TEXT, body TEXT, is_read, created_at; RLS через session → tenant_id)
+**Backend:**
+- `POST /api/chat/sessions` — клієнт відкриває нову сесію (перший повідомлення)
+- `GET /api/chat/sessions` — клієнт бачить свої сесії (свій tenant)
+- `GET /api/chat/sessions/{id}/messages` — список повідомлень сесії
+- `POST /api/chat/sessions/{id}/messages` — надіслати повідомлення (клієнт або провайдер)
+- `POST /api/chat/sessions/{id}/close` — закрити сесію
+- `GET /api/admin/chat/sessions` (ProviderOnly) — всі сесії cross-tenant
+- `GET /api/admin/chat/sessions/{id}/messages` (ProviderOnly) — повідомлення клієнта
+- `POST /api/admin/chat/sessions/{id}/messages` (ProviderOnly) — відповідь провайдера
+- `POST /api/admin/chat/sessions/{id}/close` (ProviderOnly) — закрити сесію
+**Frontend (клієнт) — `SupportChatWidget.tsx`:**
+- Повністю переробити: замість тікету показати список чат-сесій + кнопку "Новий чат"
+- Активна сесія: вигляд як у месенджері (бульки повідомлень), input внизу, відправка через Enter/кнопку
+- Polling кожні 3 секунди через `refetchInterval` React Query (без WebSocket)
+**Frontend (провайдер) — нова вкладка в `/service-desk`:**
+- Панель "Живий чат" поруч із існуючим Service Desk
+- Список чат-сесій усіх клієнтів (ім'я, тенант, остання активність, кількість непрочитаних)
+- При натисканні — повна переписка + input для відповіді
+- Нові повідомлення підсвічуються, polling кожні 3с
+Accept: dotnet build green; міграція green; клієнт може надіслати повідомлення, провайдер його бачить і відповідає; tsc + next build green.
+
+## TASK-277 — Команда: створення користувача з логіном/паролем та правами
+**Status:** planned · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
+**Backend:**
+- Розширити `InviteProviderMemberRequest` полем `Password?: string` (необов'язкове)
+- В `ProviderTeamService.InviteMemberAsync`: якщо `Password` передано → хешувати його замість `tempPassword`
+- Якщо `Password` не передано — поведінка залишається як є (tempPassword)
+**Frontend — `InviteProviderMemberModal.tsx`:**
+- Додати поля: «Пароль» (type=password) + «Підтвердження паролю»
+- Валідація: обидва поля повинні збігатися, мінімум 6 символів
+- Додати секцію «Права доступу» — readonly список того, що може робити обрана роль:
+  - provider_admin: управління командою, всі клієнти, Service Desk, Чат
+  - provider_agent: Service Desk, Чат, перегляд клієнтів
+- Кнопка тепер «Створити користувача» (а не «Запросити»)
+Accept: backend build green; фронтенд: tsc green; можна створити провайдер-агента з власним паролем, він може увійти в систему з цим паролем.
+
+## TASK-276 — Розклад: множинний вибір днів при додаванні зміни
+**Status:** planned · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-06-21
+Поточний `AddSlotModal` у `ScheduleTab.tsx` дозволяє вибрати лише один день.
+**Зміни:**
+- Замінити `<select>` для дня тижня на 7 чекбоксів (Пн–Нд) у горизонтальній сітці
+- Форма дозволяє виділити будь-яку кількість днів (мінімум 1)
+- При сабміті — послідовно викликати `create.mutateAsync` для кожного вибраного дня з однаковими `userId`, `startTime`, `endTime`, `notes`
+- Стан форми: `dayOfWeek` → `daysOfWeek: number[]`
+- Якщо будь-який з викликів повертає помилку — показати її й зупинитись
+- Після успіху — закрити модалку (одиночний `onClose()`)
+Accept: tsc green; можна обрати 3 дні → backend отримує 3 POST-запити → 3 слоти з'являються у grid.
+
+## TASK-275 — Маркетплейс: Full-width + Створення постачальника + Додавання товарів
+**Status:** planned · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
+**Frontend (швидке виправлення):**
+- У `frontend/app/(dashboard)/marketplace/page.tsx` рядок 80: видалити `maxWidth: 1200` зі стилів обгортки
+**Backend — нові провайдер-ендпоінти (`MarketplaceAdminController`):**
+- `POST /api/admin/marketplace/suppliers` (ProviderOnly) — створити нового постачальника:
+  Body: `{ companyName, region, categories[], website?, deliveryRegions[], workingHours?, paymentTerms?, isPublic, plan }`
+  Дія: CREATE `Supplier` (tenantId = provider tenant_id) + CREATE `SupplierProfile` для нього
+- `POST /api/admin/marketplace/suppliers/{id}/items` (ProviderOnly) — додати товар:
+  Body: `{ customName, price?, minQty?, unit?, isAvailable }`
+  Дія: CREATE `SupplierItem` (supplierId = id)
+- `DELETE /api/admin/marketplace/suppliers/{id}/items/{itemId}` (ProviderOnly) — видалити товар
+**Frontend — сторінка `/marketplace`:**
+- Додати кнопку «+ Створити постачальника» (видима лише для PROVIDER_TEAM ролей) поруч із пошуковим рядком
+- `CreateSupplierModal.tsx` (`features/marketplace/components/`): форма з полями companyName, region, categories (textarea через кому), isPublic toggle, plan select (free/premium)
+- На `SupplierCard.tsx` або `marketplace/[id]/page.tsx` — кнопка «+ Додати товар» (видима для PROVIDER_TEAM):
+  `AddSupplierItemModal.tsx`: customName, price, minQty, unit, isAvailable toggle
+- Hooks: `useCreateSupplier`, `useAddSupplierItem`, `useDeleteSupplierItem` у `features/marketplace/hooks/`
+Accept: backend build green; tsc + next build green; провайдер може створити постачальника → він з'являється у списку; можна додати/видалити товар; сторінка на всю ширину.
+
+---
+
+## v3.4 carry-over
 
 ## TASK-274 — Provider Schedule (розклад команди)
 **Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** TASK-272 · Updated: 2026-06-20

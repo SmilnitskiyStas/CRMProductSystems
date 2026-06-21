@@ -24,7 +24,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
   const create = useCreateScheduleSlot();
   const [form, setForm] = useState({
     userId: "",
-    dayOfWeek: 0,
+    daysOfWeek: [0] as number[],
     startTime: "09:00",
     endTime: "18:00",
     notes: "",
@@ -34,9 +34,18 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.userId) { setError("Оберіть учасника"); return; }
+    if (form.daysOfWeek.length === 0) { setError("Оберіть хоча б один день"); return; }
     setError(null);
     try {
-      await create.mutateAsync({ ...form, dayOfWeek: Number(form.dayOfWeek) });
+      for (const day of form.daysOfWeek) {
+        await create.mutateAsync({
+          userId: form.userId,
+          dayOfWeek: day,
+          startTime: form.startTime,
+          endTime: form.endTime,
+          notes: form.notes,
+        });
+      }
       onClose();
     } catch (err: unknown) {
       const e = err as { error?: string };
@@ -72,15 +81,43 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
             ))}
           </select>
 
-          <select
-            value={form.dayOfWeek}
-            onChange={(e) => setForm((f) => ({ ...f, dayOfWeek: Number(e.target.value) }))}
-            style={{ ...inputStyle, appearance: "none" }}
-          >
-            {DAY_FULL.map((d, i) => (
-              <option key={i} value={i}>{d}</option>
-            ))}
-          </select>
+          <div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>Дні тижня</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {DAY_LABELS.map((label, i) => {
+                const selected = form.daysOfWeek.includes(i);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => {
+                        const already = f.daysOfWeek.includes(i);
+                        if (already && f.daysOfWeek.length === 1) return f;
+                        return {
+                          ...f,
+                          daysOfWeek: already
+                            ? f.daysOfWeek.filter((d) => d !== i)
+                            : [...f.daysOfWeek, i],
+                        };
+                      });
+                    }}
+                    style={{
+                      width: 32, height: 32, borderRadius: 6,
+                      background: selected ? "#1D3461" : "#0D1117",
+                      border: `1px solid ${selected ? "#3B82F6" : "#1F2937"}`,
+                      color: selected ? "#93C5FD" : "#6B7280",
+                      fontSize: 11, fontWeight: 600,
+                      cursor: "pointer", padding: 0, flexShrink: 0,
+                      transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>

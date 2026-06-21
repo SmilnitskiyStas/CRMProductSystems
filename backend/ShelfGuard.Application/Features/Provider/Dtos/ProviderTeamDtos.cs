@@ -12,7 +12,8 @@ public record ProviderTeamMemberDto(
 public record InviteProviderMemberRequest(
     string Email,
     string FullName,
-    string Role
+    string Role,
+    string? Password = null   // якщо null — генерувати тимчасовий
 );
 
 public record UpdateProviderMemberRequest(
