@@ -3,7 +3,7 @@
 ---
 
 ## TASK-278 — Live Chat: живий чат провайдер ↔ клієнт
-**Status:** planned · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
 Різниця між тікетом і чатом: тікет — для довгострокових задач (налаштування компанії), чат — миттєве спілкування.
 **DB (міграція AddChatFeature):**
 - `chat_sessions` (id, tenant_id, created_by_user_id, subject TEXT, status open/closed, created_at, updated_at; RLS на tenant_id)
@@ -30,7 +30,7 @@
 Accept: dotnet build green; міграція green; клієнт може надіслати повідомлення, провайдер його бачить і відповідає; tsc + next build green.
 
 ## TASK-277 — Команда: створення користувача з логіном/паролем та правами
-**Status:** planned · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
 **Backend:**
 - Розширити `InviteProviderMemberRequest` полем `Password?: string` (необов'язкове)
 - В `ProviderTeamService.InviteMemberAsync`: якщо `Password` передано → хешувати його замість `tempPassword`
@@ -45,7 +45,7 @@ Accept: dotnet build green; міграція green; клієнт може над
 Accept: backend build green; фронтенд: tsc green; можна створити провайдер-агента з власним паролем, він може увійти в систему з цим паролем.
 
 ## TASK-276 — Розклад: множинний вибір днів при додаванні зміни
-**Status:** planned · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-06-21
+**Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-06-21
 Поточний `AddSlotModal` у `ScheduleTab.tsx` дозволяє вибрати лише один день.
 **Зміни:**
 - Замінити `<select>` для дня тижня на 7 чекбоксів (Пн–Нд) у горизонтальній сітці
@@ -57,7 +57,7 @@ Accept: backend build green; фронтенд: tsc green; можна створ�
 Accept: tsc green; можна обрати 3 дні → backend отримує 3 POST-запити → 3 слоти з'являються у grid.
 
 ## TASK-275 — Маркетплейс: Full-width + Створення постачальника + Додавання товарів
-**Status:** planned · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
+**Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
 **Frontend (швидке виправлення):**
 - У `frontend/app/(dashboard)/marketplace/page.tsx` рядок 80: видалити `maxWidth: 1200` зі стилів обгортки
 **Backend — нові провайдер-ендпоінти (`MarketplaceAdminController`):**
