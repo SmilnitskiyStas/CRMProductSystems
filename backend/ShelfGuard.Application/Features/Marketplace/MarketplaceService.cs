@@ -136,6 +136,92 @@ public sealed class MarketplaceService : IMarketplaceService
         return (ToFullProfileDto(profile, supplier, null, showPremium: true), null);
     }
 
+    // ── Platform admin (ProviderOnly) ────────────────────────────────────────
+
+    public async Task<(SupplierProfileDto Profile, string? Error)> AdminCreateSupplierAsync(
+        AdminCreateSupplierDto request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.CompanyName))
+            return (null!, "CompanyName is required.");
+
+        if (request.Plan is not "free" and not "premium")
+            return (null!, "Plan must be 'free' or 'premium'.");
+
+        // Platform-managed suppliers are not tied to a tenant — use Guid.Empty
+        var platformTenantId = Guid.Empty;
+
+        var supplier = new Supplier
+        {
+            TenantId = platformTenantId,
+            Name     = request.CompanyName.Trim(),
+        };
+
+        await _repo.AddSupplierAsync(supplier, ct);
+
+        var profile = new SupplierProfile
+        {
+            SupplierId      = supplier.Id,
+            TenantId        = platformTenantId,
+            Region          = request.Region?.Trim(),
+            Categories      = request.Categories is { Length: > 0 }
+                                  ? JsonSerializer.Serialize(request.Categories)
+                                  : null,
+            Website         = request.Website?.Trim(),
+            DeliveryRegions = request.DeliveryRegions is { Length: > 0 }
+                                  ? JsonSerializer.Serialize(request.DeliveryRegions)
+                                  : null,
+            WorkingHours    = request.WorkingHours?.Trim(),
+            PaymentTerms    = request.PaymentTerms?.Trim(),
+            IsPublic        = request.IsPublic,
+            Plan            = request.Plan,
+        };
+
+        await _repo.AddSupplierProfileAsync(profile, ct);
+        await _repo.SaveChangesAsync(ct);
+
+        return (ToFullProfileDto(profile, supplier, null, showPremium: true), null);
+    }
+
+    public async Task<(SupplierItemDto? Item, string? Error)> AdminAddSupplierItemAsync(
+        Guid supplierId, AdminAddSupplierItemDto request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.CustomName))
+            return (null, "CustomName is required.");
+
+        var supplier = await _repo.GetSupplierByRawIdAsync(supplierId, ct);
+        if (supplier is null)
+            return (null, "Supplier not found.");
+
+        var item = new SupplierItem
+        {
+            SupplierId  = supplierId,
+            TenantId    = supplier.TenantId,
+            CustomName  = request.CustomName.Trim(),
+            Price       = request.Price,
+            MinQty      = request.MinQty,
+            Unit        = request.Unit?.Trim(),
+            IsAvailable = request.IsAvailable,
+        };
+
+        await _repo.AddSupplierItemAsync(item, ct);
+        await _repo.SaveChangesAsync(ct);
+
+        return (ToItemDto(item), null);
+    }
+
+    public async Task<string?> AdminDeleteSupplierItemAsync(
+        Guid supplierId, Guid itemId, CancellationToken ct = default)
+    {
+        var item = await _repo.GetSupplierItemByIdAsync(supplierId, itemId, ct);
+        if (item is null)
+            return "Item not found.";
+
+        _repo.RemoveSupplierItem(item);
+        await _repo.SaveChangesAsync(ct);
+
+        return null;
+    }
+
     // ── Private mapping ───────────────────────────────────────────────────────
 
     private static SupplierListItemDto ToListItemDto(

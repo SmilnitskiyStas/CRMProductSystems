@@ -67,6 +67,26 @@ public record SupplierProfileUpdateDto(
 /// <summary>Paginated list response.</summary>
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
+// ── Platform admin DTOs (TASK-275) ───────────────────────────────────────────
+
+public record AdminCreateSupplierDto(
+    string CompanyName,
+    string? Region,
+    string[]? Categories,
+    string? Website,
+    string[]? DeliveryRegions,
+    string? WorkingHours,
+    string? PaymentTerms,
+    bool IsPublic,
+    string Plan);
+
+public record AdminAddSupplierItemDto(
+    string CustomName,
+    decimal? Price,
+    int? MinQty,
+    string? Unit,
+    bool IsAvailable);
+
 // ── AI Supplier Recommendation (TASK-223) ─────────────────────────────────────
 
 public record AiRecommendRequestDto(

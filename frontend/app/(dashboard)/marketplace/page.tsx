@@ -5,7 +5,10 @@ import { Search } from "lucide-react";
 import { useSuppliers, useMarketplaceSearch } from "@/features/marketplace/hooks/useMarketplace";
 import { SupplierCard } from "@/features/marketplace/components/SupplierCard";
 import { SupplierFilters } from "@/features/marketplace/components/SupplierFilters";
+import { CreateSupplierModal } from "@/features/marketplace/components/CreateSupplierModal";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { PROVIDER_TEAM } from "@/lib/roles";
 import type { MarketplaceFilters, SupplierProfileDto } from "@/features/marketplace/types";
 
 const DEFAULT_FILTERS: MarketplaceFilters = {
@@ -18,6 +21,10 @@ export default function MarketplacePage() {
   const { data: modulesData } = useModules();
   const marketplaceActive =
     !modulesData || modulesData.modules.includes("marketplace");
+
+  const { data: me } = useMe();
+  const isProviderTeam = PROVIDER_TEAM.has(me?.role as any);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const [filters, setFilters] = useState<MarketplaceFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
@@ -77,7 +84,7 @@ export default function MarketplacePage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1200 }}>
+    <div style={{ padding: "28px 32px" }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
@@ -160,7 +167,29 @@ export default function MarketplacePage() {
             Скинути
           </button>
         )}
+        {isProviderTeam && (
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            style={{
+              padding: "9px 20px",
+              borderRadius: 8,
+              border: "none",
+              background: "#059669",
+              color: "#E8EDF5",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            + Створити постачальника
+          </button>
+        )}
       </div>
+
+      {createModalOpen && (
+        <CreateSupplierModal onClose={() => setCreateModalOpen(false)} />
+      )}
 
       {/* Filters (hidden in search mode) */}
       {!isSearchMode && (

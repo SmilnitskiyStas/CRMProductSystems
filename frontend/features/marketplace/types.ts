@@ -84,3 +84,25 @@ export interface MarketplaceFilters {
   category: string;
   plan: "all" | SupplierPlan;
 }
+
+// ─── Admin / platform request bodies (TASK-275) ───────────────────────────────
+
+export interface CreateSupplierRequest {
+  companyName: string;
+  region?: string;
+  categories?: string[];
+  website?: string;
+  deliveryRegions?: string[];
+  workingHours?: string;
+  paymentTerms?: string;
+  isPublic: boolean;
+  plan: SupplierPlan;
+}
+
+export interface AddSupplierItemRequest {
+  customName: string;
+  price?: number;
+  minQty?: number;
+  unit?: string;
+  isAvailable: boolean;
+}

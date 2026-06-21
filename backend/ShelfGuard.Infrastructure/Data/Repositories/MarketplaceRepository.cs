@@ -151,6 +151,28 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
     public Task SaveChangesAsync(CancellationToken ct = default) =>
         _db.SaveChangesAsync(ct);
 
+    // ── Platform admin operations ─────────────────────────────────────────────
+
+    public async Task AddSupplierAsync(Supplier supplier, CancellationToken ct = default) =>
+        await _db.Suppliers.AddAsync(supplier, ct);
+
+    public async Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct = default) =>
+        await _db.SupplierProfiles.AddAsync(profile, ct);
+
+    public async Task AddSupplierItemAsync(SupplierItem item, CancellationToken ct = default) =>
+        await _db.SupplierItems.AddAsync(item, ct);
+
+    public Task<SupplierItem?> GetSupplierItemByIdAsync(
+        Guid supplierId, Guid itemId, CancellationToken ct = default) =>
+        _db.SupplierItems.FirstOrDefaultAsync(
+            i => i.Id == itemId && i.SupplierId == supplierId, ct);
+
+    public void RemoveSupplierItem(SupplierItem item) =>
+        _db.SupplierItems.Remove(item);
+
+    public Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default) =>
+        _db.Suppliers.FirstOrDefaultAsync(s => s.Id == supplierId, ct);
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
