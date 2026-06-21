@@ -161,6 +161,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IProviderScheduleRepository,
             Data.Repositories.ProviderScheduleRepository>();
 
+        // TASK-278 - Live Chat
+        services.AddScoped<Application.Features.Chat.IChatService,
+            Services.ChatService>();
+
         return services;
     }
 }

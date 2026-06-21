@@ -79,6 +79,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<TicketComment>  TicketComments  => Set<TicketComment>();
 
+    // Live Chat (TASK-278)
+    public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+
     // v4 Phase 3 — Supplier Marketplace
     public DbSet<SupplierProfile> SupplierProfiles => Set<SupplierProfile>();
     public DbSet<SupplierItem>    SupplierItems    => Set<SupplierItem>();
@@ -1345,6 +1349,29 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasOne(s => s.User).WithMany()
              .HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ChatSession (TASK-278) ────────────────────────────────────────────
+        builder.Entity<ChatSession>(e =>
+        {
+            e.ToTable("chat_sessions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("open");
+            e.Property(x => x.Subject).HasMaxLength(500);
+            e.HasMany(x => x.Messages)
+             .WithOne(x => x.Session)
+             .HasForeignKey(x => x.SessionId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ChatMessage (TASK-278) ────────────────────────────────────────────
+        builder.Entity<ChatMessage>(e =>
+        {
+            e.ToTable("chat_messages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Body).HasMaxLength(4000);
+            e.Property(x => x.SenderName).HasMaxLength(200);
+            e.HasIndex(x => x.SessionId);
         });
     }
 }
