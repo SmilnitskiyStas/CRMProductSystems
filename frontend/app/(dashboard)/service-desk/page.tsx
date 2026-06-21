@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Ticket } from "lucide-react";
+import { Plus, Ticket, MessageCircle } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
@@ -11,35 +11,20 @@ import { TicketDetail } from "@/features/service-desk/components/TicketDetail";
 import { CreateTicketForm } from "@/features/service-desk/components/CreateTicketForm";
 import type { TicketDto } from "@/features/service-desk/types";
 import { ProviderSupportTab } from "@/features/provider/components/ProviderSupportTab";
+import { ChatSupportTab } from "@/features/provider/components/ChatSupportTab";
 
-type Tab = "all" | "my";
+type TenantTab = "all" | "my";
+type ProviderTab = "tickets" | "chat";
 
 export default function ServiceDeskPage() {
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
-  const isManager = AT_LEAST_STORE_MANAGER.has(userRole as AppRole);
+  const isProvider = PROVIDER_TEAM.has(userRole);
+  const isManager = AT_LEAST_STORE_MANAGER.has(userRole);
 
-  // Provider team → cross-tenant Service Desk view
-  if (PROVIDER_TEAM.has(userRole)) {
-    return (
-      <div style={{ padding: "28px 32px" }}>
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Ticket size={22} style={{ color: "#3B82F6" }} />
-            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-              Service Desk
-            </h1>
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Тікети всіх клієнтів платформи
-          </p>
-        </div>
-        <ProviderSupportTab />
-      </div>
-    );
-  }
-
-  const [activeTab, setActiveTab] = useState<Tab>(isManager ? "all" : "my");
+  // All hooks must run unconditionally — split rendering via flags below
+  const [providerTab, setProviderTab] = useState<ProviderTab>("tickets");
+  const [tenantTab, setTenantTab] = useState<TenantTab>(isManager ? "all" : "my");
   const [selectedTicket, setSelectedTicket] = useState<TicketDto | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -53,8 +38,58 @@ export default function ServiceDeskPage() {
     padding: "10px 16px",
     cursor: "pointer",
     transition: "color 0.15s, border-color 0.15s",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
   });
 
+  // ── Provider view ────────────────────────────────────────────────────────────
+  if (isProvider) {
+    return (
+      <div style={{ padding: "28px 32px" }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Ticket size={22} style={{ color: "#3B82F6" }} />
+            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+              Service Desk
+            </h1>
+          </div>
+          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+            Тікети та чати всіх клієнтів платформи
+          </p>
+        </div>
+
+        {/* Provider tabs */}
+        <div
+          style={{
+            borderBottom: "1px solid #1F2937",
+            marginBottom: 20,
+            display: "flex",
+            gap: 4,
+          }}
+        >
+          <button
+            style={tabStyle(providerTab === "tickets")}
+            onClick={() => setProviderTab("tickets")}
+          >
+            <Ticket size={14} />
+            Тікети
+          </button>
+          <button
+            style={tabStyle(providerTab === "chat")}
+            onClick={() => setProviderTab("chat")}
+          >
+            <MessageCircle size={14} />
+            Чат
+          </button>
+        </div>
+
+        {providerTab === "tickets" ? <ProviderSupportTab /> : <ChatSupportTab />}
+      </div>
+    );
+  }
+
+  // ── Tenant view ──────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "28px 32px", minHeight: "100vh" }}>
       {/* Header */}
@@ -110,22 +145,22 @@ export default function ServiceDeskPage() {
       >
         {isManager && (
           <button
-            style={tabStyle(activeTab === "all")}
-            onClick={() => setActiveTab("all")}
+            style={tabStyle(tenantTab === "all")}
+            onClick={() => setTenantTab("all")}
           >
             Всі тікети
           </button>
         )}
         <button
-          style={tabStyle(activeTab === "my")}
-          onClick={() => setActiveTab("my")}
+          style={tabStyle(tenantTab === "my")}
+          onClick={() => setTenantTab("my")}
         >
           Мої тікети
         </button>
       </div>
 
       {/* Content */}
-      {activeTab === "all" && isManager ? (
+      {tenantTab === "all" && isManager ? (
         <TicketList
           selectedId={selectedTicket?.id}
           onSelect={(ticket) => setSelectedTicket(ticket)}
