@@ -171,11 +171,14 @@ export default function MarketplacePage() {
           <button
             onClick={() => setCreateModalOpen(true)}
             style={{
-              padding: "9px 20px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "9px 16px",
               borderRadius: 8,
-              border: "none",
-              background: "#059669",
-              color: "#E8EDF5",
+              border: "1px solid #3B82F6",
+              background: "#1D3461",
+              color: "#93C5FD",
               fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
