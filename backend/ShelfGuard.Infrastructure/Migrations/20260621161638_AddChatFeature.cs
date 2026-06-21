@@ -29,7 +29,7 @@ namespace ShelfGuard.Infrastructure.Migrations
                 });
 
             migrationBuilder.Sql("ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;");
-            migrationBuilder.Sql(@"CREATE POLICY chat_sessions_tenant ON chat_sessions USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid OR current_setting('app.tenant_id', TRUE) IS NULL OR current_setting('app.tenant_id', TRUE) = '');");
+            migrationBuilder.Sql(@"CREATE POLICY chat_sessions_tenant ON chat_sessions USING (""TenantId"" = current_setting('app.tenant_id', TRUE)::uuid OR current_setting('app.tenant_id', TRUE) IS NULL OR current_setting('app.tenant_id', TRUE) = '');");
 
             migrationBuilder.CreateTable(
                 name: "chat_messages",
