@@ -177,7 +177,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Адмін",
     icon: <Shield size={18} />,
     items: [
-      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_ONLY },
+      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_ONLY, exact: true },
       { href: "/admin",    label: "Адмін",     icon: <Settings size={16} />, roles: PROVIDER_ONLY },
     ],
   },
