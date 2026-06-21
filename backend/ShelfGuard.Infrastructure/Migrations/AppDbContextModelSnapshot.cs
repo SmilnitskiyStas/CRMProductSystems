@@ -1964,6 +1964,42 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("provider_schedule_slots", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProviderRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("BaseRole")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<List<string>>("Permissions")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("provider_roles", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Recipe", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3116,6 +3152,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid?>("ProviderRoleId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("StoreId")
                         .HasColumnType("uuid");
 
@@ -3130,6 +3169,8 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("ProviderRoleId");
 
                     b.HasIndex("TenantId");
 
@@ -4348,6 +4389,11 @@ namespace ShelfGuard.Infrastructure.Migrations
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.User", b =>
                 {
+                    b.HasOne("ShelfGuard.Domain.Entities.ProviderRole", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderRoleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
                         .WithMany("Users")
                         .HasForeignKey("TenantId")

@@ -25,6 +25,12 @@ public sealed class User
     public Dictionary<string, bool>? Permissions { get; private set; }
 
     /// <summary>
+    /// Custom provider role assigned to this user (provider team only).
+    /// Null means the user's base system role applies.
+    /// </summary>
+    public Guid? ProviderRoleId { get; private set; }
+
+    /// <summary>
     /// Display name of the user who created/invited this account.
     /// Null for seed/self-registered users.
     /// Denormalized for fast read — not a FK to avoid cascades.
@@ -76,6 +82,8 @@ public sealed class User
     public void Activate() => IsActive = true;
 
     public void SetRole(string role) => Role = role;
+
+    public void SetProviderRole(Guid? roleId) => ProviderRoleId = roleId;
 
     public void SetStore(Guid? storeId) => StoreId = storeId;
 

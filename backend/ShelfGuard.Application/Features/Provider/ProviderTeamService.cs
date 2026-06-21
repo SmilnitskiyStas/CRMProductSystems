@@ -35,13 +35,19 @@ public sealed class ProviderTeamService(
         var hash = hasher.Hash(password);
 
         var user = User.Create(
-            tenantId:     null,
-            email:        req.Email.Trim().ToLowerInvariant(),
-            fullName:     req.FullName.Trim(),
-            passwordHash: hash,
-            role:         req.Role,
-            storeId:      null,
+            tenantId:      null,
+            email:         req.Email.Trim().ToLowerInvariant(),
+            fullName:      req.FullName.Trim(),
+            passwordHash:  hash,
+            role:          req.Role,
+            storeId:       null,
             invitedByName: "Provider");
+
+        if (req.ProviderRoleId.HasValue)
+            user.SetProviderRole(req.ProviderRoleId);
+
+        if (req.PermissionsOverride is { Count: > 0 })
+            user.SetPermissions(req.PermissionsOverride);
 
         await users.AddAsync(user, ct);
         await users.SaveChangesAsync(ct);
@@ -67,6 +73,9 @@ public sealed class ProviderTeamService(
 
         user.UpdateProfile(req.FullName.Trim(), null);
         user.SetRole(req.Role);
+        user.SetProviderRole(req.ProviderRoleId);
+        user.SetPermissions(req.PermissionsOverride is { Count: > 0 } ? req.PermissionsOverride : null);
+
         users.Update(user);
         await users.SaveChangesAsync(ct);
         return (Map(user), null);
@@ -95,5 +104,6 @@ public sealed class ProviderTeamService(
     }
 
     private static ProviderTeamMemberDto Map(User u) =>
-        new(u.Id, u.Email, u.FullName, u.Role, u.IsActive, u.CreatedAt);
+        new(u.Id, u.Email, u.FullName, u.Role, u.IsActive, u.CreatedAt,
+            u.ProviderRoleId, u.Permissions);
 }

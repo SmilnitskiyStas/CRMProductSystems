@@ -7,6 +7,8 @@ export interface ProviderTeamMemberDto {
   role: string;
   isActive: boolean;
   createdAt: string;
+  providerRoleId?: string | null;
+  permissionsOverride?: Record<string, boolean> | null;
 }
 
 export interface InviteProviderMemberRequest {
@@ -14,6 +16,8 @@ export interface InviteProviderMemberRequest {
   fullName: string;
   role: string;
   password?: string;
+  providerRoleId?: string | null;
+  permissionsOverride?: Record<string, boolean> | null;
 }
 
 export function getTeam(): Promise<ProviderTeamMemberDto[]> {
@@ -27,6 +31,8 @@ export function inviteMember(req: InviteProviderMemberRequest): Promise<Provider
 export interface UpdateProviderMemberRequest {
   fullName: string;
   role: string;
+  providerRoleId?: string | null;
+  permissionsOverride?: Record<string, boolean> | null;
 }
 
 export function updateMember(memberId: string, req: UpdateProviderMemberRequest): Promise<ProviderTeamMemberDto> {

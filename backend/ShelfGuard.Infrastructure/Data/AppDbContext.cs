@@ -106,6 +106,9 @@ public sealed class AppDbContext : DbContext
     // Provider team schedules (TASK-274)
     public DbSet<ProviderScheduleSlot> ProviderScheduleSlots => Set<ProviderScheduleSlot>();
 
+    // Provider RBAC — custom roles
+    public DbSet<ProviderRole> ProviderRoles => Set<ProviderRole>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -146,6 +149,9 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.IsActive).HasDefaultValue(true);
             e.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(u => u.InvitedByName).HasMaxLength(255).IsRequired(false);
+            e.Property(u => u.ProviderRoleId).IsRequired(false);
+            e.HasOne<ProviderRole>().WithMany()
+             .HasForeignKey(u => u.ProviderRoleId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.Property(u => u.Permissions)
              .HasColumnType("jsonb")
              .HasConversion(
@@ -1349,6 +1355,19 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasOne(s => s.User).WithMany()
              .HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProviderRole (TASK-279) ───────────────────────────────────────────
+        builder.Entity<ProviderRole>(e =>
+        {
+            e.ToTable("provider_roles");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.DisplayName).HasMaxLength(200).IsRequired();
+            e.Property(r => r.BaseRole).HasMaxLength(50).IsRequired();
+            e.Property(r => r.Permissions).HasColumnType("text[]").IsRequired();
+            e.Property(r => r.IsSystem).HasDefaultValue(false);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
         });
 
         // ── ChatSession (TASK-278) ────────────────────────────────────────────

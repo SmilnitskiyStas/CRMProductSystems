@@ -165,6 +165,10 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.Chat.IChatService,
             Services.ChatService>();
 
+        // TASK-279 - Provider custom roles
+        services.AddScoped<Application.Features.Provider.IProviderRolesService,
+            Services.ProviderRolesService>();
+
         return services;
     }
 }

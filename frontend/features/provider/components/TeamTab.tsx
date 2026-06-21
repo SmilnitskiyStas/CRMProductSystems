@@ -5,6 +5,7 @@ import { UserPlus, Trash2, Users, Pencil, RefreshCw } from "lucide-react";
 import { useProviderTeam, useDeactivateMember, useReactivateMember } from "../hooks/useProviderTeam";
 import { InviteProviderMemberModal } from "./InviteProviderMemberModal";
 import { EditMemberModal } from "./EditMemberModal";
+import { RolesSection } from "./RolesSection";
 import type { ProviderTeamMemberDto } from "../api/providerTeamApi";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -174,6 +175,8 @@ export function TeamTab() {
           ))}
         </div>
       )}
+
+      <RolesSection />
 
       {showInvite && <InviteProviderMemberModal onClose={() => setShowInvite(false)} />}
       {editMember && <EditMemberModal member={editMember} onClose={() => setEditMember(null)} />}

@@ -6,19 +6,25 @@ public record ProviderTeamMemberDto(
     string   FullName,
     string   Role,
     bool     IsActive,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    Guid?    ProviderRoleId,
+    Dictionary<string, bool>? PermissionsOverride
 );
 
 public record InviteProviderMemberRequest(
-    string Email,
-    string FullName,
-    string Role,
-    string? Password = null   // якщо null — генерувати тимчасовий
+    string   Email,
+    string   FullName,
+    string   Role,
+    string?  Password              = null,
+    Guid?    ProviderRoleId        = null,
+    Dictionary<string, bool>? PermissionsOverride = null
 );
 
 public record UpdateProviderMemberRequest(
-    string FullName,
-    string Role
+    string   FullName,
+    string   Role,
+    Guid?    ProviderRoleId        = null,
+    Dictionary<string, bool>? PermissionsOverride = null
 );
 
 public record ProviderMemberStatsDto(
