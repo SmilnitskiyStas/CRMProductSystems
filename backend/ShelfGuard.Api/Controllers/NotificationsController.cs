@@ -87,6 +87,18 @@ public sealed class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Marks one notification as unread.</summary>
+    [HttpPost("{id:guid}/unread")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> MarkAsUnread(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        await _notifications.MarkAsUnreadAsync(id, tenantId.Value, ct);
+        return NoContent();
+    }
+
     /// <summary>Marks all notifications as read for the current tenant.</summary>
     [HttpPost("read-all")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

@@ -7,6 +7,7 @@ import {
   fetchNotificationHistory,
   sendTestNotification,
   markNotificationAsRead,
+  markNotificationAsUnread,
   markAllNotificationsAsRead,
   fetchUnreadCount,
 } from "../api/notifications";
@@ -210,6 +211,20 @@ export function useMarkAllAsRead() {
         old?.map((n) => ({ ...n, isRead: true, readAt: n.readAt ?? new Date().toISOString() }))
       );
       qc.setQueryData(UNREAD_KEY, 0);
+      qc.invalidateQueries({ queryKey: HISTORY_KEY });
+    },
+  });
+}
+
+export function useMarkAsUnread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => markNotificationAsUnread(id),
+    onSuccess: (_data, id) => {
+      qc.setQueryData<NotificationHistoryItem[]>(HISTORY_KEY, (old) =>
+        old?.map((n) => n.id === id ? { ...n, isRead: false, readAt: null } : n)
+      );
+      qc.invalidateQueries({ queryKey: UNREAD_KEY });
     },
   });
 }

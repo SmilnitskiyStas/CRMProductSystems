@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, CheckCircle, Clock, Send, AlertTriangle } from "lucide-react";
+import { X, CheckCircle, Clock, Send, AlertTriangle, RotateCcw } from "lucide-react";
 import type { NotificationHistoryItem } from "../types";
 import {
   EVENT_TYPE_LABELS,
@@ -13,6 +13,7 @@ import {
 interface Props {
   item: NotificationHistoryItem | null;
   onClose: () => void;
+  onMarkUnread?: (id: string) => void;
 }
 
 function formatDateFull(iso: string): string {
@@ -38,7 +39,7 @@ const STATUS_META: Record<string, { icon: React.ReactNode; color: string; label:
   pending: { icon: <Clock size={14} />, color: "#FACC15", label: "Очікує" },
 };
 
-export function NotificationDetailDrawer({ item, onClose }: Props) {
+export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props) {
   // Close on Escape
   useEffect(() => {
     if (!item) return;
@@ -119,11 +120,36 @@ export function NotificationDetailDrawer({ item, onClose }: Props) {
               ? <CheckCircle size={14} style={{ color: "#4ADE80" }} />
               : <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3B82F6", flexShrink: 0 }} />
             }
-            <span style={{ fontSize: 12, color: item.isRead ? "#4ADE80" : "#93C5FD" }}>
+            <span style={{ fontSize: 12, color: item.isRead ? "#4ADE80" : "#93C5FD", flex: 1 }}>
               {item.isRead
                 ? `Переглянуто ${item.readAt ? formatDateFull(item.readAt) : ""}`
                 : "Непрочитане"}
             </span>
+            {item.isRead && onMarkUnread && (
+              <button
+                onClick={() => onMarkUnread(item.id)}
+                title="Позначити як непрочитане"
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  background: "transparent", border: "1px solid #1F2937",
+                  borderRadius: 6, padding: "3px 8px",
+                  color: "#6B7280", fontSize: 11, cursor: "pointer",
+                  transition: "border-color 0.1s, color 0.1s",
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6";
+                  (e.currentTarget as HTMLElement).style.color = "#93C5FD";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+                  (e.currentTarget as HTMLElement).style.color = "#6B7280";
+                }}
+              >
+                <RotateCcw size={11} />
+                Непрочитане
+              </button>
+            )}
           </div>
 
           {/* From / Source */}

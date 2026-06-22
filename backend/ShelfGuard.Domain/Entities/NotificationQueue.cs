@@ -22,4 +22,10 @@ public sealed class NotificationQueue
         IsRead = true;
         ReadAt = DateTime.UtcNow;
     }
+
+    public void MarkUnread()
+    {
+        IsRead = false;
+        ReadAt = null;
+    }
 }

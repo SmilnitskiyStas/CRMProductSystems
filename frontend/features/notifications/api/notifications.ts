@@ -28,6 +28,10 @@ export async function markNotificationAsRead(id: string): Promise<void> {
   await api.post(`/api/notifications/${id}/read`, {});
 }
 
+export async function markNotificationAsUnread(id: string): Promise<void> {
+  await api.post(`/api/notifications/${id}/unread`, {});
+}
+
 export async function markAllNotificationsAsRead(): Promise<void> {
   await api.post("/api/notifications/read-all", {});
 }

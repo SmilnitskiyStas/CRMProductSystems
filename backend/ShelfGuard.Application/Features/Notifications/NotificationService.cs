@@ -43,6 +43,9 @@ public sealed class NotificationService : INotificationService
     public Task MarkAsReadAsync(Guid id, Guid tenantId, CancellationToken ct = default)
         => _repo.MarkAsReadAsync(id, tenantId, ct);
 
+    public Task MarkAsUnreadAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+        => _repo.MarkAsUnreadAsync(id, tenantId, ct);
+
     public Task MarkAllAsReadAsync(Guid tenantId, CancellationToken ct = default)
         => _repo.MarkAllAsReadAsync(tenantId, ct);
 

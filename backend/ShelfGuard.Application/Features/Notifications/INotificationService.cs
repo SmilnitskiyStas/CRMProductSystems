@@ -12,6 +12,7 @@ public interface INotificationService
 
     Task<NotificationHistoryDto?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default);
     Task MarkAsReadAsync(Guid id, Guid tenantId, CancellationToken ct = default);
+    Task MarkAsUnreadAsync(Guid id, Guid tenantId, CancellationToken ct = default);
     Task MarkAllAsReadAsync(Guid tenantId, CancellationToken ct = default);
     Task<int> GetUnreadCountAsync(Guid tenantId, CancellationToken ct = default);
 }

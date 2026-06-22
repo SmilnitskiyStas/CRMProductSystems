@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CheckCheck } from "lucide-react";
-import { useNotificationHistory, useMarkAsRead, useMarkAllAsRead } from "../hooks/useNotifications";
+import { useNotificationHistory, useMarkAsRead, useMarkAllAsRead, useMarkAsUnread } from "../hooks/useNotifications";
 import { NotificationDetailDrawer } from "./NotificationDetailDrawer";
 import type { NotificationHistoryItem } from "../types";
 import { EVENT_TYPE_LABELS, CHANNEL_LABELS, CHANNEL_ICONS } from "../types";
@@ -26,13 +26,16 @@ export function NotificationHistoryList() {
   const { data: history, isLoading } = useNotificationHistory();
   const markAsRead    = useMarkAsRead();
   const markAllAsRead = useMarkAllAsRead();
+  const markAsUnread  = useMarkAsUnread();
 
-  const [selected, setSelected] = useState<NotificationHistoryItem | null>(null);
+  // Store only the ID so the drawer always gets the fresh item from the cache
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = history?.find((n) => n.id === selectedId) ?? null;
 
   const unreadCount = history?.filter((n) => !n.isRead).length ?? 0;
 
   function handleClick(item: NotificationHistoryItem) {
-    setSelected(item);
+    setSelectedId(item.id);
     if (!item.isRead) markAsRead.mutate(item.id);
   }
 
@@ -174,7 +177,8 @@ export function NotificationHistoryList() {
       {/* Detail drawer */}
       <NotificationDetailDrawer
         item={selected}
-        onClose={() => setSelected(null)}
+        onClose={() => setSelectedId(null)}
+        onMarkUnread={(id) => markAsUnread.mutate(id)}
       />
     </>
   );

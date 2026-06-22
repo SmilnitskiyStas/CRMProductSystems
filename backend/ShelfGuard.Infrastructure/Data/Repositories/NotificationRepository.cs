@@ -77,6 +77,15 @@ public sealed class NotificationRepository : INotificationRepository
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task MarkAsUnreadAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+    {
+        var item = await _db.NotificationQueues
+            .FirstOrDefaultAsync(q => q.Id == id && q.TenantId == tenantId, ct);
+        if (item is null || !item.IsRead) return;
+        item.MarkUnread();
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task MarkAllAsReadAsync(Guid tenantId, CancellationToken ct = default)
     {
         var items = await _db.NotificationQueues
