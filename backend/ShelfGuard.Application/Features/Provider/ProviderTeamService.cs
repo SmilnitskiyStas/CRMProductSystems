@@ -26,7 +26,7 @@ public sealed class ProviderTeamService(
             return (null, $"Role '{req.Role}' is not a valid provider role.");
 
         var existing = await users.GetByEmailAsync(req.Email.ToLowerInvariant(), ct);
-        if (existing is not null)
+        if (existing is not null && existing.IsActive)
             return (null, $"Email '{req.Email}' is already registered.");
 
         var password = !string.IsNullOrWhiteSpace(req.Password)
