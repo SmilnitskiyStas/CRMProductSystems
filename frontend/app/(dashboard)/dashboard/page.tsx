@@ -13,7 +13,7 @@ import {
   useStoreZones,
 } from "@/features/dashboard/hooks/useDashboard";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { PROVIDER_TEAM } from "@/lib/roles";
+import { PROVIDER_TEAM, type AppRole } from "@/lib/roles";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const { data: zones, isLoading: zonesLoading } = useStoreZones();
 
   useEffect(() => {
-    if (me && PROVIDER_TEAM.has(me.role)) router.replace("/provider");
+    if (me && PROVIDER_TEAM.has(me.role as AppRole)) router.replace("/provider");
   }, [me, router]);
 
   return (
