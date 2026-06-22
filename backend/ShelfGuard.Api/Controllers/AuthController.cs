@@ -92,7 +92,7 @@ public sealed class AuthController : ControllerBase
             var tenantIdRaw = User.FindFirstValue("tenant_id");
             Guid? tenantId  = Guid.TryParse(tenantIdRaw, out var tid) ? tid : null;
 
-            return Ok(new AuthUserDto(userId.Value, email, email, role, tenantId, StoreId: null));
+            return Ok(new AuthUserDto(userId.Value, email, email, role, tenantId, StoreId: null, Permissions: null));
         }
 
         var user = await _auth.GetCurrentUserAsync(userId.Value, ct);
