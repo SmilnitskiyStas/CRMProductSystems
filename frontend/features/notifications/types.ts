@@ -25,9 +25,19 @@ export interface NotificationHistoryItem {
   eventType: NotificationEventType;
   channel: NotificationChannel;
   status: "sent" | "failed" | "skipped" | "pending";
-  payload: string;
+  payload: string | null;
   createdAt: string;
+  isRead: boolean;
+  readAt: string | null;
 }
+
+export const EVENT_TYPE_SOURCE: Record<NotificationEventType, { service: string; actor: string }> = {
+  "stock.expiry_warning":    { service: "Модуль інвентаризації", actor: "Моніторинг терміну придатності" },
+  "stock.expiry_critical":   { service: "Модуль інвентаризації", actor: "Моніторинг терміну придатності" },
+  "stock.expired":           { service: "Модуль інвентаризації", actor: "Контроль якості" },
+  "stock.needs_verification":{ service: "Модуль інвентаризації", actor: "Контроль якості" },
+  "weekly_report":           { service: "Планувальник завдань",  actor: "Автоматичний звіт" },
+};
 
 export const EVENT_TYPE_LABELS: Record<NotificationEventType, string> = {
   "stock.expiry_warning": "Попередження про термін",

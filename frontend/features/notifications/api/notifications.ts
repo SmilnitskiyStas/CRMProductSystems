@@ -23,3 +23,16 @@ export async function sendTestNotification(
 ): Promise<void> {
   await api.post("/api/notifications/test", { channel, eventType });
 }
+
+export async function markNotificationAsRead(id: string): Promise<void> {
+  await api.post(`/api/notifications/${id}/read`, {});
+}
+
+export async function markAllNotificationsAsRead(): Promise<void> {
+  await api.post("/api/notifications/read-all", {});
+}
+
+export async function fetchUnreadCount(): Promise<number> {
+  const data = await api.get<{ count: number }>("/api/notifications/unread-count");
+  return data.count;
+}

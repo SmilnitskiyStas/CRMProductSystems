@@ -13,4 +13,13 @@ public sealed class NotificationQueue
     public DateTime? SentAt { get; set; }
     public string? Error { get; set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+
+    public bool IsRead { get; set; } = false;
+    public DateTime? ReadAt { get; set; }
+
+    public void MarkRead()
+    {
+        IsRead = true;
+        ReadAt = DateTime.UtcNow;
+    }
 }

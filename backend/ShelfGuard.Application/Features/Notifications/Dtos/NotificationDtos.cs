@@ -19,7 +19,9 @@ public sealed record NotificationHistoryDto(
     string    Channel,
     string    Status,
     string?   Payload,
-    DateTime  CreatedAt
+    DateTime  CreatedAt,
+    bool      IsRead,
+    DateTime? ReadAt
 );
 
 public sealed record TestNotificationRequest(

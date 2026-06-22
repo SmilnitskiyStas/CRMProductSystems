@@ -1179,6 +1179,14 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Payload")
                         .HasColumnType("jsonb");
 
@@ -1205,6 +1213,9 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "Status", "CreatedAt")
                         .HasDatabaseName("idx_notification_queue_tenant_status");
+
+                    b.HasIndex("TenantId", "IsRead")
+                        .HasDatabaseName("idx_notification_queue_tenant_unread");
 
                     b.ToTable("notification_queue", (string)null);
                 });

@@ -61,4 +61,34 @@ public sealed class NotificationRepository : INotificationRepository
         _db.NotificationQueues.Add(item);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task<NotificationQueue?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+    {
+        return await _db.NotificationQueues
+            .FirstOrDefaultAsync(q => q.Id == id && q.TenantId == tenantId, ct);
+    }
+
+    public async Task MarkAsReadAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+    {
+        var item = await _db.NotificationQueues
+            .FirstOrDefaultAsync(q => q.Id == id && q.TenantId == tenantId, ct);
+        if (item is null || item.IsRead) return;
+        item.MarkRead();
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task MarkAllAsReadAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var items = await _db.NotificationQueues
+            .Where(q => q.TenantId == tenantId && !q.IsRead)
+            .ToListAsync(ct);
+        foreach (var item in items) item.MarkRead();
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<int> GetUnreadCountAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        return await _db.NotificationQueues
+            .CountAsync(q => q.TenantId == tenantId && !q.IsRead, ct);
+    }
 }

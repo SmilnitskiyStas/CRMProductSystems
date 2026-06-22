@@ -31,16 +31,23 @@ public sealed class NotificationService : INotificationService
         Guid tenantId, CancellationToken ct = default)
     {
         var items = await _repo.GetHistoryAsync(tenantId, limit: 100, ct);
-        return items
-            .Select(q => new NotificationHistoryDto(
-                q.Id,
-                q.EventType ?? string.Empty,
-                q.Channel,
-                q.Status,
-                q.Payload,
-                q.CreatedAt))
-            .ToList();
+        return items.Select(ToDto).ToList();
     }
+
+    public async Task<NotificationHistoryDto?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+    {
+        var item = await _repo.GetByIdAsync(id, tenantId, ct);
+        return item is null ? null : ToDto(item);
+    }
+
+    public Task MarkAsReadAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+        => _repo.MarkAsReadAsync(id, tenantId, ct);
+
+    public Task MarkAllAsReadAsync(Guid tenantId, CancellationToken ct = default)
+        => _repo.MarkAllAsReadAsync(tenantId, ct);
+
+    public Task<int> GetUnreadCountAsync(Guid tenantId, CancellationToken ct = default)
+        => _repo.GetUnreadCountAsync(tenantId, ct);
 
     public Task SendTestAsync(
         Guid tenantId, Guid userId, TestNotificationRequest request, CancellationToken ct = default)
@@ -79,6 +86,9 @@ public sealed class NotificationService : INotificationService
         if (!ValidEventTypes.Contains(value))
             throw new ArgumentException($"Unknown event type: {value}");
     }
+
+    private static NotificationHistoryDto ToDto(NotificationQueue q) =>
+        new(q.Id, q.EventType ?? string.Empty, q.Channel, q.Status, q.Payload, q.CreatedAt, q.IsRead, q.ReadAt);
 
     private static void ValidateChannel(string value)
     {

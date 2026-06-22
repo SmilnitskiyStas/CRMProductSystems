@@ -62,6 +62,55 @@ public sealed class NotificationsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Returns a single notification by id.</summary>
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(NotificationHistoryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var result = await _notifications.GetByIdAsync(id, tenantId.Value, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>Marks one notification as read.</summary>
+    [HttpPost("{id:guid}/read")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        await _notifications.MarkAsReadAsync(id, tenantId.Value, ct);
+        return NoContent();
+    }
+
+    /// <summary>Marks all notifications as read for the current tenant.</summary>
+    [HttpPost("read-all")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> MarkAllAsRead(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        await _notifications.MarkAllAsReadAsync(tenantId.Value, ct);
+        return NoContent();
+    }
+
+    /// <summary>Returns unread notification count for the TopBar badge.</summary>
+    [HttpGet("unread-count")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUnreadCount(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Ok(new { count = 0 });
+
+        var count = await _notifications.GetUnreadCountAsync(tenantId.Value, ct);
+        return Ok(new { count });
+    }
+
     /// <summary>Enqueues a test notification for the current user.</summary>
     [HttpPost("test")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

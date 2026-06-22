@@ -8,6 +8,7 @@ import { TENANT_ROLES } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
 import { UserMenu } from "./UserMenu";
 import { SupportChatWidget } from "./SupportChatWidget";
+import { useUnreadCount } from "@/features/notifications/hooks/useNotifications";
 
 interface Props {
   title?: string;
@@ -15,6 +16,7 @@ interface Props {
 
 export function TopBar({ title }: Props) {
   const { data: user } = useMe();
+  const { data: unreadCount = 0 } = useUnreadCount();
   const [chatOpen, setChatOpen] = useState(false);
 
   const storeName = user?.storeId ? "Магазин #1" : "ShelfGuard";
@@ -108,17 +110,30 @@ export function TopBar({ title }: Props) {
             }}
           >
             <Bell size={16} />
-            <span
-              style={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                width: 6,
-                height: 6,
-                background: "#EF4444",
-                borderRadius: "50%",
-              }}
-            />
+            {unreadCount > 0 && (
+              unreadCount > 9 ? (
+                <span style={{
+                  position: "absolute", top: -6, right: -6,
+                  minWidth: 16, height: 16, padding: "0 4px",
+                  background: "#EF4444", borderRadius: 8,
+                  fontSize: 10, fontWeight: 700, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  lineHeight: 1,
+                }}>
+                  9+
+                </span>
+              ) : (
+                <span style={{
+                  position: "absolute", top: -6, right: -6,
+                  width: 16, height: 16,
+                  background: "#EF4444", borderRadius: "50%",
+                  fontSize: 10, fontWeight: 700, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {unreadCount}
+                </span>
+              )
+            )}
           </Link>
 
           {/* User dropdown */}

@@ -6,6 +6,9 @@ import {
   updateNotificationSetting,
   fetchNotificationHistory,
   sendTestNotification,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  fetchUnreadCount,
 } from "../api/notifications";
 import type {
   NotificationSettingsMap,
@@ -47,6 +50,8 @@ const MOCK_HISTORY: NotificationHistoryItem[] = [
     status: "sent",
     payload: "Молоко 2.5% — залишилось 2 дні",
     createdAt: "2026-06-06T08:15:00Z",
+    isRead: false,
+    readAt: null,
   },
   {
     id: "h2",
@@ -55,6 +60,8 @@ const MOCK_HISTORY: NotificationHistoryItem[] = [
     status: "sent",
     payload: "Йогурт полуниця — прострочено",
     createdAt: "2026-06-05T09:00:00Z",
+    isRead: true,
+    readAt: "2026-06-05T10:00:00Z",
   },
   {
     id: "h3",
@@ -63,6 +70,8 @@ const MOCK_HISTORY: NotificationHistoryItem[] = [
     status: "sent",
     payload: "Тижневий звіт за 26.05–01.06.2026",
     createdAt: "2026-06-01T08:00:00Z",
+    isRead: true,
+    readAt: "2026-06-01T09:00:00Z",
   },
   {
     id: "h4",
@@ -71,6 +80,8 @@ const MOCK_HISTORY: NotificationHistoryItem[] = [
     status: "failed",
     payload: "Сир Гауда — залишилось 8 днів",
     createdAt: "2026-06-04T11:30:00Z",
+    isRead: false,
+    readAt: null,
   },
 ];
 
@@ -159,5 +170,46 @@ export function useSendTestNotification() {
   return useMutation({
     mutationFn: ({ channel, eventType }: { channel: string; eventType: string }) =>
       sendTestNotification(channel, eventType),
+  });
+}
+
+const HISTORY_KEY = ["notifications", "history"] as const;
+const UNREAD_KEY  = ["notifications", "unread-count"] as const;
+
+export function useUnreadCount() {
+  return useQuery<number>({
+    queryKey: UNREAD_KEY,
+    queryFn: async () => {
+      try { return await fetchUnreadCount(); } catch { return 0; }
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useMarkAsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => markNotificationAsRead(id),
+    onSuccess: (_data, id) => {
+      // Optimistic update in history cache
+      qc.setQueryData<NotificationHistoryItem[]>(HISTORY_KEY, (old) =>
+        old?.map((n) => n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)
+      );
+      qc.invalidateQueries({ queryKey: UNREAD_KEY });
+    },
+  });
+}
+
+export function useMarkAllAsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: markAllNotificationsAsRead,
+    onSuccess: () => {
+      qc.setQueryData<NotificationHistoryItem[]>(HISTORY_KEY, (old) =>
+        old?.map((n) => ({ ...n, isRead: true, readAt: n.readAt ?? new Date().toISOString() }))
+      );
+      qc.setQueryData(UNREAD_KEY, 0);
+    },
   });
 }
