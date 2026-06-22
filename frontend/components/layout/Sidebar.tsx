@@ -50,6 +50,10 @@ import {
   TENANT_ROLES,
   type AppRole,
 } from "@/lib/roles";
+import {
+  SYSTEM_ROLE_PERMISSIONS,
+  resolvePermissions,
+} from "@/lib/providerPermissions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -58,6 +62,8 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   roles?: Set<AppRole>;
+  /** Permission key required for PROVIDER_TEAM users (from providerPermissions.ts) */
+  permission?: string;
   exact?: boolean;
 }
 
@@ -121,7 +127,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: <Store size={18} />,
     moduleKey: "marketplace",
     items: [
-      { href: "/marketplace", label: "Постачальники", icon: <Store size={16} />, exact: true },
+      { href: "/marketplace", label: "Постачальники", icon: <Store size={16} />, exact: true, permission: "marketplace" },
     ],
   },
   {
@@ -150,8 +156,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Аналітика",
     icon: <BarChart2 size={18} />,
     items: [
-      { href: "/analytics",     label: "Аналітика",    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true },
-      { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS },
+      { href: "/analytics",     label: "Аналітика",    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
+      { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
     ],
   },
   {
@@ -160,8 +166,8 @@ const NAV_GROUPS: NavGroup[] = [
     icon: <Users size={18} />,
     items: [
       { href: "/users",          label: "Персонал", icon: <Users size={16} />,    roles: AT_LEAST_STORE_MANAGER },
-      { href: "/schedules",      label: "Розклад",  icon: <Calendar size={16} /> },
-      { href: "/provider/team",  label: "Команда",  icon: <Users size={16} />,    roles: PROVIDER_TEAM },
+      { href: "/schedules",      label: "Розклад",  icon: <Calendar size={16} />, permission: "schedule_management" },
+      { href: "/provider/team",  label: "Команда",  icon: <Users size={16} />,    roles: PROVIDER_TEAM, permission: "team_management" },
     ],
   },
   {
@@ -169,7 +175,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Підтримка",
     icon: <LifeBuoy size={18} />,
     items: [
-      { href: "/service-desk", label: "Service Desk", icon: <LifeBuoy size={16} /> },
+      { href: "/service-desk", label: "Service Desk", icon: <LifeBuoy size={16} />, permission: "service_desk" },
     ],
   },
   {
@@ -177,8 +183,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Адмін",
     icon: <Shield size={18} />,
     items: [
-      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_ONLY, exact: true },
-      { href: "/admin",    label: "Адмін",     icon: <Settings size={16} />, roles: PROVIDER_ONLY },
+      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_ONLY, exact: true, permission: "admin_panel" },
+      { href: "/admin",    label: "Адмін",     icon: <Settings size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
     ],
   },
 ];
@@ -355,6 +361,12 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
 
+  // Resolve effective permissions for PROVIDER_TEAM users
+  const isProviderTeamMember = PROVIDER_TEAM.has(userRole);
+  const effectivePermissions = isProviderTeamMember
+    ? new Set(resolvePermissions(SYSTEM_ROLE_PERMISSIONS[userRole] ?? [], me?.permissions))
+    : null;
+
   // Standalone top item: Dashboard
   const dashboardItem: NavItem = {
     href: "/dashboard",
@@ -383,12 +395,20 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     ? new Set<string>(modulesData.modules)
     : null;
 
-  // Filter groups by module activation, then by role
+  // Filter groups by module activation, then by role and permissions
   const visibleGroups = NAV_GROUPS
     .filter((group) => isModuleActive(group.moduleKey, modulesSet))
     .map((group) => ({
       group,
-      visibleItems: group.items.filter((item) => !item.roles || item.roles.has(userRole)),
+      visibleItems: group.items.filter((item) => {
+        // Role check (existing logic)
+        if (item.roles && !item.roles.has(userRole)) return false;
+        // Permission check: only applied for PROVIDER_TEAM users on permission-gated items
+        if (effectivePermissions && item.permission) {
+          return effectivePermissions.has(item.permission);
+        }
+        return true;
+      }),
     }))
     .filter(({ visibleItems }) => visibleItems.length > 0);
 

@@ -7,6 +7,7 @@ export interface AuthUserDto {
   storeId: string | null;
   phone?: string | null;
   telegramChatId?: string | null;
+  permissions?: Record<string, boolean> | null;
 }
 
 export interface LoginRequest {

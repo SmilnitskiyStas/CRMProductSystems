@@ -14,5 +14,6 @@ public record AuthUserDto(
     string FullName,
     string Role,
     Guid? TenantId,
-    Guid? StoreId
+    Guid? StoreId,
+    Dictionary<string, bool>? Permissions
 );
