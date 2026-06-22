@@ -33,19 +33,15 @@ fi
 echo ">>> Stopping existing containers..."
 cd "$DEPLOY_DIR"
 
-# Remove ghost containers by known ShelfGuard names (from interrupted/manual deploys).
-for name in shelfguard_api shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mqtt; do
-  if docker ps -a --format "{{.Names}}" | grep -q "^${name}$"; then
-    echo "    Removing ghost container by name: $name"
-    docker rm -f "$name" 2>/dev/null || true
-  fi
-done
+# Remove all known ShelfGuard containers — running, stopped, or created.
+# docker rm -f is idempotent: if the container doesn't exist it exits non-zero,
+# which we suppress. Using -a to also catch Exited/Created containers.
+echo "    Removing ghost containers by name..."
+docker rm -f shelfguard_api shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mosquitto 2>/dev/null || true
 
-# Remove any ghost containers holding ShelfGuard ports (from interrupted/manual deploys).
-# compose down only removes containers it knows by name; hash-prefixed ghosts stay and
-# block port binding on the next `up`. Explicit port sweep fixes this.
+# Also sweep by port in case any hash-named containers hold the ports.
 for port in 5100 3100 6380 1884; do
-  CONTAINER=$(docker ps -q --filter "publish=$port" 2>/dev/null)
+  CONTAINER=$(docker ps -aq --filter "publish=$port" 2>/dev/null)
   if [ -n "$CONTAINER" ]; then
     echo "    Removing ghost container on port $port: $CONTAINER"
     docker rm -f "$CONTAINER" 2>/dev/null || true
