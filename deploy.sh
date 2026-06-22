@@ -32,6 +32,18 @@ fi
 
 echo ">>> Stopping existing containers..."
 cd "$DEPLOY_DIR"
+
+# Remove any ghost containers holding ShelfGuard ports (from interrupted/manual deploys).
+# compose down only removes containers it knows by name; hash-prefixed ghosts stay and
+# block port binding on the next `up`. Explicit port sweep fixes this.
+for port in 5100 3100 6380 1884; do
+  CONTAINER=$(docker ps -q --filter "publish=$port" 2>/dev/null)
+  if [ -n "$CONTAINER" ]; then
+    echo "    Removing ghost container on port $port: $CONTAINER"
+    docker rm -f "$CONTAINER" 2>/dev/null || true
+  fi
+done
+
 docker compose -f docker-compose.production.yml --env-file .env down --remove-orphans 2>/dev/null || true
 
 # shelfguard_postgres is external (not in compose) — ensure it's in the network after compose recreates it
