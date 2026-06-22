@@ -15,7 +15,7 @@ export function useMe() {
     queryKey: ME_KEY,
     queryFn: authApi.getMe,
     enabled: typeof window !== "undefined" && Boolean(getToken()),
-    staleTime: 5 * 60_000,
+    staleTime: 0,
     retry: false,
   });
 }
