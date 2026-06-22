@@ -62,8 +62,8 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   roles?: Set<AppRole>;
-  /** Permission key required for PROVIDER_TEAM users (from providerPermissions.ts) */
-  permission?: string;
+  /** Permission key(s) required for PROVIDER_TEAM users — user needs at least one (OR logic) */
+  permission?: string | string[];
   exact?: boolean;
 }
 
@@ -183,7 +183,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Адмін",
     icon: <Shield size={18} />,
     items: [
-      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_ONLY, exact: true, permission: "admin_panel" },
+      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_TEAM, exact: true, permission: ["view_clients", "manage_clients"] },
       { href: "/admin",    label: "Адмін",     icon: <Settings size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
     ],
   },
@@ -405,7 +405,8 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         if (item.roles && !item.roles.has(userRole)) return false;
         // Permission check: only applied for PROVIDER_TEAM users on permission-gated items
         if (effectivePermissions && item.permission) {
-          return effectivePermissions.has(item.permission);
+          const perms = Array.isArray(item.permission) ? item.permission : [item.permission];
+          return perms.some((p) => effectivePermissions.has(p));
         }
         return true;
       }),
