@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 // Only checks the HttpOnly refreshToken cookie as a lightweight proxy;
 // the real auth validation happens server-side on /api/auth/me.
 
-const PROTECTED = ["/dashboard", "/stock", "/products", "/analytics"];
+const PROTECTED = ["/dashboard", "/stock", "/products", "/analytics", "/provider"];
 const AUTH_ROUTES = ["/login"];
 
 export function middleware(request: NextRequest) {

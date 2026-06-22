@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authApi } from "../api/auth";
 import { clearToken, getToken } from "@/lib/api";
 import { clearStoredUser } from "../store";
+import { PROVIDER_TEAM } from "@/lib/roles";
 
 export const ME_KEY = ["me"] as const;
 
@@ -28,7 +29,7 @@ export function useLogin() {
     mutationFn: authApi.login,
     onSuccess: (data) => {
       queryClient.setQueryData(ME_KEY, data.user);
-      router.push(data.user.role === "provider" ? "/provider" : "/dashboard");
+      router.push(PROVIDER_TEAM.has(data.user.role) ? "/provider" : "/dashboard");
     },
   });
 }
