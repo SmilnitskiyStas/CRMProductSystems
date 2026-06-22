@@ -34,6 +34,20 @@ public sealed class ProviderTeamService(
             : Guid.NewGuid().ToString("N")[..12];
         var hash = hasher.Hash(password);
 
+        // Reactivate deactivated account instead of creating a duplicate
+        if (existing is not null && !existing.IsActive)
+        {
+            existing.UpdateProfile(req.FullName.Trim(), null);
+            existing.SetRole(req.Role);
+            existing.SetProviderRole(req.ProviderRoleId);
+            existing.SetPermissions(req.PermissionsOverride is { Count: > 0 } ? req.PermissionsOverride : null);
+            existing.ChangePassword(hash);
+            existing.Activate();
+            users.Update(existing);
+            await users.SaveChangesAsync(ct);
+            return (Map(existing), null);
+        }
+
         var user = User.Create(
             tenantId:      null,
             email:         req.Email.Trim().ToLowerInvariant(),
