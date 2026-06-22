@@ -33,6 +33,14 @@ fi
 echo ">>> Stopping existing containers..."
 cd "$DEPLOY_DIR"
 
+# Remove ghost containers by known ShelfGuard names (from interrupted/manual deploys).
+for name in shelfguard_api shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mqtt; do
+  if docker ps -a --format "{{.Names}}" | grep -q "^${name}$"; then
+    echo "    Removing ghost container by name: $name"
+    docker rm -f "$name" 2>/dev/null || true
+  fi
+done
+
 # Remove any ghost containers holding ShelfGuard ports (from interrupted/manual deploys).
 # compose down only removes containers it knows by name; hash-prefixed ghosts stay and
 # block port binding on the next `up`. Explicit port sweep fixes this.
