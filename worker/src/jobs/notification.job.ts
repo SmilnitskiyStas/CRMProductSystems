@@ -38,6 +38,14 @@ export type IotOfflinePayload = {
 
 type NotificationPayload = ExpiryAlertPayload | TempAlertPayload | IotOfflinePayload;
 
+// ── EventType keys must match backend ValidEventTypes and frontend types.ts ──
+
+const STATUS_TO_EVENT_TYPE: Record<ExpiryAlertPayload["status"], string> = {
+  warning:  "stock.expiry_warning",
+  critical: "stock.expiry_critical",
+  expired:  "stock.expired",
+};
+
 // ── Role → event subscription matrix (from v1-spec section 8.2) ────────────
 
 const EXPIRY_EVENT_ROLES: Record<
@@ -139,13 +147,14 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
     if (usersRes.rows.length === 0) return;
 
     // Check notification_settings — only send if user has enabled this event+channel
+    const eventType = STATUS_TO_EVENT_TYPE[payload.status];
     const settingsRes = await client.query<{ user_id: string; channel: string }>(
       `SELECT "UserId" AS user_id, "Channel" AS channel
        FROM notification_settings
        WHERE "UserId" = ANY($1::uuid[])
-         AND "EventType" = 'product.' || $2
+         AND "EventType" = $2
          AND "IsEnabled" = true`,
-      [usersRes.rows.map((u) => u.id), payload.status]
+      [usersRes.rows.map((u) => u.id), eventType]
     );
 
     const enabledMap = new Map<string, Set<string>>();
@@ -191,7 +200,7 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
       await logNotifications(client, {
         tenantId: payload.tenantId,
         userId: user.id,
-        eventType: `product.${payload.status}`,
+        eventType,
         payload,
         outcomes,
       });
