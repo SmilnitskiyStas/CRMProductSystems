@@ -384,11 +384,12 @@ export function Sidebar({ collapsed, onToggle }: Props) {
 
   const showDashboard = !dashboardItem.roles || dashboardItem.roles.has(userRole);
 
-  // Provider has no tenant_id outside impersonation — /api/settings/modules would 403.
-  // enterprise_admin manages modules, so they bypass gating and see all groups.
-  const isModuleAdmin = userRole === "provider" || userRole === "enterprise_admin";
+  // Only bare provider sessions have no tenant_id — /api/settings/modules would 403.
+  // enterprise_admin (real clients AND impersonation sessions) must go through module
+  // gating so only their tenant's enabled modules are visible.
+  const isModuleAdmin = userRole === "provider";
   const { data: modulesData } = useModules(!!userRole && !isModuleAdmin);
-  // null = not loaded yet (show all) OR user is a module admin (always show all)
+  // null = user is provider (show all) OR data still loading (show all until resolved)
   const modulesSet = isModuleAdmin
     ? null
     : modulesData
