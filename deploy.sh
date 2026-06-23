@@ -33,13 +33,14 @@ fi
 echo ">>> Stopping existing containers..."
 cd "$DEPLOY_DIR"
 
-# Remove all known ShelfGuard containers — running, stopped, or created.
-# docker rm -f is idempotent: if the container doesn't exist it exits non-zero,
-# which we suppress. Using -a to also catch Exited/Created containers.
-echo "    Removing ghost containers by name..."
+# Step 1: compose down first so Docker tracks the removal properly
+docker compose -f docker-compose.production.yml --env-file .env down --remove-orphans 2>/dev/null || true
+
+# Step 2: force-remove any remaining named containers (Created/Exited/hash-named ghosts)
+echo "    Removing residual containers by name..."
 docker rm -f shelfguard_api shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mosquitto 2>/dev/null || true
 
-# Also sweep by port in case any hash-named containers hold the ports.
+# Step 3: sweep by port for any hash-named containers still holding ports
 for port in 5100 3100 6380 1884; do
   CONTAINER=$(docker ps -aq --filter "publish=$port" 2>/dev/null)
   if [ -n "$CONTAINER" ]; then
@@ -47,8 +48,6 @@ for port in 5100 3100 6380 1884; do
     docker rm -f "$CONTAINER" 2>/dev/null || true
   fi
 done
-
-docker compose -f docker-compose.production.yml --env-file .env down --remove-orphans 2>/dev/null || true
 
 # shelfguard_postgres is external (not in compose) — ensure it's in the network after compose recreates it
 echo ">>> Ensuring postgres is reachable..."
