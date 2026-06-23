@@ -1,5 +1,6 @@
 using ShelfGuard.Application.Features.Provider.Dtos;
 using ShelfGuard.Application.Services;
+using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Application.Features.Provider;
