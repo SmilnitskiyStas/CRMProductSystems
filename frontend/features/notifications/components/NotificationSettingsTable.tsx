@@ -129,23 +129,18 @@ export function NotificationSettingsTable() {
                     </span>
                   </td>
                   {ALL_CHANNELS.map((channel) => {
-                    const setting = eventSettings[channel];
-                    const available = setting !== undefined;
+                    const isEnabled = eventSettings[channel]?.isEnabled ?? false;
                     return (
                       <td key={channel} style={{ ...tdStyle, textAlign: "center" }}>
-                        {available ? (
-                          <div style={{ display: "flex", justifyContent: "center" }}>
-                            <Toggle
-                              checked={setting.isEnabled}
-                              disabled={toggle.isPending}
-                              onChange={(isEnabled) =>
-                                toggle.mutate({ eventType, channel, isEnabled })
-                              }
-                            />
-                          </div>
-                        ) : (
-                          <span style={{ color: "#374151", fontSize: 18 }}>—</span>
-                        )}
+                        <div style={{ display: "flex", justifyContent: "center" }}>
+                          <Toggle
+                            checked={isEnabled}
+                            disabled={toggle.isPending}
+                            onChange={(value) =>
+                              toggle.mutate({ eventType, channel, isEnabled: value })
+                            }
+                          />
+                        </div>
                       </td>
                     );
                   })}
@@ -156,7 +151,7 @@ export function NotificationSettingsTable() {
         </table>
       </div>
       <p style={{ color: "#374151", fontSize: 12, marginTop: 16 }}>
-        «—» означає, що цей канал недоступний для даної події згідно з вашою роллю.
+        Налаштування зберігаються автоматично при зміні перемикача.
       </p>
     </div>
   );

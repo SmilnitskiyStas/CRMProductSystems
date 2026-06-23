@@ -92,22 +92,18 @@ export function useNotificationSettings() {
   return useQuery<NotificationSettingsMap>({
     queryKey: ["notifications", "settings"],
     queryFn: async () => {
-      try {
-        const raw = await fetchNotificationSettings();
-        return raw.reduce<NotificationSettingsMap>((acc, s) => {
-          if (!acc[s.eventType]) acc[s.eventType] = {};
-          acc[s.eventType][s.channel as NotificationChannel] = {
-            id: s.id,
-            isEnabled: s.isEnabled,
-          };
-          return acc;
-        }, {});
-      } catch {
-        // Fallback to mock while backend is starting up
-        return MOCK_SETTINGS_MAP;
-      }
+      const raw = await fetchNotificationSettings();
+      return raw.reduce<NotificationSettingsMap>((acc, s) => {
+        if (!acc[s.eventType]) acc[s.eventType] = {};
+        acc[s.eventType][s.channel as NotificationChannel] = {
+          id: s.id,
+          isEnabled: s.isEnabled,
+        };
+        return acc;
+      }, {});
     },
     staleTime: 30_000,
+    retry: 1,
   });
 }
 
