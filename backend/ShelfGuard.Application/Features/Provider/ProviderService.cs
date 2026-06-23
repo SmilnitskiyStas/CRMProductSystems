@@ -38,6 +38,7 @@ public sealed class ProviderService : IProviderService
             t.Name,
             t.Slug,
             t.Plan,
+            t.BusinessType,
             ParseModules(t.Modules),
             t.IsActive,
             t.CreatedAt,
@@ -67,6 +68,7 @@ public sealed class ProviderService : IProviderService
             tenant.Name,
             tenant.Slug,
             tenant.Plan,
+            tenant.BusinessType,
             ParseModules(tenant.Modules),
             tenant.IsActive,
             tenant.CreatedAt,
@@ -74,6 +76,46 @@ public sealed class ProviderService : IProviderService
             storeCount,
             expiredCount,
             lastActivity), null);
+    }
+
+    // ── Tenant creation ─────────────────────────────────────────────────────
+
+    public async Task<(TenantDetailDto? Tenant, string? Error)> CreateTenantAsync(
+        CreateTenantRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return (null, "Name is required.");
+        if (string.IsNullOrWhiteSpace(request.Slug))
+            return (null, "Slug is required.");
+
+        var slug = request.Slug.ToLowerInvariant().Trim();
+        if (await _tenants.SlugExistsAsync(slug, ct))
+            return (null, $"Slug '{slug}' is already taken.");
+
+        var tenant = Tenant.Create(request.Name.Trim(), slug);
+
+        var planError = tenant.UpdatePlan(request.Plan);
+        if (planError is not null) return (null, planError);
+
+        var btError = tenant.UpdateBusinessType(request.BusinessType);
+        if (btError is not null) return (null, btError);
+
+        var modules = request.Modules ?? [.. Tenant.DefaultModulesForBusinessType(request.BusinessType)];
+        var modError = tenant.UpdateModules(modules);
+        if (modError is not null) return (null, modError);
+
+        await _tenants.AddAsync(tenant, ct);
+
+        return (new TenantDetailDto(
+            tenant.Id,
+            tenant.Name,
+            tenant.Slug,
+            tenant.Plan,
+            tenant.BusinessType,
+            ParseModules(tenant.Modules),
+            tenant.IsActive,
+            tenant.CreatedAt,
+            0, 0, 0, null), null);
     }
 
     // ── Plan & modules ──────────────────────────────────────────────────────

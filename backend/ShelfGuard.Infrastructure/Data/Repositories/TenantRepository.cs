@@ -60,5 +60,14 @@ public sealed class TenantRepository : ITenantRepository
         await _db.ProductStocks
             .CountAsync(ps => ps.Status == "expired" && ps.Quantity > 0, ct);
 
+    public async Task AddAsync(Tenant tenant, CancellationToken ct)
+    {
+        _db.Tenants.Add(tenant);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public Task<bool> SlugExistsAsync(string slug, CancellationToken ct) =>
+        _db.Tenants.AnyAsync(t => t.Slug == slug.ToLowerInvariant(), ct);
+
     public Task SaveChangesAsync(CancellationToken ct) => _db.SaveChangesAsync(ct);
 }

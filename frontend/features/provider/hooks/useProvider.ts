@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { providerApi } from "../api/provider";
-import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto } from "../types";
+import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto, CreateTenantRequest } from "../types";
 
 // ── Query keys ───────────────────────────────────────────────────────────────
 
@@ -75,6 +75,17 @@ export function useProviderLogs(filter: ProviderLogsFilter) {
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
+
+export function useCreateTenant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateTenantRequest) => providerApi.createTenant(req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: TENANTS_KEY });
+      qc.invalidateQueries({ queryKey: HEALTH_KEY });
+    },
+  });
+}
 
 export function useUpdatePlan(tenantId: string) {
   const qc = useQueryClient();

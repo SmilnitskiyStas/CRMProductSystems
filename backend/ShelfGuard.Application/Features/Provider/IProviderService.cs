@@ -8,6 +8,9 @@ public interface IProviderService
     Task<IReadOnlyList<TenantSummaryDto>> GetTenantsAsync(CancellationToken ct);
     Task<(TenantDetailDto? Tenant, string? Error)> GetTenantAsync(Guid tenantId, CancellationToken ct);
 
+    // Tenant creation
+    Task<(TenantDetailDto? Tenant, string? Error)> CreateTenantAsync(CreateTenantRequest request, CancellationToken ct);
+
     // Plan & modules
     Task<string?> UpdatePlanAsync(Guid tenantId, string plan, CancellationToken ct);
     Task<string?> UpdateModulesAsync(Guid tenantId, string[] modules, CancellationToken ct);

@@ -8,6 +8,7 @@ public record TenantSummaryDto(
     string   Name,
     string   Slug,
     string   Plan,
+    string   BusinessType,
     string[] Modules,
     bool     IsActive,
     DateTime CreatedAt,
@@ -21,6 +22,7 @@ public record TenantDetailDto(
     string    Name,
     string    Slug,
     string    Plan,
+    string    BusinessType,
     string[]  Modules,
     bool      IsActive,
     DateTime  CreatedAt,
@@ -30,6 +32,14 @@ public record TenantDetailDto(
     DateTime? LastActivityAt);
 
 // ── Mutations ───────────────────────────────────────────────────────────────
+
+/// <summary>POST /provider/tenants — create a new tenant</summary>
+public record CreateTenantRequest(
+    string    Name,
+    string    Slug,
+    string    BusinessType,
+    string    Plan,
+    string[]? Modules);
 
 /// <summary>PUT /provider/tenants/:id/plan</summary>
 public record UpdatePlanRequest(string Plan);

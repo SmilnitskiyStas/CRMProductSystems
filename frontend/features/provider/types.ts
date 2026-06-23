@@ -1,11 +1,19 @@
 export type TenantPlan   = "basic" | "standard" | "enterprise" | "trial";
-export type TenantModule = "shelf_manager" | "crm" | "notifications" | "auto_order" | "iot" | "cv_camera";
+export type TenantModule =
+  | "inventory" | "procurement" | "pos"
+  | "auto_service" | "production" | "marketplace";
+
+export type BusinessType =
+  | "retail" | "auto_service" | "restaurant"
+  | "warehouse" | "production" | "distribution"
+  | "pharmacy" | "floristry";
 
 export interface TenantSummaryDto {
   id: string;
   name: string;
   slug: string;
   plan: TenantPlan;
+  businessType: BusinessType;
   modules: TenantModule[];
   isActive: boolean;
   createdAt: string;
@@ -16,6 +24,14 @@ export interface TenantSummaryDto {
 
 export interface TenantDetailDto extends TenantSummaryDto {
   lastActivityAt: string | null;
+}
+
+export interface CreateTenantRequest {
+  name: string;
+  slug: string;
+  businessType: BusinessType;
+  plan: TenantPlan;
+  modules?: TenantModule[];
 }
 
 export interface ProviderHealthDto {
@@ -61,7 +77,72 @@ export interface ImpersonateResponse {
   tenantId: string;
 }
 
-// ── Display helpers ──────────────────────────────────────────────────────────
+// ── Business types ───────────────────────────────────────────────────────────
+
+export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
+  retail:       "Роздрібна торгівля",
+  auto_service: "Автосервіс",
+  restaurant:   "Ресторан / HoReCa",
+  warehouse:    "Склад / Логістика",
+  production:   "Виробництво",
+  distribution: "Дистрибуція",
+  pharmacy:     "Аптека / Медтовари",
+  floristry:    "Флористика",
+};
+
+export const BUSINESS_TYPE_ICONS: Record<BusinessType, string> = {
+  retail:       "🛒",
+  auto_service: "🔧",
+  restaurant:   "🍽️",
+  warehouse:    "📦",
+  production:   "🏭",
+  distribution: "🚚",
+  pharmacy:     "💊",
+  floristry:    "🌸",
+};
+
+export const ALL_BUSINESS_TYPES: BusinessType[] = [
+  "retail", "auto_service", "restaurant", "warehouse",
+  "production", "distribution", "pharmacy", "floristry",
+];
+
+// Default module presets per business type (mirrors backend Tenant.DefaultModulesForBusinessType)
+export const BUSINESS_TYPE_PRESETS: Record<BusinessType, TenantModule[]> = {
+  retail:       ["inventory", "procurement", "pos"],
+  auto_service: ["auto_service", "procurement"],
+  restaurant:   ["inventory", "pos", "production"],
+  warehouse:    ["inventory", "procurement"],
+  production:   ["inventory", "procurement", "production"],
+  distribution: ["inventory", "procurement", "marketplace"],
+  pharmacy:     ["inventory", "procurement", "pos"],
+  floristry:    ["inventory", "procurement", "pos"],
+};
+
+// ── Modules ──────────────────────────────────────────────────────────────────
+
+export const MODULE_LABELS: Record<TenantModule, string> = {
+  inventory:    "Інвентаризація",
+  procurement:  "Постачання",
+  pos:          "Каса (POS)",
+  auto_service: "Автосервіс",
+  production:   "Виробництво",
+  marketplace:  "Маркетплейс постачальників",
+};
+
+export const MODULE_DESCRIPTIONS: Record<TenantModule, string> = {
+  inventory:    "Каталог товарів, залишки, прийомка, переміщення, списання",
+  procurement:  "Постачальники, замовлення постачання, AI-прогнозування закупівель",
+  pos:          "Робота з касовим апаратом, продажі, фіскалізація чеків",
+  auto_service: "Клієнти, автомобілі, наряд-замовлення, облік запчастин",
+  production:   "Рецепти, виробничі замовлення, списання сировини",
+  marketplace:  "Пошук і порівняння постачальників, відгуки, рейтинги",
+};
+
+export const ALL_MODULES: TenantModule[] = [
+  "inventory", "procurement", "pos", "auto_service", "production", "marketplace",
+];
+
+// ── Plans ────────────────────────────────────────────────────────────────────
 
 export const PLAN_LABELS: Record<TenantPlan, string> = {
   basic:      "Basic",
@@ -77,14 +158,4 @@ export const PLAN_COLORS: Record<TenantPlan, { bg: string; border: string; text:
   trial:      { bg: "#451A03", border: "#92400E", text: "#FCD34D" },
 };
 
-export const MODULE_LABELS: Record<TenantModule, string> = {
-  shelf_manager: "Менеджер полиць",
-  crm:           "CRM",
-  notifications: "Сповіщення",
-  auto_order:    "Авто-замовлення",
-  iot:           "IoT-інтеграція",
-  cv_camera:     "CV-камера",
-};
-
-export const ALL_MODULES: TenantModule[]   = ["shelf_manager", "crm", "notifications", "auto_order", "iot", "cv_camera"];
-export const ALL_PLANS:   TenantPlan[]     = ["basic", "standard", "enterprise", "trial"];
+export const ALL_PLANS: TenantPlan[] = ["trial", "basic", "standard", "enterprise"];

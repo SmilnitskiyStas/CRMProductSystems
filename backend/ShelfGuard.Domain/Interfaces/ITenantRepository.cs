@@ -22,5 +22,7 @@ public interface ITenantRepository
     Task<int> GetTotalExpiredBatchesAsync(CancellationToken ct);
 
     // Tenant mutations
+    Task AddAsync(Tenant tenant, CancellationToken ct);
+    Task<bool> SlugExistsAsync(string slug, CancellationToken ct);
     Task SaveChangesAsync(CancellationToken ct);
 }

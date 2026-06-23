@@ -57,7 +57,7 @@ public sealed class Tenant
     /// <summary>Sets the business type (provider-only, determines default module set).</summary>
     public string? UpdateBusinessType(string businessType)
     {
-        var valid = new[] { "retail", "auto_service", "warehouse", "restaurant", "production", "distribution" };
+        var valid = new[] { "retail", "auto_service", "warehouse", "restaurant", "production", "distribution", "pharmacy", "floristry" };
         if (!valid.Contains(businessType, StringComparer.OrdinalIgnoreCase))
             return $"Unknown business type '{businessType}'. Valid: {string.Join(", ", valid)}.";
         BusinessType = businessType.ToLowerInvariant();
@@ -94,6 +94,8 @@ public sealed class Tenant
             "warehouse"    => ["inventory", "procurement"],
             "production"   => ["inventory", "procurement", "production"],
             "distribution" => ["inventory", "procurement", "marketplace"],
+            "pharmacy"     => ["inventory", "procurement", "pos"],
+            "floristry"    => ["inventory", "procurement", "pos"],
             _              => ["inventory"],
         };
 

@@ -44,6 +44,20 @@ public sealed class ProviderController : ControllerBase
         return error is null ? Ok(tenant) : NotFound(new { error });
     }
 
+    /// <summary>Creates a new tenant with the given business type and module preset.</summary>
+    [HttpPost("tenants")]
+    [ProducesResponseType(typeof(TenantDetailDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateTenant(
+        [FromBody] CreateTenantRequest request,
+        CancellationToken ct)
+    {
+        var (tenant, error) = await _provider.CreateTenantAsync(request, ct);
+        if (error is not null)
+            return BadRequest(new { error });
+        return CreatedAtAction(nameof(GetTenant), new { id = tenant!.Id }, tenant);
+    }
+
     // ── Plan & modules ──────────────────────────────────────────────────────
 
     /// <summary>Changes the billing plan for a tenant.</summary>

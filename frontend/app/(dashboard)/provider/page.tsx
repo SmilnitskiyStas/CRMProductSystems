@@ -8,6 +8,7 @@ import { useTenants, useProviderHealth } from "@/features/provider/hooks/useProv
 import { TenantCard } from "@/features/provider/components/TenantCard";
 import { TenantDetailPanel } from "@/features/provider/components/TenantDetailPanel";
 import { ProviderLogsPanel } from "@/features/provider/components/ProviderLogsPanel";
+import { CreateTenantWizard } from "@/features/provider/components/CreateTenantWizard";
 
 const PROVIDER_ROLES = ["provider", "provider_admin", "provider_agent"];
 
@@ -22,6 +23,7 @@ export default function ProviderPage() {
   const [activeTab,      setActiveTab]      = useState<"tenants" | "logs">("tenants");
   const [selectedId,     setSelectedId]     = useState<string | null>(null);
   const [logsForTenant,  setLogsForTenant]  = useState<string | undefined>(undefined);
+  const [showWizard,     setShowWizard]     = useState(false);
 
   // Role guard — redirect non-provider users
   useEffect(() => {
@@ -74,6 +76,16 @@ export default function ProviderPage() {
 
   return (
     <>
+      {showWizard && (
+        <CreateTenantWizard
+          onClose={() => setShowWizard(false)}
+          onCreated={(id) => {
+            setShowWizard(false);
+            setSelectedId(id);
+          }}
+        />
+      )}
+
       {/* Flex row: main content + inline detail panel */}
       <div style={{ display: "flex", alignItems: "flex-start", minHeight: "100vh" }}>
 
@@ -108,18 +120,31 @@ export default function ProviderPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => refetchTenants()}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", borderRadius: 8,
-              background: "transparent", border: "1px solid #1F2937",
-              color: "#6B7280", fontSize: 13, cursor: "pointer",
-            }}
-          >
-            <RefreshCw size={14} />
-            Оновити
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setShowWizard(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 16px", borderRadius: 8,
+                background: "#3B82F6", border: "none",
+                color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              + Новий клієнт
+            </button>
+            <button
+              onClick={() => refetchTenants()}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 14px", borderRadius: 8,
+                background: "transparent", border: "1px solid #1F2937",
+                color: "#6B7280", fontSize: 13, cursor: "pointer",
+              }}
+            >
+              <RefreshCw size={14} />
+              Оновити
+            </button>
+          </div>
         </div>
 
         {/* Stats row */}

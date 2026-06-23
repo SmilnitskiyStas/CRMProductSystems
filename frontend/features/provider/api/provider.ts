@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 import type {
   TenantSummaryDto,
   TenantDetailDto,
+  CreateTenantRequest,
   ProviderHealthDto,
   ProviderLogsPageDto,
   ProviderLogsFilter,
@@ -16,6 +17,10 @@ export const providerApi = {
   /** GET /api/provider/tenants/:id */
   getTenant: (id: string): Promise<TenantDetailDto> =>
     api.get<TenantDetailDto>(`/api/provider/tenants/${id}`),
+
+  /** POST /api/provider/tenants */
+  createTenant: (req: CreateTenantRequest): Promise<TenantDetailDto> =>
+    api.post<TenantDetailDto>("/api/provider/tenants", req),
 
   /** PUT /api/provider/tenants/:id/plan */
   updatePlan: (id: string, plan: string): Promise<void> =>
