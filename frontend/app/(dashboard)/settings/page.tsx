@@ -8,7 +8,7 @@ import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab"
 import { ModulesTab } from "@/features/settings/components/ModulesTab";
 import { MarketplaceProfileTab } from "@/features/settings/components/MarketplaceProfileTab";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { hasRole, ENTERPRISE_ADMIN_ONLY } from "@/lib/roles";
+import { hasRole, PROVIDER_TEAM } from "@/lib/roles";
 import { useModules } from "@/features/modules/hooks/useModules";
 
 type Tab = "general" | "notifications" | "integrations" | "modules" | "marketplace-profile";
@@ -24,7 +24,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { data: me } = useMe();
-  const canViewModules = hasRole(me?.role, ENTERPRISE_ADMIN_ONLY);
+  const canViewModules = hasRole(me?.role, PROVIDER_TEAM);
   const { data: modulesData } = useModules(!!me?.role && me.role !== "provider");
   const marketplaceActive = modulesData?.modules.includes("marketplace") ?? false;
 
