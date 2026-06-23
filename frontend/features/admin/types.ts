@@ -44,13 +44,13 @@ export const PLAN_COLORS: Record<TenantPlan, { bg: string; border: string; text:
 };
 
 export const MODULE_LABELS: Record<string, string> = {
-  shelf_manager: "Менеджер полиць",
-  crm:           "CRM",
-  notifications: "Сповіщення",
-  auto_order:    "Авто-замовлення",
-  iot:           "IoT-інтеграція",
-  cv_camera:     "CV-камера",
+  inventory:    "Інвентаризація",
+  procurement:  "Постачання",
+  pos:          "Каса (POS)",
+  auto_service: "Автосервіс",
+  production:   "Виробництво",
+  marketplace:  "Маркетплейс постачальників",
 };
 
-export const ALL_MODULES = ["shelf_manager", "crm", "notifications", "auto_order", "iot", "cv_camera"] as const;
+export const ALL_MODULES = ["inventory", "procurement", "pos", "auto_service", "production", "marketplace"] as const;
 export const ALL_PLANS: TenantPlan[] = ["trial", "basic", "standard", "enterprise"];
