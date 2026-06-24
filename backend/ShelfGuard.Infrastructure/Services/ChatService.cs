@@ -215,8 +215,31 @@ public sealed class ChatService : IChatService
             ?? throw new InvalidOperationException("Session not found.");
 
         session.Status    = "closed";
+        session.ClosedAt  = DateTimeOffset.UtcNow;
         session.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
+    }
+
+    // ── Tenant: Submit rating ─────────────────────────────────────────────────
+
+    public async Task<string?> SubmitRatingAsync(
+        Guid sessionId, Guid tenantId, int rating, string? comment, CancellationToken ct)
+    {
+        if (rating < 1 || rating > 5)
+            return "Rating must be between 1 and 5.";
+
+        var session = await _db.ChatSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.TenantId == tenantId, ct);
+
+        if (session is null) return "Session not found.";
+        if (session.Status != "closed") return "Session is not closed yet.";
+        if (session.Rating is not null) return "Rating already submitted.";
+
+        session.Rating        = rating;
+        session.RatingComment = comment?.Trim();
+        session.UpdatedAt     = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return null;
     }
 
     // ── Mappers ───────────────────────────────────────────────────────────────
@@ -229,15 +252,18 @@ public sealed class ChatService : IChatService
             .FirstOrDefault();
 
         return new ChatSessionDto(
-            Id:          s.Id,
-            TenantId:    s.TenantId,
-            TenantName:  tenantName,
-            Subject:     s.Subject,
-            Status:      s.Status,
-            UnreadCount: unreadCount,
-            CreatedAt:   s.CreatedAt,
-            UpdatedAt:   s.UpdatedAt,
-            LastMessage: lastMessage
+            Id:            s.Id,
+            TenantId:      s.TenantId,
+            TenantName:    tenantName,
+            Subject:       s.Subject,
+            Status:        s.Status,
+            UnreadCount:   unreadCount,
+            CreatedAt:     s.CreatedAt,
+            UpdatedAt:     s.UpdatedAt,
+            ClosedAt:      s.ClosedAt,
+            Rating:        s.Rating,
+            RatingComment: s.RatingComment,
+            LastMessage:   lastMessage
         );
     }
 

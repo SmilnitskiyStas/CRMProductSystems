@@ -1377,6 +1377,9 @@ public sealed class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("open");
             e.Property(x => x.Subject).HasMaxLength(500);
+            e.Property(x => x.ClosedAt).IsRequired(false);
+            e.Property(x => x.Rating).IsRequired(false);
+            e.Property(x => x.RatingComment).HasMaxLength(1000).IsRequired(false);
             e.HasMany(x => x.Messages)
              .WithOne(x => x.Session)
              .HasForeignKey(x => x.SessionId)

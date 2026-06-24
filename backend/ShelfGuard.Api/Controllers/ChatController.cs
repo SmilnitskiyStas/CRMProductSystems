@@ -106,6 +106,24 @@ public sealed class ChatController : ControllerBase
         return NoContent();
     }
 
+    // ── POST /api/chat/sessions/{id}/rating ──────────────────────────────────
+
+    [HttpPost("sessions/{id:guid}/rating")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> SubmitRating(
+        Guid id,
+        [FromBody] SubmitRatingRequest req,
+        CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+
+        var error = await _chat.SubmitRatingAsync(id, tenantId.Value, req.Rating, req.Comment, ct);
+        return error is null ? NoContent() : BadRequest(new { error });
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Guid? GetTenantId()

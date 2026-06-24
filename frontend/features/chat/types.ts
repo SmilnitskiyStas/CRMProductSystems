@@ -7,6 +7,9 @@ export interface ChatSessionDto {
   unreadCount: number;
   createdAt: string;
   updatedAt: string;
+  closedAt: string | null;
+  rating: number | null;
+  ratingComment: string | null;
   lastMessage: ChatMessageDto | null;
 }
 
@@ -27,4 +30,9 @@ export interface CreateChatSessionRequest {
 
 export interface SendChatMessageRequest {
   body: string;
+}
+
+export interface SubmitRatingRequest {
+  rating: number;
+  comment?: string;
 }

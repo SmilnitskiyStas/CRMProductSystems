@@ -13,4 +13,5 @@ public interface IChatService
     Task<IReadOnlyList<ChatMessageDto>> GetMessagesForProviderAsync(Guid sessionId, CancellationToken ct);
     Task<ChatMessageDto> ProviderSendMessageAsync(Guid sessionId, Guid providerId, string providerName, SendChatMessageRequest req, CancellationToken ct);
     Task ProviderCloseSessionAsync(Guid sessionId, CancellationToken ct);
+    Task<string?> SubmitRatingAsync(Guid sessionId, Guid tenantId, int rating, string? comment, CancellationToken ct);
 }

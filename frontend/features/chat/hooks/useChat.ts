@@ -2,11 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatApi, providerChatApi } from "../api/chat-api";
-import type { CreateChatSessionRequest, SendChatMessageRequest } from "../types";
+import type { CreateChatSessionRequest, SendChatMessageRequest, SubmitRatingRequest } from "../types";
 
 // ── Query keys ────────────────────────────────────────────────────────────────
 
-const CHAT_SESSIONS_KEY = ["chat", "sessions"] as const;
+export const CHAT_SESSIONS_KEY = ["chat", "sessions"] as const;
 const chatMessagesKey = (sessionId: string) => ["chat", "messages", sessionId] as const;
 
 const PROVIDER_CHAT_SESSIONS_KEY = ["provider", "chat", "sessions"] as const;
@@ -59,6 +59,17 @@ export function useCloseChat() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: string) => chatApi.closeSession(sessionId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CHAT_SESSIONS_KEY });
+    },
+  });
+}
+
+export function useSubmitRating() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, req }: { sessionId: string; req: SubmitRatingRequest }) =>
+      chatApi.submitRating(sessionId, req),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CHAT_SESSIONS_KEY });
     },

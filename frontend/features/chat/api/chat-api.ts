@@ -4,6 +4,7 @@ import type {
   ChatMessageDto,
   CreateChatSessionRequest,
   SendChatMessageRequest,
+  SubmitRatingRequest,
 } from "../types";
 
 // ── Client endpoints (tenant-scoped) ─────────────────────────────────────────
@@ -23,6 +24,9 @@ export const chatApi = {
 
   closeSession: (sessionId: string): Promise<void> =>
     api.post<void>(`/api/chat/sessions/${sessionId}/close`),
+
+  submitRating: (sessionId: string, req: SubmitRatingRequest): Promise<void> =>
+    api.post<void>(`/api/chat/sessions/${sessionId}/rating`, req),
 };
 
 // ── Provider endpoints (cross-tenant) ────────────────────────────────────────

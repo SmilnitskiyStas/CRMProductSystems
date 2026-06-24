@@ -9,6 +9,9 @@ public record ChatSessionDto(
     int UnreadCount,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
+    DateTimeOffset? ClosedAt,
+    int? Rating,
+    string? RatingComment,
     ChatMessageDto? LastMessage
 );
 
@@ -24,3 +27,4 @@ public record ChatMessageDto(
 
 public record CreateChatSessionRequest(string Subject, string FirstMessage);
 public record SendChatMessageRequest(string Body);
+public record SubmitRatingRequest(int Rating, string? Comment);

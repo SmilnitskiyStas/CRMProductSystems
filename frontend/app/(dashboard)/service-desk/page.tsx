@@ -12,8 +12,9 @@ import { CreateTicketForm } from "@/features/service-desk/components/CreateTicke
 import type { TicketDto } from "@/features/service-desk/types";
 import { ProviderSupportTab } from "@/features/provider/components/ProviderSupportTab";
 import { ChatSupportTab } from "@/features/provider/components/ChatSupportTab";
+import { ClientChatPanel } from "@/features/chat/components/ClientChatPanel";
 
-type TenantTab = "all" | "my";
+type TenantTab = "all" | "my" | "chat";
 type ProviderTab = "tickets" | "chat";
 
 export default function ServiceDeskPage() {
@@ -157,10 +158,19 @@ export default function ServiceDeskPage() {
         >
           Мої тікети
         </button>
+        <button
+          style={tabStyle(tenantTab === "chat")}
+          onClick={() => setTenantTab("chat")}
+        >
+          <MessageCircle size={14} />
+          Чат
+        </button>
       </div>
 
       {/* Content */}
-      {tenantTab === "all" && isManager ? (
+      {tenantTab === "chat" ? (
+        <ClientChatPanel />
+      ) : tenantTab === "all" && isManager ? (
         <TicketList
           selectedId={selectedTicket?.id}
           onSelect={(ticket) => setSelectedTicket(ticket)}
