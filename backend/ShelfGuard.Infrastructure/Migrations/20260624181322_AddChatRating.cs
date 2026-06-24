@@ -11,9 +11,7 @@ namespace ShelfGuard.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "idx_notification_queue_tenant_unread",
-                table: "notification_queue");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS idx_notification_queue_tenant_unread;");
 
             migrationBuilder.AlterColumn<bool>(
                 name: "IsRead",
