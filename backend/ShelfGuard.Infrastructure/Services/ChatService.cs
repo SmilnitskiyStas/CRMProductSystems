@@ -184,8 +184,31 @@ public sealed class ChatService : IChatService
         await _db.Database.ExecuteSqlRawAsync("SET LOCAL app.tenant_id = ''", ct);
 
         var session = await _db.ChatSessions
+            .Include(s => s.Messages)
             .FirstOrDefaultAsync(s => s.Id == sessionId, ct)
             ?? throw new InvalidOperationException("Session not found.");
+
+        // First provider reply → create system message + assign agent
+        bool isFirstProviderMessage = !session.Messages
+            .Any(m => m.SenderUserId == providerId && !m.IsSystem);
+
+        if (isFirstProviderMessage || session.AssignedAgentName != providerName)
+        {
+            if (session.AssignedAgentName != providerName)
+            {
+                var systemMsg = new ChatMessage
+                {
+                    SessionId    = sessionId,
+                    SenderUserId = Guid.Empty,
+                    SenderName   = "system",
+                    Body         = $"{providerName} підключився до чату",
+                    IsRead       = true,
+                    IsSystem     = true,
+                };
+                await _db.ChatMessages.AddAsync(systemMsg, ct);
+            }
+            session.AssignedAgentName = providerName;
+        }
 
         var message = new ChatMessage
         {
@@ -193,7 +216,7 @@ public sealed class ChatService : IChatService
             SenderUserId = providerId,
             SenderName   = providerName,
             Body         = req.Body,
-            IsRead       = true, // provider's own message is already "read"
+            IsRead       = true,
         };
 
         session.UpdatedAt = DateTimeOffset.UtcNow;
@@ -252,18 +275,19 @@ public sealed class ChatService : IChatService
             .FirstOrDefault();
 
         return new ChatSessionDto(
-            Id:            s.Id,
-            TenantId:      s.TenantId,
-            TenantName:    tenantName,
-            Subject:       s.Subject,
-            Status:        s.Status,
-            UnreadCount:   unreadCount,
-            CreatedAt:     s.CreatedAt,
-            UpdatedAt:     s.UpdatedAt,
-            ClosedAt:      s.ClosedAt,
-            Rating:        s.Rating,
-            RatingComment: s.RatingComment,
-            LastMessage:   lastMessage
+            Id:                s.Id,
+            TenantId:          s.TenantId,
+            TenantName:        tenantName,
+            Subject:           s.Subject,
+            Status:            s.Status,
+            UnreadCount:       unreadCount,
+            CreatedAt:         s.CreatedAt,
+            UpdatedAt:         s.UpdatedAt,
+            ClosedAt:          s.ClosedAt,
+            Rating:            s.Rating,
+            RatingComment:     s.RatingComment,
+            AssignedAgentName: s.AssignedAgentName,
+            LastMessage:       lastMessage
         );
     }
 
@@ -275,6 +299,7 @@ public sealed class ChatService : IChatService
             SenderName:   m.SenderName,
             Body:         m.Body,
             IsRead:       m.IsRead,
+            IsSystem:     m.IsSystem,
             CreatedAt:    m.CreatedAt
         );
 }

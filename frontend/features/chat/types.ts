@@ -10,6 +10,7 @@ export interface ChatSessionDto {
   closedAt: string | null;
   rating: number | null;
   ratingComment: string | null;
+  assignedAgentName: string | null;
   lastMessage: ChatMessageDto | null;
 }
 
@@ -20,6 +21,7 @@ export interface ChatMessageDto {
   senderName: string;
   body: string;
   isRead: boolean;
+  isSystem: boolean;
   createdAt: string;
 }
 

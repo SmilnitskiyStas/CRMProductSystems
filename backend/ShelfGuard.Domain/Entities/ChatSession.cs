@@ -9,6 +9,7 @@ public sealed class ChatSession
     public string Status { get; set; } = "open";
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? AssignedAgentName { get; set; }
     public DateTimeOffset? ClosedAt { get; set; }
     public int? Rating { get; set; }
     public string? RatingComment { get; set; }

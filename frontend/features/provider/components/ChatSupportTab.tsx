@@ -233,6 +233,11 @@ function ChatPanel({
           <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
             {session.subject}
           </div>
+          {session.assignedAgentName && (
+            <div style={{ color: "#6B7280", fontSize: 11, marginTop: 2 }}>
+              Веде: <span style={{ color: "#93C5FD" }}>{session.assignedAgentName}</span>
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
@@ -279,6 +284,22 @@ function ChatPanel({
           </div>
         )}
         {(messages ?? []).map((msg) => {
+          if (msg.isSystem) {
+            return (
+              <div key={msg.id} style={{ display: "flex", justifyContent: "center", padding: "2px 0" }}>
+                <span style={{
+                  background: "#1F2937",
+                  border: "1px solid #374151",
+                  borderRadius: 20,
+                  color: "#9CA3AF",
+                  fontSize: 11,
+                  padding: "4px 14px",
+                }}>
+                  {msg.body}
+                </span>
+              </div>
+            );
+          }
           const isMe = msg.senderUserId === currentUserId;
           return (
             <div

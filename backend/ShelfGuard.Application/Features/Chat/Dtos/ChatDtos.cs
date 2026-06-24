@@ -12,6 +12,7 @@ public record ChatSessionDto(
     DateTimeOffset? ClosedAt,
     int? Rating,
     string? RatingComment,
+    string? AssignedAgentName,
     ChatMessageDto? LastMessage
 );
 
@@ -22,6 +23,7 @@ public record ChatMessageDto(
     string SenderName,
     string Body,
     bool IsRead,
+    bool IsSystem,
     DateTimeOffset CreatedAt
 );
 

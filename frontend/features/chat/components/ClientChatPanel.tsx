@@ -206,12 +206,24 @@ export function ClientChatPanel() {
                 <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 14 }}>
                   {selectedSession.subject}
                 </span>
-                {selectedSession.status === "closed" && (
-                  <span style={{ color: "#6B7280", fontSize: 12, marginLeft: 10 }}>
-                    • Чат закрито
-                    {selectedSession.rating !== null && ` · Оцінка: ${selectedSession.rating}/5`}
-                  </span>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+                  {selectedSession.assignedAgentName ? (
+                    <span style={{ color: "#4ADE80", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80", display: "inline-block" }} />
+                      {selectedSession.assignedAgentName} — підтримка
+                    </span>
+                  ) : (
+                    <span style={{ color: "#6B7280", fontSize: 12 }}>
+                      Очікування відповіді оператора...
+                    </span>
+                  )}
+                  {selectedSession.status === "closed" && (
+                    <span style={{ color: "#6B7280", fontSize: 12 }}>
+                      · Чат закрито
+                      {selectedSession.rating !== null && ` · Оцінка: ${selectedSession.rating}/5`}
+                    </span>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => setSelectedId(null)}
@@ -224,6 +236,22 @@ export function ClientChatPanel() {
             {/* Messages */}
             <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
               {messages.map((m) => {
+                if (m.isSystem) {
+                  return (
+                    <div key={m.id} style={{ display: "flex", justifyContent: "center", padding: "2px 0" }}>
+                      <span style={{
+                        background: "#1F2937",
+                        border: "1px solid #374151",
+                        borderRadius: 20,
+                        color: "#9CA3AF",
+                        fontSize: 11,
+                        padding: "4px 14px",
+                      }}>
+                        {m.body}
+                      </span>
+                    </div>
+                  );
+                }
                 const isMe = me?.id ? m.senderUserId === me.id : false;
                 return (
                   <div key={m.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>

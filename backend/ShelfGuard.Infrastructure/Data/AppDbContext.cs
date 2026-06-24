@@ -1377,6 +1377,7 @@ public sealed class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("open");
             e.Property(x => x.Subject).HasMaxLength(500);
+            e.Property(x => x.AssignedAgentName).HasMaxLength(200).IsRequired(false);
             e.Property(x => x.ClosedAt).IsRequired(false);
             e.Property(x => x.Rating).IsRequired(false);
             e.Property(x => x.RatingComment).HasMaxLength(1000).IsRequired(false);
@@ -1393,6 +1394,7 @@ public sealed class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Body).HasMaxLength(4000);
             e.Property(x => x.SenderName).HasMaxLength(200);
+            e.Property(x => x.IsSystem).HasDefaultValue(false);
             e.HasIndex(x => x.SessionId);
         });
     }
