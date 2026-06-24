@@ -15,7 +15,8 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
     // Whitelist prevents injection via a crafted JWT role claim.
     private static readonly HashSet<string> ValidRoles = new(StringComparer.OrdinalIgnoreCase)
     {
-        "provider", "enterprise_admin", "network_manager",
+        "provider", "provider_admin", "provider_agent",
+        "enterprise_admin", "network_manager",
         "store_manager", "merchandiser", "storekeeper", "cashier",
     };
 

@@ -12,7 +12,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/admin/service-desk")]
-[Authorize(Policy = AppPolicies.ProviderOnly)]
+[Authorize(Policy = AppPolicies.ProviderTeamMember)]
 public sealed class AdminServiceDeskController : ControllerBase
 {
     private readonly IProviderTicketService _tickets;
