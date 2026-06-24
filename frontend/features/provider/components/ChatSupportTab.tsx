@@ -422,7 +422,9 @@ export function ChatSupportTab() {
         border: "1px solid #1F2937",
         borderRadius: 12,
         padding: "20px 24px",
-        minHeight: 400,
+        height: "calc(100vh - 230px)",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       {/* Header */}
@@ -434,6 +436,7 @@ export function ChatSupportTab() {
           marginBottom: 20,
           flexWrap: "wrap",
           gap: 12,
+          flexShrink: 0,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -494,11 +497,12 @@ export function ChatSupportTab() {
           display: "grid",
           gridTemplateColumns: selectedSession ? "340px 1fr" : "1fr",
           gap: 16,
-          minHeight: 500,
+          flex: 1,
+          minHeight: 0,
         }}
       >
         {/* Left: session list */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", minHeight: 0 }}>
           {isLoading ? (
             <div style={{ color: "#4B5563", fontSize: 14, padding: "20px 0" }}>Завантаження…</div>
           ) : !filteredSessions.length ? (
