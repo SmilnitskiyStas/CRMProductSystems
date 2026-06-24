@@ -79,7 +79,7 @@ public sealed class AdminChatController : ControllerBase
     }
 
     private string GetUserName() =>
-        User.FindFirstValue(ClaimTypes.Name)
-        ?? User.FindFirstValue("name")
+        User.FindFirstValue("full_name")
+        ?? User.FindFirstValue(ClaimTypes.Name)
         ?? "Provider";
 }
