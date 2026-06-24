@@ -11,17 +11,6 @@ namespace ShelfGuard.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("DROP INDEX IF EXISTS idx_notification_queue_tenant_unread;");
-
-            migrationBuilder.AlterColumn<bool>(
-                name: "IsRead",
-                table: "notification_queue",
-                type: "boolean",
-                nullable: false,
-                oldClrType: typeof(bool),
-                oldType: "boolean",
-                oldDefaultValue: false);
-
             migrationBuilder.AddColumn<DateTimeOffset>(
                 name: "ClosedAt",
                 table: "chat_sessions",
@@ -57,19 +46,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                 name: "RatingComment",
                 table: "chat_sessions");
 
-            migrationBuilder.AlterColumn<bool>(
-                name: "IsRead",
-                table: "notification_queue",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false,
-                oldClrType: typeof(bool),
-                oldType: "boolean");
-
-            migrationBuilder.CreateIndex(
-                name: "idx_notification_queue_tenant_unread",
-                table: "notification_queue",
-                columns: new[] { "TenantId", "IsRead" });
         }
     }
 }
