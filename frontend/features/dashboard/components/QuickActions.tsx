@@ -7,7 +7,7 @@ import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
 import { useVerifyStock, useStockById } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { useStores } from "@/features/stores/hooks/useStores";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { DetailDrawer, DrawerField, DrawerSection, DrawerGrid } from "@/components/ui/DetailDrawer";
 import type { AttentionItem } from "../types";
 
@@ -643,7 +643,7 @@ type ActiveModal = "critical" | "writeoff" | "order" | null;
 
 export function QuickActions({ items = [], isLoading }: Props) {
   const { data: user } = useMe();
-  const { data: stores = [] } = useStores();
+  const { selectedStoreId } = useStoreContext();
   const [modal, setModal] = useState<ActiveModal>(null);
   const [writeOffItems, setWriteOffItems] = useState<AttentionItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<AttentionItem | null>(null);
@@ -651,7 +651,7 @@ export function QuickActions({ items = [], isLoading }: Props) {
   const criticalItems = items.filter((i) => i.status === "critical" || i.status === "expired");
   const expiredItems = items.filter((i) => i.status === "expired");
   const topCritical = criticalItems.slice(0, 5);
-  const storeId = user?.storeId ?? stores[0]?.id ?? "";
+  const storeId = user?.storeId ?? selectedStoreId ?? "";
 
   function openWriteOff(forItems: AttentionItem[]) {
     setWriteOffItems(forItems);

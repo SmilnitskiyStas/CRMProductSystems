@@ -7,6 +7,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
 import { UserMenu } from "./UserMenu";
+import { StoreSelector } from "./StoreSelector";
 import { SupportChatWidget } from "./SupportChatWidget";
 import type { ChatTab } from "./SupportChatWidget";
 import { useUnreadCount } from "@/features/notifications/hooks/useNotifications";
@@ -21,7 +22,6 @@ export function TopBar({ title }: Props) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ChatTab>("support");
 
-  const storeName = user?.storeId ? "Магазин #1" : "ShelfGuard";
   const userRole = (user?.role ?? "") as AppRole;
 
   function openPanel(tab: ChatTab) {
@@ -82,9 +82,9 @@ export function TopBar({ title }: Props) {
           zIndex: 10,
         }}
       >
-        {/* Left — store name / breadcrumb */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>{storeName}</span>
+        {/* Left — store selector / breadcrumb */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <StoreSelector />
           {title && (
             <>
               <span style={{ color: "#374151", fontSize: 14 }}>/</span>
