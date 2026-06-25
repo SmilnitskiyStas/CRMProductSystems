@@ -159,17 +159,21 @@ function WriteOffModal({ items, storeId, onClose }: { items: AttentionItem[]; st
   async function handleSubmit() {
     const chosenItems = items.filter((i) => selected.has(i.id));
     if (chosenItems.length === 0) return;
-    const result = await createWriteOff.mutateAsync({
-      storeId,
-      reason: "expired",
-      notes: "Автоматичне списання прострочених товарів з дашборду",
-      items: chosenItems.map((i) => ({
-        productStockId: i.id,
-        productId: i.productId,
-        quantity: i.quantity > 0 ? i.quantity : 1,
-      })),
-    });
-    setDone({ id: result.id });
+    try {
+      const result = await createWriteOff.mutateAsync({
+        storeId,
+        reason: "expired",
+        notes: "Автоматичне списання прострочених товарів з дашборду",
+        items: chosenItems.map((i) => ({
+          productStockId: i.id,
+          productId: i.productId,
+          quantity: i.quantity > 0 ? i.quantity : 1,
+        })),
+      });
+      setDone({ id: result.id });
+    } catch {
+      // createWriteOff.isError + createWriteOff.error автоматично оновлюються React Query
+    }
   }
 
   if (done) {
@@ -283,7 +287,6 @@ function WriteOffModal({ items, storeId, onClose }: { items: AttentionItem[]; st
           </div>
         </>
       )}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </Modal>
   );
 }

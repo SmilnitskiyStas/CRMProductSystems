@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import type { PagedResult } from "@/lib/api-types";
 import type {
   RecipeListItemDto,
   RecipeDetailDto,
@@ -73,7 +74,7 @@ export const productionApi = {
   /** GET /api/items — for item selector dropdowns */
   getItems: () =>
     api
-      .get<{ items: ItemSlimDto[]; totalCount: number; page: number; pageSize: number }>("/api/items")
+      .get<PagedResult<ItemSlimDto>>("/api/items")
       .then((r) => r.items),
 
   /** GET /api/locations — for location selector dropdown */

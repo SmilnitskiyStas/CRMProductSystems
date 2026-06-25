@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -198,17 +199,22 @@ public sealed class StockRepository : IStockRepository
             baseQuery = baseQuery.Where(s => s.StoreId == storeId);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var criticalCutoff = today.AddDays(6);
-        var warningCutoff = today.AddDays(14);
-        var verificationCutoff = DateTime.UtcNow.AddDays(-90);
+        var criticalCutoff = today.AddDays(StockStatus.CriticalDays);
+        var warningCutoff = today.AddDays(StockStatus.WarningDays);
+        var verificationCutoff = DateTime.UtcNow.AddDays(-StockStatus.NeedsVerificationDays);
+
+        // Single round-trip: fetch only the two date columns, count in memory.
+        var rows = await baseQuery
+            .Select(s => new { s.ExpiryDate, s.LastCheckedAt })
+            .ToListAsync(ct);
 
         return new Dictionary<string, int>
         {
-            ["expired"] = await baseQuery.CountAsync(s => s.ExpiryDate <= today, ct),
-            ["critical"] = await baseQuery.CountAsync(s => s.ExpiryDate > today && s.ExpiryDate <= criticalCutoff, ct),
-            ["warning"] = await baseQuery.CountAsync(s => s.ExpiryDate > criticalCutoff && s.ExpiryDate <= warningCutoff, ct),
-            ["needs_verification"] = await baseQuery.CountAsync(s => s.ExpiryDate > warningCutoff && s.LastCheckedAt <= verificationCutoff, ct),
-            ["safe"] = await baseQuery.CountAsync(s => s.ExpiryDate > warningCutoff && s.LastCheckedAt > verificationCutoff, ct),
+            ["expired"] = rows.Count(s => s.ExpiryDate <= today),
+            ["critical"] = rows.Count(s => s.ExpiryDate > today && s.ExpiryDate <= criticalCutoff),
+            ["warning"] = rows.Count(s => s.ExpiryDate > criticalCutoff && s.ExpiryDate <= warningCutoff),
+            ["needs_verification"] = rows.Count(s => s.ExpiryDate > warningCutoff && s.LastCheckedAt <= verificationCutoff),
+            ["safe"] = rows.Count(s => s.ExpiryDate > warningCutoff && s.LastCheckedAt > verificationCutoff),
         };
     }
 
@@ -236,9 +242,9 @@ public sealed class StockRepository : IStockRepository
         if (string.IsNullOrWhiteSpace(status)) return query;
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var criticalCutoff = today.AddDays(6);   // StockStatus.CriticalDays
-        var warningCutoff = today.AddDays(14);   // StockStatus.WarningDays
-        var verificationCutoff = DateTime.UtcNow.AddDays(-90); // StockStatus.NeedsVerificationDays
+        var criticalCutoff = today.AddDays(StockStatus.CriticalDays);
+        var warningCutoff = today.AddDays(StockStatus.WarningDays);
+        var verificationCutoff = DateTime.UtcNow.AddDays(-StockStatus.NeedsVerificationDays);
 
         return status switch
         {
@@ -248,7 +254,7 @@ public sealed class StockRepository : IStockRepository
             "warning" => query.Where(s => s.Quantity > 0 && s.ExpiryDate > criticalCutoff && s.ExpiryDate <= warningCutoff),
             "safe" => query.Where(s => s.Quantity > 0 && s.ExpiryDate > warningCutoff && s.LastCheckedAt > verificationCutoff),
             "needs_verification" => query.Where(s => s.Quantity > 0 && s.ExpiryDate > warningCutoff && s.LastCheckedAt <= verificationCutoff),
-            _ => query
+            _ => query.Where(_ => false)
         };
     }
 }

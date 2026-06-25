@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import type { PagedResult } from "@/lib/api-types";
 import type { LocationDto, LocationType } from "../types";
 
 // Minimal stock shape needed for per-zone status counts on the floor plan
@@ -32,6 +33,6 @@ export const locationsApi = {
     api.put<LocationDto>(`/api/locations/${id}/floor-plan`, { floorPlan }),
   getStock: () =>
     api
-      .get<{ items: StockBatchSlim[]; totalCount: number; page: number; pageSize: number }>("/api/stock")
+      .get<PagedResult<StockBatchSlim>>("/api/stock")
       .then((r) => r.items),
 };

@@ -13,9 +13,9 @@ public static class StockStatus
     public const string SoldOut = "sold_out";
     public const string NeedsVerification = "needs_verification";
 
-    private const int NeedsVerificationDays = 90;
-    private const int CriticalDays = 6;
-    private const int WarningDays = 14;
+    public const int NeedsVerificationDays = 90;
+    public const int CriticalDays = 6;
+    public const int WarningDays = 14;
 
     public static string Compute(decimal quantity, DateOnly expiryDate, DateTime lastCheckedAt)
     {

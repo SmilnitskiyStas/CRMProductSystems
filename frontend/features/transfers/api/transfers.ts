@@ -1,12 +1,6 @@
 import { api } from "@/lib/api";
+import type { PagedResult } from "@/lib/api-types";
 import type { TransferDto, CreateTransferRequest } from "../types";
-
-interface PagedResult<T> {
-  items: T[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-}
 
 export const transfersApi = {
   getAll: (params?: { store_id?: string; status?: string }) => {
