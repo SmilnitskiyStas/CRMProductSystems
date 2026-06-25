@@ -71,7 +71,10 @@ export const productionApi = {
   // ── Selectors ─────────────────────────────────────────────────────────────
 
   /** GET /api/items — for item selector dropdowns */
-  getItems: () => api.get<ItemSlimDto[]>("/api/items"),
+  getItems: () =>
+    api
+      .get<{ items: ItemSlimDto[]; totalCount: number; page: number; pageSize: number }>("/api/items")
+      .then((r) => r.items),
 
   /** GET /api/locations — for location selector dropdown */
   getLocations: () => api.get<LocationDto[]>("/api/locations"),
