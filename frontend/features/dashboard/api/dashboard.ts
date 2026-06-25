@@ -8,6 +8,15 @@ interface PagedResult<T> {
   pageSize: number;
 }
 
+interface StockSummaryDto {
+  safe: number;
+  warning: number;
+  critical: number;
+  expired: number;
+  needsVerification: number;
+  total: number;
+}
+
 interface ProductStockDto {
   id: string;
   productId: string;
@@ -30,13 +39,13 @@ interface ProductStockDto {
 }
 
 async function getDashboardStats(): Promise<DashboardStats> {
-  const { items: batches } = await api.get<PagedResult<ProductStockDto>>("/api/stock");
-  const stats: DashboardStats = { safe: 0, warning: 0, critical: 0, expired: 0 };
-  for (const b of batches) {
-    const s = b.status as keyof DashboardStats;
-    if (s in stats) stats[s]++;
-  }
-  return stats;
+  const summary = await api.get<StockSummaryDto>("/api/stock/summary");
+  return {
+    safe: summary.safe,
+    warning: summary.warning,
+    critical: summary.critical,
+    expired: summary.expired,
+  };
 }
 
 async function getAttentionItems(): Promise<AttentionItem[]> {

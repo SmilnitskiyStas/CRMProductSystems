@@ -193,14 +193,23 @@ public sealed class StockRepository : IStockRepository
 
     public async Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default)
     {
-        var query = _db.ProductStocks.Where(s => s.Quantity > 0).AsQueryable();
+        var baseQuery = _db.ProductStocks.Where(s => s.Quantity > 0).AsQueryable();
         if (storeId.HasValue)
-            query = query.Where(s => s.StoreId == storeId);
+            baseQuery = baseQuery.Where(s => s.StoreId == storeId);
 
-        return await query
-            .GroupBy(s => s.Status)
-            .Select(g => new { Status = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Status, x => x.Count, ct);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var criticalCutoff = today.AddDays(6);
+        var warningCutoff = today.AddDays(14);
+        var verificationCutoff = DateTime.UtcNow.AddDays(-90);
+
+        return new Dictionary<string, int>
+        {
+            ["expired"] = await baseQuery.CountAsync(s => s.ExpiryDate <= today, ct),
+            ["critical"] = await baseQuery.CountAsync(s => s.ExpiryDate > today && s.ExpiryDate <= criticalCutoff, ct),
+            ["warning"] = await baseQuery.CountAsync(s => s.ExpiryDate > criticalCutoff && s.ExpiryDate <= warningCutoff, ct),
+            ["needs_verification"] = await baseQuery.CountAsync(s => s.ExpiryDate > warningCutoff && s.LastCheckedAt <= verificationCutoff, ct),
+            ["safe"] = await baseQuery.CountAsync(s => s.ExpiryDate > warningCutoff && s.LastCheckedAt > verificationCutoff, ct),
+        };
     }
 
     public async Task AddAsync(ProductStock stock, CancellationToken ct = default) =>
