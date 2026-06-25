@@ -60,11 +60,12 @@ export function TopBar({ title }: Props) {
               background: chatOpen ? "#1D3461" : "transparent",
               border: `1px solid ${chatOpen ? "#3B82F6" : "#1F2937"}`,
               borderRadius: 8,
-              padding: "6px 8px",
+              padding: "6px 12px",
               cursor: "pointer",
               color: chatOpen ? "#60A5FA" : "#6B7280",
               display: "flex",
               alignItems: "center",
+              gap: 6,
               transition: "border-color 0.15s, color 0.15s, background 0.15s",
             }}
             onMouseEnter={(e) => {
@@ -81,6 +82,7 @@ export function TopBar({ title }: Props) {
             }}
           >
             <LifeBuoy size={16} />
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Чат підтримка</span>
           </button>
 
           {/* Notification bell */}
