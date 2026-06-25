@@ -23,8 +23,7 @@ public sealed class StockRepository : IStockRepository
         if (storeId.HasValue)
             query = query.Where(s => s.StoreId == storeId);
 
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(s => s.Status == status);
+        query = ApplyStatusFilter(query, status);
 
         if (zoneId.HasValue)
             query = query.Where(s => s.ZoneId == zoneId);
@@ -51,8 +50,7 @@ public sealed class StockRepository : IStockRepository
 
         if (storeId.HasValue)
             query = query.Where(s => s.StoreId == storeId);
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(s => s.Status == status);
+        query = ApplyStatusFilter(query, status);
         if (zoneId.HasValue)
             query = query.Where(s => s.ZoneId == zoneId);
         if (productId.HasValue)
@@ -216,4 +214,32 @@ public sealed class StockRepository : IStockRepository
 
     public Task SaveChangesAsync(CancellationToken ct = default) =>
         _db.SaveChangesAsync(ct);
+
+    // ── helpers ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Filters by the *computed* (real-time) status rather than the stored column,
+    /// matching the logic in StockStatus.Compute so the filter is always accurate.
+    /// </summary>
+    private static IQueryable<ProductStock> ApplyStatusFilter(
+        IQueryable<ProductStock> query, string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return query;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var criticalCutoff = today.AddDays(6);   // StockStatus.CriticalDays
+        var warningCutoff = today.AddDays(14);   // StockStatus.WarningDays
+        var verificationCutoff = DateTime.UtcNow.AddDays(-90); // StockStatus.NeedsVerificationDays
+
+        return status switch
+        {
+            "sold_out" => query.Where(s => s.Quantity <= 0),
+            "expired" => query.Where(s => s.Quantity > 0 && s.ExpiryDate <= today),
+            "critical" => query.Where(s => s.Quantity > 0 && s.ExpiryDate > today && s.ExpiryDate <= criticalCutoff),
+            "warning" => query.Where(s => s.Quantity > 0 && s.ExpiryDate > criticalCutoff && s.ExpiryDate <= warningCutoff),
+            "safe" => query.Where(s => s.Quantity > 0 && s.ExpiryDate > warningCutoff && s.LastCheckedAt > verificationCutoff),
+            "needs_verification" => query.Where(s => s.Quantity > 0 && s.ExpiryDate > warningCutoff && s.LastCheckedAt <= verificationCutoff),
+            _ => query
+        };
+    }
 }
