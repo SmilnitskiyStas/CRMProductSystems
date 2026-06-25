@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, ChevronRight as Arrow, Loader2, ExternalLink, Package } from "lucide-react";
 import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
 import { useVerifyStock, useStockById } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { useStores } from "@/features/stores/hooks/useStores";
 import { DetailDrawer, DrawerField, DrawerSection, DrawerGrid } from "@/components/ui/DetailDrawer";
 import type { AttentionItem } from "../types";
 
@@ -144,11 +145,25 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
 
 // ── 2. Write-off modal ────────────────────────────────────────────────────────
 
-function WriteOffModal({ items, storeId, onClose }: { items: AttentionItem[]; storeId: string; onClose: () => void }) {
+function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
+  isOpen: boolean;
+  items: AttentionItem[];
+  storeId: string;
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(items.map((i) => i.id)));
-  const [done, setDone] = useState<{ id: string } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [done, setDone] = useState(false);
   const createWriteOff = useCreateWriteOff();
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelected(new Set(items.map((i) => i.id)));
+      setDone(false);
+      createWriteOff.reset();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -162,7 +177,7 @@ function WriteOffModal({ items, storeId, onClose }: { items: AttentionItem[]; st
     const chosenItems = items.filter((i) => selected.has(i.id));
     if (chosenItems.length === 0) return;
     try {
-      const result = await createWriteOff.mutateAsync({
+      await createWriteOff.mutateAsync({
         storeId,
         reason: "expired",
         notes: "Автоматичне списання прострочених товарів з дашборду",
@@ -172,16 +187,24 @@ function WriteOffModal({ items, storeId, onClose }: { items: AttentionItem[]; st
           quantity: i.quantity > 0 ? i.quantity : 1,
         })),
       });
-      setDone({ id: result.id });
+      setDone(true);
     } catch {
-      // createWriteOff.isError + createWriteOff.error автоматично оновлюються React Query
+      // помилка відображається через createWriteOff.isError
     }
   }
 
-  if (done) {
-    return (
-      <Modal title="Чернетку списання створено" onClose={onClose}>
-        <div style={{ flex: 1, padding: "32px 20px", textAlign: "center" }}>
+  const selectedCount = selected.size;
+
+  return (
+    <DetailDrawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={done ? "Списання створено" : "Списати прострочені"}
+      subtitle={done ? "Чернетка очікує затвердження" : `${items.length} товарів для списання`}
+      width={480}
+    >
+      {done ? (
+        <div style={{ textAlign: "center", padding: "32px 0" }}>
           <div style={{
             width: 56, height: 56, borderRadius: "50%",
             background: "rgba(74,222,128,0.1)", border: "1px solid #166534",
@@ -204,105 +227,99 @@ function WriteOffModal({ items, storeId, onClose }: { items: AttentionItem[]; st
               padding: "9px 20px", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer",
             }}
           >
-            Перейти до Списань
-            <ChevronRight size={14} />
+            Перейти до Списань <ChevronRight size={14} />
           </button>
         </div>
-      </Modal>
-    );
-  }
-
-  const selectedCount = selected.size;
-
-  return (
-    <Modal title="Списати прострочені товари" onClose={onClose}>
-      {items.length === 0 ? (
-        <div style={{ flex: 1, padding: "32px 20px", textAlign: "center", color: "#4ADE80", fontSize: 14 }}>
+      ) : items.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px 0", color: "#4ADE80", fontSize: 14 }}>
           Прострочених товарів немає ✓
         </div>
       ) : (
         <>
-          <div style={{ padding: "12px 20px 8px", flexShrink: 0 }}>
-            <p style={{ color: "#6B7280", fontSize: 13, margin: 0 }}>
-              Виберіть товари для включення до чернетки списання. Буде створено документ зі статусом «Чернетка».
-            </p>
-          </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "8px 20px" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {items.map((item) => {
-                const checked = selected.has(item.id);
-                return (
-                  <label
-                    key={item.id}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 12,
-                      background: checked ? "#1a0a0a" : "#0D1117",
-                      border: `1px solid ${checked ? "#991b1b40" : "#1F2937"}`,
-                      borderRadius: 10, padding: "10px 14px", cursor: "pointer",
-                      transition: "border-color 0.15s, background 0.15s",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(item.id)}
-                      style={{ width: 15, height: 15, accentColor: "#EF4444", flexShrink: 0 }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>{item.name}</div>
-                      <div style={{ color: "#6B7280", fontSize: 11 }}>{item.zone !== "—" ? item.zone : ""} · к-сть: {item.quantity}</div>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 16px", lineHeight: 1.6 }}>
+            Виберіть товари для включення до чернетки списання. Буде створено документ зі статусом «Чернетка».
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+            {items.map((item) => {
+              const checked = selected.has(item.id);
+              return (
+                <label key={item.id} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  background: checked ? "#1a0a0a" : "#0D1117",
+                  border: `1px solid ${checked ? "#991b1b40" : "#1F2937"}`,
+                  borderRadius: 10, padding: "10px 14px", cursor: "pointer",
+                  transition: "border-color 0.15s, background 0.15s",
+                }}>
+                  <input
+                    type="checkbox" checked={checked} onChange={() => toggle(item.id)}
+                    style={{ width: 15, height: 15, accentColor: "#EF4444", flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>{item.name}</div>
+                    <div style={{ color: "#6B7280", fontSize: 11 }}>
+                      {item.zone !== "—" ? item.zone : ""} · к-сть: {item.quantity}
                     </div>
-                    <span style={{
-                      fontSize: 10, padding: "2px 7px", borderRadius: 99, flexShrink: 0,
-                      background: "#EF444415", color: "#EF4444", border: "1px solid #EF444430",
-                    }}>
-                      Прострочено
-                    </span>
-                  </label>
-                );
-              })}
+                  </div>
+                  <span style={{
+                    fontSize: 10, padding: "2px 7px", borderRadius: 99, flexShrink: 0,
+                    background: "#EF444415", color: "#EF4444", border: "1px solid #EF444430",
+                  }}>
+                    Прострочено
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          {createWriteOff.isError && (
+            <div style={{ color: "#EF4444", fontSize: 12, marginBottom: 12 }}>
+              Помилка: {createWriteOff.error?.message ?? "Не вдалося створити списання"}
             </div>
-          </div>
-          <div style={{ borderTop: "1px solid #1F2937", padding: "12px 20px", flexShrink: 0 }}>
-            {createWriteOff.isError && (
-              <div style={{ color: "#EF4444", fontSize: 12, marginBottom: 8 }}>
-                Помилка: {createWriteOff.error?.message ?? "Не вдалося створити списання"}
-              </div>
-            )}
-            <button
-              onClick={handleSubmit}
-              disabled={selectedCount === 0 || createWriteOff.isPending}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                background: selectedCount > 0 ? "#1a0a0a" : "#111827",
-                border: `1px solid ${selectedCount > 0 ? "#EF4444" : "#1F2937"}`,
-                borderRadius: 8, padding: "10px 0",
-                color: selectedCount > 0 ? "#EF4444" : "#374151",
-                fontSize: 13, fontWeight: 600,
-                cursor: selectedCount > 0 ? "pointer" : "not-allowed",
-              }}
-            >
-              {createWriteOff.isPending
-                ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Створення…</>
-                : <><Trash2 size={14} /> Створити чернетку ({selectedCount})</>}
-            </button>
-          </div>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={selectedCount === 0 || createWriteOff.isPending}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              background: selectedCount > 0 ? "#1a0a0a" : "#111827",
+              border: `1px solid ${selectedCount > 0 ? "#EF4444" : "#1F2937"}`,
+              borderRadius: 8, padding: "10px 0",
+              color: selectedCount > 0 ? "#EF4444" : "#374151",
+              fontSize: 13, fontWeight: 600,
+              cursor: selectedCount > 0 && !createWriteOff.isPending ? "pointer" : "not-allowed",
+            }}
+          >
+            {createWriteOff.isPending
+              ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Створення…</>
+              : <><Trash2 size={14} /> Створити чернетку ({selectedCount})</>
+            }
+          </button>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </>
       )}
-    </Modal>
+    </DetailDrawer>
   );
 }
 
-// ── 3. Order modal ────────────────────────────────────────────────────────────
+// ── 3. Order drawer ───────────────────────────────────────────────────────────
 
 type OrderState = "idle" | "loading" | "done" | "error";
 
-function OrderModal({ storeId, onClose }: { storeId: string; onClose: () => void }) {
+function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: string; onClose: () => void }) {
   const router = useRouter();
   const [state, setState] = useState<OrderState>("idle");
   const [result, setResult] = useState<{ linesToOrder: number; productsEvaluated: number; buffersCalculated: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const generateOrder = useGenerateOrder();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setState("idle");
+      setResult(null);
+      setErrorMsg("");
+    }
+  }, [isOpen]);
 
   async function handleGenerate() {
     setState("loading");
@@ -320,127 +337,122 @@ function OrderModal({ storeId, onClose }: { storeId: string; onClose: () => void
     }
   }
 
+  const subtitle = state === "loading" ? "Виконується розрахунок…"
+    : state === "done" ? "Замовлення розраховано"
+    : "TOC / DDMRP методологія";
+
   return (
-    <Modal title="Сформувати замовлення" onClose={onClose}>
-      <div style={{ flex: 1, padding: "24px 20px" }}>
-        {state === "idle" && (
-          <>
-            <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.7, margin: "0 0 20px" }}>
-              Система перерахує ADU, оновить буфери та розрахує оптимальне замовлення за методологією TOC/DDMRP.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                "Перерахунок середнього щоденного споживання (ADU)",
-                "Оновлення буферів (зелений / жовтий / червоний)",
-                "Розрахунок позицій замовлення",
-              ].map((step, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{
-                    width: 22, height: 22, borderRadius: "50%", background: "#1D3461",
-                    border: "1px solid #3B82F640", display: "flex", alignItems: "center",
-                    justifyContent: "center", color: "#60A5FA", fontSize: 11, fontWeight: 700, flexShrink: 0,
-                  }}>
-                    {i + 1}
-                  </div>
-                  <span style={{ color: "#9CA3AF", fontSize: 13 }}>{step}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {state === "loading" && (
-          <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <Loader2
-              size={36}
-              color="#3B82F6"
-              style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }}
-            />
-            <div style={{ color: "#9CA3AF", fontSize: 13 }}>Виконується розрахунок…</div>
-          </div>
-        )}
-
-        {state === "done" && result && (
-          <div style={{ textAlign: "center" }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: "50%",
-              background: "rgba(59,130,246,0.1)", border: "1px solid #1D3461",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 16px",
-            }}>
-              <CheckCircle size={26} color="#3B82F6" />
-            </div>
-            <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, marginBottom: 16 }}>
-              Замовлення розраховано
-            </div>
-            <div style={{
-              display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24,
-            }}>
-              {[
-                { label: "Оцінено товарів", value: result.productsEvaluated },
-                { label: "Оновлено буферів", value: result.buffersCalculated },
-                { label: "Позицій до замовлення", value: result.linesToOrder, accent: "#3B82F6" },
-              ].map(({ label, value, accent }) => (
-                <div key={label} style={{
-                  background: "#0D1117", border: "1px solid #1F2937",
-                  borderRadius: 10, padding: "12px 8px", textAlign: "center",
+    <DetailDrawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Сформувати замовлення"
+      subtitle={subtitle}
+      width={480}
+    >
+      {state === "idle" && (
+        <>
+          <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.7, margin: "0 0 20px" }}>
+            Система перерахує ADU, оновить буфери та розрахує оптимальне замовлення за методологією TOC/DDMRP.
+          </p>
+          <DrawerSection title="Кроки розрахунку">
+            {[
+              "Перерахунок середнього щоденного споживання (ADU)",
+              "Оновлення буферів (зелений / жовтий / червоний)",
+              "Розрахунок позицій замовлення",
+            ].map((step, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", background: "#1D3461",
+                  border: "1px solid #3B82F640", display: "flex", alignItems: "center",
+                  justifyContent: "center", color: "#60A5FA", fontSize: 11, fontWeight: 700, flexShrink: 0,
                 }}>
-                  <div style={{ color: accent ?? "#E8EDF5", fontSize: 22, fontWeight: 700, fontFamily: "monospace" }}>
-                    {value}
-                  </div>
-                  <div style={{ color: "#6B7280", fontSize: 10, marginTop: 4 }}>{label}</div>
+                  {i + 1}
                 </div>
-              ))}
-            </div>
-            <button
-              onClick={() => { router.push("/orders"); onClose(); }}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 8,
-                padding: "9px 20px", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Переглянути замовлення
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
-
-        {state === "error" && (
-          <div style={{ textAlign: "center", padding: "16px 0" }}>
-            <div style={{ color: "#EF4444", fontSize: 14, marginBottom: 8 }}>Помилка розрахунку</div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 20 }}>{errorMsg}</div>
-            <button
-              onClick={() => setState("idle")}
-              style={{
-                background: "transparent", border: "1px solid #374151", borderRadius: 8,
-                padding: "8px 16px", color: "#9CA3AF", fontSize: 13, cursor: "pointer",
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
-        )}
-      </div>
-
-      {(state === "idle" || state === "error") && (
-        <div style={{ borderTop: "1px solid #1F2937", padding: "12px 20px", flexShrink: 0 }}>
+                <span style={{ color: "#9CA3AF", fontSize: 13 }}>{step}</span>
+              </div>
+            ))}
+          </DrawerSection>
           <button
             onClick={handleGenerate}
-            disabled={false}
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 8,
-              padding: "10px 0", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              padding: "10px 0", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 8,
             }}
           >
-            <ShoppingCart size={14} />
-            Розрахувати замовлення
+            <ShoppingCart size={14} /> Розрахувати замовлення
+          </button>
+        </>
+      )}
+
+      {state === "loading" && (
+        <div style={{ textAlign: "center", padding: "48px 0" }}>
+          <Loader2 size={36} color="#3B82F6"
+            style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }} />
+          <div style={{ color: "#9CA3AF", fontSize: 13 }}>Виконується розрахунок…</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {state === "done" && result && (
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: "50%",
+            background: "rgba(59,130,246,0.1)", border: "1px solid #1D3461",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 20px",
+          }}>
+            <CheckCircle size={26} color="#3B82F6" />
+          </div>
+          <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, marginBottom: 20 }}>
+            Замовлення розраховано
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
+            {[
+              { label: "Оцінено товарів", value: result.productsEvaluated },
+              { label: "Оновлено буферів", value: result.buffersCalculated },
+              { label: "Позицій до замовлення", value: result.linesToOrder, accent: "#3B82F6" },
+            ].map(({ label, value, accent }) => (
+              <div key={label} style={{
+                background: "#0D1117", border: "1px solid #1F2937",
+                borderRadius: 10, padding: "12px 8px", textAlign: "center",
+              }}>
+                <div style={{ color: accent ?? "#E8EDF5", fontSize: 22, fontWeight: 700, fontFamily: "monospace" }}>
+                  {value}
+                </div>
+                <div style={{ color: "#6B7280", fontSize: 10, marginTop: 4 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => { router.push("/orders"); onClose(); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 8,
+              padding: "9px 20px", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            Переглянути замовлення <ChevronRight size={14} />
           </button>
         </div>
       )}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </Modal>
+
+      {state === "error" && (
+        <div style={{ textAlign: "center", padding: "24px 0" }}>
+          <div style={{ color: "#EF4444", fontSize: 14, marginBottom: 8 }}>Помилка розрахунку</div>
+          <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 20 }}>{errorMsg}</div>
+          <button
+            onClick={() => setState("idle")}
+            style={{
+              background: "transparent", border: "1px solid #374151", borderRadius: 8,
+              padding: "8px 16px", color: "#9CA3AF", fontSize: 13, cursor: "pointer",
+            }}
+          >
+            Спробувати ще раз
+          </button>
+        </div>
+      )}
+    </DetailDrawer>
   );
 }
 
@@ -631,6 +643,7 @@ type ActiveModal = "critical" | "writeoff" | "order" | null;
 
 export function QuickActions({ items = [], isLoading }: Props) {
   const { data: user } = useMe();
+  const { data: stores = [] } = useStores();
   const [modal, setModal] = useState<ActiveModal>(null);
   const [writeOffItems, setWriteOffItems] = useState<AttentionItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<AttentionItem | null>(null);
@@ -638,7 +651,7 @@ export function QuickActions({ items = [], isLoading }: Props) {
   const criticalItems = items.filter((i) => i.status === "critical" || i.status === "expired");
   const expiredItems = items.filter((i) => i.status === "expired");
   const topCritical = criticalItems.slice(0, 5);
-  const storeId = user?.storeId ?? "";
+  const storeId = user?.storeId ?? stores[0]?.id ?? "";
 
   function openWriteOff(forItems: AttentionItem[]) {
     setWriteOffItems(forItems);
@@ -764,12 +777,17 @@ export function QuickActions({ items = [], isLoading }: Props) {
       {modal === "critical" && (
         <CriticalModal items={criticalItems} onClose={() => setModal(null)} />
       )}
-      {modal === "writeoff" && storeId && (
-        <WriteOffModal items={writeOffItems} storeId={storeId} onClose={() => setModal(null)} />
-      )}
-      {modal === "order" && storeId && (
-        <OrderModal storeId={storeId} onClose={() => setModal(null)} />
-      )}
+      <WriteOffDrawer
+        isOpen={modal === "writeoff"}
+        items={writeOffItems}
+        storeId={storeId}
+        onClose={() => setModal(null)}
+      />
+      <OrderDrawer
+        isOpen={modal === "order"}
+        storeId={storeId}
+        onClose={() => setModal(null)}
+      />
     </>
   );
 }
