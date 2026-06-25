@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, Loader2, ExternalLink } from "lucide-react";
+import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, Loader2, ExternalLink, Package, Calendar, MapPin, Hash, ChevronRight as Arrow } from "lucide-react";
 import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
-import { useVerifyStock } from "@/features/shelf/hooks/useStock";
+import { useVerifyStock, useStockById } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import type { AttentionItem } from "../types";
@@ -443,18 +443,215 @@ function OrderModal({ storeId, onClose }: { storeId: string; onClose: () => void
   );
 }
 
+// ── 4. Item detail modal ──────────────────────────────────────────────────────
+
+const STATUS_LABEL: Record<string, string> = {
+  expired: "Прострочено",
+  critical: "Критично",
+  warning: "Попередження",
+  safe: "Норма",
+};
+const STATUS_COLOR: Record<string, string> = {
+  expired: "#EF4444",
+  critical: "#F97316",
+  warning: "#F59E0B",
+  safe: "#22C55E",
+};
+
+function ItemDetailModal({
+  item, storeId, onClose, onWriteOff,
+}: {
+  item: AttentionItem;
+  storeId: string;
+  onClose: () => void;
+  onWriteOff: (items: AttentionItem[]) => void;
+}) {
+  const router = useRouter();
+  const { data: batch, isLoading } = useStockById(item.id);
+  const verifyStock = useVerifyStock();
+  const [verified, setVerified] = useState(false);
+
+  const color = STATUS_COLOR[item.status] ?? "#6B7280";
+  const label = STATUS_LABEL[item.status] ?? item.status;
+
+  const expiryStr = batch
+    ? new Date(batch.expiryDate as unknown as string).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : "—";
+  const addedStr = batch
+    ? new Date(batch.addedAt as unknown as string).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : "—";
+
+  async function handleVerify() {
+    await verifyStock.mutateAsync(item.id);
+    setVerified(true);
+  }
+
+  return (
+    <Modal title="Інформація про партію" onClose={onClose}>
+      {isLoading ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+          <Loader2 size={28} color="#374151" style={{ animation: "spin 1s linear infinite" }} />
+        </div>
+      ) : (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+            {/* Product header */}
+            <div style={{
+              background: `${color}08`,
+              border: `1px solid ${color}25`,
+              borderRadius: 10,
+              padding: "14px 16px",
+              marginBottom: 16,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 8,
+                background: `${color}15`, border: `1px solid ${color}30`,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <Package size={18} color={color} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+                  {item.name}
+                </div>
+                <span style={{
+                  display: "inline-block",
+                  fontSize: 11, padding: "2px 8px", borderRadius: 99,
+                  background: `${color}15`, color, border: `1px solid ${color}30`,
+                }}>
+                  {label}
+                </span>
+              </div>
+            </div>
+
+            {/* Info grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <InfoCell icon={<Package size={13} />} label="Залишок"
+                value={`${item.quantity} / ${batch?.quantityInitial ?? "?"}`}
+                valueColor={item.quantity === 0 ? "#EF4444" : "#E8EDF5"}
+              />
+              <InfoCell icon={<Calendar size={13} />} label="Термін придатності"
+                value={expiryStr}
+                valueColor={color}
+              />
+              <InfoCell icon={<Calendar size={13} />} label="Днів залишилось"
+                value={batch ? (batch.daysLeft <= 0 ? "Прострочено" : `${batch.daysLeft} дн.`) : "—"}
+                valueColor={color}
+              />
+              <InfoCell icon={<MapPin size={13} />} label="Зона"
+                value={batch?.zoneName ?? item.zone ?? "—"}
+              />
+              <InfoCell icon={<Hash size={13} />} label="Партія №"
+                value={batch?.batchNumber ?? "—"}
+              />
+              <InfoCell icon={<Hash size={13} />} label="Штрихкод"
+                value={batch?.productBarcode ?? item.sku ?? "—"}
+              />
+              <InfoCell icon={<Calendar size={13} />} label="Дата надходження"
+                value={addedStr}
+              />
+              <InfoCell icon={<MapPin size={13} />} label="Полиця №"
+                value={batch?.shelfNumber != null ? String(batch.shelfNumber) : "—"}
+              />
+            </div>
+
+            {verified && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: "rgba(74,222,128,0.08)", border: "1px solid #166534",
+                borderRadius: 8, padding: "10px 14px", marginTop: 8,
+              }}>
+                <CheckCircle size={15} color="#4ADE80" />
+                <span style={{ color: "#4ADE80", fontSize: 13 }}>Верифіковано успішно</span>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div style={{
+            borderTop: "1px solid #1F2937", padding: "12px 20px",
+            flexShrink: 0, display: "flex", flexDirection: "column", gap: 8,
+          }}>
+            {!verified && (
+              <button
+                onClick={handleVerify}
+                disabled={verifyStock.isPending}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  background: "rgba(74,222,128,0.08)", border: "1px solid #166534",
+                  borderRadius: 8, padding: "9px 0",
+                  color: "#4ADE80", fontSize: 13, fontWeight: 600,
+                  cursor: verifyStock.isPending ? "not-allowed" : "pointer",
+                  opacity: verifyStock.isPending ? 0.6 : 1,
+                }}
+              >
+                {verifyStock.isPending
+                  ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Верифікація…</>
+                  : <><CheckCircle size={14} /> Верифікувати партію</>}
+              </button>
+            )}
+
+            {item.status === "expired" && storeId && (
+              <button
+                onClick={() => { onWriteOff([item]); onClose(); }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  background: "rgba(239,68,68,0.08)", border: "1px solid #991B1B",
+                  borderRadius: 8, padding: "9px 0",
+                  color: "#EF4444", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                <Trash2 size={14} /> Створити списання
+              </button>
+            )}
+
+            <button
+              onClick={() => { router.push(`/stock?status=${item.status}`); onClose(); }}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                background: "transparent", border: "1px solid #1F2937",
+                borderRadius: 8, padding: "9px 0",
+                color: "#6B7280", fontSize: 13, cursor: "pointer",
+              }}
+            >
+              Переглянути всі залишки
+              <ExternalLink size={13} />
+            </button>
+          </div>
+        </>
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </Modal>
+  );
+}
+
+function InfoCell({ icon, label, value, valueColor }: {
+  icon: React.ReactNode; label: string; value: string; valueColor?: string;
+}) {
+  return (
+    <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: "10px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#4B5563", fontSize: 11, marginBottom: 4 }}>
+        {icon} {label}
+      </div>
+      <div style={{ color: valueColor ?? "#9CA3AF", fontSize: 13, fontWeight: 600, wordBreak: "break-all" }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 // ── Main QuickActions ─────────────────────────────────────────────────────────
 
 type ActiveModal = "critical" | "writeoff" | "order" | null;
 
 export function QuickActions({ items = [], isLoading }: Props) {
-  const router = useRouter();
   const { data: user } = useMe();
   const [modal, setModal] = useState<ActiveModal>(null);
   const [writeOffItems, setWriteOffItems] = useState<AttentionItem[]>([]);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const verifyStock = useVerifyStock();
+  const [selectedItem, setSelectedItem] = useState<AttentionItem | null>(null);
 
   const criticalItems = items.filter((i) => i.status === "critical" || i.status === "expired");
   const expiredItems = items.filter((i) => i.status === "expired");
@@ -525,25 +722,32 @@ export function QuickActions({ items = [], isLoading }: Props) {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {topCritical.map((item) => {
-                  const isHovered = hoveredId === item.id;
-                  const isVerifying = verifyingId === item.id;
-                  const statusColor = item.status === "expired" ? "#EF4444" : "#F97316";
-
+                  const color = STATUS_COLOR[item.status] ?? "#EF4444";
                   return (
-                    <div
+                    <button
                       key={item.id}
-                      onMouseEnter={() => setHoveredId(item.id)}
-                      onMouseLeave={() => setHoveredId(null)}
+                      onClick={() => setSelectedItem(item)}
                       style={{
-                        background: isHovered ? "#1f0b0b" : "#1a0a0a",
-                        border: `1px solid ${isHovered ? "#991b1b60" : "#991b1b30"}`,
+                        width: "100%",
+                        background: "#1a0a0a",
+                        border: `1px solid ${color}25`,
                         borderRadius: 8,
                         padding: "10px 12px",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
                         gap: 8,
+                        cursor: "pointer",
+                        textAlign: "left",
                         transition: "background 0.15s, border-color 0.15s",
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "#220d0d";
+                        (e.currentTarget as HTMLElement).style.borderColor = `${color}50`;
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "#1a0a0a";
+                        (e.currentTarget as HTMLElement).style.borderColor = `${color}25`;
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -554,44 +758,13 @@ export function QuickActions({ items = [], isLoading }: Props) {
                           {item.zone !== "—" ? item.zone : item.category}
                         </div>
                       </div>
-
-                      {isHovered ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                          <ItemActionBtn
-                            title="Переглянути в Залишках"
-                            color="#60A5FA"
-                            onClick={() => router.push(`/stock?status=${item.status}`)}
-                          >
-                            <ExternalLink size={12} />
-                          </ItemActionBtn>
-                          <ItemActionBtn
-                            title="Верифікувати"
-                            color="#4ADE80"
-                            onClick={() => {
-                              setVerifyingId(item.id);
-                              verifyStock.mutate(item.id, { onSettled: () => setVerifyingId(null) });
-                            }}
-                          >
-                            {isVerifying
-                              ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />
-                              : <CheckCircle size={12} />}
-                          </ItemActionBtn>
-                          {item.status === "expired" && storeId && (
-                            <ItemActionBtn
-                              title="Створити списання"
-                              color="#EF4444"
-                              onClick={() => openWriteOff([item])}
-                            >
-                              <Trash2 size={12} />
-                            </ItemActionBtn>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={{ color: statusColor, fontSize: 14, fontWeight: 700, fontFamily: "monospace", flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                        <span style={{ color, fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>
                           {item.quantity === 0 ? "OUT" : item.quantity}
-                        </div>
-                      )}
-                    </div>
+                        </span>
+                        <Arrow size={13} color="#374151" />
+                      </div>
+                    </button>
                   );
                 })}
               </div>
@@ -600,6 +773,14 @@ export function QuickActions({ items = [], isLoading }: Props) {
         </div>
       </div>
 
+      {selectedItem && (
+        <ItemDetailModal
+          item={selectedItem}
+          storeId={storeId}
+          onClose={() => setSelectedItem(null)}
+          onWriteOff={openWriteOff}
+        />
+      )}
       {modal === "critical" && (
         <CriticalModal items={criticalItems} onClose={() => setModal(null)} />
       )}
@@ -610,40 +791,6 @@ export function QuickActions({ items = [], isLoading }: Props) {
         <OrderModal storeId={storeId} onClose={() => setModal(null)} />
       )}
     </>
-  );
-}
-
-function ItemActionBtn({
-  children, title, color, onClick,
-}: {
-  children: React.ReactNode;
-  title: string;
-  color: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      title={title}
-      style={{
-        background: `${color}15`,
-        border: `1px solid ${color}30`,
-        borderRadius: 6,
-        color,
-        width: 26,
-        height: 26,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        flexShrink: 0,
-        transition: "background 0.15s",
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${color}30`; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = `${color}15`; }}
-    >
-      {children}
-    </button>
   );
 }
 
