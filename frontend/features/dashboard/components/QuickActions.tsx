@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, Loader2 } from "lucide-react";
+import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, Loader2, ExternalLink } from "lucide-react";
 import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
+import { useVerifyStock } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import type { AttentionItem } from "../types";
@@ -447,13 +448,23 @@ function OrderModal({ storeId, onClose }: { storeId: string; onClose: () => void
 type ActiveModal = "critical" | "writeoff" | "order" | null;
 
 export function QuickActions({ items = [], isLoading }: Props) {
+  const router = useRouter();
   const { data: user } = useMe();
   const [modal, setModal] = useState<ActiveModal>(null);
+  const [writeOffItems, setWriteOffItems] = useState<AttentionItem[]>([]);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const verifyStock = useVerifyStock();
 
   const criticalItems = items.filter((i) => i.status === "critical" || i.status === "expired");
   const expiredItems = items.filter((i) => i.status === "expired");
   const topCritical = criticalItems.slice(0, 5);
   const storeId = user?.storeId ?? "";
+
+  function openWriteOff(forItems: AttentionItem[]) {
+    setWriteOffItems(forItems);
+    setModal("writeoff");
+  }
 
   return (
     <>
@@ -483,7 +494,7 @@ export function QuickActions({ items = [], isLoading }: Props) {
               accent="#6B7280"
               badge={expiredItems.length > 0 ? expiredItems.length : undefined}
               icon={<Trash2 size={14} />}
-              onClick={() => setModal("writeoff")}
+              onClick={() => openWriteOff(expiredItems)}
               disabled={!storeId}
             />
             <ActionButton
@@ -513,29 +524,76 @@ export function QuickActions({ items = [], isLoading }: Props) {
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {topCritical.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      background: "#1a0a0a", border: "1px solid #991b1b30", borderRadius: 8,
-                      padding: "10px 12px", display: "flex", justifyContent: "space-between",
-                      alignItems: "center", gap: 8,
-                    }}
-                  >
-                    <div>
-                      <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
-                        {item.name}
+                {topCritical.map((item) => {
+                  const isHovered = hoveredId === item.id;
+                  const isVerifying = verifyingId === item.id;
+                  const statusColor = item.status === "expired" ? "#EF4444" : "#F97316";
+
+                  return (
+                    <div
+                      key={item.id}
+                      onMouseEnter={() => setHoveredId(item.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      style={{
+                        background: isHovered ? "#1f0b0b" : "#1a0a0a",
+                        border: `1px solid ${isHovered ? "#991b1b60" : "#991b1b30"}`,
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                        transition: "background 0.15s, border-color 0.15s",
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {item.name}
+                        </div>
+                        <div style={{ color: "#6B7280", fontSize: 11 }}>
+                          {item.zone !== "—" ? item.zone : item.category}
+                        </div>
                       </div>
-                      <div style={{ color: "#6B7280", fontSize: 11 }}>{item.category}</div>
+
+                      {isHovered ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                          <ItemActionBtn
+                            title="Переглянути в Залишках"
+                            color="#60A5FA"
+                            onClick={() => router.push(`/stock?status=${item.status}`)}
+                          >
+                            <ExternalLink size={12} />
+                          </ItemActionBtn>
+                          <ItemActionBtn
+                            title="Верифікувати"
+                            color="#4ADE80"
+                            onClick={() => {
+                              setVerifyingId(item.id);
+                              verifyStock.mutate(item.id, { onSettled: () => setVerifyingId(null) });
+                            }}
+                          >
+                            {isVerifying
+                              ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />
+                              : <CheckCircle size={12} />}
+                          </ItemActionBtn>
+                          {item.status === "expired" && storeId && (
+                            <ItemActionBtn
+                              title="Створити списання"
+                              color="#EF4444"
+                              onClick={() => openWriteOff([item])}
+                            >
+                              <Trash2 size={12} />
+                            </ItemActionBtn>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ color: statusColor, fontSize: 14, fontWeight: 700, fontFamily: "monospace", flexShrink: 0 }}>
+                          {item.quantity === 0 ? "OUT" : item.quantity}
+                        </div>
+                      )}
                     </div>
-                    <div style={{
-                      color: item.quantity === 0 ? "#9CA3AF" : "#EF4444",
-                      fontSize: 14, fontWeight: 700, fontFamily: "monospace", flexShrink: 0,
-                    }}>
-                      {item.quantity === 0 ? "OUT" : item.quantity}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -546,12 +604,46 @@ export function QuickActions({ items = [], isLoading }: Props) {
         <CriticalModal items={criticalItems} onClose={() => setModal(null)} />
       )}
       {modal === "writeoff" && storeId && (
-        <WriteOffModal items={expiredItems} storeId={storeId} onClose={() => setModal(null)} />
+        <WriteOffModal items={writeOffItems} storeId={storeId} onClose={() => setModal(null)} />
       )}
       {modal === "order" && storeId && (
         <OrderModal storeId={storeId} onClose={() => setModal(null)} />
       )}
     </>
+  );
+}
+
+function ItemActionBtn({
+  children, title, color, onClick,
+}: {
+  children: React.ReactNode;
+  title: string;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={title}
+      style={{
+        background: `${color}15`,
+        border: `1px solid ${color}30`,
+        borderRadius: 6,
+        color,
+        width: 26,
+        height: 26,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        flexShrink: 0,
+        transition: "background 0.15s",
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${color}30`; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = `${color}15`; }}
+    >
+      {children}
+    </button>
   );
 }
 
