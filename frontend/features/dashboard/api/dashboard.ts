@@ -38,6 +38,7 @@ async function getAttentionItems(): Promise<AttentionItem[]> {
     .filter((b) => b.status !== "safe")
     .map((b) => ({
       id: b.id,
+      productId: b.productId,
       name: b.productName,
       sku: b.batchNumber ?? b.productBarcode ?? "—",
       category: b.zoneName ?? "—",

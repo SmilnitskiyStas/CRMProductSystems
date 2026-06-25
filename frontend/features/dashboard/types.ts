@@ -9,6 +9,7 @@ export interface DashboardStats {
 
 export interface AttentionItem {
   id: string;
+  productId: string;
   name: string;
   sku: string;
   category: string;
