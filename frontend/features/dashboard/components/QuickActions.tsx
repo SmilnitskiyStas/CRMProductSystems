@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, Loader2, ExternalLink, Package, Calendar, MapPin, Hash, ChevronRight as Arrow } from "lucide-react";
+import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, ChevronRight as Arrow, Loader2, ExternalLink, Package } from "lucide-react";
 import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
 import { useVerifyStock, useStockById } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { DetailDrawer, DrawerField, DrawerSection, DrawerGrid } from "@/components/ui/DetailDrawer";
 import type { AttentionItem } from "../types";
 
 interface Props {
@@ -443,7 +444,7 @@ function OrderModal({ storeId, onClose }: { storeId: string; onClose: () => void
   );
 }
 
-// ── 4. Item detail modal ──────────────────────────────────────────────────────
+// ── 4. Item detail drawer ─────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
   expired: "Прострочено",
@@ -458,21 +459,21 @@ const STATUS_COLOR: Record<string, string> = {
   safe: "#22C55E",
 };
 
-function ItemDetailModal({
+function ItemDetailDrawer({
   item, storeId, onClose, onWriteOff,
 }: {
-  item: AttentionItem;
+  item: AttentionItem | null;
   storeId: string;
   onClose: () => void;
   onWriteOff: (items: AttentionItem[]) => void;
 }) {
   const router = useRouter();
-  const { data: batch, isLoading } = useStockById(item.id);
+  const { data: batch, isLoading } = useStockById(item?.id ?? null);
   const verifyStock = useVerifyStock();
   const [verified, setVerified] = useState(false);
 
-  const color = STATUS_COLOR[item.status] ?? "#6B7280";
-  const label = STATUS_LABEL[item.status] ?? item.status;
+  const color = STATUS_COLOR[item?.status ?? ""] ?? "#6B7280";
+  const label = STATUS_LABEL[item?.status ?? ""] ?? (item?.status ?? "");
 
   const expiryStr = batch
     ? new Date(batch.expiryDate as unknown as string).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -480,101 +481,98 @@ function ItemDetailModal({
   const addedStr = batch
     ? new Date(batch.addedAt as unknown as string).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" })
     : "—";
+  const daysLeftStr = batch
+    ? (batch.daysLeft <= 0 ? "Прострочено" : `${batch.daysLeft} дн.`)
+    : "—";
 
   async function handleVerify() {
+    if (!item) return;
     await verifyStock.mutateAsync(item.id);
     setVerified(true);
   }
 
   return (
-    <Modal title="Інформація про партію" onClose={onClose}>
+    <DetailDrawer
+      isOpen={!!item}
+      onClose={onClose}
+      title={item?.name ?? ""}
+      subtitle={label}
+      width={460}
+    >
       {isLoading ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
           <Loader2 size={28} color="#374151" style={{ animation: "spin 1s linear infinite" }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-            {/* Product header */}
+          {/* Status badge */}
+          <div style={{ marginBottom: 20 }}>
             <div style={{
-              background: `${color}08`,
-              border: `1px solid ${color}25`,
-              borderRadius: 10,
-              padding: "14px 16px",
-              marginBottom: 16,
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 12,
+              display: "inline-flex", alignItems: "center", gap: 8,
+              background: `${color}10`, border: `1px solid ${color}30`,
+              borderRadius: 8, padding: "8px 14px",
             }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 8,
-                background: `${color}15`, border: `1px solid ${color}30`,
-                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-              }}>
-                <Package size={18} color={color} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
-                  {item.name}
-                </div>
-                <span style={{
-                  display: "inline-block",
-                  fontSize: 11, padding: "2px 8px", borderRadius: 99,
-                  background: `${color}15`, color, border: `1px solid ${color}30`,
-                }}>
-                  {label}
-                </span>
-              </div>
+              <Package size={15} color={color} />
+              <span style={{ color, fontSize: 13, fontWeight: 600 }}>{label}</span>
             </div>
-
-            {/* Info grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <InfoCell icon={<Package size={13} />} label="Залишок"
-                value={`${item.quantity} / ${batch?.quantityInitial ?? "?"}`}
-                valueColor={item.quantity === 0 ? "#EF4444" : "#E8EDF5"}
-              />
-              <InfoCell icon={<Calendar size={13} />} label="Термін придатності"
-                value={expiryStr}
-                valueColor={color}
-              />
-              <InfoCell icon={<Calendar size={13} />} label="Днів залишилось"
-                value={batch ? (batch.daysLeft <= 0 ? "Прострочено" : `${batch.daysLeft} дн.`) : "—"}
-                valueColor={color}
-              />
-              <InfoCell icon={<MapPin size={13} />} label="Зона"
-                value={batch?.zoneName ?? item.zone ?? "—"}
-              />
-              <InfoCell icon={<Hash size={13} />} label="Партія №"
-                value={batch?.batchNumber ?? "—"}
-              />
-              <InfoCell icon={<Hash size={13} />} label="Штрихкод"
-                value={batch?.productBarcode ?? item.sku ?? "—"}
-              />
-              <InfoCell icon={<Calendar size={13} />} label="Дата надходження"
-                value={addedStr}
-              />
-              <InfoCell icon={<MapPin size={13} />} label="Полиця №"
-                value={batch?.shelfNumber != null ? String(batch.shelfNumber) : "—"}
-              />
-            </div>
-
-            {verified && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8,
-                background: "rgba(74,222,128,0.08)", border: "1px solid #166534",
-                borderRadius: 8, padding: "10px 14px", marginTop: 8,
-              }}>
-                <CheckCircle size={15} color="#4ADE80" />
-                <span style={{ color: "#4ADE80", fontSize: 13 }}>Верифіковано успішно</span>
-              </div>
-            )}
           </div>
 
+          <DrawerSection title="Залишки">
+            <DrawerGrid>
+              <DrawerField
+                label="Поточна кількість"
+                value={item?.quantity === 0 ? "OUT" : String(item?.quantity ?? "—")}
+                color={item?.quantity === 0 ? "#EF4444" : undefined}
+              />
+              <DrawerField
+                label="Початкова кількість"
+                value={String(batch?.quantityInitial ?? "—")}
+              />
+            </DrawerGrid>
+          </DrawerSection>
+
+          <DrawerSection title="Термін придатності">
+            <DrawerGrid>
+              <DrawerField
+                label="Термін до"
+                value={expiryStr}
+                color={color}
+              />
+              <DrawerField
+                label="Залишилось"
+                value={daysLeftStr}
+                color={color}
+              />
+            </DrawerGrid>
+          </DrawerSection>
+
+          <DrawerSection title="Розташування та партія">
+            <DrawerGrid>
+              <DrawerField label="Зона" value={batch?.zoneName ?? item?.zone ?? "—"} />
+              <DrawerField
+                label="Полиця №"
+                value={batch?.shelfNumber != null ? String(batch.shelfNumber) : "—"}
+              />
+              <DrawerField label="Партія №" value={batch?.batchNumber ?? "—"} />
+              <DrawerField label="Штрихкод" value={batch?.productBarcode ?? item?.sku ?? "—"} />
+            </DrawerGrid>
+            <DrawerField label="Дата надходження" value={addedStr} />
+          </DrawerSection>
+
+          {verified && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "rgba(74,222,128,0.08)", border: "1px solid #166534",
+              borderRadius: 8, padding: "10px 14px", marginBottom: 16,
+            }}>
+              <CheckCircle size={15} color="#4ADE80" />
+              <span style={{ color: "#4ADE80", fontSize: 13 }}>Верифіковано успішно</span>
+            </div>
+          )}
+
           {/* Actions */}
-          <div style={{
-            borderTop: "1px solid #1F2937", padding: "12px 20px",
-            flexShrink: 0, display: "flex", flexDirection: "column", gap: 8,
-          }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {!verified && (
               <button
                 onClick={handleVerify}
@@ -582,7 +580,7 @@ function ItemDetailModal({
                 style={{
                   width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   background: "rgba(74,222,128,0.08)", border: "1px solid #166534",
-                  borderRadius: 8, padding: "9px 0",
+                  borderRadius: 8, padding: "10px 0",
                   color: "#4ADE80", fontSize: 13, fontWeight: 600,
                   cursor: verifyStock.isPending ? "not-allowed" : "pointer",
                   opacity: verifyStock.isPending ? 0.6 : 1,
@@ -594,13 +592,13 @@ function ItemDetailModal({
               </button>
             )}
 
-            {item.status === "expired" && storeId && (
+            {item?.status === "expired" && storeId && (
               <button
-                onClick={() => { onWriteOff([item]); onClose(); }}
+                onClick={() => { if (item) onWriteOff([item]); onClose(); }}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   background: "rgba(239,68,68,0.08)", border: "1px solid #991B1B",
-                  borderRadius: 8, padding: "9px 0",
+                  borderRadius: 8, padding: "10px 0",
                   color: "#EF4444", fontSize: 13, fontWeight: 600, cursor: "pointer",
                 }}
               >
@@ -609,11 +607,11 @@ function ItemDetailModal({
             )}
 
             <button
-              onClick={() => { router.push(`/stock?status=${item.status}`); onClose(); }}
+              onClick={() => { router.push(`/stock?status=${item?.status}`); onClose(); }}
               style={{
                 width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 background: "transparent", border: "1px solid #1F2937",
-                borderRadius: 8, padding: "9px 0",
+                borderRadius: 8, padding: "10px 0",
                 color: "#6B7280", fontSize: 13, cursor: "pointer",
               }}
             >
@@ -623,23 +621,7 @@ function ItemDetailModal({
           </div>
         </>
       )}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </Modal>
-  );
-}
-
-function InfoCell({ icon, label, value, valueColor }: {
-  icon: React.ReactNode; label: string; value: string; valueColor?: string;
-}) {
-  return (
-    <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: "10px 12px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#4B5563", fontSize: 11, marginBottom: 4 }}>
-        {icon} {label}
-      </div>
-      <div style={{ color: valueColor ?? "#9CA3AF", fontSize: 13, fontWeight: 600, wordBreak: "break-all" }}>
-        {value}
-      </div>
-    </div>
+    </DetailDrawer>
   );
 }
 
@@ -773,14 +755,12 @@ export function QuickActions({ items = [], isLoading }: Props) {
         </div>
       </div>
 
-      {selectedItem && (
-        <ItemDetailModal
-          item={selectedItem}
-          storeId={storeId}
-          onClose={() => setSelectedItem(null)}
-          onWriteOff={openWriteOff}
-        />
-      )}
+      <ItemDetailDrawer
+        item={selectedItem}
+        storeId={storeId}
+        onClose={() => setSelectedItem(null)}
+        onWriteOff={openWriteOff}
+      />
       {modal === "critical" && (
         <CriticalModal items={criticalItems} onClose={() => setModal(null)} />
       )}
