@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useStock, useVerifyStock } from "@/features/shelf/hooks/useStock";
 import { useStores } from "@/features/stores/hooks/useStores";
@@ -17,7 +18,11 @@ interface Filters {
 }
 
 export default function StockPage() {
-  const [filters, setFilters] = useState<Filters>({ status: "", search: "" });
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<Filters>({
+    status: searchParams.get("status") ?? "",
+    search: "",
+  });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
 

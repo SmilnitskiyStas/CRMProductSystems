@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { DashboardStats } from "../types";
 
 interface StatCard {
@@ -7,15 +8,16 @@ interface StatCard {
   key: keyof DashboardStats;
   color: string;
   bg: string;
+  bgHover: string;
   border: string;
   dot: string;
 }
 
 const CARDS: StatCard[] = [
-  { label: "Safe", key: "safe", color: "#22c55e", bg: "#0d2818", border: "#166534", dot: "#22c55e" },
-  { label: "Warning", key: "warning", color: "#f59e0b", bg: "#261c05", border: "#854d0e", dot: "#f59e0b" },
-  { label: "Critical", key: "critical", color: "#ef4444", bg: "#2a0a0a", border: "#991b1b", dot: "#ef4444" },
-  { label: "Expired", key: "expired", color: "#6b7280", bg: "#141414", border: "#374151", dot: "#6b7280" },
+  { label: "Safe", key: "safe", color: "#22c55e", bg: "#0d2818", bgHover: "#112f1c", border: "#166534", dot: "#22c55e" },
+  { label: "Warning", key: "warning", color: "#f59e0b", bg: "#261c05", bgHover: "#2e2006", border: "#854d0e", dot: "#f59e0b" },
+  { label: "Critical", key: "critical", color: "#ef4444", bg: "#2a0a0a", bgHover: "#310c0c", border: "#991b1b", dot: "#ef4444" },
+  { label: "Expired", key: "expired", color: "#6b7280", bg: "#141414", bgHover: "#1a1a1a", border: "#374151", dot: "#6b7280" },
 ];
 
 interface Props {
@@ -27,14 +29,20 @@ export function StatsCards({ stats, isLoading }: Props) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {CARDS.map((card) => (
-        <div
+        <Link
           key={card.key}
+          href={`/stock?status=${card.key}`}
           style={{
             background: card.bg,
             border: `1px solid ${card.border}`,
             borderRadius: 12,
             padding: "20px 24px",
+            display: "block",
+            textDecoration: "none",
+            transition: "background 0.15s",
           }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = card.bgHover; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = card.bg; }}
         >
           <div className="flex items-center gap-2 mb-3">
             <span
@@ -59,7 +67,7 @@ export function StatsCards({ stats, isLoading }: Props) {
             )}
           </div>
           <div style={{ color: "#4B5563", fontSize: 12, marginTop: 6 }}>items</div>
-        </div>
+        </Link>
       ))}
     </div>
   );
