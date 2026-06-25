@@ -1,6 +1,13 @@
 import { api } from "@/lib/api";
 import type { AttentionItem, DashboardStats, ItemStatus, StoreZone } from "../types";
 
+interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 interface ProductStockDto {
   id: string;
   productId: string;
@@ -23,7 +30,7 @@ interface ProductStockDto {
 }
 
 async function getDashboardStats(): Promise<DashboardStats> {
-  const batches = await api.get<ProductStockDto[]>("/api/stock");
+  const { items: batches } = await api.get<PagedResult<ProductStockDto>>("/api/stock");
   const stats: DashboardStats = { safe: 0, warning: 0, critical: 0, expired: 0 };
   for (const b of batches) {
     const s = b.status as keyof DashboardStats;
@@ -33,7 +40,7 @@ async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 async function getAttentionItems(): Promise<AttentionItem[]> {
-  const batches = await api.get<ProductStockDto[]>("/api/stock");
+  const { items: batches } = await api.get<PagedResult<ProductStockDto>>("/api/stock");
   return batches
     .filter((b) => b.status !== "safe")
     .map((b) => ({

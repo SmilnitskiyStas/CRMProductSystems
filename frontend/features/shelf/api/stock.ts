@@ -7,6 +7,13 @@ import type {
   FefoConsumeResult,
 } from "../types";
 
+interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export const stockApi = {
   getAll: (params?: {
     store_id?: string;
@@ -20,7 +27,9 @@ export const stockApi = {
     if (params?.zone_id) qs.set("zone_id", params.zone_id);
     if (params?.product_id) qs.set("product_id", params.product_id);
     const query = qs.toString();
-    return api.get<ProductStockDto[]>(`/api/stock${query ? `?${query}` : ""}`);
+    return api
+      .get<PagedResult<ProductStockDto>>(`/api/stock${query ? `?${query}` : ""}`)
+      .then((r) => r.items);
   },
 
   getById: (id: string) => api.get<ProductStockDto>(`/api/stock/${id}`),

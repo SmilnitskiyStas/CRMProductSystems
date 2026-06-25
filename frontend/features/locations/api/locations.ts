@@ -30,5 +30,8 @@ export const locationsApi = {
     api.put<LocationDto>(`/api/locations/${id}`, data),
   updateFloorPlan: (id: string, floorPlan: string) =>
     api.put<LocationDto>(`/api/locations/${id}/floor-plan`, { floorPlan }),
-  getStock: () => api.get<StockBatchSlim[]>("/api/stock"),
+  getStock: () =>
+    api
+      .get<{ items: StockBatchSlim[]; totalCount: number; page: number; pageSize: number }>("/api/stock")
+      .then((r) => r.items),
 };
