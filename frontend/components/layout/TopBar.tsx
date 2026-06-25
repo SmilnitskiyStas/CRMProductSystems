@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, LifeBuoy } from "lucide-react";
+import { Bell, LifeBuoy, Bot } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
 import { UserMenu } from "./UserMenu";
 import { SupportChatWidget } from "./SupportChatWidget";
+import type { ChatTab } from "./SupportChatWidget";
 import { useUnreadCount } from "@/features/notifications/hooks/useNotifications";
 
 interface Props {
@@ -17,10 +18,52 @@ interface Props {
 export function TopBar({ title }: Props) {
   const { data: user } = useMe();
   const { data: unreadCount = 0 } = useUnreadCount();
-  const [chatOpen, setChatOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ChatTab>("support");
 
   const storeName = user?.storeId ? "Магазин #1" : "ShelfGuard";
   const userRole = (user?.role ?? "") as AppRole;
+
+  function openPanel(tab: ChatTab) {
+    setActiveTab(tab);
+    setPanelOpen(true);
+  }
+
+  function handleTabChange(tab: ChatTab) {
+    setActiveTab(tab);
+  }
+
+  const supportActive = panelOpen && activeTab === "support";
+  const assistantActive = panelOpen && activeTab === "assistant";
+
+  function btnStyle(active: boolean): React.CSSProperties {
+    return {
+      background: active ? "#1D3461" : "transparent",
+      border: `1px solid ${active ? "#3B82F6" : "#1F2937"}`,
+      borderRadius: 8,
+      padding: "6px 12px",
+      cursor: "pointer",
+      color: active ? "#60A5FA" : "#6B7280",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      transition: "border-color 0.15s, color 0.15s, background 0.15s",
+    };
+  }
+
+  function onMouseEnter(e: React.MouseEvent<HTMLButtonElement>, active: boolean) {
+    if (!active) {
+      (e.currentTarget as HTMLElement).style.borderColor = "#374151";
+      (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
+    }
+  }
+
+  function onMouseLeave(e: React.MouseEvent<HTMLButtonElement>, active: boolean) {
+    if (!active) {
+      (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+      (e.currentTarget as HTMLElement).style.color = "#6B7280";
+    }
+  }
 
   return (
     <>
@@ -50,39 +93,30 @@ export function TopBar({ title }: Props) {
           )}
         </div>
 
-        {/* Right — support + bell + user menu */}
+        {/* Right — support + assistant + bell + user menu */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Support button */}
+          {/* Support chat button */}
           <button
-            onClick={() => setChatOpen((v) => !v)}
+            onClick={() => supportActive ? setPanelOpen(false) : openPanel("support")}
             title="Підтримка"
-            style={{
-              background: chatOpen ? "#1D3461" : "transparent",
-              border: `1px solid ${chatOpen ? "#3B82F6" : "#1F2937"}`,
-              borderRadius: 8,
-              padding: "6px 12px",
-              cursor: "pointer",
-              color: chatOpen ? "#60A5FA" : "#6B7280",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              transition: "border-color 0.15s, color 0.15s, background 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              if (!chatOpen) {
-                (e.currentTarget as HTMLElement).style.borderColor = "#374151";
-                (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!chatOpen) {
-                (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
-                (e.currentTarget as HTMLElement).style.color = "#6B7280";
-              }
-            }}
+            style={btnStyle(supportActive)}
+            onMouseEnter={(e) => onMouseEnter(e, supportActive)}
+            onMouseLeave={(e) => onMouseLeave(e, supportActive)}
           >
             <LifeBuoy size={16} />
             <span style={{ fontSize: 13, fontWeight: 500 }}>Чат підтримка</span>
+          </button>
+
+          {/* AI assistant button */}
+          <button
+            onClick={() => assistantActive ? setPanelOpen(false) : openPanel("assistant")}
+            title="AI Бізнес-Асистент"
+            style={btnStyle(assistantActive)}
+            onMouseEnter={(e) => onMouseEnter(e, assistantActive)}
+            onMouseLeave={(e) => onMouseLeave(e, assistantActive)}
+          >
+            <Bot size={16} />
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Мій асистент</span>
           </button>
 
           {/* Notification bell */}
@@ -143,11 +177,13 @@ export function TopBar({ title }: Props) {
         </div>
       </header>
 
-      {/* Floating support chat widget */}
-      {chatOpen && (
+      {/* Unified chat panel */}
+      {panelOpen && (
         <SupportChatWidget
           userRole={userRole}
-          onClose={() => setChatOpen(false)}
+          onClose={() => setPanelOpen(false)}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
         />
       )}
     </>
