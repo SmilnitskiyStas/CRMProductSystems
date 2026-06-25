@@ -6,7 +6,6 @@ import { StatsCards } from "@/features/dashboard/components/StatsCards";
 import { AttentionTable } from "@/features/dashboard/components/AttentionTable";
 import { QuickActions } from "@/features/dashboard/components/QuickActions";
 import { StoreMap } from "@/features/dashboard/components/StoreMap";
-import { AiAssistantWidget } from "@/features/ai-assistant/components/AiAssistantWidget";
 import {
   useAttentionItems,
   useDashboardStats,
@@ -55,8 +54,6 @@ export default function DashboardPage() {
       {/* Store map */}
       <StoreMap zones={zones} isLoading={zonesLoading} />
 
-      {/* AI Business Assistant */}
-      <AiAssistantWidget />
     </div>
   );
 }
