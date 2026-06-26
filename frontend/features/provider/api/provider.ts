@@ -48,6 +48,14 @@ export const providerApi = {
   createTenantUser: (tenantId: string, req: CreateTenantUserRequest): Promise<TenantUserDto> =>
     api.post<TenantUserDto>(`/api/provider/tenants/${tenantId}/users`, req),
 
+  /** POST /api/provider/tenants/:id/activate */
+  activateTenant: (id: string): Promise<void> =>
+    api.post<void>(`/api/provider/tenants/${id}/activate`),
+
+  /** POST /api/provider/tenants/:id/deactivate */
+  deactivateTenant: (id: string): Promise<void> =>
+    api.post<void>(`/api/provider/tenants/${id}/deactivate`),
+
   /** GET /api/provider/health */
   getHealth: (): Promise<ProviderHealthDto> =>
     api.get<ProviderHealthDto>("/api/provider/health"),

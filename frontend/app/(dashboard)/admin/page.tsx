@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Plus, Building2, CheckCircle, LayoutGrid } from "lucide-react";
+import Link from "next/link";
+import { Shield, Building2, CheckCircle, LayoutGrid } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useTenants } from "@/features/admin/hooks/useAdmin";
 import { TenantTable } from "@/features/admin/components/TenantTable";
-import { CreateTenantModal } from "@/features/admin/components/CreateTenantModal";
 import { TenantDetailDrawer } from "@/features/admin/components/TenantDetailDrawer";
 import type { TenantDto, TenantPlan } from "@/features/admin/types";
 import { PLAN_LABELS, PLAN_COLORS } from "@/features/admin/types";
@@ -16,7 +16,6 @@ export default function AdminPage() {
   const { data: me, isLoading: meLoading } = useMe();
   const { data: tenants, isLoading: tenantsLoading } = useTenants();
 
-  const [showCreate, setShowCreate]   = useState(false);
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [search,     setSearch]       = useState("");
 
@@ -117,25 +116,16 @@ export default function AdminPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowCreate(true)}
+          <Link
+            href="/provider"
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 18px",
-              borderRadius: 8,
-              background: "#1D3461",
-              border: "1px solid #3B82F6",
-              color: "#93C5FD",
+              color: "#60A5FA",
               fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
+              textDecoration: "none",
             }}
           >
-            <Plus size={15} />
-            Новий тенант
-          </button>
+            → Провайдер
+          </Link>
         </div>
 
         {/* Stats row */}
@@ -220,10 +210,6 @@ export default function AdminPage() {
         />
       )}
 
-      {/* Modal */}
-      {showCreate && (
-        <CreateTenantModal onClose={() => setShowCreate(false)} />
-      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
   ALL_MODULES, ALL_PLANS,
 } from "../types";
 import type { TenantDetailDto } from "../types";
-import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers } from "../hooks/useProvider";
+import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers, useActivateTenant, useDeactivateTenant } from "../hooks/useProvider";
 import { AddTenantUserModal } from "./AddTenantUserModal";
 import { setToken, getToken } from "@/lib/api";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
@@ -33,6 +33,8 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const updatePlan    = useUpdatePlan(tenantId);
   const updateModules = useUpdateModules(tenantId);
   const impersonate   = useImpersonate();
+  const activate      = useActivateTenant(tenantId);
+  const deactivate    = useDeactivateTenant(tenantId);
   const queryClient   = useQueryClient();
 
   const [editingPlan,    setEditingPlan]    = useState(false);
@@ -490,6 +492,45 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                 Клієнт деактивований — вхід як клієнт недоступний
               </div>
             )}
+
+            <div style={{ borderTop: "1px solid #1F2937", marginTop: 16, paddingTop: 16 }}>
+              {!tenant.isActive && (
+                <button
+                  onClick={() => activate.mutate()}
+                  disabled={activate.isPending}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: activate.isPending ? "default" : "pointer",
+                    background: "#052e16",
+                    border: "1px solid #166534",
+                    color: "#4ADE80",
+                  }}
+                >
+                  {activate.isPending ? "Зміна…" : "Активувати"}
+                </button>
+              )}
+              {tenant.isActive && (
+                <button
+                  onClick={() => deactivate.mutate()}
+                  disabled={deactivate.isPending}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: deactivate.isPending ? "default" : "pointer",
+                    background: "#1A1011",
+                    border: "1px solid #7F1D1D",
+                    color: "#F87171",
+                  }}
+                >
+                  {deactivate.isPending ? "Зміна…" : "Деактивувати"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

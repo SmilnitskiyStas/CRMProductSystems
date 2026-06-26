@@ -152,6 +152,26 @@ public sealed class ProviderService : IProviderService
         return null;
     }
 
+    // ── Tenant activation ───────────────────────────────────────────────────
+
+    public async Task<(bool Success, string? Error)> ActivateTenantAsync(Guid tenantId, CancellationToken ct)
+    {
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        if (tenant is null) return (false, "Tenant not found.");
+        tenant.Activate();
+        await _tenants.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeactivateTenantAsync(Guid tenantId, CancellationToken ct)
+    {
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        if (tenant is null) return (false, "Tenant not found.");
+        tenant.Deactivate();
+        await _tenants.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
     // ── Impersonation ───────────────────────────────────────────────────────
 
     public async Task<(ImpersonateResponse? Response, string? Error)> ImpersonateAsync(

@@ -101,6 +101,26 @@ public sealed class ProviderController : ControllerBase
                 : BadRequest(new { error }));
     }
 
+    /// <summary>Activates a previously deactivated tenant.</summary>
+    [HttpPost("tenants/{id:guid}/activate")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ActivateTenant(Guid id, CancellationToken ct)
+    {
+        var (success, error) = await _provider.ActivateTenantAsync(id, ct);
+        return success ? NoContent() : NotFound(new { error });
+    }
+
+    /// <summary>Deactivates a tenant (soft disable — data preserved).</summary>
+    [HttpPost("tenants/{id:guid}/deactivate")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeactivateTenant(Guid id, CancellationToken ct)
+    {
+        var (success, error) = await _provider.DeactivateTenantAsync(id, ct);
+        return success ? NoContent() : NotFound(new { error });
+    }
+
     // ── Impersonation ───────────────────────────────────────────────────────
 
     /// <summary>

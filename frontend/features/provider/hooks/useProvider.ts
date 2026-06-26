@@ -133,3 +133,25 @@ export function useCreateTenantUser(tenantId: string) {
     },
   });
 }
+
+export function useActivateTenant(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => providerApi.activateTenant(tenantId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["provider", "tenants", tenantId] });
+      qc.invalidateQueries({ queryKey: ["provider", "tenants"] });
+    },
+  });
+}
+
+export function useDeactivateTenant(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => providerApi.deactivateTenant(tenantId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["provider", "tenants", tenantId] });
+      qc.invalidateQueries({ queryKey: ["provider", "tenants"] });
+    },
+  });
+}

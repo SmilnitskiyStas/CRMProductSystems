@@ -15,6 +15,10 @@ public interface IProviderService
     Task<string?> UpdatePlanAsync(Guid tenantId, string plan, CancellationToken ct);
     Task<string?> UpdateModulesAsync(Guid tenantId, string[] modules, CancellationToken ct);
 
+    // Tenant activation
+    Task<(bool Success, string? Error)> ActivateTenantAsync(Guid tenantId, CancellationToken ct);
+    Task<(bool Success, string? Error)> DeactivateTenantAsync(Guid tenantId, CancellationToken ct);
+
     // Impersonation
     Task<(ImpersonateResponse? Response, string? Error)> ImpersonateAsync(
         Guid providerId, string providerEmail, Guid targetTenantId, CancellationToken ct);

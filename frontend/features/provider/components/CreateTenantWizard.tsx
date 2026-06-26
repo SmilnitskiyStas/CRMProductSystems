@@ -178,14 +178,11 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
                 />
               </Field>
 
-              <Field label="Ідентифікатор (slug) *" hint="Латинські літери, цифри, дефіс. Не змінюється після створення.">
-                <input
-                  value={slug}
-                  onChange={(e) => { setSlugTouched(true); setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")); }}
-                  placeholder="atb-network"
-                  style={inputStyle}
-                />
-              </Field>
+              {slug && (
+                <div style={{ fontSize: 11, color: "#4B5563", marginTop: -10 }}>
+                  Ідентифікатор: <span style={{ color: "#6B7280" }}>{slug}</span>
+                </div>
+              )}
 
               <Field label="Тарифний план">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
