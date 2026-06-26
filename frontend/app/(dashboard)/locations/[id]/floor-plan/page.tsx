@@ -6,13 +6,14 @@ import { toast } from "sonner";
 import { Save } from "lucide-react";
 import { FloorPlanCanvas } from "@/features/locations/components/FloorPlanCanvas";
 import { FloorPlanSidePanel } from "@/features/locations/components/FloorPlanSidePanel";
+import { ZoneDialog } from "@/features/locations/components/ZoneDialog";
 import { useLocation, useLocations } from "@/features/locations/hooks/useLocations";
 import {
   parseFloorPlan,
   useUpdateFloorPlan,
   useZoneStatusCounts,
 } from "@/features/locations/hooks/useFloorPlan";
-import type { FloorPlanLayout } from "@/features/locations/types";
+import type { FloorPlanLayout, LocationZoneDto } from "@/features/locations/types";
 import { LOCATION_TYPE_LABELS } from "@/features/locations/types";
 
 const DEFAULT_W = 160;
@@ -31,8 +32,8 @@ export default function FloorPlanPage() {
   const [layout, setLayout] = useState<FloorPlanLayout | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [showZoneDialog, setShowZoneDialog] = useState(false);
 
-  // Initialize local layout once per location load; resets when switching locations
   useEffect(() => {
     if (location) {
       setLayout(parseFloorPlan(location.floorPlan));
@@ -64,7 +65,6 @@ export default function FloorPlanPage() {
 
   function handleAdd(zoneId: string) {
     patchLayout((prev) => {
-      // Place on a simple cascade so new zones don't stack exactly on top of each other
       const n = prev.zones.length;
       const x = prev.grid * 2 + (n % 4) * (DEFAULT_W + prev.grid);
       const y = prev.grid * 2 + Math.floor(n / 4) * (DEFAULT_H + prev.grid);
@@ -76,6 +76,19 @@ export default function FloorPlanPage() {
   function handleRemove(zoneId: string) {
     patchLayout((prev) => ({ ...prev, zones: prev.zones.filter((z) => z.zoneId !== zoneId) }));
     setSelectedZoneId(null);
+  }
+
+  function handleResizeCanvas(w: number, h: number) {
+    patchLayout((prev) => ({ ...prev, canvasW: w, canvasH: h }));
+  }
+
+  function handleZoneCreated(zone: LocationZoneDto) {
+    setShowZoneDialog(false);
+    handleAdd(zone.id);
+  }
+
+  function handleOpenShelves(zoneId: string) {
+    router.push(`/locations/${locationId}/zones/${zoneId}/shelves`);
   }
 
   function handleSave() {
@@ -191,8 +204,19 @@ export default function FloorPlanPage() {
             selectedZoneId={selectedZoneId}
             onAdd={handleAdd}
             onRemove={handleRemove}
+            onCreateZone={() => setShowZoneDialog(true)}
+            onOpenShelves={handleOpenShelves}
+            onResizeCanvas={handleResizeCanvas}
           />
         </div>
+      )}
+
+      {showZoneDialog && (
+        <ZoneDialog
+          locationId={locationId}
+          onCreated={handleZoneCreated}
+          onClose={() => setShowZoneDialog(false)}
+        />
       )}
     </div>
   );

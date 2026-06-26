@@ -9,7 +9,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { createSnapModifier, restrictToParentElement } from "@dnd-kit/modifiers";
+import { createSnapModifier } from "@dnd-kit/modifiers";
 import type {
   FloorPlanLayout,
   FloorPlanZonePlacement,
@@ -31,6 +31,12 @@ export const ZONE_TYPE_ICONS: Record<string, string> = {
   fresh: "🌿",
   dry: "📦",
   frozen: "🧊",
+  fridge: "❄️",
+  freezer: "🧊",
+  shelf: "📦",
+  display: "🪟",
+  production: "⚙️",
+  warehouse: "🏭",
 };
 
 // Worst status wins: expired > critical > warning > safe; no stock → empty
@@ -78,58 +84,66 @@ export function FloorPlanCanvas({
   const zoneById = new Map(zones.map((z) => [z.id, z]));
 
   return (
-    <DndContext
-      sensors={sensors}
-      modifiers={[createSnapModifier(grid), restrictToParentElement]}
-      onDragEnd={handleDragEnd}
+    <div
+      style={{
+        height: 600,
+        overflow: "auto",
+        border: "1px solid #1F2937",
+        borderRadius: 12,
+        background: "#0B0E14",
+      }}
     >
-      <div
-        onClick={() => onSelect(null)}
-        style={{
-          position: "relative",
-          height: 620,
-          background: "#0B0E14",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "hidden",
-          backgroundImage:
-            "linear-gradient(#161B26 1px, transparent 1px), linear-gradient(90deg, #161B26 1px, transparent 1px)",
-          backgroundSize: `${grid}px ${grid}px`,
-        }}
+      <DndContext
+        sensors={sensors}
+        modifiers={[createSnapModifier(grid)]}
+        onDragEnd={handleDragEnd}
       >
-        {layout.zones.map((placement) => {
-          const zone = zoneById.get(placement.zoneId);
-          if (!zone) return null; // zone deleted after layout was saved
-          return (
-            <ZoneBox
-              key={placement.zoneId}
-              zone={zone}
-              placement={placement}
-              counts={counts?.get(placement.zoneId)}
-              grid={grid}
-              selected={selectedZoneId === placement.zoneId}
-              onSelect={onSelect}
-              onResize={onResize}
-            />
-          );
-        })}
-        {layout.zones.length === 0 && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#4B5563",
-              fontSize: 13,
-            }}
-          >
-            План порожній — додайте зони з панелі праворуч
-          </div>
-        )}
-      </div>
-    </DndContext>
+        <div
+          onClick={() => onSelect(null)}
+          style={{
+            position: "relative",
+            width: layout.canvasW,
+            height: layout.canvasH,
+            background: "#0B0E14",
+            backgroundImage:
+              "linear-gradient(#161B26 1px, transparent 1px), linear-gradient(90deg, #161B26 1px, transparent 1px)",
+            backgroundSize: `${grid}px ${grid}px`,
+          }}
+        >
+          {layout.zones.map((placement) => {
+            const zone = zoneById.get(placement.zoneId);
+            if (!zone) return null;
+            return (
+              <ZoneBox
+                key={placement.zoneId}
+                zone={zone}
+                placement={placement}
+                counts={counts?.get(placement.zoneId)}
+                grid={grid}
+                selected={selectedZoneId === placement.zoneId}
+                onSelect={onSelect}
+                onResize={onResize}
+              />
+            );
+          })}
+          {layout.zones.length === 0 && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#4B5563",
+                fontSize: 13,
+              }}
+            >
+              План порожній — додайте зони з панелі праворуч
+            </div>
+          )}
+        </div>
+      </DndContext>
+    </div>
   );
 }
 
@@ -153,7 +167,8 @@ function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }
   const cfg = STATUS_CONFIG[status];
   const icon = ZONE_TYPE_ICONS[zone.type] ?? "🗂️";
 
-  // Native pointer-event resize: dnd-kit owns dragging, the handle owns sizing
+  const tooltipAbove = placement.y >= 120;
+
   function startResize(e: React.PointerEvent) {
     e.stopPropagation();
     e.preventDefault();
@@ -199,7 +214,7 @@ function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }
         borderRadius: 8,
         padding: "10px 12px",
         cursor: isDragging ? "grabbing" : "grab",
-        zIndex: isDragging || hovered ? 10 : 1,
+        zIndex: isDragging ? 50 : hovered ? 50 : 1,
         userSelect: "none",
         touchAction: "none",
         display: "flex",
@@ -226,21 +241,21 @@ function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }
         <span style={{ color: cfg.color, fontSize: 10, fontWeight: 600 }}>{cfg.label}</span>
       </div>
 
-      {/* Hover tooltip: safe/warning/critical breakdown (spec §6.4) */}
       {hovered && !isDragging && (
         <div
           style={{
             position: "absolute",
-            bottom: "100%",
+            ...(tooltipAbove
+              ? { bottom: "100%", marginBottom: 6 }
+              : { top: "100%", marginTop: 6 }),
             left: 0,
-            marginBottom: 6,
             background: "#1F2733",
             border: "1px solid #2D3748",
             borderRadius: 8,
             padding: "8px 10px",
             whiteSpace: "nowrap",
             pointerEvents: "none",
-            zIndex: 20,
+            zIndex: 100,
             boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
           }}
         >

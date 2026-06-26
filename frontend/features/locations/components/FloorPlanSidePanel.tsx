@@ -11,9 +11,22 @@ interface Props {
   selectedZoneId: string | null;
   onAdd: (zoneId: string) => void;
   onRemove: (zoneId: string) => void;
+  onCreateZone: () => void;
+  onOpenShelves: (zoneId: string) => void;
+  onResizeCanvas: (w: number, h: number) => void;
 }
 
-export function FloorPlanSidePanel({ zones, layout, counts, selectedZoneId, onAdd, onRemove }: Props) {
+export function FloorPlanSidePanel({
+  zones,
+  layout,
+  counts,
+  selectedZoneId,
+  onAdd,
+  onRemove,
+  onCreateZone,
+  onOpenShelves,
+  onResizeCanvas,
+}: Props) {
   const placedIds = new Set(layout.zones.map((z) => z.zoneId));
   const unplaced = zones.filter((z) => z.isActive && !placedIds.has(z.id));
   const selected = selectedZoneId ? zones.find((z) => z.id === selectedZoneId) : null;
@@ -44,22 +57,92 @@ export function FloorPlanSidePanel({ zones, layout, counts, selectedZoneId, onAd
             >
               <Trash2 size={14} /> Прибрати з плану
             </button>
+            <button
+              onClick={() => onOpenShelves(selected.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "transparent",
+                border: "1px solid #3B82F6",
+                color: "#3B82F6",
+                borderRadius: 8,
+                padding: "7px 12px",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Конструктор поличок →
+            </button>
           </div>
         ) : (
-          <p style={{ color: "#6B7280", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-            Перетягуйте зони по сітці. Кут знизу праворуч — зміна розміру.
-            Клік по зоні — вибір.
-          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ color: "#6B7280", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+              Перетягуйте зони по сітці. Кут знизу праворуч — зміна розміру.
+              Клік по зоні — вибір.
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => onResizeCanvas(layout.canvasW + 200, layout.canvasH)}
+                style={{
+                  flex: 1,
+                  background: "#0B0E14",
+                  border: "1px solid #1F2937",
+                  color: "#9CA3AF",
+                  borderRadius: 8,
+                  padding: "6px 8px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                + Ширина
+              </button>
+              <button
+                onClick={() => onResizeCanvas(layout.canvasW, layout.canvasH + 200)}
+                style={{
+                  flex: 1,
+                  background: "#0B0E14",
+                  border: "1px solid #1F2937",
+                  color: "#9CA3AF",
+                  borderRadius: 8,
+                  padding: "6px 8px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                + Висота
+              </button>
+            </div>
+          </div>
         )}
       </Panel>
 
       {/* Unplaced zones */}
       <Panel title={`Не розміщені зони (${unplaced.length})`}>
-        {unplaced.length === 0 ? (
-          <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>Усі зони на плані</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {unplaced.map((zone) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <button
+            onClick={onCreateZone}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              background: "#0d1f3a",
+              border: "1px solid #1D4ED8",
+              color: "#60A5FA",
+              borderRadius: 8,
+              padding: "8px 10px",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <Plus size={14} /> Нова зона
+          </button>
+          {unplaced.length === 0 ? (
+            <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>Усі зони на плані</p>
+          ) : (
+            unplaced.map((zone) => (
               <button
                 key={zone.id}
                 onClick={() => onAdd(zone.id)}
@@ -83,9 +166,9 @@ export function FloorPlanSidePanel({ zones, layout, counts, selectedZoneId, onAd
                 </span>
                 <Plus size={14} style={{ flexShrink: 0, color: "#3B82F6" }} />
               </button>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </Panel>
 
       {/* Legend */}

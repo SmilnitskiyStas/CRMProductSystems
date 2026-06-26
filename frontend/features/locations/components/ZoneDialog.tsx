@@ -1,0 +1,204 @@
+"use client";
+
+import { useState } from "react";
+import type { LocationZoneDto } from "../types";
+import { useCreateZone } from "../hooks/useFloorPlan";
+
+const ZONE_TYPES = [
+  { value: "shelf", label: "Стелаж" },
+  { value: "fridge", label: "Холодильник" },
+  { value: "freezer", label: "Морозильна камера" },
+  { value: "display", label: "Вітрина" },
+  { value: "production", label: "Виробнича зона" },
+  { value: "warehouse", label: "Складська зона" },
+];
+
+const TEMP_TYPES = new Set(["fridge", "freezer"]);
+
+interface Props {
+  locationId: string;
+  onCreated: (zone: LocationZoneDto) => void;
+  onClose: () => void;
+}
+
+export function ZoneDialog({ locationId, onCreated, onClose }: Props) {
+  const createZone = useCreateZone(locationId);
+  const [name, setName] = useState("");
+  const [type, setType] = useState("shelf");
+  const [shelvesCount, setShelvesCount] = useState(1);
+  const [tempMin, setTempMin] = useState<string>("");
+  const [tempMax, setTempMax] = useState<string>("");
+
+  const showTemp = TEMP_TYPES.has(type);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    createZone.mutate(
+      {
+        name: name.trim(),
+        type,
+        shelvesCount,
+        tempMin: showTemp && tempMin !== "" ? Number(tempMin) : null,
+        tempMax: showTemp && tempMax !== "" ? Number(tempMax) : null,
+      },
+      {
+        onSuccess: (zone) => {
+          onCreated(zone);
+          onClose();
+        },
+      }
+    );
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: "#0B0E14",
+    border: "1px solid #1F2937",
+    borderRadius: 8,
+    color: "#E8EDF5",
+    fontSize: 13,
+    padding: "8px 12px",
+    width: "100%",
+    boxSizing: "border-box",
+    outline: "none",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    color: "#9CA3AF",
+    fontSize: 12,
+    marginBottom: 4,
+    display: "block",
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        background: "rgba(0,0,0,0.6)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#161B26",
+          border: "1px solid #1F2937",
+          borderRadius: 16,
+          padding: 28,
+          width: 420,
+          maxWidth: "calc(100vw - 32px)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: "0 0 20px 0" }}>
+          Нова зона
+        </h2>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Назва</label>
+            <input
+              style={inputStyle}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="напр. Холодильник №1"
+              autoFocus
+              required
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Тип</label>
+            <select
+              style={inputStyle}
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+            >
+              {ZONE_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Кількість полиць</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={1}
+              value={shelvesCount}
+              onChange={(e) => setShelvesCount(Math.max(1, Number(e.target.value)))}
+            />
+          </div>
+
+          {showTemp && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Темп. мін (°C)</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  value={tempMin}
+                  onChange={(e) => setTempMin(e.target.value)}
+                  placeholder="напр. -18"
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Темп. макс (°C)</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  value={tempMax}
+                  onChange={(e) => setTempMax(e.target.value)}
+                  placeholder="напр. 4"
+                />
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                flex: 1,
+                background: "#0B0E14",
+                border: "1px solid #1F2937",
+                color: "#9CA3AF",
+                borderRadius: 8,
+                padding: "9px 16px",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Скасувати
+            </button>
+            <button
+              type="submit"
+              disabled={createZone.isPending || !name.trim()}
+              style={{
+                flex: 2,
+                background: createZone.isPending || !name.trim() ? "#1F2937" : "#2563EB",
+                border: "none",
+                color: createZone.isPending || !name.trim() ? "#6B7280" : "#fff",
+                borderRadius: 8,
+                padding: "9px 16px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: createZone.isPending || !name.trim() ? "default" : "pointer",
+              }}
+            >
+              {createZone.isPending ? "Створення…" : "Створити зону"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

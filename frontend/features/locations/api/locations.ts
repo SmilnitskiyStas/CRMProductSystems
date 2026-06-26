@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
-import type { LocationDto, LocationType } from "../types";
+import type { LocationDto, LocationType, LocationZoneDto } from "../types";
 
 // Minimal stock shape needed for per-zone status counts on the floor plan
 export interface StockBatchSlim {
@@ -23,6 +23,14 @@ export interface UpdateLocationDto {
   isActive: boolean;
 }
 
+export interface CreateZoneDto {
+  name: string;
+  type: string;
+  shelvesCount: number;
+  tempMin?: number | null;
+  tempMax?: number | null;
+}
+
 export const locationsApi = {
   getAll: () => api.get<LocationDto[]>("/api/locations"),
   getById: (id: string) => api.get<LocationDto>(`/api/locations/${id}`),
@@ -31,6 +39,10 @@ export const locationsApi = {
     api.put<LocationDto>(`/api/locations/${id}`, data),
   updateFloorPlan: (id: string, floorPlan: string) =>
     api.put<LocationDto>(`/api/locations/${id}/floor-plan`, { floorPlan }),
+  createZone: (locationId: string, data: CreateZoneDto) =>
+    api.post<LocationZoneDto>(`/api/locations/${locationId}/zones`, data),
+  updateZone: (locationId: string, zoneId: string, data: Partial<CreateZoneDto> & { isActive?: boolean; name?: string; position?: string }) =>
+    api.put<LocationZoneDto>(`/api/locations/${locationId}/zones/${zoneId}`, data),
   getStock: () =>
     api
       .get<PagedResult<StockBatchSlim>>("/api/stock")

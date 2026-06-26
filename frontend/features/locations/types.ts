@@ -39,7 +39,26 @@ export interface FloorPlanZonePlacement {
 export interface FloorPlanLayout {
   version: 1;
   grid: number;
+  canvasW: number;
+  canvasH: number;
   zones: FloorPlanZonePlacement[];
+}
+
+export interface ShelfItemPlacement {
+  shelfId: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface ShelfPlanLayout {
+  version: 1;
+  grid: number;
+  canvasW: number;
+  canvasH: number;
+  items: ShelfItemPlacement[];
 }
 
 export type ZoneStatus = "safe" | "warning" | "critical" | "expired";

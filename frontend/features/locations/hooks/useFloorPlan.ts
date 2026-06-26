@@ -1,14 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { locationsApi } from "../api/locations";
-import type { FloorPlanLayout, ZoneStatusCounts } from "../types";
+import { locationsApi, type CreateZoneDto } from "../api/locations";
+import type { FloorPlanLayout, LocationZoneDto, ShelfPlanLayout, ZoneStatusCounts } from "../types";
 
 export function parseFloorPlan(raw: string | null): FloorPlanLayout {
-  const empty: FloorPlanLayout = { version: 1, grid: 20, zones: [] };
+  const empty: FloorPlanLayout = { version: 1, grid: 20, canvasW: 1400, canvasH: 900, zones: [] };
   if (!raw) return empty;
   try {
     const parsed = JSON.parse(raw) as Partial<FloorPlanLayout>;
     if (!Array.isArray(parsed.zones)) return empty;
-    return { version: 1, grid: parsed.grid ?? 20, zones: parsed.zones };
+    return {
+      version: 1,
+      grid: parsed.grid ?? 20,
+      canvasW: parsed.canvasW ?? 1400,
+      canvasH: parsed.canvasH ?? 900,
+      zones: parsed.zones,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export function parseShelfPlan(raw: string | null): ShelfPlanLayout {
+  const empty: ShelfPlanLayout = { version: 1, grid: 20, canvasW: 1000, canvasH: 600, items: [] };
+  if (!raw) return empty;
+  try {
+    const parsed = JSON.parse(raw) as Partial<ShelfPlanLayout>;
+    if (!Array.isArray(parsed.items)) return empty;
+    return {
+      version: 1,
+      grid: parsed.grid ?? 20,
+      canvasW: parsed.canvasW ?? 1000,
+      canvasH: parsed.canvasH ?? 600,
+      items: parsed.items,
+    };
   } catch {
     return empty;
   }
@@ -19,6 +43,31 @@ export function useUpdateFloorPlan(locationId: string) {
   return useMutation({
     mutationFn: (layout: FloorPlanLayout) =>
       locationsApi.updateFloorPlan(locationId, JSON.stringify(layout)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["locations"] }),
+  });
+}
+
+export function useCreateZone(locationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateZoneDto) => locationsApi.createZone(locationId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["locations"] }),
+  });
+}
+
+export function useUpdateZonePosition(locationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ zone, shelfLayout }: { zone: LocationZoneDto; shelfLayout: ShelfPlanLayout }) =>
+      locationsApi.updateZone(locationId, zone.id, {
+        name: zone.name,
+        type: zone.type,
+        shelvesCount: zone.shelvesCount,
+        tempMin: zone.tempMin,
+        tempMax: zone.tempMax,
+        isActive: zone.isActive,
+        position: JSON.stringify(shelfLayout),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["locations"] }),
   });
 }
