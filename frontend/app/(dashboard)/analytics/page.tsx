@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   useExpirySummary,
   useWriteOffAnalytics,
@@ -20,21 +22,45 @@ function MetricCard({
   value,
   sub,
   color,
+  onClick,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   color?: string;
+  onClick?: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
+
   return (
     <div
+      onClick={onClick}
+      onMouseEnter={() => onClick && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        background: "#0D1117",
-        border: "1px solid #1F2937",
+        background: hovered ? "#111827" : "#0D1117",
+        border: hovered && onClick ? "1px solid #3B82F650" : "1px solid #1F2937",
         borderRadius: 10,
         padding: "16px 20px",
+        cursor: onClick ? "pointer" : undefined,
+        position: "relative",
+        transition: "background 0.1s, border-color 0.1s",
       }}
     >
+      {onClick && (
+        <span
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 12,
+            color: hovered ? "#60A5FA" : "#4B5563",
+            fontSize: 14,
+            transition: "color 0.1s",
+          }}
+        >
+          ›
+        </span>
+      )}
       <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 6 }}>{label}</div>
       <div style={{ color: color ?? "#E8EDF5", fontSize: 22, fontWeight: 700, fontFamily: "monospace" }}>
         {value}
@@ -115,7 +141,16 @@ const REASON_LABELS: Record<string, string> = {
   other: "Інше",
 };
 
+function rowHoverStyle(isHovered: boolean): React.CSSProperties {
+  return {
+    cursor: "pointer",
+    background: isHovered ? "#0F1825" : "transparent",
+    transition: "background 0.1s",
+  };
+}
+
 export default function AnalyticsPage() {
+  const router = useRouter();
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
 
@@ -125,6 +160,13 @@ export default function AnalyticsPage() {
   const { data: zones } = useZoneAnalytics(undefined, enabled);
   const { data: categories } = useCategoryAnalytics(undefined, enabled);
   const { data: losses } = useLosses(undefined, enabled);
+
+  // Row hover states
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [hoveredReasonRow, setHoveredReasonRow] = useState<string | null>(null);
+  const [hoveredZoneRow, setHoveredZoneRow] = useState<string | null>(null);
+  const [hoveredCategoryRow, setHoveredCategoryRow] = useState<string | null>(null);
+  const [hoveredLossRow, setHoveredLossRow] = useState<string | null>(null);
 
   if (access === null) return null;
   if (!access) return <AccessDenied title="Аналітика" />;
@@ -153,12 +195,12 @@ export default function AnalyticsPage() {
                 marginBottom: 16,
               }}
             >
-              <MetricCard label="Норма" value={expiry.safe} color="#4ADE80" />
-              <MetricCard label="Попередження" value={expiry.warning} color="#FBBF24" />
-              <MetricCard label="Критично" value={expiry.critical} color="#F87171" />
-              <MetricCard label="Прострочено" value={expiry.expired} color="#DC2626" />
-              <MetricCard label="Перевірка" value={expiry.needsVerification} color="#A78BFA" />
-              <MetricCard label="Всього партій" value={expiry.total} />
+              <MetricCard label="Норма" value={expiry.safe} color="#4ADE80" onClick={() => router.push("/stock?status=safe")} />
+              <MetricCard label="Попередження" value={expiry.warning} color="#FBBF24" onClick={() => router.push("/stock?status=warning")} />
+              <MetricCard label="Критично" value={expiry.critical} color="#F87171" onClick={() => router.push("/stock?status=critical")} />
+              <MetricCard label="Прострочено" value={expiry.expired} color="#DC2626" onClick={() => router.push("/stock?status=expired")} />
+              <MetricCard label="Перевірка" value={expiry.needsVerification} color="#A78BFA" onClick={() => router.push("/stock?status=needs_verification")} />
+              <MetricCard label="Всього партій" value={expiry.total} onClick={() => router.push("/stock")} />
             </div>
 
             <ExpiryDonut
@@ -183,12 +225,46 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     {expiry.stores.map((s) => (
-                      <tr key={s.storeId}>
+                      <tr
+                        key={s.storeId}
+                        onClick={() => router.push(`/stock?store_id=${s.storeId}`)}
+                        onMouseEnter={() => setHoveredRow(s.storeId)}
+                        onMouseLeave={() => setHoveredRow(null)}
+                        style={rowHoverStyle(hoveredRow === s.storeId)}
+                      >
                         <td style={tdText}>{s.storeName}</td>
-                        <td style={{ ...tdNum, color: "#4ADE80" }}>{s.safe}</td>
-                        <td style={{ ...tdNum, color: "#FBBF24" }}>{s.warning}</td>
-                        <td style={{ ...tdNum, color: "#F87171" }}>{s.critical}</td>
-                        <td style={{ ...tdNum, color: "#DC2626" }}>{s.expired}</td>
+                        <td style={{ ...tdNum, color: "#4ADE80" }}>
+                          <span
+                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=safe`); }}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {s.safe}
+                          </span>
+                        </td>
+                        <td style={{ ...tdNum, color: "#FBBF24" }}>
+                          <span
+                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=warning`); }}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {s.warning}
+                          </span>
+                        </td>
+                        <td style={{ ...tdNum, color: "#F87171" }}>
+                          <span
+                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=critical`); }}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {s.critical}
+                          </span>
+                        </td>
+                        <td style={{ ...tdNum, color: "#DC2626" }}>
+                          <span
+                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=expired`); }}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {s.expired}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -211,11 +287,12 @@ export default function AnalyticsPage() {
               marginBottom: 16,
             }}
           >
-            <MetricCard label="Всього документів" value={writeoffs.totalDocuments} />
+            <MetricCard label="Всього документів" value={writeoffs.totalDocuments} onClick={() => router.push("/write-offs")} />
             <MetricCard
               label="Загальні збитки"
               value={`${writeoffs.totalLoss.toLocaleString("uk-UA")} ₴`}
               color="#F87171"
+              onClick={() => router.push("/write-offs")}
             />
           </div>
 
@@ -233,7 +310,13 @@ export default function AnalyticsPage() {
                 </thead>
                 <tbody>
                   {writeoffs.byReason.map((r) => (
-                    <tr key={r.reason}>
+                    <tr
+                      key={r.reason}
+                      onClick={() => router.push(`/write-offs?reason=${r.reason}`)}
+                      onMouseEnter={() => setHoveredReasonRow(r.reason)}
+                      onMouseLeave={() => setHoveredReasonRow(null)}
+                      style={rowHoverStyle(hoveredReasonRow === r.reason)}
+                    >
                       <td style={tdText}>{REASON_LABELS[r.reason] ?? r.reason}</td>
                       <td style={tdNum}>{r.count}</td>
                       <td style={{ ...tdNum, color: "#F87171" }}>
@@ -267,13 +350,47 @@ export default function AnalyticsPage() {
               </thead>
               <tbody>
                 {zones.map((z) => (
-                  <tr key={z.zoneId}>
+                  <tr
+                    key={z.zoneId}
+                    onClick={() => router.push(`/stock?zone_id=${z.zoneId}`)}
+                    onMouseEnter={() => setHoveredZoneRow(z.zoneId)}
+                    onMouseLeave={() => setHoveredZoneRow(null)}
+                    style={rowHoverStyle(hoveredZoneRow === z.zoneId)}
+                  >
                     <td style={tdText}>{z.zoneName}</td>
                     <td style={tdMuted}>{z.storeName}</td>
-                    <td style={{ ...tdNum, color: "#4ADE80" }}>{z.safe}</td>
-                    <td style={{ ...tdNum, color: "#FBBF24" }}>{z.warning}</td>
-                    <td style={{ ...tdNum, color: "#F87171" }}>{z.critical}</td>
-                    <td style={{ ...tdNum, color: "#DC2626" }}>{z.expired}</td>
+                    <td style={{ ...tdNum, color: "#4ADE80" }}>
+                      <span
+                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=safe`); }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {z.safe}
+                      </span>
+                    </td>
+                    <td style={{ ...tdNum, color: "#FBBF24" }}>
+                      <span
+                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=warning`); }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {z.warning}
+                      </span>
+                    </td>
+                    <td style={{ ...tdNum, color: "#F87171" }}>
+                      <span
+                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=critical`); }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {z.critical}
+                      </span>
+                    </td>
+                    <td style={{ ...tdNum, color: "#DC2626" }}>
+                      <span
+                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=expired`); }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {z.expired}
+                      </span>
+                    </td>
                     <td style={tdNum}>{z.totalBatches}</td>
                   </tr>
                 ))}
@@ -303,7 +420,13 @@ export default function AnalyticsPage() {
               </thead>
               <tbody>
                 {categories.map((c) => (
-                  <tr key={c.categoryId ?? "uncategorized"}>
+                  <tr
+                    key={c.categoryId ?? "uncategorized"}
+                    onClick={() => router.push(`/inventory?category=${encodeURIComponent(c.categoryName)}`)}
+                    onMouseEnter={() => setHoveredCategoryRow(c.categoryId ?? "uncategorized")}
+                    onMouseLeave={() => setHoveredCategoryRow(null)}
+                    style={rowHoverStyle(hoveredCategoryRow === (c.categoryId ?? "uncategorized"))}
+                  >
                     <td style={tdText}>{c.categoryName}</td>
                     <td style={{ ...tdNum, color: "#4ADE80" }}>{c.safe}</td>
                     <td style={{ ...tdNum, color: "#FBBF24" }}>{c.warning}</td>
@@ -335,8 +458,9 @@ export default function AnalyticsPage() {
               label="Загальні збитки"
               value={`${losses.totalLoss.toLocaleString("uk-UA")} ₴`}
               color="#F87171"
+              onClick={() => router.push("/write-offs")}
             />
-            <MetricCard label="Всього списань" value={losses.totalWriteOffs} />
+            <MetricCard label="Всього списань" value={losses.totalWriteOffs} onClick={() => router.push("/write-offs")} />
             <MetricCard
               label="Середнє на документ"
               value={`${losses.averageLossPerWriteOff.toLocaleString("uk-UA")} ₴`}
@@ -354,7 +478,13 @@ export default function AnalyticsPage() {
               </thead>
               <tbody>
                 {losses.byStore.map((s) => (
-                  <tr key={s.storeId}>
+                  <tr
+                    key={s.storeId}
+                    onClick={() => router.push(`/write-offs?store_id=${s.storeId}`)}
+                    onMouseEnter={() => setHoveredLossRow(s.storeId)}
+                    onMouseLeave={() => setHoveredLossRow(null)}
+                    style={rowHoverStyle(hoveredLossRow === s.storeId)}
+                  >
                     <td style={tdText}>{s.storeName}</td>
                     <td style={tdNum}>{s.writeOffCount}</td>
                     <td style={{ ...tdNum, color: "#F87171" }}>

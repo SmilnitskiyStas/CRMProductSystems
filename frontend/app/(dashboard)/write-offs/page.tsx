@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
-  Eye, CheckCircle, XCircle, FileDown, ChevronDown, BarChart2,
+  Eye, CheckCircle, XCircle, FileDown, BarChart2,
 } from "lucide-react";
 import {
   useWriteOffs,
@@ -227,10 +228,15 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
-export default function WriteOffsPage() {
+// ── Page inner (uses useSearchParams) ────────────────────────────────────────
+function WriteOffsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [statusFilter, setStatusFilter] = useState("");
+  const [reasonFilter] = useState(searchParams.get("reason") ?? "");
+  const [storeIdFilter, setStoreIdFilter] = useState(searchParams.get("store_id") ?? "");
+
   const { data: writeOffs = [], isLoading } = useWriteOffs(
     statusFilter ? { status: statusFilter } : undefined,
   );
@@ -238,6 +244,40 @@ export default function WriteOffsPage() {
   const reject = useRejectWriteOff();
 
   const [selected, setSelected] = useState<WriteOffDto | null>(null);
+
+  // Client-side filtering for reason and store_id
+  const filteredWriteOffs = useMemo(() => {
+    let result = writeOffs;
+    if (reasonFilter) {
+      result = result.filter((w) => w.reason === reasonFilter);
+    }
+    if (storeIdFilter) {
+      result = result.filter((w) => w.storeId === storeIdFilter);
+    }
+    return result;
+  }, [writeOffs, reasonFilter, storeIdFilter]);
+
+  const chipStyle: React.CSSProperties = {
+    background: "#1D3461",
+    border: "1px solid #3B82F6",
+    color: "#93C5FD",
+    borderRadius: 20,
+    padding: "3px 10px",
+    fontSize: 12,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  };
+
+  const chipBtnStyle: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    color: "#93C5FD",
+    cursor: "pointer",
+    fontSize: 14,
+    padding: 0,
+    lineHeight: 1,
+  };
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -295,6 +335,28 @@ export default function WriteOffsPage() {
         })}
       </div>
 
+      {/* Active filter chips */}
+      {(reasonFilter || storeIdFilter) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {reasonFilter && (
+            <span style={chipStyle}>
+              Причина: {WRITE_OFF_REASON_LABEL[reasonFilter] ?? reasonFilter}
+            </span>
+          )}
+          {storeIdFilter && (
+            <span style={chipStyle}>
+              Магазин: {storeIdFilter}
+              <button
+                onClick={() => setStoreIdFilter("")}
+                style={chipBtnStyle}
+              >
+                ×
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       <div
         style={{
@@ -308,7 +370,7 @@ export default function WriteOffsPage() {
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
             Завантаження…
           </div>
-        ) : writeOffs.length === 0 ? (
+        ) : filteredWriteOffs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
             Немає списань
           </div>
@@ -326,7 +388,7 @@ export default function WriteOffsPage() {
               </tr>
             </thead>
             <tbody>
-              {writeOffs.map((w) => (
+              {filteredWriteOffs.map((w) => (
                 <tr
                   key={w.id}
                   style={{
@@ -413,5 +475,14 @@ export default function WriteOffsPage() {
         )}
       </DetailDrawer>
     </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+export default function WriteOffsPage() {
+  return (
+    <Suspense>
+      <WriteOffsPageContent />
+    </Suspense>
   );
 }

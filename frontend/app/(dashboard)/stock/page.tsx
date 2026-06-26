@@ -15,6 +15,8 @@ import { Btn } from "@/components/ui/Btn";
 interface Filters {
   status: string;
   search: string;
+  store_id: string;
+  zone_id: string;
 }
 
 function StockPageContent() {
@@ -22,13 +24,17 @@ function StockPageContent() {
   const [filters, setFilters] = useState<Filters>({
     status: searchParams.get("status") ?? "",
     search: "",
+    store_id: searchParams.get("store_id") ?? "",
+    zone_id: searchParams.get("zone_id") ?? "",
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const { data: batches = [], isLoading } = useStock(
-    filters.status ? { status: filters.status } : undefined,
-  );
+  const { data: batches = [], isLoading } = useStock({
+    status: filters.status || undefined,
+    store_id: filters.store_id || undefined,
+    zone_id: filters.zone_id || undefined,
+  });
   const { data: stores = [] } = useStores();
   const { data: products = [] } = useCatalogProducts();
   const verify = useVerifyStock();
@@ -75,6 +81,28 @@ function StockPageContent() {
       ? `${filtered.length} з ${batches.length}`
       : String(filtered.length);
 
+  const chipStyle: React.CSSProperties = {
+    background: "#1D3461",
+    border: "1px solid #3B82F6",
+    color: "#93C5FD",
+    borderRadius: 20,
+    padding: "3px 10px",
+    fontSize: 12,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  };
+
+  const chipBtnStyle: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    color: "#93C5FD",
+    cursor: "pointer",
+    fontSize: 14,
+    padding: 0,
+    lineHeight: 1,
+  };
+
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
@@ -91,7 +119,38 @@ function StockPageContent() {
       </div>
 
       {/* Filters */}
-      <StockFilters filters={filters} onChange={setFilters} />
+      <StockFilters
+        filters={{ status: filters.status, search: filters.search }}
+        onChange={(partial) => setFilters((prev) => ({ ...prev, ...partial, store_id: prev.store_id, zone_id: prev.zone_id }))}
+      />
+
+      {/* Active store/zone filter chips */}
+      {(filters.store_id || filters.zone_id) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {filters.store_id && (
+            <span style={chipStyle}>
+              Магазин: {filters.store_id}
+              <button
+                onClick={() => setFilters((p) => ({ ...p, store_id: "" }))}
+                style={chipBtnStyle}
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {filters.zone_id && (
+            <span style={chipStyle}>
+              Зона: {filters.zone_id}
+              <button
+                onClick={() => setFilters((p) => ({ ...p, zone_id: "" }))}
+                style={chipBtnStyle}
+              >
+                ×
+              </button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
