@@ -155,24 +155,57 @@ function SummaryCard({
 
 // ── Legend ────────────────────────────────────────────────────────────────────
 
-function ChartLegend({ showBuffers }: { showBuffers: boolean }) {
+function ChartLegend({
+  showBuffers,
+  hidden,
+  onToggle,
+}: {
+  showBuffers: boolean;
+  hidden: Set<string>;
+  onToggle: (key: string) => void;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-      {/* Data lines */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
-        {LINES.map(({ key, label, color, dash, width }) => (
-          <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <svg width="24" height="10">
-              <line x1="0" y1="5" x2="24" y2="5" stroke={color} strokeWidth={width} strokeDasharray={dash ?? "none"} />
-            </svg>
-            <span style={{ color: key === "stock" ? "#9CA3AF" : "#6B7280", fontSize: 11, fontWeight: key === "stock" ? 600 : 400 }}>
-              {label}
-            </span>
-          </div>
-        ))}
+      {/* Clickable data lines */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
+        {LINES.map(({ key, label, color, dash, width }) => {
+          const off = hidden.has(key);
+          return (
+            <button
+              key={key}
+              onClick={() => onToggle(key)}
+              title={off ? `Показати «${label}»` : `Приховати «${label}»`}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                background: off ? "#0A0F1A" : "transparent",
+                border: `1px solid ${off ? "#1F2937" : "transparent"}`,
+                borderRadius: 6, padding: "3px 8px",
+                cursor: "pointer", transition: "all 0.15s",
+                opacity: off ? 0.45 : 1,
+              }}
+            >
+              <svg width="24" height="10">
+                <line
+                  x1="0" y1="5" x2="24" y2="5"
+                  stroke={off ? "#4B5563" : color}
+                  strokeWidth={width}
+                  strokeDasharray={dash ?? "none"}
+                />
+              </svg>
+              <span style={{
+                fontSize: 11,
+                fontWeight: key === "stock" ? 600 : 400,
+                color: off ? "#374151" : (key === "stock" ? "#9CA3AF" : "#6B7280"),
+                textDecoration: off ? "line-through" : "none",
+              }}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Buffer lines + zones */}
+      {/* Buffer lines + zones (display-only, not toggleable) */}
       {showBuffers && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", paddingTop: 6, borderTop: "1px solid #1F2937" }}>
           {BUFFER_LINES.map(({ key, label, color, dash }) => (
@@ -286,6 +319,16 @@ export function ProductAnalyticsTab({
   buffers?: ProductBuffers;
 }) {
   const [rangeDays, setRangeDays] = useState(30);
+  const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
+
+  function toggleLine(key: string) {
+    setHiddenLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   const from = daysAgoStr(rangeDays);
   const to   = todayStr();
@@ -390,7 +433,7 @@ export function ProductAnalyticsTab({
           <div style={{ color: "#4B5563", fontSize: 11 }}>{movements.length} подій за {rangeDays} дн.</div>
         </div>
 
-        <ChartLegend showBuffers={!!buffers} />
+        <ChartLegend showBuffers={!!buffers} hidden={hiddenLines} onToggle={toggleLine} />
 
         {movements.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#374151", fontSize: 13 }}>
@@ -459,6 +502,7 @@ export function ProductAnalyticsTab({
                 dot={false}
                 activeDot={{ r: 4, fill: "#38BDF8" }}
                 connectNulls
+                hide={hiddenLines.has("stock")}
               />
 
               {/* Movement lines */}
@@ -472,6 +516,7 @@ export function ProductAnalyticsTab({
                   strokeDasharray={dash}
                   dot={false}
                   activeDot={{ r: 3, fill: color }}
+                  hide={hiddenLines.has(key)}
                 />
               ))}
             </LineChart>
