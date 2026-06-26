@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Application.Features.Analytics.Dtos;
+using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Domain.Entities;
 
 namespace ShelfGuard.Infrastructure.Data.Repositories;
@@ -15,7 +16,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         Guid? tenantId, Guid? storeId, bool network, CancellationToken ct = default)
     {
         var query = _db.ProductStocks
-            .Where(s => s.Quantity > 0 && s.Status != "sold_out" && s.Status != "archived");
+            .Where(s => s.Quantity > 0);
 
         if (tenantId.HasValue)
             query = query.Where(s => s.TenantId == tenantId.Value);
@@ -23,9 +24,16 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (storeId.HasValue && !network)
             query = query.Where(s => s.StoreId == storeId.Value);
 
-        var batches = await query
-            .Select(s => new { s.Status, s.StoreId })
+        var rows = await query
+            .Select(s => new { s.ExpiryDate, s.LastCheckedAt, s.StoreId })
             .ToListAsync(ct);
+
+        var thresholds = StatusThresholds.Now();
+        var batches = rows.Select(r => new
+        {
+            r.StoreId,
+            Status = ComputeStatus(r.ExpiryDate, r.LastCheckedAt, thresholds)
+        }).ToList();
 
         var storeIds = batches.Select(b => b.StoreId).Distinct().ToHashSet();
         var stores = await _db.Locations
@@ -157,7 +165,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             query = query.Where(s => s.StoreId == storeId.Value);
 
         // Single query: join zone and store via navigation properties
-        var batches = await query
+        var rows = await query
             .Select(s => new
             {
                 s.ZoneId,
@@ -165,9 +173,21 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
                 ZoneType  = s.Zone!.Type,
                 StoreId   = s.Zone!.LocationId,
                 StoreName = s.Zone!.Location!.Name,
-                s.Status
+                s.ExpiryDate,
+                s.LastCheckedAt,
             })
             .ToListAsync(ct);
+
+        var thresholds = StatusThresholds.Now();
+        var batches = rows.Select(r => new
+        {
+            r.ZoneId,
+            r.ZoneName,
+            r.ZoneType,
+            r.StoreId,
+            r.StoreName,
+            Status = ComputeStatus(r.ExpiryDate, r.LastCheckedAt, thresholds)
+        }).ToList();
 
         return batches
             .GroupBy(b => b.ZoneId!.Value)
@@ -204,15 +224,25 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             stockQuery = stockQuery.Where(s => s.StoreId == storeId.Value);
 
         // Single query: join product and category via navigation properties
-        var batches = await stockQuery
+        var rows = await stockQuery
             .Select(s => new
             {
                 CategoryId   = s.Product!.CategoryId,
                 CategoryName = s.Product!.Category != null ? s.Product.Category.Name : null,
-                s.Status,
+                s.ExpiryDate,
+                s.LastCheckedAt,
                 s.Quantity
             })
             .ToListAsync(ct);
+
+        var thresholds = StatusThresholds.Now();
+        var batches = rows.Select(r => new
+        {
+            r.CategoryId,
+            r.CategoryName,
+            r.Quantity,
+            Status = ComputeStatus(r.ExpiryDate, r.LastCheckedAt, thresholds)
+        }).ToList();
 
         return batches
             .GroupBy(b => b.CategoryId)
@@ -462,5 +492,33 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         // ISO week: Monday = 1, Sunday = 7
         var offset = dow == 0 ? -6 : 1 - dow;
         return dt.Date.AddDays(offset);
+    }
+
+    // Mirrors StockStatus.Compute so analytics and stock counts are always in sync.
+    private static string ComputeStatus(DateOnly expiryDate, DateTime lastCheckedAt, StatusThresholds t)
+    {
+        if (expiryDate <= t.Today)                      return "expired";
+        if (expiryDate <= t.CriticalCutoff)             return "critical";
+        if (expiryDate <= t.WarningCutoff)              return "warning";
+        if (lastCheckedAt <= t.VerificationCutoff)      return "needs_verification";
+        return "safe";
+    }
+
+    private sealed record StatusThresholds(
+        DateOnly Today,
+        DateOnly CriticalCutoff,
+        DateOnly WarningCutoff,
+        DateTime VerificationCutoff)
+    {
+        public static StatusThresholds Now()
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            return new StatusThresholds(
+                Today:               today,
+                CriticalCutoff:      today.AddDays(StockStatus.CriticalDays),
+                WarningCutoff:       today.AddDays(StockStatus.WarningDays),
+                VerificationCutoff:  DateTime.UtcNow.AddDays(-StockStatus.NeedsVerificationDays)
+            );
+        }
     }
 }
