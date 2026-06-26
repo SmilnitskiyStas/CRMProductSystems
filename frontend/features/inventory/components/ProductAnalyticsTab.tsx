@@ -136,7 +136,13 @@ function ChartLegend() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ProductAnalyticsTab({ productId }: { productId: string }) {
+export function ProductAnalyticsTab({
+  productId,
+  chartHeight = 220,
+}: {
+  productId: string;
+  chartHeight?: number;
+}) {
   const [rangeDays, setRangeDays] = useState(30);
 
   const from = daysAgoStr(rangeDays);
@@ -228,7 +234,7 @@ export function ProductAnalyticsTab({ productId }: { productId: string }) {
             Немає рухів за вибраний період
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={chartData} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" vertical={false} />
               <XAxis

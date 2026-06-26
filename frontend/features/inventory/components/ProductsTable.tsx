@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, Pencil, Trash2, BarChart2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye, Pencil, Trash2, BarChart2, ExternalLink } from "lucide-react";
 import type { Product } from "../types";
 import { ITEM_TYPE_LABELS } from "./ProductForm";
 import { ActionMenu } from "@/components/ui/ActionMenu";
@@ -293,6 +294,7 @@ function ProductDetail({ p }: { p: Product }) {
 
 // ── Table ────────────────────────────────────────────────────────────────────
 export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props) {
+  const router = useRouter();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("info");
@@ -411,6 +413,11 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                           icon: <BarChart2 size={13} />,
                           onClick: () => openProduct(product, "analytics"),
                         },
+                        {
+                          label: "Відкрити сторінку",
+                          icon: <ExternalLink size={13} />,
+                          onClick: () => router.push(`/inventory/${product.id}`),
+                        },
                         { separator: true },
                         {
                           label: "Редагувати",
@@ -453,6 +460,35 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
         title={selected?.name ?? ""}
         subtitle={selected ? `${selected.categoryName ?? "Без категорії"} · ${selected.unit}` : ""}
         width={580}
+        actions={
+          selected && (
+            <button
+              onClick={() => router.push(`/inventory/${selected.id}`)}
+              title="Відкрити на повній сторінці"
+              style={{
+                background: "transparent",
+                border: "1px solid #1F2937",
+                borderRadius: 7,
+                color: "#6B7280",
+                padding: "4px 8px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                transition: "color 0.1s, border-color 0.1s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
+                (e.currentTarget as HTMLElement).style.borderColor = "#374151";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.color = "#6B7280";
+                (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+              }}
+            >
+              <ExternalLink size={14} />
+            </button>
+          )
+        }
       >
         {selected && (
           <>

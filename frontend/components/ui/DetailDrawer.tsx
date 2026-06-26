@@ -10,6 +10,7 @@ interface Props {
   subtitle?: string;
   children: React.ReactNode;
   width?: number;
+  actions?: React.ReactNode;
 }
 
 export function DetailDrawer({
@@ -19,6 +20,7 @@ export function DetailDrawer({
   subtitle,
   children,
   width = 520,
+  actions,
 }: Props) {
   // Close on Escape
   useEffect(() => {
@@ -79,23 +81,24 @@ export function DetailDrawer({
               <div style={{ color: "#4B5563", fontSize: 12, marginTop: 3 }}>{subtitle}</div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "1px solid #1F2937",
-              borderRadius: 7,
-              color: "#6B7280",
-              padding: "4px 8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              marginLeft: 12,
-              flexShrink: 0,
-            }}
-          >
-            <X size={15} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 12 }}>
+            {actions}
+            <button
+              onClick={onClose}
+              style={{
+                background: "transparent",
+                border: "1px solid #1F2937",
+                borderRadius: 7,
+                color: "#6B7280",
+                padding: "4px 8px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <X size={15} />
+            </button>
+          </div>
         </div>
 
         {/* Content — scrollable */}
