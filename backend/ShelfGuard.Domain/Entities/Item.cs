@@ -8,7 +8,9 @@ public sealed class Item
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid TenantId { get; init; }
-    public string? Barcode { get; set; }
+    public List<string> Barcodes { get; set; } = [];
+    public string? Manufacturer { get; set; }
+    public string? CountryOrigin { get; set; }
     public string Name { get; set; } = string.Empty;
     public Guid? CategoryId { get; set; }
     public Guid? SegmentId { get; set; }

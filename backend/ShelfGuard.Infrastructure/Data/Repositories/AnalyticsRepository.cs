@@ -407,7 +407,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             {
                 i.ProductId,
                 ProductName = i.Product!.Name,
-                Barcode     = i.Product!.Barcode,
+                Barcode     = i.Product!.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null,
                 i.PriceFinal,
                 i.Quantity,
                 i.TransactionId

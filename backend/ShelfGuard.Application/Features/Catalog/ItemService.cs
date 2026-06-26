@@ -71,7 +71,7 @@ public sealed class ItemService : IItemService
         {
             TenantId = tenantId,
             Name = request.Name.Trim(),
-            Barcode = request.Barcode?.Trim(),
+            Barcodes = request.Barcodes ?? [],
             CategoryId = request.CategoryId,
             SegmentId = request.SegmentId,
             Unit = string.IsNullOrWhiteSpace(request.Unit) ? "шт" : request.Unit.Trim(),
@@ -88,6 +88,8 @@ public sealed class ItemService : IItemService
             PricePurchase = request.PricePurchase,
             PriceRetail = request.PriceRetail,
             ImageUrl = request.ImageUrl,
+            Manufacturer = request.Manufacturer,
+            CountryOrigin = request.CountryOrigin,
         };
 
         await _repo.AddAsync(product, ct);
@@ -115,7 +117,7 @@ public sealed class ItemService : IItemService
             return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit.");
 
         product.Name = request.Name.Trim();
-        product.Barcode = request.Barcode?.Trim();
+        product.Barcodes = request.Barcodes ?? [];
         product.CategoryId = request.CategoryId;
         product.SegmentId = request.SegmentId;
         product.Unit = string.IsNullOrWhiteSpace(request.Unit) ? "шт" : request.Unit.Trim();
@@ -134,6 +136,8 @@ public sealed class ItemService : IItemService
         product.PriceRetail = request.PriceRetail;
         product.ImageUrl = request.ImageUrl;
         product.IsActive = request.IsActive;
+        product.Manufacturer = request.Manufacturer;
+        product.CountryOrigin = request.CountryOrigin;
 
         _repo.Update(product);
         await _repo.SaveChangesAsync(ct);
@@ -205,7 +209,7 @@ public sealed class ItemService : IItemService
 
     private static ItemDto ToDto(Item p) => new(
         p.Id,
-        p.Barcode,
+        p.Barcodes,
         p.Name,
         p.CategoryId,
         p.Category?.Name,
@@ -227,7 +231,9 @@ public sealed class ItemService : IItemService
         p.PriceRetail,
         p.ImageUrl,
         p.IsActive,
-        p.CreatedAt
+        p.CreatedAt,
+        p.Manufacturer,
+        p.CountryOrigin
     );
 
     private static ProductSupplierSettingDto ToSupplierDto(ProductSupplierSetting s) => new(

@@ -222,7 +222,7 @@ public static class DbSeeder
         return new Item
         {
             TenantId          = tenantId,
-            Barcode           = barcode,
+            Barcodes          = string.IsNullOrEmpty(barcode) ? [] : [barcode],
             Name              = name,
             CategoryId        = categoryId,
             DefaultSupplierId = supplierId,

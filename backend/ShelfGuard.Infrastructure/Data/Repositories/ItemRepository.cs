@@ -75,7 +75,7 @@ public sealed class ItemRepository : IItemRepository
             .Include(p => p.Category)
             .Include(p => p.Segment)
             .Include(p => p.DefaultSupplier)
-            .FirstOrDefaultAsync(p => p.Barcode == barcode, ct);
+            .FirstOrDefaultAsync(p => p.Barcodes.Contains(barcode), ct);
 
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) =>
         _db.ProductSupplierSettings

@@ -236,7 +236,7 @@ public sealed class DailySalesService : IDailySalesService
         s.Store?.Name ?? "",
         s.ProductId,
         s.Product?.Name ?? "",
-        s.Product?.Barcode,
+        s.Product?.Barcodes.Count > 0 ? s.Product.Barcodes[0] : null,
         s.Date,
         s.QuantitySold,
         s.QuantityEndOfDay,

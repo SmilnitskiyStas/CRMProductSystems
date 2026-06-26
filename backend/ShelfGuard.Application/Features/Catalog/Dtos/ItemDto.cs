@@ -2,7 +2,7 @@ namespace ShelfGuard.Application.Features.Catalog.Dtos;
 
 public sealed record ItemDto(
     Guid Id,
-    string? Barcode,
+    List<string> Barcodes,
     string Name,
     Guid? CategoryId,
     string? CategoryName,
@@ -24,33 +24,14 @@ public sealed record ItemDto(
     decimal? PriceRetail,
     string? ImageUrl,
     bool IsActive,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? Manufacturer,
+    string? CountryOrigin
 );
 
 public sealed record CreateProductRequest(
     string Name,
-    string? Barcode,
-    Guid? CategoryId,
-    Guid? SegmentId,
-    string Unit,
-    string ManagementType,
-    string? ItemType,
-    decimal MinStock,
-    decimal MaxStock,
-    decimal SafetyBuffer,
-    decimal? StorageTempMin,
-    decimal? StorageTempMax,
-    int? ShelfLifeDays,
-    Guid? DefaultSupplierId,
-    decimal VatRate,
-    decimal? PricePurchase,
-    decimal? PriceRetail,
-    string? ImageUrl
-);
-
-public sealed record UpdateProductRequest(
-    string Name,
-    string? Barcode,
+    List<string>? Barcodes,
     Guid? CategoryId,
     Guid? SegmentId,
     string Unit,
@@ -67,7 +48,32 @@ public sealed record UpdateProductRequest(
     decimal? PricePurchase,
     decimal? PriceRetail,
     string? ImageUrl,
-    bool IsActive
+    string? Manufacturer,
+    string? CountryOrigin
+);
+
+public sealed record UpdateProductRequest(
+    string Name,
+    List<string>? Barcodes,
+    Guid? CategoryId,
+    Guid? SegmentId,
+    string Unit,
+    string ManagementType,
+    string? ItemType,
+    decimal MinStock,
+    decimal MaxStock,
+    decimal SafetyBuffer,
+    decimal? StorageTempMin,
+    decimal? StorageTempMax,
+    int? ShelfLifeDays,
+    Guid? DefaultSupplierId,
+    decimal VatRate,
+    decimal? PricePurchase,
+    decimal? PriceRetail,
+    string? ImageUrl,
+    bool IsActive,
+    string? Manufacturer,
+    string? CountryOrigin
 );
 
 public sealed record ProductSupplierSettingDto(

@@ -288,7 +288,11 @@ public sealed class AppDbContext : DbContext
             e.ToTable("items");
             e.HasKey(p => p.Id);
             e.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
-            e.Property(p => p.Barcode).HasMaxLength(100);
+            e.Property(p => p.Barcodes)
+             .HasColumnType("jsonb")
+             .HasDefaultValueSql("'[]'::jsonb");
+            e.Property(p => p.Manufacturer).HasMaxLength(255);
+            e.Property(p => p.CountryOrigin).HasMaxLength(100);
             e.Property(p => p.Name).HasMaxLength(255).IsRequired();
             e.Property(p => p.Unit).HasMaxLength(20).HasDefaultValue("шт");
             e.Property(p => p.ManagementType).HasMaxLength(10).HasDefaultValue("MTS");
@@ -306,10 +310,10 @@ public sealed class AppDbContext : DbContext
             // Catalog browse: filter by category + segment + active status
             e.HasIndex(p => new { p.TenantId, p.CategoryId, p.SegmentId, p.IsActive })
              .HasDatabaseName("idx_items_tenant_category_segment_active");
-            // Barcode lookup — partial: only active items
-            e.HasIndex(p => p.Barcode)
-             .HasDatabaseName("idx_items_barcode_active")
-             .HasFilter("\"IsActive\" = true");
+            // Barcodes GIN index for array containment queries
+            e.HasIndex(p => p.Barcodes)
+             .HasDatabaseName("idx_items_barcodes_gin")
+             .HasAnnotation("Npgsql:IndexMethod", "gin");
             e.HasOne(p => p.Tenant).WithMany()
              .HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(p => p.Category).WithMany()

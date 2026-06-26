@@ -64,7 +64,7 @@ public sealed class OrderCalcService : IOrderCalcService
             lines.Add(new OrderLineDto(
                 buffer.ProductId,
                 buffer.Product?.Name ?? "",
-                buffer.Product?.Barcode,
+                buffer.Product?.Barcodes.Count > 0 ? buffer.Product.Barcodes[0] : null,
                 buffer.BufferTotal,
                 buffer.BufferGreen,
                 buffer.BufferYellow,

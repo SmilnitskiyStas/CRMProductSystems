@@ -108,7 +108,7 @@ file sealed class FakeCatalogRepo : IItemRepository
     public List<Item> Products { get; } = [];
 
     public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) =>
-        Task.FromResult(Products.FirstOrDefault(p => p.Barcode == barcode));
+        Task.FromResult(Products.FirstOrDefault(p => p.Barcodes.Contains(barcode)));
 
     public Task<List<Item>> GetAllAsync(Guid? categoryId, Guid? segmentId, string? managementType, CancellationToken ct = default) =>
         Task.FromResult(Products);
@@ -184,7 +184,7 @@ public sealed class PosServiceTests
         {
             Id = Guid.NewGuid(),
             TenantId = TenantId,
-            Barcode = barcode,
+            Barcodes = [barcode],
             Name = "Тестовий товар",
             PriceRetail = price,
         };

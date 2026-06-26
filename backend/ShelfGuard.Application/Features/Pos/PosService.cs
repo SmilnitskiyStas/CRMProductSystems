@@ -304,7 +304,7 @@ public sealed class PosService : IPosService
             txItemDtos.Add(new SaleItemDto(
                 ProductId: resolved.Product.Id,
                 ProductName: resolved.Product.Name,
-                Barcode: resolved.Product.Barcode ?? string.Empty,
+                Barcode: resolved.Product.Barcodes.Count > 0 ? resolved.Product.Barcodes[0] : string.Empty,
                 Quantity: resolved.Quantity,
                 UnitPrice: resolved.PriceRetail,
                 DiscountAmount: resolved.DiscountAmount,
@@ -338,7 +338,7 @@ public sealed class PosService : IPosService
                         Name: r.Product.Name,
                         UnitPrice: r.PriceRetail - r.DiscountAmount,
                         Quantity: r.Quantity,
-                        Barcode: r.Product.Barcode)).ToList(),
+                        Barcode: r.Product.Barcodes.Count > 0 ? r.Product.Barcodes[0] : null)).ToList(),
                     Payments: [new FiscalPayment(
                         string.Equals(request.PaymentType, "Card", StringComparison.OrdinalIgnoreCase)
                             ? FiscalPaymentKind.Cashless : FiscalPaymentKind.Cash,
@@ -397,7 +397,7 @@ public sealed class PosService : IPosService
             Items: t.Items.Select(i => new SaleItemDto(
                 ProductId: i.ProductId,
                 ProductName: i.Product?.Name ?? "—",
-                Barcode: i.Product?.Barcode ?? string.Empty,
+                Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
                 Quantity: i.Quantity,
                 UnitPrice: i.PriceRetail,
                 DiscountAmount: i.DiscountAmount,
@@ -433,7 +433,7 @@ public sealed class PosService : IPosService
                     Name: i.Product?.Name ?? i.ProductId.ToString(),
                     UnitPrice: i.PriceRetail - i.DiscountAmount,
                     Quantity: i.Quantity,
-                    Barcode: i.Product?.Barcode)).ToList(),
+                    Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null)).ToList(),
                 Payments: [new FiscalPayment(
                     string.Equals(tx.PaymentType, "card", StringComparison.OrdinalIgnoreCase)
                         ? FiscalPaymentKind.Cashless : FiscalPaymentKind.Cash,
@@ -513,7 +513,7 @@ public sealed class PosService : IPosService
                 Items: t.Items.Select(i => new SaleItemDto(
                     ProductId: i.ProductId,
                     ProductName: i.Product?.Name ?? "—",
-                    Barcode: i.Product?.Barcode ?? string.Empty,
+                    Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
                     Quantity: i.Quantity,
                     UnitPrice: i.PriceRetail,
                     DiscountAmount: i.DiscountAmount,

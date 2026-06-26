@@ -257,7 +257,7 @@ public sealed class AiOrderService : IAiOrderService
         s.Items
             .OrderByDescending(i => Math.Abs(i.QuantitySuggested - i.QuantityBase))
             .Select(i => new AiOrderItemDto(
-                i.Id, i.ProductId, i.Product?.Name ?? "", i.Product?.Barcode,
+                i.Id, i.ProductId, i.Product?.Name ?? "", i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null,
                 i.QuantityBase, i.QuantitySuggested, i.QuantityFinal,
                 i.Reasoning, i.Confidence, i.Factors, i.WasEdited, i.EditReason))
             .ToList());

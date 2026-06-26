@@ -234,7 +234,7 @@ public sealed class ReceiptService : IReceiptService
         i.Id,
         i.ProductId,
         i.Product?.Name ?? "—",
-        i.Product?.Barcode,
+        i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null,
         i.QuantityOrdered,
         i.QuantityReceived,
         i.PricePurchase,

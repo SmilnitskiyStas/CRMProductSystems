@@ -304,7 +304,7 @@ public sealed class StockService : IStockService
         s.Id,
         s.ProductId,
         s.Product?.Name ?? string.Empty,
-        s.Product?.Barcode,
+        s.Product?.Barcodes.Count > 0 ? s.Product.Barcodes[0] : null,
         s.StoreId,
         s.Store?.Name ?? string.Empty,
         s.ZoneId,
