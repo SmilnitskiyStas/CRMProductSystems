@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { providerApi } from "../api/provider";
-import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto, CreateTenantRequest } from "../types";
+import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto, CreateTenantRequest, CreateTenantUserRequest } from "../types";
 
 // ── Query keys ───────────────────────────────────────────────────────────────
 
@@ -112,5 +112,24 @@ export function useUpdateModules(tenantId: string) {
 export function useImpersonate() {
   return useMutation({
     mutationFn: (tenantId: string) => providerApi.impersonate(tenantId),
+  });
+}
+
+export function useTenantUsers(tenantId: string) {
+  return useQuery({
+    queryKey: ["provider", "tenants", tenantId, "users"],
+    queryFn: () => providerApi.getTenantUsers(tenantId),
+    enabled: !!tenantId,
+  });
+}
+
+export function useCreateTenantUser(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateTenantUserRequest) => providerApi.createTenantUser(tenantId, req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["provider", "tenants", tenantId, "users"] });
+      qc.invalidateQueries({ queryKey: ["provider", "tenants", tenantId] });
+    },
   });
 }

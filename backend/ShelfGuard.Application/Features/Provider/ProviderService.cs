@@ -1,5 +1,6 @@
 using ShelfGuard.Application.Features.Provider.Dtos;
 using ShelfGuard.Application.Services;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -11,18 +12,24 @@ namespace ShelfGuard.Application.Features.Provider;
 /// </summary>
 public sealed class ProviderService : IProviderService
 {
-    private readonly ITenantRepository    _tenants;
+    private readonly ITenantRepository      _tenants;
     private readonly IActivityLogRepository _logs;
-    private readonly IJwtService          _jwt;
+    private readonly IJwtService            _jwt;
+    private readonly IUserRepository        _users;
+    private readonly IPasswordHasher        _hasher;
 
     public ProviderService(
         ITenantRepository tenants,
         IActivityLogRepository logs,
-        IJwtService jwt)
+        IJwtService jwt,
+        IUserRepository users,
+        IPasswordHasher hasher)
     {
         _tenants = tenants;
         _logs    = logs;
         _jwt     = jwt;
+        _users   = users;
+        _hasher  = hasher;
     }
 
     // ── Tenant listing ──────────────────────────────────────────────────────
@@ -221,6 +228,55 @@ public sealed class ProviderService : IProviderService
             l.CreatedAt)).ToList();
 
         return new ProviderLogsPageDto(dtos, total, page, pageSize);
+    }
+
+    // ── Tenant users ────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<TenantUserDto>> GetTenantUsersAsync(Guid tenantId, CancellationToken ct)
+    {
+        var allUsers = await _users.GetAllByTenantAsync(tenantId, ct);
+
+        return allUsers
+            .Where(u => u.Role == AppRoles.EnterpriseAdmin)
+            .Select(u => new TenantUserDto(u.Id, u.FullName, u.Email, u.Role, u.CreatedAt))
+            .ToList();
+    }
+
+    public async Task<(TenantUserDto? User, string? Error)> CreateTenantUserAsync(
+        Guid tenantId, CreateTenantUserRequest request, CancellationToken ct)
+    {
+        // Validate inputs
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            return (null, "FullName is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+            return (null, "A valid email address is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
+            return (null, "Password must be at least 6 characters long.");
+
+        // Tenant must exist
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        if (tenant is null)
+            return (null, "Tenant not found.");
+
+        // Email must be globally unique
+        var existing = await _users.GetByEmailAsync(request.Email.Trim().ToLowerInvariant(), ct);
+        if (existing is not null)
+            return (null, $"Email '{request.Email}' is already in use.");
+
+        var passwordHash = _hasher.Hash(request.Password);
+        var user = User.Create(
+            tenantId:     tenantId,
+            email:        request.Email.Trim(),
+            fullName:     request.FullName.Trim(),
+            passwordHash: passwordHash,
+            role:         AppRoles.EnterpriseAdmin);
+
+        await _users.AddAsync(user, ct);
+        await _users.SaveChangesAsync(ct);
+
+        return (new TenantUserDto(user.Id, user.FullName, user.Email, user.Role, user.CreatedAt), null);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

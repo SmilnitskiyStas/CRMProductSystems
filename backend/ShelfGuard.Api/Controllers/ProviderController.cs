@@ -136,6 +136,35 @@ public sealed class ProviderController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public IActionResult EndImpersonate(Guid id) => NoContent();
 
+    /// <summary>Returns all enterprise_admin users belonging to a tenant.</summary>
+    [HttpGet("tenants/{id:guid}/users")]
+    [ProducesResponseType(typeof(IReadOnlyList<TenantUserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTenantUsers(Guid id, CancellationToken ct)
+    {
+        var users = await _provider.GetTenantUsersAsync(id, ct);
+        return Ok(users);
+    }
+
+    /// <summary>Creates a new enterprise_admin user for a tenant.</summary>
+    [HttpPost("tenants/{id:guid}/users")]
+    [ProducesResponseType(typeof(TenantUserDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateTenantUser(
+        Guid id,
+        [FromBody] CreateTenantUserRequest request,
+        CancellationToken ct)
+    {
+        var (user, error) = await _provider.CreateTenantUserAsync(id, request, ct);
+        if (error is not null)
+            return error.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                ? NotFound(new { error })
+                : BadRequest(new { error });
+
+        return CreatedAtAction(nameof(GetTenantUsers), new { id }, user);
+    }
+
     // ── Health & observability ──────────────────────────────────────────────
 
     /// <summary>Returns platform-wide health metrics.</summary>

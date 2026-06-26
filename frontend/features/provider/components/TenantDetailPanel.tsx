@@ -8,7 +8,8 @@ import {
   ALL_MODULES, ALL_PLANS,
 } from "../types";
 import type { TenantDetailDto } from "../types";
-import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate } from "../hooks/useProvider";
+import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers } from "../hooks/useProvider";
+import { AddTenantUserModal } from "./AddTenantUserModal";
 import { setToken, getToken } from "@/lib/api";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
 
@@ -40,6 +41,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const [selectedMods,   setSelectedMods]   = useState<string[]>([]);
   const [impersonating,  setImpersonating]  = useState(false);
   const [impersonateErr, setImpersonateErr] = useState("");
+  const [showAddUser,    setShowAddUser]    = useState(false);
+
+  const { data: tenantUsers = [], isLoading: usersLoading } = useTenantUsers(tenantId);
 
   function startEditPlan(t: TenantDetailDto) {
     setSelectedPlan(t.plan);
@@ -138,6 +142,14 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
 
       {!isLoading && !tenant && (
         <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>Не знайдено</div>
+      )}
+
+      {showAddUser && (
+        <AddTenantUserModal
+          tenantId={tenantId}
+          onClose={() => setShowAddUser(false)}
+          onCreated={() => setShowAddUser(false)}
+        />
       )}
 
       {tenant && (
@@ -364,6 +376,65 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                   >
                     {MODULE_LABELS[m] ?? m}
                   </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Admins */}
+          <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>АДМІНІСТРАТОРИ</div>
+              <button
+                onClick={() => setShowAddUser(true)}
+                style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
+              >
+                Додати
+              </button>
+            </div>
+
+            {usersLoading ? (
+              <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+            ) : tenantUsers.length === 0 ? (
+              <div style={{ color: "#4B5563", fontSize: 13 }}>Адміністраторів не додано</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {tenantUsers.map((user) => (
+                  <div
+                    key={user.id}
+                    style={{
+                      background: "#111827",
+                      border: "1px solid #1F2937",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
+                        {user.fullName}
+                      </div>
+                      <div style={{ color: "#6B7280", fontSize: 12 }}>{user.email}</div>
+                    </div>
+                    <span
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: 5,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        background: "#1D3461",
+                        border: "1px solid #3B82F6",
+                        color: "#93C5FD",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      Admin
+                    </span>
+                  </div>
                 ))}
               </div>
             )}

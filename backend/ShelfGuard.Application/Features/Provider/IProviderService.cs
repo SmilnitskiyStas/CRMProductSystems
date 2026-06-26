@@ -19,6 +19,10 @@ public interface IProviderService
     Task<(ImpersonateResponse? Response, string? Error)> ImpersonateAsync(
         Guid providerId, string providerEmail, Guid targetTenantId, CancellationToken ct);
 
+    // Tenant users
+    Task<IReadOnlyList<TenantUserDto>> GetTenantUsersAsync(Guid tenantId, CancellationToken ct);
+    Task<(TenantUserDto? User, string? Error)> CreateTenantUserAsync(Guid tenantId, CreateTenantUserRequest request, CancellationToken ct);
+
     // Health & observability
     Task<ProviderHealthDto> GetHealthAsync(CancellationToken ct);
     Task<ProviderLogsPageDto> GetLogsAsync(ProviderLogsQuery query, CancellationToken ct);

@@ -7,6 +7,8 @@ import type {
   ProviderLogsPageDto,
   ProviderLogsFilter,
   ImpersonateResponse,
+  TenantUserDto,
+  CreateTenantUserRequest,
 } from "../types";
 
 export const providerApi = {
@@ -37,6 +39,14 @@ export const providerApi = {
   /** DELETE /api/provider/tenants/:id/impersonate */
   endImpersonate: (id: string): Promise<void> =>
     api.delete<void>(`/api/provider/tenants/${id}/impersonate`),
+
+  /** GET /api/provider/tenants/:id/users */
+  getTenantUsers: (tenantId: string): Promise<TenantUserDto[]> =>
+    api.get<TenantUserDto[]>(`/api/provider/tenants/${tenantId}/users`),
+
+  /** POST /api/provider/tenants/:id/users */
+  createTenantUser: (tenantId: string, req: CreateTenantUserRequest): Promise<TenantUserDto> =>
+    api.post<TenantUserDto>(`/api/provider/tenants/${tenantId}/users`, req),
 
   /** GET /api/provider/health */
   getHealth: (): Promise<ProviderHealthDto> =>

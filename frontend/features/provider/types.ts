@@ -77,6 +77,20 @@ export interface ImpersonateResponse {
   tenantId: string;
 }
 
+export interface TenantUserDto {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface CreateTenantUserRequest {
+  fullName: string;
+  email: string;
+  password: string;
+}
+
 // ── Business types ───────────────────────────────────────────────────────────
 
 export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
