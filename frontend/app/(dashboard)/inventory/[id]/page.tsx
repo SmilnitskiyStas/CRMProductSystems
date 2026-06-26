@@ -143,7 +143,7 @@ export default function ProductPage() {
   }
 
   return (
-    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, maxWidth: 1100 }}>
+    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -191,7 +191,7 @@ export default function ProductPage() {
 
       {/* ── Info tab ─────────────────────────────────────────────────────── */}
       {tab === "info" && (
-        <>
+        <div style={{ maxWidth: 1100, display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
             <StatCard
@@ -298,14 +298,12 @@ export default function ProductPage() {
               </div>
             </Section>
           </div>
-        </>
+        </div>
       )}
 
       {/* ── Analytics tab ──────────────────────────────────────────────── */}
       {tab === "analytics" && (
-        <div style={{ maxWidth: 900 }}>
-          <ProductAnalyticsTab productId={id} chartHeight={380} />
-        </div>
+        <ProductAnalyticsTab productId={id} chartHeight={380} />
       )}
     </div>
   );
