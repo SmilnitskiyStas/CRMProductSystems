@@ -1,7 +1,7 @@
 // Matches ItemDto from the backend API
 export interface Product {
   id: string;
-  barcode: string | null;
+  barcodes: string[];          // було: barcode: string | null
   name: string;
   categoryId: string | null;
   categoryName: string | null;
@@ -24,11 +24,24 @@ export interface Product {
   imageUrl: string | null;
   isActive: boolean;
   createdAt: string;
+  manufacturer: string | null;    // НОВЕ
+  countryOrigin: string | null;   // НОВЕ
+}
+
+export interface BarcodeProductLookup {
+  name: string;
+  barcodes: string[];
+  brand: string | null;
+  manufacturer: string | null;
+  countryOrigin: string | null;
+  imageUrl: string | null;
+  shelfLifeDays: number | null;
+  unit: string | null;
 }
 
 export interface CreateProductPayload {
   name: string;
-  barcode?: string;
+  barcodes?: string[];           // було: barcode?: string
   categoryId?: string;
   segmentId?: string;
   unit: string;
@@ -45,6 +58,8 @@ export interface CreateProductPayload {
   pricePurchase?: number;
   priceRetail?: number;
   imageUrl?: string;
+  manufacturer?: string;         // НОВЕ
+  countryOrigin?: string;        // НОВЕ
 }
 
 export interface UpdateProductPayload extends CreateProductPayload {

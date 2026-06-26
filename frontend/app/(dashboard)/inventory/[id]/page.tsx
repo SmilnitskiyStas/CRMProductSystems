@@ -178,7 +178,7 @@ export default function ProductPage() {
           </div>
           <p style={{ color: "#4B5563", fontSize: 12, marginTop: 3, marginBottom: 0 }}>
             {product.categoryName ?? "Без категорії"}
-            {product.barcode && ` · ${product.barcode}`}
+            {product.barcodes?.[0] && ` · ${product.barcodes[0]}`}
             {` · ${product.unit}`}
           </p>
         </div>
@@ -233,7 +233,7 @@ export default function ProductPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <Field label="Назва" value={product.name} />
                 <Grid>
-                  <Field label="Штрихкод" value={<span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>{product.barcode ?? "—"}</span>} />
+                  <Field label="Штрихкод" value={<span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>{product.barcodes?.[0] ?? "—"}</span>} />
                   <Field label="Одиниця виміру" value={product.unit} />
                   <Field label="Категорія" value={product.categoryName ?? "—"} />
                   <Field label="Сегмент" value={product.segmentName ?? "—"} />

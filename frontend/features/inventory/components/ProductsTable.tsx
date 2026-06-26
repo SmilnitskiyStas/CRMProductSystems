@@ -175,7 +175,7 @@ function ProductDetail({ p }: { p: Product }) {
             label="Штрихкод"
             value={
               <span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>
-                {p.barcode ?? "—"}
+                {p.barcodes?.[0] ?? "—"}
               </span>
             }
           />
@@ -365,7 +365,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                       color: "#4B5563",
                     }}
                   >
-                    {product.barcode ?? "—"}
+                    {product.barcodes?.[0] ?? "—"}
                   </td>
                   <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
                     {product.name}
