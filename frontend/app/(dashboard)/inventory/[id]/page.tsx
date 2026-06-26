@@ -151,7 +151,7 @@ export default function ProductPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <button
-          onClick={() => router.push("/inventory")}
+          onClick={() => router.back()}
           style={{
             background: "transparent", border: "none",
             color: "#6B7280", cursor: "pointer",
@@ -159,7 +159,7 @@ export default function ProductPage() {
             fontSize: 13, padding: 0, flexShrink: 0,
           }}
         >
-          <ArrowLeft size={15} /> Каталог
+          <ArrowLeft size={15} /> Назад
         </button>
 
         <div style={{ flex: 1, minWidth: 0 }}>
