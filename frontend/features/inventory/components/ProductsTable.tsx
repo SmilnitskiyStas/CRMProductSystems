@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, Pencil, Trash2, Tag, Thermometer } from "lucide-react";
+import { Eye, Pencil, Trash2, BarChart2 } from "lucide-react";
 import type { Product } from "../types";
 import { ITEM_TYPE_LABELS } from "./ProductForm";
 import { ActionMenu } from "@/components/ui/ActionMenu";
@@ -11,6 +11,7 @@ import {
   DrawerSection,
   DrawerGrid,
 } from "@/components/ui/DetailDrawer";
+import { ProductAnalyticsTab } from "./ProductAnalyticsTab";
 
 interface Props {
   products: Product[];
@@ -120,6 +121,45 @@ function DeleteDialog({
         </div>
       </div>
     </>
+  );
+}
+
+// ── Tab bar ──────────────────────────────────────────────────────────────────
+type DrawerTab = "info" | "analytics";
+
+function TabBar({ active, onChange }: { active: DrawerTab; onChange: (t: DrawerTab) => void }) {
+  const tabs: { key: DrawerTab; label: string; icon: React.ReactNode }[] = [
+    { key: "info",      label: "Інформація", icon: null },
+    { key: "analytics", label: "Аналітика",  icon: <BarChart2 size={13} /> },
+  ];
+  return (
+    // Negative margins break out of DetailDrawer's 20px/24px padding
+    <div style={{
+      display: "flex", gap: 4,
+      margin: "-20px -24px 16px",
+      padding: "10px 24px",
+      borderBottom: "1px solid #1F2937",
+      background: "#0D1117",
+    }}>
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+            cursor: "pointer",
+            background: active === t.key ? "#161B26" : "transparent",
+            border: `1px solid ${active === t.key ? "#374151" : "transparent"}`,
+            color: active === t.key ? "#E8EDF5" : "#6B7280",
+            transition: "all 0.1s",
+          }}
+        >
+          {t.icon}
+          {t.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -255,8 +295,14 @@ function ProductDetail({ p }: { p: Product }) {
 export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>("info");
 
   const pendingProduct = products.find((p) => p.id === pendingDeleteId) ?? null;
+
+  function openProduct(product: Product, tab: DrawerTab = "info") {
+    setSelected(product);
+    setDrawerTab(tab);
+  }
 
   return (
     <>
@@ -358,7 +404,12 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                         {
                           label: "Переглянути",
                           icon: <Eye size={13} />,
-                          onClick: () => setSelected(product),
+                          onClick: () => openProduct(product, "info"),
+                        },
+                        {
+                          label: "Аналітика",
+                          icon: <BarChart2 size={13} />,
+                          onClick: () => openProduct(product, "analytics"),
                         },
                         { separator: true },
                         {
@@ -395,15 +446,21 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
         />
       )}
 
-      {/* Detail drawer */}
+      {/* Detail drawer with tabs */}
       <DetailDrawer
         isOpen={selected !== null}
         onClose={() => setSelected(null)}
         title={selected?.name ?? ""}
         subtitle={selected ? `${selected.categoryName ?? "Без категорії"} · ${selected.unit}` : ""}
-        width={560}
+        width={580}
       >
-        {selected && <ProductDetail p={selected} />}
+        {selected && (
+          <>
+            <TabBar active={drawerTab} onChange={setDrawerTab} />
+            {drawerTab === "info"      && <ProductDetail p={selected} />}
+            {drawerTab === "analytics" && <ProductAnalyticsTab productId={selected.id} />}
+          </>
+        )}
       </DetailDrawer>
     </>
   );
