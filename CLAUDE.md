@@ -156,22 +156,48 @@ docker compose logs -f  # tail logs
 
 ## Multi-Agent Workflow
 
-This repository uses a structured multi-agent system. Agents are defined in `.claude/agents/`.
+This repository uses a **mandatory** multi-agent system. Agents are defined in `.claude/agents/`.
 
-### Agent Responsibilities
+> **RULE: Never implement code directly in the main session.**
+> For any implementation task — always spawn the appropriate role agent.
+> The main session orchestrates; agents implement.
 
-| Agent | When to invoke |
+### How to spawn an agent
+
+Agents in `.claude/agents/` are **not** built-in subagent types.
+Always spawn as `general-purpose` with an instruction to read the role file first:
+
+```
+Agent({
+  subagent_type: "general-purpose",
+  description: "frontend-developer: <short task description>",
+  prompt: `Read .claude/agents/frontend-developer.md first, then implement:
+<detailed task description with file paths, requirements, context>`
+})
+```
+
+### Agent → Task mapping (MANDATORY)
+
+| Task type | Agent to spawn |
 |---|---|
-| `project-manager` | Task creation, status tracking, sprint coordination |
-| `project-architect` | Architecture decisions, breaking requirements into tasks |
-| `backend-developer` | API endpoints, services, domain logic, backend tests |
-| `frontend-developer` | Pages, components, forms, API integration (Next.js / React) |
-| `mobile-developer` | Expo screens, components, navigation, API integration (Expo SDK 56 / RN) |
-| `database-engineer` | Schema design, migrations, indexes, RLS policies |
-| `qa-tester` | Test plans, checklists, regression testing |
-| `security-reviewer` | Auth, permissions, input validation, sensitive data |
-| `devops-engineer` | Docker, CI/CD, environment configuration |
-| `documentation-writer` | Docs, API contracts, architecture summaries |
+| New page / component / form / hook (Next.js/React) | `frontend-developer` |
+| API endpoint / service / domain logic (C#) | `backend-developer` |
+| Expo screen / mobile component / navigation | `mobile-developer` |
+| DB schema / EF migration / index / RLS policy | `database-engineer` |
+| Architecture decision / module design | `project-architect` |
+| Task tracking / sprint / status update | `project-manager` |
+| Test plan / regression check | `qa-tester` |
+| Auth / permissions / input validation | `security-reviewer` |
+| Docker / CI/CD / deployment | `devops-engineer` |
+| Docs / API contracts / ADR | `documentation-writer` |
+
+### When the main session acts directly (exceptions)
+
+The main session may act without spawning an agent **only** for:
+- Reading files / exploring codebase
+- Running `tsc --noEmit`, `git status`, `git push`, lint
+- Quick isolated fix in a single well-known file (< 10 lines)
+- Answering architecture questions without writing code
 
 ### Agent Workflow (all agents must follow)
 
