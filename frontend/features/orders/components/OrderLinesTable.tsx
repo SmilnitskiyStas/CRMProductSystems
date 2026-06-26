@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { BarChart2 } from "lucide-react";
 import { BufferFunnel } from "./BufferFunnel";
 import type { OrderLine } from "../types";
-import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
+import { ActionMenu } from "@/components/ui/ActionMenu";
 
 const th: React.CSSProperties = {
   textAlign: "left",
@@ -33,6 +35,8 @@ const roundingLabels: Record<OrderLine["rounding"], string> = {
 };
 
 export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
+  const router = useRouter();
+
   if (lines.length === 0) {
     return (
       <div style={{ color: "#4B5563", fontSize: 14, padding: "48px 0", textAlign: "center" }}>
@@ -52,6 +56,7 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
           <th style={{ ...th, textAlign: "right" }}>ББ</th>
           <th style={{ ...th, textAlign: "right" }}>Розрахунок</th>
           <th style={{ ...th, textAlign: "right" }}>Замовити</th>
+          <th style={th}>Дії</th>
         </tr>
       </thead>
       <tbody>
@@ -60,14 +65,11 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
           return (
             <tr key={l.productId} style={ordering ? undefined : { opacity: 0.45 }}>
               <td style={td}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div>{l.productName}</div>
-                    {l.barcode && (
-                      <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{l.barcode}</div>
-                    )}
-                  </div>
-                  <ProductAnalyticsLink productId={l.productId} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div>{l.productName}</div>
+                  {l.barcode && (
+                    <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{l.barcode}</div>
+                  )}
                 </div>
               </td>
               <td style={td}><BufferFunnel line={l} /></td>
@@ -91,6 +93,17 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
                 ) : (
                   <span style={{ color: "#34D399", fontSize: 12 }}>покрито</span>
                 )}
+              </td>
+              <td style={td}>
+                <ActionMenu
+                  items={[
+                    {
+                      label: "Аналітика товару",
+                      icon: <BarChart2 size={13} />,
+                      onClick: () => router.push(`/inventory/${l.productId}?tab=analytics`),
+                    },
+                  ]}
+                />
               </td>
             </tr>
           );

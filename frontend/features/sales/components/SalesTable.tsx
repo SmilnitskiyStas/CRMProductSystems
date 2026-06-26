@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { BarChart2, AlertTriangle } from "lucide-react";
 import type { DailySale } from "../types";
-import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
+import { ActionMenu } from "@/components/ui/ActionMenu";
 
 interface Props {
   sales: DailySale[];
@@ -34,6 +36,8 @@ const sourceLabels: Record<string, string> = {
 };
 
 export function SalesTable({ sales, onToggleAnomaly }: Props) {
+  const router = useRouter();
+
   if (sales.length === 0) {
     return (
       <div style={{ color: "#4B5563", fontSize: 14, padding: "48px 0", textAlign: "center" }}>
@@ -88,26 +92,22 @@ export function SalesTable({ sales, onToggleAnomaly }: Props) {
               )}
             </td>
             <td style={{ ...td, textAlign: "right" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
-              {s.productId && <ProductAnalyticsLink productId={s.productId} />}
-              <button
-                onClick={() => onToggleAnomaly(s.id, !s.isAnomaly)}
-                title={s.isAnomaly
-                  ? "Повернути до розрахунку ADU"
-                  : "Виключити з розрахунку ADU (оптовий продаж, помилка даних)"}
-                style={{
-                  background: "transparent",
-                  border: "1px solid #1F2937",
-                  borderRadius: 6,
-                  color: s.isAnomaly ? "#34D399" : "#6B7280",
-                  fontSize: 12,
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                }}
-              >
-                {s.isAnomaly ? "Включити" : "Аномалія"}
-              </button>
-              </div>
+              <ActionMenu
+                items={[
+                  {
+                    label: s.isAnomaly ? "Включити в ADU" : "Позначити аномалією",
+                    icon: <AlertTriangle size={13} />,
+                    onClick: () => onToggleAnomaly(s.id, !s.isAnomaly),
+                  },
+                  { separator: true },
+                  {
+                    label: "Аналітика товару",
+                    icon: <BarChart2 size={13} />,
+                    onClick: () => router.push(`/inventory/${s.productId}?tab=analytics`),
+                    disabled: !s.productId,
+                  },
+                ]}
+              />
             </td>
           </tr>
         ))}

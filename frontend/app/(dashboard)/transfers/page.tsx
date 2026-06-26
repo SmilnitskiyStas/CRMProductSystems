@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeftRight, Eye, CheckCircle, XCircle } from "lucide-react";
-import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
+import { useRouter } from "next/navigation";
+import { ArrowLeftRight, Eye, CheckCircle, XCircle, BarChart2 } from "lucide-react";
 import {
   useTransfers,
   useConfirmTransfer,
@@ -70,7 +70,7 @@ const thStyle: React.CSSProperties = {
 };
 
 // ── Detail drawer content ────────────────────────────────────────────────────
-function TransferDetail({ t }: { t: TransferDto }) {
+function TransferDetail({ t, onViewAnalytics }: { t: TransferDto; onViewAnalytics: (productId: string) => void }) {
   return (
     <>
       <DrawerSection title="Загальна інформація">
@@ -110,7 +110,7 @@ function TransferDetail({ t }: { t: TransferDto }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
-                  {["Товар", "Партія", "К-сть", "Термін", ""].map((h) => (
+                  {["Товар", "Партія", "К-сть", "Термін", "Дії"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -143,10 +143,7 @@ function TransferDetail({ t }: { t: TransferDto }) {
                         fontWeight: 500,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ flex: 1 }}>{item.productName}</span>
-                        <ProductAnalyticsLink productId={item.productId} size={12} />
-                      </div>
+                      {item.productName}
                     </td>
                     <td
                       style={{
@@ -186,7 +183,15 @@ function TransferDetail({ t }: { t: TransferDto }) {
                         : "—"}
                     </td>
                     <td style={{ padding: "7px 10px", borderBottom: "1px solid #1F2937", textAlign: "center" }}>
-                      <ProductAnalyticsLink productId={item.productId} size={12} />
+                      <ActionMenu
+                        items={[
+                          {
+                            label: "Аналітика товару",
+                            icon: <BarChart2 size={13} />,
+                            onClick: () => onViewAnalytics(item.productId),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -201,6 +206,7 @@ function TransferDetail({ t }: { t: TransferDto }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function TransfersPage() {
+  const router = useRouter();
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_RECEIVE_STOCK) : null;
 
@@ -353,7 +359,12 @@ export default function TransfersPage() {
             : ""
         }
       >
-        {selected && <TransferDetail t={selected} />}
+        {selected && (
+          <TransferDetail
+            t={selected}
+            onViewAnalytics={(productId) => router.push(`/inventory/${productId}?tab=analytics`)}
+          />
+        )}
       </DetailDrawer>
     </div>
   );

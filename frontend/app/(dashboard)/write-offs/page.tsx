@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Eye, CheckCircle, XCircle, FileDown, ChevronDown,
+  Eye, CheckCircle, XCircle, FileDown, ChevronDown, BarChart2,
 } from "lucide-react";
-import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 import {
   useWriteOffs,
   useApproveWriteOff,
@@ -74,7 +74,7 @@ const thStyle: React.CSSProperties = {
 };
 
 // ── Detail drawer content ────────────────────────────────────────────────────
-function WriteOffDetail({ w }: { w: WriteOffDto }) {
+function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytics: (productId: string) => void }) {
   return (
     <>
       <DrawerSection title="Загальна інформація">
@@ -132,7 +132,7 @@ function WriteOffDetail({ w }: { w: WriteOffDto }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
-                  {["Товар", "Партія", "К-сть", "Збиток", ""].map((h) => (
+                  {["Товар", "Партія", "К-сть", "Збиток", "Дії"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -165,10 +165,7 @@ function WriteOffDetail({ w }: { w: WriteOffDto }) {
                         fontWeight: 500,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ flex: 1 }}>{item.productName}</span>
-                        <ProductAnalyticsLink productId={item.productId} size={12} />
-                      </div>
+                      {item.productName}
                     </td>
                     <td
                       style={{
@@ -209,7 +206,15 @@ function WriteOffDetail({ w }: { w: WriteOffDto }) {
                         : "—"}
                     </td>
                     <td style={{ padding: "7px 10px", borderBottom: "1px solid #1F2937", textAlign: "center" }}>
-                      <ProductAnalyticsLink productId={item.productId} size={12} />
+                      <ActionMenu
+                        items={[
+                          {
+                            label: "Аналітика товару",
+                            icon: <BarChart2 size={13} />,
+                            onClick: () => onViewAnalytics(item.productId),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -224,6 +229,7 @@ function WriteOffDetail({ w }: { w: WriteOffDto }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function WriteOffsPage() {
+  const router = useRouter();
   const [statusFilter, setStatusFilter] = useState("");
   const { data: writeOffs = [], isLoading } = useWriteOffs(
     statusFilter ? { status: statusFilter } : undefined,
@@ -399,7 +405,12 @@ export default function WriteOffsPage() {
         title="Списання"
         subtitle={selected ? `${selected.storeName} · ${new Date(selected.createdAt).toLocaleDateString("uk-UA")}` : ""}
       >
-        {selected && <WriteOffDetail w={selected} />}
+        {selected && (
+          <WriteOffDetail
+            w={selected}
+            onViewAnalytics={(productId) => router.push(`/inventory/${productId}?tab=analytics`)}
+          />
+        )}
       </DetailDrawer>
     </div>
   );

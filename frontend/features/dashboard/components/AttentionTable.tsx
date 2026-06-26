@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { BarChart2 } from "lucide-react";
 import type { AttentionItem, ItemStatus } from "../types";
-import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
+import { ActionMenu } from "@/components/ui/ActionMenu";
 
 const STATUS_CONFIG: Record<ItemStatus, { label: string; color: string; bg: string }> = {
   safe: { label: "Safe", color: "#22c55e", bg: "#0d2818" },
@@ -24,6 +26,7 @@ interface Props {
 }
 
 export function AttentionTable({ items = [], isLoading }: Props) {
+  const router = useRouter();
   const [filter, setFilter] = useState<ItemStatus | "all">("all");
 
   const filtered = filter === "all" ? items : items.filter((i) => i.status === filter);
@@ -100,7 +103,7 @@ export function AttentionTable({ items = [], isLoading }: Props) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1F2937" }}>
-                {["Назва", "SKU", "Категорія", "Зона", "Кількість", "Мін. залишок", "Статус", ""].map(
+                {["Назва", "SKU", "Категорія", "Зона", "Кількість", "Мін. залишок", "Статус", "Дії"].map(
                   (h) => (
                     <th
                       key={h}
@@ -188,7 +191,15 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                       </span>
                     </td>
                     <td style={{ padding: "8px 16px" }}>
-                      <ProductAnalyticsLink productId={item.productId} />
+                      <ActionMenu
+                        items={[
+                          {
+                            label: "Аналітика товару",
+                            icon: <BarChart2 size={13} />,
+                            onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 );

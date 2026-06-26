@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { BarChart2 } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { useAcceptAiOrder, useRejectAiOrder, useUpdateAiOrderItem } from "../hooks/useAiOrders";
 import { STATUS_META, type AiOrder, type AiOrderItem } from "../types";
-import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
+import { ActionMenu } from "@/components/ui/ActionMenu";
 
 const th: React.CSSProperties = {
   textAlign: "left", color: "#6B7280", fontSize: 11, fontWeight: 600,
@@ -32,6 +34,7 @@ function DeltaBadge({ item }: { item: AiOrderItem }) {
 }
 
 export function AiOrderReview({ order }: { order: AiOrder }) {
+  const router = useRouter();
   const updateItem = useUpdateAiOrderItem();
   const accept = useAcceptAiOrder();
   const reject = useRejectAiOrder();
@@ -103,20 +106,18 @@ export function AiOrderReview({ order }: { order: AiOrder }) {
             <th style={{ ...th, textAlign: "right" }}>AI пропонує</th>
             <th style={{ ...th, textAlign: "right" }}>Ваша зміна</th>
             <th style={th}>Причина</th>
+            <th style={th}>Дії</th>
           </tr>
         </thead>
         <tbody>
           {order.items.map((item) => (
             <tr key={item.id}>
               <td style={td}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div>{item.productName}</div>
-                    {item.barcode && (
-                      <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{item.barcode}</div>
-                    )}
-                  </div>
-                  <ProductAnalyticsLink productId={item.productId} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div>{item.productName}</div>
+                  {item.barcode && (
+                    <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{item.barcode}</div>
+                  )}
                 </div>
               </td>
               <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#9CA3AF" }}>
@@ -155,6 +156,17 @@ export function AiOrderReview({ order }: { order: AiOrder }) {
                 ) : (
                   <span style={{ color: "#4B5563", fontSize: 12 }}>математична формула</span>
                 )}
+              </td>
+              <td style={td}>
+                <ActionMenu
+                  items={[
+                    {
+                      label: "Аналітика товару",
+                      icon: <BarChart2 size={13} />,
+                      onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
+                    },
+                  ]}
+                />
               </td>
             </tr>
           ))}
