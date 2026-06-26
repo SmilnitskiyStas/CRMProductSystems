@@ -15,6 +15,52 @@ function formatDate(iso: string): string {
   });
 }
 
+function formatPayloadPreview(eventType: string, payload: string | null): string {
+  if (!payload) return "—";
+  try {
+    const data = JSON.parse(payload) as Record<string, unknown>;
+    switch (eventType) {
+      case "weekly_report": {
+        const parts: string[] = [];
+        if (data.safe    != null) parts.push(`Норма: ${data.safe}`);
+        if (data.warning != null) parts.push(`Попередження: ${data.warning}`);
+        if (data.critical != null) parts.push(`Критично: ${data.critical}`);
+        if (data.expired  != null) parts.push(`Прострочено: ${data.expired}`);
+        return parts.length ? parts.join(" · ") : "Тижневий звіт";
+      }
+      case "stock.expiry_warning":
+      case "stock.expiry_critical":
+      case "stock.expired": {
+        const name = data.productName ?? data.name ?? data.product;
+        const days = data.daysLeft ?? data.days_left;
+        const qty  = data.quantity ?? data.qty;
+        if (name) {
+          const info: string[] = [String(name)];
+          if (days != null) info.push(Number(days) <= 0 ? "прострочено" : `${days} дн.`);
+          if (qty  != null) info.push(`к-сть: ${qty}`);
+          return info.join(" · ");
+        }
+        break;
+      }
+      case "stock.needs_verification": {
+        const name = data.productName ?? data.name ?? data.product;
+        if (name) return `${name} — потребує перевірки`;
+        break;
+      }
+    }
+    // Fallback: show key=value pairs, skip tenantId/storeId noise
+    const SKIP = new Set(["tenantId", "storeId", "id", "tenantid", "storeid"]);
+    const pairs = Object.entries(data)
+      .filter(([k]) => !SKIP.has(k))
+      .slice(0, 4)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ");
+    return pairs || "—";
+  } catch {
+    return payload.length > 80 ? payload.slice(0, 80) + "…" : payload;
+  }
+}
+
 const STATUS_COLOR: Record<string, { bg: string; text: string; label: string }> = {
   sent:    { bg: "#052e16", text: "#4ADE80", label: "Надіслано" },
   failed:  { bg: "#450a0a", text: "#F87171", label: "Помилка"   },
@@ -149,7 +195,7 @@ export function NotificationHistoryList() {
                   color: "#6B7280", fontSize: 12,
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
-                  {item.payload ?? "—"}
+                  {formatPayloadPreview(item.eventType, item.payload)}
                 </div>
               </div>
 
