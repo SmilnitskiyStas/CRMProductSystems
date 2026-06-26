@@ -97,6 +97,40 @@ public sealed class ItemsController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
+    [HttpGet("lookup")]
+    [ProducesResponseType(typeof(BarcodeProductLookupDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> LookupByBarcode([FromQuery] string barcode, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(barcode))
+            return BadRequest(new { error = "Barcode is required." });
+
+        var result = await _catalog.LookupByBarcodeExternalAsync(barcode, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPost("{id:guid}/image")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "No file uploaded." });
+
+        if (file.Length > 5 * 1024 * 1024)
+            return BadRequest(new { error = "File too large. Max 5 MB." });
+
+        using var stream = file.OpenReadStream();
+        var (url, error) = await _catalog.UploadImageAsync(id, stream, file.FileName, ct);
+
+        if (error == "Product not found.") return NotFound(new { error });
+        if (error is not null) return BadRequest(new { error });
+
+        return Ok(new { imageUrl = url });
+    }
+
     [HttpGet("{id:guid}/suppliers")]
     [ProducesResponseType(typeof(List<ProductSupplierSettingDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSuppliers(Guid id, CancellationToken ct)

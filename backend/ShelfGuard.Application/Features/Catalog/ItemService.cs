@@ -205,6 +205,121 @@ public sealed class ItemService : IItemService
         return (created is null ? ToSupplierDtoMinimal(setting) : ToSupplierDto(created), null);
     }
 
+    public async Task<BarcodeProductLookupDto?> LookupByBarcodeExternalAsync(string barcode, CancellationToken ct)
+    {
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.Add("User-Agent", "ShelfGuard/1.0 (contact@shelfguard.app)");
+
+        var url = $"https://world.openfoodfacts.org/api/v0/product/{barcode}.json";
+        var resp = await http.GetAsync(url, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+
+        var json = await resp.Content.ReadAsStringAsync(ct);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        // Check if product was found (status: 1 = found, 0 = not found)
+        if (!root.TryGetProperty("status", out var status) || status.GetInt32() != 1)
+            return null;
+
+        var p = root.GetProperty("product");
+
+        // Name: prefer Ukrainian, then generic
+        var name = GetString(p, "product_name_uk")
+                ?? GetString(p, "product_name")
+                ?? GetString(p, "product_name_en")
+                ?? "Невідомий продукт";
+
+        // Brand
+        var brand = GetString(p, "brands");
+
+        // Manufacturer — from "manufacturing_places" or "manufacturers_tags"
+        string? manufacturer = null;
+        if (p.TryGetProperty("manufacturing_places", out var mfgEl) && mfgEl.ValueKind == System.Text.Json.JsonValueKind.String)
+            manufacturer = mfgEl.GetString();
+
+        // Country — from countries_tags, take first "en:ukraine" or first entry
+        string? country = null;
+        if (p.TryGetProperty("countries_tags", out var ct2) && ct2.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            foreach (var c in ct2.EnumerateArray())
+            {
+                var cv = c.GetString() ?? "";
+                if (cv.Contains("ukraine", StringComparison.OrdinalIgnoreCase)) { country = "Україна"; break; }
+            }
+            if (country is null)
+            {
+                var first = ct2.EnumerateArray().FirstOrDefault();
+                if (first.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    var raw = first.GetString() ?? "";
+                    country = raw.Contains(':') ? raw.Split(':')[1] : raw;
+                }
+            }
+        }
+
+        // Image URL
+        var imageUrl = GetString(p, "image_url") ?? GetString(p, "image_front_url");
+
+        // Unit — from quantity field e.g. "100 g" or "1 L"
+        var unit = "шт";
+        var qty = GetString(p, "quantity");
+        if (qty is not null)
+        {
+            if (qty.Contains('г') || qty.Contains('g', StringComparison.OrdinalIgnoreCase)) unit = "г";
+            else if (qty.Contains('л') || qty.Contains('l', StringComparison.OrdinalIgnoreCase)) unit = "л";
+            else if (qty.Contains("мл") || qty.Contains("ml", StringComparison.OrdinalIgnoreCase)) unit = "мл";
+            else if (qty.Contains("кг") || qty.Contains("kg", StringComparison.OrdinalIgnoreCase)) unit = "кг";
+        }
+
+        return new BarcodeProductLookupDto(
+            Name:          name,
+            Barcodes:      [barcode],
+            Brand:         brand,
+            Manufacturer:  manufacturer,
+            CountryOrigin: country,
+            ImageUrl:      imageUrl,
+            ShelfLifeDays: null,
+            Unit:          unit
+        );
+    }
+
+    public async Task<(string? Url, string? Error)> UploadImageAsync(Guid itemId, Stream imageStream, string fileName, CancellationToken ct)
+    {
+        var item = await _repo.GetByIdAsync(itemId, ct);
+        if (item is null) return (null, "Product not found.");
+
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+        if (!allowed.Contains(ext)) return (null, "Unsupported image format.");
+
+        var uploadDir = Path.Combine("wwwroot", "uploads", "items");
+        Directory.CreateDirectory(uploadDir);
+
+        var fileNameOnDisk = $"{itemId}{ext}";
+        var filePath = Path.Combine(uploadDir, fileNameOnDisk);
+
+        using var fs = new FileStream(filePath, FileMode.Create);
+        await imageStream.CopyToAsync(fs, ct);
+
+        var url = $"/uploads/items/{fileNameOnDisk}";
+        item.ImageUrl = url;
+        _repo.Update(item);
+        await _repo.SaveChangesAsync(ct);
+
+        return (url, null);
+    }
+
+    private static string? GetString(System.Text.Json.JsonElement el, string prop)
+    {
+        if (el.TryGetProperty(prop, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            var s = v.GetString();
+            return string.IsNullOrWhiteSpace(s) ? null : s;
+        }
+        return null;
+    }
+
     // ── mapping ────────────────────────────────────────────────────────────
 
     private static ItemDto ToDto(Item p) => new(

@@ -44,4 +44,8 @@ public interface IItemService
         Guid tenantId,
         AddProductSupplierRequest request,
         CancellationToken ct = default);
+
+    Task<BarcodeProductLookupDto?> LookupByBarcodeExternalAsync(string barcode, CancellationToken ct);
+
+    Task<(string? Url, string? Error)> UploadImageAsync(Guid itemId, Stream imageStream, string fileName, CancellationToken ct);
 }
