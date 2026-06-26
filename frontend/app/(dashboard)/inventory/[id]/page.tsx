@@ -303,7 +303,15 @@ export default function ProductPage() {
 
       {/* ── Analytics tab ──────────────────────────────────────────────── */}
       {tab === "analytics" && (
-        <ProductAnalyticsTab productId={id} chartHeight={380} />
+        <ProductAnalyticsTab
+          productId={id}
+          chartHeight={380}
+          buffers={{
+            safetyBuffer: product.safetyBuffer,
+            minStock: product.minStock,
+            maxStock: product.maxStock,
+          }}
+        />
       )}
     </div>
   );

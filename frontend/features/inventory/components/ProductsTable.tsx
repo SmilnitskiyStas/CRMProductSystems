@@ -494,7 +494,16 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
           <>
             <TabBar active={drawerTab} onChange={setDrawerTab} />
             {drawerTab === "info"      && <ProductDetail p={selected} />}
-            {drawerTab === "analytics" && <ProductAnalyticsTab productId={selected.id} />}
+            {drawerTab === "analytics" && (
+              <ProductAnalyticsTab
+                productId={selected.id}
+                buffers={{
+                  safetyBuffer: selected.safetyBuffer,
+                  minStock: selected.minStock,
+                  maxStock: selected.maxStock,
+                }}
+              />
+            )}
           </>
         )}
       </DetailDrawer>
