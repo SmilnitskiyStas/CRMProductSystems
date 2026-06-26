@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { useAcceptAiOrder, useRejectAiOrder, useUpdateAiOrderItem } from "../hooks/useAiOrders";
 import { STATUS_META, type AiOrder, type AiOrderItem } from "../types";
+import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 
 const th: React.CSSProperties = {
   textAlign: "left", color: "#6B7280", fontSize: 11, fontWeight: 600,
@@ -108,10 +109,15 @@ export function AiOrderReview({ order }: { order: AiOrder }) {
           {order.items.map((item) => (
             <tr key={item.id}>
               <td style={td}>
-                <div>{item.productName}</div>
-                {item.barcode && (
-                  <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{item.barcode}</div>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div>{item.productName}</div>
+                    {item.barcode && (
+                      <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{item.barcode}</div>
+                    )}
+                  </div>
+                  <ProductAnalyticsLink productId={item.productId} />
+                </div>
               </td>
               <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#9CA3AF" }}>
                 {item.quantityBase}

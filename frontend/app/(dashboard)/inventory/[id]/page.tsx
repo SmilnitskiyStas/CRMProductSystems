@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, BarChart2, Info, ExternalLink,
   ArrowDownToLine, TrendingUp, Trash2, RefreshCw, Loader2,
@@ -120,8 +120,11 @@ function StatCard({
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
-  const router  = useRouter();
-  const [tab, setTab] = useState<PageTab>("info");
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<PageTab>(
+    searchParams.get("tab") === "analytics" ? "analytics" : "info",
+  );
 
   const { data: product, isLoading } = useProduct(id);
 

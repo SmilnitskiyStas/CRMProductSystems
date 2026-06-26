@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AttentionItem, ItemStatus } from "../types";
+import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 
 const STATUS_CONFIG: Record<ItemStatus, { label: string; color: string; bg: string }> = {
   safe: { label: "Safe", color: "#22c55e", bg: "#0d2818" },
@@ -99,7 +100,7 @@ export function AttentionTable({ items = [], isLoading }: Props) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1F2937" }}>
-                {["Назва", "SKU", "Категорія", "Зона", "Кількість", "Мін. залишок", "Статус"].map(
+                {["Назва", "SKU", "Категорія", "Зона", "Кількість", "Мін. залишок", "Статус", ""].map(
                   (h) => (
                     <th
                       key={h}
@@ -185,6 +186,9 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                         />
                         {cfg.label}
                       </span>
+                    </td>
+                    <td style={{ padding: "8px 16px" }}>
+                      <ProductAnalyticsLink productId={item.productId} />
                     </td>
                   </tr>
                 );

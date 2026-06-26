@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Eye, CheckCircle, XCircle, FileDown, ChevronDown,
 } from "lucide-react";
+import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 import {
   useWriteOffs,
   useApproveWriteOff,
@@ -131,7 +132,7 @@ function WriteOffDetail({ w }: { w: WriteOffDto }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
-                  {["Товар", "Партія", "К-сть", "Збиток"].map((h) => (
+                  {["Товар", "Партія", "К-сть", "Збиток", ""].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -164,7 +165,10 @@ function WriteOffDetail({ w }: { w: WriteOffDto }) {
                         fontWeight: 500,
                       }}
                     >
-                      {item.productName}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ flex: 1 }}>{item.productName}</span>
+                        <ProductAnalyticsLink productId={item.productId} size={12} />
+                      </div>
                     </td>
                     <td
                       style={{
@@ -203,6 +207,9 @@ function WriteOffDetail({ w }: { w: WriteOffDto }) {
                       {item.lossAmount != null
                         ? `${item.lossAmount.toLocaleString("uk-UA")} ₴`
                         : "—"}
+                    </td>
+                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #1F2937", textAlign: "center" }}>
+                      <ProductAnalyticsLink productId={item.productId} size={12} />
                     </td>
                   </tr>
                 ))}

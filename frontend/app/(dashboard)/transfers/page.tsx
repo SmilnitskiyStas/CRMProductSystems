@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ArrowLeftRight, Eye, CheckCircle, XCircle } from "lucide-react";
+import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 import {
   useTransfers,
   useConfirmTransfer,
@@ -109,7 +110,7 @@ function TransferDetail({ t }: { t: TransferDto }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
-                  {["Товар", "Партія", "К-сть", "Термін"].map((h) => (
+                  {["Товар", "Партія", "К-сть", "Термін", ""].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -142,7 +143,10 @@ function TransferDetail({ t }: { t: TransferDto }) {
                         fontWeight: 500,
                       }}
                     >
-                      {item.productName}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ flex: 1 }}>{item.productName}</span>
+                        <ProductAnalyticsLink productId={item.productId} size={12} />
+                      </div>
                     </td>
                     <td
                       style={{
@@ -180,6 +184,9 @@ function TransferDetail({ t }: { t: TransferDto }) {
                       {item.expiryDate
                         ? new Date(item.expiryDate).toLocaleDateString("uk-UA")
                         : "—"}
+                    </td>
+                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #1F2937", textAlign: "center" }}>
+                      <ProductAnalyticsLink productId={item.productId} size={12} />
                     </td>
                   </tr>
                 ))}

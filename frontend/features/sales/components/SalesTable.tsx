@@ -1,6 +1,7 @@
 "use client";
 
 import type { DailySale } from "../types";
+import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 
 interface Props {
   sales: DailySale[];
@@ -87,6 +88,8 @@ export function SalesTable({ sales, onToggleAnomaly }: Props) {
               )}
             </td>
             <td style={{ ...td, textAlign: "right" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+              {s.productId && <ProductAnalyticsLink productId={s.productId} />}
               <button
                 onClick={() => onToggleAnomaly(s.id, !s.isAnomaly)}
                 title={s.isAnomaly
@@ -104,6 +107,7 @@ export function SalesTable({ sales, onToggleAnomaly }: Props) {
               >
                 {s.isAnomaly ? "Включити" : "Аномалія"}
               </button>
+              </div>
             </td>
           </tr>
         ))}

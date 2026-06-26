@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, ShieldCheck, BarChart2 } from "lucide-react";
+import { Eye, ShieldCheck } from "lucide-react";
+import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 import type { ProductStockDto, BatchStatus } from "../types";
 import { STATUS_COLOR, STATUS_LABEL } from "../types";
 import { StatusBadge } from "./StatusBadge";
@@ -270,12 +271,15 @@ export function StockTable({
                     />
                   </td>
 
-                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500, maxWidth: 220 }}>
-                    <div
-                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      title={item.productName}
-                    >
-                      {item.productName}
+                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500, maxWidth: 240 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div
+                        style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}
+                        title={item.productName}
+                      >
+                        {item.productName}
+                      </div>
+                      <ProductAnalyticsLink productId={item.productId} />
                     </div>
                     <div style={{ color: "#4B5563", fontSize: 11, marginTop: 1 }}>
                       {item.storeName}
@@ -360,6 +364,7 @@ export function StockTable({
         title={selected?.productName ?? ""}
         subtitle={selected ? `${selected.storeName}${selected.zoneName ? ` · ${selected.zoneName}` : ""}` : ""}
         width={540}
+        actions={selected && <ProductAnalyticsLink productId={selected.productId} />}
       >
         {selected && <StockDetail item={selected} />}
       </DetailDrawer>

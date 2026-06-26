@@ -2,6 +2,7 @@
 
 import { BufferFunnel } from "./BufferFunnel";
 import type { OrderLine } from "../types";
+import { ProductAnalyticsLink } from "@/components/ui/ProductAnalyticsLink";
 
 const th: React.CSSProperties = {
   textAlign: "left",
@@ -59,10 +60,15 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
           return (
             <tr key={l.productId} style={ordering ? undefined : { opacity: 0.45 }}>
               <td style={td}>
-                <div>{l.productName}</div>
-                {l.barcode && (
-                  <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{l.barcode}</div>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div>{l.productName}</div>
+                    {l.barcode && (
+                      <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{l.barcode}</div>
+                    )}
+                  </div>
+                  <ProductAnalyticsLink productId={l.productId} />
+                </div>
               </td>
               <td style={td}><BufferFunnel line={l} /></td>
               <td style={num}>{l.stockOnHand}</td>
