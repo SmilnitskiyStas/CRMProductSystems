@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Building2, AlertTriangle, Activity, RefreshCw, Users } from "lucide-react";
+import { Shield, Building2, AlertTriangle, Activity, RefreshCw, Users, Plus } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { Btn } from "@/components/ui/Btn";
 import { useTenants, useProviderHealth } from "@/features/provider/hooks/useProvider";
 import { TenantCard } from "@/features/provider/components/TenantCard";
 import { TenantDetailPanel } from "@/features/provider/components/TenantDetailPanel";
@@ -121,29 +122,12 @@ export default function ProviderPage() {
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => setShowWizard(true)}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 16px", borderRadius: 8,
-                background: "#3B82F6", border: "none",
-                color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              + Новий клієнт
-            </button>
-            <button
-              onClick={() => refetchTenants()}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 14px", borderRadius: 8,
-                background: "transparent", border: "1px solid #1F2937",
-                color: "#6B7280", fontSize: 13, cursor: "pointer",
-              }}
-            >
-              <RefreshCw size={14} />
+            <Btn icon={<Plus size={15} />} onClick={() => setShowWizard(true)}>
+              Новий клієнт
+            </Btn>
+            <Btn variant="ghost" icon={<RefreshCw size={14} />} onClick={() => refetchTenants()}>
               Оновити
-            </button>
+            </Btn>
           </div>
         </div>
 
