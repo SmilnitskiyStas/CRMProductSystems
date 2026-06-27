@@ -22,7 +22,7 @@ public sealed class ItemServiceTests
     {
         var req = new CreateProductRequest(
             "Молоко 2.5% 1л", null, null, null, "шт", "MTS", null,
-            0, 0, 0, null, null, null, null, 20, null, 45.00m, null, null, null);
+            0, 0, 0, null, null, null, null, 20, null, 45.00m, null, null, null, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
 
@@ -41,7 +41,7 @@ public sealed class ItemServiceTests
     {
         var req = new CreateProductRequest(
             name, null, null, null, "шт", "MTS", null,
-            0, 0, 0, null, null, null, null, 20, null, null, null, null, null);
+            0, 0, 0, null, null, null, null, 20, null, null, null, null, null, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
 
@@ -57,7 +57,7 @@ public sealed class ItemServiceTests
     {
         var req = new CreateProductRequest(
             "Test", null, null, null, "шт", type, null,
-            0, 0, 0, null, null, null, null, 20, null, null, null, null, null);
+            0, 0, 0, null, null, null, null, 20, null, null, null, null, null, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
 
@@ -74,7 +74,7 @@ public sealed class ItemServiceTests
     {
         var req = new CreateProductRequest(
             "Test Product", null, null, null, "шт", type, null,
-            0, 0, 0, null, null, null, null, 20, null, null, null, null, null);
+            0, 0, 0, null, null, null, null, 20, null, null, null, null, null, null);
 
         var (product, error) = await _sut.CreateAsync(_tenantId, req);
 
@@ -93,7 +93,7 @@ public sealed class ItemServiceTests
 
         var req = new UpdateProductRequest(
             "Name", null, null, null, "шт", "MTS", null,
-            0, 0, 0, null, null, null, null, 20, null, null, null, true, null, null);
+            0, 0, 0, null, null, null, null, 20, null, null, null, true, null, null, null);
 
         var (product, error) = await _sut.UpdateAsync(id, req);
 
@@ -115,7 +115,7 @@ public sealed class ItemServiceTests
 
         var req = new UpdateProductRequest(
             "New Name", ["1234567890"], null, null, "кг", "MTO", null,
-            5, 100, 2, 0m, 8m, 14, null, 20, 30m, 50m, null, true, null, null);
+            5, 100, 2, 0m, 8m, 14, null, 20, 30m, 50m, null, true, null, null, null);
 
         var (product, error) = await _sut.UpdateAsync(existing.Id, req);
 

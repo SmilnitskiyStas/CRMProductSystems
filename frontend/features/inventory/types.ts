@@ -26,6 +26,7 @@ export interface Product {
   createdAt: string;
   manufacturer: string | null;    // НОВЕ
   countryOrigin: string | null;   // НОВЕ
+  perishabilityClass: string;     // НОВЕ
 }
 
 export interface BarcodeProductLookup {
@@ -60,6 +61,7 @@ export interface CreateProductPayload {
   imageUrl?: string;
   manufacturer?: string;         // НОВЕ
   countryOrigin?: string;        // НОВЕ
+  perishabilityClass?: string;   // НОВЕ
 }
 
 export interface UpdateProductPayload extends CreateProductPayload {

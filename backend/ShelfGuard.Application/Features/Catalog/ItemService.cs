@@ -1,5 +1,6 @@
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Catalog.Dtos;
+using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -67,6 +68,9 @@ public sealed class ItemService : IItemService
         if (!string.IsNullOrWhiteSpace(request.ItemType) && !IsValidItemType(request.ItemType))
             return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit.");
 
+        if (!string.IsNullOrWhiteSpace(request.PerishabilityClass) && !PerishabilityClass.IsValid(request.PerishabilityClass))
+            return (null, $"Invalid perishability class '{request.PerishabilityClass}'. Valid values: fresh, chilled, standard, durable.");
+
         var product = new Item
         {
             TenantId = tenantId,
@@ -90,6 +94,7 @@ public sealed class ItemService : IItemService
             ImageUrl = request.ImageUrl,
             Manufacturer = request.Manufacturer,
             CountryOrigin = request.CountryOrigin,
+            PerishabilityClass = request.PerishabilityClass ?? "standard",
         };
 
         await _repo.AddAsync(product, ct);
@@ -116,6 +121,9 @@ public sealed class ItemService : IItemService
         if (!string.IsNullOrWhiteSpace(request.ItemType) && !IsValidItemType(request.ItemType))
             return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit.");
 
+        if (!string.IsNullOrWhiteSpace(request.PerishabilityClass) && !PerishabilityClass.IsValid(request.PerishabilityClass))
+            return (null, $"Invalid perishability class '{request.PerishabilityClass}'. Valid values: fresh, chilled, standard, durable.");
+
         product.Name = request.Name.Trim();
         product.Barcodes = request.Barcodes ?? [];
         product.CategoryId = request.CategoryId;
@@ -138,6 +146,7 @@ public sealed class ItemService : IItemService
         product.IsActive = request.IsActive;
         product.Manufacturer = request.Manufacturer;
         product.CountryOrigin = request.CountryOrigin;
+        product.PerishabilityClass = request.PerishabilityClass ?? "standard";
 
         _repo.Update(product);
         await _repo.SaveChangesAsync(ct);
@@ -348,7 +357,8 @@ public sealed class ItemService : IItemService
         p.IsActive,
         p.CreatedAt,
         p.Manufacturer,
-        p.CountryOrigin
+        p.CountryOrigin,
+        p.PerishabilityClass
     );
 
     private static ProductSupplierSettingDto ToSupplierDto(ProductSupplierSetting s) => new(

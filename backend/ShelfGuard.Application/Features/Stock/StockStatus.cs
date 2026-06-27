@@ -17,7 +17,10 @@ public static class StockStatus
     public const int CriticalDays = 6;
     public const int WarningDays = 14;
 
-    public static string Compute(decimal quantity, DateOnly expiryDate, DateTime lastCheckedAt)
+    public static string Compute(decimal quantity, DateOnly expiryDate, DateTime lastCheckedAt) =>
+        Compute(quantity, expiryDate, lastCheckedAt, perishabilityClass: null);
+
+    public static string Compute(decimal quantity, DateOnly expiryDate, DateTime lastCheckedAt, string? perishabilityClass)
     {
         if (quantity <= 0)
             return SoldOut;
@@ -28,10 +31,12 @@ public static class StockStatus
         if (daysLeft <= 0)
             return Expired;
 
-        if (daysLeft <= CriticalDays)
+        var (criticalDays, warningDays) = PerishabilityClass.GetThresholds(perishabilityClass);
+
+        if (daysLeft <= criticalDays)
             return Critical;
 
-        if (daysLeft <= WarningDays)
+        if (daysLeft <= warningDays)
             return Warning;
 
         var daysSinceCheck = (DateTime.UtcNow - lastCheckedAt).TotalDays;

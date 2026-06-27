@@ -1016,6 +1016,13 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("PerishabilityClass")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("standard");
+
                     b.Property<decimal>("MaxStock")
                         .HasColumnType("decimal(10,2)");
 

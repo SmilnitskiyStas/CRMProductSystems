@@ -8,6 +8,13 @@ import { Btn } from "@/components/ui/Btn";
 import type { CreateProductPayload, Product, UpdateProductPayload } from "../types";
 import { productsApi } from "../api/products";
 
+export const PERISHABILITY_CLASS_OPTIONS: { value: string; label: string }[] = [
+  { value: "fresh",    label: "🥦 Fresh — овочі, фрукти, хліб (≤1/3 дні)" },
+  { value: "chilled",  label: "🥛 Chilled — молоко, м'ясо, риба (≤2/5 дні)" },
+  { value: "standard", label: "📦 Standard — пакована продукція (≤6/14 дні)" },
+  { value: "durable",  label: "🥫 Durable — консерви, крупи (≤14/30 дні)" },
+];
+
 export const ITEM_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "product",      label: "Товар" },
   { value: "service",      label: "Послуга" },
@@ -34,8 +41,9 @@ const productSchema = z.object({
   pricePurchase:  z.coerce.number().min(0).optional().or(z.literal("")),
   priceRetail:    z.coerce.number().min(0).optional().or(z.literal("")),
   isActive:       z.boolean(),
-  manufacturer:   z.string().max(255).optional(),
-  countryOrigin:  z.string().max(100).optional(),
+  manufacturer:        z.string().max(255).optional(),
+  countryOrigin:       z.string().max(100).optional(),
+  perishabilityClass:  z.string().min(1),
 });
 
 type FormValues = z.infer<typeof productSchema>;
@@ -48,6 +56,7 @@ const defaultValues: FormValues = {
   isActive: true,
   manufacturer: "",
   countryOrigin: "",
+  perishabilityClass: "standard",
 };
 
 interface Props {
@@ -117,8 +126,9 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             pricePurchase:  product.pricePurchase ?? "",
             priceRetail:    product.priceRetail ?? "",
             isActive:       product.isActive,
-            manufacturer:   product.manufacturer ?? "",
-            countryOrigin:  product.countryOrigin ?? "",
+            manufacturer:        product.manufacturer ?? "",
+            countryOrigin:       product.countryOrigin ?? "",
+            perishabilityClass:  product.perishabilityClass ?? "standard",
           }
         : defaultValues,
     );
@@ -181,8 +191,9 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
       vatRate:       values.vatRate,
       pricePurchase: values.pricePurchase !== "" ? Number(values.pricePurchase) : undefined,
       priceRetail:   values.priceRetail !== "" ? Number(values.priceRetail) : undefined,
-      manufacturer:  values.manufacturer || undefined,
-      countryOrigin: values.countryOrigin || undefined,
+      manufacturer:       values.manufacturer || undefined,
+      countryOrigin:      values.countryOrigin || undefined,
+      perishabilityClass: values.perishabilityClass,
     };
 
     if (isEditing) {
@@ -394,6 +405,16 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                 <label style={labelStyle}>ПДВ %</label>
                 <input {...register("vatRate")} type="number" step="0.01" min="0" max="100" style={inputStyle} />
               </div>
+            </div>
+
+            {/* PerishabilityClass */}
+            <div>
+              <label style={labelStyle}>Клас псуємості</label>
+              <select {...register("perishabilityClass")} style={{ ...inputStyle, cursor: "pointer" }}>
+                {PERISHABILITY_CLASS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </div>
 
             {/* Manufacturer + CountryOrigin */}

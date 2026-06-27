@@ -43,6 +43,33 @@ const thStyle: React.CSSProperties = {
   textAlign: "center",
 };
 
+// ── Perishability class badge ────────────────────────────────────────────────
+const PERISHABILITY_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+  fresh:    { label: "Fresh",    bg: "#052e16", color: "#4ADE80" },
+  chilled:  { label: "Chilled",  bg: "#0c1a3a", color: "#93C5FD" },
+  standard: { label: "Standard", bg: "#111827", color: "#9CA3AF" },
+  durable:  { label: "Durable",  bg: "#1c1200", color: "#FCD34D" },
+};
+
+function PerishabilityBadge({ value }: { value: string }) {
+  const badge = PERISHABILITY_BADGE[value] ?? PERISHABILITY_BADGE.standard;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 20,
+        background: badge.bg,
+        color: badge.color,
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      {badge.label}
+    </span>
+  );
+}
+
 // ── Confirm delete dialog ────────────────────────────────────────────────────
 function DeleteDialog({
   product,
@@ -185,6 +212,10 @@ function ProductDetail({ p }: { p: Product }) {
           <DrawerField label="Тип управління" value={p.managementType} />
           <DrawerField label="Тип товару" value={ITEM_TYPE_LABELS[p.itemType] ?? p.itemType} />
           <DrawerField
+            label="Клас псуємості"
+            value={<PerishabilityBadge value={p.perishabilityClass ?? "standard"} />}
+          />
+          <DrawerField
             label="Статус"
             value={
               <span
@@ -320,7 +351,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
           <thead>
             <tr>
               {[
-                "Штрихкод", "Назва", "Категорія", "Тип товару", "Одиниця",
+                "Штрихкод", "Назва", "Клас", "Категорія", "Тип товару", "Одиниця",
                 "Закупівля", "Роздриб", "Мін.", "Макс.",
                 "Статус", "Дії",
               ].map((h) => (
@@ -334,7 +365,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
             {products.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={12}
                   style={{
                     padding: "40px 0",
                     textAlign: "center",
@@ -369,6 +400,9 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                   </td>
                   <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
                     {product.name}
+                  </td>
+                  <td style={tdStyle}>
+                    <PerishabilityBadge value={product.perishabilityClass ?? "standard"} />
                   </td>
                   <td style={tdStyle}>{product.categoryName ?? "—"}</td>
                   <td style={tdStyle}>{ITEM_TYPE_LABELS[product.itemType] ?? product.itemType ?? "—"}</td>

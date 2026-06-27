@@ -11,6 +11,7 @@ public sealed class Item
     public List<string> Barcodes { get; set; } = [];
     public string? Manufacturer { get; set; }
     public string? CountryOrigin { get; set; }
+    public string PerishabilityClass { get; set; } = "standard";
     public string Name { get; set; } = string.Empty;
     public Guid? CategoryId { get; set; }
     public Guid? SegmentId { get; set; }

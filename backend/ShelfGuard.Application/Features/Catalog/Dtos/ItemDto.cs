@@ -26,7 +26,8 @@ public sealed record ItemDto(
     bool IsActive,
     DateTime CreatedAt,
     string? Manufacturer,
-    string? CountryOrigin
+    string? CountryOrigin,
+    string PerishabilityClass
 );
 
 public sealed record CreateProductRequest(
@@ -49,7 +50,8 @@ public sealed record CreateProductRequest(
     decimal? PriceRetail,
     string? ImageUrl,
     string? Manufacturer,
-    string? CountryOrigin
+    string? CountryOrigin,
+    string? PerishabilityClass
 );
 
 public sealed record UpdateProductRequest(
@@ -73,7 +75,8 @@ public sealed record UpdateProductRequest(
     string? ImageUrl,
     bool IsActive,
     string? Manufacturer,
-    string? CountryOrigin
+    string? CountryOrigin,
+    string? PerishabilityClass
 );
 
 public sealed record ProductSupplierSettingDto(
