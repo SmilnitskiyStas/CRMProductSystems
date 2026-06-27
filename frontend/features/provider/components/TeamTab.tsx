@@ -6,6 +6,7 @@ import { useProviderTeam, useDeactivateMember, useReactivateMember } from "../ho
 import { InviteProviderMemberModal } from "./InviteProviderMemberModal";
 import { EditMemberModal } from "./EditMemberModal";
 import type { ProviderTeamMemberDto } from "../api/providerTeamApi";
+import { Btn } from "@/components/ui/Btn";
 
 const ROLE_LABELS: Record<string, string> = {
   provider:       "Власник",
@@ -50,18 +51,9 @@ export function TeamTab() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 14px", borderRadius: 8,
-            background: "#1D3461", border: "1px solid #3B82F6",
-            color: "#93C5FD", fontSize: 13, cursor: "pointer",
-          }}
-        >
-          <UserPlus size={14} />
+        <Btn icon={<UserPlus size={14} />} onClick={() => setShowInvite(true)}>
           Запросити
-        </button>
+        </Btn>
       </div>
 
       {isLoading ? (

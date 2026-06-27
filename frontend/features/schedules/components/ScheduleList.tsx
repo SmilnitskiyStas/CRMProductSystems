@@ -11,6 +11,7 @@ import {
   useUpdateSchedule,
   useDeleteSchedule,
 } from "../hooks/useSchedules";
+import { Btn } from "@/components/ui/Btn";
 
 const STATUS_STYLE: Record<ScheduleStatus, { bg: string; color: string; border: string; label: string }> = {
   draft:     { bg: "#111827", color: "#6B7280", border: "#374151", label: "Чернетка"     },
@@ -106,25 +107,9 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
         <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700, margin: 0 }}>
           Графіки ({schedules.length})
         </h2>
-        <button
-          onClick={() => setCreateOpen(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "#1D3461",
-            border: "1px solid #3B82F6",
-            borderRadius: 8,
-            padding: "7px 12px",
-            color: "#93C5FD",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={14} />
+        <Btn size="sm" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
           Новий графік
-        </button>
+        </Btn>
       </div>
 
       {/* List */}

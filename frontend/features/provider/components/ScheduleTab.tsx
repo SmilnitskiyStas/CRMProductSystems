@@ -5,6 +5,7 @@ import { Calendar, Plus, Trash2, X } from "lucide-react";
 import { useProviderSchedule, useCreateScheduleSlot, useDeleteScheduleSlot } from "../hooks/useProviderSchedule";
 import { useProviderTeam } from "../hooks/useProviderTeam";
 import type { ProviderScheduleSlotDto } from "../api/providerScheduleApi";
+import { Btn } from "@/components/ui/Btn";
 
 const DAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 const DAY_FULL   = ["Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота", "Неділя"];
@@ -230,16 +231,9 @@ export function ScheduleTab() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8,
-            background: "#1D3461", border: "1px solid #3B82F6", color: "#93C5FD", fontSize: 13, cursor: "pointer",
-          }}
-        >
-          <Plus size={14} />
+        <Btn icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>
           Додати зміну
-        </button>
+        </Btn>
       </div>
 
       {isLoading ? (

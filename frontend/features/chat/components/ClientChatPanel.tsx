@@ -11,6 +11,7 @@ import {
 import { useMe } from "@/features/auth/hooks/useAuth";
 import type { ChatSessionDto } from "../types";
 import { RatingModal } from "./RatingModal";
+import { Btn } from "@/components/ui/Btn";
 
 export function ClientChatPanel() {
   const { data: me } = useMe();
@@ -97,25 +98,9 @@ export function ClientChatPanel() {
           alignItems: "center",
         }}>
           <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 14 }}>Мої чати</span>
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{
-              background: "#1D3461",
-              border: "1px solid #3B82F6",
-              borderRadius: 6,
-              color: "#93C5FD",
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "5px 10px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-            }}
-          >
-            <Plus size={12} />
+          <Btn size="sm" icon={<Plus size={12} />} onClick={() => setShowCreate(true)}>
             Новий
-          </button>
+          </Btn>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -302,22 +287,14 @@ export function ClientChatPanel() {
                     outline: "none",
                   }}
                 />
-                <button
+                <Btn
+                  icon={<Send size={15} />}
                   onClick={handleSend}
                   disabled={!newText.trim() || sendMessage.isPending}
-                  style={{
-                    background: "#1D3461",
-                    border: "1px solid #3B82F6",
-                    borderRadius: 8,
-                    color: "#93C5FD",
-                    padding: "9px 14px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
+                  style={{ padding: "9px 14px" }}
                 >
-                  <Send size={15} />
-                </button>
+                  {""}
+                </Btn>
               </div>
             ) : (
               <div style={{
@@ -427,23 +404,13 @@ export function ClientChatPanel() {
             />
 
             <div style={{ display: "flex", gap: 10 }}>
-              <button
+              <Btn
                 onClick={handleCreate}
                 disabled={!newSubject.trim() || !newFirstMsg.trim() || createChat.isPending}
-                style={{
-                  flex: 1,
-                  background: "#1D3461",
-                  border: "1px solid #3B82F6",
-                  borderRadius: 8,
-                  color: "#93C5FD",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  padding: "10px 0",
-                  cursor: "pointer",
-                }}
+                style={{ flex: 1, justifyContent: "center" }}
               >
                 {createChat.isPending ? "Створення..." : "Почати чат"}
-              </button>
+              </Btn>
               <button
                 onClick={() => setShowCreate(false)}
                 style={{

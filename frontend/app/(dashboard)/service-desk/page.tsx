@@ -13,6 +13,7 @@ import type { TicketDto } from "@/features/service-desk/types";
 import { ProviderSupportTab } from "@/features/provider/components/ProviderSupportTab";
 import { ChatSupportTab } from "@/features/provider/components/ChatSupportTab";
 import { ClientChatPanel } from "@/features/chat/components/ClientChatPanel";
+import { Btn } from "@/components/ui/Btn";
 
 type TenantTab = "all" | "my" | "chat";
 type ProviderTab = "tickets" | "chat";
@@ -114,25 +115,9 @@ export default function ServiceDeskPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setCreateOpen(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            background: "#1D3461",
-            border: "1px solid #3B82F6",
-            borderRadius: 8,
-            padding: "9px 16px",
-            color: "#93C5FD",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={15} />
+        <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
           Новий тікет
-        </button>
+        </Btn>
       </div>
 
       {/* Tabs */}

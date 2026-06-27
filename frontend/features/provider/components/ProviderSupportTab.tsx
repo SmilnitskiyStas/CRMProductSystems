@@ -15,6 +15,7 @@ import {
 } from "@/features/service-desk/types";
 import { TicketStatusBadge } from "@/features/service-desk/components/TicketStatusBadge";
 import { PriorityBadge } from "@/features/service-desk/components/PriorityBadge";
+import { Btn } from "@/components/ui/Btn";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -435,22 +436,9 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
           >
             Скасувати
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            style={{
-              background: canSubmit ? "#1D3461" : "#111827",
-              border: `1px solid ${canSubmit ? "#3B82F6" : "#1F2937"}`,
-              borderRadius: 8,
-              color: canSubmit ? "#93C5FD" : "#374151",
-              fontSize: 13,
-              fontWeight: 600,
-              padding: "9px 18px",
-              cursor: canSubmit ? "pointer" : "not-allowed",
-            }}
-          >
+          <Btn onClick={handleSubmit} disabled={!canSubmit}>
             {create.isPending ? "Збереження…" : "Створити тікет"}
-          </button>
+          </Btn>
         </div>
       </div>
     </div>
@@ -522,25 +510,9 @@ export function ProviderSupportTab() {
           )}
         </div>
 
-        <button
-          onClick={() => setCreateOpen(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            background: "#1D3461",
-            border: "1px solid #3B82F6",
-            borderRadius: 8,
-            padding: "8px 14px",
-            color: "#93C5FD",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={14} />
+        <Btn icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
           Новий тікет
-        </button>
+        </Btn>
       </div>
 
       {/* Filters */}

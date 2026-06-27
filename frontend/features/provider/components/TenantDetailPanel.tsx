@@ -12,6 +12,7 @@ import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUs
 import { AddTenantUserModal } from "./AddTenantUserModal";
 import { setToken, getToken } from "@/lib/api";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   tenantId: string;
@@ -245,29 +246,12 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                  <button
-                    onClick={savePlan}
-                    disabled={updatePlan.isPending}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "#1D3461", border: "1px solid #3B82F6",
-                      color: "#93C5FD", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
-                    <Save size={13} />
+                  <Btn size="sm" icon={<Save size={13} />} onClick={savePlan} disabled={updatePlan.isPending}>
                     {updatePlan.isPending ? "Збереження…" : "Зберегти"}
-                  </button>
-                  <button
-                    onClick={() => setEditingPlan(false)}
-                    style={{
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "transparent", border: "1px solid #374151",
-                      color: "#6B7280", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
+                  </Btn>
+                  <Btn size="sm" variant="ghost" onClick={() => setEditingPlan(false)}>
                     Скасувати
-                  </button>
+                  </Btn>
                 </div>
               </div>
             ) : (
@@ -335,29 +319,12 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                  <button
-                    onClick={saveModules}
-                    disabled={updateModules.isPending}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "#1D3461", border: "1px solid #3B82F6",
-                      color: "#93C5FD", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
-                    <Save size={13} />
+                  <Btn size="sm" icon={<Save size={13} />} onClick={saveModules} disabled={updateModules.isPending}>
                     {updateModules.isPending ? "Збереження…" : "Зберегти"}
-                  </button>
-                  <button
-                    onClick={() => setEditingModules(false)}
-                    style={{
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "transparent", border: "1px solid #374151",
-                      color: "#6B7280", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
+                  </Btn>
+                  <Btn size="sm" variant="ghost" onClick={() => setEditingModules(false)}>
                     Скасувати
-                  </button>
+                  </Btn>
                 </div>
               </div>
             ) : (
@@ -454,38 +421,13 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
               <div style={{ color: "#F87171", fontSize: 12, marginBottom: 10 }}>{impersonateErr}</div>
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button
-                onClick={handleImpersonate}
-                disabled={impersonating || !tenant.isActive}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "9px 18px", borderRadius: 8,
-                  background: impersonating || !tenant.isActive ? "#1A1F2C" : "#1D3461",
-                  border: `1px solid ${impersonating || !tenant.isActive ? "#374151" : "#3B82F6"}`,
-                  color: impersonating || !tenant.isActive ? "#4B5563" : "#93C5FD",
-                  fontSize: 13, fontWeight: 600,
-                  cursor: impersonating || !tenant.isActive ? "default" : "pointer",
-                }}
-              >
-                <LogIn size={15} />
+              <Btn icon={<LogIn size={15} />} onClick={handleImpersonate} disabled={impersonating || !tenant.isActive}>
                 {impersonating ? "Підключення…" : "Увійти як клієнт"}
-              </button>
+              </Btn>
 
-              <button
-                onClick={() => onViewLogs(tenantId)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "9px 18px", borderRadius: 8,
-                  background: "transparent",
-                  border: "1px solid #374151",
-                  color: "#9CA3AF",
-                  fontSize: 13, fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                <ScrollText size={15} />
+              <Btn variant="ghost" icon={<ScrollText size={15} />} onClick={() => onViewLogs(tenantId)}>
                 Логи
-              </button>
+              </Btn>
             </div>
             {!tenant.isActive && (
               <div style={{ color: "#4B5563", fontSize: 11, marginTop: 6 }}>
@@ -495,40 +437,14 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
 
             <div style={{ borderTop: "1px solid #1F2937", marginTop: 16, paddingTop: 16 }}>
               {!tenant.isActive && (
-                <button
-                  onClick={() => activate.mutate()}
-                  disabled={activate.isPending}
-                  style={{
-                    padding: "9px 18px",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: activate.isPending ? "default" : "pointer",
-                    background: "#052e16",
-                    border: "1px solid #166534",
-                    color: "#4ADE80",
-                  }}
-                >
+                <Btn variant="success" onClick={() => activate.mutate()} disabled={activate.isPending}>
                   {activate.isPending ? "Зміна…" : "Активувати"}
-                </button>
+                </Btn>
               )}
               {tenant.isActive && (
-                <button
-                  onClick={() => deactivate.mutate()}
-                  disabled={deactivate.isPending}
-                  style={{
-                    padding: "9px 18px",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: deactivate.isPending ? "default" : "pointer",
-                    background: "#1A1011",
-                    border: "1px solid #7F1D1D",
-                    color: "#F87171",
-                  }}
-                >
+                <Btn variant="danger" onClick={() => deactivate.mutate()} disabled={deactivate.isPending}>
                   {deactivate.isPending ? "Зміна…" : "Деактивувати"}
-                </button>
+                </Btn>
               )}
             </div>
           </div>

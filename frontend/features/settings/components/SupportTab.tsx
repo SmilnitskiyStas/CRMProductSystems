@@ -11,6 +11,7 @@ import {
   type TicketStatus,
   type SupportTicketDto,
 } from "@/features/support/types";
+import { Btn } from "@/components/ui/Btn";
 
 export function SupportTab() {
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
@@ -39,18 +40,9 @@ export function SupportTab() {
           <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>Служба підтримки</div>
           <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>Відправте запит і отримайте відповідь від нашої команди</div>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 14px", borderRadius: 8,
-            background: "#1D3461", border: "1px solid #3B82F6",
-            color: "#93C5FD", fontSize: 13, cursor: "pointer",
-          }}
-        >
-          <Plus size={14} />
+        <Btn icon={<Plus size={14} />} onClick={() => setShowCreate(true)}>
           Новий запит
-        </button>
+        </Btn>
       </div>
 
       {isLoading ? (
@@ -271,16 +263,9 @@ function ClientTicketThread({ ticketId, onBack }: { ticketId: string; onBack: ()
               borderRadius: 9, padding: "10px 14px", color: "#E8EDF5", fontSize: 13, outline: "none",
             }}
           />
-          <button
-            onClick={send}
-            disabled={!text.trim() || addMsg.isPending}
-            style={{
-              background: "#1D3461", border: "1px solid #3B82F6",
-              borderRadius: 9, padding: "0 16px", color: "#93C5FD", cursor: "pointer",
-            }}
-          >
-            <Send size={15} />
-          </button>
+          <Btn icon={<Send size={15} />} onClick={send} disabled={!text.trim() || addMsg.isPending} style={{ padding: "0 16px" }}>
+            {""}
+          </Btn>
         </div>
       )}
     </div>

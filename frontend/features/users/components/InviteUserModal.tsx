@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useInviteUser } from "../hooks/useUsers";
 import { ROLE_LABELS } from "@/features/profile/types";
+import { Btn } from "@/components/ui/Btn";
 
 const INVITE_ROLES = [
   "store_manager",
@@ -195,39 +196,12 @@ export function InviteUserModal({ onClose }: Props) {
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
-            <button
-              type="submit"
-              disabled={invite.isPending}
-              style={{
-                flex: 1,
-                padding: "10px 0",
-                borderRadius: 8,
-                background: "#1D3461",
-                border: "1px solid #3B82F6",
-                color: "#93C5FD",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: invite.isPending ? "default" : "pointer",
-                opacity: invite.isPending ? 0.7 : 1,
-              }}
-            >
+            <Btn type="submit" disabled={invite.isPending} style={{ flex: 1, justifyContent: "center" }}>
               {invite.isPending ? "Створення…" : "Запросити"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "10px 20px",
-                borderRadius: 8,
-                background: "transparent",
-                border: "1px solid #374151",
-                color: "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            </Btn>
+            <Btn type="button" variant="ghost" onClick={onClose}>
               Скасувати
-            </button>
+            </Btn>
           </div>
 
           {invite.isError && (

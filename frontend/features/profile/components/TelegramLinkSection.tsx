@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLinkTelegram } from "../hooks/useProfile";
+import { Btn } from "@/components/ui/Btn";
 
 export function TelegramLinkSection() {
   const { data: me } = useMe();
@@ -144,19 +145,9 @@ export function TelegramLinkSection() {
               )}
             </div>
 
-            <button
-              type="submit"
-              disabled={link.isPending}
-              style={{
-                padding: "9px 22px", borderRadius: 8,
-                background: "#1D3461", border: "1px solid #3B82F6",
-                color: "#93C5FD", fontSize: 13, fontWeight: 600,
-                cursor: link.isPending ? "default" : "pointer",
-                opacity: link.isPending ? 0.7 : 1,
-              }}
-            >
+            <Btn type="submit" disabled={link.isPending}>
               {link.isPending ? "Підключення…" : "Підключити"}
-            </button>
+            </Btn>
           </form>
         </>
       )}

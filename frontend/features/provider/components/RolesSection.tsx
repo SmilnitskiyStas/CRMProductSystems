@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X, Shield } from "lucide-react";
 import { useProviderRoles, useCreateRole, useUpdateRole, useDeleteRole } from "../hooks/useProviderRoles";
 import { PROVIDER_PERMISSIONS, ALL_PERMISSIONS } from "@/lib/providerPermissions";
 import type { ProviderRoleDto } from "../api/providerRolesApi";
+import { Btn } from "@/components/ui/Btn";
 
 const BASE_ROLE_LABELS: Record<string, string> = {
   provider_admin: "Адмін провайдера",
@@ -141,18 +142,9 @@ export function RolesSection({ standalone = false }: Props) {
               </span>
             )}
           </div>
-          <button
-            onClick={() => setCreating(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", borderRadius: 8,
-              background: "#1D3461", border: "1px solid #3B82F6",
-              color: "#93C5FD", fontSize: 13, cursor: "pointer",
-            }}
-          >
-            <Plus size={14} />
+          <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
             Нова роль
-          </button>
+          </Btn>
         </div>
         {content}
       </div>

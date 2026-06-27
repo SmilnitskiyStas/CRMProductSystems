@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useCustomer } from "../hooks/useCustomers";
 import type { Customer, CustomerTransaction } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 const UAH = new Intl.NumberFormat("uk-UA", { style: "currency", currency: "UAH" });
 
@@ -146,20 +147,9 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
             {customer.name}
           </h2>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={onEdit}
-              style={{
-                background: "#1D3461",
-                border: "1px solid #3B82F6",
-                borderRadius: 8,
-                padding: "6px 14px",
-                color: "#93C5FD",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
+            <Btn size="sm" onClick={onEdit}>
               Редагувати
-            </button>
+            </Btn>
             <button
               onClick={onClose}
               style={{

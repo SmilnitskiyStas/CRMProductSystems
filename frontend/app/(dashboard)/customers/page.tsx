@@ -13,6 +13,7 @@ import {
   useDeleteCustomer,
 } from "@/features/customers/hooks/useCustomers";
 import type { Customer, CreateCustomerPayload, UpdateCustomerPayload } from "@/features/customers/types";
+import { Btn } from "@/components/ui/Btn";
 
 const PAGE_SIZE = 50;
 
@@ -98,25 +99,9 @@ export default function CustomersPage() {
             База клієнтів — контакти, теги, історія замовлень
           </p>
         </div>
-        <button
-          onClick={() => { setEditing(null); setFormOpen(true); }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            background: "#1D3461",
-            border: "1px solid #3B82F6",
-            borderRadius: 8,
-            padding: "9px 16px",
-            color: "#93C5FD",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={15} />
+        <Btn icon={<Plus size={15} />} onClick={() => { setEditing(null); setFormOpen(true); }}>
           Додати клієнта
-        </button>
+        </Btn>
       </div>
 
       {/* Table */}

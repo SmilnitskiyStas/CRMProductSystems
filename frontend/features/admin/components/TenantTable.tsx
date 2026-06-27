@@ -3,6 +3,7 @@
 import type { TenantDto } from "../types";
 import { PLAN_LABELS, PLAN_COLORS } from "../types";
 import { useActivateTenant, useDeactivateTenant } from "../hooks/useAdmin";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   tenants: TenantDto[];
@@ -148,36 +149,18 @@ export function TenantTable({ tenants, isLoading, onRowClick }: Props) {
                 <StatusBadge isActive={t.isActive} />
               </td>
               <td style={TD_STYLE}>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRowClick(t); }}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      background: "#1D3461",
-                      border: "1px solid #3B82F6",
-                      color: "#93C5FD",
-                      cursor: "pointer",
-                    }}
-                  >
+                <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                  <Btn size="sm" onClick={() => onRowClick(t)}>
                     Деталі
-                  </button>
-                  <button
-                    onClick={(e) => handleToggle(e, t)}
+                  </Btn>
+                  <Btn
+                    size="sm"
+                    variant={t.isActive ? "danger" : "success"}
+                    onClick={() => { if (t.isActive) { deactivate.mutate(t.id); } else { activate.mutate(t.id); } }}
                     disabled={activate.isPending || deactivate.isPending}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      background: t.isActive ? "#1F1211" : "#052e16",
-                      border: `1px solid ${t.isActive ? "#7F1D1D" : "#166534"}`,
-                      color: t.isActive ? "#F87171" : "#4ADE80",
-                      cursor: "pointer",
-                    }}
                   >
                     {t.isActive ? "Деакт." : "Акт."}
-                  </button>
+                  </Btn>
                 </div>
               </td>
             </tr>

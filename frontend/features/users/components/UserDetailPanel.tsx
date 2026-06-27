@@ -8,6 +8,7 @@ import { ROLE_LABELS } from "@/features/profile/types";
 import { ROLE_RANK } from "../types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import type { UserDto, UpdateUserRequest } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 const EDITABLE_ROLES = [
   "store_manager",
@@ -272,29 +273,12 @@ export function UserDetailPanel({ user, onClose }: Props) {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 10 }}>
-                      <button
-                        onClick={handleSave}
-                        disabled={update.isPending}
-                        style={{
-                          flex: 1, padding: "9px 0", borderRadius: 8,
-                          background: "#1D3461", border: "1px solid #3B82F6",
-                          color: "#93C5FD", fontSize: 13, fontWeight: 600,
-                          cursor: update.isPending ? "default" : "pointer",
-                          opacity: update.isPending ? 0.7 : 1,
-                        }}
-                      >
+                      <Btn onClick={handleSave} disabled={update.isPending} style={{ flex: 1, justifyContent: "center" }}>
                         {update.isPending ? "Збереження…" : "Зберегти"}
-                      </button>
-                      <button
-                        onClick={() => setEditing(false)}
-                        style={{
-                          padding: "9px 16px", borderRadius: 8,
-                          background: "transparent", border: "1px solid #374151",
-                          color: "#6B7280", fontSize: 13, cursor: "pointer",
-                        }}
-                      >
+                      </Btn>
+                      <Btn variant="ghost" onClick={() => setEditing(false)}>
                         Скасувати
-                      </button>
+                      </Btn>
                     </div>
                   </div>
                 ) : (

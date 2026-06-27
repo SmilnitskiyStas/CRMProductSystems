@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, ChevronRight as Arrow, Loader2, ExternalLink, Package } from "lucide-react";
+import { Btn } from "@/components/ui/Btn";
 import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
 import { useVerifyStock, useStockById } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
@@ -127,17 +128,10 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
         )}
       </div>
       <div style={{ borderTop: "1px solid #1F2937", padding: "12px 20px", flexShrink: 0, display: "flex", gap: 8 }}>
-        <button
-          onClick={() => { router.push("/stock"); onClose(); }}
-          style={{
-            flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 8,
-            padding: "9px 0", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer",
-          }}
-        >
+        <Btn onClick={() => { router.push("/stock"); onClose(); }} style={{ flex: 1, justifyContent: "center" }}>
           Відкрити Залишки
           <ChevronRight size={14} />
-        </button>
+        </Btn>
       </div>
     </Modal>
   );
@@ -219,16 +213,9 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
           <div style={{ color: "#6B7280", fontSize: 13, marginBottom: 24 }}>
             Перейдіть до сторінки Списання для затвердження документа.
           </div>
-          <button
-            onClick={() => { router.push("/write-offs"); onClose(); }}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 8,
-              padding: "9px 20px", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
-          >
+          <Btn onClick={() => { router.push("/write-offs"); onClose(); }}>
             Перейти до Списань <ChevronRight size={14} />
-          </button>
+          </Btn>
         </div>
       ) : items.length === 0 ? (
         <div style={{ textAlign: "center", padding: "32px 0", color: "#4ADE80", fontSize: 14 }}>
@@ -277,24 +264,15 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
             </div>
           )}
 
-          <button
+          <Btn
+            variant="danger"
+            icon={createWriteOff.isPending ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Trash2 size={14} />}
             onClick={handleSubmit}
             disabled={selectedCount === 0 || createWriteOff.isPending}
-            style={{
-              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              background: selectedCount > 0 ? "#1a0a0a" : "#111827",
-              border: `1px solid ${selectedCount > 0 ? "#EF4444" : "#1F2937"}`,
-              borderRadius: 8, padding: "10px 0",
-              color: selectedCount > 0 ? "#EF4444" : "#374151",
-              fontSize: 13, fontWeight: 600,
-              cursor: selectedCount > 0 && !createWriteOff.isPending ? "pointer" : "not-allowed",
-            }}
+            style={{ width: "100%", justifyContent: "center" }}
           >
-            {createWriteOff.isPending
-              ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Створення…</>
-              : <><Trash2 size={14} /> Створити чернетку ({selectedCount})</>
-            }
-          </button>
+            {createWriteOff.isPending ? "Створення…" : `Створити чернетку (${selectedCount})`}
+          </Btn>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </>
       )}
@@ -372,16 +350,9 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
               </div>
             ))}
           </DrawerSection>
-          <button
-            onClick={handleGenerate}
-            style={{
-              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 8,
-              padding: "10px 0", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 8,
-            }}
-          >
-            <ShoppingCart size={14} /> Розрахувати замовлення
-          </button>
+          <Btn icon={<ShoppingCart size={14} />} onClick={handleGenerate} style={{ width: "100%", justifyContent: "center", marginTop: 8 }}>
+            Розрахувати замовлення
+          </Btn>
         </>
       )}
 
@@ -424,16 +395,9 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
               </div>
             ))}
           </div>
-          <button
-            onClick={() => { router.push("/orders"); onClose(); }}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 8,
-              padding: "9px 20px", color: "#93C5FD", fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
-          >
+          <Btn onClick={() => { router.push("/orders"); onClose(); }}>
             Переглянути замовлення <ChevronRight size={14} />
-          </button>
+          </Btn>
         </div>
       )}
 
@@ -441,15 +405,9 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
         <div style={{ textAlign: "center", padding: "24px 0" }}>
           <div style={{ color: "#EF4444", fontSize: 14, marginBottom: 8 }}>Помилка розрахунку</div>
           <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 20 }}>{errorMsg}</div>
-          <button
-            onClick={() => setState("idle")}
-            style={{
-              background: "transparent", border: "1px solid #374151", borderRadius: 8,
-              padding: "8px 16px", color: "#9CA3AF", fontSize: 13, cursor: "pointer",
-            }}
-          >
+          <Btn variant="ghost" onClick={() => setState("idle")}>
             Спробувати ще раз
-          </button>
+          </Btn>
         </div>
       )}
     </DetailDrawer>
@@ -586,50 +544,36 @@ function ItemDetailDrawer({
           {/* Actions */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {!verified && (
-              <button
+              <Btn
+                variant="success"
+                icon={verifyStock.isPending ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <CheckCircle size={14} />}
                 onClick={handleVerify}
                 disabled={verifyStock.isPending}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: "rgba(74,222,128,0.08)", border: "1px solid #166534",
-                  borderRadius: 8, padding: "10px 0",
-                  color: "#4ADE80", fontSize: 13, fontWeight: 600,
-                  cursor: verifyStock.isPending ? "not-allowed" : "pointer",
-                  opacity: verifyStock.isPending ? 0.6 : 1,
-                }}
+                style={{ width: "100%", justifyContent: "center" }}
               >
-                {verifyStock.isPending
-                  ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Верифікація…</>
-                  : <><CheckCircle size={14} /> Верифікувати партію</>}
-              </button>
+                {verifyStock.isPending ? "Верифікація…" : "Верифікувати партію"}
+              </Btn>
             )}
 
             {item?.status === "expired" && storeId && (
-              <button
+              <Btn
+                variant="danger"
+                icon={<Trash2 size={14} />}
                 onClick={() => { if (item) onWriteOff([item]); onClose(); }}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: "rgba(239,68,68,0.08)", border: "1px solid #991B1B",
-                  borderRadius: 8, padding: "10px 0",
-                  color: "#EF4444", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                }}
+                style={{ width: "100%", justifyContent: "center" }}
               >
-                <Trash2 size={14} /> Створити списання
-              </button>
+                Створити списання
+              </Btn>
             )}
 
-            <button
+            <Btn
+              variant="ghost"
               onClick={() => { router.push(`/stock?status=${item?.status}`); onClose(); }}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                background: "transparent", border: "1px solid #1F2937",
-                borderRadius: 8, padding: "10px 0",
-                color: "#6B7280", fontSize: 13, cursor: "pointer",
-              }}
+              style={{ width: "100%", justifyContent: "center" }}
             >
               Переглянути всі залишки
               <ExternalLink size={13} />
-            </button>
+            </Btn>
           </div>
         </>
       )}

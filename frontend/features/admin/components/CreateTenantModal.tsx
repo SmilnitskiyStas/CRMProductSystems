@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { useCreateTenant } from "../hooks/useAdmin";
 import { ALL_PLANS, PLAN_LABELS } from "../types";
 import type { CreateTenantRequest } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   onClose: () => void;
@@ -224,37 +225,12 @@ export function CreateTenantModal({ onClose }: Props) {
               borderTop: "1px solid #1F2937",
             }}
           >
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "8px 18px",
-                borderRadius: 8,
-                background: "transparent",
-                border: "1px solid #374151",
-                color: "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            <Btn type="button" variant="ghost" onClick={onClose}>
               Скасувати
-            </button>
-            <button
-              type="submit"
-              disabled={createTenant.isPending}
-              style={{
-                padding: "8px 20px",
-                borderRadius: 8,
-                background: "#1D3461",
-                border: "1px solid #3B82F6",
-                color: "#93C5FD",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: createTenant.isPending ? "default" : "pointer",
-              }}
-            >
+            </Btn>
+            <Btn type="submit" disabled={createTenant.isPending}>
               {createTenant.isPending ? "Створення…" : "Створити"}
-            </button>
+            </Btn>
           </div>
         </form>
       </div>

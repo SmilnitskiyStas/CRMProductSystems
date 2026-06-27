@@ -8,6 +8,7 @@ import {
   ALL_MODULES, ALL_PLANS,
 } from "../types";
 import type { TenantDto } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   tenantId: string;
@@ -215,29 +216,12 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                  <button
-                    onClick={savePlan}
-                    disabled={updatePlan.isPending}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "#1D3461", border: "1px solid #3B82F6",
-                      color: "#93C5FD", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
-                    <Save size={13} />
+                  <Btn size="sm" icon={<Save size={13} />} onClick={savePlan} disabled={updatePlan.isPending}>
                     {updatePlan.isPending ? "Збереження…" : "Зберегти"}
-                  </button>
-                  <button
-                    onClick={() => setEditingPlan(false)}
-                    style={{
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "transparent", border: "1px solid #374151",
-                      color: "#6B7280", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
+                  </Btn>
+                  <Btn size="sm" variant="ghost" onClick={() => setEditingPlan(false)}>
                     Скасувати
-                  </button>
+                  </Btn>
                 </div>
               </div>
             ) : (
@@ -303,29 +287,12 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                  <button
-                    onClick={saveModules}
-                    disabled={updateModules.isPending}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "#1D3461", border: "1px solid #3B82F6",
-                      color: "#93C5FD", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
-                    <Save size={13} />
+                  <Btn size="sm" icon={<Save size={13} />} onClick={saveModules} disabled={updateModules.isPending}>
                     {updateModules.isPending ? "Збереження…" : "Зберегти"}
-                  </button>
-                  <button
-                    onClick={() => setEditingModules(false)}
-                    style={{
-                      padding: "7px 14px", borderRadius: 7,
-                      background: "transparent", border: "1px solid #374151",
-                      color: "#6B7280", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
+                  </Btn>
+                  <Btn size="sm" variant="ghost" onClick={() => setEditingModules(false)}>
                     Скасувати
-                  </button>
+                  </Btn>
                 </div>
               </div>
             ) : (
@@ -356,26 +323,17 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
             <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
               УПРАВЛІННЯ ДОСТУПОМ
             </div>
-            <button
+            <Btn
+              variant={tenant.isActive ? "danger" : "success"}
               onClick={handleToggleActive}
               disabled={activate.isPending || deactivate.isPending}
-              style={{
-                padding: "9px 18px",
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: activate.isPending || deactivate.isPending ? "default" : "pointer",
-                background: tenant.isActive ? "#1F1211" : "#052e16",
-                border: `1px solid ${tenant.isActive ? "#7F1D1D" : "#166534"}`,
-                color: tenant.isActive ? "#F87171" : "#4ADE80",
-              }}
             >
               {activate.isPending || deactivate.isPending
                 ? "Обробка…"
                 : tenant.isActive
                 ? "Деактивувати тенант"
                 : "Активувати тенант"}
-            </button>
+            </Btn>
           </div>
         </div>
       )}

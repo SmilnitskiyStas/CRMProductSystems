@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useUpdatePermissions } from "../hooks/useUsers";
 import { PAGES, ROLE_RANK, roleHasPageAccess } from "../types";
 import type { UserDto } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   user: UserDto;
@@ -200,33 +201,14 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
       {/* Actions */}
       {canEdit && (
         <div style={{ display: "flex", gap: 10 }}>
-          <button
-            onClick={handleSave}
-            disabled={updatePerms.isPending}
-            style={{
-              flex: 1, padding: "9px 0", borderRadius: 8,
-              background: "#1D3461", border: "1px solid #3B82F6",
-              color: "#93C5FD", fontSize: 13, fontWeight: 600,
-              cursor: updatePerms.isPending ? "default" : "pointer",
-              opacity: updatePerms.isPending ? 0.7 : 1,
-            }}
-          >
+          <Btn onClick={handleSave} disabled={updatePerms.isPending} style={{ flex: 1, justifyContent: "center" }}>
             {updatePerms.isPending ? "Збереження…" : saved ? "✓ Збережено" : "Зберегти зміни"}
-          </button>
+          </Btn>
 
           {hasAnyOverride && (
-            <button
-              onClick={handleResetAll}
-              disabled={updatePerms.isPending}
-              style={{
-                padding: "9px 14px", borderRadius: 8,
-                background: "transparent", border: "1px solid #374151",
-                color: "#6B7280", fontSize: 13, cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
+            <Btn variant="ghost" onClick={handleResetAll} disabled={updatePerms.isPending}>
               Скинути всі
-            </button>
+            </Btn>
           )}
         </div>
       )}

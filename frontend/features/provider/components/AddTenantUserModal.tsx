@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { useCreateTenantUser } from "../hooks/useProvider";
 import type { TenantUserDto } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   tenantId: string;
@@ -212,39 +213,12 @@ export function AddTenantUserModal({ tenantId, onClose, onCreated }: Props) {
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button
-              type="submit"
-              disabled={createUser.isPending}
-              style={{
-                flex: 1,
-                padding: "9px 18px",
-                borderRadius: 8,
-                background: createUser.isPending ? "#1A1F2C" : "#1D3461",
-                border: `1px solid ${createUser.isPending ? "#374151" : "#3B82F6"}`,
-                color: createUser.isPending ? "#4B5563" : "#93C5FD",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: createUser.isPending ? "default" : "pointer",
-              }}
-            >
+            <Btn type="submit" disabled={createUser.isPending} style={{ flex: 1, justifyContent: "center" }}>
               {createUser.isPending ? "Створення…" : "Додати адміністратора"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "9px 16px",
-                borderRadius: 8,
-                background: "transparent",
-                border: "1px solid #374151",
-                color: "#6B7280",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
+            </Btn>
+            <Btn type="button" variant="ghost" onClick={onClose}>
               Скасувати
-            </button>
+            </Btn>
           </div>
         </form>
       </div>

@@ -10,6 +10,7 @@ import { useModules } from "@/features/modules/hooks/useModules";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { PROVIDER_TEAM } from "@/lib/roles";
 import type { MarketplaceFilters, SupplierProfileDto } from "@/features/marketplace/types";
+import { Btn } from "@/components/ui/Btn";
 
 const DEFAULT_FILTERS: MarketplaceFilters = {
   region: "",
@@ -168,26 +169,9 @@ export default function MarketplacePage() {
           </button>
         )}
         {isProviderTeam && (
-          <button
-            onClick={() => setCreateModalOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "9px 16px",
-              borderRadius: 8,
-              border: "1px solid #3B82F6",
-              background: "#1D3461",
-              color: "#93C5FD",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              marginLeft: "auto",
-            }}
-          >
+          <Btn onClick={() => setCreateModalOpen(true)} style={{ marginLeft: "auto" }}>
             + Створити постачальника
-          </button>
+          </Btn>
         )}
       </div>
 

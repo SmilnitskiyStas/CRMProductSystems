@@ -6,6 +6,7 @@ import { UsersList } from "@/features/users/components/UsersList";
 import { InviteUserModal } from "@/features/users/components/InviteUserModal";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useUsers } from "@/features/users/hooks/useUsers";
+import { Btn } from "@/components/ui/Btn";
 
 export default function UsersPage() {
   const { data: me } = useMe();
@@ -40,25 +41,9 @@ export default function UsersPage() {
         </div>
 
         {isAdmin && (
-          <button
-            onClick={() => setInviteOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 18px",
-              borderRadius: 8,
-              background: "#1D3461",
-              border: "1px solid #3B82F6",
-              color: "#93C5FD",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <UserPlus size={15} />
+          <Btn icon={<UserPlus size={15} />} onClick={() => setInviteOpen(true)}>
             Запросити
-          </button>
+          </Btn>
         )}
       </div>
 

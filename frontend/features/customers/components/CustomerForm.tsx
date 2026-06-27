@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Customer, CreateCustomerPayload, UpdateCustomerPayload } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -232,22 +233,9 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
                 placeholder="Введіть тег і натисніть Enter"
                 style={{ ...inputStyle, flex: 1 }}
               />
-              <button
-                type="button"
-                onClick={addTag}
-                style={{
-                  background: "#1D3461",
-                  border: "1px solid #3B82F6",
-                  borderRadius: 8,
-                  padding: "0 14px",
-                  color: "#93C5FD",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <Btn type="button" size="sm" onClick={addTag}>
                 + Додати
-              </button>
+              </Btn>
             </div>
             {tags.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -295,39 +283,12 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
-            <button
-              type="submit"
-              disabled={isPending}
-              style={{
-                flex: 1,
-                padding: "10px 0",
-                borderRadius: 8,
-                background: "#1D3461",
-                border: "1px solid #3B82F6",
-                color: "#93C5FD",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: isPending ? "default" : "pointer",
-                opacity: isPending ? 0.7 : 1,
-              }}
-            >
+            <Btn type="submit" disabled={isPending} style={{ flex: 1, justifyContent: "center" }}>
               {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "10px 20px",
-                borderRadius: 8,
-                background: "transparent",
-                border: "1px solid #374151",
-                color: "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            </Btn>
+            <Btn type="button" variant="ghost" onClick={onClose}>
               Скасувати
-            </button>
+            </Btn>
           </div>
         </form>
       </div>

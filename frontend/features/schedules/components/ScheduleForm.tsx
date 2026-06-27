@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { WorkScheduleDto, CreateSchedulePayload, UpdateSchedulePayload, ScheduleStatus } from "../types";
 import { useLocations } from "@/features/locations/hooks/useLocations";
+import { Btn } from "@/components/ui/Btn";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -238,39 +239,12 @@ export function ScheduleForm(props: Props) {
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
-            <button
-              type="submit"
-              disabled={props.isPending}
-              style={{
-                flex: 1,
-                padding: "10px 0",
-                borderRadius: 8,
-                background: "#1D3461",
-                border: "1px solid #3B82F6",
-                color: "#93C5FD",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: props.isPending ? "default" : "pointer",
-                opacity: props.isPending ? 0.7 : 1,
-              }}
-            >
+            <Btn type="submit" disabled={props.isPending} style={{ flex: 1, justifyContent: "center" }}>
               {props.isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
-            </button>
-            <button
-              type="button"
-              onClick={props.onClose}
-              style={{
-                padding: "10px 20px",
-                borderRadius: 8,
-                background: "transparent",
-                border: "1px solid #374151",
-                color: "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            </Btn>
+            <Btn type="button" variant="ghost" onClick={props.onClose}>
               Скасувати
-            </button>
+            </Btn>
           </div>
         </form>
       </div>
