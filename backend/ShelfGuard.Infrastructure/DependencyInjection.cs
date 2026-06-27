@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Application.Features.Analytics;
@@ -22,9 +23,14 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddSingleton<TenantConnectionInterceptor>();
 
+        var npgsqlDataSource = new NpgsqlDataSourceBuilder(
+                configuration.GetConnectionString("DefaultConnection"))
+            .EnableDynamicJson()
+            .Build();
+
         services.AddDbContext<AppDbContext>((sp, options) =>
             options
-                .UseNpgsql(configuration.GetConnectionString("DefaultConnection"))
+                .UseNpgsql(npgsqlDataSource)
                 .AddInterceptors(sp.GetRequiredService<TenantConnectionInterceptor>()));
 
         // Auth services
