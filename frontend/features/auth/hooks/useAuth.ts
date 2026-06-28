@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authApi } from "../api/auth";
 import { clearToken, getToken } from "@/lib/api";
 import { clearStoredUser } from "../store";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { PROVIDER_TEAM, type AppRole } from "@/lib/roles";
 
 export const ME_KEY = ["me"] as const;
@@ -28,6 +29,12 @@ export function useLogin() {
   return useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
+      // Clear ALL cached data from any previous user/tenant before setting
+      // the new user — prevents cross-tenant data leakage via React Query cache.
+      queryClient.clear();
+      // Reset persisted store selection — the new tenant may not have the
+      // same stores, and a stale selectedStoreId would point to a wrong tenant.
+      useStoreContext.setState({ selectedStoreId: null });
       queryClient.setQueryData(ME_KEY, data.user);
       router.push(PROVIDER_TEAM.has(data.user.role as AppRole) ? "/provider" : "/dashboard");
     },
@@ -45,6 +52,7 @@ export function useLogout() {
       clearToken();
       clearStoredUser();
       queryClient.clear();
+      useStoreContext.setState({ selectedStoreId: null });
       router.push("/login");
     },
   });
