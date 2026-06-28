@@ -4,6 +4,7 @@ import { Suspense, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useStock, useVerifyStock } from "@/features/shelf/hooks/useStock";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
 import { StockTable } from "@/features/shelf/components/StockTable";
@@ -21,6 +22,7 @@ interface Filters {
 
 function StockPageContent() {
   const searchParams = useSearchParams();
+  const { selectedStoreId } = useStoreContext();
   const [filters, setFilters] = useState<Filters>({
     status: searchParams.get("status") ?? "",
     search: "",
@@ -30,9 +32,13 @@ function StockPageContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
 
+  // If the user hasn't explicitly picked a store filter, fall back to the store
+  // selected in the header StoreSelector so stock changes when the user switches stores.
+  const effectiveStoreId = filters.store_id || selectedStoreId || undefined;
+
   const { data: batches = [], isLoading } = useStock({
     status: filters.status || undefined,
-    store_id: filters.store_id || undefined,
+    store_id: effectiveStoreId,
     zone_id: filters.zone_id || undefined,
   });
   const { data: stores = [] } = useStores();

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Btn } from "@/components/ui/Btn";
+import { useModules } from "@/features/modules/hooks/useModules";
 import { LOCATION_TYPE_LABELS, type LocationDto, type LocationType } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
@@ -42,12 +43,25 @@ interface Props {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-const LOCATION_TYPES = Object.entries(LOCATION_TYPE_LABELS) as [LocationType, string][];
+/** Which location types make sense for each business type */
+const TYPES_FOR_BUSINESS: Record<string, LocationType[]> = {
+  retail:       ["retail_store", "warehouse"],
+  auto_service: ["auto_service", "office", "warehouse"],
+  restaurant:   ["restaurant", "warehouse", "office"],
+  production:   ["production", "warehouse", "office"],
+  warehouse:    ["warehouse"],
+  distribution: ["warehouse"],
+};
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function LocationFormDialog({ location, isPending, onClose, onSubmit }: Props) {
   const isEdit = location !== null;
+
+  const { data: modules } = useModules();
+  const businessType = modules?.businessType ?? "retail";
+  const allowedTypes = TYPES_FOR_BUSINESS[businessType] ?? (Object.keys(LOCATION_TYPE_LABELS) as LocationType[]);
+  const locationTypes = allowedTypes.map((k) => [k, LOCATION_TYPE_LABELS[k]] as [LocationType, string]);
 
   const {
     register,
@@ -140,7 +154,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
           {/* Location type */}
           <Field label="Тип локації" error={errors.locationType?.message}>
             <select {...register("locationType")} style={inputStyle}>
-              {LOCATION_TYPES.map(([value, label]) => (
+              {locationTypes.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
