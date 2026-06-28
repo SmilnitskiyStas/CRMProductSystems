@@ -28,8 +28,8 @@ public sealed class LocationService : ILocationService
         if (string.IsNullOrWhiteSpace(request.Name))
             return (null, "Location name is required.");
 
-        if (!IsValidLocationType(request.Type))
-            return (null, $"Invalid location type '{request.Type}'. Valid: shop, central_warehouse, production, distribution.");
+        if (!IsValidLocationType(request.LocationType))
+            return (null, $"Invalid location type '{request.LocationType}'.");
 
         var location = new Location
         {
@@ -38,7 +38,7 @@ public sealed class LocationService : ILocationService
             Address = request.Address?.Trim(),
             Latitude = request.Latitude,
             Longitude = request.Longitude,
-            Type = request.Type,
+            Type = request.LocationType,
         };
 
         await _repo.AddAsync(location, ct);
@@ -57,14 +57,14 @@ public sealed class LocationService : ILocationService
         if (string.IsNullOrWhiteSpace(request.Name))
             return (null, "Location name is required.");
 
-        if (!IsValidLocationType(request.Type))
-            return (null, $"Invalid location type '{request.Type}'. Valid: shop, central_warehouse, production, distribution.");
+        if (!IsValidLocationType(request.LocationType))
+            return (null, $"Invalid location type '{request.LocationType}'.");
 
         location.Name = request.Name.Trim();
         location.Address = request.Address?.Trim();
         location.Latitude = request.Latitude;
         location.Longitude = request.Longitude;
-        location.Type = request.Type;
+        location.Type = request.LocationType;
         location.IsActive = request.IsActive;
 
         _repo.Update(location);
@@ -199,7 +199,9 @@ public sealed class LocationService : ILocationService
     );
 
     private static bool IsValidLocationType(string type) =>
-        type is "shop" or "central_warehouse" or "production" or "distribution";
+        type is "retail_store" or "warehouse" or "auto_service"
+               or "office" or "production" or "restaurant"
+               or "shop" or "central_warehouse" or "distribution";
 
     private static bool IsValidZoneType(string type) =>
         type is "shelf" or "fridge" or "freezer" or "display" or "production" or "warehouse";

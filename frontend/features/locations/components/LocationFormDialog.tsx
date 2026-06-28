@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Btn } from "@/components/ui/Btn";
 import { LOCATION_TYPE_LABELS, type LocationDto, type LocationType } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
@@ -168,38 +169,12 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
 
           {/* Buttons */}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "1px solid #374151",
-                color: "#9CA3AF",
-                borderRadius: 8,
-                padding: "8px 16px",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            <Btn variant="ghost" type="button" onClick={onClose}>
               Скасувати
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              style={{
-                background: "#2563EB",
-                border: "none",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "8px 20px",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: isPending ? "default" : "pointer",
-                opacity: isPending ? 0.7 : 1,
-              }}
-            >
+            </Btn>
+            <Btn type="submit" disabled={isPending}>
               {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
-            </button>
+            </Btn>
           </div>
         </form>
       </div>

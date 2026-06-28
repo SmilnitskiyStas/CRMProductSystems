@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Plus, Map } from "lucide-react";
 import { toast } from "sonner";
+import { Btn } from "@/components/ui/Btn";
 import {
   useLocations,
   useCreateLocation,
@@ -63,25 +64,9 @@ export default function LocationsPage() {
             Магазини, склади та інші об'єкти мережі
           </p>
         </div>
-        <button
-          onClick={() => setDialog("create")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "#2563EB",
-            border: "none",
-            color: "#fff",
-            borderRadius: 8,
-            padding: "9px 16px",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={15} />
+        <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
           Нова локація
-        </button>
+        </Btn>
       </div>
 
       {/* Table */}
@@ -184,20 +169,9 @@ export default function LocationsPage() {
                         <Map size={13} />
                         План
                       </Link>
-                      <button
-                        onClick={() => setDialog(loc)}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid #374151",
-                          color: "#9CA3AF",
-                          borderRadius: 6,
-                          padding: "5px 10px",
-                          fontSize: 12,
-                          cursor: "pointer",
-                        }}
-                      >
+                      <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
                         Редагувати
-                      </button>
+                      </Btn>
                     </div>
                   </td>
                 </tr>

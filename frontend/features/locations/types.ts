@@ -77,7 +77,6 @@ export interface LocationDto {
   latitude: number | null;
   longitude: number | null;
   locationType: LocationType;
-  type: string;
   floorPlan: string | null;
   isActive: boolean;
   createdAt: string;

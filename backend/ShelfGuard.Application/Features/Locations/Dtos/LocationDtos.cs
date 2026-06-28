@@ -6,7 +6,7 @@ public sealed record LocationDto(
     string? Address,
     decimal? Latitude,
     decimal? Longitude,
-    string Type,
+    string LocationType,
     string? FloorPlan,
     bool IsActive,
     DateTime CreatedAt,
@@ -30,7 +30,7 @@ public sealed record CreateLocationRequest(
     string? Address,
     decimal? Latitude,
     decimal? Longitude,
-    string Type
+    string LocationType
 );
 
 public sealed record UpdateLocationRequest(
@@ -38,7 +38,7 @@ public sealed record UpdateLocationRequest(
     string? Address,
     decimal? Latitude,
     decimal? Longitude,
-    string Type,
+    string LocationType,
     bool IsActive
 );
 
