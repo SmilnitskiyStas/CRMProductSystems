@@ -53,6 +53,13 @@ Status: open
 Description: `/stock`, `/transfers`, `/write-offs`, `/analytics`, `/notifications`, `/settings` show a catch-all "in development" page. Not a bug — intended placeholder.
 Resolution: Implement each page per sprint plan.
 
+### KI-013: Npgsql 8.0+ requires EnableDynamicJson() for List<string>/JSONB fields
+Severity: high (silent 500 in production)
+Status: resolved (2026-06-27)
+Description: Npgsql 8.0+ breaking change — `List<string>` та інші складні .NET типи більше не десеріалізуються з JSONB-колонок автоматично. Без `EnableDynamicJson()` API повертає `System.NotSupportedException` → 500 на всіх GET-ендпоінтах, що читають JSONB. Проявилось після деплою поля `Barcodes: List<string>`.
+Resolution: У `backend/ShelfGuard.Infrastructure/DependencyInjection.cs` замінено `UseNpgsql(connectionString)` на `NpgsqlDataSourceBuilder(...).EnableDynamicJson().Build()`, результат передається у `UseNpgsql(dataSource)`.
+Rule: **При кожному новому полі `List<T>` / JSONB** — перевіряти, що `EnableDynamicJson()` вже є у `DependencyInjection.cs`. Якщо у prod-логах з'явився `InvalidCastException` / `NotSupportedException` з текстом `jsonb` — перша підозра саме тут.
+
 ## Resolved Issues
 
 ### KI-012: Existing tenants have stale legacy module keys, not v4 module keys ✅ resolved (2026-06-16)
