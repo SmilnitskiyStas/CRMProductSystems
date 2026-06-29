@@ -50,6 +50,14 @@ public sealed class StockController : ControllerBase
         return Ok(summary);
     }
 
+    [HttpGet("zones-summary")]
+    [ProducesResponseType(typeof(List<ShelfGuard.Application.Features.Stock.Dtos.ZoneSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetZonesSummary([FromQuery] Guid? store_id, CancellationToken ct)
+    {
+        var zones = await _stock.GetZonesSummaryAsync(store_id, ct);
+        return Ok(zones);
+    }
+
     [HttpGet("expiring")]
     [ProducesResponseType(typeof(List<ProductStockDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetExpiring(

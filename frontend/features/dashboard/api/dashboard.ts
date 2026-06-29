@@ -63,16 +63,27 @@ async function getAttentionItems(): Promise<AttentionItem[]> {
     });
 }
 
-// Static placeholder zones until /api/stores/:id/zones is implemented
+interface ZoneSummaryDto {
+  zoneId: string;
+  name: string;
+  type: string;
+  safe: number;
+  warning: number;
+  critical: number;
+  expired: number;
+}
+
 async function getStoreZones(): Promise<StoreZone[]> {
-  return [
-    { id: "z1", name: "Молочні продукти", type: "refrigerated", status: "warning", safe: 12, warning: 4, critical: 1 },
-    { id: "z2", name: "Овочі та фрукти", type: "fresh", status: "critical", safe: 8, warning: 2, critical: 3 },
-    { id: "z3", name: "Бакалія", type: "dry", status: "safe", safe: 24, warning: 1, critical: 0 },
-    { id: "z4", name: "М'ясний відділ", type: "refrigerated", status: "critical", safe: 6, warning: 3, critical: 4 },
-    { id: "z5", name: "Заморожені", type: "frozen", status: "warning", safe: 15, warning: 3, critical: 0 },
-    { id: "z6", name: "Напої", type: "dry", status: "safe", safe: 18, warning: 0, critical: 0 },
-  ];
+  const zones = await api.get<ZoneSummaryDto[]>("/api/stock/zones-summary");
+  return zones.map((z) => ({
+    id: z.zoneId,
+    name: z.name,
+    type: z.type,
+    safe: z.safe,
+    warning: z.warning,
+    critical: z.critical,
+    status: (z.critical > 0 ? "critical" : z.warning > 0 ? "warning" : "safe") as ItemStatus,
+  }));
 }
 
 export const dashboardApi = {

@@ -49,6 +49,8 @@ public interface IStockRepository
 
     Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default);
 
+    Task<List<(Guid? ZoneId, string ZoneName, string ZoneType, string Status)>> GetStockByZoneRawAsync(Guid? storeId, CancellationToken ct = default);
+
     Task AddAsync(ProductStock stock, CancellationToken ct = default);
     Task AddMovementAsync(StockMovement movement, CancellationToken ct = default);
     void Update(ProductStock stock);

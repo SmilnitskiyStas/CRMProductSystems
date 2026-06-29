@@ -218,6 +218,44 @@ public sealed class StockRepository : IStockRepository
         };
     }
 
+    public async Task<List<(Guid? ZoneId, string ZoneName, string ZoneType, string Status)>> GetStockByZoneRawAsync(
+        Guid? storeId, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var criticalCutoff = today.AddDays(StockStatus.CriticalDays);
+        var warningCutoff = today.AddDays(StockStatus.WarningDays);
+        var verificationCutoff = DateTime.UtcNow.AddDays(-StockStatus.NeedsVerificationDays);
+
+        var query = _db.ProductStocks
+            .Where(s => s.Quantity > 0)
+            .Include(s => s.Zone)
+            .AsQueryable();
+
+        if (storeId.HasValue)
+            query = query.Where(s => s.StoreId == storeId);
+
+        var rows = await query
+            .Select(s => new
+            {
+                s.ZoneId,
+                ZoneName = s.Zone != null ? s.Zone.Name : "Без зони",
+                ZoneType = s.Zone != null ? s.Zone.Type : "other",
+                s.ExpiryDate,
+                s.LastCheckedAt,
+            })
+            .ToListAsync(ct);
+
+        return rows.Select(r =>
+        {
+            var status = r.ExpiryDate <= today ? "expired"
+                : r.ExpiryDate <= criticalCutoff ? "critical"
+                : r.ExpiryDate <= warningCutoff ? "warning"
+                : r.LastCheckedAt <= verificationCutoff ? "needs_verification"
+                : "safe";
+            return (r.ZoneId, r.ZoneName, r.ZoneType, status);
+        }).ToList();
+    }
+
     public async Task AddAsync(ProductStock stock, CancellationToken ct = default) =>
         await _db.ProductStocks.AddAsync(stock, ct);
 

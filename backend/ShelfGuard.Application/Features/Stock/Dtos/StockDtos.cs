@@ -92,3 +92,13 @@ public sealed record StockSummaryDto(
     int NeedsVerification,
     int Total
 );
+
+public sealed record ZoneSummaryDto(
+    Guid ZoneId,
+    string Name,
+    string Type,
+    int Safe,
+    int Warning,
+    int Critical,
+    int Expired
+);

@@ -70,6 +70,25 @@ public sealed class StockService : IStockService
             safe + warning + critical + expired + needsVerification);
     }
 
+    public async Task<List<ZoneSummaryDto>> GetZonesSummaryAsync(Guid? storeId, CancellationToken ct = default)
+    {
+        var rows = await _repo.GetStockByZoneRawAsync(storeId, ct);
+        return rows
+            .GroupBy(r => new { r.ZoneId, r.ZoneName, r.ZoneType })
+            .Select(g => new ZoneSummaryDto(
+                g.Key.ZoneId ?? Guid.Empty,
+                g.Key.ZoneName,
+                g.Key.ZoneType,
+                g.Count(r => r.Status == "safe"),
+                g.Count(r => r.Status == "warning"),
+                g.Count(r => r.Status == "critical"),
+                g.Count(r => r.Status == "expired")
+            ))
+            .OrderByDescending(z => z.Critical)
+            .ThenByDescending(z => z.Warning)
+            .ToList();
+    }
+
     public async Task<List<SuggestionDto>> GetSuggestionsAsync(Guid? storeId, CancellationToken ct = default)
     {
         var batches = await _repo.GetActionRequiredAsync(storeId, ct);

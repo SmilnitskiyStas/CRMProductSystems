@@ -50,6 +50,8 @@ public interface IStockService
 
     Task<StockSummaryDto> GetSummaryAsync(Guid? storeId, CancellationToken ct = default);
 
+    Task<List<ZoneSummaryDto>> GetZonesSummaryAsync(Guid? storeId, CancellationToken ct = default);
+
     Task<FefoConsumeResult> FefoConsumeAsync(
         Guid tenantId,
         Guid performedBy,
