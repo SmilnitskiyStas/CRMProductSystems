@@ -77,9 +77,9 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (storeId.HasValue)
             query = query.Where(w => w.StoreId == storeId.Value);
         if (from.HasValue)
-            query = query.Where(w => w.CreatedAt >= from.Value.ToDateTime(TimeOnly.MinValue));
+            query = query.Where(w => w.CreatedAt >= ToUtcStart(from.Value));
         if (to.HasValue)
-            query = query.Where(w => w.CreatedAt <= to.Value.ToDateTime(TimeOnly.MaxValue));
+            query = query.Where(w => w.CreatedAt <= ToUtcEnd(to.Value));
 
         var writeOffs = await query
             .Select(w => new { w.Id, w.Reason, w.TotalLossAmount, w.CreatedAt })
@@ -126,9 +126,9 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (!string.IsNullOrEmpty(type))
             query = query.Where(m => m.MovementType == type);
         if (from.HasValue)
-            query = query.Where(m => m.CreatedAt >= from.Value.ToDateTime(TimeOnly.MinValue));
+            query = query.Where(m => m.CreatedAt >= ToUtcStart(from.Value));
         if (to.HasValue)
-            query = query.Where(m => m.CreatedAt <= to.Value.ToDateTime(TimeOnly.MaxValue));
+            query = query.Where(m => m.CreatedAt <= ToUtcEnd(to.Value));
 
         var movements = await query
             .Select(m => new { m.MovementType, m.Quantity })
@@ -279,9 +279,9 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (storeId.HasValue)
             query = query.Where(w => w.StoreId == storeId.Value);
         if (from.HasValue)
-            query = query.Where(w => w.CreatedAt >= from.Value.ToDateTime(TimeOnly.MinValue));
+            query = query.Where(w => w.CreatedAt >= ToUtcStart(from.Value));
         if (to.HasValue)
-            query = query.Where(w => w.CreatedAt <= to.Value.ToDateTime(TimeOnly.MaxValue));
+            query = query.Where(w => w.CreatedAt <= ToUtcEnd(to.Value));
 
         // Single query: join store name via navigation property
         var writeOffs = await query
@@ -320,8 +320,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     public async Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(
         Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var fromDt = from.ToDateTime(TimeOnly.MinValue);
-        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
 
         var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
 
@@ -357,8 +357,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     public async Task<PosRevenueTrendDto> GetPosRevenueTrendAsync(
         Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
     {
-        var fromDt = from.ToDateTime(TimeOnly.MinValue);
-        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
 
         var txData = await BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt)
             .Select(t => new { t.TotalAmount, t.CreatedAt })
@@ -395,8 +395,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     public async Task<PosTopProductsDto> GetPosTopProductsAsync(
         Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)
     {
-        var fromDt = from.ToDateTime(TimeOnly.MinValue);
-        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
 
         // Use IQueryable subquery instead of materialising txIds into memory
         var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
@@ -433,8 +433,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     public async Task<PosCashierStatsDto> GetPosCashierStatsAsync(
         Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var fromDt = from.ToDateTime(TimeOnly.MinValue);
-        var toDt   = to.ToDateTime(TimeOnly.MaxValue);
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
 
         var txData = await BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt)
             .Where(t => t.CashierId.HasValue)
@@ -468,6 +468,11 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     }
 
     // ── helpers ───────────────────────────────────────────────────────────
+
+    // Npgsql rejects DateTime with Kind=Unspecified as a parameter for
+    // timestamptz columns — date-range bounds must be explicitly UTC.
+    private static DateTime ToUtcStart(DateOnly date) => date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    private static DateTime ToUtcEnd(DateOnly date)   => date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
     private IQueryable<Domain.Entities.PosTransaction> BuildPosTransactionQuery(
         Guid? tenantId, Guid? storeId, DateTime fromDt, DateTime toDt)

@@ -2,6 +2,23 @@
 
 ---
 
+## BUG-006 — Analytics 500: DateTimeKind.Unspecified vs timestamptz
+**Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
+Found during QA of store_manager role. On prod усі 4 POS analytics ендпоінти
+(`/api/analytics/pos/summary`, `revenue-trend`, `top-products`, `cashiers`) повертали 500,
+а `/api/analytics/write-offs` та `/api/movements` — 500 тільки з `from=&to=` фільтрами.
+Root cause: `DateOnly.ToDateTime(TimeOnly.MinValue/MaxValue)` в `AnalyticsRepository.cs`
+дає `DateTime` з `Kind=Unspecified`; Npgsql відхиляє такі параметри для `timestamptz`
+колонок (`pos_transactions.CreatedAt` тощо) → runtime exception → 500. Тести не ловили,
+бо використовують fake-репозиторії.
+Fix: приватні хелпери `ToUtcStart(DateOnly)` / `ToUtcEnd(DateOnly)` через
+`ToDateTime(..., DateTimeKind.Utc)`; замінено всі 14 конверсій. `MovementRepository` вже
+використовував правильний overload — без змін. Build green, 459/459 тестів.
+Log: `bug006_2026-07-02_analytics-datetime-kind-500_backend-developer.md`
+**Next:** deploy to prod; re-run store_manager QA pass on analytics endpoints.
+
+---
+
 ## TASK-278 — Live Chat: живий чат провайдер ↔ клієнт
 **Status:** done · **Agent:** backend-developer + frontend-developer · **Depends:** — · Updated: 2026-06-21
 Різниця між тікетом і чатом: тікет — для довгострокових задач (налаштування компанії), чат — миттєве спілкування.
