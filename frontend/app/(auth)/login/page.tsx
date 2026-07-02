@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { LoginForm } from "@/features/auth/components/LoginForm";
+import { SessionExpiredNotice } from "@/features/auth/components/SessionExpiredNotice";
 
 export const metadata = { title: "Вхід — ShelfGuard" };
 
@@ -73,6 +75,11 @@ export default function LoginPage() {
 
         {/* Divider */}
         <div style={{ borderTop: "1px solid #2A3347", marginBottom: 24 }} />
+
+        {/* useSearchParams requires a Suspense boundary in a server-rendered page */}
+        <Suspense fallback={null}>
+          <SessionExpiredNotice />
+        </Suspense>
 
         <LoginForm />
       </div>

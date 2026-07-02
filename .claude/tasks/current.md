@@ -2,6 +2,22 @@
 
 ---
 
+## TASK-279 — Повідомлення про завершення сеансу при неактивності
+**Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-02
+Раніше при протуханні access token + невдалому refresh `frontend/lib/api.ts` робив
+жорсткий redirect на `/login` без пояснення — користувача «викидало» мовчки.
+Fix: redirect тепер на `/login?reason=session_expired`; на сторінці логіну новий
+клієнтський компонент `SessionExpiredNotice` (features/auth/components) читає параметр
+через `useSearchParams` (обгорнуто в `<Suspense>` у server-сторінці) і показує amber-банер
+«Час сеансу сплив. Будь ласка, увійдіть знову.» над формою — той самий візуальний патерн,
+що й error-блок у LoginForm, але warning-тон (#F59E0B), бо це очікувана подія.
+`middleware.ts` без змін: він не може відрізнити «сеанс сплив» від «перший візит»
+(в обох випадках cookie відсутні), тож reason ставить лише api.ts після фактичного
+провалу refresh. `tsc --noEmit` та `npm run build` — green.
+Log: `279_2026-07-02_session-expired-notice_frontend-developer.md`
+
+---
+
 ## BUG-007 — /api/movements 500: паралельні запити на одному DbContext
 **Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
 Found during store_manager role QA (follow-up to BUG-006). На prod `/api/movements`

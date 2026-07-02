@@ -66,7 +66,9 @@ async function apiFetch<T>(
     const refreshed = await tryRefresh();
     if (refreshed) return apiFetch<T>(path, options, true);
     clearToken();
-    if (typeof window !== "undefined") window.location.href = "/login";
+    // Hard navigation on purpose — resets all in-memory state (React Query cache, Zustand).
+    // The reason param lets the login page explain why the user was signed out.
+    if (typeof window !== "undefined") window.location.href = "/login?reason=session_expired";
     throw new ApiError(401, "Session expired.");
   }
 
