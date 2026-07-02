@@ -407,7 +407,9 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             {
                 i.ProductId,
                 ProductName = i.Product!.Name,
-                Barcode     = i.Product!.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null,
+                // jsonb-mapped List<string>: Count/indexer are not SQL-translatable (BUG-008) —
+                // select the whole list and take the first element client-side below.
+                Barcodes    = i.Product!.Barcodes,
                 i.PriceFinal,
                 i.Quantity,
                 i.TransactionId
@@ -419,7 +421,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             .Select(g => new TopProductDto(
                 ProductId:        g.Key,
                 ProductName:      g.First().ProductName,
-                Barcode:          g.First().Barcode ?? string.Empty,
+                Barcode:          g.First().Barcodes?.FirstOrDefault() ?? string.Empty,
                 TotalRevenue:     g.Sum(i => i.PriceFinal * i.Quantity),
                 TotalQuantity:    g.Sum(i => i.Quantity),
                 TransactionCount: g.Select(i => i.TransactionId).Distinct().Count()))

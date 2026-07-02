@@ -23,12 +23,11 @@ public sealed class MovementService : IMovementService
         page     = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 200);
 
-        var itemsTask = _repo.GetAsync(tenantId, productId, storeId, type, from, to, page, pageSize, ct);
-        var countTask = _repo.CountAsync(tenantId, productId, storeId, type, from, to, ct);
+        // DbContext is not thread-safe: run the two queries sequentially (BUG-007).
+        var items = await _repo.GetAsync(tenantId, productId, storeId, type, from, to, page, pageSize, ct);
+        var total = await _repo.CountAsync(tenantId, productId, storeId, type, from, to, ct);
 
-        await Task.WhenAll(itemsTask, countTask);
-
-        var dtos = itemsTask.Result.Select(m => new MovementDto(
+        var dtos = items.Select(m => new MovementDto(
             m.Id,
             m.MovementType,
             m.ProductId,
@@ -48,6 +47,6 @@ public sealed class MovementService : IMovementService
             m.CreatedAt
         )).ToList();
 
-        return new MovementPageDto(dtos, countTask.Result, page, pageSize);
+        return new MovementPageDto(dtos, total, page, pageSize);
     }
 }

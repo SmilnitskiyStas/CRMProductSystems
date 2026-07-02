@@ -2,6 +2,40 @@
 
 ---
 
+## BUG-007 — /api/movements 500: паралельні запити на одному DbContext
+**Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
+Found during store_manager role QA (follow-up to BUG-006). На prod `/api/movements`
+повертав 500 на кожен виклик (5/5 запитів fail).
+Root cause: `MovementService.GetAsync` запускав `_repo.GetAsync` і `_repo.CountAsync`
+паралельно через `Task.WhenAll` на одному scoped `AppDbContext`. DbContext не
+thread-safe → «A second operation was started on this context instance…» → 500.
+Fix: обидва запити виконуються послідовно через `await` у
+`ShelfGuard.Application/Features/Movements/MovementService.cs`. Grep по всьому
+Application + Infrastructure: інших `Task.WhenAll` над одним DbContext немає.
+Build green, 459/459 тестів.
+Log: `bug007-008_2026-07-02_movements-concurrency-topproducts-jsonb_backend-developer.md`
+**Next:** deploy to prod; re-run store_manager QA pass.
+
+---
+
+## BUG-008 — /api/analytics/pos/top-products 500: jsonb Barcodes у SQL-проєкції
+**Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
+Found during store_manager role QA (follow-up to BUG-006). Ендпоінт падав 500 навіть
+після фіксу DateTime Kind (BUG-006).
+Root cause: `AnalyticsRepository.GetPosTopProductsAsync` проєктував
+`i.Product!.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null` всередині SQL-запиту.
+`Barcodes` — `List<string>` mapped to `jsonb`; Npgsql не транслює `.Count` / індексер
+`[0]` над jsonb-списком → runtime translation exception → 500.
+Fix: у проєкції вибирається весь список (`Barcodes = i.Product!.Barcodes`), перший
+штрихкод береться client-side (`FirstOrDefault()`) після `ToListAsync` — той самий
+патерн, що в `DailySalesRepository.cs:50-54`. Інші `Barcodes.Count/[0]` у кодовій базі —
+в Application-сервісах над матеріалізованими entity, не в IQueryable — не зачеплені.
+Build green, 459/459 тестів.
+Log: `bug007-008_2026-07-02_movements-concurrency-topproducts-jsonb_backend-developer.md`
+**Next:** deploy to prod; re-run store_manager QA pass on POS analytics.
+
+---
+
 ## BUG-006 — Analytics 500: DateTimeKind.Unspecified vs timestamptz
 **Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
 Found during QA of store_manager role. On prod усі 4 POS analytics ендпоінти
