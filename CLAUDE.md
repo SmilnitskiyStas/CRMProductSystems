@@ -352,3 +352,4 @@ Architecture decisions and domain context live in `.claude/docs/`.
 - Reference `.claude/docs/` and `v*-spec.md` by name rather than pasting content.
 - Scope prompts to one feature and one layer at a time.
 - Include file path and relevant line range rather than quoting large blocks.
+- **Short reports.** Звіти про роботу і завершення задач — стислі: що зроблено, статус build/tests/deploy, знайдені проблеми. Без таблиць, повторів контексту й переказу процесу. Стосується фінальних відповідей, agent report-back і task logs.
