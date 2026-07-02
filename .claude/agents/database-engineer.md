@@ -19,13 +19,17 @@
 ## RLS Pattern (обов'язковий для кожної таблиці з tenant даними)
 ```sql
 ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
+ALTER TABLE {table_name} FORCE ROW LEVEL SECURITY;
 
+-- ОБОВ'ЯЗКОВО: NULLIF guard щоб порожній рядок (після RESET) не ламав cast
 CREATE POLICY tenant_isolation ON {table_name}
-  USING (tenant_id = current_setting('app.tenant_id')::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 CREATE POLICY provider_bypass ON {table_name}
-  USING (current_setting('app.role') = 'provider');
+  USING (current_setting('app.role', true) = 'provider');
 ```
+
+⚠️ **Не використовувати `current_setting('app.tenant_id')::uuid` без NULLIF** — після `RESET app.tenant_id` повертає порожній рядок, що ламає cast до uuid (баг, зафіксований у виробництві).
 
 ## FEFO Index (обов'язковий для product_stock)
 ```sql

@@ -27,5 +27,6 @@
 - Дата (ISO: YYYY-MM-DD)
 
 ## Naming Conventions
-- Task IDs: `TASK-001`, `TASK-002`, ...
+- Task IDs: `TASK-001`, `TASK-002`, ... (поточний максимум: TASK-278)
 - Log files: `TASK-ID_YYYY-MM-DD_short-description_agent.md`
+- Нові задачі нумеруються з TASK-279

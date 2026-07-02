@@ -4,26 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**ShelfGuard** — B2B SaaS платформа для рітейлу: продуктові магазини, мережі, квіткові магазини.
-Відстеження термінів придатності (FEFO), управління залишками, AI-автозамовлення, IoT-інтеграції.
+**ShelfGuard** — B2B SaaS платформа для рітейлу та суміжних галузей: продуктові магазини, мережі, автосервіси, виробництво, склади.
+Відстеження термінів придатності (FEFO), управління залишками, POS-каса (Checkbox ПРРО), AI-автозамовлення, IoT-інтеграції, B2B marketplace.
 Modular monolith, multi-tenant (RLS), що масштабується до enterprise.
+
+**Production:** `agrusystems.pp.ua` (Hetzner 93.127.143.98, Docker, Nginx + Let's Encrypt)
 
 **Spec-файли (primary source of truth):**
 - `v1-spec.md` — MVP: Shelf Manager + CRM ядро + HR + Notifications
 - `v2-spec.md` — Auto Order + AI Forecasting (Claude API)
 - `v3-spec.md` — IoT + CV Camera + ПРРО Каса
+- `v4-spec.md` — Platform Transformation: multi-industry, module activation system
+
+**Поточний стан:**
+- v1 ✅ · v2 ✅ · v3 ✅ · v4 ✅ (Store→Location, Product→Item, module activation)
+- Sprint v3.5 «Provider UX» завершено (TASK-275..278)
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js · React · TypeScript · Tailwind CSS · shadcn/ui · React Query · Zustand |
-| Backend | ASP.NET Core Web API · C# · modular monolith |
+| Backend | ASP.NET Core Web API · C# · .NET 8 · modular monolith |
 | Mobile | Expo SDK 56 · React Native · Expo Router · NativeWind v4 |
-| Queue | BullMQ · Redis (окремий Node.js worker-сервіс для фонових задач) |
-| Database | PostgreSQL · EF Core · Row Level Security (RLS) |
-| AI | Claude API (claude-sonnet-4) |
-| Infrastructure | Docker · Docker Compose |
+| Queue | BullMQ · Redis 7 (окремий Node.js worker-сервіс) |
+| Database | PostgreSQL 16 · EF Core 8 · Row Level Security (RLS) |
+| AI | Claude API (claude-sonnet-4-5, Anthropic SDK) |
+| Fiscal | Checkbox ПРРО (IFiscalService, per-tenant via integration_configs) |
+| IoT | MQTT / Mosquitto (температура, вага, stock events) |
+| Infrastructure | Docker · Docker Compose · GitHub Actions CI/CD |
 
 ## Development Commands
 
@@ -39,18 +48,17 @@ npm test           # run tests
 ### Backend (`/backend`)
 ```bash
 dotnet restore     # restore packages
-dotnet run --project CRM.Api         # API server → localhost:5000
+dotnet run --project ShelfGuard.Api         # API server → localhost:5000
 dotnet build       # build solution
 dotnet test        # run all tests
 dotnet test --filter "FullyQualifiedName~FeatureName"  # run single test
-dotnet ef migrations add <Name> --project CRM.Infrastructure --startup-project CRM.Api
+dotnet ef migrations add <Name> --project ShelfGuard.Infrastructure --startup-project ShelfGuard.Api
 ```
 
 ### Mobile (`/mobile`)
 ```bash
-npm install        # install dependencies
-npx expo start     # start dev server
-npx expo run:ios   # iOS simulator
+npm install           # install dependencies
+npx expo start        # start dev server
 npx expo run:android  # Android emulator
 ```
 
@@ -62,7 +70,7 @@ npm run dev        # start BullMQ worker
 
 ### Infrastructure
 ```bash
-docker compose up -d    # start PostgreSQL + Redis and services
+docker compose up -d    # start PostgreSQL + Redis + Mosquitto + Worker
 docker compose down     # stop all services
 docker compose logs -f  # tail logs
 ```
@@ -74,58 +82,132 @@ docker compose logs -f  # tail logs
 ### Backend layout
 ```
 /backend
-├── ShelfGuard.Api/            # Controllers, middleware, startup — thin layer only
-├── ShelfGuard.Application/    # Business logic, use cases, DTOs
+├── ShelfGuard.Api/            # Controllers (50), middleware, startup — thin layer only
+├── ShelfGuard.Application/    # Business logic, use cases, DTOs (41 feature modules)
 │   └── Features/
-│       ├── Inventory/         # Products, stock, FEFO
-│       ├── Shelf/             # Expiry tracking, statuses, suggestions
-│       ├── Suppliers/         # Supplier catalog, receipts
+│       ├── Auth/              # JWT, roles, tenant context
+│       ├── Inventory/         # Product catalog, FEFO
+│       ├── Stock/             # Stock status, expiry tracking
+│       ├── Receipts/          # Supplier deliveries
 │       ├── Transfers/         # Store-to-store movements
 │       ├── WriteOffs/         # Write-off documents
-│       ├── Notifications/     # Notification settings, queue
-│       ├── Auth/              # JWT, roles, tenant context
-│       └── Analytics/         # Reports, summaries
-├── ShelfGuard.Domain/         # Entities, value objects, domain interfaces
-├── ShelfGuard.Infrastructure/ # EF Core, repositories, external services
+│       ├── Orders/            # Purchase orders, order formula
+│       ├── Adu/               # Average Daily Usage
+│       ├── Buffer/            # CDA buffer engine (green/yellow/red)
+│       ├── Sales/             # Daily sales
+│       ├── Pos/               # POS shifts, transactions, fiscalization
+│       ├── Suppliers/         # Supplier catalog, metrics
+│       ├── Marketplace/       # B2B supplier marketplace
+│       ├── Customers/         # Customer master data
+│       ├── Locations/         # Store zones, shelves
+│       ├── Stores/            # Store master
+│       ├── Users/             # Team members, roles
+│       ├── Schedules/         # Employee work schedules
+│       ├── Notifications/     # Alert settings, queue
+│       ├── IoT/               # IoT device management
+│       ├── Analytics/         # Reports, summaries, KPIs
+│       ├── AiOrders/          # AI order suggestions
+│       ├── AiAssistant/       # Claude AI business advisor
+│       ├── AutoService/       # Auto-service module
+│       ├── Production/        # Production orders, recipes
+│       ├── Events/            # Demand events (holidays, promos)
+│       ├── Weather/           # Open-Meteo integration
+│       ├── Cannibalization/   # Promo cannibalization
+│       ├── Chat/              # Provider ↔ client live chat
+│       ├── ServiceDesk/       # Support tickets
+│       ├── Provider/          # SaaS provider management
+│       ├── Admin/             # Super admin (tenant onboarding)
+│       ├── Integrations/      # Third-party API configs (ПРРО, Claude)
+│       ├── Settings/          # Module settings, toggles
+│       └── Telegram/          # Telegram bot integration
+├── ShelfGuard.Domain/         # Entities (69), value objects, repo interfaces (42)
+├── ShelfGuard.Infrastructure/ # EF Core (87 migrations), repositories (42), external services
 │   ├── Data/                  # AppDbContext, migrations, repositories
 │   ├── AI/                    # Claude API client — isolated here
-│   └── Integrations/          # Telegram, email, webhooks
-└── ShelfGuard.Tests/
+│   │   ├── ClaudeOrderAdvisor.cs
+│   │   ├── BusinessAssistant/
+│   │   └── SupplierAdvisor/
+│   └── Integrations/
+│       ├── Prro/              # IFiscalService → CheckboxFiscalClient (per-tenant factory)
+│       └── OpenMeteoClient.cs
+└── ShelfGuard.Tests/          # 45 test files (~8% coverage; Pos + Prro best covered)
 ```
 
 ### Frontend layout
 ```
 /frontend
-├── app/                       # Next.js App Router
-│   ├── (auth)/
-│   └── (dashboard)/
-├── features/                  # One directory per domain
-│   ├── inventory/             # components/ hooks/ api/ types.ts
-│   ├── shelf/                 # Expiry tracking, statuses, suggestions
-│   ├── suppliers/
-│   ├── transfers/
-│   ├── write-offs/
-│   ├── analytics/
-│   └── settings/
-├── components/                # Shared UI components
-└── lib/                       # API client, auth config, utilities
+├── app/                       # Next.js App Router (43 pages)
+│   ├── (auth)/login/
+│   └── (dashboard)/           # All authenticated routes
+├── features/                  # 35 feature directories (one per domain)
+│   ├── inventory/             # Product catalog
+│   ├── shelf/                 # FEFO tracking, expiry statuses
+│   ├── stock/                 # Live stock view
+│   ├── receipts/              # Supplier deliveries
+│   ├── transfers/             # Store-to-store movements
+│   ├── write-offs/            # Waste management
+│   ├── orders/                # Purchase orders + buffer funnel
+│   ├── sales/                 # Manual sales entry
+│   ├── pos/                   # Point of sale (5 components)
+│   ├── analytics/             # Charts, dashboards, POS analytics
+│   ├── ai-orders/             # Claude AI forecasting
+│   ├── ai-assistant/          # AI chat widget
+│   ├── marketplace/           # B2B supplier catalog (11 components)
+│   ├── suppliers/             # Supplier management
+│   ├── customers/             # Customer directory
+│   ├── auto-service/          # Auto-service module (9 components)
+│   ├── production/            # Manufacturing, recipes
+│   ├── locations/             # Store zones, floor plans
+│   ├── stores/                # Store management
+│   ├── schedules/             # Staff shifts
+│   ├── iot/                   # Temperature sensors, devices
+│   ├── users/                 # Team members, permissions
+│   ├── notifications/         # Alert history
+│   ├── integrations/          # ПРРО, Claude key config
+│   ├── service-desk/          # Support tickets (7 components)
+│   ├── chat/                  # Live chat sessions
+│   ├── provider/              # SaaS admin panel (14 components)
+│   ├── admin/                 # Tenant onboarding
+│   ├── dashboard/             # Main home page
+│   ├── settings/              # User preferences
+│   ├── profile/               # Account management
+│   ├── auth/                  # JWT, session
+│   ├── events/                # Activity log
+│   ├── catalog/               # Internal catalog service
+│   └── modules/               # Feature flags / module activation
+├── components/                # Shared UI: shadcn/ui + custom (20 components)
+│   ├── ui/                    # button, dialog, form, table, badge, etc.
+│   └── layout/                # Sidebar, TopBar, UserMenu, StoreSelector
+└── lib/                       # api.ts, query-client.ts, roles.ts, utils.ts
 ```
 
 ### Mobile layout
 ```
 /mobile
-└── app/
-    ├── (auth)/
-    │   ├── _layout.tsx
-    │   └── login.tsx
-    └── (app)/
-        ├── _layout.tsx        # Bottom Tab Navigator
-        ├── index.tsx          # Dashboard
-        ├── scan.tsx           # Barcode scan (center tab)
-        ├── stock/
-        ├── receipt/
-        ├── inventory/
-        └── profile/
+├── app/
+│   ├── (auth)/
+│   │   ├── _layout.tsx
+│   │   └── login.tsx
+│   └── (app)/
+│       ├── _layout.tsx              # Bottom Tab Navigator (5 tabs)
+│       ├── index.tsx                # Dashboard
+│       ├── scan.tsx                 # Barcode scan (center FAB tab)
+│       ├── notifications.tsx
+│       ├── ai-assistant.tsx
+│       ├── profile.tsx
+│       ├── stock/                   # Inventory + batches
+│       ├── receipt/                 # Receive deliveries
+│       ├── transfers/               # Create/view transfers
+│       ├── write-offs/              # Quick waste entry
+│       ├── pos/                     # Full POS: scanner → cart → payment → receipt
+│       ├── production/              # Recipes, batch management
+│       ├── schedules/               # View shifts
+│       ├── customers/               # Customer lookup
+│       ├── service-desk/            # Support tickets
+│       ├── marketplace/             # Supplier catalog
+│       ├── auto-service/            # Auto shop module
+│       └── inventory/[zoneId]       # Zone inventory
+└── features/                        # 15 feature directories (same pattern as web)
 ```
 
 ### Worker layout
@@ -133,11 +215,21 @@ docker compose logs -f  # tail logs
 /worker                        # Node.js BullMQ worker service
 ├── src/
 │   ├── jobs/
-│   │   ├── expiry-check.job.ts   # cron: every hour
-│   │   ├── notification.job.ts   # queue worker + retry
-│   │   ├── weekly-report.job.ts  # cron: Sunday 08:00
-│   │   └── cleanup.job.ts        # cron: daily
-│   ├── queues/
+│   │   ├── expiry-check.job.ts        # cron: every hour — update stock statuses
+│   │   ├── notification.job.ts        # queue worker — Telegram/Push/Email + retry ×3
+│   │   ├── weekly-report.job.ts       # cron: Sunday 08:00
+│   │   ├── cleanup.job.ts             # cron: daily 03:00 — archive + purge logs
+│   │   ├── ai-order.job.ts            # cron: 05:00 — Claude API → order suggestions
+│   │   ├── fiscalization-retry.job.ts # cron: */5 min — poll Checkbox pending receipts
+│   │   ├── mqtt-listener.ts           # MQTT subscriber (shelfguard/#) — IoT events
+│   │   └── telegram-listener.ts       # Telegram bot: /start /status /critical /tasks
+│   ├── services/
+│   │   ├── db.ts              # PostgreSQL connection pool
+│   │   ├── redis.ts           # Redis client (BullMQ broker)
+│   │   ├── telegram.ts        # Telegraf.js bot client
+│   │   ├── email.ts           # Resend API (blocked: domain not verified)
+│   │   ├── iot-rules.ts       # Pure functions: confidence calc, threshold logic
+│   │   └── notification-log.ts
 │   └── index.ts
 └── package.json
 ```
@@ -145,14 +237,17 @@ docker compose logs -f  # tail logs
 ## Architecture Rules
 
 - **Thin controllers.** Business logic belongs in `ShelfGuard.Application` services, never in controllers.
-- **Feature-based frontend.** Components, hooks, API calls, and types live inside their feature directory.
-- **React Query owns server state.** Do not duplicate it into Zustand stores.
+- **Feature-based frontend.** Components, hooks, API calls, and types live inside their feature directory. Pattern: `types.ts`, `api/`, `hooks/`, `components/`.
+- **React Query owns server state.** Do not duplicate it into Zustand stores. Zustand — тільки UI state (auth token, notification badge).
 - **CSR for all authenticated/dashboard views.** SSR only when a page has an explicit SEO requirement.
 - **AI integrations are isolated.** Claude API client, prompts, and AI logic stay in `ShelfGuard.Infrastructure/AI`. Never couple AI providers to business logic.
 - **Validate at boundaries only.** API endpoints, external integrations, user input. No redundant internal re-validation.
-- **FEFO is sacred.** Any stock consumption must use FEFO logic — always take the batch with the nearest expiry_date.
-- **Tenant isolation via RLS.** Every table with tenant data must have `tenant_id` and a corresponding PostgreSQL RLS policy.
+- **FEFO is sacred.** Any stock consumption must use FEFO logic — always take the batch with the nearest `expiry_date`.
+- **Tenant isolation via RLS.** Every table with tenant data must have `tenant_id` and a corresponding PostgreSQL RLS policy. Use `NULLIF(current_setting(...), '')` guard in all policies.
 - **expiry_date and batch_number never change on transfer.** These fields are copied as-is when stock moves between locations.
+- **Module activation.** Feature endpoints guarded by `[RequireModule("module_key")]`. Module sets stored in `tenants.modules` (JSONB). Business type in `tenants.business_type`.
+- **Fiscal service is per-tenant.** Use `IFiscalServiceFactory` to resolve `IFiscalService` per-tenant from `integration_configs`. Never inject `IFiscalService` directly at startup.
+- **Secrets never in code.** ПРРО creds, Claude API key, Telegram token → `.env` only. Masked on GET (last 4 chars).
 
 ## Multi-Agent Workflow
 
@@ -211,13 +306,13 @@ The main session may act without spawning an agent **only** for:
 
 ### Task ID Format
 ```
-TASK-001, TASK-002, ...
+TASK-001, TASK-002, ...  (current max: TASK-278)
 ```
 
 ### Task Log File Format
 ```
 .claude/logs/tasks/TASK-ID_YYYY-MM-DD_short-description_agent.md
-Example: .claude/logs/tasks/001_2026-06-03_products-api_backend-developer.md
+Example: .claude/logs/tasks/278_2026-06-21_live-chat_backend-developer.md
 ```
 
 ### Task States
@@ -231,16 +326,16 @@ Architecture decisions and domain context live in `.claude/docs/`.
 
 ```
 .claude/docs/
-├── architecture.md        # Key decisions and rationale
+├── architecture.md        # Key decisions and rationale (ADR-001..015)
 ├── domain-model.md        # Core entities and relationships
 ├── api-contracts.md       # Shared request/response shapes
 ├── database-schema.md     # Schema decisions, RLS patterns
 ├── frontend-structure.md  # Frontend conventions and patterns
 ├── backend-structure.md   # Backend layer conventions
-├── integrations.md        # Claude API, Telegram, BullMQ, Open-Meteo
+├── integrations.md        # Claude API, Telegram, BullMQ, Open-Meteo, Checkbox, MQTT
 ├── decisions.md           # Architecture decision log (ADR)
 ├── known-issues.md        # Known bugs and limitations
-└── glossary.md            # Domain terms (FEFO, CDA, ADU, etc.)
+└── glossary.md            # Domain terms (FEFO, CDA, ADU, MOQ, USQ, etc.)
 ```
 
 ## AI Workflow

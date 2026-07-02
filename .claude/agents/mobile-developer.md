@@ -34,21 +34,27 @@
 ```
 mobile/app/
 ├── (auth)/
-│   ├── _layout.tsx      ← Stack navigator (no tabs)
+│   ├── _layout.tsx           ← Stack navigator (no tabs)
 │   └── login.tsx
 └── (app)/
-    ├── _layout.tsx      ← Bottom Tab Navigator (5 tabs)
-    ├── index.tsx        ← Dashboard
-    ├── scan.tsx         ← Barcode scan (center fab tab)
-    ├── stock/
-    │   └── index.tsx
-    ├── receipt/
-    │   ├── index.tsx
-    │   └── [id].tsx
-    ├── inventory/
-    │   └── index.tsx
-    └── profile/
-        └── index.tsx
+    ├── _layout.tsx           ← Bottom Tab Navigator (5 tabs)
+    ├── index.tsx             ← Dashboard
+    ├── scan.tsx              ← Barcode scan (center FAB tab)
+    ├── notifications.tsx
+    ├── ai-assistant.tsx
+    ├── profile.tsx
+    ├── stock/index.tsx       ← Inventory + batches
+    ├── receipt/[id].tsx
+    ├── transfers/            ← index, [id], create
+    ├── write-offs/           ← index, [id], create
+    ├── pos/                  ← _layout, index, scanner, payment, receipt
+    ├── production/           ← index, [id], recipes
+    ├── schedules/[id].tsx
+    ├── customers/[id].tsx
+    ├── service-desk/[id].tsx
+    ├── marketplace/[id].tsx
+    ├── auto-service/         ← index, customers, [id]
+    └── inventory/[zoneId].tsx
 ```
 
 ## Feature Structure (mobile/features/)
@@ -63,7 +69,7 @@ mobile/features/{domain}/
 ## Navigation Pattern
 - Auth guard у `(app)/_layout.tsx` — перевіряє токен, redirect на login
 - Deep links через `expo-linking`
-- Tab bar: Dashboard / Stock / Scan (FAB) / Receipt / Profile
+- Tab bar: Dashboard / Stock / Scan (FAB) / Receipt / More
 
 ## Component Patterns
 ```tsx
