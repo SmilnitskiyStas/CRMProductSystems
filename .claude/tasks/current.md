@@ -2,6 +2,22 @@
 
 ---
 
+## TASK-281 — Dashboard і /stock: консистентний фільтр магазину
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-280 · Updated: 2026-07-02
+Дашборд (stats, «Потребують уваги», карта зон) викликав `/api/stock*` без
+`store_id` — показував дані всіх магазинів, тоді як `/stock` фільтрує за
+`selectedStoreId` з header StoreSelector. Після «Переглянути всі» список міг
+бути порожнім. Fix: `frontend/features/dashboard/api/dashboard.ts` — усі три
+функції приймають `storeId` (helper `withStore` додає `store_id=` до URL);
+`frontend/features/dashboard/hooks/useDashboard.ts` — хуки читають
+`selectedStoreId` з `useStoreContext` і включають його в queryKey. Бекенд
+(`StockController`) вже приймає `store_id?` на `/api/stock`, `/summary`,
+`/zones-summary`. Коли магазин не вибрано (`null`) — параметр не додається,
+обидві сторінки показують все. `tsc --noEmit` та `npm run build` — green.
+Log: `281_2026-07-02_dashboard-store-consistency_frontend-developer.md`
+
+---
+
 ## TASK-280 — Dashboard: блок «Потребують уваги» — 5 рядків + «Переглянути всі»
 **Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-02
 Блок `AttentionTable` не мав обмеження висоти — при багатьох товарах займав пів

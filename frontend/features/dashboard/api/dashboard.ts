@@ -32,8 +32,14 @@ interface ProductStockDto {
   lastCheckedAt: string;
 }
 
-async function getDashboardStats(): Promise<DashboardStats> {
-  const summary = await api.get<StockSummaryDto>("/api/stock/summary");
+function withStore(path: string, storeId: string | null): string {
+  if (!storeId) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}store_id=${encodeURIComponent(storeId)}`;
+}
+
+async function getDashboardStats(storeId: string | null): Promise<DashboardStats> {
+  const summary = await api.get<StockSummaryDto>(withStore("/api/stock/summary", storeId));
   return {
     safe: summary.safe,
     warning: summary.warning,
@@ -42,8 +48,10 @@ async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
-async function getAttentionItems(): Promise<AttentionItem[]> {
-  const { items: batches } = await api.get<PagedResult<ProductStockDto>>("/api/stock?pageSize=200");
+async function getAttentionItems(storeId: string | null): Promise<AttentionItem[]> {
+  const { items: batches } = await api.get<PagedResult<ProductStockDto>>(
+    withStore("/api/stock?pageSize=200", storeId),
+  );
   return batches
     .filter((b) => b.status !== "safe")
     .map((b) => ({
@@ -73,8 +81,8 @@ interface ZoneSummaryDto {
   expired: number;
 }
 
-async function getStoreZones(): Promise<StoreZone[]> {
-  const zones = await api.get<ZoneSummaryDto[]>("/api/stock/zones-summary");
+async function getStoreZones(storeId: string | null): Promise<StoreZone[]> {
+  const zones = await api.get<ZoneSummaryDto[]>(withStore("/api/stock/zones-summary", storeId));
   return zones.map((z) => ({
     id: z.zoneId,
     name: z.name,
