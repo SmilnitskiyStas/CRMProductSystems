@@ -20,6 +20,8 @@ const FILTERS: { label: string; value: ItemStatus | "all" }[] = [
   { label: "Warning", value: "warning" },
 ];
 
+const VISIBLE_ROWS = 5;
+
 interface Props {
   items: AttentionItem[] | undefined;
   isLoading: boolean;
@@ -30,6 +32,8 @@ export function AttentionTable({ items = [], isLoading }: Props) {
   const [filter, setFilter] = useState<ItemStatus | "all">("all");
 
   const filtered = filter === "all" ? items : items.filter((i) => i.status === filter);
+  const visible = filtered.slice(0, VISIBLE_ROWS);
+  const viewAllHref = filter === "all" ? "/stock" : `/stock?status=${filter}`;
 
   return (
     <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, overflow: "hidden" }}>
@@ -125,13 +129,13 @@ export function AttentionTable({ items = [], isLoading }: Props) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item, idx) => {
+              {visible.map((item, idx) => {
                 const cfg = STATUS_CONFIG[item.status];
                 return (
                   <tr
                     key={item.id}
                     style={{
-                      borderBottom: idx < filtered.length - 1 ? "1px solid #111827" : "none",
+                      borderBottom: idx < visible.length - 1 ? "1px solid #111827" : "none",
                       transition: "background 0.1s",
                     }}
                     onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#1a1f2e")}
@@ -206,6 +210,42 @@ export function AttentionTable({ items = [], isLoading }: Props) {
               })}
             </tbody>
           </table>
+
+          {/* View all */}
+          {filtered.length > VISIBLE_ROWS && (
+            <div
+              style={{
+                borderTop: "1px solid #1F2937",
+                padding: "10px 16px",
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                onClick={() => router.push(viewAllHref)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #1F2937",
+                  background: "transparent",
+                  color: "#93C5FD",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "#1D3461";
+                  (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                  (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+                }}
+              >
+                Переглянути всі ({filtered.length})
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

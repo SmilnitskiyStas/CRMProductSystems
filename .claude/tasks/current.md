@@ -2,6 +2,20 @@
 
 ---
 
+## TASK-280 — Dashboard: блок «Потребують уваги» — 5 рядків + «Переглянути всі»
+**Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-02
+Блок `AttentionTable` не мав обмеження висоти — при багатьох товарах займав пів
+сторінки. Fix (у `frontend/features/dashboard/components/AttentionTable.tsx`):
+показуються перші 5 рядків поточного фільтра; нижче кнопка
+«Переглянути всі (N)» (лише коли рядків > 5). Ціль навігації — `/stock`
+(сторінки `/shelf` немає): таб «All» → `/stock`, таби Expired/Critical/Warning →
+`/stock?status=<value>` — сторінка вже читає `status` з query params, значення
+збігаються зі `StockFilters`, тож фільтр преселектнутий. Стилі — існуючий
+inline dark-theme патерн блоку. `tsc --noEmit` та `npm run build` — green.
+Log: `280_2026-07-02_dashboard-attention-view-all_frontend-developer.md`
+
+---
+
 ## TASK-279 — Повідомлення про завершення сеансу при неактивності
 **Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-02
 Раніше при протуханні access token + невдалому refresh `frontend/lib/api.ts` робив
