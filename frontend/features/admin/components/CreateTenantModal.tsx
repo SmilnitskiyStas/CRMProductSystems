@@ -6,13 +6,10 @@ import { useCreateTenant } from "../hooks/useAdmin";
 import { ALL_BUSINESS_TYPES, ALL_PLANS, BUSINESS_TYPE_LABELS, PLAN_LABELS } from "../types";
 import type { CreateTenantRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { slugify } from "@/lib/slug";
 
 interface Props {
   onClose: () => void;
-}
-
-function autoSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -72,7 +69,7 @@ export function CreateTenantModal({ onClose }: Props) {
     setForm((prev) => ({
       ...prev,
       name,
-      slug: slugManual ? prev.slug : autoSlug(name),
+      slug: slugManual ? prev.slug : slugify(name),
     }));
   }
 

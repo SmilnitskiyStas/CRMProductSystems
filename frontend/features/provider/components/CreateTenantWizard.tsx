@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, ChevronRight, ChevronLeft, Check, Building2 } from "lucide-react";
 import { useCreateTenant } from "../hooks/useProvider";
+import { slugify } from "@/lib/slug";
 import type { BusinessType, TenantModule, TenantPlan } from "../types";
 import {
   ALL_BUSINESS_TYPES,
@@ -20,18 +21,6 @@ import {
 interface Props {
   onClose: () => void;
   onCreated: (tenantId: string) => void;
-}
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9Ѐ-ӿ\s-]/g, "")
-    .replace(/[\s_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/[^\x00-\x7F]/g, "")
-    .replace(/[^a-z0-9-]/g, "")
-    .slice(0, 32);
 }
 
 export function CreateTenantWizard({ onClose, onCreated }: Props) {

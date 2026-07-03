@@ -183,6 +183,22 @@ Log: `bug011_2026-07-03_logout-expired-banner_frontend-developer.md`
 
 ---
 
+## BUG-013 — майстер «Новий клієнт» (provider): нема типу «Постачальник» + кирилична назва блокує «Далі»
+**Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-03
+Repro: CreateTenantWizard (панель провайдера) не мав business type «Постачальник»
+(supplier додано лише в admin у TASK-286); кирилична назва → slugify відкидав усі
+не-ASCII символи → slug порожній → кнопка «Далі» disabled.
+Fix: (1) `features/provider/types.ts` — `supplier` у BusinessType, labels («Постачальник»,
+🚚), ALL_BUSINESS_TYPES, preset `["marketplace_supplier"]`; `marketplace_supplier` у
+TenantModule + MODULE_LABELS/DESCRIPTIONS/ALL_MODULES (звірено з Tenant.cs, TASK-282).
+(2) Спільна util `lib/slug.ts` — транслітерація укр→лат (щ→shch, ї→yi, х→kh тощо) +
+санітизація; використана в CreateTenantWizard і admin/CreateTenantModal (там була та сама
+вада). Назва компанії зберігається як введена — транслітерується тільки slug.
+tsc + next build green.
+Log: `bug013_2026-07-03_provider-wizard-supplier-slug_frontend-developer.md`
+
+---
+
 ## BUG-012 — POST /api/admin/marketplace/suppliers 500 (FK violation) на prod
 **Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-03
 Root cause: `MarketplaceService.AdminCreateSupplierAsync` хардкодив `TenantId = Guid.Empty`

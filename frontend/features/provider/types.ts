@@ -1,12 +1,13 @@
 export type TenantPlan   = "basic" | "standard" | "enterprise" | "trial";
 export type TenantModule =
   | "inventory" | "procurement" | "pos"
-  | "auto_service" | "production" | "marketplace";
+  | "auto_service" | "production" | "marketplace"
+  | "marketplace_supplier";
 
 export type BusinessType =
   | "retail" | "auto_service" | "restaurant"
   | "warehouse" | "production" | "distribution"
-  | "pharmacy" | "floristry";
+  | "pharmacy" | "floristry" | "supplier";
 
 export interface TenantSummaryDto {
   id: string;
@@ -102,6 +103,7 @@ export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
   distribution: "Дистрибуція",
   pharmacy:     "Аптека / Медтовари",
   floristry:    "Флористика",
+  supplier:     "Постачальник",
 };
 
 export const BUSINESS_TYPE_ICONS: Record<BusinessType, string> = {
@@ -113,11 +115,12 @@ export const BUSINESS_TYPE_ICONS: Record<BusinessType, string> = {
   distribution: "🚚",
   pharmacy:     "💊",
   floristry:    "🌸",
+  supplier:     "🚚",
 };
 
 export const ALL_BUSINESS_TYPES: BusinessType[] = [
   "retail", "auto_service", "restaurant", "warehouse",
-  "production", "distribution", "pharmacy", "floristry",
+  "production", "distribution", "pharmacy", "floristry", "supplier",
 ];
 
 // Default module presets per business type (mirrors backend Tenant.DefaultModulesForBusinessType)
@@ -130,6 +133,7 @@ export const BUSINESS_TYPE_PRESETS: Record<BusinessType, TenantModule[]> = {
   distribution: ["inventory", "procurement", "marketplace"],
   pharmacy:     ["inventory", "procurement", "pos"],
   floristry:    ["inventory", "procurement", "pos"],
+  supplier:     ["marketplace_supplier"],
 };
 
 // ── Modules ──────────────────────────────────────────────────────────────────
@@ -141,6 +145,7 @@ export const MODULE_LABELS: Record<TenantModule, string> = {
   auto_service: "Автосервіс",
   production:   "Виробництво",
   marketplace:  "Маркетплейс постачальників",
+  marketplace_supplier: "Кабінет постачальника",
 };
 
 export const MODULE_DESCRIPTIONS: Record<TenantModule, string> = {
@@ -150,10 +155,12 @@ export const MODULE_DESCRIPTIONS: Record<TenantModule, string> = {
   auto_service: "Клієнти, автомобілі, наряд-замовлення, облік запчастин",
   production:   "Рецепти, виробничі замовлення, списання сировини",
   marketplace:  "Пошук і порівняння постачальників, відгуки, рейтинги",
+  marketplace_supplier: "Self-service постачальника: каталог, замовлення, чат з клієнтами",
 };
 
 export const ALL_MODULES: TenantModule[] = [
   "inventory", "procurement", "pos", "auto_service", "production", "marketplace",
+  "marketplace_supplier",
 ];
 
 // ── Plans ────────────────────────────────────────────────────────────────────
