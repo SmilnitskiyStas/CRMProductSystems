@@ -17,6 +17,10 @@ public sealed class SupplierItem
     public int? MinQty { get; set; }
     public string? Unit { get; set; }
     public bool IsAvailable { get; set; } = true;
+    /// <summary>Category key (e.g. "food", "auto_parts", "medical", "construction"). Null = no category (legacy/default form).</summary>
+    public string? Category { get; set; }
+    /// <summary>Category-specific attributes (e.g. oem_number, dosage, expiry_date). Null when Category is null.</summary>
+    public Dictionary<string, object?>? Attributes { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
 
     public Supplier? Supplier { get; init; }

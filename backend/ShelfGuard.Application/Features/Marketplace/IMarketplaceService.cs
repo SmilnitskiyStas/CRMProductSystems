@@ -67,4 +67,9 @@ public interface IMarketplaceService
     /// <summary>Returns null on success, error string on failure.</summary>
     Task<string?> AdminDeleteSupplierItemAsync(
         Guid supplierId, Guid itemId, CancellationToken ct = default);
+
+    // ── Item category registry (TASK-294) ─────────────────────────────────────
+
+    /// <summary>Fixed category/field registry (ADR-017 §4), backend source of truth for the item form.</summary>
+    IReadOnlyList<SupplierItemCategoryDto> GetItemCategories();
 }

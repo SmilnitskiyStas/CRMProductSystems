@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useAddCabinetItem, useUpdateCabinetItem } from "../hooks/useSupplierCabinet";
+import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
+import { ItemCategoryFields, findMissingRequiredField } from "@/features/marketplace/components/ItemCategoryFields";
 import type { CabinetItem } from "../types";
 
 interface Props {
@@ -42,7 +44,12 @@ export function CabinetItemModal({ item, onClose }: Props) {
   const [minQtyRaw, setMinQtyRaw] = useState(item?.minQty != null ? String(item.minQty) : "");
   const [unit, setUnit] = useState(item?.unit ?? "");
   const [isAvailable, setIsAvailable] = useState(item?.isAvailable ?? true);
+  const [category, setCategory] = useState(item?.category ?? "");
+  const [attributes, setAttributes] = useState<Record<string, string>>(
+    (item?.attributes as Record<string, string>) ?? {}
+  );
   const [error, setError] = useState<string | null>(null);
+  const { data: categories = [] } = useItemCategories();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -65,8 +72,20 @@ export function CabinetItemModal({ item, onClose }: Props) {
       return;
     }
 
+    if (category) {
+      const missing = findMissingRequiredField(categories, category, attributes);
+      if (missing) {
+        setError(missing);
+        return;
+      }
+    }
+
     const onError = (err: unknown) =>
       setError(err instanceof Error ? err.message : "Помилка збереження товару.");
+
+    const categoryFields = category
+      ? { category, attributes: attributes as Record<string, unknown> }
+      : {};
 
     if (isEdit) {
       updateItem.mutate(
@@ -78,6 +97,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
             minQty,
             unit: unit.trim() || undefined,
             isAvailable,
+            ...categoryFields,
           },
         },
         { onSuccess: onClose, onError }
@@ -90,6 +110,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
           minQty,
           unit: unit.trim() || undefined,
           isAvailable,
+          ...categoryFields,
         },
         { onSuccess: onClose, onError }
       );
@@ -156,6 +177,13 @@ export function CabinetItemModal({ item, onClose }: Props) {
               required
             />
           </div>
+
+          <ItemCategoryFields
+            category={category}
+            onCategoryChange={setCategory}
+            attributes={attributes}
+            onAttributesChange={setAttributes}
+          />
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>

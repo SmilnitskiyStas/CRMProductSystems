@@ -1,4 +1,7 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ShelfGuard.Domain.Entities;
 
 namespace ShelfGuard.Infrastructure.Data;
@@ -1029,6 +1032,18 @@ public sealed class AppDbContext : DbContext
             e.Property(i => i.Price).HasColumnType("numeric(12,2)");
             e.Property(i => i.Unit).HasColumnType("text");
             e.Property(i => i.IsAvailable).HasDefaultValue(true);
+            e.Property(i => i.Category).HasColumnType("text");
+            // Value converter (not Npgsql dynamic-json) so the model also works under
+            // EF Core InMemory (used by ShelfGuard.Tests), which cannot map Dictionary<string, object?> directly.
+            e.Property(i => i.Attributes)
+             .HasColumnType("jsonb")
+             .HasConversion(
+                 v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                 v => v == null ? null : JsonSerializer.Deserialize<Dictionary<string, object?>>(v, (JsonSerializerOptions?)null))
+             .Metadata.SetValueComparer(new ValueComparer<Dictionary<string, object?>?>(
+                 (a, b) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null) == JsonSerializer.Serialize(b, (JsonSerializerOptions?)null),
+                 v => v == null ? 0 : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null).GetHashCode(),
+                 v => v == null ? null : JsonSerializer.Deserialize<Dictionary<string, object?>>(JsonSerializer.Serialize(v, (JsonSerializerOptions?)null), (JsonSerializerOptions?)null)));
             e.Property(i => i.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(i => new { i.SupplierId, i.TenantId });
             e.HasIndex(i => i.ItemId);

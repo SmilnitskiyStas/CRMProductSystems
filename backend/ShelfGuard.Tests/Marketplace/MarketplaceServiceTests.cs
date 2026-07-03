@@ -589,4 +589,173 @@ public sealed class MarketplaceServiceTests
 
         Assert.NotNull(await _sut.GetSupplierReviewsAsync(_supplierIdA, page: 1, pageSize: 20));
     }
+
+    // ── Category/attributes validation (TASK-295, ADR-017 §5) ─────────────────
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_CategoryMedical_MissingExpiryDate_ReturnsError()
+    {
+        var supplier = MakeSupplier(_supplierIdA, "Supplier A");
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (item, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto(
+                "Paracetamol", 50m, 1, "box", true,
+                Category: "medical",
+                Attributes: new Dictionary<string, object?> { ["dosage"] = "500 мг" }));
+
+        Assert.Null(item);
+        Assert.NotNull(error);
+        Assert.Contains("Термін придатності", error);
+        Assert.Contains("Рецептурний статус", error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_CategoryMedical_AllRequiredFieldsPresent_Succeeds()
+    {
+        var supplier = MakeSupplier(_supplierIdA, "Supplier A");
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (item, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto(
+                "Paracetamol", 50m, 1, "box", true,
+                Category: "medical",
+                Attributes: new Dictionary<string, object?>
+                {
+                    ["dosage"] = "500 мг",
+                    ["expiry_date"] = "2027-01-01",
+                    ["prescription_status"] = "ОТС",
+                }));
+
+        Assert.Null(error);
+        Assert.NotNull(item);
+        Assert.Equal("medical", item!.Category);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_NoCategory_SucceedsRegardlessOfAttributes()
+    {
+        var supplier = MakeSupplier(_supplierIdA, "Supplier A");
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (item, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, 10, "pcs", true));
+
+        Assert.Null(error);
+        Assert.NotNull(item);
+        Assert.Null(item!.Category);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_CategoryMedical_MissingExpiryDate_ReturnsError()
+    {
+        var item = new SupplierItem
+        {
+            SupplierId = _supplierIdA,
+            CustomName = "Ibuprofen",
+            IsAvailable = true,
+        };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto(
+                null, null, null, null, null,
+                Category: "medical",
+                Attributes: new Dictionary<string, object?> { ["dosage"] = "200 мг" }));
+
+        Assert.Null(dto);
+        Assert.NotNull(error);
+        Assert.Contains("Термін придатності", error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_CategoryMedical_AllRequiredFieldsPresent_Succeeds()
+    {
+        var item = new SupplierItem
+        {
+            SupplierId = _supplierIdA,
+            CustomName = "Ibuprofen",
+            IsAvailable = true,
+        };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto(
+                null, null, null, null, null,
+                Category: "medical",
+                Attributes: new Dictionary<string, object?>
+                {
+                    ["dosage"] = "200 мг",
+                    ["expiry_date"] = "2027-06-01",
+                    ["prescription_status"] = "рецептурний",
+                }));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal("medical", item.Category);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_NoCategory_SucceedsRegardlessOfAttributes()
+    {
+        var item = new SupplierItem
+        {
+            SupplierId = _supplierIdA,
+            CustomName = "Milk 1L",
+            IsAvailable = true,
+        };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto("Milk 2L", null, null, null, null));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Null(item.Category);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    // ── GetItemCategories (TASK-294) ───────────────────────────────────────────
+
+    [Fact]
+    public void GetItemCategories_ReturnsAllFourCategoriesWithFieldCounts()
+    {
+        var categories = _sut.GetItemCategories();
+
+        Assert.Equal(4, categories.Count);
+
+        var food = categories.Single(c => c.Key == "food");
+        Assert.Equal(3, food.Fields.Count);
+        Assert.Contains(food.Fields, f => f.Key == "expiry_date" && f.Required);
+
+        var medical = categories.Single(c => c.Key == "medical");
+        Assert.Equal(4, medical.Fields.Count);
+        var prescriptionField = medical.Fields.Single(f => f.Key == "prescription_status");
+        Assert.Equal("select", prescriptionField.Type);
+        Assert.NotNull(prescriptionField.Options);
+        Assert.Contains("ОТС", prescriptionField.Options!);
+
+        var autoParts = categories.Single(c => c.Key == "auto_parts");
+        Assert.Equal(3, autoParts.Fields.Count);
+
+        var construction = categories.Single(c => c.Key == "construction");
+        Assert.Equal(3, construction.Fields.Count);
+    }
 }

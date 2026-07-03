@@ -109,6 +109,18 @@ public sealed class MarketplaceController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    /// <summary>
+    /// Fixed category/field registry for supplier items (ADR-017 §4). Public and
+    /// cacheable — the cabinet/admin item forms render dynamically from this.
+    /// </summary>
+    [HttpGet("item-categories")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierItemCategoryDto>), StatusCodes.Status200OK)]
+    public IActionResult GetItemCategories()
+    {
+        return Ok(_marketplace.GetItemCategories());
+    }
+
     // ── Authenticated — leave a review ────────────────────────────────────────
 
     /// <summary>Leave a review for a supplier. One review per tenant per supplier.</summary>

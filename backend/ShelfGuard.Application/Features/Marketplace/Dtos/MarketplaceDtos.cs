@@ -42,7 +42,9 @@ public record SupplierItemDto(
     decimal? Price,
     int? MinQty,
     string? Unit,
-    bool IsAvailable);
+    bool IsAvailable,
+    string? Category = null,
+    Dictionary<string, object?>? Attributes = null);
 
 public record SupplierReviewCreateDto(int Rating, string? Comment);
 
@@ -85,7 +87,9 @@ public record AdminAddSupplierItemDto(
     decimal? Price,
     int? MinQty,
     string? Unit,
-    bool IsAvailable);
+    bool IsAvailable,
+    string? Category = null,
+    Dictionary<string, object?>? Attributes = null);
 
 /// <summary>Patch-semantics item update — only non-null fields are applied.</summary>
 public record AdminUpdateSupplierItemDto(
@@ -93,7 +97,9 @@ public record AdminUpdateSupplierItemDto(
     decimal? Price,
     int? MinQty,
     string? Unit,
-    bool? IsAvailable);
+    bool? IsAvailable,
+    string? Category = null,
+    Dictionary<string, object?>? Attributes = null);
 
 // ── Supplier cabinet (v4.1, TASK-284, ADR-016) ───────────────────────────────
 
@@ -139,3 +145,17 @@ public record SupplierRecommendationDto(
     string Reasoning,
     SupplierItemDto? MatchedItem,
     SupplierMetricsDto? Metrics);
+
+// ── Item category registry (TASK-294, ADR-017 §4) ────────────────────────────
+
+public record SupplierItemCategoryFieldDto(
+    string Key,
+    string LabelUa,
+    string Type,
+    bool Required,
+    IReadOnlyList<string>? Options);
+
+public record SupplierItemCategoryDto(
+    string Key,
+    string LabelUa,
+    IReadOnlyList<SupplierItemCategoryFieldDto> Fields);

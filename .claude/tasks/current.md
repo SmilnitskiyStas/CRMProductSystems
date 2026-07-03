@@ -1,8 +1,115 @@
-# Current Sprint — v4.1 «Supplier Self-Service» (started 2026-07-02)
+# Current Sprint — v4.2 «Supplier Categories & Navigation» (started 2026-07-03)
 
-Архітектура: ADR-016 (`.claude/docs/decisions.md`). Supplier = окремий tenant
-(`business_type = "supplier"`, модуль `marketplace_supplier`), роль `supplier_admin`,
-кабінет `/api/supplier-cabinet/*` + frontend `/supplier/*`. RLS — існуючі політики.
+Архітектура: ADR-017 (`.claude/docs/decisions.md`). Feature A: provider-панель `/provider`
+дістає таб-спліт «Клієнти» / «Постачальники» над існуючим списком тенантів (client-side
+фільтр по `business_type`, без нового ендпоінта/роуту). Feature B: `SupplierItem` отримує
+nullable `category` + `attributes JSONB`; довідник категорій/полів — backend-джерело
+істини (`GET /api/marketplace/item-categories`), фронтенд рендерить форму динамічно.
+Existing items без категорії лишаються валідними назавжди (не міграційна яма).
+
+---
+
+## TASK-293 — DB: SupplierItem.Category + Attributes (JSONB)
+**Status:** done · **Agent:** database-engineer · **Depends:** —
+Міграція: `supplier_items.category text NULL` + `supplier_items.attributes jsonb NULL`
+(raw SQL у подвійних лапках колонок, ADR-008). Entity `SupplierItem`
+(`backend/ShelfGuard.Domain/Entities/SupplierItem.cs`): `string? Category`,
+`Dictionary<string, object?>? Attributes`. EF config: `.HasColumnType("jsonb")` для
+Attributes (той самий підхід, що `Item.Barcodes` — перевірити, чи потрібен додатковий
+Npgsql dynamic-json switch для `Dictionary<string, object?>`, чи досить generic
+`JsonSerializer` конвертера, як показано в ADR-017 п.3). Без DEFAULT — обидва nullable,
+existing rows лишаються `NULL`. Не чіпати RLS (`supplier_items` вже під `tenant_isolation`
++ `provider_bypass` з попередніх спринтів) — тільки перевірити NULLIF-guard присутній.
+**Accept criteria:** migration up/down чиста на dev-базі; existing `SupplierItem` рядки
+не ламаються (Category/Attributes читаються як null); `dotnet build` + тести green.
+
+---
+
+## TASK-294 — Backend: довідник категорій (SupplierItemCategories) + item-categories endpoint
+**Status:** done (2026-07-03) · **Agent:** backend-developer · **Depends:** TASK-293
+Log: `.claude/logs/tasks/294-295_2026-07-03_supplier-item-categories_backend-developer.md`
+Новий `ShelfGuard.Domain.Constants.SupplierItemCategories`: фіксовані ключі `food`,
+`auto_parts`, `medical`, `construction` + для кожного — список полів
+`{ Key, LabelUa, Type (text|number|date|bool|select), Required, Options? }`:
+- `food`: weight/volume (text, req), expiry_date (date, req), batch_number (text, opt)
+- `auto_parts`: oem_number (text, req), compatible_models (text, opt, вільний текст через кому),
+  part_number (text, opt)
+- `medical`: dosage (text, req), expiry_date (date, req), prescription_status (select:
+  ОТС/рецептурний, req), storage_conditions (text, opt)
+- `construction`: unit (text, req), package_weight_volume (text, opt), certification_class (text, opt)
+Метод `SupplierItemCategories.Validate(string? category, Dictionary<string,object?>? attrs)`
+→ список помилок за відсутні required-поля (порожній список, якщо `category == null` —
+без категорії валідація не застосовується, ADR-017 п.5).
+Новий публічний ендпоінт `GET /api/marketplace/item-categories` (`[AllowAnonymous]`) —
+віддає довідник як DTO (`SupplierItemCategoryDto[]`) для фронтенд-рендеру форми.
+**Accept criteria:** unit-тести на Validate (кожна категорія: бракує required → помилка;
+всі required заповнені → ok; category=null → завжди ok); ендпоінт віддає 4 категорії з
+повним списком полів; `dotnet build` + тести green.
+
+---
+
+## TASK-295 — Backend: Category/Attributes у SupplierItem DTOs + CRUD валідація
+**Status:** done (2026-07-03) · **Agent:** backend-developer · **Depends:** TASK-294
+Log: `.claude/logs/tasks/294-295_2026-07-03_supplier-item-categories_backend-developer.md`
+`SupplierItemDto`, `AdminAddSupplierItemDto`, `AdminUpdateSupplierItemDto`,
+`CabinetAddItemDto`/`CabinetUpdateItemDto` (якщо окремі — перевірити фактичні назви в
+`MarketplaceDtos.cs`) отримують `string? Category` + `Dictionary<string,object?>? Attributes`.
+`MarketplaceService`/`SupplierCabinetService` CRUD-методи товару: перед create/update
+викликають `SupplierItemCategories.Validate` → 400 зі списком відсутніх полів, якщо
+`category` заданий і чогось не вистачає. Existing товари без категорії — CRUD без змін
+поведінки. AI Supplier Recommendation (`SupplierRecommendationDto.MatchedItem`) — Category
+проходить крізь той самий `SupplierItemDto`, змін логіки рекомендації не потрібно.
+**Accept criteria:** POST/PUT товару з category="medical" без expiry_date → 400 з
+переліком полів; той самий запит з усіма required → 200/201; товар без category — як
+раніше; unit-тести на guard + backward-compat; `dotnet test` green.
+
+---
+
+## TASK-296 — Frontend: динамічна форма товару за категорією (CabinetItemModal)
+**Status:** done (2026-07-03, log: 296-297_2026-07-03_supplier-categories-and-provider-tabs_frontend-developer.md) · **Agent:** frontend-developer · **Depends:** TASK-294, TASK-295
+`frontend/features/supplier-cabinet/components/CabinetItemModal.tsx`: додати select
+«Категорія» (опційний, з опцією «Без категорії») над існуючими полями. Категорії й поля
+підтягуються з нового хука `useItemCategories()` (`GET /api/marketplace/item-categories`,
+закешовано, `staleTime: Infinity` — довідник статичний). При виборі категорії — рендер
+додаткового блоку полів під схемою категорії (text/number/date/bool/select), значення
+складаються в `attributes` об'єкт при сабміті. Клієнтська дзеркальна валідація
+required-полів (UX, не заміна серверної) — показує ту саму помилку до сабміту.
+`types.ts` (`CabinetItem`, add/update payloads) — `category?: string`, `attributes?:
+Record<string, unknown>`. `CabinetItemsTable.tsx` — показати бейдж категорії в рядку
+(лейбл з довідника), товари без категорії — без бейджа (як зараз).
+**Accept criteria:** вибір категорії показує правильний набір полів; сабміт без required
+поля показує помилку і не відправляє запит; товар без категорії зберігається як раніше;
+`tsc --noEmit` + `npm run build` green.
+
+---
+
+## TASK-297 — Frontend: провайдер-панель — таби «Клієнти» / «Постачальники»
+**Status:** done (2026-07-03, log: 296-297_2026-07-03_supplier-categories-and-provider-tabs_frontend-developer.md) · **Agent:** frontend-developer · **Depends:** —
+`frontend/app/(dashboard)/provider/page.tsx`: `activeTab` розширюється з
+`"tenants" | "logs"` на `"clients" | "suppliers" | "logs"`. Список `tenants` (з існуючого
+`useTenants()`, без нового API-виклику) фільтрується client-side:
+`t.businessType === "supplier"` → таб «Постачальники», інакше → «Клієнти». Таби показують
+лейбл з лічильником (`Клієнти (N)`, `Постачальники (M)`). Пошук (`search` state) працює
+в межах активного табу. `TenantCard`/`TenantDetailPanel`/`CreateTenantWizard` — без змін
+(реюз). Health-картки зверху (`stats`) лишаються агрегатом по всіх тенантах — не діляться
+по табу.
+**Accept criteria:** перемикання таба фільтрує список без нового network-запиту; лічильники
+в лейблах табів коректні; пошук працює в межах вибраного табу; `tsc --noEmit` +
+`npm run build` green.
+
+---
+
+## TASK-298 — QA: supplier categories + provider nav split regression
+**Status:** done (2026-07-03, log: `.claude/logs/reviews/qa_293-298_2026-07-03.md`) · **Agent:** qa-tester · **Depends:** TASK-296, TASK-297
+Усі 8 сценаріїв PASS на локальному стеку: item-categories довідник (4 категорії, коректні
+required-поля), medical create без/з required (400 з укр. помилкою / 201), category omitted
+CRUD (backward compat, включно з legacy item без категорії), update null→food без/з required
+(400/200), невідома категорія → 400, provider tenants `businessType` присутній +
+platform-marketplace виключений (BUG-014 regression), регресія публічних marketplace-ендпоінтів
+і cabinet profile/items. `dotnet test` 535/535 green, `tsc --noEmit` чисто, `npm run build` green.
+Багів не знайдено. Не покрито: PUT існуючого seed-товару alpha@supplier.local (немає credentials,
+адмінський контролер без PUT для items) — pre-existing обмеження, поза скоупом.
+**Accept criteria:** усі сценарії пройдені; знайдені баги оформлені як BUG-задачі. Виконано.
 
 ---
 

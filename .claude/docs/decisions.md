@@ -1,7 +1,76 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-02
+**Updated:** 2026-07-03
+
+## ADR-017: Provider nav split (Клієнти/Постачальники) + per-item категорії з JSONB attributes
+Date: 2026-07-03
+Status: accepted
+
+Context: v4.1 (ADR-016) додав supplier-as-tenant. Два подальші UX/дані запити:
+(A) провайдер-панель показує всіх тенантів одним списком (`ProviderService.GetTenantsAsync`,
+`frontend/features/provider/`, сторінка `/provider` з табами `tenants`/`logs`) — незручно шукати
+серед клієнтів і постачальників разом; (B) `SupplierItem` (marketplace listing постачальника,
+не Item catalog) не має категорії — постачальник, який працює в кількох галузях (продукти,
+автозапчастини, медикаменти, будматеріали), не може задати категорійно-специфічні поля
+(OEM-номер, дозування/рецептурний статус, партія/термін придатності, клас сертифікації) для
+кожного товару окремо.
+
+Decision:
+1. **Feature A — один список, client-side split, без нового роуту.** Сторінка `/provider`
+   лишається одна; `activeTab` розширюється з `"tenants" | "logs"` на
+   `"clients" | "suppliers" | "logs"`. Дані й API-виклик (`useTenants()`) без змін — фільтрація
+   `business_type === "supplier"` виконується на клієнті над уже завантаженим списком (список
+   тенантів невеликий, provider-only, пагінації немає). Причина проти нового бекенд-ендпоінта
+   чи нового Next-роуту: нуль нових абстракцій, нуль ризику розсинхронізації лічильників
+   (health-картки лишаються на весь список), TenantDetailPanel/CreateTenantWizard реюзаються
+   без змін. Лічильник міняється лише в лейблі табу (`Клієнти (N)` / `Постачальники (M)`).
+2. **Feature A — фільтрація по business_type, не по slug.** `platform-marketplace` (BUG-014,
+   системний, IsActive=false) вже виключається на рівні `TenantRepository.GetAllAsync` — таб
+   «Постачальники» бачить тільки реальні supplier-tenant-и, створені онбордингом (ADR-016 п.3/TASK-289).
+3. **Feature B — категорія товару: `category` string (nullable) + `attributes JSONB (nullable)` на `SupplierItem`.**
+   Обрано (b) єдину JSONB-колонку над (a) фіксованими nullable-колонками per category:
+   набір категорій зростатиме (спека вже передбачає 4 старт-категорії, будматеріали/медикаменти
+   реально розширяться підкатегоріями), і кожна нова категорія з підходом (a) означала б нову
+   міграцію + розпухання entity. Прецедент у кодовій базі: `Item.Barcodes` — `List<string>` →
+   `jsonb`, EF Core вже сконфігурований на dynamic JSON (Npgsql `EnableDynamicJson`, див.
+   пам'ять проєкту); тут форма JSON я — довільний `Dictionary<string, object?>` (не List), тому
+   на рівні EF — `.HasColumnType("jsonb")` + serialize/deserialize через `System.Text.Json`
+   (той самий патерн, без потреби у нових Npgsql-налаштуваннях). Значення в `attributes`
+   ніколи не беруть участі в SQL WHERE/JOIN (лише читання/показ у формі) — тому втрата
+   SQL-запитів по конкретних полях прийнятна: категорійний пошук/фільтр (якщо колись знадобиться)
+   іде через `category`, не через вміст attributes.
+4. **Довідник категорій і полів живе в backend (C# const/enum + shared DTO), не тільки в
+   фронтенд-мапі.** `SupplierItemCategories` (`ShelfGuard.Domain.Constants`) — фіксований
+   список ключів категорій (`food`, `auto_parts`, `medical`, `construction`) + для кожної:
+   список полів з `{key, label, type, required}` — **backend є джерелом істини**, бо валідація
+   обов'язкових полів (медикамент без терміну придатності — invalid) має відбуватись на
+   сервері, а не тільки в React-формі. Ендпоінт `GET /api/marketplace/item-categories`
+   (публічний, кешується на фронті) віддає цей довідник як DTO — фронтенд не хардкодить форму,
+   а рендерить її з відповіді. Це трохи важче за "фронтенд-only мапу", але усуває клас багів
+   (фронт і бек розходяться в тому, що обов'язково) і дає єдине місце для розширення категорій.
+5. **Зворотна сумісність.** `category` і `attributes` — нові nullable-колонки, DEFAULT NULL.
+   Existing `SupplierItem` (provider-created legacy, TASK-275, і вже створені кабінетом TASK-286)
+   лишаються з `category = null` — трактуються фронтом як «без категорії» (стара форма
+   customName/price/minQty/unit, без динамічних полів). Валідація обов'язкових
+   категорійних полів застосовується **тільки** коли `category` заданий (create/update DTO);
+   `category = null` — валідний стан назавжди, не тимчасова міграційна яма.
+6. **DTO shape:** `AdminAddSupplierItemDto`/`AdminUpdateSupplierItemDto`/`SupplierItemDto`
+   (Cabinet-варіанти теж) отримують `string? Category` + `Dictionary<string, object?>? Attributes`.
+   Немає окремих DTO per категорія — один generic shape, валідація обов'язкових полів
+   виконується сервісним методом `SupplierItemCategories.Validate(category, attributes)`,
+   що повертає список помилок (400 з переліком відсутніх полів).
+
+Consequences:
++ Нова категорія (наприклад «Текстиль») — тільки зміна в `SupplierItemCategories` (C#) +
+  фронтенд рендерить нову форму автоматично через API-довідник, без міграції
++ Один generic DTO/контролер-шлях для всіх категорій — мінімум нового коду в MarketplaceService/SupplierCabinetService
++ Existing товари (без категорії) не ламаються, стара форма продовжує працювати
+- Не можна ефективно фільтрувати/сортувати marketplace за конкретним атрибутом (напр. "OEM-номер X")
+  без повного сканування JSONB — прийнятно, бо публічний пошук сьогодні йде по `ItemName`/`Region`, не по атрибутах
+- Валідація обов'язкових полів існує тільки в коді (C# + дзеркальна перевірка у формі), не в БД CHECK constraint —
+  узгоджено з існуючим правилом "Validate at boundaries only"
+- Provider-панель `/provider` тепер має 3 таби замість 2 — трохи вищий когнітивний навантаження, без нового роутингу
 
 ## ADR-016: Supplier self-service — supplier як окремий tenant (business_type = "supplier")
 Date: 2026-07-02

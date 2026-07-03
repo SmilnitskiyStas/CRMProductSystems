@@ -199,7 +199,8 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
                 : null);
 
     private static SupplierItemDto ToItemDto(SupplierItem i) =>
-        new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable);
+        new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable,
+            i.Category, i.Attributes);
 
     private static string[]? DeserializeStringArray(string? json)
     {

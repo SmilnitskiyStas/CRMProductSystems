@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Building2, AlertTriangle, Activity, RefreshCw, Users, Plus } from "lucide-react";
+import { Shield, Building2, AlertTriangle, Activity, RefreshCw, Users, Plus, Truck } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
 import { useTenants, useProviderHealth } from "@/features/provider/hooks/useProvider";
@@ -21,7 +21,7 @@ export default function ProviderPage() {
   const { data: health }  = useProviderHealth();
 
   const [search,         setSearch]         = useState("");
-  const [activeTab,      setActiveTab]      = useState<"tenants" | "logs">("tenants");
+  const [activeTab,      setActiveTab]      = useState<"clients" | "suppliers" | "logs">("clients");
   const [selectedId,     setSelectedId]     = useState<string | null>(null);
   const [logsForTenant,  setLogsForTenant]  = useState<string | undefined>(undefined);
   const [showWizard,     setShowWizard]     = useState(false);
@@ -43,10 +43,19 @@ export default function ProviderPage() {
 
   if (!me || !PROVIDER_ROLES.includes(me.role)) return null;
 
-  const filtered = (tenants ?? []).filter((t) =>
+  const clientTenants = (tenants ?? []).filter((t) => t.businessType !== "supplier");
+  const supplierTenants = (tenants ?? []).filter((t) => t.businessType === "supplier");
+
+  const bySearch = (t: { name: string; slug: string }) =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
-    t.slug.toLowerCase().includes(search.toLowerCase()),
-  );
+    t.slug.toLowerCase().includes(search.toLowerCase());
+
+  const filtered =
+    activeTab === "suppliers"
+      ? supplierTenants.filter(bySearch)
+      : activeTab === "clients"
+        ? clientTenants.filter(bySearch)
+        : [];
 
   const stats = [
     {
@@ -161,8 +170,9 @@ export default function ProviderPage() {
         <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
           {(
             [
-              { key: "tenants", label: `Клієнти (${tenants?.length ?? 0})`, icon: <Building2 size={14} /> },
-              { key: "logs",    label: "Логи",                               icon: <Activity size={14} /> },
+              { key: "clients",   label: `Клієнти (${clientTenants.length})`,     icon: <Building2 size={14} /> },
+              { key: "suppliers", label: `Постачальники (${supplierTenants.length})`, icon: <Truck size={14} /> },
+              { key: "logs",      label: "Логи",                                  icon: <Activity size={14} /> },
             ] as const
           ).map(({ key, label, icon }) => (
             <button
@@ -187,8 +197,8 @@ export default function ProviderPage() {
           ))}
         </div>
 
-        {/* Tenants tab */}
-        {activeTab === "tenants" && (
+        {/* Clients / Suppliers tabs (share the same tenant grid) */}
+        {(activeTab === "clients" || activeTab === "suppliers") && (
           <>
             {/* Search */}
             <div style={{ marginBottom: 20 }}>
@@ -216,7 +226,11 @@ export default function ProviderPage() {
               <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження клієнтів…</div>
             ) : filtered.length === 0 ? (
               <div style={{ color: "#4B5563", fontSize: 14 }}>
-                {search ? "Нічого не знайдено" : "Клієнтів немає"}
+                {search
+                  ? "Нічого не знайдено"
+                  : activeTab === "suppliers"
+                    ? "Постачальників немає"
+                    : "Клієнтів немає"}
               </div>
             ) : (
               <div

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { useCabinetItems, useDeleteCabinetItem } from "../hooks/useSupplierCabinet";
+import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { CabinetItemModal } from "./CabinetItemModal";
 import type { CabinetItem } from "../types";
 
@@ -27,6 +28,7 @@ const CELL: React.CSSProperties = {
 
 export function CabinetItemsTable() {
   const { data, isLoading, isError, error } = useCabinetItems();
+  const { data: categories = [] } = useItemCategories();
   const deleteItem = useDeleteCabinetItem();
 
   const [modal, setModal] = useState<{ open: boolean; item?: CabinetItem }>({ open: false });
@@ -110,7 +112,25 @@ export function CabinetItemsTable() {
             <tbody>
               {data.map((item) => (
                 <tr key={item.id}>
-                  <td style={CELL}>{item.customName ?? item.itemName ?? "—"}</td>
+                  <td style={CELL}>
+                    {item.customName ?? item.itemName ?? "—"}
+                    {item.category && (
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          display: "inline-block",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: "#1E293B",
+                          color: "#93C5FD",
+                        }}
+                      >
+                        {categories.find((c) => c.key === item.category)?.labelUa ?? item.category}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ ...CELL, textAlign: "right" }}>
                     {item.price != null
                       ? item.price.toLocaleString("uk-UA", {

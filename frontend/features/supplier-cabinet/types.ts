@@ -49,6 +49,8 @@ export interface CabinetItem {
   minQty: number | null;
   unit: string | null;
   isAvailable: boolean;
+  category: string | null;
+  attributes: Record<string, unknown> | null;
 }
 
 /** POST /api/supplier-cabinet/items */
@@ -58,6 +60,8 @@ export interface CabinetAddItemRequest {
   minQty?: number;
   unit?: string;
   isAvailable: boolean;
+  category?: string;
+  attributes?: Record<string, unknown>;
 }
 
 /** PUT /api/supplier-cabinet/items/{id} — patch semantics. */
@@ -67,6 +71,8 @@ export interface CabinetUpdateItemRequest {
   minQty?: number;
   unit?: string;
   isAvailable?: boolean;
+  category?: string;
+  attributes?: Record<string, unknown>;
 }
 
 /** Review as returned by GET /api/supplier-cabinet/reviews (reviewer by display name). */

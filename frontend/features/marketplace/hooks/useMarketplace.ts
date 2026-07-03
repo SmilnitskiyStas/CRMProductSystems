@@ -22,6 +22,7 @@ export const MARKETPLACE_KEYS = {
   supplierReviewsPrefix: (id: string) =>
     ["marketplace", "supplier-reviews", id] as const,
   myProfile: ["marketplace", "my-profile"] as const,
+  itemCategories: ["marketplace", "item-categories"] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -173,5 +174,14 @@ export function useDeleteSupplierItem() {
         queryKey: MARKETPLACE_KEYS.supplierItems(supplierId),
       });
     },
+  });
+}
+
+/** GET /api/marketplace/item-categories — static registry, cached indefinitely. */
+export function useItemCategories() {
+  return useQuery({
+    queryKey: MARKETPLACE_KEYS.itemCategories,
+    queryFn: () => marketplaceApi.getItemCategories(),
+    staleTime: Infinity,
   });
 }

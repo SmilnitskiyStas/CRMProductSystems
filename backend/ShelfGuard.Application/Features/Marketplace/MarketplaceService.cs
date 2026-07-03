@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -262,6 +263,10 @@ public sealed class MarketplaceService : IMarketplaceService
         if (string.IsNullOrWhiteSpace(request.CustomName))
             return (null, "CustomName is required.");
 
+        var categoryErrors = SupplierItemCategories.Validate(request.Category, request.Attributes);
+        if (categoryErrors.Count > 0)
+            return (null, string.Join(" ", categoryErrors));
+
         var supplier = await _repo.GetSupplierByRawIdAsync(supplierId, ct);
         if (supplier is null)
             return (null, "Supplier not found.");
@@ -275,6 +280,8 @@ public sealed class MarketplaceService : IMarketplaceService
             MinQty      = request.MinQty,
             Unit        = request.Unit?.Trim(),
             IsAvailable = request.IsAvailable,
+            Category    = request.Category,
+            Attributes  = request.Attributes,
         };
 
         await _repo.AddSupplierItemAsync(item, ct);
@@ -294,12 +301,22 @@ public sealed class MarketplaceService : IMarketplaceService
         {
             if (string.IsNullOrWhiteSpace(request.CustomName))
                 return (null, "CustomName cannot be empty.");
-            item.CustomName = request.CustomName.Trim();
         }
-        if (request.Price.HasValue)       item.Price       = request.Price;
-        if (request.MinQty.HasValue)      item.MinQty      = request.MinQty;
-        if (request.Unit is not null)     item.Unit        = request.Unit.Trim();
-        if (request.IsAvailable.HasValue) item.IsAvailable = request.IsAvailable.Value;
+
+        // Validate the resulting category/attributes state (existing values unless patched).
+        var effectiveCategory   = request.Category ?? item.Category;
+        var effectiveAttributes = request.Attributes ?? item.Attributes;
+        var categoryErrors = SupplierItemCategories.Validate(effectiveCategory, effectiveAttributes);
+        if (categoryErrors.Count > 0)
+            return (null, string.Join(" ", categoryErrors));
+
+        if (request.CustomName is not null)      item.CustomName = request.CustomName.Trim();
+        if (request.Price.HasValue)              item.Price       = request.Price;
+        if (request.MinQty.HasValue)              item.MinQty      = request.MinQty;
+        if (request.Unit is not null)             item.Unit        = request.Unit.Trim();
+        if (request.IsAvailable.HasValue)         item.IsAvailable = request.IsAvailable.Value;
+        if (request.Category is not null)         item.Category    = request.Category;
+        if (request.Attributes is not null)       item.Attributes  = request.Attributes;
 
         await _repo.SaveChangesAsync(ct);
 
@@ -353,10 +370,21 @@ public sealed class MarketplaceService : IMarketplaceService
             m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt);
 
     private static SupplierItemDto ToItemDto(SupplierItem i) =>
-        new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable);
+        new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable,
+            i.Category, i.Attributes);
 
     private static SupplierReviewDto ToReviewDto(SupplierReview r) =>
         new(r.Id, r.Rating, r.Comment, r.CreatedAt);
+
+    // ── Item category registry (TASK-294) ─────────────────────────────────────
+
+    public IReadOnlyList<SupplierItemCategoryDto> GetItemCategories() =>
+        SupplierItemCategories.All.Select(c => new SupplierItemCategoryDto(
+            c.Key,
+            c.LabelUa,
+            c.Fields.Select(f => new SupplierItemCategoryFieldDto(
+                f.Key, f.LabelUa, f.Type.ToString().ToLowerInvariant(), f.Required, f.Options)).ToList()))
+            .ToList();
 
     private static string[]? DeserializeStringArray(string? json)
     {

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
-import { useAddSupplierItem } from "../hooks/useMarketplace";
+import { useAddSupplierItem, useItemCategories } from "../hooks/useMarketplace";
+import { ItemCategoryFields, findMissingRequiredField } from "./ItemCategoryFields";
 import type { AddSupplierItemRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
@@ -19,7 +20,10 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
   const [minQtyRaw, setMinQtyRaw] = useState("");
   const [unit, setUnit] = useState("");
   const [isAvailable, setIsAvailable] = useState(true);
+  const [category, setCategory] = useState("");
+  const [attributes, setAttributes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const { data: categories = [] } = useItemCategories();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,12 +46,21 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
       return;
     }
 
+    if (category) {
+      const missing = findMissingRequiredField(categories, category, attributes);
+      if (missing) {
+        setError(missing);
+        return;
+      }
+    }
+
     const body: AddSupplierItemRequest = {
       customName: customName.trim(),
       price,
       minQty,
       unit: unit.trim() || undefined,
       isAvailable,
+      ...(category ? { category, attributes: attributes as Record<string, unknown> } : {}),
     };
 
     addItem.mutate(body, {
@@ -140,6 +153,13 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
               required
             />
           </div>
+
+          <ItemCategoryFields
+            category={category}
+            onCategoryChange={setCategory}
+            attributes={attributes}
+            onAttributesChange={setAttributes}
+          />
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>

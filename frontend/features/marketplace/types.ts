@@ -51,6 +51,26 @@ export interface SupplierItemDto {
   minQty: number | null;
   unit: string | null;
   isAvailable: boolean;
+  category: string | null;
+  attributes: Record<string, unknown> | null;
+}
+
+// ─── Item categories (ADR-017 §4, TASK-296) ───────────────────────────────────
+
+export type SupplierItemFieldType = "text" | "number" | "date" | "bool" | "select";
+
+export interface SupplierItemCategoryField {
+  key: string;
+  labelUa: string;
+  type: SupplierItemFieldType;
+  required: boolean;
+  options: string[] | null;
+}
+
+export interface SupplierItemCategoryDto {
+  key: string;
+  labelUa: string;
+  fields: SupplierItemCategoryField[];
 }
 
 /** Response of POST /suppliers/{id}/reviews. */
@@ -130,4 +150,6 @@ export interface AddSupplierItemRequest {
   minQty?: number;
   unit?: string;
   isAvailable: boolean;
+  category?: string;
+  attributes?: Record<string, unknown>;
 }

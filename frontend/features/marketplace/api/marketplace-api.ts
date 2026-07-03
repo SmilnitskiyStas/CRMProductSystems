@@ -12,6 +12,7 @@ import type {
   SupplierPlan,
   CreateSupplierRequest,
   AddSupplierItemRequest,
+  SupplierItemCategoryDto,
 } from "../types";
 
 export const marketplaceApi = {
@@ -85,4 +86,8 @@ export const marketplaceApi = {
     api.delete<void>(
       `/api/admin/marketplace/suppliers/${supplierId}/items/${itemId}`
     ),
+
+  /** GET /api/marketplace/item-categories — static category/field registry (ADR-017). */
+  getItemCategories: () =>
+    api.get<SupplierItemCategoryDto[]>("/api/marketplace/item-categories"),
 };
