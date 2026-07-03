@@ -1,48 +1,73 @@
 // ─── Marketplace Feature Types ────────────────────────────────────────────────
-// Matches API DTOs from TASK-221 (Marketplace API)
+// Matches backend DTOs (MarketplaceDtos.cs): SupplierListItemDto,
+// SupplierProfileDto, SupplierMetricsDto, SupplierItemDto,
+// PublicSupplierReviewDto (v4.1, TASK-285/287).
 
 export type SupplierPlan = "free" | "premium";
 
-export interface SupplierProfileDto {
+/** Compact card in the public listing / search results. */
+export interface SupplierListItemDto {
   id: string;
-  tenantId: string;
-  companyName: string;
-  region: string;
-  categories: string[];
+  name: string;
+  region: string | null;
   plan: SupplierPlan;
+  categories: string[] | null;
+  rating: number | null;
+  avgDeliveryDays: number | null;
   isPublic: boolean;
-  /** Premium-only fields — null when plan=free or caller lacks auth */
-  website: string | null;
-  deliveryRegions: string[];
-  workingHours: string | null;
-  paymentTerms: string | null;
-  /** Metrics */
+}
+
+export interface SupplierMetricsDto {
   rating: number | null;
   avgDeliveryDays: number | null;
   orderAccuracy: number | null;
   qualityScore: number | null;
-  responseTimeHours: number | null;
   cancellationRate: number | null;
+  responseTimeHours: number | null;
+  updatedAt: string;
+}
+
+/** Full supplier profile. Premium fields are null for unauthenticated/free callers. */
+export interface SupplierProfileDto {
+  supplierId: string;
+  supplierName: string;
+  region: string | null;
+  categories: string[] | null;
+  website: string | null;
+  deliveryRegions: string[] | null;
+  workingHours: string | null;
+  paymentTerms: string | null;
+  isPublic: boolean;
+  plan: SupplierPlan;
+  metrics: SupplierMetricsDto | null;
 }
 
 export interface SupplierItemDto {
   id: string;
-  supplierId: string;
   itemId: string | null;
-  customName: string;
-  price: number;
-  minQty: number;
-  unit: string;
+  customName: string | null;
+  itemName: string | null;
+  price: number | null;
+  minQty: number | null;
+  unit: string | null;
   isAvailable: boolean;
 }
 
+/** Response of POST /suppliers/{id}/reviews. */
 export interface SupplierReviewDto {
   id: string;
-  supplierId: string;
-  tenantId: string;
   rating: number;
   comment: string | null;
   createdAt: string;
+}
+
+/** Public review (GET /suppliers/{id}/reviews) — reviewer by display name only. */
+export interface PublicSupplierReviewDto {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  reviewerName: string;
 }
 
 // ─── Paginated list response ──────────────────────────────────────────────────

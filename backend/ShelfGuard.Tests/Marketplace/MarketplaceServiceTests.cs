@@ -74,11 +74,28 @@ public sealed class MarketplaceServiceTests
         Assert.Empty(result.Items);
     }
 
+    /// <summary>
+    /// Sets up the repo so that _supplierIdA belongs to another tenant and the
+    /// reviewer (_tenantId) is an ordinary client tenant — the happy review path.
+    /// </summary>
+    private Supplier ArrangeReviewableSupplier(string reviewerBusinessType = "retail")
+    {
+        var supplier = new Supplier { Id = _supplierIdA, TenantId = Guid.NewGuid(), Name = "Reviewed Supplier" };
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+        _repo.GetTenantBusinessTypeAsync(_tenantId, Arg.Any<CancellationToken>())
+             .Returns(reviewerBusinessType);
+        _repo.GetReviewRatingsAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(new List<short>());
+        return supplier;
+    }
+
     // ── CreateReviewAsync — 409 on duplicate ──────────────────────────────────
 
     [Fact]
     public async Task CreateReviewAsync_DuplicateReview_Returns409Flag()
     {
+        ArrangeReviewableSupplier();
         _repo.ReviewExistsAsync(_supplierIdA, _tenantId, Arg.Any<CancellationToken>())
              .Returns(true);
 
@@ -95,6 +112,7 @@ public sealed class MarketplaceServiceTests
     [Fact]
     public async Task CreateReviewAsync_ValidReview_Saves()
     {
+        ArrangeReviewableSupplier();
         _repo.ReviewExistsAsync(_supplierIdA, _tenantId, Arg.Any<CancellationToken>())
              .Returns(false);
 
@@ -109,7 +127,131 @@ public sealed class MarketplaceServiceTests
         await _repo.Received(1).AddReviewAsync(
             Arg.Is<SupplierReview>(r => r.SupplierId == _supplierIdA && r.Rating == 4),
             Arg.Any<CancellationToken>());
-        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _repo.Received().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    // ── CreateReviewAsync — v4.1 hardening guards (TASK-285) ──────────────────
+
+    [Fact]
+    public async Task CreateReviewAsync_SupplierNotFound_ReturnsError()
+    {
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((Supplier?)null);
+
+        var (review, error, isDuplicate) = await _sut.CreateReviewAsync(
+            _supplierIdA, _tenantId, new SupplierReviewCreateDto(5, null));
+
+        Assert.Null(review);
+        Assert.Equal("Supplier not found.", error);
+        Assert.False(isDuplicate);
+        await _repo.DidNotReceive().AddReviewAsync(Arg.Any<SupplierReview>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateReviewAsync_SelfReview_ReturnsError()
+    {
+        // Supplier belongs to the SAME tenant as the reviewer
+        var supplier = new Supplier { TenantId = _tenantId, Name = "My Own Supplier" };
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (review, error, isDuplicate) = await _sut.CreateReviewAsync(
+            _supplierIdA, _tenantId, new SupplierReviewCreateDto(5, "Great, me!"));
+
+        Assert.Null(review);
+        Assert.NotNull(error);
+        Assert.Contains("own supplier", error, StringComparison.OrdinalIgnoreCase);
+        Assert.False(isDuplicate);
+        await _repo.DidNotReceive().AddReviewAsync(Arg.Any<SupplierReview>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateReviewAsync_SupplierTenantReviewer_ReturnsError()
+    {
+        ArrangeReviewableSupplier(reviewerBusinessType: "supplier");
+
+        var (review, error, isDuplicate) = await _sut.CreateReviewAsync(
+            _supplierIdA, _tenantId, new SupplierReviewCreateDto(1, "Competitor sabotage"));
+
+        Assert.Null(review);
+        Assert.NotNull(error);
+        Assert.Contains("supplier tenants", error, StringComparison.OrdinalIgnoreCase);
+        Assert.False(isDuplicate);
+        await _repo.DidNotReceive().AddReviewAsync(Arg.Any<SupplierReview>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── CreateReviewAsync — rating recalc (TASK-285) ──────────────────────────
+
+    [Fact]
+    public async Task CreateReviewAsync_RecalculatesRating_CreatesMetricsRowWhenAbsent()
+    {
+        var supplier = ArrangeReviewableSupplier();
+        _repo.GetReviewRatingsAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(new List<short> { 4, 5, 3 });
+        _repo.GetMetricsBySupplierIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((SupplierMetrics?)null);
+
+        var (review, error, _) = await _sut.CreateReviewAsync(
+            _supplierIdA, _tenantId, new SupplierReviewCreateDto(3, null));
+
+        Assert.Null(error);
+        Assert.NotNull(review);
+        await _repo.Received(1).AddMetricsAsync(
+            Arg.Is<SupplierMetrics>(m =>
+                m.SupplierId == _supplierIdA &&
+                m.TenantId == supplier.TenantId &&
+                m.Rating == 4.00m),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateReviewAsync_RecalculatesRating_UpdatesExistingMetricsRow()
+    {
+        ArrangeReviewableSupplier();
+        _repo.GetReviewRatingsAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(new List<short> { 5, 4 });
+
+        var metrics = new SupplierMetrics { SupplierId = _supplierIdA, Rating = 1.00m };
+        _repo.GetMetricsBySupplierIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(metrics);
+
+        var (_, error, _) = await _sut.CreateReviewAsync(
+            _supplierIdA, _tenantId, new SupplierReviewCreateDto(4, null));
+
+        Assert.Null(error);
+        Assert.Equal(4.50m, metrics.Rating);
+        await _repo.DidNotReceive().AddMetricsAsync(Arg.Any<SupplierMetrics>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── GetSupplierReviewsAsync — public reviews (TASK-285) ───────────────────
+
+    [Fact]
+    public async Task GetSupplierReviewsAsync_MapsReviewerDisplayName()
+    {
+        var review = new SupplierReview
+        {
+            SupplierId = _supplierIdA,
+            TenantId   = _tenantId,
+            Rating     = 5,
+            Comment    = "Top!",
+        };
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((MakeProfile(_supplierIdA, _tenantId, isPublic: true),
+                       MakeSupplier(_supplierIdA, "Supplier A"),
+                       (SupplierMetrics?)null));
+        _repo.GetReviewsBySupplierAsync(_supplierIdA, 1, 20, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierReview, string)> { (review, "Client Shop") });
+        _repo.CountReviewsBySupplierAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(1);
+
+        var result = await _sut.GetSupplierReviewsAsync(_supplierIdA, 1, 20);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result!.Total);
+        var dto = Assert.Single(result.Items);
+        Assert.Equal(5, dto.Rating);
+        Assert.Equal("Top!", dto.Comment);
+        Assert.Equal("Client Shop", dto.ReviewerName);
     }
 
     [Theory]
@@ -225,6 +367,52 @@ public sealed class MarketplaceServiceTests
         Assert.Contains("not found", error, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ── AdminUpdateSupplierItemAsync (TASK-284) ───────────────────────────────
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_PatchesOnlyProvidedFields()
+    {
+        var item = new SupplierItem
+        {
+            SupplierId  = _supplierIdA,
+            CustomName  = "Milk 1L",
+            Price       = 30m,
+            MinQty      = 10,
+            Unit        = "pcs",
+            IsAvailable = true,
+        };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto(null, 35m, null, null, false));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal("Milk 1L", item.CustomName);   // unchanged
+        Assert.Equal(35m, item.Price);              // updated
+        Assert.Equal(10, item.MinQty);              // unchanged
+        Assert.False(item.IsAvailable);             // updated
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_WrongSupplierScope_ReturnsNotFound()
+    {
+        // Repo scopes by (supplierId, itemId) — item of another supplier resolves to null
+        _repo.GetSupplierItemByIdAsync(_supplierIdB, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+             .Returns((SupplierItem?)null);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdB, Guid.NewGuid(),
+            new AdminUpdateSupplierItemDto("Hijack", null, null, null, null));
+
+        Assert.Null(dto);
+        Assert.Equal("Item not found.", error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // ── GetSupplierProfileAsync — premium field gating ────────────────────────
 
     [Fact]
@@ -261,6 +449,37 @@ public sealed class MarketplaceServiceTests
         Assert.Equal("https://example.com", result!.Website);
     }
 
+    // ── GetSupplierProfileAsync — unpublished profile leak (BUG-010) ─────────
+
+    [Fact]
+    public async Task GetSupplierProfileAsync_Unpublished_ReturnsNull()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, isPublic: false);
+        var supplier = MakeSupplier(_supplierIdA, "Hidden Supplier");
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, (SupplierMetrics?)null));
+
+        // Both anonymous and authenticated tenant callers get 404-equivalent null
+        Assert.Null(await _sut.GetSupplierProfileAsync(_supplierIdA, callerIsAuthenticated: false));
+        Assert.Null(await _sut.GetSupplierProfileAsync(_supplierIdA, callerIsAuthenticated: true));
+    }
+
+    [Fact]
+    public async Task GetSupplierProfileAsync_Published_ReturnsProfile()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, isPublic: true);
+        var supplier = MakeSupplier(_supplierIdA, "Visible Supplier");
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, (SupplierMetrics?)null));
+
+        var result = await _sut.GetSupplierProfileAsync(_supplierIdA, callerIsAuthenticated: true);
+
+        Assert.NotNull(result);
+        Assert.True(result!.IsPublic);
+    }
+
     [Fact]
     public async Task GetSupplierProfileAsync_NotFound_ReturnsNull()
     {
@@ -270,5 +489,64 @@ public sealed class MarketplaceServiceTests
         var result = await _sut.GetSupplierProfileAsync(Guid.NewGuid(), false);
 
         Assert.Null(result);
+    }
+
+    // ── Items/reviews of unpublished supplier must be hidden too (BUG-010) ───
+
+    [Fact]
+    public async Task GetSupplierItemsAsync_Unpublished_ReturnsNull()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, isPublic: false);
+        var supplier = MakeSupplier(_supplierIdA, "Hidden Supplier");
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, (SupplierMetrics?)null));
+
+        Assert.Null(await _sut.GetSupplierItemsAsync(_supplierIdA));
+        await _repo.DidNotReceive().GetSupplierItemsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSupplierItemsAsync_Published_ReturnsItems()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, isPublic: true);
+        var supplier = MakeSupplier(_supplierIdA, "Visible Supplier");
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, (SupplierMetrics?)null));
+        _repo.GetSupplierItemsAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierItem>());
+
+        Assert.NotNull(await _sut.GetSupplierItemsAsync(_supplierIdA));
+    }
+
+    [Fact]
+    public async Task GetSupplierReviewsAsync_Unpublished_ReturnsNull()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, isPublic: false);
+        var supplier = MakeSupplier(_supplierIdA, "Hidden Supplier");
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, (SupplierMetrics?)null));
+
+        Assert.Null(await _sut.GetSupplierReviewsAsync(_supplierIdA, page: 1, pageSize: 20));
+        await _repo.DidNotReceive().GetReviewsBySupplierAsync(
+            Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSupplierReviewsAsync_Published_ReturnsPage()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, isPublic: true);
+        var supplier = MakeSupplier(_supplierIdA, "Visible Supplier");
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, (SupplierMetrics?)null));
+        _repo.GetReviewsBySupplierAsync(_supplierIdA, 1, 20, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierReview Review, string ReviewerName)>());
+        _repo.CountReviewsBySupplierAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(0);
+
+        Assert.NotNull(await _sut.GetSupplierReviewsAsync(_supplierIdA, page: 1, pageSize: 20));
     }
 }

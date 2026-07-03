@@ -25,6 +25,12 @@ export interface CreateTenantRequest {
   adminEmail: string;
   adminFullName: string;
   adminPassword: string;
+  /**
+   * Determines the default module set (ADR-015). "supplier" (ADR-016) creates a
+   * marketplace supplier tenant: Supplier + SupplierProfile pair, first user
+   * gets the supplier_admin role. Backend defaults to "retail" when omitted.
+   */
+  businessType?: string;
 }
 
 // ── Display helpers ──────────────────────────────────────────────────────────
@@ -54,3 +60,18 @@ export const MODULE_LABELS: Record<string, string> = {
 
 export const ALL_MODULES = ["inventory", "procurement", "pos", "auto_service", "production", "marketplace"] as const;
 export const ALL_PLANS: TenantPlan[] = ["trial", "basic", "standard", "enterprise"];
+
+// Mirrors backend Tenant.UpdateBusinessType valid values (ADR-014/016).
+export const BUSINESS_TYPE_LABELS: Record<string, string> = {
+  retail:       "Рітейл (магазин)",
+  auto_service: "Автосервіс",
+  warehouse:    "Склад",
+  restaurant:   "Ресторан",
+  production:   "Виробництво",
+  distribution: "Дистрибуція",
+  pharmacy:     "Аптека",
+  floristry:    "Флористика",
+  supplier:     "Постачальник (маркетплейс)",
+};
+
+export const ALL_BUSINESS_TYPES = Object.keys(BUSINESS_TYPE_LABELS);

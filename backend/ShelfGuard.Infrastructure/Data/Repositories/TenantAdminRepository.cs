@@ -35,6 +35,14 @@ public sealed class TenantAdminRepository : ITenantAdminRepository
     public async Task AddUserAsync(User user, CancellationToken ct) =>
         await _db.Users.AddAsync(user, ct);
 
+    // v4.1 supplier self-service onboarding hook (ADR-016)
+
+    public async Task AddSupplierAsync(Supplier supplier, CancellationToken ct) =>
+        await _db.Suppliers.AddAsync(supplier, ct);
+
+    public async Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct) =>
+        await _db.SupplierProfiles.AddAsync(profile, ct);
+
     public Task SaveChangesAsync(CancellationToken ct) =>
         _db.SaveChangesAsync(ct);
 

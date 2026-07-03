@@ -170,8 +170,91 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
     public void RemoveSupplierItem(SupplierItem item) =>
         _db.SupplierItems.Remove(item);
 
-    public Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default) =>
-        _db.Suppliers.FirstOrDefaultAsync(s => s.Id == supplierId, ct);
+    public async Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default)
+    {
+        // Provider bypass: a reviewing tenant must be able to resolve the supplier's
+        // TenantId (self-review guard) even though the row belongs to another tenant.
+        await SetProviderRoleAsync(ct);
+        return await _db.Suppliers.FirstOrDefaultAsync(s => s.Id == supplierId, ct);
+    }
+
+    // ── Supplier cabinet (v4.1, ADR-016) ─────────────────────────────────────
+
+    public async Task<(SupplierProfile Profile, Supplier Supplier)?> GetOwnerManagedProfileAsync(
+        Guid tenantId, CancellationToken ct = default)
+    {
+        // Tenant RLS applies — a supplier tenant only ever sees its own rows.
+        var row = await _db.SupplierProfiles
+            .Include(p => p.Supplier)
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.IsOwnerManaged, ct);
+
+        if (row?.Supplier is null) return null;
+        return (row, row.Supplier);
+    }
+
+    public async Task<IReadOnlyList<SupplierItem>> GetSupplierItemsForOwnerAsync(
+        Guid supplierId, CancellationToken ct = default) =>
+        await _db.SupplierItems
+            .AsNoTracking()
+            .Include(i => i.Item)
+            .Where(i => i.SupplierId == supplierId)
+            .OrderBy(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty))
+            .ToListAsync(ct);
+
+    // ── Reviews / metrics (v4.1, ADR-016) ────────────────────────────────────
+
+    public Task<string?> GetTenantBusinessTypeAsync(Guid tenantId, CancellationToken ct = default) =>
+        _db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == tenantId)
+            .Select(t => (string?)t.BusinessType)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<short>> GetReviewRatingsAsync(
+        Guid supplierId, CancellationToken ct = default)
+    {
+        await SetProviderRoleAsync(ct);
+        return await _db.SupplierReviews
+            .AsNoTracking()
+            .Where(r => r.SupplierId == supplierId)
+            .Select(r => r.Rating)
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<(SupplierReview Review, string ReviewerName)>> GetReviewsBySupplierAsync(
+        Guid supplierId, int page, int pageSize, CancellationToken ct = default)
+    {
+        await SetProviderRoleAsync(ct);
+
+        var rows = await _db.SupplierReviews
+            .AsNoTracking()
+            .Where(r => r.SupplierId == supplierId)
+            .Join(_db.Tenants, r => r.TenantId, t => t.Id,
+                  (r, t) => new { Review = r, ReviewerName = t.Name })
+            .OrderByDescending(x => x.Review.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return rows.Select(x => (x.Review, x.ReviewerName)).ToList();
+    }
+
+    public async Task<int> CountReviewsBySupplierAsync(Guid supplierId, CancellationToken ct = default)
+    {
+        await SetProviderRoleAsync(ct);
+        return await _db.SupplierReviews.CountAsync(r => r.SupplierId == supplierId, ct);
+    }
+
+    public async Task<SupplierMetrics?> GetMetricsBySupplierIdAsync(
+        Guid supplierId, CancellationToken ct = default)
+    {
+        // Tracked (no AsNoTracking) — the rating recalc mutates and saves this row.
+        await SetProviderRoleAsync(ct);
+        return await _db.SupplierMetrics.FirstOrDefaultAsync(m => m.SupplierId == supplierId, ct);
+    }
+
+    public async Task AddMetricsAsync(SupplierMetrics metrics, CancellationToken ct = default) =>
+        await _db.SupplierMetrics.AddAsync(metrics, ct);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

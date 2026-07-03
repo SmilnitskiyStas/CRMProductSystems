@@ -33,15 +33,22 @@ public sealed class MarketplaceService : IMarketplaceService
 
         var (profile, supplier, metrics) = result.Value;
 
+        // BUG-010: unpublished profiles must not be exposed via the public detail
+        // endpoint — behave exactly like "not found" (listing/search already filter IsPublic).
+        if (!profile.IsPublic) return null;
+
         // Premium fields visible if plan=premium OR caller is authenticated
         bool showPremium = callerIsAuthenticated || profile.Plan == "premium";
 
         return ToFullProfileDto(profile, supplier, metrics, showPremium);
     }
 
-    public async Task<IReadOnlyList<SupplierItemDto>> GetSupplierItemsAsync(
+    public async Task<IReadOnlyList<SupplierItemDto>?> GetSupplierItemsAsync(
         Guid supplierId, CancellationToken ct = default)
     {
+        // BUG-010: items of an unpublished supplier must not be exposed either.
+        if (!await IsPublishedAsync(supplierId, ct)) return null;
+
         var items = await _repo.GetSupplierItemsAsync(supplierId, ct);
         return items.Select(ToItemDto).ToList();
     }
@@ -63,6 +70,18 @@ public sealed class MarketplaceService : IMarketplaceService
         if (request.Rating < 1 || request.Rating > 5)
             return (null, "Rating must be between 1 and 5.", false);
 
+        // v4.1 review hardening (ADR-016, TASK-285)
+        var supplier = await _repo.GetSupplierByRawIdAsync(supplierId, ct);
+        if (supplier is null)
+            return (null, "Supplier not found.", false);
+
+        if (supplier.TenantId == tenantId)
+            return (null, "You cannot review your own supplier.", false);
+
+        var reviewerBusinessType = await _repo.GetTenantBusinessTypeAsync(tenantId, ct);
+        if (string.Equals(reviewerBusinessType, "supplier", StringComparison.OrdinalIgnoreCase))
+            return (null, "Supplier tenants cannot leave reviews.", false);
+
         var duplicate = await _repo.ReviewExistsAsync(supplierId, tenantId, ct);
         if (duplicate)
             return (null, "You have already reviewed this supplier.", true);
@@ -78,7 +97,60 @@ public sealed class MarketplaceService : IMarketplaceService
         await _repo.AddReviewAsync(review, ct);
         await _repo.SaveChangesAsync(ct);
 
+        // Synchronous rating recalc: SupplierMetrics.Rating = AVG(all reviews)
+        await RecalculateRatingAsync(supplier, ct);
+
         return (ToReviewDto(review), null, false);
+    }
+
+    public async Task<PagedResult<PublicSupplierReviewDto>?> GetSupplierReviewsAsync(
+        Guid supplierId, int page, int pageSize, CancellationToken ct = default)
+    {
+        // BUG-010: reviews of an unpublished supplier must not be exposed either.
+        if (!await IsPublishedAsync(supplierId, ct)) return null;
+
+        var rows  = await _repo.GetReviewsBySupplierAsync(supplierId, page, pageSize, ct);
+        var total = await _repo.CountReviewsBySupplierAsync(supplierId, ct);
+
+        var items = rows
+            .Select(r => new PublicSupplierReviewDto(
+                r.Review.Id, r.Review.Rating, r.Review.Comment, r.Review.CreatedAt, r.ReviewerName))
+            .ToList();
+
+        return new PagedResult<PublicSupplierReviewDto>(items, total, page, pageSize);
+    }
+
+    private async Task<bool> IsPublishedAsync(Guid supplierId, CancellationToken ct)
+    {
+        var result = await _repo.GetSupplierByIdAsync(supplierId, ct);
+        return result is not null && result.Value.Profile.IsPublic;
+    }
+
+    private async Task RecalculateRatingAsync(Supplier supplier, CancellationToken ct)
+    {
+        var ratings = await _repo.GetReviewRatingsAsync(supplier.Id, ct);
+        if (ratings.Count == 0) return;
+
+        var avg = Math.Round((decimal)ratings.Average(r => (int)r), 2);
+
+        var metrics = await _repo.GetMetricsBySupplierIdAsync(supplier.Id, ct);
+        if (metrics is null)
+        {
+            metrics = new SupplierMetrics
+            {
+                SupplierId = supplier.Id,
+                TenantId   = supplier.TenantId,
+                Rating     = avg,
+            };
+            await _repo.AddMetricsAsync(metrics, ct);
+        }
+        else
+        {
+            metrics.Rating    = avg;
+            metrics.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _repo.SaveChangesAsync(ct);
     }
 
     // ── Supplier self-management ──────────────────────────────────────────────
@@ -204,6 +276,29 @@ public sealed class MarketplaceService : IMarketplaceService
         };
 
         await _repo.AddSupplierItemAsync(item, ct);
+        await _repo.SaveChangesAsync(ct);
+
+        return (ToItemDto(item), null);
+    }
+
+    public async Task<(SupplierItemDto? Item, string? Error)> AdminUpdateSupplierItemAsync(
+        Guid supplierId, Guid itemId, AdminUpdateSupplierItemDto request, CancellationToken ct = default)
+    {
+        var item = await _repo.GetSupplierItemByIdAsync(supplierId, itemId, ct);
+        if (item is null)
+            return (null, "Item not found.");
+
+        if (request.CustomName is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.CustomName))
+                return (null, "CustomName cannot be empty.");
+            item.CustomName = request.CustomName.Trim();
+        }
+        if (request.Price.HasValue)       item.Price       = request.Price;
+        if (request.MinQty.HasValue)      item.MinQty      = request.MinQty;
+        if (request.Unit is not null)     item.Unit        = request.Unit.Trim();
+        if (request.IsAvailable.HasValue) item.IsAvailable = request.IsAvailable.Value;
+
         await _repo.SaveChangesAsync(ct);
 
         return (ToItemDto(item), null);

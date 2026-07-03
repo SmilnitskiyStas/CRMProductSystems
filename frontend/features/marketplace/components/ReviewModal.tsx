@@ -31,7 +31,17 @@ export function ReviewModal({ supplierId, onClose }: Props) {
         },
         onError: (err) => {
           if (err instanceof ApiError && err.status === 409) {
+            // Duplicate — one review per tenant per supplier (TASK-285)
             setErrorMsg("Ви вже залишили відгук для цього постачальника.");
+          } else if (err instanceof ApiError && err.status === 400) {
+            // v4.1 backend guards (TASK-285)
+            if (err.message.includes("your own supplier")) {
+              setErrorMsg("Не можна залишати відгук на власний профіль постачальника.");
+            } else if (err.message.includes("Supplier tenants")) {
+              setErrorMsg("Постачальники не можуть залишати відгуки.");
+            } else {
+              setErrorMsg(err.message || "Некоректні дані відгуку.");
+            }
           } else {
             setErrorMsg(
               err instanceof Error ? err.message : "Помилка при збереженні відгуку."

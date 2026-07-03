@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useCreateTenant } from "../hooks/useAdmin";
-import { ALL_PLANS, PLAN_LABELS } from "../types";
+import { ALL_BUSINESS_TYPES, ALL_PLANS, BUSINESS_TYPE_LABELS, PLAN_LABELS } from "../types";
 import type { CreateTenantRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
@@ -56,6 +56,7 @@ export function CreateTenantModal({ onClose }: Props) {
     name: "",
     slug: "",
     plan: "trial",
+    businessType: "retail",
     adminEmail: "",
     adminFullName: "",
     adminPassword: "",
@@ -174,6 +175,24 @@ export function CreateTenantModal({ onClose }: Props) {
                   <option key={p} value={p}>{PLAN_LABELS[p]}</option>
                 ))}
               </select>
+            </Field>
+
+            <Field label="Тип бізнесу">
+              <select
+                style={{ ...INPUT_STYLE, cursor: "pointer" }}
+                value={form.businessType}
+                onChange={(e) => setField("businessType", e.target.value)}
+              >
+                {ALL_BUSINESS_TYPES.map((bt) => (
+                  <option key={bt} value={bt}>{BUSINESS_TYPE_LABELS[bt]}</option>
+                ))}
+              </select>
+              {form.businessType === "supplier" && (
+                <div style={{ color: "#6B7280", fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+                  Буде створено постачальника маркетплейсу: перший користувач отримає роль
+                  supplier_admin і доступ лише до кабінету постачальника.
+                </div>
+              )}
             </Field>
 
             <div style={{ borderTop: "1px solid #1F2937", paddingTop: 16 }}>

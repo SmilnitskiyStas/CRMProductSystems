@@ -87,6 +87,38 @@ public record AdminAddSupplierItemDto(
     string? Unit,
     bool IsAvailable);
 
+/// <summary>Patch-semantics item update — only non-null fields are applied.</summary>
+public record AdminUpdateSupplierItemDto(
+    string? CustomName,
+    decimal? Price,
+    int? MinQty,
+    string? Unit,
+    bool? IsAvailable);
+
+// ── Supplier cabinet (v4.1, TASK-284, ADR-016) ───────────────────────────────
+
+/// <summary>
+/// Cabinet profile update. Publish state is toggled via POST /profile/publish,
+/// and plan is provider-managed — neither is editable here.
+/// </summary>
+public record CabinetProfileUpdateDto(
+    string? Region,
+    string[]? Categories,
+    string? Website,
+    string[]? DeliveryRegions,
+    string? WorkingHours,
+    string? PaymentTerms);
+
+// ── Public reviews (v4.1, TASK-285) ──────────────────────────────────────────
+
+/// <summary>Public review representation — reviewer exposed by display name only (no tenant id).</summary>
+public record PublicSupplierReviewDto(
+    Guid Id,
+    int Rating,
+    string? Comment,
+    DateTimeOffset CreatedAt,
+    string ReviewerName);
+
 // ── AI Supplier Recommendation (TASK-223) ─────────────────────────────────────
 
 public record AiRecommendRequestDto(

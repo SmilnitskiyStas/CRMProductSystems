@@ -73,6 +73,9 @@ services.AddScoped<IAuthService, AuthService>();
         // v4 Phase 3 - Supplier Marketplace (TASK-221)
         services.AddScoped<IMarketplaceService, MarketplaceService>();
 
+        // v4.1 - Supplier self-service cabinet (TASK-284, ADR-016)
+        services.AddScoped<ISupplierCabinetService, SupplierCabinetService>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<IAutoServiceService, AutoServiceService>();
 

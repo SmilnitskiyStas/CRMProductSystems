@@ -159,6 +159,32 @@ public sealed class AppPoliciesTests
     public void CanViewNetworkAnalytics_denies_lower_roles(string role)
         => Assert.DoesNotContain(role, RolesFor(AppPolicies.CanViewNetworkAnalytics));
 
+    // ── SupplierCabinet (v4.1, ADR-016) ─────────────────────────────────────
+
+    [Fact]
+    public void SupplierCabinet_allows_only_supplier_admin()
+    {
+        var roles = RolesFor(AppPolicies.SupplierCabinet).ToList();
+        Assert.Equal(new[] { AppRoles.SupplierAdmin }, roles);
+    }
+
+    // supplier_admin must be excluded from every tenant-staff policy —
+    // it can only reach /api/supplier-cabinet (403 on /api/stock, /api/pos, etc.)
+    [Theory]
+    [InlineData(AppPolicies.ProviderOnly)]
+    [InlineData(AppPolicies.ProviderTeamMember)]
+    [InlineData(AppPolicies.AtLeastEnterpriseAdmin)]
+    [InlineData(AppPolicies.AtLeastNetworkManager)]
+    [InlineData(AppPolicies.AtLeastStoreManager)]
+    [InlineData(AppPolicies.CanReceiveStock)]
+    [InlineData(AppPolicies.CanViewStock)]
+    [InlineData(AppPolicies.CanViewAnalytics)]
+    [InlineData(AppPolicies.CanAccessPos)]
+    [InlineData(AppPolicies.CanManageStore)]
+    [InlineData(AppPolicies.CanViewNetworkAnalytics)]
+    public void SupplierAdmin_is_denied_by_all_tenant_staff_policies(string policyName)
+        => Assert.DoesNotContain(AppRoles.SupplierAdmin, RolesFor(policyName));
+
     // ── All policies are registered ─────────────────────────────────────────
 
     [Theory]
@@ -171,6 +197,7 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.CanAccessPos)]
     [InlineData(AppPolicies.CanManageStore)]
     [InlineData(AppPolicies.CanViewNetworkAnalytics)]
+    [InlineData(AppPolicies.SupplierCabinet)]
     public void All_policies_are_registered(string policyName)
         => Assert.NotNull(_options.GetPolicy(policyName));
 

@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useParams } from "next/navigation";
-import { useSupplier } from "@/features/marketplace/hooks/useMarketplace";
+import { useSupplier, useSupplierReviewCount } from "@/features/marketplace/hooks/useMarketplace";
+import { reviewWord } from "@/features/marketplace/utils";
 import { SupplierMetrics } from "@/features/marketplace/components/SupplierMetrics";
 import { SupplierItemsTab } from "@/features/marketplace/components/SupplierItemsTab";
 import { SupplierReviewsTab } from "@/features/marketplace/components/SupplierReviewsTab";
@@ -22,6 +23,7 @@ export default function SupplierProfilePage() {
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
 
   const { data: supplier, isLoading, isError } = useSupplier(id);
+  const { data: reviewCount } = useSupplierReviewCount(id);
   const { data: me } = useMe();
   const isProviderTeam = PROVIDER_TEAM.has(me?.role as any);
 
@@ -120,7 +122,7 @@ export default function SupplierProfilePage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
             <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-              {supplier.companyName}
+              {supplier.supplierName}
             </h1>
             <PlanBadge plan={supplier.plan} />
           </div>
@@ -128,10 +130,17 @@ export default function SupplierProfilePage() {
             {supplier.region}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <StarRating value={supplier.rating ?? 0} size={15} />
+            <StarRating value={supplier.metrics?.rating ?? 0} size={15} />
             <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-              {supplier.rating != null ? supplier.rating.toFixed(1) : "Без оцінки"}
+              {supplier.metrics?.rating != null
+                ? Number(supplier.metrics.rating).toFixed(1)
+                : "Без оцінки"}
             </span>
+            {reviewCount != null && (
+              <span style={{ color: "#4B5563", fontSize: 13 }}>
+                · {reviewCount} {reviewWord(reviewCount)}
+              </span>
+            )}
           </div>
 
           {/* Premium fields */}
@@ -169,10 +178,10 @@ export default function SupplierProfilePage() {
                   <span style={{ color: "#9CA3AF", fontSize: 13 }}>{supplier.paymentTerms}</span>
                 </div>
               )}
-              {supplier.deliveryRegions.length > 0 && (
+              {(supplier.deliveryRegions ?? []).length > 0 && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{ color: "#4B5563", fontSize: 12 }}>Доставка:</span>
-                  {supplier.deliveryRegions.map((r) => (
+                  {(supplier.deliveryRegions ?? []).map((r) => (
                     <span
                       key={r}
                       style={{
@@ -193,9 +202,9 @@ export default function SupplierProfilePage() {
         </div>
 
         {/* Categories */}
-        {supplier.categories.length > 0 && (
+        {(supplier.categories ?? []).length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "flex-start" }}>
-            {supplier.categories.map((cat) => (
+            {(supplier.categories ?? []).map((cat) => (
               <span
                 key={cat}
                 style={{
@@ -218,7 +227,7 @@ export default function SupplierProfilePage() {
         <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: "0 0 14px" }}>
           Показники роботи
         </h2>
-        <SupplierMetrics supplier={supplier} />
+        <SupplierMetrics metrics={supplier.metrics} />
       </div>
 
       {/* Tabs */}
@@ -268,13 +277,13 @@ export default function SupplierProfilePage() {
           padding: 24,
         }}
       >
-        {activeTab === "catalog" && <SupplierItemsTab supplierId={supplier.id} />}
-        {activeTab === "reviews" && <SupplierReviewsTab supplierId={supplier.id} />}
+        {activeTab === "catalog" && <SupplierItemsTab supplierId={id} />}
+        {activeTab === "reviews" && <SupplierReviewsTab supplierId={id} />}
       </div>
 
       {addItemModalOpen && (
         <AddSupplierItemModal
-          supplierId={supplier.id}
+          supplierId={id}
           onClose={() => setAddItemModalOpen(false)}
         />
       )}

@@ -10,6 +10,7 @@ public sealed class TenantTests
     [InlineData("auto_service", new[] { "auto_service", "procurement" })]
     [InlineData("restaurant", new[] { "inventory", "pos", "production" })]
     [InlineData("warehouse", new[] { "inventory", "procurement" })]
+    [InlineData("supplier", new[] { "marketplace_supplier" })]
     public void DefaultModulesForBusinessType_KnownTypes_ReturnsExpectedSet(string businessType, string[] expected)
     {
         var modules = Tenant.DefaultModulesForBusinessType(businessType);

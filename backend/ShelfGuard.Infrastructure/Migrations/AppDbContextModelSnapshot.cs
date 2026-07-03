@@ -1016,13 +1016,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
-                    b.Property<string>("PerishabilityClass")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("standard");
-
                     b.Property<decimal>("MaxStock")
                         .HasColumnType("decimal(10,2)");
 
@@ -1033,6 +1026,13 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<string>("PerishabilityClass")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("standard");
 
                     b.Property<decimal?>("PricePurchase")
                         .HasColumnType("decimal(12,2)");
@@ -2714,6 +2714,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<string>("DeliveryRegions")
                         .HasColumnType("jsonb");
 
+                    b.Property<bool>("IsOwnerManaged")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsPublic")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2755,6 +2760,10 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("TenantId");
+
+                    b.HasIndex(new[] { "TenantId" }, "UX_supplier_profiles_owner_tenant")
+                        .IsUnique()
+                        .HasFilter("\"IsOwnerManaged\"");
 
                     b.ToTable("supplier_profiles", (string)null);
                 });

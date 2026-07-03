@@ -35,6 +35,7 @@ public static class AppPolicies
     public const string CanAccessPos            = "CanAccessPos";
     public const string CanManageStore          = "CanManageStore";
     public const string CanViewNetworkAnalytics = "CanViewNetworkAnalytics";
+    public const string SupplierCabinet         = "SupplierCabinet";
 
     // Role sets per policy — the single source of truth referenced by both registration and tests.
     internal static readonly string[] ProviderOnlyRoles =
@@ -79,6 +80,11 @@ public static class AppPolicies
     internal static readonly string[] CanViewNetworkAnalyticsRoles =
         [AppRoles.Provider, AppRoles.EnterpriseAdmin, AppRoles.NetworkManager];
 
+    // v4.1 supplier self-service cabinet (ADR-016): supplier_admin ONLY —
+    // supplier_admin is deliberately absent from every tenant-staff policy above.
+    internal static readonly string[] SupplierCabinetRoles =
+        [AppRoles.SupplierAdmin];
+
     /// <summary>
     /// Registers all named policies into the AuthorizationOptions.
     /// Call: services.AddAuthorization(AppPolicies.Configure)
@@ -97,5 +103,6 @@ public static class AppPolicies
         options.AddPolicy(CanAccessPos,            p => p.RequireRole(CanAccessPosRoles));
         options.AddPolicy(CanManageStore,          p => p.RequireRole(CanManageStoreRoles));
         options.AddPolicy(CanViewNetworkAnalytics, p => p.RequireRole(CanViewNetworkAnalyticsRoles));
+        options.AddPolicy(SupplierCabinet,         p => p.RequireRole(SupplierCabinetRoles));
     }
 }

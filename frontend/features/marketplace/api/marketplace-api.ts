@@ -1,8 +1,10 @@
 import { api } from "@/lib/api";
 import type {
+  SupplierListItemDto,
   SupplierProfileDto,
   SupplierItemDto,
   SupplierReviewDto,
+  PublicSupplierReviewDto,
   PaginatedResponse,
   MarketplaceSearchRequest,
   CreateReviewRequest,
@@ -27,7 +29,7 @@ export const marketplaceApi = {
     if (params.region) qs.set("region", params.region);
     if (params.category) qs.set("category", params.category);
     if (params.plan && params.plan !== "all") qs.set("plan", params.plan);
-    return api.get<PaginatedResponse<SupplierProfileDto>>(
+    return api.get<PaginatedResponse<SupplierListItemDto>>(
       `/api/marketplace/suppliers?${qs.toString()}`
     );
   },
@@ -40,13 +42,15 @@ export const marketplaceApi = {
   getSupplierItems: (supplierId: string) =>
     api.get<SupplierItemDto[]>(`/api/marketplace/suppliers/${supplierId}/items`),
 
-  /** GET /api/marketplace/suppliers/{id}/reviews */
-  getSupplierReviews: (supplierId: string) =>
-    api.get<SupplierReviewDto[]>(`/api/marketplace/suppliers/${supplierId}/reviews`),
+  /** GET /api/marketplace/suppliers/{id}/reviews — public, paginated (v4.1, TASK-285) */
+  getSupplierReviews: (supplierId: string, page = 1, pageSize = 20) =>
+    api.get<PaginatedResponse<PublicSupplierReviewDto>>(
+      `/api/marketplace/suppliers/${supplierId}/reviews?page=${page}&pageSize=${pageSize}`
+    ),
 
   /** POST /api/marketplace/search */
   search: (body: MarketplaceSearchRequest) =>
-    api.post<SupplierProfileDto[]>("/api/marketplace/search", body),
+    api.post<SupplierListItemDto[]>("/api/marketplace/search", body),
 
   /** POST /api/marketplace/suppliers/{id}/reviews */
   createReview: (supplierId: string, body: CreateReviewRequest) =>

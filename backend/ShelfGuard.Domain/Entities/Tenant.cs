@@ -45,7 +45,9 @@ public sealed class Tenant
             // legacy
             "shelf_manager", "crm", "notifications", "auto_order", "iot", "cv_camera",
             // v4 module-based activation
-            "inventory", "procurement", "pos", "auto_service", "production", "marketplace"
+            "inventory", "procurement", "pos", "auto_service", "production", "marketplace",
+            // v4.1 supplier self-service (ADR-016)
+            "marketplace_supplier"
         };
         var unknown = modules.Where(m => !valid.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
         if (unknown.Count > 0)
@@ -57,7 +59,7 @@ public sealed class Tenant
     /// <summary>Sets the business type (provider-only, determines default module set).</summary>
     public string? UpdateBusinessType(string businessType)
     {
-        var valid = new[] { "retail", "auto_service", "warehouse", "restaurant", "production", "distribution", "pharmacy", "floristry" };
+        var valid = new[] { "retail", "auto_service", "warehouse", "restaurant", "production", "distribution", "pharmacy", "floristry", "supplier" };
         if (!valid.Contains(businessType, StringComparer.OrdinalIgnoreCase))
             return $"Unknown business type '{businessType}'. Valid: {string.Join(", ", valid)}.";
         BusinessType = businessType.ToLowerInvariant();
@@ -96,6 +98,7 @@ public sealed class Tenant
             "distribution" => ["inventory", "procurement", "marketplace"],
             "pharmacy"     => ["inventory", "procurement", "pos"],
             "floristry"    => ["inventory", "procurement", "pos"],
+            "supplier"     => ["marketplace_supplier"],
             _              => ["inventory"],
         };
 

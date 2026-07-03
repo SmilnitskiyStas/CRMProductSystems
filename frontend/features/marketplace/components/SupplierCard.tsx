@@ -1,13 +1,20 @@
+"use client";
+
 import Link from "next/link";
-import type { SupplierProfileDto } from "../types";
+import type { SupplierListItemDto } from "../types";
 import { StarRating } from "./StarRating";
 import { PlanBadge } from "./PlanBadge";
+import { useSupplierReviewCount } from "../hooks/useMarketplace";
+import { reviewWord } from "../utils";
 
 interface Props {
-  supplier: SupplierProfileDto;
+  supplier: SupplierListItemDto;
 }
 
 export function SupplierCard({ supplier }: Props) {
+  const { data: reviewCount } = useSupplierReviewCount(supplier.id);
+  const categories = supplier.categories ?? [];
+
   return (
     <Link
       href={`/marketplace/${supplier.id}`}
@@ -46,7 +53,7 @@ export function SupplierCard({ supplier }: Props) {
                 whiteSpace: "nowrap",
               }}
             >
-              {supplier.companyName}
+              {supplier.name}
             </div>
             <div style={{ color: "#6B7280", fontSize: 12 }}>{supplier.region}</div>
           </div>
@@ -57,8 +64,13 @@ export function SupplierCard({ supplier }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <StarRating value={supplier.rating ?? 0} size={14} />
           <span style={{ color: "#9CA3AF", fontSize: 12 }}>
-            {supplier.rating != null ? supplier.rating.toFixed(1) : "—"}
+            {supplier.rating != null ? Number(supplier.rating).toFixed(1) : "—"}
           </span>
+          {reviewCount != null && (
+            <span style={{ color: "#4B5563", fontSize: 12 }}>
+              ({reviewCount} {reviewWord(reviewCount)})
+            </span>
+          )}
           {supplier.avgDeliveryDays != null && (
             <span style={{ color: "#4B5563", fontSize: 12, marginLeft: "auto" }}>
               {supplier.avgDeliveryDays} дн. доставки
@@ -67,9 +79,9 @@ export function SupplierCard({ supplier }: Props) {
         </div>
 
         {/* Categories chips */}
-        {supplier.categories.length > 0 && (
+        {categories.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {supplier.categories.slice(0, 4).map((cat) => (
+            {categories.slice(0, 4).map((cat) => (
               <span
                 key={cat}
                 style={{
@@ -83,7 +95,7 @@ export function SupplierCard({ supplier }: Props) {
                 {cat}
               </span>
             ))}
-            {supplier.categories.length > 4 && (
+            {categories.length > 4 && (
               <span
                 style={{
                   padding: "2px 8px",
@@ -93,7 +105,7 @@ export function SupplierCard({ supplier }: Props) {
                   fontSize: 11,
                 }}
               >
-                +{supplier.categories.length - 4}
+                +{categories.length - 4}
               </span>
             )}
           </div>

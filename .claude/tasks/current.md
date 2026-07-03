@@ -1,4 +1,90 @@
-# Current Sprint — v3.5 «Provider UX» (started 2026-06-21)
+# Current Sprint — v4.1 «Supplier Self-Service» (started 2026-07-02)
+
+Архітектура: ADR-016 (`.claude/docs/decisions.md`). Supplier = окремий tenant
+(`business_type = "supplier"`, модуль `marketplace_supplier`), роль `supplier_admin`,
+кабінет `/api/supplier-cabinet/*` + frontend `/supplier/*`. RLS — існуючі політики.
+
+---
+
+## TASK-282 — DB: supplier business_type, IsOwnerManaged, дефолтні модулі
+**Status:** done (2026-07-02, migration `20260702192126_V41SupplierSelfService`, log: `282_2026-07-02_supplier-self-service-db_database-engineer.md`) · **Agent:** database-engineer · **Depends:** — 
+Міграція `V41SupplierSelfService`:
+- `supplier_profiles.IsOwnerManaged boolean NOT NULL DEFAULT false` + partial unique index
+  `UX_supplier_profiles_owner_tenant ON supplier_profiles ("TenantId") WHERE "IsOwnerManaged"` 
+  (колонки в raw SQL — у подвійних лапках, ADR-008).
+- Domain: `Tenant.DefaultModulesForBusinessType` — новий кейс `"supplier"` → `["marketplace_supplier"]`.
+- Перевірити, що існуючі RLS-політики supplier_* мають NULLIF-guard (патерн d8abc4d8); якщо ні — включити в цю міграцію.
+- Дані не мігруються: existing suppliers (`TenantId = Guid.Empty`) без змін.
+**Accept criteria:** міграція up/down чиста на dev-базі; unique index не конфліктує з existing rows; `dotnet build` + тести green.
+
+---
+
+## TASK-283 — Backend: роль supplier_admin + онбординг supplier-tenant
+**Status:** done (2026-07-02, log: `283-285_2026-07-02_supplier-self-service-backend_backend-developer.md`) · **Agent:** backend-developer · **Depends:** TASK-282
+- `AppRoles`: додати `SupplierAdmin = "supplier_admin"` (+ у `All`).
+- Admin tenant onboarding (`Admin` feature): при створенні tenant з `business_type = "supplier"` — 
+  автоматично створити `Supplier` (`TenantId` = new tenant id) + `SupplierProfile`
+  (`IsOwnerManaged = true`, `IsPublic = false`); перший user tenant-а отримує роль `supplier_admin`.
+- Policy/authorization: supplier_admin НЕ входить у tenant-staff політики (stock/pos/etc.) — тільки кабінет.
+**Accept criteria:** створення supplier-tenant через `/api/admin/tenants` дає tenant + user + Supplier + Profile однією транзакцією; supplier_admin отримує 403 на `/api/stock`; тести на онбординг-hook.
+
+---
+
+## TASK-284 — Backend: SupplierCabinetController (профіль, товари, відгуки)
+**Status:** done (2026-07-02, log: `283-285_2026-07-02_supplier-self-service-backend_backend-developer.md`) · **Agent:** backend-developer · **Depends:** TASK-283
+Новий `SupplierCabinetController` (`/api/supplier-cabinet`), `[Authorize]` роль supplier_admin + `[RequireModule("marketplace_supplier")]`. Resolve «мій Supplier» по `tenant_id` через `IsOwnerManaged`-профіль:
+- `GET /profile`, `PUT /profile` (region, categories, website, delivery_regions, working_hours, payment_terms), `POST /profile/publish` (toggle `IsPublic`)
+- `GET /items`, `POST /items`, `PUT /items/{id}`, `DELETE /items/{id}` — реюз Admin*-методів `MarketplaceService` (параметризувати supplierId)
+- `GET /reviews` (read-only), `GET /metrics`
+**Accept criteria:** усі ендпоінти працюють лише в контексті свого tenant (RLS-перевірка: другий supplier-tenant не бачить чужі items); provider-created suppliers (Guid.Empty) недоступні через кабінет; unit-тести на resolve + CRUD.
+
+---
+
+## TASK-285 — Backend: reviews hardening + публічні відгуки + rating recalc
+**Status:** done (2026-07-02, log: `283-285_2026-07-02_supplier-self-service-backend_backend-developer.md`) · **Agent:** backend-developer · **Depends:** TASK-282
+- `CreateReviewAsync`: guard — reviewer tenant ≠ `supplier.TenantId` та reviewer `business_type != "supplier"` (400); дубль уже дає 409.
+- Після створення відгуку — синхронний перерахунок `SupplierMetrics.Rating` = AVG(rating) (створити metrics-рядок, якщо нема).
+- Новий публічний `GET /api/marketplace/suppliers/{id}/reviews` (`[AllowAnonymous]`, paginated) — rating, comment, created_at, назва tenant-рецензента (denormalized display name, без id).
+**Accept criteria:** self-review → 400; supplier-tenant review → 400; rating у публічному листингу оновлюється після нового відгуку; тести на guard + recalc.
+
+---
+
+## TASK-286 — Frontend: supplier cabinet (роль, sidebar, сторінки)
+**Status:** done (2026-07-03, log: `286-287_2026-07-03_supplier-cabinet-marketplace-frontend_frontend-developer.md`) · **Agent:** frontend-developer · **Depends:** TASK-284
+- `lib/roles.ts`: `SupplierAdmin` + set `SUPPLIER_ONLY`; supplier_admin виключити з tenant-staff sets.
+- Sidebar: для supplier_admin — тільки група «Кабінет постачальника» (Профіль / Мої товари / Відгуки) + профіль користувача.
+- Нова feature `features/supplier-cabinet/` (`types.ts`, `api/`, `hooks/`, `components/`), сторінки `(dashboard)/supplier/profile`, `/supplier/items`, `/supplier/reviews`. Реюз компонентів `features/marketplace/` (AddSupplierItemModal, форма профілю) де можливо.
+- Admin onboarding UI: у формі створення tenant — опція business_type `supplier`.
+**Accept criteria:** supplier_admin після логіну бачить лише кабінет; CRUD товарів і publish-toggle працюють; `tsc --noEmit` + `npm run build` green.
+
+---
+
+## TASK-287 — Frontend: marketplace enrichment — рейтинг і відгуки видимі клієнтам
+**Status:** done (2026-07-03, log: `286-287_2026-07-03_supplier-cabinet-marketplace-frontend_frontend-developer.md`) · **Agent:** frontend-developer · **Depends:** TASK-285
+- `/marketplace/[id]`: блок «Відгуки» (список з `GET /suppliers/{id}/reviews`, зірки, дата, ім'я рецензента) + існуюча форма «залишити відгук» показує 400/409 помилки guard-ів.
+- `SupplierCard` у листингу: рейтинг (зірки + число) і кількість відгуків; фільтр за категорією вже є — переконатися, що категорії supplier-профілів відображаються.
+**Accept criteria:** рейтинг/відгуки видно і анонімно, і клієнт-tenant-ам; свіжий відгук одразу оновлює рейтинг (invalidate query); `tsc --noEmit` + build green.
+
+---
+
+## TASK-288 — QA: supplier self-service regression
+**Status:** done (2026-07-03, log: `.claude/logs/reviews/qa_282-288_2026-07-03.md`) · **Agent:** qa-tester · **Depends:** TASK-286, TASK-287
+Усі 6 сценаріїв + регресія + `dotnet test` 494/494 + `tsc --noEmit` — PASS (локальний стек).
+Знайдено 2 pre-existing баги (не блокують v4.1):
+- **BUG-009 (high, deploy/env):** 8 hand-written міграцій без `[Migration]`/`[DbContext]` атрибутів
+  (AddProviderRoles, AddNotificationIsRead, 2×ProviderBypassRls, AddItemPerishabilityClass,
+  ForceRlsOnAllTenantTables, 2×FixRlsNullIf) — EF `MigrateAsync` їх НЕ бачить; свіжа БД отримує
+  неповну схему (login 500: ProviderRoleId missing). Локальну dev-базу полагоджено вручну.
+- **BUG-010 (medium):** `GET /api/marketplace/suppliers/{id}` віддає unpublished-профіль
+  (IsPublic=false) навіть анонімно — detail не фільтрує is_public (листинг/search фільтрують).
+Low-нотатки (див. QA-лог): review-guard-и 400 екрануються module gate 403 для supplier-tenant-ів;
+supplier_admin має 200 на /api/notifications/history (свій tenant, порожньо).
+Тест-план: (1) онбординг supplier-tenant провайдером; (2) ізоляція — supplier A не бачить дані supplier B і клієнтських tenant-ів (RLS); (3) supplier_admin 403 на всі tenant-staff ендпоінти; (4) publish-toggle → поява/зникнення в публічному листингу; (5) review-флоу: клієнт лишає відгук, дубль → 409, self-review → 400, рейтинг перерахований; (6) module gate: деактивація `marketplace_supplier` → 403 кабінету.
+**Accept criteria:** усі 6 сценаріїв пройдені на dev; знайдені баги оформлені як BUG-задачі.
+
+---
+
+# Previous Sprint — v3.5 «Provider UX» (started 2026-06-21)
 
 ---
 
@@ -45,6 +131,38 @@ Fix: redirect тепер на `/login?reason=session_expired`; на сторін
 (в обох випадках cookie відсутні), тож reason ставить лише api.ts після фактичного
 провалу refresh. `tsc --noEmit` та `npm run build` — green.
 Log: `279_2026-07-02_session-expired-notice_frontend-developer.md`
+
+---
+
+## BUG-009 — 8 hand-written міграцій без [Migration]/[DbContext] атрибутів
+**Status:** done · **Agent:** database-engineer (+ main session verification) · Updated: 2026-07-03
+Found in QA v4.1: EF `MigrateAsync` ігнорував 8 ручних міграцій (AddProviderRoles,
+AddNotificationIsRead, ServiceDesk/Team provider bypass RLS, ItemPerishabilityClass,
+ForceRlsOnAllTenantTables, 2× NULLIF RLS-фікси) — свіжа БД розгорталась неповною.
+Fix: додано атрибути `[DbContext(typeof(AppDbContext))]` + `[Migration("<id>")]`,
+міграції переписані на ідемпотентний SQL (IF NOT EXISTS / OR REPLACE guards),
+snapshot оновлено. На проді вони виконаються ПОВТОРНО при наступному деплої
+(відсутні у __EFMigrationsHistory) — ідемпотентність перевірена: DELETE 8 рядків
+історії на локальній БД з існуючими обʼєктами → повторний прогін чистий.
+`dotnet ef migrations list` показує всі 9; build green; tests 500/500.
+Log: `bug009_2026-07-03_orphan-migrations_database-engineer.md`
+
+---
+
+## BUG-010 — GET /api/marketplace/suppliers/{id} віддає unpublished профіль
+**Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-03
+Found in QA v4.1 (`qa_282-288_2026-07-03.md`). Листинг/search фільтрують `IsPublic`,
+але detail-ендпоінт — ні: неопублікований профіль був доступний будь-кому за id.
+Fix: `MarketplaceService.GetSupplierProfileAsync` повертає `null` (→404) якщо
+`profile.IsPublic == false` — для анонімних і автентифікованих. Legitimate доступи
+не зачеплені: supplier cabinet читає свій профіль через `ISupplierCabinetService.
+GetOwnerManagedProfileAsync` (окремий шлях), MarketplaceAdminController використовує
+лише Admin*-методи — інших call sites у `GetSupplierProfileAsync` нема.
+Tests: +2 unit (unpublished→null для anon/auth, published→dto). `dotnet build` 0 warn.
+Follow-up (main session, 2026-07-03): той самий guard додано в `GetSupplierItemsAsync`
+і `GetSupplierReviewsAsync` (приватний `IsPublishedAsync`) → `/items` і `/reviews`
+unpublished-постачальника тепер теж 404. +4 unit tests. `dotnet test` 500/500 green.
+Log: `bug010_2026-07-03_unpublished-supplier-leak_backend-developer.md`
 
 ---
 

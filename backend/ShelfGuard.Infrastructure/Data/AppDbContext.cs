@@ -297,6 +297,8 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.Unit).HasMaxLength(20).HasDefaultValue("шт");
             e.Property(p => p.ManagementType).HasMaxLength(10).HasDefaultValue("MTS");
             e.Property(p => p.ItemType).HasMaxLength(50).HasDefaultValue("product");
+            // Matches hand-written migration AddItemPerishabilityClass (varchar(20) DEFAULT 'standard')
+            e.Property(p => p.PerishabilityClass).HasMaxLength(20).HasDefaultValue("standard");
             e.Property(p => p.MinStock).HasColumnType("decimal(10,2)");
             e.Property(p => p.MaxStock).HasColumnType("decimal(10,2)");
             e.Property(p => p.SafetyBuffer).HasColumnType("decimal(10,2)");
@@ -999,12 +1001,18 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.WorkingHours).HasColumnType("text");
             e.Property(p => p.PaymentTerms).HasColumnType("text");
             e.Property(p => p.IsPublic).HasDefaultValue(false);
+            e.Property(p => p.IsOwnerManaged).HasDefaultValue(false);
             e.Property(p => p.Plan).HasMaxLength(50).HasDefaultValue("free");
             e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(p => p.UpdatedAt).HasDefaultValueSql("NOW()");
             // 1-to-1: one profile per supplier
             e.HasIndex(p => p.SupplierId).IsUnique();
             e.HasIndex(p => p.TenantId);
+            // ADR-016: deterministic "my profile" lookup — at most one
+            // owner-managed profile per supplier tenant.
+            e.HasIndex(p => p.TenantId, "UX_supplier_profiles_owner_tenant")
+             .IsUnique()
+             .HasFilter("\"IsOwnerManaged\"");
             e.HasOne(p => p.Supplier).WithMany()
              .HasForeignKey(p => p.SupplierId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(p => p.Tenant).WithMany()

@@ -70,6 +70,43 @@ public interface IMarketplaceRepository
 
     void RemoveSupplierItem(SupplierItem item);
 
-    /// <summary>Returns a supplier by its Id (no tenant filter).</summary>
+    /// <summary>Returns a supplier by its Id (no tenant filter; provider-bypass read).</summary>
     Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default);
+
+    // ── Supplier cabinet (v4.1, ADR-016) ─────────────────────────────────────
+
+    /// <summary>
+    /// Deterministic "my supplier" lookup for self-service supplier tenants:
+    /// the single owner-managed profile of the given tenant (partial unique index).
+    /// Provider-created suppliers (TenantId = Guid.Empty) are never returned.
+    /// Tenant RLS applies.
+    /// </summary>
+    Task<(SupplierProfile Profile, Supplier Supplier)?> GetOwnerManagedProfileAsync(
+        Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>All items of a supplier including unavailable ones (cabinet view; tenant RLS applies).</summary>
+    Task<IReadOnlyList<SupplierItem>> GetSupplierItemsForOwnerAsync(
+        Guid supplierId, CancellationToken ct = default);
+
+    // ── Reviews / metrics (v4.1, ADR-016) ────────────────────────────────────
+
+    /// <summary>Reviewer tenant's business_type (tenants table — no RLS).</summary>
+    Task<string?> GetTenantBusinessTypeAsync(Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>All review ratings of a supplier, cross-tenant (provider-bypass read).</summary>
+    Task<IReadOnlyList<short>> GetReviewRatingsAsync(Guid supplierId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Paged reviews of a supplier joined with the reviewer tenant display name
+    /// (provider-bypass read), newest first.
+    /// </summary>
+    Task<IReadOnlyList<(SupplierReview Review, string ReviewerName)>> GetReviewsBySupplierAsync(
+        Guid supplierId, int page, int pageSize, CancellationToken ct = default);
+
+    Task<int> CountReviewsBySupplierAsync(Guid supplierId, CancellationToken ct = default);
+
+    /// <summary>Tracked metrics row for a supplier (provider-bypass read), or null when absent.</summary>
+    Task<SupplierMetrics?> GetMetricsBySupplierIdAsync(Guid supplierId, CancellationToken ct = default);
+
+    Task AddMetricsAsync(SupplierMetrics metrics, CancellationToken ct = default);
 }

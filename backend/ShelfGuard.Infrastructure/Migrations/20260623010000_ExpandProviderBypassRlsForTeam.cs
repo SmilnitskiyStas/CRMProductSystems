@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using ShelfGuard.Infrastructure.Data;
 
 #nullable disable
 
 namespace ShelfGuard.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260623010000_ExpandProviderBypassRlsForTeam")]
     public partial class ExpandProviderBypassRlsForTeam : Migration
     {
         /// <inheritdoc />

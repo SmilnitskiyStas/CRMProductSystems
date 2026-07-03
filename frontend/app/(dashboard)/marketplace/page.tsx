@@ -9,7 +9,7 @@ import { CreateSupplierModal } from "@/features/marketplace/components/CreateSup
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { PROVIDER_TEAM } from "@/lib/roles";
-import type { MarketplaceFilters, SupplierProfileDto } from "@/features/marketplace/types";
+import type { MarketplaceFilters, SupplierListItemDto } from "@/features/marketplace/types";
 import { Btn } from "@/components/ui/Btn";
 
 const DEFAULT_FILTERS: MarketplaceFilters = {
@@ -30,14 +30,14 @@ export default function MarketplacePage() {
   const [filters, setFilters] = useState<MarketplaceFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SupplierProfileDto[] | null>(null);
+  const [searchResults, setSearchResults] = useState<SupplierListItemDto[] | null>(null);
 
   const { data, isLoading, isError } = useSuppliers(filters, page);
   const searchMutation = useMarketplaceSearch();
 
   // Derive unique categories from loaded suppliers for filter dropdown
   const knownCategories = Array.from(
-    new Set((data?.items ?? []).flatMap((s) => s.categories))
+    new Set((data?.items ?? []).flatMap((s) => s.categories ?? []))
   ).sort();
 
   function handleSearch() {

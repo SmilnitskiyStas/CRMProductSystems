@@ -13,6 +13,8 @@ export const AppRoles = {
   Merchandiser:    "merchandiser",
   Storekeeper:     "storekeeper",
   Cashier:         "cashier",
+  /** v4.1 (ADR-016): admin of a supplier tenant — supplier cabinet only. */
+  SupplierAdmin:   "supplier_admin",
 } as const;
 
 export type AppRole = (typeof AppRoles)[keyof typeof AppRoles];
@@ -99,9 +101,19 @@ export const PROVIDER_TEAM = new Set<AppRole>([
 export const ENTERPRISE_ADMIN_ONLY = new Set<AppRole>([AppRoles.EnterpriseAdmin]);
 
 /**
+ * Supplier cabinet only (v4.1, ADR-016). supplier_admin is deliberately NOT part
+ * of any tenant-staff set (stock/pos/warehouse/…) — the backend returns 403 on
+ * all tenant-staff endpoints for this role. Mirror that here: the only pages a
+ * supplier_admin sees are /supplier/* and Settings.
+ */
+export const SUPPLIER_ONLY = new Set<AppRole>([AppRoles.SupplierAdmin]);
+
+/**
  * All tenant roles (all except provider).
  * Use this for pages that make tenant-scoped API calls — provider has no
  * tenant_id and will get 403/empty from every tenant endpoint.
+ * NOTE: supplier_admin is intentionally excluded — it has a tenant_id but only
+ * the supplier cabinet, none of the tenant-staff pages.
  */
 export const TENANT_ROLES = new Set<AppRole>([
   AppRoles.EnterpriseAdmin,

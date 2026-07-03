@@ -21,7 +21,7 @@ public interface IMarketplaceService
         bool callerIsAuthenticated,
         CancellationToken ct = default);
 
-    Task<IReadOnlyList<SupplierItemDto>> GetSupplierItemsAsync(
+    Task<IReadOnlyList<SupplierItemDto>?> GetSupplierItemsAsync(
         Guid supplierId, CancellationToken ct = default);
 
     Task<IReadOnlyList<SupplierListItemDto>> SearchSuppliersAsync(
@@ -32,11 +32,18 @@ public interface IMarketplaceService
     /// <summary>
     /// Returns (review, null) on success.
     /// Returns (null, error) on validation or duplicate.
+    /// v4.1 guards (ADR-016): self-review (reviewer tenant owns the supplier) and
+    /// supplier-tenant reviewers are rejected. On success SupplierMetrics.Rating is
+    /// synchronously recalculated as AVG of all reviews.
     /// </summary>
     Task<(SupplierReviewDto? Review, string? Error, bool IsDuplicate)> CreateReviewAsync(
         Guid supplierId, Guid tenantId,
         SupplierReviewCreateDto request,
         CancellationToken ct = default);
+
+    /// <summary>Public paginated reviews of a supplier with denormalized reviewer display names.</summary>
+    Task<PagedResult<PublicSupplierReviewDto>?> GetSupplierReviewsAsync(
+        Guid supplierId, int page, int pageSize, CancellationToken ct = default);
 
     // ── Supplier self-management ──────────────────────────────────────────────
 
@@ -52,6 +59,10 @@ public interface IMarketplaceService
 
     Task<(SupplierItemDto? Item, string? Error)> AdminAddSupplierItemAsync(
         Guid supplierId, AdminAddSupplierItemDto request, CancellationToken ct = default);
+
+    /// <summary>Patch-updates a supplier item. Only non-null request fields are applied.</summary>
+    Task<(SupplierItemDto? Item, string? Error)> AdminUpdateSupplierItemAsync(
+        Guid supplierId, Guid itemId, AdminUpdateSupplierItemDto request, CancellationToken ct = default);
 
     /// <summary>Returns null on success, error string on failure.</summary>
     Task<string?> AdminDeleteSupplierItemAsync(

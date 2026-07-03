@@ -68,10 +68,11 @@ public sealed class MarketplaceController : ControllerBase
     [HttpGet("suppliers/{id:guid}/items")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IReadOnlyList<SupplierItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSupplierItems(Guid id, CancellationToken ct)
     {
         var items = await _marketplace.GetSupplierItemsAsync(id, ct);
-        return Ok(items);
+        return items is null ? NotFound() : Ok(items);
     }
 
     /// <summary>Search suppliers by item name and optional region.</summary>
@@ -88,6 +89,24 @@ public sealed class MarketplaceController : ControllerBase
 
         var results = await _marketplace.SearchSuppliersAsync(request, ct);
         return Ok(results);
+    }
+
+    /// <summary>Public paginated reviews of a supplier (v4.1, TASK-285). Reviewer shown by display name only.</summary>
+    [HttpGet("suppliers/{id:guid}/reviews")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(PagedResult<PublicSupplierReviewDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSupplierReviews(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+        var result = await _marketplace.GetSupplierReviewsAsync(id, page, pageSize, ct);
+        return result is null ? NotFound() : Ok(result);
     }
 
     // ── Authenticated — leave a review ────────────────────────────────────────
@@ -109,6 +128,9 @@ public sealed class MarketplaceController : ControllerBase
 
         var (review, error, isDuplicate) =
             await _marketplace.CreateReviewAsync(id, tenantId.Value, request, ct);
+
+        if (error == "Supplier not found.")
+            return NotFound(new { error });
 
         if (error is not null)
             return isDuplicate ? Conflict(new { error }) : BadRequest(new { error });

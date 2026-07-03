@@ -16,7 +16,11 @@ export const MARKETPLACE_KEYS = {
     ["marketplace", "suppliers", filters, page] as const,
   supplier: (id: string) => ["marketplace", "supplier", id] as const,
   supplierItems: (id: string) => ["marketplace", "supplier-items", id] as const,
-  supplierReviews: (id: string) => ["marketplace", "supplier-reviews", id] as const,
+  supplierReviews: (id: string, page: number) =>
+    ["marketplace", "supplier-reviews", id, page] as const,
+  /** Prefix for invalidating all pages of a supplier's reviews. */
+  supplierReviewsPrefix: (id: string) =>
+    ["marketplace", "supplier-reviews", id] as const,
   myProfile: ["marketplace", "my-profile"] as const,
 };
 
@@ -59,11 +63,25 @@ export function useSupplierItems(supplierId: string) {
   });
 }
 
-export function useSupplierReviews(supplierId: string) {
+export function useSupplierReviews(supplierId: string, page = 1, pageSize = 20) {
   return useQuery({
-    queryKey: MARKETPLACE_KEYS.supplierReviews(supplierId),
-    queryFn: () => marketplaceApi.getSupplierReviews(supplierId),
+    queryKey: MARKETPLACE_KEYS.supplierReviews(supplierId, page),
+    queryFn: () => marketplaceApi.getSupplierReviews(supplierId, page, pageSize),
     enabled: !!supplierId,
+  });
+}
+
+/**
+ * Review count only — fetches the lightest possible page (pageSize=1) and reads
+ * `total`. Used on listing cards (TASK-287).
+ */
+export function useSupplierReviewCount(supplierId: string) {
+  return useQuery({
+    queryKey: ["marketplace", "supplier-review-count", supplierId] as const,
+    queryFn: () => marketplaceApi.getSupplierReviews(supplierId, 1, 1),
+    enabled: !!supplierId,
+    staleTime: 60_000,
+    select: (data) => data.total,
   });
 }
 
@@ -83,12 +101,18 @@ export function useCreateReview(supplierId: string) {
     mutationFn: (body: CreateReviewRequest) =>
       marketplaceApi.createReview(supplierId, body),
     onSuccess: () => {
+      // Reviews (all pages) + count badge
       queryClient.invalidateQueries({
-        queryKey: MARKETPLACE_KEYS.supplierReviews(supplierId),
+        queryKey: MARKETPLACE_KEYS.supplierReviewsPrefix(supplierId),
       });
+      queryClient.invalidateQueries({
+        queryKey: ["marketplace", "supplier-review-count", supplierId],
+      });
+      // Profile + listing — rating is recalculated synchronously on the backend
       queryClient.invalidateQueries({
         queryKey: MARKETPLACE_KEYS.supplier(supplierId),
       });
+      queryClient.invalidateQueries({ queryKey: ["marketplace", "suppliers"] });
     },
   });
 }

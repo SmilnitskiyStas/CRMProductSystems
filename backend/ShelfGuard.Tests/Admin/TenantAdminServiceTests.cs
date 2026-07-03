@@ -3,6 +3,7 @@ using NSubstitute.ReturnsExtensions;
 using ShelfGuard.Application.Features.Admin;
 using ShelfGuard.Application.Features.Admin.Dtos;
 using ShelfGuard.Application.Services;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 using Xunit;
@@ -138,6 +139,78 @@ public sealed class TenantAdminServiceTests
         Assert.Null(tenant);
         Assert.NotNull(error);
         await _repo.DidNotReceive().AddTenantAsync(Arg.Any<Tenant>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── CreateTenant — supplier self-service onboarding (TASK-283, ADR-016) ──
+
+    [Fact]
+    public async Task CreateTenant_SupplierBusinessType_CreatesSupplierPairAndSupplierAdmin()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        Tenant? persistedTenant = null;
+        _repo.When(r => r.AddTenantAsync(Arg.Any<Tenant>(), Arg.Any<CancellationToken>()))
+             .Do(ci => persistedTenant = ci.Arg<Tenant>());
+
+        var req = new CreateTenantRequest(
+            Name:          "Fresh Foods Ltd",
+            Slug:          "fresh-foods",
+            Plan:          "basic",
+            AdminEmail:    "owner@freshfoods.com",
+            AdminFullName: "Owner",
+            AdminPassword: "SecurePass123",
+            BusinessType:  "supplier");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        Assert.Equal("supplier", tenant.BusinessType);
+        Assert.Equal(new[] { "marketplace_supplier" }, tenant.Modules);
+
+        // First user gets the supplier_admin role, not enterprise_admin
+        await _repo.Received(1).AddUserAsync(
+            Arg.Is<User>(u => u.Role == AppRoles.SupplierAdmin && u.TenantId == persistedTenant!.Id),
+            Arg.Any<CancellationToken>());
+
+        // Supplier + owner-managed hidden profile created for the new tenant
+        await _repo.Received(1).AddSupplierAsync(
+            Arg.Is<Supplier>(s => s.TenantId == persistedTenant!.Id && s.Name == "Fresh Foods Ltd"),
+            Arg.Any<CancellationToken>());
+        await _repo.Received(1).AddSupplierProfileAsync(
+            Arg.Is<SupplierProfile>(p =>
+                p.TenantId == persistedTenant!.Id &&
+                p.IsOwnerManaged &&
+                !p.IsPublic),
+            Arg.Any<CancellationToken>());
+
+        // Single transaction — exactly one SaveChanges
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateTenant_NonSupplierBusinessType_DoesNotCreateSupplierPair()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        var req = new CreateTenantRequest(
+            Name:          "Retail Shop",
+            Slug:          "retail-shop",
+            Plan:          "basic",
+            AdminEmail:    "admin@retailshop.com",
+            AdminFullName: "Admin",
+            AdminPassword: "SecurePass123",
+            BusinessType:  "retail");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        await _repo.Received(1).AddUserAsync(
+            Arg.Is<User>(u => u.Role == AppRoles.EnterpriseAdmin),
+            Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().AddSupplierAsync(Arg.Any<Supplier>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
     }
 
     // ── UpdatePlan_InvalidPlan_ReturnsError ────────────────────────────────

@@ -83,16 +83,18 @@ export function SupplierItemsTab({ supplierId }: Props) {
         <tbody>
           {data.map((item) => (
             <tr key={item.id}>
-              <td style={cellStyle}>{item.customName}</td>
+              <td style={cellStyle}>{item.customName ?? item.itemName ?? "—"}</td>
               <td style={{ ...cellStyle, textAlign: "right" }}>
-                {item.price.toLocaleString("uk-UA", {
-                  style: "currency",
-                  currency: "UAH",
-                  minimumFractionDigits: 2,
-                })}
+                {item.price != null
+                  ? item.price.toLocaleString("uk-UA", {
+                      style: "currency",
+                      currency: "UAH",
+                      minimumFractionDigits: 2,
+                    })
+                  : "—"}
               </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>{item.minQty}</td>
-              <td style={{ ...cellStyle, color: "#9CA3AF" }}>{item.unit}</td>
+              <td style={{ ...cellStyle, textAlign: "right" }}>{item.minQty ?? "—"}</td>
+              <td style={{ ...cellStyle, color: "#9CA3AF" }}>{item.unit ?? "—"}</td>
               <td style={{ ...cellStyle, textAlign: "center" }}>
                 <span
                   style={{

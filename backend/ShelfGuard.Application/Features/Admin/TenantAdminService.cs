@@ -71,18 +71,42 @@ public sealed class TenantAdminService : ITenantAdminService
         if (modulesError is not null)
             return (null, modulesError);
 
-        // 3. Create first EnterpriseAdmin user
+        // 3. Create first admin user.
+        // Supplier tenants (ADR-016) get a supplier_admin — cabinet-only access,
+        // deliberately excluded from all tenant-staff policies.
+        var isSupplierTenant = tenant.BusinessType == "supplier";
         var passwordHash = _hasher.Hash(req.AdminPassword);
         var admin = User.Create(
             tenantId:     tenant.Id,
             email:        req.AdminEmail.Trim(),
             fullName:     req.AdminFullName.Trim(),
             passwordHash: passwordHash,
-            role:         AppRoles.EnterpriseAdmin);
+            role:         isSupplierTenant ? AppRoles.SupplierAdmin : AppRoles.EnterpriseAdmin);
 
-        // 4. Persist in a single SaveChanges
+        // 4. Persist in a single SaveChanges (one transaction)
         await _repo.AddTenantAsync(tenant, ct);
         await _repo.AddUserAsync(admin, ct);
+
+        // v4.1 onboarding hook (ADR-016): supplier tenant gets its own
+        // Supplier + owner-managed marketplace profile (hidden until published).
+        if (isSupplierTenant)
+        {
+            var supplier = new Supplier
+            {
+                TenantId = tenant.Id,
+                Name     = tenant.Name,
+            };
+            var profile = new SupplierProfile
+            {
+                SupplierId     = supplier.Id,
+                TenantId       = tenant.Id,
+                IsOwnerManaged = true,
+                IsPublic       = false,
+            };
+            await _repo.AddSupplierAsync(supplier, ct);
+            await _repo.AddSupplierProfileAsync(profile, ct);
+        }
+
         await _repo.SaveChangesAsync(ct);
 
         var usage = await BuildUsageAsync(tenant.Id, ct);

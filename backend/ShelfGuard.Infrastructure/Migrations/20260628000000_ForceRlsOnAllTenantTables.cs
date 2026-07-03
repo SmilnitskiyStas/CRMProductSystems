@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using ShelfGuard.Infrastructure.Data;
 
 #nullable disable
 
 namespace ShelfGuard.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260628000000_ForceRlsOnAllTenantTables")]
     public partial class ForceRlsOnAllTenantTables : Migration
     {
         /// <inheritdoc />

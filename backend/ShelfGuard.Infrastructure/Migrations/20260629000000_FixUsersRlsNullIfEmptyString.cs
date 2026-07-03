@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using ShelfGuard.Infrastructure.Data;
 
 #nullable disable
 
 namespace ShelfGuard.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260629000000_FixUsersRlsNullIfEmptyString")]
     public partial class FixUsersRlsNullIfEmptyString : Migration
     {
         /// <inheritdoc />

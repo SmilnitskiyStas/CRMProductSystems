@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Bell, LifeBuoy, Bot } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { TENANT_ROLES } from "@/lib/roles";
+import { AppRoles, TENANT_ROLES } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
 import { UserMenu } from "./UserMenu";
 import { StoreSelector } from "./StoreSelector";
@@ -84,7 +84,8 @@ export function TopBar({ title }: Props) {
       >
         {/* Left — store selector / breadcrumb */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <StoreSelector />
+          {/* supplier_admin has no stores — /api/stores would 403 (v4.1, ADR-016) */}
+          {userRole !== AppRoles.SupplierAdmin && <StoreSelector />}
           {title && (
             <>
               <span style={{ color: "#374151", fontSize: 14 }}>/</span>

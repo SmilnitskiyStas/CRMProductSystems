@@ -19,6 +19,12 @@ public sealed class SupplierProfile
     public string? WorkingHours { get; set; }
     public string? PaymentTerms { get; set; }
     public bool IsPublic { get; set; } = false;
+    /// <summary>
+    /// True when this profile belongs to a self-service supplier tenant (ADR-016).
+    /// At most one owner-managed profile per tenant (partial unique index on TenantId).
+    /// Provider-created suppliers (TenantId = Guid.Empty) keep false.
+    /// </summary>
+    public bool IsOwnerManaged { get; set; } = false;
     public string Plan { get; set; } = "free";
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

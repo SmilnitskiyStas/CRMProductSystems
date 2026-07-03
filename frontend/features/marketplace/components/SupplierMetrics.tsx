@@ -1,8 +1,8 @@
-import type { SupplierProfileDto } from "../types";
+import type { SupplierMetricsDto } from "../types";
 import { StarRating } from "./StarRating";
 
 interface Props {
-  supplier: SupplierProfileDto;
+  metrics: SupplierMetricsDto | null;
 }
 
 interface MetricItemProps {
@@ -29,8 +29,8 @@ function MetricItem({ label, value }: MetricItemProps) {
   );
 }
 
-export function SupplierMetrics({ supplier }: Props) {
-  const fmt = (v: number | null, suffix = "") =>
+export function SupplierMetrics({ metrics }: Props) {
+  const fmt = (v: number | null | undefined, suffix = "") =>
     v != null ? `${v}${suffix}` : "—";
 
   return (
@@ -44,10 +44,10 @@ export function SupplierMetrics({ supplier }: Props) {
       <MetricItem
         label="Рейтинг"
         value={
-          supplier.rating != null ? (
+          metrics?.rating != null ? (
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {supplier.rating.toFixed(1)}
-              <StarRating value={supplier.rating} size={14} />
+              {Number(metrics.rating).toFixed(1)}
+              <StarRating value={metrics.rating} size={14} />
             </span>
           ) : (
             "—"
@@ -56,29 +56,29 @@ export function SupplierMetrics({ supplier }: Props) {
       />
       <MetricItem
         label="Середній термін доставки"
-        value={fmt(supplier.avgDeliveryDays, " дн.")}
+        value={fmt(metrics?.avgDeliveryDays, " дн.")}
       />
       <MetricItem
         label="Точність замовлень"
         value={
-          supplier.orderAccuracy != null
-            ? `${(supplier.orderAccuracy * 100).toFixed(0)}%`
+          metrics?.orderAccuracy != null
+            ? `${(metrics.orderAccuracy * 100).toFixed(0)}%`
             : "—"
         }
       />
       <MetricItem
         label="Якість товарів"
-        value={fmt(supplier.qualityScore)}
+        value={fmt(metrics?.qualityScore)}
       />
       <MetricItem
         label="Час відповіді"
-        value={fmt(supplier.responseTimeHours, " год.")}
+        value={fmt(metrics?.responseTimeHours, " год.")}
       />
       <MetricItem
         label="Відмови"
         value={
-          supplier.cancellationRate != null
-            ? `${(supplier.cancellationRate * 100).toFixed(0)}%`
+          metrics?.cancellationRate != null
+            ? `${(metrics.cancellationRate * 100).toFixed(0)}%`
             : "—"
         }
       />

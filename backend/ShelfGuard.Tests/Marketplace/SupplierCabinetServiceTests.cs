@@ -1,0 +1,227 @@
+using NSubstitute;
+using ShelfGuard.Application.Features.Marketplace;
+using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Interfaces;
+using Xunit;
+
+namespace ShelfGuard.Tests.Marketplace;
+
+/// <summary>
+/// TASK-284 (ADR-016): cabinet authorization scoping — every operation must be
+/// resolved through the calling tenant's owner-managed profile and never accept
+/// a foreign supplier id.
+/// </summary>
+public sealed class SupplierCabinetServiceTests
+{
+    private readonly IMarketplaceRepository _repo   = Substitute.For<IMarketplaceRepository>();
+    private readonly IMarketplaceService _marketplace = Substitute.For<IMarketplaceService>();
+    private readonly SupplierCabinetService _sut;
+
+    private readonly Guid _tenantId = Guid.NewGuid();
+
+    public SupplierCabinetServiceTests() =>
+        _sut = new SupplierCabinetService(_repo, _marketplace);
+
+    private (SupplierProfile Profile, Supplier Supplier) ArrangeOwnSupplier(bool isPublic = false)
+    {
+        var supplier = new Supplier { TenantId = _tenantId, Name = "My Supplier" };
+        var profile = new SupplierProfile
+        {
+            SupplierId     = supplier.Id,
+            TenantId       = _tenantId,
+            IsOwnerManaged = true,
+            IsPublic       = isPublic,
+        };
+        _repo.GetOwnerManagedProfileAsync(_tenantId, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier));
+        return (profile, supplier);
+    }
+
+    private void ArrangeNoCabinet() =>
+        _repo.GetOwnerManagedProfileAsync(_tenantId, Arg.Any<CancellationToken>())
+             .Returns(((SupplierProfile, Supplier)?)null);
+
+    // ── Resolve guard: no owner-managed profile → cabinet unavailable ─────────
+
+    [Fact]
+    public async Task GetProfileAsync_NoOwnerManagedProfile_ReturnsError()
+    {
+        ArrangeNoCabinet();
+
+        var (profile, error) = await _sut.GetProfileAsync(_tenantId);
+
+        Assert.Null(profile);
+        Assert.Equal(SupplierCabinetService.CabinetNotAvailableError, error);
+    }
+
+    [Fact]
+    public async Task AddItemAsync_NoOwnerManagedProfile_DoesNotTouchMarketplaceService()
+    {
+        ArrangeNoCabinet();
+
+        var (item, error) = await _sut.AddItemAsync(
+            _tenantId, new AdminAddSupplierItemDto("X", null, null, null, true));
+
+        Assert.Null(item);
+        Assert.Equal(SupplierCabinetService.CabinetNotAvailableError, error);
+        await _marketplace.DidNotReceive().AdminAddSupplierItemAsync(
+            Arg.Any<Guid>(), Arg.Any<AdminAddSupplierItemDto>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteItemAsync_NoOwnerManagedProfile_ReturnsError()
+    {
+        ArrangeNoCabinet();
+
+        var error = await _sut.DeleteItemAsync(_tenantId, Guid.NewGuid());
+
+        Assert.Equal(SupplierCabinetService.CabinetNotAvailableError, error);
+        await _marketplace.DidNotReceive().AdminDeleteSupplierItemAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── Items delegate to Admin* methods with the RESOLVED supplier id ────────
+
+    [Fact]
+    public async Task AddItemAsync_DelegatesWithResolvedSupplierId()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var request = new AdminAddSupplierItemDto("Milk", 30m, 5, "pcs", true);
+        _marketplace.AdminAddSupplierItemAsync(supplier.Id, request, Arg.Any<CancellationToken>())
+                    .Returns((new SupplierItemDto(Guid.NewGuid(), null, "Milk", null, 30m, 5, "pcs", true), (string?)null));
+
+        var (item, error) = await _sut.AddItemAsync(_tenantId, request);
+
+        Assert.Null(error);
+        Assert.NotNull(item);
+        await _marketplace.Received(1).AdminAddSupplierItemAsync(
+            supplier.Id, request, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateItemAsync_DelegatesWithResolvedSupplierId()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var itemId  = Guid.NewGuid();
+        var request = new AdminUpdateSupplierItemDto(null, 42m, null, null, null);
+        _marketplace.AdminUpdateSupplierItemAsync(supplier.Id, itemId, request, Arg.Any<CancellationToken>())
+                    .Returns((new SupplierItemDto(itemId, null, "Milk", null, 42m, null, null, true), (string?)null));
+
+        var (item, error) = await _sut.UpdateItemAsync(_tenantId, itemId, request);
+
+        Assert.Null(error);
+        Assert.NotNull(item);
+        await _marketplace.Received(1).AdminUpdateSupplierItemAsync(
+            supplier.Id, itemId, request, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteItemAsync_DelegatesWithResolvedSupplierId()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var itemId = Guid.NewGuid();
+        _marketplace.AdminDeleteSupplierItemAsync(supplier.Id, itemId, Arg.Any<CancellationToken>())
+                    .Returns((string?)null);
+
+        var error = await _sut.DeleteItemAsync(_tenantId, itemId);
+
+        Assert.Null(error);
+        await _marketplace.Received(1).AdminDeleteSupplierItemAsync(
+            supplier.Id, itemId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetItemsAsync_ReadsItemsOfResolvedSupplierOnly()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        _repo.GetSupplierItemsForOwnerAsync(supplier.Id, Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierItem>
+             {
+                 new() { SupplierId = supplier.Id, CustomName = "Draft item", IsAvailable = false },
+             });
+
+        var (items, error) = await _sut.GetItemsAsync(_tenantId);
+
+        Assert.Null(error);
+        var item = Assert.Single(items!);
+        Assert.Equal("Draft item", item.CustomName);
+        // Cabinet sees unavailable (draft) items too
+        Assert.False(item.IsAvailable);
+        await _repo.Received(1).GetSupplierItemsForOwnerAsync(supplier.Id, Arg.Any<CancellationToken>());
+    }
+
+    // ── Profile update / publish toggle ───────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateProfileAsync_PatchesFields_NeverTouchesPublishOrPlan()
+    {
+        var (profile, _) = ArrangeOwnSupplier(isPublic: false);
+        profile.Plan = "free";
+
+        var (dto, error) = await _sut.UpdateProfileAsync(_tenantId, new CabinetProfileUpdateDto(
+            Region:          "Kyiv",
+            Categories:      ["dairy", "bakery"],
+            Website:         null,
+            DeliveryRegions: null,
+            WorkingHours:    "9-18",
+            PaymentTerms:    null));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal("Kyiv", profile.Region);
+        Assert.Equal("9-18", profile.WorkingHours);
+        Assert.False(profile.IsPublic);   // publish is a separate toggle
+        Assert.Equal("free", profile.Plan);
+        _repo.Received(1).UpdateProfile(profile);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TogglePublishAsync_FlipsIsPublic()
+    {
+        var (profile, _) = ArrangeOwnSupplier(isPublic: false);
+
+        var (dto, error) = await _sut.TogglePublishAsync(_tenantId);
+
+        Assert.Null(error);
+        Assert.True(profile.IsPublic);
+        Assert.True(dto!.IsPublic);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // Toggle back
+        var (dto2, _) = await _sut.TogglePublishAsync(_tenantId);
+        Assert.False(profile.IsPublic);
+        Assert.False(dto2!.IsPublic);
+    }
+
+    // ── Reviews / metrics read-only ───────────────────────────────────────────
+
+    [Fact]
+    public async Task GetReviewsAsync_DelegatesWithResolvedSupplierId()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var paged = new PagedResult<PublicSupplierReviewDto>([], 0, 1, 20);
+        _marketplace.GetSupplierReviewsAsync(supplier.Id, 1, 20, Arg.Any<CancellationToken>())
+                    .Returns(paged);
+
+        var (reviews, error) = await _sut.GetReviewsAsync(_tenantId, 1, 20);
+
+        Assert.Null(error);
+        Assert.Same(paged, reviews);
+    }
+
+    [Fact]
+    public async Task GetMetricsAsync_NoMetricsRow_ReturnsEmptyDto()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        _repo.GetMetricsBySupplierIdAsync(supplier.Id, Arg.Any<CancellationToken>())
+             .Returns((SupplierMetrics?)null);
+
+        var (metrics, error) = await _sut.GetMetricsAsync(_tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(metrics);
+        Assert.Null(metrics!.Rating);
+    }
+}

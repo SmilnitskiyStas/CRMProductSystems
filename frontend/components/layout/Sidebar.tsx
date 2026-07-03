@@ -40,6 +40,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useModules } from "@/features/modules/hooks/useModules";
 import type { ModuleKey } from "@/features/modules/types";
 import {
+  AppRoles,
   AT_LEAST_STORE_MANAGER,
   CAN_ACCESS_POS,
   CAN_MANAGE_WAREHOUSE,
@@ -47,6 +48,7 @@ import {
   CAN_VIEW_WAREHOUSE,
   PROVIDER_ONLY,
   PROVIDER_TEAM,
+  SUPPLIER_ONLY,
   TENANT_ROLES,
   type AppRole,
 } from "@/lib/roles";
@@ -188,6 +190,20 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+// Supplier cabinet (v4.1, TASK-286, ADR-016) — the ONLY group a supplier_admin
+// sees. Rendered instead of NAV_GROUPS for that role; not module-gated on the
+// client (the backend already gates /api/supplier-cabinet with marketplace_supplier).
+const SUPPLIER_NAV_GROUP: NavGroup = {
+  key: "supplier_cabinet",
+  label: "Кабінет постачальника",
+  icon: <Store size={18} />,
+  items: [
+    { href: "/supplier/profile", label: "Профіль",    icon: <Store size={16} />,        roles: SUPPLIER_ONLY },
+    { href: "/supplier/items",   label: "Мої товари", icon: <Package size={16} />,      roles: SUPPLIER_ONLY },
+    { href: "/supplier/reviews", label: "Відгуки",    icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY },
+  ],
+};
 
 /**
  * True when the group should be visible given the tenant's active modules.
@@ -384,11 +400,15 @@ export function Sidebar({ collapsed, onToggle }: Props) {
 
   const showDashboard = !dashboardItem.roles || dashboardItem.roles.has(userRole);
 
+  // supplier_admin (v4.1) sees only the supplier cabinet + Settings — none of the
+  // regular NAV_GROUPS, and no module fetch (its menu is fixed).
+  const isSupplierAdmin = userRole === AppRoles.SupplierAdmin;
+
   // Only bare provider sessions have no tenant_id — /api/settings/modules would 403.
   // enterprise_admin (real clients AND impersonation sessions) must go through module
   // gating so only their tenant's enabled modules are visible.
   const isModuleAdmin = userRole === "provider";
-  const { data: modulesData } = useModules(!!userRole && !isModuleAdmin);
+  const { data: modulesData } = useModules(!!userRole && !isModuleAdmin && !isSupplierAdmin);
   // null = user is provider (show all) OR data still loading (show all until resolved)
   const modulesSet = isModuleAdmin
     ? null
@@ -396,8 +416,10 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     ? new Set<string>(modulesData.modules)
     : null;
 
-  // Filter groups by module activation, then by role and permissions
-  const visibleGroups = NAV_GROUPS
+  // Filter groups by module activation, then by role and permissions.
+  // supplier_admin bypasses NAV_GROUPS entirely — only the cabinet group.
+  const sourceGroups = isSupplierAdmin ? [SUPPLIER_NAV_GROUP] : NAV_GROUPS;
+  const visibleGroups = sourceGroups
     .filter((group) => isModuleActive(group.moduleKey, modulesSet))
     .map((group) => ({
       group,

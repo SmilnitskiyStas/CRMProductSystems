@@ -6,7 +6,7 @@ import { authApi } from "../api/auth";
 import { clearToken, getToken } from "@/lib/api";
 import { clearStoredUser } from "../store";
 import { useStoreContext } from "@/lib/useStoreContext";
-import { PROVIDER_TEAM, type AppRole } from "@/lib/roles";
+import { AppRoles, PROVIDER_TEAM, type AppRole } from "@/lib/roles";
 
 export const ME_KEY = ["me"] as const;
 
@@ -36,7 +36,15 @@ export function useLogin() {
       // same stores, and a stale selectedStoreId would point to a wrong tenant.
       useStoreContext.setState({ selectedStoreId: null });
       queryClient.setQueryData(ME_KEY, data.user);
-      router.push(PROVIDER_TEAM.has(data.user.role as AppRole) ? "/provider" : "/dashboard");
+      const role = data.user.role as AppRole;
+      // supplier_admin has no dashboard — land directly in the cabinet (v4.1, ADR-016)
+      router.push(
+        PROVIDER_TEAM.has(role)
+          ? "/provider"
+          : role === AppRoles.SupplierAdmin
+          ? "/supplier/profile"
+          : "/dashboard"
+      );
     },
   });
 }

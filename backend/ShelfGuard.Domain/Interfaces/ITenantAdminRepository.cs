@@ -14,6 +14,11 @@ public interface ITenantAdminRepository
     Task<bool> SlugExistsAsync(string slug, CancellationToken ct);
     Task AddTenantAsync(Tenant tenant, CancellationToken ct);
     Task AddUserAsync(User user, CancellationToken ct);
+
+    // v4.1 supplier self-service onboarding hook (ADR-016)
+    Task AddSupplierAsync(Supplier supplier, CancellationToken ct);
+    Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct);
+
     Task SaveChangesAsync(CancellationToken ct);
 
     // Usage statistics (per-tenant counts)

@@ -15,6 +15,8 @@ public static class AppRoles
     public const string Merchandiser    = "merchandiser";
     public const string Storekeeper     = "storekeeper";
     public const string Cashier         = "cashier";
+    /// <summary>v4.1 (ADR-016): self-service supplier tenant admin. Access limited to /api/supplier-cabinet — not part of any tenant-staff policy.</summary>
+    public const string SupplierAdmin   = "supplier_admin";
 
     public static readonly IReadOnlySet<string> ProviderTeamRoles =
         new HashSet<string> { Provider, ProviderAdmin, ProviderAgent };
@@ -24,5 +26,6 @@ public static class AppRoles
     {
         Provider, ProviderAdmin, ProviderAgent,
         EnterpriseAdmin, NetworkManager, StoreManager, Merchandiser, Storekeeper, Cashier,
+        SupplierAdmin,
     };
 }
