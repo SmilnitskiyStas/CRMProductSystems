@@ -29,7 +29,7 @@ export default function SupplierProfilePage() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: "28px 32px", maxWidth: 900 }}>
+      <div style={{ padding: "28px 32px" }}>
         <div
           style={{
             height: 120,
@@ -86,7 +86,7 @@ export default function SupplierProfilePage() {
   });
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 900 }}>
+    <div style={{ padding: "28px 32px" }}>
       {/* Back link */}
       <Link
         href="/marketplace"

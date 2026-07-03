@@ -9,6 +9,23 @@ Existing items без категорії лишаються валідними �
 
 ---
 
+## BUG-015 — StoreSelector shown to provider role in TopBar ✅ done (2026-07-04)
+Log: `.claude/logs/tasks/bug015-017_2026-07-04_provider-storeselector-duplicate-button-detail-width_frontend-developer.md`
+`frontend/components/layout/TopBar.tsx` already used `TENANT_ROLES.has(userRole)` (excludes
+provider/provider_admin/provider_agent + supplier_admin) — verified correct, no change needed.
+
+## BUG-016 — Duplicate "Створити постачальника" button on /marketplace ✅ done (2026-07-04)
+Log: `.claude/logs/tasks/bug015-017_2026-07-04_provider-storeselector-duplicate-button-detail-width_frontend-developer.md`
+Removed button + `CreateSupplierModal` usage from `frontend/app/(dashboard)/marketplace/page.tsx`.
+Deleted unused `frontend/features/marketplace/components/CreateSupplierModal.tsx` (no other callers).
+Backend `MarketplaceAdminController`/`AdminCreateSupplierAsync` left untouched — candidate for later cleanup.
+
+## BUG-017 — Supplier detail page constrained to half width ✅ done (2026-07-04)
+Log: `.claude/logs/tasks/bug015-017_2026-07-04_provider-storeselector-duplicate-button-detail-width_frontend-developer.md`
+Removed `maxWidth: 900` from both wrapper divs in `frontend/app/(dashboard)/marketplace/[id]/page.tsx`.
+
+---
+
 ## TASK-293 — DB: SupplierItem.Category + Attributes (JSONB)
 **Status:** done · **Agent:** database-engineer · **Depends:** —
 Міграція: `supplier_items.category text NULL` + `supplier_items.attributes jsonb NULL`
