@@ -16,6 +16,16 @@ export class ApiError extends Error {
 const TOKEN_KEY = "sg_token";
 let _token: string | null = null;
 
+// Set when the user logs out on purpose. In-flight requests (polling widgets,
+// notification badge) that 401 during logout must NOT trigger the
+// "session expired" redirect — the logout flow does its own clean redirect.
+let _loggedOut = false;
+
+/** Call BEFORE authApi.logout()/clearToken() so racing 401s stay silent. */
+export function markLoggedOut(): void {
+  _loggedOut = true;
+}
+
 export function getToken(): string | null {
   if (_token) return _token;
   if (typeof window === "undefined") return null;
@@ -25,6 +35,7 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   _token = token;
+  _loggedOut = false; // a fresh login/refresh clears the manual-logout flag
   if (typeof window !== "undefined") {
     localStorage.setItem(TOKEN_KEY, token);
     document.cookie = "sg_session=1; path=/; SameSite=Lax";
@@ -63,12 +74,19 @@ async function apiFetch<T>(
 
   // 401 on a protected request — try refreshing once
   if (res.status === 401 && !isRetry && path !== "/api/auth/login") {
+    // Manual logout in progress: refresh cookie is already revoked, so don't
+    // attempt refresh or redirect — useLogout handles the clean navigation.
+    if (_loggedOut) throw new ApiError(401, "Logged out.");
     const refreshed = await tryRefresh();
     if (refreshed) return apiFetch<T>(path, options, true);
+    if (_loggedOut) throw new ApiError(401, "Logged out.");
     clearToken();
-    // Hard navigation on purpose — resets all in-memory state (React Query cache, Zustand).
-    // The reason param lets the login page explain why the user was signed out.
-    if (typeof window !== "undefined") window.location.href = "/login?reason=session_expired";
+    if (typeof window !== "undefined") {
+      // Hard navigation on purpose — resets all in-memory state (React Query cache, Zustand).
+      // Only show the "session expired" notice when the user actually HAD a
+      // session that lapsed; with no token this is just "not signed in".
+      window.location.href = token ? "/login?reason=session_expired" : "/login";
+    }
     throw new ApiError(401, "Session expired.");
   }
 

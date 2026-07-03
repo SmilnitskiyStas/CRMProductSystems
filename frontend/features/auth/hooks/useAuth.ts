@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { authApi } from "../api/auth";
-import { clearToken, getToken } from "@/lib/api";
+import { clearToken, getToken, markLoggedOut } from "@/lib/api";
 import { clearStoredUser } from "../store";
 import { useStoreContext } from "@/lib/useStoreContext";
 import { AppRoles, PROVIDER_TEAM, type AppRole } from "@/lib/roles";
@@ -55,7 +55,13 @@ export function useLogout() {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: authApi.logout,
+    mutationFn: () => {
+      // Flag BEFORE the logout call: in-flight polling requests (chat widget,
+      // notifications) will 401 once the refresh cookie is revoked — the flag
+      // keeps them from hijacking the redirect with ?reason=session_expired (BUG-011).
+      markLoggedOut();
+      return authApi.logout();
+    },
     onSettled: () => {
       clearToken();
       clearStoredUser();

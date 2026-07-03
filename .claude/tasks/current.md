@@ -166,6 +166,23 @@ Log: `bug010_2026-07-03_unpublished-supplier-leak_backend-developer.md`
 
 ---
 
+## BUG-011 — банер «Час сеансу сплив» після ручного «Вийти»
+**Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-03
+Repro: клік «Вийти» → /login з банером session_expired (TASK-279), хоча вихід ручний.
+Cause: in-flight polling (SupportChatWidget 3с, notifications badge) ловив 401 після
+відкликання refresh cookie → `apiFetch` робив hard redirect `/login?reason=session_expired`,
+перебиваючи чистий `router.push("/login")` з `useLogout`.
+Fix (`frontend/lib/api.ts` + `useAuth.ts`): module-level прапорець `markLoggedOut()`,
+який `useLogout.mutationFn` ставить ПЕРЕД `authApi.logout()`; у 401-гілці `apiFetch`
+при прапорці — тихий `ApiError` без refresh/redirect (перевірка і до, і після tryRefresh
+для гонки). Прапорець скидається в `setToken()` (login/refresh). Додатково: 401 без
+токена на момент запиту → редірект на `/login` БЕЗ reason (не «сеанс сплив»).
+TASK-279 сценарій не зачеплено: протухла сесія з токеном далі дає reason=session_expired.
+`npx tsc --noEmit` + `npm run build` green.
+Log: `bug011_2026-07-03_logout-expired-banner_frontend-developer.md`
+
+---
+
 ## BUG-007 — /api/movements 500: паралельні запити на одному DbContext
 **Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
 Found during store_manager role QA (follow-up to BUG-006). На prod `/api/movements`
