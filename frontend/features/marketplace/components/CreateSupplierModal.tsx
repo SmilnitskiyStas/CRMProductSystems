@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { useCreateSupplier } from "../hooks/useMarketplace";
 import type { CreateSupplierRequest, SupplierPlan } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   onClose: () => void;
@@ -187,38 +188,12 @@ export function CreateSupplierModal({ onClose }: Props) {
           )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "9px 20px",
-                borderRadius: 8,
-                border: "1px solid #1F2937",
-                background: "transparent",
-                color: "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            <Btn type="button" variant="ghost" onClick={onClose}>
               Скасувати
-            </button>
-            <button
-              type="submit"
-              disabled={createSupplier.isPending}
-              style={{
-                padding: "9px 20px",
-                borderRadius: 8,
-                border: "none",
-                background: "#059669",
-                color: "#E8EDF5",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: createSupplier.isPending ? "not-allowed" : "pointer",
-                opacity: createSupplier.isPending ? 0.7 : 1,
-              }}
-            >
+            </Btn>
+            <Btn type="submit" disabled={createSupplier.isPending}>
               {createSupplier.isPending ? "Збереження…" : "Створити"}
-            </button>
+            </Btn>
           </div>
         </form>
       </div>

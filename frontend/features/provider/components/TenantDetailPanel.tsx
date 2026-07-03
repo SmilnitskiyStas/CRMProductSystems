@@ -150,6 +150,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
       {showAddUser && (
         <AddTenantUserModal
           tenantId={tenantId}
+          businessType={tenant?.businessType}
           onClose={() => setShowAddUser(false)}
           onCreated={() => setShowAddUser(false)}
         />

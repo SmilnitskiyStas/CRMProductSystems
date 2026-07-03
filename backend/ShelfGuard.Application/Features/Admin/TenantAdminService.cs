@@ -91,18 +91,7 @@ public sealed class TenantAdminService : ITenantAdminService
         // Supplier + owner-managed marketplace profile (hidden until published).
         if (isSupplierTenant)
         {
-            var supplier = new Supplier
-            {
-                TenantId = tenant.Id,
-                Name     = tenant.Name,
-            };
-            var profile = new SupplierProfile
-            {
-                SupplierId     = supplier.Id,
-                TenantId       = tenant.Id,
-                IsOwnerManaged = true,
-                IsPublic       = false,
-            };
+            var (supplier, profile) = Marketplace.SupplierOnboarding.CreateOwnerManaged(tenant.Id, tenant.Name);
             await _repo.AddSupplierAsync(supplier, ct);
             await _repo.AddSupplierProfileAsync(profile, ct);
         }

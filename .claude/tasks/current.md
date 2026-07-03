@@ -84,6 +84,32 @@ supplier_admin має 200 на /api/notifications/history (свій tenant, по
 
 ---
 
+## TASK-289 — Backend: provider-path onboarding + cabinet backfill + role guard (ADR-016)
+**Status:** done (2026-07-03, log: `289_2026-07-03_provider-supplier-onboarding_backend-developer.md`) · **Agent:** backend-developer · **Depends:** TASK-283, BUG-012
+Провайдерський візард (`ProviderService.CreateTenantAsync`, `/api/provider/tenants`) не мав
+онбординг-хука TASK-283 — supplier-tenant, створений через нього, лишався без Supplier/Profile.
+Fix:
+- `ProviderService.CreateTenantAsync` викликає `SupplierOnboarding.CreateOwnerManaged` в тій самій
+  транзакції, що й TenantAdminService (`ITenantRepository.AddPendingAsync` — deferred-варіант
+  `AddAsync`, +`AddSupplierAsync`/`AddSupplierProfileAsync`, один `SaveChangesAsync`).
+  `TenantAdminService` теж переведено на спільний хелпер (усунуто дублювання логіки).
+- `SupplierCabinetService.ResolveAsync` — lazy backfill: якщо `IsOwnerManaged`-профілю нема,
+  а `tenant.business_type == "supplier"` — створює пару через
+  `IMarketplaceRepository.GetOrCreateOwnerManagedProfileAsync` (race-safe, той самий патерн
+  detach+refetch, що й `GetOrCreatePlatformTenantIdAsync`, BUG-012). Самолікує supplier-tenant,
+  створений на проді до цього фіксу.
+- `CreateTenantUserRequest.Role` + валідація в `ProviderService.CreateTenantUserAsync`: роль має
+  відповідати `business_type` тенанта (`supplier` → тільки `supplier_admin`, інакше — тільки
+  `enterprise_admin`); невідповідність — 400.
+Тести: `ProviderServiceTests` (онбординг supplier/non-supplier, role guard обидва напрямки),
+`SupplierCabinetServiceTests` (backfill supplier/non-supplier tenant, no-op коли профіль вже є).
+`dotnet build` + `dotnet test` — 513/513 green (було 506).
+**Accept criteria:** supplier-tenant через `/api/provider/tenants` отримує Supplier+Profile
+однією транзакцією; кабінет самолікує existing supplier-tenant без профілю; role guard рубає
+supplier_admin для non-supplier тенанта і навпаки.
+
+---
+
 # Previous Sprint — v3.5 «Provider UX» (started 2026-06-21)
 
 ---
@@ -196,6 +222,30 @@ TenantModule + MODULE_LABELS/DESCRIPTIONS/ALL_MODULES (звірено з Tenant.
 вада). Назва компанії зберігається як введена — транслітерується тільки slug.
 tsc + next build green.
 Log: `bug013_2026-07-03_provider-wizard-supplier-slug_frontend-developer.md`
+
+---
+
+## TASK-290 — AddTenantUserModal: role selector + success view (ADR-016)
+**Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-03
+Попередній прогін лишив компонент напівготовим: рахував `isSupplier`/`roles`/`role`,
+але не рендерив селектор ролі, не слав `role` у запиті, і мав мертвий код
+(`createdUser`/`CheckCircle2`). `TenantDetailPanel` не передавав `businessType`.
+Fix: `types.ts` (`role` у `CreateTenantUserRequest`), `TenantDetailPanel.tsx`
+(`businessType={tenant?.businessType}`), `AddTenantUserModal.tsx` (поле «Роль»,
+`role` у mutateAsync, success-екран після створення). Backend поки ігнорує `role`
+(окрема задача). tsc + build green.
+Log: `290_2026-07-03_supplier-user-role-modal_frontend-developer.md`
+
+---
+
+## TASK-292 — Кнопки в модалках маркетплейсу: стиль під `Btn`
+**Status:** done · **Agent:** frontend-developer · **Depends:** — · Updated: 2026-07-03
+`CreateSupplierModal.tsx` і `AddSupplierItemModal.tsx` мали raw `<button>` замість
+спільного `components/ui/Btn.tsx` — випадали зі стилю решти застосунку (user feedback).
+Fix: «Скасувати» → `<Btn variant="ghost">`, primary-дія → `<Btn type="submit">`
+(той самий патерн, що вже в `AddTenantUserModal.tsx`). Тільки розмітка, логіка не змінена.
+`tsc --noEmit` + `npm run build` green.
+Log: `292_2026-07-03_supplier-modal-buttons-restyle_frontend-developer.md`
 
 ---
 

@@ -1,26 +1,57 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, CheckCircle2 } from "lucide-react";
 import { useCreateTenantUser } from "../hooks/useProvider";
-import type { TenantUserDto } from "../types";
+import type { BusinessType, TenantUserDto } from "../types";
 import { Btn } from "@/components/ui/Btn";
+
+interface RoleOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+// Role set depends on tenant business type (ADR-016):
+// supplier tenants get ONLY supplier_admin (cabinet-only access),
+// regular tenants keep the existing enterprise_admin role.
+const SUPPLIER_ROLES: RoleOption[] = [
+  {
+    value: "supplier_admin",
+    label: "Адміністратор постачальника",
+    description: "Доступ до кабінету постачальника: профіль, товари, відгуки",
+  },
+];
+
+const REGULAR_ROLES: RoleOption[] = [
+  {
+    value: "enterprise_admin",
+    label: "Адміністратор підприємства",
+    description: "Повний доступ до всіх модулів і налаштувань тенанта",
+  },
+];
 
 interface Props {
   tenantId: string;
+  businessType?: BusinessType;
   onClose: () => void;
   onCreated: (user: TenantUserDto) => void;
 }
 
-export function AddTenantUserModal({ tenantId, onClose, onCreated }: Props) {
+export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated }: Props) {
   const createUser = useCreateTenantUser(tenantId);
 
+  const isSupplier = businessType === "supplier";
+  const roles      = isSupplier ? SUPPLIER_ROLES : REGULAR_ROLES;
+
+  const [role, setRole]                   = useState(roles[0].value);
   const [fullName, setFullName]           = useState("");
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors]               = useState<Record<string, string>>({});
   const [serverError, setServerError]     = useState("");
+  const [createdUser, setCreatedUser]     = useState<TenantUserDto | null>(null);
 
   function validate() {
     const e: Record<string, string> = {};
@@ -42,9 +73,8 @@ export function AddTenantUserModal({ tenantId, onClose, onCreated }: Props) {
     }
     setErrors({});
     try {
-      const user = await createUser.mutateAsync({ fullName: fullName.trim(), email: email.trim(), password });
-      onCreated(user);
-      onClose();
+      const user = await createUser.mutateAsync({ fullName: fullName.trim(), email: email.trim(), password, role });
+      setCreatedUser(user);
     } catch (err) {
       setServerError((err as Error)?.message ?? "Помилка при створенні користувача");
     }
@@ -95,7 +125,26 @@ export function AddTenantUserModal({ tenantId, onClose, onCreated }: Props) {
           </button>
         </div>
 
-        {/* Form */}
+        {createdUser ? (
+          <div style={{ padding: "24px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+            <CheckCircle2 size={40} color="#22C55E" />
+            <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
+              Адміністратора {createdUser.email} створено.
+            </div>
+            {isSupplier && (
+              <div style={{ color: "#6B7280", fontSize: 12 }}>
+                Постачальник входить через звичайну сторінку логіну
+              </div>
+            )}
+            <Btn
+              type="button"
+              onClick={() => { onCreated(createdUser); onClose(); }}
+              style={{ marginTop: 8, justifyContent: "center", width: "100%" }}
+            >
+              Закрити
+            </Btn>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
           {serverError && (
             <div style={{ color: "#F87171", fontSize: 13, background: "#1F1211", border: "1px solid #7F1D1D", borderRadius: 8, padding: "10px 14px" }}>
@@ -154,6 +203,47 @@ export function AddTenantUserModal({ tenantId, onClose, onCreated }: Props) {
             />
             {errors.email && (
               <div style={{ color: "#F87171", fontSize: 11, marginTop: 4 }}>{errors.email}</div>
+            )}
+          </div>
+
+          {/* Роль */}
+          <div>
+            <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
+              Роль
+            </label>
+            {roles.length > 1 ? (
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                style={{
+                  width: "100%",
+                  background: "#111827",
+                  border: "1px solid #1F2937",
+                  borderRadius: 8,
+                  padding: "9px 12px",
+                  color: "#E8EDF5",
+                  fontSize: 13,
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              >
+                {roles.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            ) : (
+              <div
+                style={{
+                  background: "#111827",
+                  border: "1px solid #1F2937",
+                  borderRadius: 8,
+                  padding: "9px 12px",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div style={{ color: "#E8EDF5", fontSize: 13 }}>Роль: {roles[0].label}</div>
+                <div style={{ color: "#6B7280", fontSize: 11, marginTop: 2 }}>{roles[0].description}</div>
+              </div>
             )}
           </div>
 
@@ -221,6 +311,7 @@ export function AddTenantUserModal({ tenantId, onClose, onCreated }: Props) {
             </Btn>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

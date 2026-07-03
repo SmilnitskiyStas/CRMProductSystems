@@ -230,6 +230,27 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
         return (row, row.Supplier);
     }
 
+    public async Task<(SupplierProfile Profile, Supplier Supplier)?> GetOrCreateOwnerManagedProfileAsync(
+        Supplier supplier, SupplierProfile profile, CancellationToken ct = default)
+    {
+        await _db.Suppliers.AddAsync(supplier, ct);
+        await _db.SupplierProfiles.AddAsync(profile, ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+            return (profile, supplier);
+        }
+        catch (DbUpdateException)
+        {
+            // Lost a concurrent race on the partial unique index (TenantId, IsOwnerManaged) —
+            // another request already created the pair. Detach our copies and re-fetch the winner.
+            _db.Entry(supplier).State = EntityState.Detached;
+            _db.Entry(profile).State = EntityState.Detached;
+            return await GetOwnerManagedProfileAsync(supplier.TenantId, ct);
+        }
+    }
+
     public async Task<IReadOnlyList<SupplierItem>> GetSupplierItemsForOwnerAsync(
         Guid supplierId, CancellationToken ct = default) =>
         await _db.SupplierItems
@@ -247,6 +268,18 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
             .Where(t => t.Id == tenantId)
             .Select(t => (string?)t.BusinessType)
             .FirstOrDefaultAsync(ct);
+
+    public async Task<(string BusinessType, string Name)?> GetTenantOnboardingInfoAsync(
+        Guid tenantId, CancellationToken ct = default)
+    {
+        var row = await _db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == tenantId)
+            .Select(t => new { t.BusinessType, t.Name })
+            .FirstOrDefaultAsync(ct);
+
+        return row is null ? null : (row.BusinessType, row.Name);
+    }
 
     public async Task<IReadOnlyList<short>> GetReviewRatingsAsync(
         Guid supplierId, CancellationToken ct = default)

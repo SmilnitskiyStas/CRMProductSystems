@@ -157,9 +157,27 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Task<(SupplierProfile Profile, Supplier Supplier)?> ResolveAsync(
-        Guid tenantId, CancellationToken ct) =>
-        _repo.GetOwnerManagedProfileAsync(tenantId, ct);
+    /// <summary>
+    /// Resolves the calling tenant's owner-managed Supplier/Profile pair, lazily
+    /// creating it on first cabinet access if the tenant is business_type = "supplier"
+    /// but has none yet (TASK-289 self-heal for tenants onboarded before the
+    /// provider-path hook existed, or created directly in the DB). Persistence and
+    /// race-safety (concurrent first-access requests) are the repository's responsibility
+    /// (mirrors MarketplaceRepository.GetOrCreatePlatformTenantIdAsync, BUG-012).
+    /// </summary>
+    private async Task<(SupplierProfile Profile, Supplier Supplier)?> ResolveAsync(
+        Guid tenantId, CancellationToken ct)
+    {
+        var existing = await _repo.GetOwnerManagedProfileAsync(tenantId, ct);
+        if (existing is not null) return existing;
+
+        var tenantInfo = await _repo.GetTenantOnboardingInfoAsync(tenantId, ct);
+        if (tenantInfo is null || !SupplierOnboarding.IsSupplierBusinessType(tenantInfo.Value.BusinessType))
+            return null;
+
+        var (supplier, profile) = SupplierOnboarding.CreateOwnerManaged(tenantId, tenantInfo.Value.Name);
+        return await _repo.GetOrCreateOwnerManagedProfileAsync(supplier, profile, ct);
+    }
 
     private static SupplierProfileDto ToProfileDto(
         SupplierProfile p, Supplier s, SupplierMetrics? m) =>

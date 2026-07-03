@@ -92,6 +92,16 @@ public interface IMarketplaceRepository
     Task<(SupplierProfile Profile, Supplier Supplier)?> GetOwnerManagedProfileAsync(
         Guid tenantId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Lazy backfill (TASK-289): persists the given not-yet-saved Supplier + owner-managed
+    /// SupplierProfile pair and returns it. Race-safe — if a concurrent request already
+    /// created the tenant's owner-managed profile (partial unique index on
+    /// (TenantId, IsOwnerManaged)), the insert is abandoned and the winner's row is
+    /// returned instead (same pattern as GetOrCreatePlatformTenantIdAsync, BUG-012).
+    /// </summary>
+    Task<(SupplierProfile Profile, Supplier Supplier)?> GetOrCreateOwnerManagedProfileAsync(
+        Supplier supplier, SupplierProfile profile, CancellationToken ct = default);
+
     /// <summary>All items of a supplier including unavailable ones (cabinet view; tenant RLS applies).</summary>
     Task<IReadOnlyList<SupplierItem>> GetSupplierItemsForOwnerAsync(
         Guid supplierId, CancellationToken ct = default);
@@ -100,6 +110,14 @@ public interface IMarketplaceRepository
 
     /// <summary>Reviewer tenant's business_type (tenants table — no RLS).</summary>
     Task<string?> GetTenantBusinessTypeAsync(Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tenant's business_type + name (tenants table — no RLS). Used by the supplier
+    /// cabinet lazy backfill (TASK-289) to decide whether/how to self-heal a missing
+    /// owner-managed Supplier/Profile pair for an existing supplier tenant.
+    /// </summary>
+    Task<(string BusinessType, string Name)?> GetTenantOnboardingInfoAsync(
+        Guid tenantId, CancellationToken ct = default);
 
     /// <summary>All review ratings of a supplier, cross-tenant (provider-bypass read).</summary>
     Task<IReadOnlyList<short>> GetReviewRatingsAsync(Guid supplierId, CancellationToken ct = default);

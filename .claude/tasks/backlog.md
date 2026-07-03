@@ -5,6 +5,20 @@ Rewritten 2026-06-15: v4 platform transformation decomposition added (TASK-200+)
 
 ---
 
+## v4.1 — Supplier Self-Service (follow-ups)
+
+#### TASK-291 — Supplier cabinet: імпорт товарів файлом (CSV/Excel)
+**Status:** planned · **Agent:** backend-developer + frontend-developer · **Priority:** medium · **Added:** 2026-07-03
+Постачальник у кабінеті (/supplier/items) завантажує файл з товарами замість ручного вводу.
+Backend: POST /api/supplier-cabinet/items/import (multipart, CSV перший етап; колонки:
+назва, ціна, мін. к-ть, одиниця, доступність) — валідація построчно, звіт про помилки,
+реюз патерну CSV-імпорту з daily-sales (TASK-047). Frontend: кнопка «Імпорт з файлу» +
+діалог з результатом (додано/пропущено/помилки). Ручне додавання вже працює (TASK-286).
+Заявлено користувачем 2026-07-03: «про можливість завантажування файлами можна пізніше
+реалізувати, коли налаштуємо все як потрібно».
+
+---
+
 ## v4 — Business Platform Transformation
 
 **ADR:** ADR-014 (entity rename), ADR-015 (module activation)

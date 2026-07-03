@@ -70,4 +70,18 @@ public sealed class TenantRepository : ITenantRepository
         _db.Tenants.AnyAsync(t => t.Slug == slug.ToLowerInvariant(), ct);
 
     public Task SaveChangesAsync(CancellationToken ct) => _db.SaveChangesAsync(ct);
+
+    // v4.1 supplier self-service onboarding hook (ADR-016, TASK-289)
+
+    public Task AddPendingAsync(Tenant tenant, CancellationToken ct)
+    {
+        _db.Tenants.Add(tenant);
+        return Task.CompletedTask;
+    }
+
+    public async Task AddSupplierAsync(Supplier supplier, CancellationToken ct) =>
+        await _db.Suppliers.AddAsync(supplier, ct);
+
+    public async Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct) =>
+        await _db.SupplierProfiles.AddAsync(profile, ct);
 }

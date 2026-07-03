@@ -25,4 +25,12 @@ public interface ITenantRepository
     Task AddAsync(Tenant tenant, CancellationToken ct);
     Task<bool> SlugExistsAsync(string slug, CancellationToken ct);
     Task SaveChangesAsync(CancellationToken ct);
+
+    // v4.1 supplier self-service onboarding hook (ADR-016, TASK-289).
+    // Deferred variant of AddAsync — does not call SaveChanges itself, so the tenant
+    // and its Supplier/SupplierProfile pair (added via AddSupplierAsync/AddSupplierProfileAsync)
+    // commit together in one SaveChangesAsync call.
+    Task AddPendingAsync(Tenant tenant, CancellationToken ct);
+    Task AddSupplierAsync(Supplier supplier, CancellationToken ct);
+    Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct);
 }

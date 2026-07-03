@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Provider.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
@@ -112,7 +113,19 @@ public sealed class ProviderService : IProviderService
         var modError = tenant.UpdateModules(modules);
         if (modError is not null) return (null, modError);
 
-        await _tenants.AddAsync(tenant, ct);
+        await _tenants.AddPendingAsync(tenant, ct);
+
+        // v4.1 onboarding hook (ADR-016, TASK-289): a supplier tenant created via the
+        // provider wizard gets its own Supplier + owner-managed marketplace profile
+        // (hidden until published), same as the TenantAdminService admin-onboarding path.
+        if (SupplierOnboarding.IsSupplierBusinessType(tenant.BusinessType))
+        {
+            var (supplier, profile) = SupplierOnboarding.CreateOwnerManaged(tenant.Id, tenant.Name);
+            await _tenants.AddSupplierAsync(supplier, ct);
+            await _tenants.AddSupplierProfileAsync(profile, ct);
+        }
+
+        await _tenants.SaveChangesAsync(ct);
 
         return (new TenantDetailDto(
             tenant.Id,
@@ -257,7 +270,7 @@ public sealed class ProviderService : IProviderService
         var allUsers = await _users.GetAllByTenantAsync(tenantId, ct);
 
         return allUsers
-            .Where(u => u.Role == AppRoles.EnterpriseAdmin)
+            .Where(u => u.Role == AppRoles.EnterpriseAdmin || u.Role == AppRoles.SupplierAdmin)
             .Select(u => new TenantUserDto(u.Id, u.FullName, u.Email, u.Role, u.CreatedAt))
             .ToList();
     }
@@ -280,6 +293,14 @@ public sealed class ProviderService : IProviderService
         if (tenant is null)
             return (null, "Tenant not found.");
 
+        // Role must match the tenant's business type (ADR-016): supplier tenants only
+        // get supplier_admin (cabinet-only access); every other tenant only gets
+        // enterprise_admin. Reject the mismatched direction either way.
+        var isSupplierTenant = SupplierOnboarding.IsSupplierBusinessType(tenant.BusinessType);
+        var expectedRole = isSupplierTenant ? AppRoles.SupplierAdmin : AppRoles.EnterpriseAdmin;
+        if (request.Role != expectedRole)
+            return (null, $"Role '{request.Role}' is not valid for a '{tenant.BusinessType}' tenant. Expected '{expectedRole}'.");
+
         // Email must be globally unique
         var existing = await _users.GetByEmailAsync(request.Email.Trim().ToLowerInvariant(), ct);
         if (existing is not null)
@@ -291,7 +312,7 @@ public sealed class ProviderService : IProviderService
             email:        request.Email.Trim(),
             fullName:     request.FullName.Trim(),
             passwordHash: passwordHash,
-            role:         AppRoles.EnterpriseAdmin);
+            role:         expectedRole);
 
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);

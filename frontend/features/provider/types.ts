@@ -90,6 +90,7 @@ export interface CreateTenantUserRequest {
   fullName: string;
   email: string;
   password: string;
+  role: string;
 }
 
 // ── Business types ───────────────────────────────────────────────────────────

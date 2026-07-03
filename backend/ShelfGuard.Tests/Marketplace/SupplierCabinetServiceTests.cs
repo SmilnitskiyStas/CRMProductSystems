@@ -224,4 +224,67 @@ public sealed class SupplierCabinetServiceTests
         Assert.NotNull(metrics);
         Assert.Null(metrics!.Rating);
     }
+
+    // ── Lazy backfill (TASK-289): self-heal a supplier tenant with no profile yet ──
+
+    [Fact]
+    public async Task GetProfileAsync_SupplierTenantMissingProfile_LazilyCreatesIt()
+    {
+        ArrangeNoCabinet();
+        _repo.GetTenantOnboardingInfoAsync(_tenantId, Arg.Any<CancellationToken>())
+             .Returns(("supplier", "Fresh Foods Ltd"));
+
+        Supplier? createdSupplier = null;
+        SupplierProfile? createdProfile = null;
+        _repo.GetOrCreateOwnerManagedProfileAsync(
+                Arg.Any<Supplier>(), Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>())
+             .Returns(ci =>
+             {
+                 createdSupplier = ci.Arg<Supplier>();
+                 createdProfile  = ci.Arg<SupplierProfile>();
+                 return (createdProfile, createdSupplier);
+             });
+
+        var (profile, error) = await _sut.GetProfileAsync(_tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(profile);
+        Assert.NotNull(createdSupplier);
+        Assert.Equal(_tenantId, createdSupplier!.TenantId);
+        Assert.Equal("Fresh Foods Ltd", createdSupplier.Name);
+        Assert.True(createdProfile!.IsOwnerManaged);
+        Assert.False(createdProfile.IsPublic);
+        await _repo.Received(1).GetOrCreateOwnerManagedProfileAsync(
+            Arg.Any<Supplier>(), Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetProfileAsync_NonSupplierTenantMissingProfile_DoesNotBackfill()
+    {
+        ArrangeNoCabinet();
+        _repo.GetTenantOnboardingInfoAsync(_tenantId, Arg.Any<CancellationToken>())
+             .Returns(("retail", "Some Retail Tenant"));
+
+        var (profile, error) = await _sut.GetProfileAsync(_tenantId);
+
+        Assert.Null(profile);
+        Assert.Equal(SupplierCabinetService.CabinetNotAvailableError, error);
+        await _repo.DidNotReceive().GetOrCreateOwnerManagedProfileAsync(
+            Arg.Any<Supplier>(), Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetProfileAsync_ProfileAlreadyExists_DoesNotBackfillAgain()
+    {
+        // Existing owner-managed profile is found on the first lookup — no create attempt.
+        ArrangeOwnSupplier();
+
+        var (profile, error) = await _sut.GetProfileAsync(_tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(profile);
+        await _repo.DidNotReceive().GetTenantOnboardingInfoAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().GetOrCreateOwnerManagedProfileAsync(
+            Arg.Any<Supplier>(), Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
 }
