@@ -7,7 +7,7 @@ namespace ShelfGuard.Application.Features.Marketplace;
 /// Every operation resolves "my supplier" from the calling tenant's single
 /// owner-managed profile (supplier_profiles.IsOwnerManaged partial unique index),
 /// so a supplier tenant can never touch another supplier's data.
-/// Provider-created suppliers (TenantId = Guid.Empty) are unreachable here.
+/// Provider-created suppliers (platform tenant, IsOwnerManaged = false) are unreachable here.
 /// </summary>
 public interface ISupplierCabinetService
 {

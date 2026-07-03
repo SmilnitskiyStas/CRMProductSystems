@@ -22,7 +22,7 @@ public sealed class SupplierProfile
     /// <summary>
     /// True when this profile belongs to a self-service supplier tenant (ADR-016).
     /// At most one owner-managed profile per tenant (partial unique index on TenantId).
-    /// Provider-created suppliers (TenantId = Guid.Empty) keep false.
+    /// Provider-created suppliers (platform tenant, BUG-012) keep false.
     /// </summary>
     public bool IsOwnerManaged { get; set; } = false;
     public string Plan { get; set; } = "free";

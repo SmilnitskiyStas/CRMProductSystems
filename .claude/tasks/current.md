@@ -183,6 +183,26 @@ Log: `bug011_2026-07-03_logout-expired-banner_frontend-developer.md`
 
 ---
 
+## BUG-012 — POST /api/admin/marketplace/suppliers 500 (FK violation) на prod
+**Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-03
+Root cause: `MarketplaceService.AdminCreateSupplierAsync` хардкодив `TenantId = Guid.Empty`
+→ INSERT у `suppliers` порушував FK `FK_suppliers_tenants_TenantId` (тенант 00000000-… не
+існує). Флоу TASK-275 «+ Створити постачальника» падав 500 завжди — рядків з Guid.Empty
+у prod немає.
+Fix: get-or-create системний tenant «Platform Marketplace» (slug `platform-marketplace`,
+business_type=supplier, inactive, без users) — `MarketplaceRepository.
+GetOrCreatePlatformTenantIdAsync` (ліниво, race-safe по unique slug + detach на програші);
+`AdminCreateSupplierAsync` використовує його id. Supplier cabinet не зачеплено: профілі
+admin-флоу мають `IsOwnerManaged = false`, кабінет фільтрує `IsOwnerManaged = true` —
+покрито тестом. Чому TASK-275-тести не зловили: NSubstitute-моки репо не перевіряють FK;
+додано 4 repo-тести на EF InMemory (перший виклик створює tenant, другий/крос-контекст
+реюзає; cabinet-лукап не бачить platform-suppliers) + 2 service-тести. ADR-016 amendment
+у `decisions.md`. Build green, 506/506 тестів.
+Log: `bug012_2026-07-03_admin-supplier-fk_backend-developer.md`
+**Next:** deploy to prod; re-check «+ Створити постачальника» на /marketplace.
+
+---
+
 ## BUG-007 — /api/movements 500: паралельні запити на одному DbContext
 **Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
 Found during store_manager role QA (follow-up to BUG-006). На prod `/api/movements`

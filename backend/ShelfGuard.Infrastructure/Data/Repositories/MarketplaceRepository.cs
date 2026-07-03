@@ -153,6 +153,44 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
 
     // ── Platform admin operations ─────────────────────────────────────────────
 
+    /// <summary>Slug of the system tenant that owns provider-created marketplace suppliers (BUG-012).</summary>
+    public const string PlatformTenantSlug = "platform-marketplace";
+    public const string PlatformTenantName = "Platform Marketplace";
+
+    public async Task<Guid> GetOrCreatePlatformTenantIdAsync(CancellationToken ct = default)
+    {
+        // tenants table has no tenant RLS — plain lookup by unique slug.
+        var existing = await _db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Slug == PlatformTenantSlug)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync(ct);
+        if (existing is not null) return existing.Value;
+
+        var tenant = Tenant.Create(PlatformTenantName, PlatformTenantSlug);
+        tenant.UpdateBusinessType("supplier");
+        tenant.Deactivate(); // system tenant: no users, no login, cabinet unreachable
+
+        await _db.Tenants.AddAsync(tenant, ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+            return tenant.Id;
+        }
+        catch (DbUpdateException)
+        {
+            // Lost a concurrent race on the unique slug index — detach our copy
+            // (so later SaveChanges of the supplier doesn't retry it) and reuse
+            // the winner's row.
+            _db.Entry(tenant).State = EntityState.Detached;
+            return await _db.Tenants
+                .AsNoTracking()
+                .Where(t => t.Slug == PlatformTenantSlug)
+                .Select(t => t.Id)
+                .FirstAsync(ct);
+        }
+    }
+
     public async Task AddSupplierAsync(Supplier supplier, CancellationToken ct = default) =>
         await _db.Suppliers.AddAsync(supplier, ct);
 

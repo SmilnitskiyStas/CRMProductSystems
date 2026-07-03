@@ -367,6 +367,46 @@ public sealed class MarketplaceServiceTests
         Assert.Contains("not found", error, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ── AdminCreateSupplierAsync — platform tenant FK fix (BUG-012) ───────────
+
+    [Fact]
+    public async Task AdminCreateSupplierAsync_UsesPlatformTenant_NotGuidEmpty()
+    {
+        var platformTenantId = Guid.NewGuid();
+        _repo.GetOrCreatePlatformTenantIdAsync(Arg.Any<CancellationToken>())
+             .Returns(platformTenantId);
+
+        var (dto, error) = await _sut.AdminCreateSupplierAsync(
+            new AdminCreateSupplierDto("Platform Supplier", "Kyiv", null, null, null, null, null, false, "free"));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        await _repo.Received(1).GetOrCreatePlatformTenantIdAsync(Arg.Any<CancellationToken>());
+        await _repo.Received(1).AddSupplierAsync(
+            Arg.Is<Supplier>(s => s.TenantId == platformTenantId),
+            Arg.Any<CancellationToken>());
+        // Profile also bound to the platform tenant and NOT owner-managed —
+        // the supplier cabinet (IsOwnerManaged filter) must never resolve it.
+        await _repo.Received(1).AddSupplierProfileAsync(
+            Arg.Is<SupplierProfile>(p => p.TenantId == platformTenantId && !p.IsOwnerManaged),
+            Arg.Any<CancellationToken>());
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminCreateSupplierAsync_InvalidInput_DoesNotTouchTenantOrSave()
+    {
+        var (_, missingName) = await _sut.AdminCreateSupplierAsync(
+            new AdminCreateSupplierDto("  ", null, null, null, null, null, null, false, "free"));
+        var (_, badPlan) = await _sut.AdminCreateSupplierAsync(
+            new AdminCreateSupplierDto("Supplier", null, null, null, null, null, null, false, "enterprise"));
+
+        Assert.NotNull(missingName);
+        Assert.NotNull(badPlan);
+        await _repo.DidNotReceive().GetOrCreatePlatformTenantIdAsync(Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // ── AdminUpdateSupplierItemAsync (TASK-284) ───────────────────────────────
 
     [Fact]

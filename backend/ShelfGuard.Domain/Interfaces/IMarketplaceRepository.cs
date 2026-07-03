@@ -58,6 +58,14 @@ public interface IMarketplaceRepository
 
     // ── Platform admin operations (ProviderOnly) ─────────────────────────────
 
+    /// <summary>
+    /// Returns the id of the system "Platform Marketplace" tenant, creating it on
+    /// first use (BUG-012). Provider-created suppliers reference this tenant so the
+    /// suppliers→tenants FK holds. The tenant is inactive, has no users, and its
+    /// profiles keep IsOwnerManaged = false — the supplier cabinet never resolves it.
+    /// </summary>
+    Task<Guid> GetOrCreatePlatformTenantIdAsync(CancellationToken ct = default);
+
     Task AddSupplierAsync(Supplier supplier, CancellationToken ct = default);
 
     Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct = default);
@@ -78,7 +86,7 @@ public interface IMarketplaceRepository
     /// <summary>
     /// Deterministic "my supplier" lookup for self-service supplier tenants:
     /// the single owner-managed profile of the given tenant (partial unique index).
-    /// Provider-created suppliers (TenantId = Guid.Empty) are never returned.
+    /// Provider-created suppliers (platform tenant, IsOwnerManaged = false) are never returned.
     /// Tenant RLS applies.
     /// </summary>
     Task<(SupplierProfile Profile, Supplier Supplier)?> GetOwnerManagedProfileAsync(

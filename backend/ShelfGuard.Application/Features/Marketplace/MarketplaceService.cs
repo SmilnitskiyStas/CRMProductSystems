@@ -219,8 +219,10 @@ public sealed class MarketplaceService : IMarketplaceService
         if (request.Plan is not "free" and not "premium")
             return (null!, "Plan must be 'free' or 'premium'.");
 
-        // Platform-managed suppliers are not tied to a tenant — use Guid.Empty
-        var platformTenantId = Guid.Empty;
+        // BUG-012: suppliers.TenantId has a FK to tenants — Guid.Empty violated it
+        // (tenant 00000000-... does not exist). Platform-managed suppliers are
+        // attached to a real system "Platform Marketplace" tenant, created lazily.
+        var platformTenantId = await _repo.GetOrCreatePlatformTenantIdAsync(ct);
 
         var supplier = new Supplier
         {
