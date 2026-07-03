@@ -293,6 +293,13 @@ public sealed class ProviderService : IProviderService
         if (tenant is null)
             return (null, "Tenant not found.");
 
+        // BUG-014: an inactive tenant (e.g. the internal platform-marketplace system
+        // tenant used by BUG-012) must never get a real login-capable user — it would
+        // just create an unreachable account (no active tenant context, module gates
+        // always closed).
+        if (!tenant.IsActive)
+            return (null, "Tenant is not active.");
+
         // Role must match the tenant's business type (ADR-016): supplier tenants only
         // get supplier_admin (cabinet-only access); every other tenant only gets
         // enterprise_admin. Reject the mismatched direction either way.

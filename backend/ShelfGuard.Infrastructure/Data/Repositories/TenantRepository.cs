@@ -14,9 +14,13 @@ public sealed class TenantRepository : ITenantRepository
 
     public TenantRepository(AppDbContext db) => _db = db;
 
+    // BUG-014: the internal system tenant used as a home for provider-created
+    // (pre-v4.1) suppliers (BUG-012) is never a real client — never surface it
+    // in the provider tenant list.
     public async Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken ct) =>
         await _db.Tenants
             .AsNoTracking()
+            .Where(t => t.Slug != MarketplaceRepository.PlatformTenantSlug)
             .OrderBy(t => t.Name)
             .ToListAsync(ct);
 

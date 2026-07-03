@@ -269,6 +269,24 @@ Log: `bug012_2026-07-03_admin-supplier-fk_backend-developer.md`
 
 ---
 
+## BUG-014 — Provider випадково створив supplier_admin у системному tenant «Platform Marketplace»
+**Status:** done · **Agent:** backend-developer · **Depends:** BUG-012 · Updated: 2026-07-03
+Root cause: системний tenant `platform-marketplace` (BUG-012 фікс) не фільтрувався у
+`ProviderService.GetTenantsAsync` → з'являвся у provider-панелі поруч з реальними клієнтами;
+provider створив там supplier_admin через «Додати адміністратора», юзер отримує 403 на
+`/api/supplier-cabinet/*` (tenant inactive, без модуля marketplace_supplier).
+Fix: `TenantRepository.GetAllAsync` фільтрує `Slug != MarketplaceRepository.PlatformTenantSlug`
+на рівні репозиторію (уникнули cross-feature reference з Application); `ProviderService.
+CreateTenantUserAsync` — загальний guard: `!tenant.IsActive` → 400 "Tenant is not active."
+(захищає від тієї ж помилки на будь-якому деактивованому tenant, не тільки platform).
+Тести: `TenantRepositoryPlatformTenantTests` (EF InMemory, GetAllAsync виключає platform tenant)
++ `ProviderServiceTests.CreateTenantUser_InactiveTenant_IsRejected`. Build green, 515/515 тестів.
+Data cleanup на prod (stray user) — окремо, поза скоупом цього фіксу.
+Log: `bug014_2026-07-03_platform-tenant-visible-in-provider-list_backend-developer.md`
+**Next:** deploy to prod; clean up stray user tenant 89d95a15-abcb-459a-b943-6e9a8a3f07ac.
+
+---
+
 ## BUG-007 — /api/movements 500: паралельні запити на одному DbContext
 **Status:** done · **Agent:** backend-developer · **Depends:** — · Updated: 2026-07-02
 Found during store_manager role QA (follow-up to BUG-006). На prod `/api/movements`

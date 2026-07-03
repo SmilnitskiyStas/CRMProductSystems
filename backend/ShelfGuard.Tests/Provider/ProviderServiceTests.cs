@@ -122,4 +122,27 @@ public sealed class ProviderServiceTests
         Assert.NotNull(error);
         await _users.DidNotReceive().AddAsync(Arg.Any<User>(), Arg.Any<CancellationToken>());
     }
+
+    // ── CreateTenantUserAsync — inactive tenant guard (BUG-014) ────────────────
+
+    [Fact]
+    public async Task CreateTenantUser_InactiveTenant_IsRejected()
+    {
+        var tenant = Tenant.Create("Platform Marketplace", "platform-marketplace");
+        tenant.UpdateBusinessType("supplier");
+        tenant.Deactivate();
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+
+        var req = new CreateTenantUserRequest(
+            FullName: "Someone",
+            Email:    "someone@platform.com",
+            Password: "SecurePass123",
+            Role:     AppRoles.SupplierAdmin);
+
+        var (user, error) = await _sut.CreateTenantUserAsync(tenant.Id, req, default);
+
+        Assert.Null(user);
+        Assert.NotNull(error);
+        await _users.DidNotReceive().AddAsync(Arg.Any<User>(), Arg.Any<CancellationToken>());
+    }
 }
