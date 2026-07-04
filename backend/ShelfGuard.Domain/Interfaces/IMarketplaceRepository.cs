@@ -81,6 +81,23 @@ public interface IMarketplaceRepository
     /// <summary>Returns a supplier by its Id (no tenant filter; provider-bypass read).</summary>
     Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Replaces all barcodes of <paramref name="item"/> with <paramref name="newBarcodes"/> via
+    /// explicit RemoveRange/AddRange against the DbContext (not navigation-collection mutation).
+    /// Avoids the DbUpdateConcurrencyException that occurs when EF's change tracker treats
+    /// newly-added children (client-generated Guid keys) as pre-existing rows to UPDATE — see
+    /// BUG-018. Existing rows for the item are always removed first, even when
+    /// <paramref name="newBarcodes"/> is empty.
+    /// </summary>
+    void ReplaceItemBarcodes(SupplierItem item, IReadOnlyList<SupplierItemBarcode> newBarcodes);
+
+    /// <summary>
+    /// Replaces all images of <paramref name="item"/> with <paramref name="newImages"/> via
+    /// explicit RemoveRange/AddRange against the DbContext. See <see cref="ReplaceItemBarcodes"/>
+    /// for the rationale (BUG-018).
+    /// </summary>
+    void ReplaceItemImages(SupplierItem item, IReadOnlyList<SupplierItemImage> newImages);
+
     // ── Supplier cabinet (v4.1, ADR-016) ─────────────────────────────────────
 
     /// <summary>

@@ -614,6 +614,56 @@ public sealed class MarketplaceServiceTests
         Assert.Equal(new[] { "111", "222" }, item.Barcodes.Select(b => b.Barcode));
     }
 
+    /// <summary>
+    /// BUG-018 regression: updating an item that starts with ZERO images/barcodes and
+    /// supplying a non-empty ImageUrls/Barcodes list crashed in production with
+    /// DbUpdateConcurrencyException ("expected to affect 1 row(s), but actually affected
+    /// 0 row(s)") because the old code mutated item.Barcodes/item.Images navigation
+    /// collections in place on an already-tracked entity, and EF's change tracker
+    /// misjudged the new children as pre-existing UPDATE targets rather than INSERTs.
+    /// The fix routes replacement through explicit repo.ReplaceItemBarcodes/
+    /// ReplaceItemImages (RemoveRange/AddRange) instead. This test asserts both the
+    /// resulting DTO state and that the repo replace methods were invoked with an empty
+    /// "old" collection and the correct new rows — i.e. no UPDATE-shaped assumption.
+    /// </summary>
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_ZeroExistingBarcodesAndImages_PopulatesFirstTimeViaReplace()
+    {
+        var item = new SupplierItem { SupplierId = _supplierIdA, CustomName = "Milk 1L", IsAvailable = true };
+        Assert.Empty(item.Barcodes);
+        Assert.Empty(item.Images);
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto(null, null, null, null, null,
+                Barcodes: new List<string> { "111", "222" },
+                ImageUrls: new List<string> { "https://a/1.jpg", "https://a/2.jpg" }));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(new[] { "111", "222" }, item.Barcodes.Select(b => b.Barcode));
+        Assert.Equal(new[] { "https://a/1.jpg", "https://a/2.jpg" }, item.Images.Select(i => i.Url));
+
+        // Old collection passed to the repo must have been empty (nothing to remove),
+        // and the new rows must carry the item's Id/TenantId — proving this went through
+        // the explicit replace path rather than an in-place navigation-collection mutation.
+        _repo.Received(1).ReplaceItemBarcodes(item,
+            Arg.Is<IReadOnlyList<SupplierItemBarcode>>(list =>
+                list.Count == 2 &&
+                list[0].Barcode == "111" && list[0].Kind == "primary" &&
+                list[1].Barcode == "222" && list[1].Kind == "alternate" &&
+                list.All(b => b.SupplierItemId == item.Id)));
+
+        _repo.Received(1).ReplaceItemImages(item,
+            Arg.Is<IReadOnlyList<SupplierItemImage>>(list =>
+                list.Count == 2 &&
+                list[0].Url == "https://a/1.jpg" && list[0].Kind == "main" &&
+                list[1].Url == "https://a/2.jpg" && list[1].Kind == "gallery" &&
+                list.All(i => i.SupplierItemId == item.Id)));
+    }
+
     // ── GetSupplierProfileAsync — premium field gating ────────────────────────
 
     [Fact]

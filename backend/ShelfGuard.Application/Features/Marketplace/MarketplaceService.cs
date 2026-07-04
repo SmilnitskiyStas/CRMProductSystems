@@ -295,8 +295,12 @@ public sealed class MarketplaceService : IMarketplaceService
             WidthCm             = request.WidthCm,
         };
 
-        ReplaceBarcodes(item, request.Barcodes, supplier.TenantId);
-        ReplaceImages(item, request.ImageUrls, supplier.TenantId);
+        // New item: not yet tracked by the DbContext, so plain navigation-collection
+        // assignment is safe here — EF marks the whole graph Added on AddSupplierItemAsync.
+        foreach (var barcode in BuildBarcodes(item.Id, request.Barcodes, supplier.TenantId))
+            item.Barcodes.Add(barcode);
+        foreach (var image in BuildImages(item.Id, request.ImageUrls, supplier.TenantId))
+            item.Images.Add(image);
 
         await _repo.AddSupplierItemAsync(item, ct);
         await _repo.SaveChangesAsync(ct);
@@ -346,8 +350,28 @@ public sealed class MarketplaceService : IMarketplaceService
         if (request.DepthCm.HasValue)                 item.DepthCm       = request.DepthCm;
         if (request.WidthCm.HasValue)                 item.WidthCm       = request.WidthCm;
 
-        if (request.Barcodes is not null) ReplaceBarcodes(item, request.Barcodes, item.TenantId);
-        if (request.ImageUrls is not null) ReplaceImages(item, request.ImageUrls, item.TenantId);
+        // BUG-018: use explicit repo RemoveRange/AddRange instead of mutating the
+        // navigation collections in place. `item` here was loaded from the DB (tracked,
+        // Unchanged/Modified), so assigning new SupplierItemBarcode/SupplierItemImage
+        // objects (client-generated Guid keys) directly into item.Barcodes/item.Images
+        // is not reliably detected as EntityState.Added by EF's change tracker — it can
+        // instead be treated as an update to a pre-existing row, causing
+        // DbUpdateConcurrencyException when the item previously had zero rows.
+        if (request.Barcodes is not null)
+        {
+            var newBarcodes = BuildBarcodes(item.Id, request.Barcodes, item.TenantId).ToList();
+            _repo.ReplaceItemBarcodes(item, newBarcodes);
+            item.Barcodes.Clear();
+            foreach (var b in newBarcodes) item.Barcodes.Add(b);
+        }
+
+        if (request.ImageUrls is not null)
+        {
+            var newImages = BuildImages(item.Id, request.ImageUrls, item.TenantId).ToList();
+            _repo.ReplaceItemImages(item, newImages);
+            item.Images.Clear();
+            foreach (var img in newImages) item.Images.Add(img);
+        }
 
         await _repo.SaveChangesAsync(ct);
 
@@ -355,15 +379,14 @@ public sealed class MarketplaceService : IMarketplaceService
     }
 
     /// <summary>
-    /// Replaces item.Barcodes in-place from a plain string list: first entry becomes
+    /// Builds the barcode entities for a plain string list: first entry becomes
     /// 'primary', the rest 'alternate'. Null, blank, and duplicate (case-insensitive)
-    /// entries are skipped. No-op when <paramref name="barcodes"/> is null.
+    /// entries are skipped. Empty when <paramref name="barcodes"/> is null or empty.
     /// </summary>
-    private static void ReplaceBarcodes(SupplierItem item, List<string>? barcodes, Guid tenantId)
+    private static IEnumerable<SupplierItemBarcode> BuildBarcodes(
+        Guid supplierItemId, List<string>? barcodes, Guid tenantId)
     {
-        if (barcodes is null) return;
-
-        item.Barcodes.Clear();
+        if (barcodes is null) yield break;
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var isFirst = true;
@@ -373,27 +396,26 @@ public sealed class MarketplaceService : IMarketplaceService
             if (string.IsNullOrEmpty(trimmed)) continue;
             if (!seen.Add(trimmed)) continue;
 
-            item.Barcodes.Add(new SupplierItemBarcode
+            yield return new SupplierItemBarcode
             {
-                SupplierItemId = item.Id,
+                SupplierItemId = supplierItemId,
                 TenantId       = tenantId,
                 Barcode        = trimmed,
                 Kind           = isFirst ? "primary" : "alternate",
-            });
+            };
             isFirst = false;
         }
     }
 
     /// <summary>
-    /// Replaces item.Images in-place from a plain URL list: first entry becomes
+    /// Builds the image entities for a plain URL list: first entry becomes
     /// 'main' (SortOrder 0), the rest 'gallery' (SortOrder = list index). Null/blank
-    /// entries are skipped. No-op when <paramref name="imageUrls"/> is null.
+    /// entries are skipped. Empty when <paramref name="imageUrls"/> is null or empty.
     /// </summary>
-    private static void ReplaceImages(SupplierItem item, List<string>? imageUrls, Guid tenantId)
+    private static IEnumerable<SupplierItemImage> BuildImages(
+        Guid supplierItemId, List<string>? imageUrls, Guid tenantId)
     {
-        if (imageUrls is null) return;
-
-        item.Images.Clear();
+        if (imageUrls is null) yield break;
 
         var isFirst = true;
         var sortOrder = 0;
@@ -402,14 +424,14 @@ public sealed class MarketplaceService : IMarketplaceService
             var trimmed = raw?.Trim();
             if (string.IsNullOrEmpty(trimmed)) continue;
 
-            item.Images.Add(new SupplierItemImage
+            yield return new SupplierItemImage
             {
-                SupplierItemId = item.Id,
+                SupplierItemId = supplierItemId,
                 TenantId       = tenantId,
                 Url            = trimmed,
                 Kind           = isFirst ? "main" : "gallery",
                 SortOrder      = sortOrder,
-            });
+            };
             isFirst = false;
             sortOrder++;
         }

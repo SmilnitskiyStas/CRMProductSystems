@@ -212,6 +212,33 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
     public void RemoveSupplierItem(SupplierItem item) =>
         _db.SupplierItems.Remove(item);
 
+    // BUG-018: Barcodes/Images have client-generated Guid keys with HasDefaultValueSql
+    // ("gen_random_uuid()"). When new children are attached via navigation-collection
+    // mutation (item.Barcodes.Add(...)) on an already-tracked/Unchanged parent, EF's
+    // change tracker does not reliably infer EntityState.Added for them — it can treat
+    // them as pre-existing rows to UPDATE, producing a DbUpdateConcurrencyException
+    // ("expected to affect 1 row(s), but actually affected 0") when the item previously
+    // had zero rows. Explicit RemoveRange/AddRange against the DbSet sidesteps the
+    // ambiguity entirely: removed rows are always marked Deleted, added rows are always
+    // marked Added, regardless of the parent's tracking state.
+    public void ReplaceItemBarcodes(SupplierItem item, IReadOnlyList<SupplierItemBarcode> newBarcodes)
+    {
+        if (item.Barcodes.Count > 0)
+            _db.SupplierItemBarcodes.RemoveRange(item.Barcodes);
+
+        if (newBarcodes.Count > 0)
+            _db.SupplierItemBarcodes.AddRange(newBarcodes);
+    }
+
+    public void ReplaceItemImages(SupplierItem item, IReadOnlyList<SupplierItemImage> newImages)
+    {
+        if (item.Images.Count > 0)
+            _db.SupplierItemImages.RemoveRange(item.Images);
+
+        if (newImages.Count > 0)
+            _db.SupplierItemImages.AddRange(newImages);
+    }
+
     public async Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default)
     {
         // Provider bypass: a reviewing tenant must be able to resolve the supplier's
