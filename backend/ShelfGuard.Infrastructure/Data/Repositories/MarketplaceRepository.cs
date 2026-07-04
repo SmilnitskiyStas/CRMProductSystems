@@ -78,6 +78,8 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
         return await _db.SupplierItems
             .AsNoTracking()
             .Include(i => i.Item)
+            .Include(i => i.Barcodes)
+            .Include(i => i.Images)
             .Where(i => i.SupplierId == supplierId && i.IsAvailable)
             .OrderBy(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty))
             .ToListAsync(ct);
@@ -202,8 +204,10 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
 
     public Task<SupplierItem?> GetSupplierItemByIdAsync(
         Guid supplierId, Guid itemId, CancellationToken ct = default) =>
-        _db.SupplierItems.FirstOrDefaultAsync(
-            i => i.Id == itemId && i.SupplierId == supplierId, ct);
+        _db.SupplierItems
+            .Include(i => i.Barcodes)
+            .Include(i => i.Images)
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.SupplierId == supplierId, ct);
 
     public void RemoveSupplierItem(SupplierItem item) =>
         _db.SupplierItems.Remove(item);
@@ -256,6 +260,8 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
         await _db.SupplierItems
             .AsNoTracking()
             .Include(i => i.Item)
+            .Include(i => i.Barcodes)
+            .Include(i => i.Images)
             .Where(i => i.SupplierId == supplierId)
             .OrderBy(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty))
             .ToListAsync(ct);

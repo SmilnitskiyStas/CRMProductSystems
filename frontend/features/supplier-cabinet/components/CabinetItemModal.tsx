@@ -5,6 +5,11 @@ import { X } from "lucide-react";
 import { useAddCabinetItem, useUpdateCabinetItem } from "../hooks/useSupplierCabinet";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { ItemCategoryFields, findMissingRequiredField } from "@/features/marketplace/components/ItemCategoryFields";
+import {
+  SupplierItemExtraFields,
+  extraFieldsFromItem,
+  parseExtraFields,
+} from "@/features/marketplace/components/SupplierItemExtraFields";
 import type { CabinetItem } from "../types";
 
 interface Props {
@@ -48,6 +53,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
   const [attributes, setAttributes] = useState<Record<string, string>>(
     (item?.attributes as Record<string, string>) ?? {}
   );
+  const [extra, setExtra] = useState(() => extraFieldsFromItem(item));
   const [error, setError] = useState<string | null>(null);
   const { data: categories = [] } = useItemCategories();
 
@@ -80,12 +86,33 @@ export function CabinetItemModal({ item, onClose }: Props) {
       }
     }
 
+    const parsedExtra = parseExtraFields(extra);
+    if (parsedExtra.error !== null) {
+      setError(parsedExtra.error);
+      return;
+    }
+
     const onError = (err: unknown) =>
       setError(err instanceof Error ? err.message : "Помилка збереження товару.");
 
     const categoryFields = category
       ? { category, attributes: attributes as Record<string, unknown> }
       : {};
+
+    const extraFields = {
+      brand: parsedExtra.brand,
+      manufacturer: parsedExtra.manufacturer,
+      manufacturerCountry: parsedExtra.manufacturerCountry,
+      maxQty: parsedExtra.maxQty,
+      grossWeightKg: parsedExtra.grossWeightKg,
+      heightCm: parsedExtra.heightCm,
+      depthCm: parsedExtra.depthCm,
+      widthCm: parsedExtra.widthCm,
+      // Always send the current full list back on edit so an untouched list
+      // isn't wiped by the backend's patch semantics (omitted = untouched).
+      barcodes: parsedExtra.barcodes,
+      imageUrls: parsedExtra.imageUrls,
+    };
 
     if (isEdit) {
       updateItem.mutate(
@@ -98,6 +125,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
             unit: unit.trim() || undefined,
             isAvailable,
             ...categoryFields,
+            ...extraFields,
           },
         },
         { onSuccess: onClose, onError }
@@ -111,6 +139,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
           unit: unit.trim() || undefined,
           isAvailable,
           ...categoryFields,
+          ...extraFields,
         },
         { onSuccess: onClose, onError }
       );
@@ -139,7 +168,9 @@ export function CabinetItemModal({ item, onClose }: Props) {
           borderRadius: 12,
           padding: 28,
           width: "100%",
-          maxWidth: 440,
+          maxWidth: 560,
+          maxHeight: "90vh",
+          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 20,
@@ -222,6 +253,8 @@ export function CabinetItemModal({ item, onClose }: Props) {
               style={INPUT_STYLE}
             />
           </div>
+
+          <SupplierItemExtraFields value={extra} onChange={setExtra} />
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <input

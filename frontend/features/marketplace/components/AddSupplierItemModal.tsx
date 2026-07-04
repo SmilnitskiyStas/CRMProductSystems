@@ -4,6 +4,11 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { useAddSupplierItem, useItemCategories } from "../hooks/useMarketplace";
 import { ItemCategoryFields, findMissingRequiredField } from "./ItemCategoryFields";
+import {
+  SupplierItemExtraFields,
+  emptyExtraFields,
+  parseExtraFields,
+} from "./SupplierItemExtraFields";
 import type { AddSupplierItemRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
@@ -22,6 +27,7 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
   const [isAvailable, setIsAvailable] = useState(true);
   const [category, setCategory] = useState("");
   const [attributes, setAttributes] = useState<Record<string, string>>({});
+  const [extra, setExtra] = useState(emptyExtraFields());
   const [error, setError] = useState<string | null>(null);
   const { data: categories = [] } = useItemCategories();
 
@@ -54,6 +60,12 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
       }
     }
 
+    const parsedExtra = parseExtraFields(extra);
+    if (parsedExtra.error !== null) {
+      setError(parsedExtra.error);
+      return;
+    }
+
     const body: AddSupplierItemRequest = {
       customName: customName.trim(),
       price,
@@ -61,6 +73,16 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
       unit: unit.trim() || undefined,
       isAvailable,
       ...(category ? { category, attributes: attributes as Record<string, unknown> } : {}),
+      brand: parsedExtra.brand,
+      manufacturer: parsedExtra.manufacturer,
+      manufacturerCountry: parsedExtra.manufacturerCountry,
+      maxQty: parsedExtra.maxQty,
+      grossWeightKg: parsedExtra.grossWeightKg,
+      heightCm: parsedExtra.heightCm,
+      depthCm: parsedExtra.depthCm,
+      widthCm: parsedExtra.widthCm,
+      barcodes: parsedExtra.barcodes,
+      imageUrls: parsedExtra.imageUrls,
     };
 
     addItem.mutate(body, {
@@ -113,7 +135,9 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
           borderRadius: 12,
           padding: 28,
           width: "100%",
-          maxWidth: 440,
+          maxWidth: 560,
+          maxHeight: "90vh",
+          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 20,
@@ -198,6 +222,8 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
               style={inputStyle}
             />
           </div>
+
+          <SupplierItemExtraFields value={extra} onChange={setExtra} />
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <input

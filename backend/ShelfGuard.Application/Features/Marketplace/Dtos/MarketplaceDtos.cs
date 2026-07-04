@@ -44,7 +44,20 @@ public record SupplierItemDto(
     string? Unit,
     bool IsAvailable,
     string? Category = null,
-    Dictionary<string, object?>? Attributes = null);
+    Dictionary<string, object?>? Attributes = null,
+    string? Brand = null,
+    string? Manufacturer = null,
+    string? ManufacturerCountry = null,
+    int? MaxQty = null,
+    decimal? GrossWeightKg = null,
+    decimal? HeightCm = null,
+    decimal? DepthCm = null,
+    decimal? WidthCm = null,
+    IReadOnlyList<string>? Barcodes = null,
+    IReadOnlyList<SupplierItemImageDto>? Images = null);
+
+/// <summary>A single supplier-item image, ordered by SortOrder. Kind is 'main' | 'gallery'.</summary>
+public record SupplierItemImageDto(string Url, string Kind, int SortOrder);
 
 public record SupplierReviewCreateDto(int Rating, string? Comment);
 
@@ -89,9 +102,23 @@ public record AdminAddSupplierItemDto(
     string? Unit,
     bool IsAvailable,
     string? Category = null,
-    Dictionary<string, object?>? Attributes = null);
+    Dictionary<string, object?>? Attributes = null,
+    string? Brand = null,
+    string? Manufacturer = null,
+    string? ManufacturerCountry = null,
+    int? MaxQty = null,
+    decimal? GrossWeightKg = null,
+    decimal? HeightCm = null,
+    decimal? DepthCm = null,
+    decimal? WidthCm = null,
+    /// <summary>Plain barcode strings. First = primary, rest = alternate. Null/blank/duplicate entries are skipped.</summary>
+    List<string>? Barcodes = null,
+    /// <summary>Plain image URLs. First = main, rest = gallery (SortOrder = list index). Null/blank entries are skipped.</summary>
+    List<string>? ImageUrls = null);
 
-/// <summary>Patch-semantics item update — only non-null fields are applied.</summary>
+/// <summary>Patch-semantics item update — only non-null fields are applied.
+/// Barcodes/ImageUrls collections are only replaced when the corresponding list is
+/// explicitly provided (non-null); left untouched otherwise.</summary>
 public record AdminUpdateSupplierItemDto(
     string? CustomName,
     decimal? Price,
@@ -99,7 +126,17 @@ public record AdminUpdateSupplierItemDto(
     string? Unit,
     bool? IsAvailable,
     string? Category = null,
-    Dictionary<string, object?>? Attributes = null);
+    Dictionary<string, object?>? Attributes = null,
+    string? Brand = null,
+    string? Manufacturer = null,
+    string? ManufacturerCountry = null,
+    int? MaxQty = null,
+    decimal? GrossWeightKg = null,
+    decimal? HeightCm = null,
+    decimal? DepthCm = null,
+    decimal? WidthCm = null,
+    List<string>? Barcodes = null,
+    List<string>? ImageUrls = null);
 
 // ── Supplier cabinet (v4.1, TASK-284, ADR-016) ───────────────────────────────
 

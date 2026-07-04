@@ -200,7 +200,13 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
 
     private static SupplierItemDto ToItemDto(SupplierItem i) =>
         new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable,
-            i.Category, i.Attributes);
+            i.Category, i.Attributes,
+            i.Brand, i.Manufacturer, i.ManufacturerCountry, i.MaxQty,
+            i.GrossWeightKg, i.HeightCm, i.DepthCm, i.WidthCm,
+            i.Barcodes.OrderByDescending(b => b.Kind == "primary").ThenBy(b => b.CreatedAt)
+                      .Select(b => b.Barcode).ToList(),
+            i.Images.OrderBy(img => img.SortOrder)
+                    .Select(img => new SupplierItemImageDto(img.Url, img.Kind, img.SortOrder)).ToList());
 
     private static string[]? DeserializeStringArray(string? json)
     {

@@ -267,22 +267,36 @@ public sealed class MarketplaceService : IMarketplaceService
         if (categoryErrors.Count > 0)
             return (null, string.Join(" ", categoryErrors));
 
+        if (request.MinQty.HasValue && request.MaxQty.HasValue && request.MaxQty.Value < request.MinQty.Value)
+            return (null, "MaxQty must be greater than or equal to MinQty.");
+
         var supplier = await _repo.GetSupplierByRawIdAsync(supplierId, ct);
         if (supplier is null)
             return (null, "Supplier not found.");
 
         var item = new SupplierItem
         {
-            SupplierId  = supplierId,
-            TenantId    = supplier.TenantId,
-            CustomName  = request.CustomName.Trim(),
-            Price       = request.Price,
-            MinQty      = request.MinQty,
-            Unit        = request.Unit?.Trim(),
-            IsAvailable = request.IsAvailable,
-            Category    = request.Category,
-            Attributes  = request.Attributes,
+            SupplierId          = supplierId,
+            TenantId            = supplier.TenantId,
+            CustomName          = request.CustomName.Trim(),
+            Price               = request.Price,
+            MinQty              = request.MinQty,
+            Unit                = request.Unit?.Trim(),
+            IsAvailable         = request.IsAvailable,
+            Category            = request.Category,
+            Attributes          = request.Attributes,
+            Brand               = request.Brand?.Trim(),
+            Manufacturer        = request.Manufacturer?.Trim(),
+            ManufacturerCountry = request.ManufacturerCountry?.Trim(),
+            MaxQty              = request.MaxQty,
+            GrossWeightKg       = request.GrossWeightKg,
+            HeightCm            = request.HeightCm,
+            DepthCm             = request.DepthCm,
+            WidthCm             = request.WidthCm,
         };
+
+        ReplaceBarcodes(item, request.Barcodes, supplier.TenantId);
+        ReplaceImages(item, request.ImageUrls, supplier.TenantId);
 
         await _repo.AddSupplierItemAsync(item, ct);
         await _repo.SaveChangesAsync(ct);
@@ -310,6 +324,12 @@ public sealed class MarketplaceService : IMarketplaceService
         if (categoryErrors.Count > 0)
             return (null, string.Join(" ", categoryErrors));
 
+        // Validate the resulting MinQty/MaxQty state (existing values unless patched).
+        var effectiveMinQty = request.MinQty ?? item.MinQty;
+        var effectiveMaxQty = request.MaxQty ?? item.MaxQty;
+        if (effectiveMinQty.HasValue && effectiveMaxQty.HasValue && effectiveMaxQty.Value < effectiveMinQty.Value)
+            return (null, "MaxQty must be greater than or equal to MinQty.");
+
         if (request.CustomName is not null)      item.CustomName = request.CustomName.Trim();
         if (request.Price.HasValue)              item.Price       = request.Price;
         if (request.MinQty.HasValue)              item.MinQty      = request.MinQty;
@@ -317,10 +337,82 @@ public sealed class MarketplaceService : IMarketplaceService
         if (request.IsAvailable.HasValue)         item.IsAvailable = request.IsAvailable.Value;
         if (request.Category is not null)         item.Category    = request.Category;
         if (request.Attributes is not null)       item.Attributes  = request.Attributes;
+        if (request.Brand is not null)               item.Brand               = request.Brand.Trim();
+        if (request.Manufacturer is not null)        item.Manufacturer        = request.Manufacturer.Trim();
+        if (request.ManufacturerCountry is not null) item.ManufacturerCountry = request.ManufacturerCountry.Trim();
+        if (request.MaxQty.HasValue)                  item.MaxQty        = request.MaxQty;
+        if (request.GrossWeightKg.HasValue)           item.GrossWeightKg = request.GrossWeightKg;
+        if (request.HeightCm.HasValue)                item.HeightCm      = request.HeightCm;
+        if (request.DepthCm.HasValue)                 item.DepthCm       = request.DepthCm;
+        if (request.WidthCm.HasValue)                 item.WidthCm       = request.WidthCm;
+
+        if (request.Barcodes is not null) ReplaceBarcodes(item, request.Barcodes, item.TenantId);
+        if (request.ImageUrls is not null) ReplaceImages(item, request.ImageUrls, item.TenantId);
 
         await _repo.SaveChangesAsync(ct);
 
         return (ToItemDto(item), null);
+    }
+
+    /// <summary>
+    /// Replaces item.Barcodes in-place from a plain string list: first entry becomes
+    /// 'primary', the rest 'alternate'. Null, blank, and duplicate (case-insensitive)
+    /// entries are skipped. No-op when <paramref name="barcodes"/> is null.
+    /// </summary>
+    private static void ReplaceBarcodes(SupplierItem item, List<string>? barcodes, Guid tenantId)
+    {
+        if (barcodes is null) return;
+
+        item.Barcodes.Clear();
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var isFirst = true;
+        foreach (var raw in barcodes)
+        {
+            var trimmed = raw?.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+            if (!seen.Add(trimmed)) continue;
+
+            item.Barcodes.Add(new SupplierItemBarcode
+            {
+                SupplierItemId = item.Id,
+                TenantId       = tenantId,
+                Barcode        = trimmed,
+                Kind           = isFirst ? "primary" : "alternate",
+            });
+            isFirst = false;
+        }
+    }
+
+    /// <summary>
+    /// Replaces item.Images in-place from a plain URL list: first entry becomes
+    /// 'main' (SortOrder 0), the rest 'gallery' (SortOrder = list index). Null/blank
+    /// entries are skipped. No-op when <paramref name="imageUrls"/> is null.
+    /// </summary>
+    private static void ReplaceImages(SupplierItem item, List<string>? imageUrls, Guid tenantId)
+    {
+        if (imageUrls is null) return;
+
+        item.Images.Clear();
+
+        var isFirst = true;
+        var sortOrder = 0;
+        foreach (var raw in imageUrls)
+        {
+            var trimmed = raw?.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+
+            item.Images.Add(new SupplierItemImage
+            {
+                SupplierItemId = item.Id,
+                TenantId       = tenantId,
+                Url            = trimmed,
+                Kind           = isFirst ? "main" : "gallery",
+                SortOrder      = sortOrder,
+            });
+            isFirst = false;
+            sortOrder++;
+        }
     }
 
     public async Task<string?> AdminDeleteSupplierItemAsync(
@@ -371,7 +463,13 @@ public sealed class MarketplaceService : IMarketplaceService
 
     private static SupplierItemDto ToItemDto(SupplierItem i) =>
         new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable,
-            i.Category, i.Attributes);
+            i.Category, i.Attributes,
+            i.Brand, i.Manufacturer, i.ManufacturerCountry, i.MaxQty,
+            i.GrossWeightKg, i.HeightCm, i.DepthCm, i.WidthCm,
+            i.Barcodes.OrderByDescending(b => b.Kind == "primary").ThenBy(b => b.CreatedAt)
+                      .Select(b => b.Barcode).ToList(),
+            i.Images.OrderBy(img => img.SortOrder)
+                    .Select(img => new SupplierItemImageDto(img.Url, img.Kind, img.SortOrder)).ToList());
 
     private static SupplierReviewDto ToReviewDto(SupplierReview r) =>
         new(r.Id, r.Rating, r.Comment, r.CreatedAt);

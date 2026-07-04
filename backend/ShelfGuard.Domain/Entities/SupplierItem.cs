@@ -21,9 +21,23 @@ public sealed class SupplierItem
     public string? Category { get; set; }
     /// <summary>Category-specific attributes (e.g. oem_number, dosage, expiry_date). Null when Category is null.</summary>
     public Dictionary<string, object?>? Attributes { get; set; }
+
+    // ── Universal fields (apply regardless of Category) ────────────────────
+    public string? Brand { get; set; }
+    public string? Manufacturer { get; set; }
+    /// <summary>ISO 3166-1 alpha-2 country code, e.g. "HU", "UA".</summary>
+    public string? ManufacturerCountry { get; set; }
+    public int? MaxQty { get; set; }
+    public decimal? GrossWeightKg { get; set; }
+    public decimal? HeightCm { get; set; }
+    public decimal? DepthCm { get; set; }
+    public decimal? WidthCm { get; set; }
+
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
 
     public Supplier? Supplier { get; init; }
     public Tenant? Tenant { get; init; }
     public Item? Item { get; init; }
+    public ICollection<SupplierItemBarcode> Barcodes { get; init; } = new List<SupplierItemBarcode>();
+    public ICollection<SupplierItemImage> Images { get; init; } = new List<SupplierItemImage>();
 }

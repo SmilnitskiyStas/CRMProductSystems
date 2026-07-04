@@ -39,6 +39,13 @@ export interface CabinetProfileUpdateRequest {
   paymentTerms?: string;
 }
 
+/** Image of a supplier item. Ordered by sortOrder; kind "main" is the cover image. */
+export interface CabinetItemImage {
+  url: string;
+  kind: "main" | "gallery";
+  sortOrder: number;
+}
+
 /** Item of the own catalog (includes unavailable items). */
 export interface CabinetItem {
   id: string;
@@ -51,6 +58,18 @@ export interface CabinetItem {
   isAvailable: boolean;
   category: string | null;
   attributes: Record<string, unknown> | null;
+  brand: string | null;
+  manufacturer: string | null;
+  manufacturerCountry: string | null;
+  maxQty: number | null;
+  grossWeightKg: number | null;
+  heightCm: number | null;
+  depthCm: number | null;
+  widthCm: number | null;
+  /** Ordered primary-first; first entry is the primary barcode, rest are alternates. */
+  barcodes: string[];
+  /** Ordered by sortOrder; kind "main" is the cover image. */
+  images: CabinetItemImage[];
 }
 
 /** POST /api/supplier-cabinet/items */
@@ -62,9 +81,20 @@ export interface CabinetAddItemRequest {
   isAvailable: boolean;
   category?: string;
   attributes?: Record<string, unknown>;
+  brand?: string;
+  manufacturer?: string;
+  manufacturerCountry?: string;
+  maxQty?: number;
+  grossWeightKg?: number;
+  heightCm?: number;
+  depthCm?: number;
+  widthCm?: number;
+  barcodes?: string[];
+  imageUrls?: string[];
 }
 
-/** PUT /api/supplier-cabinet/items/{id} — patch semantics. */
+/** PUT /api/supplier-cabinet/items/{id} — patch semantics; barcodes/imageUrls
+ * are only replaced when explicitly sent (undefined = leave untouched). */
 export interface CabinetUpdateItemRequest {
   customName?: string;
   price?: number;
@@ -73,6 +103,16 @@ export interface CabinetUpdateItemRequest {
   isAvailable?: boolean;
   category?: string;
   attributes?: Record<string, unknown>;
+  brand?: string;
+  manufacturer?: string;
+  manufacturerCountry?: string;
+  maxQty?: number;
+  grossWeightKg?: number;
+  heightCm?: number;
+  depthCm?: number;
+  widthCm?: number;
+  barcodes?: string[];
+  imageUrls?: string[];
 }
 
 /** Review as returned by GET /api/supplier-cabinet/reviews (reviewer by display name). */

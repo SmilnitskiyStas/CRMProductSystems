@@ -91,6 +91,8 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierItem>    SupplierItems    => Set<SupplierItem>();
     public DbSet<SupplierMetrics> SupplierMetrics  => Set<SupplierMetrics>();
     public DbSet<SupplierReview>  SupplierReviews  => Set<SupplierReview>();
+    public DbSet<SupplierItemBarcode> SupplierItemBarcodes => Set<SupplierItemBarcode>();
+    public DbSet<SupplierItemImage>   SupplierItemImages   => Set<SupplierItemImage>();
 
     // v4 Phase 4 — Auto Service Module
     public DbSet<AsCustomer>      AsCustomers      => Set<AsCustomer>();
@@ -1045,6 +1047,14 @@ public sealed class AppDbContext : DbContext
                  v => v == null ? 0 : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null).GetHashCode(),
                  v => v == null ? null : JsonSerializer.Deserialize<Dictionary<string, object?>>(JsonSerializer.Serialize(v, (JsonSerializerOptions?)null), (JsonSerializerOptions?)null)));
             e.Property(i => i.CreatedAt).HasDefaultValueSql("NOW()");
+            // Universal fields (apply regardless of Category) — TASK-299
+            e.Property(i => i.Brand).HasColumnType("text");
+            e.Property(i => i.Manufacturer).HasColumnType("text");
+            e.Property(i => i.ManufacturerCountry).HasColumnType("text");
+            e.Property(i => i.GrossWeightKg).HasColumnType("numeric(10,3)");
+            e.Property(i => i.HeightCm).HasColumnType("numeric(10,2)");
+            e.Property(i => i.DepthCm).HasColumnType("numeric(10,2)");
+            e.Property(i => i.WidthCm).HasColumnType("numeric(10,2)");
             e.HasIndex(i => new { i.SupplierId, i.TenantId });
             e.HasIndex(i => i.ItemId);
             e.HasOne(i => i.Supplier).WithMany()
@@ -1053,6 +1063,43 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(i => i.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(i => i.Item).WithMany()
              .HasForeignKey(i => i.ItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(i => i.Barcodes).WithOne(b => b.SupplierItem)
+             .HasForeignKey(b => b.SupplierItemId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(i => i.Images).WithOne(img => img.SupplierItem)
+             .HasForeignKey(img => img.SupplierItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupplierItemBarcode (v4 Marketplace, universal fields) ─────────
+        builder.Entity<SupplierItemBarcode>(e =>
+        {
+            e.ToTable("supplier_item_barcodes");
+            e.HasKey(b => b.Id);
+            e.Property(b => b.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(b => b.Barcode).HasColumnType("text").IsRequired();
+            e.Property(b => b.Kind).HasColumnType("text").HasDefaultValue("primary");
+            e.Property(b => b.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(b => new { b.SupplierItemId, b.Barcode }).IsUnique();
+            e.HasIndex(b => b.TenantId);
+            e.HasOne(b => b.Tenant).WithMany()
+             .HasForeignKey(b => b.TenantId).OnDelete(DeleteBehavior.Restrict);
+            // SupplierItemId FK is wired via SupplierItem.HasMany above (Cascade)
+        });
+
+        // ── SupplierItemImage (v4 Marketplace, universal fields) ───────────
+        builder.Entity<SupplierItemImage>(e =>
+        {
+            e.ToTable("supplier_item_images");
+            e.HasKey(img => img.Id);
+            e.Property(img => img.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(img => img.Url).HasColumnType("text").IsRequired();
+            e.Property(img => img.Kind).HasColumnType("text").HasDefaultValue("gallery");
+            e.Property(img => img.SortOrder).HasDefaultValue(0);
+            e.Property(img => img.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(img => img.SupplierItemId);
+            e.HasIndex(img => img.TenantId);
+            e.HasOne(img => img.Tenant).WithMany()
+             .HasForeignKey(img => img.TenantId).OnDelete(DeleteBehavior.Restrict);
+            // SupplierItemId FK is wired via SupplierItem.HasMany above (Cascade)
         });
 
         // ── SupplierMetrics (v4 Marketplace) ───────────────────────────────

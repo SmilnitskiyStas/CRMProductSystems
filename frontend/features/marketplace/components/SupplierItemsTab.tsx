@@ -1,6 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { ImageOff, Barcode } from "lucide-react";
 import { useSupplierItems } from "../hooks/useMarketplace";
+import { SupplierItemDetailDialog } from "./SupplierItemDetailDialog";
+import type { SupplierItemDto } from "../types";
 
 interface Props {
   supplierId: string;
@@ -8,6 +12,7 @@ interface Props {
 
 export function SupplierItemsTab({ supplierId }: Props) {
   const { data, isLoading, isError } = useSupplierItems(supplierId);
+  const [detailItem, setDetailItem] = useState<SupplierItemDto | null>(null);
 
   if (isLoading) {
     return (
@@ -68,52 +73,118 @@ export function SupplierItemsTab({ supplierId }: Props) {
     borderBottom: "1px solid #1A2235",
   };
 
+  function moqRange(item: SupplierItemDto): string {
+    if (item.minQty == null && item.maxQty == null) return "—";
+    if (item.maxQty != null) return `${item.minQty ?? 1}–${item.maxQty}`;
+    return `${item.minQty ?? 1}+`;
+  }
+
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
+            <th style={headerCellStyle}></th>
             <th style={headerCellStyle}>Назва</th>
             <th style={{ ...headerCellStyle, textAlign: "right" }}>Ціна</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>Мін. замовл.</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>Мін./Макс.</th>
             <th style={headerCellStyle}>Од. вим.</th>
+            <th style={{ ...headerCellStyle, textAlign: "center" }}>Штрихкоди</th>
             <th style={{ ...headerCellStyle, textAlign: "center" }}>Наявність</th>
+            <th style={headerCellStyle}></th>
           </tr>
         </thead>
         <tbody>
-          {data.map((item) => (
-            <tr key={item.id}>
-              <td style={cellStyle}>{item.customName ?? item.itemName ?? "—"}</td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                {item.price != null
-                  ? item.price.toLocaleString("uk-UA", {
-                      style: "currency",
-                      currency: "UAH",
-                      minimumFractionDigits: 2,
-                    })
-                  : "—"}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>{item.minQty ?? "—"}</td>
-              <td style={{ ...cellStyle, color: "#9CA3AF" }}>{item.unit ?? "—"}</td>
-              <td style={{ ...cellStyle, textAlign: "center" }}>
-                <span
-                  style={{
-                    display: "inline-block",
-                    padding: "2px 8px",
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: item.isAvailable ? "#052e16" : "#1c1917",
-                    color: item.isAvailable ? "#4ADE80" : "#6B7280",
-                  }}
-                >
-                  {item.isAvailable ? "В наявності" : "Відсутній"}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {data.map((item) => {
+            const mainImage = item.images.find((i) => i.kind === "main") ?? item.images[0];
+            return (
+              <tr key={item.id}>
+                <td style={{ ...cellStyle, width: 40 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 6,
+                      background: "#111827",
+                      border: "1px solid #1F2937",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {mainImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={mainImage.url}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <ImageOff size={14} color="#4B5563" />
+                    )}
+                  </div>
+                </td>
+                <td style={cellStyle}>{item.customName ?? item.itemName ?? "—"}</td>
+                <td style={{ ...cellStyle, textAlign: "right" }}>
+                  {item.price != null
+                    ? item.price.toLocaleString("uk-UA", {
+                        style: "currency",
+                        currency: "UAH",
+                        minimumFractionDigits: 2,
+                      })
+                    : "—"}
+                </td>
+                <td style={{ ...cellStyle, textAlign: "right" }}>{moqRange(item)}</td>
+                <td style={{ ...cellStyle, color: "#9CA3AF" }}>{item.unit ?? "—"}</td>
+                <td style={{ ...cellStyle, textAlign: "center", color: "#9CA3AF" }}>
+                  {item.barcodes.length > 0 ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <Barcode size={13} /> {item.barcodes.length}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td style={{ ...cellStyle, textAlign: "center" }}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: item.isAvailable ? "#052e16" : "#1c1917",
+                      color: item.isAvailable ? "#4ADE80" : "#6B7280",
+                    }}
+                  >
+                    {item.isAvailable ? "В наявності" : "Відсутній"}
+                  </span>
+                </td>
+                <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button
+                    onClick={() => setDetailItem(item)}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid #374151",
+                      borderRadius: 7,
+                      color: "#9CA3AF",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "4px 10px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Детальніше
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+
+      <SupplierItemDetailDialog item={detailItem} onClose={() => setDetailItem(null)} />
     </div>
   );
 }

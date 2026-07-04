@@ -453,6 +453,167 @@ public sealed class MarketplaceServiceTests
         await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+    // ── MaxQty >= MinQty validation (TASK-299) ────────────────────────────────
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_MaxQtyLessThanMinQty_ReturnsError()
+    {
+        var supplier = MakeSupplier(_supplierIdA, "Supplier A");
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (item, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, MinQty: 10, "pcs", true, MaxQty: 5));
+
+        Assert.Null(item);
+        Assert.NotNull(error);
+        Assert.Contains("MaxQty", error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_MaxQtyGreaterThanOrEqualMinQty_Succeeds()
+    {
+        var supplier = MakeSupplier(_supplierIdA, "Supplier A");
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (item, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, MinQty: 10, "pcs", true, MaxQty: 10));
+
+        Assert.Null(error);
+        Assert.NotNull(item);
+        Assert.Equal(10, item!.MaxQty);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_MaxQtyLessThanMinQty_ReturnsError()
+    {
+        var item = new SupplierItem
+        {
+            SupplierId = _supplierIdA,
+            CustomName = "Milk 1L",
+            MinQty     = 10,
+            IsAvailable = true,
+        };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto(null, null, null, null, null, MaxQty: 5));
+
+        Assert.Null(dto);
+        Assert.NotNull(error);
+        Assert.Contains("MaxQty", error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_MaxQtyAgainstExistingMinQty_UsesEffectiveValues()
+    {
+        var item = new SupplierItem
+        {
+            SupplierId = _supplierIdA,
+            CustomName = "Milk 1L",
+            MinQty     = 10,
+            MaxQty     = 20,
+            IsAvailable = true,
+        };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        // Patches only MinQty to 25 — effective MaxQty (20, unchanged) is now < MinQty (25)
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto(null, null, MinQty: 25, null, null));
+
+        Assert.Null(dto);
+        Assert.NotNull(error);
+        Assert.Contains("MaxQty", error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    // ── Barcodes / Images replacement (TASK-299) ──────────────────────────────
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_Barcodes_FirstIsPrimaryRestAlternate_SkipsBlankAndDuplicate()
+    {
+        var supplier = MakeSupplier(_supplierIdA, "Supplier A");
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (item, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, null, "pcs", true,
+                Barcodes: new List<string> { "111", "", "  ", "222", "111" }));
+
+        Assert.Null(error);
+        Assert.NotNull(item);
+        Assert.Equal(new[] { "111", "222" }, item!.Barcodes);
+    }
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_ImageUrls_FirstIsMainRestGallery_OrderedBySortOrder()
+    {
+        var supplier = MakeSupplier(_supplierIdA, "Supplier A");
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns(supplier);
+
+        var (item, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, null, "pcs", true,
+                ImageUrls: new List<string> { "https://a/1.jpg", "", "https://a/2.jpg" }));
+
+        Assert.Null(error);
+        Assert.NotNull(item);
+        Assert.Equal(2, item!.Images.Count);
+        Assert.Equal("https://a/1.jpg", item.Images[0].Url);
+        Assert.Equal("main", item.Images[0].Kind);
+        Assert.Equal("https://a/2.jpg", item.Images[1].Url);
+        Assert.Equal("gallery", item.Images[1].Kind);
+        Assert.Equal(1, item.Images[1].SortOrder);
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_BarcodesNull_LeavesExistingBarcodesUntouched()
+    {
+        var item = new SupplierItem { SupplierId = _supplierIdA, CustomName = "Milk 1L", IsAvailable = true };
+        item.Barcodes.Add(new SupplierItemBarcode { SupplierItemId = item.Id, Barcode = "999", Kind = "primary" });
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto("Milk 2L", null, null, null, null));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Single(item.Barcodes);
+        Assert.Equal("999", item.Barcodes.Single().Barcode);
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_BarcodesProvided_ReplacesExisting()
+    {
+        var item = new SupplierItem { SupplierId = _supplierIdA, CustomName = "Milk 1L", IsAvailable = true };
+        item.Barcodes.Add(new SupplierItemBarcode { SupplierItemId = item.Id, Barcode = "999", Kind = "primary" });
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>())
+             .Returns(item);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id,
+            new AdminUpdateSupplierItemDto(null, null, null, null, null,
+                Barcodes: new List<string> { "111", "222" }));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(new[] { "111", "222" }, item.Barcodes.Select(b => b.Barcode));
+    }
+
     // ── GetSupplierProfileAsync — premium field gating ────────────────────────
 
     [Fact]

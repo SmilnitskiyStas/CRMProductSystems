@@ -42,6 +42,13 @@ export interface SupplierProfileDto {
   metrics: SupplierMetricsDto | null;
 }
 
+/** Image of a supplier item. Ordered by sortOrder; kind "main" is the cover image. */
+export interface SupplierItemImageDto {
+  url: string;
+  kind: "main" | "gallery";
+  sortOrder: number;
+}
+
 export interface SupplierItemDto {
   id: string;
   itemId: string | null;
@@ -53,6 +60,18 @@ export interface SupplierItemDto {
   isAvailable: boolean;
   category: string | null;
   attributes: Record<string, unknown> | null;
+  brand: string | null;
+  manufacturer: string | null;
+  manufacturerCountry: string | null;
+  maxQty: number | null;
+  grossWeightKg: number | null;
+  heightCm: number | null;
+  depthCm: number | null;
+  widthCm: number | null;
+  /** Ordered primary-first; first entry is the primary barcode, rest are alternates. */
+  barcodes: string[];
+  /** Ordered by sortOrder; kind "main" is the cover image. */
+  images: SupplierItemImageDto[];
 }
 
 // ─── Item categories (ADR-017 §4, TASK-296) ───────────────────────────────────
@@ -152,4 +171,37 @@ export interface AddSupplierItemRequest {
   isAvailable: boolean;
   category?: string;
   attributes?: Record<string, unknown>;
+  brand?: string;
+  manufacturer?: string;
+  manufacturerCountry?: string;
+  maxQty?: number;
+  grossWeightKg?: number;
+  heightCm?: number;
+  depthCm?: number;
+  widthCm?: number;
+  /** First = primary barcode, rest = alternates. */
+  barcodes?: string[];
+  /** First = main image, rest = gallery. */
+  imageUrls?: string[];
+}
+
+/** Patch-semantics update — barcodes/imageUrls are only replaced when explicitly sent. */
+export interface UpdateSupplierItemRequest {
+  customName?: string;
+  price?: number;
+  minQty?: number;
+  unit?: string;
+  isAvailable?: boolean;
+  category?: string;
+  attributes?: Record<string, unknown>;
+  brand?: string;
+  manufacturer?: string;
+  manufacturerCountry?: string;
+  maxQty?: number;
+  grossWeightKg?: number;
+  heightCm?: number;
+  depthCm?: number;
+  widthCm?: number;
+  barcodes?: string[];
+  imageUrls?: string[];
 }

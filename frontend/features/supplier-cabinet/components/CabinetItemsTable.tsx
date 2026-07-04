@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, ImageOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { useCabinetItems, useDeleteCabinetItem } from "../hooks/useSupplierCabinet";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { CabinetItemModal } from "./CabinetItemModal";
+import { SupplierItemDetailDialog } from "@/features/marketplace/components/SupplierItemDetailDialog";
 import type { CabinetItem } from "../types";
+import type { SupplierItemDto } from "@/features/marketplace/types";
 
 const HEADER_CELL: React.CSSProperties = {
   padding: "10px 14px",
@@ -34,6 +36,7 @@ export function CabinetItemsTable() {
   const [modal, setModal] = useState<{ open: boolean; item?: CabinetItem }>({ open: false });
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [detailItem, setDetailItem] = useState<SupplierItemDto | null>(null);
 
   if (isLoading) {
     return (
@@ -101,6 +104,7 @@ export function CabinetItemsTable() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
+                <th style={HEADER_CELL}></th>
                 <th style={HEADER_CELL}>Назва</th>
                 <th style={{ ...HEADER_CELL, textAlign: "right" }}>Ціна</th>
                 <th style={{ ...HEADER_CELL, textAlign: "right" }}>Мін. замовл.</th>
@@ -112,6 +116,35 @@ export function CabinetItemsTable() {
             <tbody>
               {data.map((item) => (
                 <tr key={item.id}>
+                  <td style={{ ...CELL, width: 40 }}>
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 6,
+                        background: "#0D1117",
+                        border: "1px solid #1F2937",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {(() => {
+                        const mainImage = item.images.find((i) => i.kind === "main") ?? item.images[0];
+                        return mainImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={mainImage.url}
+                            alt=""
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <ImageOff size={14} color="#4B5563" />
+                        );
+                      })()}
+                    </div>
+                  </td>
                   <td style={CELL}>
                     {item.customName ?? item.itemName ?? "—"}
                     {item.category && (
@@ -158,6 +191,23 @@ export function CabinetItemsTable() {
                     </span>
                   </td>
                   <td style={{ ...CELL, textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button
+                      title="Детальніше"
+                      onClick={() => setDetailItem(item as unknown as SupplierItemDto)}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid #374151",
+                        borderRadius: 7,
+                        color: "#9CA3AF",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: "4px 8px",
+                        cursor: "pointer",
+                        marginRight: 6,
+                      }}
+                    >
+                      Деталі
+                    </button>
                     <button
                       title="Редагувати"
                       onClick={() => setModal({ open: true, item })}
@@ -232,6 +282,8 @@ export function CabinetItemsTable() {
       {modal.open && (
         <CabinetItemModal item={modal.item} onClose={() => setModal({ open: false })} />
       )}
+
+      <SupplierItemDetailDialog item={detailItem} onClose={() => setDetailItem(null)} />
     </div>
   );
 }
