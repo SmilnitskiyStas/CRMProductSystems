@@ -152,6 +152,15 @@ public record CabinetProfileUpdateDto(
     string? WorkingHours,
     string? PaymentTerms);
 
+// ── Supplier cabinet staff management (self-service) ─────────────────────────
+
+/// <summary>Invite request for a new staff member of the caller's own supplier tenant.
+/// Role is always forced to supplier_admin server-side — no role choice is exposed here.</summary>
+public record CabinetInviteStaffDto(
+    string Email,
+    string FullName,
+    string Password);
+
 // ── Public reviews (v4.1, TASK-285) ──────────────────────────────────────────
 
 /// <summary>Public review representation — reviewer exposed by display name only (no tenant id).</summary>

@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Features.Users.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
+using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
 
@@ -167,6 +169,53 @@ public sealed class SupplierCabinetController : ControllerBase
 
         var (metrics, error) = await _cabinet.GetMetricsAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(metrics);
+    }
+
+    // ── Staff management (self-service) ─────────────────────────────────────────
+
+    /// <summary>Lists all staff/team members of the caller's own tenant.</summary>
+    [HttpGet("staff")]
+    [ProducesResponseType(typeof(IReadOnlyList<UserDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetStaff(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var staff = await _cabinet.GetStaffAsync(tenantId.Value, ct);
+        return Ok(staff);
+    }
+
+    /// <summary>Invites a new staff member into the own tenant. Always created as supplier_admin.</summary>
+    [HttpPost("staff")]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> InviteStaff(
+        [FromBody] CabinetInviteStaffDto request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var inviterName = User.FindFirst("full_name")?.Value
+                       ?? User.FindFirst(ClaimTypes.Name)?.Value
+                       ?? User.FindFirst(ClaimTypes.Email)?.Value
+                       ?? "Unknown";
+
+        var (user, error) = await _cabinet.InviteStaffAsync(tenantId.Value, request, inviterName, ct);
+        if (user is null) return BadRequest(new { error });
+        return StatusCode(StatusCodes.Status201Created, user);
+    }
+
+    /// <summary>Deactivates a staff member of the own tenant (soft delete).</summary>
+    [HttpDelete("staff/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeactivateStaff(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var error = await _cabinet.DeactivateStaffAsync(tenantId.Value, id, ct);
+        return error is null ? NoContent() : NotFound(new { error });
     }
 
     private Guid? ResolveTenantId()

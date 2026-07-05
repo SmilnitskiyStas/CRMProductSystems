@@ -196,7 +196,7 @@ const NAV_GROUPS: NavGroup[] = [
 // client (the backend already gates /api/supplier-cabinet with marketplace_supplier).
 const SUPPLIER_NAV_GROUP: NavGroup = {
   key: "supplier_cabinet",
-  label: "Кабінет постачальника",
+  label: "Кабінет",
   icon: <Store size={18} />,
   items: [
     { href: "/supplier/profile", label: "Профіль",    icon: <Store size={16} />,        roles: SUPPLIER_ONLY },

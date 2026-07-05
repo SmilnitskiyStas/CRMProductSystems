@@ -1,6 +1,7 @@
 "use client";
 
 import { CabinetProfileForm } from "@/features/supplier-cabinet/components/CabinetProfileForm";
+import { CabinetStaffPanel } from "@/features/supplier-cabinet/components/CabinetStaffPanel";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { SUPPLIER_ONLY, hasRole } from "@/lib/roles";
 
@@ -25,7 +26,17 @@ export default function SupplierProfilePage() {
           Заповніть профіль і опублікуйте його, щоб з&apos;явитися в маркетплейсі
         </p>
       </div>
-      <CabinetProfileForm />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 24,
+        }}
+        className="lg:grid-cols-2"
+      >
+        <CabinetProfileForm />
+        <CabinetStaffPanel />
+      </div>
     </div>
   );
 }

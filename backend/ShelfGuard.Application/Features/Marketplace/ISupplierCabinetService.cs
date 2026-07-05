@@ -1,4 +1,5 @@
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Features.Users.Dtos;
 
 namespace ShelfGuard.Application.Features.Marketplace;
 
@@ -38,4 +39,19 @@ public interface ISupplierCabinetService
 
     Task<(SupplierMetricsDto? Metrics, string? Error)> GetMetricsAsync(
         Guid tenantId, CancellationToken ct = default);
+
+    // ── Staff management (self-service) ──────────────────────────────────────
+
+    /// <summary>Lists all staff/team members of the caller's own tenant.</summary>
+    Task<IReadOnlyList<UserDto>> GetStaffAsync(Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>Invites a new staff member into the caller's own tenant, always as supplier_admin.</summary>
+    Task<(UserDto? User, string? Error)> InviteStaffAsync(
+        Guid tenantId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deactivates a staff member. Returns an error (and does nothing) if the target
+    /// user does not belong to the caller's own tenant.
+    /// </summary>
+    Task<string?> DeactivateStaffAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
 }

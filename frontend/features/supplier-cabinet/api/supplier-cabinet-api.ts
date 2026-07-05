@@ -8,7 +8,9 @@ import type {
   CabinetReview,
   CabinetMetrics,
   PagedResult,
+  CabinetInviteStaffRequest,
 } from "../types";
+import type { UserDto } from "@/features/users/types";
 
 const BASE = "/api/supplier-cabinet";
 
@@ -45,4 +47,14 @@ export const supplierCabinetApi = {
 
   /** GET /api/supplier-cabinet/metrics */
   getMetrics: () => api.get<CabinetMetrics>(`${BASE}/metrics`),
+
+  /** GET /api/supplier-cabinet/staff */
+  getStaff: () => api.get<UserDto[]>(`${BASE}/staff`),
+
+  /** POST /api/supplier-cabinet/staff */
+  inviteStaff: (body: CabinetInviteStaffRequest) =>
+    api.post<UserDto>(`${BASE}/staff`, body),
+
+  /** DELETE /api/supplier-cabinet/staff/{id} */
+  deactivateStaff: (id: string) => api.delete<void>(`${BASE}/staff/${id}`),
 };

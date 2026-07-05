@@ -33,7 +33,7 @@ export function CabinetReviews() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div>
       {/* Rating summary */}
       <div
         style={{

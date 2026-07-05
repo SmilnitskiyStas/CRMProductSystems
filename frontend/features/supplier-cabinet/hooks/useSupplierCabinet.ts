@@ -6,6 +6,7 @@ import type {
   CabinetProfileUpdateRequest,
   CabinetAddItemRequest,
   CabinetUpdateItemRequest,
+  CabinetInviteStaffRequest,
 } from "../types";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ export const CABINET_KEYS = {
   items: ["supplier-cabinet", "items"] as const,
   reviews: (page: number) => ["supplier-cabinet", "reviews", page] as const,
   metrics: ["supplier-cabinet", "metrics"] as const,
+  staff: ["supplier-cabinet", "staff"] as const,
 };
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -108,5 +110,36 @@ export function useCabinetMetrics() {
     queryFn: supplierCabinetApi.getMetrics,
     staleTime: 30_000,
     retry: false,
+  });
+}
+
+// ─── Staff ────────────────────────────────────────────────────────────────────
+
+export function useCabinetStaff() {
+  return useQuery({
+    queryKey: CABINET_KEYS.staff,
+    queryFn: supplierCabinetApi.getStaff,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useInviteCabinetStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CabinetInviteStaffRequest) => supplierCabinetApi.inviteStaff(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_KEYS.staff });
+    },
+  });
+}
+
+export function useDeactivateCabinetStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => supplierCabinetApi.deactivateStaff(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_KEYS.staff });
+    },
   });
 }

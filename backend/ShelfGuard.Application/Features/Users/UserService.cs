@@ -15,6 +15,7 @@ public sealed class UserService : IUserService
     [
         "enterprise_admin", "network_manager", "store_manager",
         "merchandiser", "storekeeper", "cashier",
+        "supplier_admin",
     ];
 
     /// <summary>

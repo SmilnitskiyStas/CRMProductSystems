@@ -131,3 +131,10 @@ export interface PagedResult<T> {
   page: number;
   pageSize: number;
 }
+
+/** POST /api/supplier-cabinet/staff — invite a new staff member for the supplier tenant. */
+export interface CabinetInviteStaffRequest {
+  email: string;
+  fullName: string;
+  password: string;
+}

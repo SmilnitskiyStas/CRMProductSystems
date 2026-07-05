@@ -132,7 +132,6 @@ export function CabinetProfileForm() {
         border: "1px solid #1F2937",
         borderRadius: 12,
         padding: "24px 28px",
-        maxWidth: 720,
       }}
     >
       {/* Header: name + plan + publish state */}

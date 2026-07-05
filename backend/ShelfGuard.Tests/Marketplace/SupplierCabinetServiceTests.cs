@@ -1,6 +1,8 @@
 using NSubstitute;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Features.Users;
+using ShelfGuard.Application.Features.Users.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 using Xunit;
@@ -16,12 +18,13 @@ public sealed class SupplierCabinetServiceTests
 {
     private readonly IMarketplaceRepository _repo   = Substitute.For<IMarketplaceRepository>();
     private readonly IMarketplaceService _marketplace = Substitute.For<IMarketplaceService>();
+    private readonly IUserService _userService = Substitute.For<IUserService>();
     private readonly SupplierCabinetService _sut;
 
     private readonly Guid _tenantId = Guid.NewGuid();
 
     public SupplierCabinetServiceTests() =>
-        _sut = new SupplierCabinetService(_repo, _marketplace);
+        _sut = new SupplierCabinetService(_repo, _marketplace, _userService);
 
     private (SupplierProfile Profile, Supplier Supplier) ArrangeOwnSupplier(bool isPublic = false)
     {
@@ -201,14 +204,42 @@ public sealed class SupplierCabinetServiceTests
     public async Task GetReviewsAsync_DelegatesWithResolvedSupplierId()
     {
         var (_, supplier) = ArrangeOwnSupplier();
-        var paged = new PagedResult<PublicSupplierReviewDto>([], 0, 1, 20);
-        _marketplace.GetSupplierReviewsAsync(supplier.Id, 1, 20, Arg.Any<CancellationToken>())
-                    .Returns(paged);
+        var review = new SupplierReview { SupplierId = supplier.Id, Rating = 5, Comment = "Great" };
+        _repo.GetReviewsBySupplierAsync(supplier.Id, 1, 20, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierReview, string)> { (review, "Reviewer Co") });
+        _repo.CountReviewsBySupplierAsync(supplier.Id, Arg.Any<CancellationToken>())
+             .Returns(1);
 
         var (reviews, error) = await _sut.GetReviewsAsync(_tenantId, 1, 20);
 
         Assert.Null(error);
-        Assert.Same(paged, reviews);
+        Assert.NotNull(reviews);
+        Assert.Equal(1, reviews!.Total);
+        var item = Assert.Single(reviews.Items);
+        Assert.Equal("Reviewer Co", item.ReviewerName);
+        await _repo.Received(1).GetReviewsBySupplierAsync(supplier.Id, 1, 20, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetReviewsAsync_UnpublishedSupplier_ReturnsEmptyPagedResult_NotNull()
+    {
+        // Bug fix: cabinet reviews must not go through the public IsPublic gate.
+        // An unpublished supplier's own cabinet should see an empty paged result
+        // (never null) when it has zero reviews.
+        var (_, supplier) = ArrangeOwnSupplier(isPublic: false);
+        _repo.GetReviewsBySupplierAsync(supplier.Id, 1, 20, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierReview, string)>());
+        _repo.CountReviewsBySupplierAsync(supplier.Id, Arg.Any<CancellationToken>())
+             .Returns(0);
+
+        var (reviews, error) = await _sut.GetReviewsAsync(_tenantId, 1, 20);
+
+        Assert.Null(error);
+        Assert.NotNull(reviews);
+        Assert.Empty(reviews!.Items);
+        Assert.Equal(0, reviews.Total);
+        await _marketplace.DidNotReceive().GetSupplierReviewsAsync(
+            Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -286,5 +317,72 @@ public sealed class SupplierCabinetServiceTests
         await _repo.DidNotReceive().GetTenantOnboardingInfoAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await _repo.DidNotReceive().GetOrCreateOwnerManagedProfileAsync(
             Arg.Any<Supplier>(), Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── Staff management (self-service) ───────────────────────────────────────
+
+    private static UserDto MakeUserDto(Guid? id = null, string role = "supplier_admin") => new(
+        id ?? Guid.NewGuid(), "teammate@example.com", "Teammate", null, role,
+        null, true, false, DateTime.UtcNow, null);
+
+    [Fact]
+    public async Task GetStaffAsync_DelegatesToUserServiceWithTenantId()
+    {
+        var users = new List<UserDto> { MakeUserDto() };
+        _userService.GetAllAsync(_tenantId, Arg.Any<CancellationToken>()).Returns(users);
+
+        var result = await _sut.GetStaffAsync(_tenantId);
+
+        Assert.Same(users, result);
+        await _userService.Received(1).GetAllAsync(_tenantId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InviteStaffAsync_AlwaysForcesSupplierAdminRole()
+    {
+        InviteUserRequest? captured = null;
+        _userService.InviteAsync(_tenantId, Arg.Do<InviteUserRequest>(r => captured = r), "Owner", Arg.Any<CancellationToken>())
+                     .Returns((MakeUserDto(), (string?)null));
+
+        var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123");
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.NotNull(captured);
+        Assert.Equal("supplier_admin", captured!.Role);
+        Assert.Equal("new@example.com", captured.Email);
+        Assert.Equal("New Teammate", captured.FullName);
+        Assert.Null(captured.StoreId);
+    }
+
+    [Fact]
+    public async Task DeactivateStaffAsync_UserBelongsToOwnTenant_Deactivates()
+    {
+        var userId = Guid.NewGuid();
+        _userService.GetByIdAsync(_tenantId, userId, Arg.Any<CancellationToken>())
+                     .Returns((MakeUserDto(userId), (string?)null));
+        _userService.DeactivateAsync(_tenantId, userId, Arg.Any<CancellationToken>())
+                     .Returns((string?)null);
+
+        var error = await _sut.DeactivateStaffAsync(_tenantId, userId);
+
+        Assert.Null(error);
+        await _userService.Received(1).DeactivateAsync(_tenantId, userId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeactivateStaffAsync_UserFromAnotherTenant_ReturnsError_DoesNotDeactivate()
+    {
+        var userId = Guid.NewGuid();
+        // GetByIdAsync is tenant-scoped in UserService — a foreign user resolves to "not found".
+        _userService.GetByIdAsync(_tenantId, userId, Arg.Any<CancellationToken>())
+                     .Returns(((UserDto?)null, "User not found."));
+
+        var error = await _sut.DeactivateStaffAsync(_tenantId, userId);
+
+        Assert.Equal("User not found.", error);
+        await _userService.DidNotReceive().DeactivateAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

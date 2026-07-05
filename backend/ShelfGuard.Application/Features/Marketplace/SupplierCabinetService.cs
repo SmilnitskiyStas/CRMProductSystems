@@ -1,5 +1,8 @@
 using System.Text.Json;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Features.Users;
+using ShelfGuard.Application.Features.Users.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -18,11 +21,14 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
 
     private readonly IMarketplaceRepository _repo;
     private readonly IMarketplaceService _marketplace;
+    private readonly IUserService _users;
 
-    public SupplierCabinetService(IMarketplaceRepository repo, IMarketplaceService marketplace)
+    public SupplierCabinetService(
+        IMarketplaceRepository repo, IMarketplaceService marketplace, IUserService users)
     {
         _repo        = repo;
         _marketplace = marketplace;
+        _users       = users;
     }
 
     // ── Profile ───────────────────────────────────────────────────────────────
@@ -135,9 +141,22 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
         var resolved = await ResolveAsync(tenantId, ct);
         if (resolved is null) return (null, CabinetNotAvailableError);
 
-        var reviews = await _marketplace.GetSupplierReviewsAsync(
-            resolved.Value.Supplier.Id, page, pageSize, ct);
-        return (reviews, null);
+        // Unlike the public marketplace endpoint (IMarketplaceService.GetSupplierReviewsAsync),
+        // the cabinet must NOT gate on IsPublic — an owner viewing their own reviews tab is
+        // already tenant-scoped via ResolveAsync above, and must see their own reviews (even
+        // zero of them) regardless of publish status. Go straight to the repository instead of
+        // routing through the public, publish-gated method (see bug fix, TASK reviews-cabinet-bug).
+        var supplierId = resolved.Value.Supplier.Id;
+
+        var rows  = await _repo.GetReviewsBySupplierAsync(supplierId, page, pageSize, ct);
+        var total = await _repo.CountReviewsBySupplierAsync(supplierId, ct);
+
+        var items = rows
+            .Select(r => new PublicSupplierReviewDto(
+                r.Review.Id, r.Review.Rating, r.Review.Comment, r.Review.CreatedAt, r.ReviewerName))
+            .ToList();
+
+        return (new PagedResult<PublicSupplierReviewDto>(items, total, page, pageSize), null);
     }
 
     public async Task<(SupplierMetricsDto? Metrics, string? Error)> GetMetricsAsync(
@@ -153,6 +172,33 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
         return (new SupplierMetricsDto(
             m.Rating, m.AvgDeliveryDays, m.OrderAccuracy, m.QualityScore,
             m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt), null);
+    }
+
+    // ── Staff management (self-service) ──────────────────────────────────────
+
+    public Task<IReadOnlyList<UserDto>> GetStaffAsync(Guid tenantId, CancellationToken ct = default) =>
+        _users.GetAllAsync(tenantId, ct);
+
+    public Task<(UserDto? User, string? Error)> InviteStaffAsync(
+        Guid tenantId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default)
+    {
+        // Role is never accepted from the client — suppliers don't need finer role
+        // granularity for MVP, every invited teammate is a supplier_admin.
+        var inviteRequest = new InviteUserRequest(
+            request.Email, request.FullName, AppRoles.SupplierAdmin, request.Password);
+
+        return _users.InviteAsync(tenantId, inviteRequest, inviterName, ct);
+    }
+
+    public async Task<string?> DeactivateStaffAsync(
+        Guid tenantId, Guid userId, CancellationToken ct = default)
+    {
+        // Verify the target belongs to the caller's own tenant before deactivating —
+        // never trust a client-supplied id to cross tenant boundaries.
+        var (user, error) = await _users.GetByIdAsync(tenantId, userId, ct);
+        if (user is null) return error ?? "User not found.";
+
+        return await _users.DeactivateAsync(tenantId, userId, ct);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
