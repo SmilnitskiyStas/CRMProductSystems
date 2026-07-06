@@ -35,6 +35,9 @@ import {
   Calendar,
   LifeBuoy,
   Building2,
+  HeartHandshake,
+  ShoppingBag,
+  FileText,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -134,6 +137,9 @@ const NAV_GROUPS: NavGroup[] = [
     moduleKey: "marketplace",
     items: [
       { href: "/marketplace", label: "Постачальники", icon: <Store size={16} />, exact: true, permission: "marketplace" },
+      // Клієнтські marketplace-замовлення (TASK-318) — тільки tenant-ролі:
+      // провайдерська команда і supplier_admin не мають своїх замовлень.
+      { href: "/marketplace/orders", label: "Мої замовлення", icon: <ShoppingBag size={16} />, roles: TENANT_ROLES },
     ],
   },
   {
@@ -216,6 +222,12 @@ const SUPPLIER_NAV_GROUP: NavGroup = {
     { href: "/supplier/tasks",   label: "Завдання",    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
     { href: "/supplier/clients", label: "Клієнти",     icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
     { href: "/supplier/team",    label: "Команда",     icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
+    // Cooperation flow (TASK-318) — без permission-ключів: у довіднику
+    // supplierPermissions поки немає відповідних прав, бекенд гейтить сам.
+    { href: "/supplier/requests",          label: "Заявки на співпрацю", icon: <HeartHandshake size={16} />, roles: SUPPLIER_ONLY },
+    { href: "/supplier/orders",            label: "Замовлення",          icon: <ShoppingBag size={16} />, roles: SUPPLIER_ONLY },
+    { href: "/supplier/contract-settings", label: "Реквізити договору",  icon: <FileText size={16} />,    roles: SUPPLIER_ONLY },
+    { href: "/supplier/support",           label: "Підтримка",           icon: <LifeBuoy size={16} />,    roles: SUPPLIER_ONLY },
   ],
 };
 

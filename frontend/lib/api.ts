@@ -1,6 +1,6 @@
 // Shared API client. Adds Authorization header, handles 401 → refresh → retry.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
 export class ApiError extends Error {
   constructor(

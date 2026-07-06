@@ -1,4 +1,39 @@
-# Current Sprint — v4.2 «Supplier Categories & Navigation» (started 2026-07-03)
+# Current Sprint — v4.3 «Supplier Cooperation & Marketplace Orders» (started 2026-07-06)
+
+Клієнт бачить каталог/рейтинг/відгуки постачальника публічно (як зараз). Для замовлень —
+заявка на співпрацю → постачальник схвалює → генерується договір (PDF: реквізити, підпис,
+мокра печатка) → підписання через Вчасно або скачування для фізичного підпису → статус
+active відкриває marketplace-замовлення. Консультація — існуючий чат; питання — тікети
+підтримки постачальника.
+
+## TASK-316 — DB: cooperation schema (agreements, orders, tickets, contract settings)
+**Status:** done (2026-07-06) · **Agent:** database-engineer · **Depends:** —
+Log: `.claude/logs/tasks/316_2026-07-06_cooperation-schema_database-engineer.md`
+6 таблиць + two-tenant RLS + партіальний unique index (одна live-угода на пару).
+Міграція `20260706155440_SupplierCooperation`. Build green, міграція не застосована.
+
+## TASK-317 — Backend: agreements + contract PDF (QuestPDF) + Вчасно + orders + support tickets
+**Status:** done (2026-07-06) · **Agent:** backend-developer · **Depends:** TASK-316
+Log: `.claude/logs/tasks/317_2026-07-06_cooperation-backend_backend-developer.md`
+Handoff: `.claude/logs/handoffs/317-to-318_frontend-developer.md` (усі ендпоінти + DTO shapes)
+Сервіси: заявка клієнта / рішення постачальника / генерація договору з реквізитами,
+підписом і печаткою / надсилання у Вчасно (per-tenant ключ через integration_configs) /
+скачування PDF; marketplace-замовлення з гейтом «тільки active agreement»; тікети підтримки.
+Build 0 errors, 639/639 tests green. QuestPDF + DejaVu Sans (кирилиця OK).
+
+## TASK-318 — Frontend: client cooperation UX + supplier cabinet (requests, contract settings, orders, support)
+**Status:** done (2026-07-07) · **Agent:** frontend-developer · **Depends:** TASK-317
+Log: `.claude/logs/tasks/318_2026-07-06_cooperation-frontend_frontend-developer.md` (два проходи)
+Клієнт: статус/заявка/договір/підтримка на `/marketplace/[id]`, кошик → замовлення
+(лише active agreement), нова `/marketplace/orders` (таби Замовлення/Співпраця) +
+sidebar «Мої замовлення». Кабінет: 4 нові сторінки `/supplier/requests` (approve/
+reject/договір/Вчасно/mark-signed/terminate), `/supplier/contract-settings` (реквізити
++ upload підпису/печатки), `/supplier/orders` (переходи статусів), `/supplier/support`
+(тікети+тред) + 4 пункти в supplier-nav. `tsc --noEmit` чисто, `npm run build` green.
+Не покрито: ручний E2E повного флоу проти бекенду — кандидат на QA-задачу.
+
+---
+# Previous sprint — v4.2 «Supplier Categories & Navigation» (started 2026-07-03)
 
 Архітектура: ADR-017 (`.claude/docs/decisions.md`). Feature A: provider-панель `/provider`
 дістає таб-спліт «Клієнти» / «Постачальники» над існуючим списком тенантів (client-side

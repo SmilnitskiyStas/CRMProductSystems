@@ -122,6 +122,14 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierChatSession> SupplierChatSessions => Set<SupplierChatSession>();
     public DbSet<SupplierChatMessage> SupplierChatMessages => Set<SupplierChatMessage>();
 
+    // Supplier cooperation: agreements, marketplace orders, support tickets (TASK-316)
+    public DbSet<SupplierContractSettings> SupplierContractSettings => Set<SupplierContractSettings>();
+    public DbSet<SupplierAgreement> SupplierAgreements => Set<SupplierAgreement>();
+    public DbSet<MarketplaceOrder> MarketplaceOrders => Set<MarketplaceOrder>();
+    public DbSet<MarketplaceOrderItem> MarketplaceOrderItems => Set<MarketplaceOrderItem>();
+    public DbSet<SupplierSupportTicket> SupplierSupportTickets => Set<SupplierSupportTicket>();
+    public DbSet<SupplierSupportTicketMessage> SupplierSupportTicketMessages => Set<SupplierSupportTicketMessage>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -1566,6 +1574,163 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.IsRead).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(x => x.SessionId);
+            e.HasIndex(x => x.CreatedAt);
+        });
+
+        // ── SupplierContractSettings (TASK-316) ───────────────────────────────
+        builder.Entity<SupplierContractSettings>(e =>
+        {
+            e.ToTable("supplier_contract_settings");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.LegalName).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Edrpou).HasMaxLength(20).IsRequired(false);
+            e.Property(x => x.Iban).HasMaxLength(40).IsRequired(false);
+            e.Property(x => x.BankName).HasMaxLength(300).IsRequired(false);
+            e.Property(x => x.LegalAddress).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.DirectorName).HasMaxLength(300).IsRequired(false);
+            e.Property(x => x.Phone).HasMaxLength(30).IsRequired(false);
+            e.Property(x => x.Email).HasMaxLength(255).IsRequired(false);
+            e.Property(x => x.ServiceName).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.ServiceDescription).HasMaxLength(4000).IsRequired(false);
+            e.Property(x => x.SignatureImageUrl).HasMaxLength(1000).IsRequired(false);
+            e.Property(x => x.StampImageUrl).HasMaxLength(1000).IsRequired(false);
+            e.Property(x => x.IsVatPayer).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.TenantId).IsUnique();
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupplierAgreement (TASK-316) ──────────────────────────────────────
+        builder.Entity<SupplierAgreement>(e =>
+        {
+            e.ToTable("supplier_agreements");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("pending").IsRequired();
+            e.Property(x => x.RequestMessage).HasMaxLength(2000).IsRequired(false);
+            e.Property(x => x.RejectionReason).HasMaxLength(2000).IsRequired(false);
+            e.Property(x => x.ContractNumber).HasMaxLength(100).IsRequired(false);
+            e.Property(x => x.ContractFilePath).HasMaxLength(1000).IsRequired(false);
+            e.Property(x => x.VchasnoDocumentId).HasMaxLength(200).IsRequired(false);
+            e.Property(x => x.RequestedAt).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.SupplierTenantId);
+            e.HasIndex(x => x.ClientTenantId);
+            // One live agreement per (supplier, client) pair — rejected/terminated
+            // rows don't block a new request.
+            e.HasIndex(x => new { x.SupplierTenantId, x.ClientTenantId })
+             .IsUnique()
+             .HasFilter("\"Status\" NOT IN ('rejected', 'terminated')");
+            // Mirrors supplier_chat_sessions: supplier CASCADE, client RESTRICT
+            // (avoids the multiple-cascade-path conflict on tenants).
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.SupplierTenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── MarketplaceOrder (TASK-316) ───────────────────────────────────────
+        builder.Entity<MarketplaceOrder>(e =>
+        {
+            e.ToTable("marketplace_orders");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.OrderNumber).HasMaxLength(50).IsRequired();
+            e.Property(x => x.AgreementId).IsRequired();
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("new").IsRequired();
+            e.Property(x => x.Comment).HasMaxLength(2000).IsRequired(false);
+            e.Property(x => x.CancelReason).HasMaxLength(2000).IsRequired(false);
+            e.Property(x => x.TotalAmount).HasColumnType("numeric(14,2)").HasDefaultValue(0m);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.SupplierTenantId);
+            e.HasIndex(x => x.ClientTenantId);
+            e.HasIndex(x => x.AgreementId);
+            e.HasOne(x => x.Agreement).WithMany()
+             .HasForeignKey(x => x.AgreementId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.SupplierTenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(x => x.Items)
+             .WithOne(x => x.Order)
+             .HasForeignKey(x => x.OrderId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── MarketplaceOrderItem (TASK-316) ───────────────────────────────────
+        builder.Entity<MarketplaceOrderItem>(e =>
+        {
+            e.ToTable("marketplace_order_items");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.OrderId).IsRequired();
+            // Denormalised copies of the parent order's tenant pair — lets the
+            // RLS policy filter without a join (explicit-columns approach).
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.ItemName).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Unit).HasMaxLength(50).IsRequired(false);
+            e.Property(x => x.Price).HasColumnType("numeric(12,2)");
+            e.Property(x => x.Qty).HasColumnType("numeric(12,3)");
+            e.Property(x => x.LineTotal).HasColumnType("numeric(14,2)");
+            e.HasIndex(x => x.OrderId);
+            e.HasOne<SupplierItem>().WithMany()
+             .HasForeignKey(x => x.SupplierItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── SupplierSupportTicket (TASK-316) ──────────────────────────────────
+        builder.Entity<SupplierSupportTicket>(e =>
+        {
+            e.ToTable("supplier_support_tickets");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.Subject).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("open").IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.SupplierTenantId);
+            e.HasIndex(x => x.ClientTenantId);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.SupplierTenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(x => x.Messages)
+             .WithOne(x => x.Ticket)
+             .HasForeignKey(x => x.TicketId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupplierSupportTicketMessage (TASK-316) ───────────────────────────
+        builder.Entity<SupplierSupportTicketMessage>(e =>
+        {
+            e.ToTable("supplier_support_ticket_messages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TicketId).IsRequired();
+            e.Property(x => x.SenderTenantId).IsRequired();
+            e.Property(x => x.SenderUserId).IsRequired();
+            e.Property(x => x.Body).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.IsRead).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.TicketId);
             e.HasIndex(x => x.CreatedAt);
         });
     }

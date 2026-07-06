@@ -190,3 +190,48 @@ GET    /api/iot/temperature?store_id=      [CanViewStock]        -> LatestTemper
 }
 ```
 isOnline = lastSeenAt within 30 minutes.
+
+---
+
+### Supplier Cooperation + Marketplace Orders + Supplier Support (v4.3 — TASK-317)
+
+Client side (`[Authorize]` + module `marketplace`; `{supplierId}` = public marketplace supplier id):
+```
+POST /api/marketplace/suppliers/{supplierId}/cooperation-requests  { message? }        -> 201 CooperationAgreementDto | 409 (live agreement exists) | 404 | 400
+GET  /api/marketplace/cooperation                                                      -> CooperationAgreementDto[]
+GET  /api/marketplace/cooperation/{id}/contract                                        -> application/pdf | 400 | 404
+POST /api/marketplace/suppliers/{supplierId}/orders  { items:[{supplierItemId,qty}], comment? }
+                                                                                       -> 201 MarketplaceOrderDto | 403 (no ACTIVE agreement) | 400 | 404
+GET  /api/marketplace/my-orders                                                        -> MarketplaceOrderDto[]
+POST /api/marketplace/orders/{id}/cancel  { reason }                                   -> MarketplaceOrderDto | 400 (only status=new) | 404
+POST /api/marketplace/suppliers/{supplierId}/support-tickets  { subject, message }     -> 201 SupplierSupportTicketDto (no agreement required)
+GET  /api/marketplace/my-support-tickets                                               -> SupplierSupportTicketDto[]
+GET  /api/marketplace/support-tickets/{id}                                             -> SupplierSupportTicketDto (with messages) | 404
+POST /api/marketplace/support-tickets/{id}/messages  { body }                          -> 201 SupportTicketMessageDto | 400 | 404
+```
+
+Supplier cabinet (`SupplierCabinet` policy + module `marketplace_supplier`):
+```
+GET  /api/supplier-cabinet/cooperation-requests?status=            -> CooperationAgreementDto[]
+POST /api/supplier-cabinet/cooperation-requests/{id}/approve       -> dto | 400 (contract settings incomplete) | 404
+POST /api/supplier-cabinet/cooperation-requests/{id}/reject        { reason } -> dto
+POST /api/supplier-cabinet/cooperation-requests/{id}/regenerate-contract      -> dto (awaiting_signature only)
+POST /api/supplier-cabinet/cooperation-requests/{id}/send-to-vchasno          -> dto | 400 «Інтеграцію Вчасно не налаштовано.»
+POST /api/supplier-cabinet/cooperation-requests/{id}/mark-signed   -> dto (awaiting_signature -> active)
+POST /api/supplier-cabinet/cooperation-requests/{id}/terminate     { reason? } -> dto (active -> terminated)
+GET  /api/supplier-cabinet/cooperation-requests/{id}/contract      -> application/pdf
+GET|PUT /api/supplier-cabinet/contract-settings                    -> SupplierContractSettingsDto (PUT body: UpsertContractSettingsDto, legalName required)
+POST /api/supplier-cabinet/contract-settings/signature-image|stamp-image  multipart file png/jpg <=2MB -> { imageUrl }
+GET  /api/supplier-cabinet/orders                                  -> MarketplaceOrderDto[]
+POST /api/supplier-cabinet/orders/{id}/status  { status, reason? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled, shipped->delivered; cancel requires reason
+GET  /api/supplier-cabinet/support-tickets                         -> SupplierSupportTicketDto[]
+GET  /api/supplier-cabinet/support-tickets/{id}                    -> dto with messages
+POST /api/supplier-cabinet/support-tickets/{id}/messages  { body } -> 201 SupportTicketMessageDto
+POST /api/supplier-cabinet/support-tickets/{id}/status  { status } -> dto (open|in_progress|resolved|closed)
+```
+
+Key DTOs (`Features/Marketplace/Dtos/CooperationDtos.cs`): full shapes in
+`.claude/logs/handoffs/317-to-318_frontend-developer.md`. Contract numbers «ДС-{yyyy}-{NNN}»,
+order numbers «MP-{yyyy}-{NNN}» — sequential per supplier. Termination reason is stored in
+`rejectionReason`. Вчасно integration: `PUT /api/integrations/vchasno` with config `{ "api_key" }`
+(masked on GET like ПРРО secrets).

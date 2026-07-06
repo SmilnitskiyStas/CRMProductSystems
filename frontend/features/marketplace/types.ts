@@ -203,6 +203,113 @@ export interface SendSupplierChatMessageRequest {
   body: string;
 }
 
+// ─── Cooperation agreements / marketplace orders / support tickets (TASK-318) ──
+// Matches backend DTOs: ShelfGuard.Application/Features/Marketplace/Dtos/CooperationDtos.cs
+// (handoff .claude/logs/handoffs/317-to-318_frontend-developer.md).
+
+export type CooperationStatus =
+  | "pending"
+  | "rejected"
+  | "awaiting_signature"
+  | "active"
+  | "terminated";
+
+export interface CooperationAgreementDto {
+  id: string;
+  supplierTenantId: string;
+  clientTenantId: string;
+  supplierName: string;
+  clientName: string;
+  status: CooperationStatus;
+  requestMessage: string | null;
+  /** Причина відмови АБО причина розірвання. */
+  rejectionReason: string | null;
+  /** «ДС-2026-001» */
+  contractNumber: string | null;
+  hasContractFile: boolean;
+  vchasnoDocumentId: string | null;
+  requestedAt: string;
+  decidedAt?: string | null;
+  signedAt?: string | null;
+  terminatedAt?: string | null;
+}
+
+export interface CreateCooperationRequestBody {
+  message?: string;
+}
+
+export type MarketplaceOrderStatus =
+  | "new"
+  | "confirmed"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+/** Line item snapshot at order time. */
+export interface MarketplaceOrderItemDto {
+  id: string;
+  supplierItemId: string | null;
+  itemName: string;
+  unit: string | null;
+  price: number;
+  qty: number;
+  lineTotal: number;
+}
+
+export interface MarketplaceOrderDto {
+  id: string;
+  /** «MP-2026-001» */
+  orderNumber: string;
+  agreementId: string;
+  supplierTenantId: string;
+  clientTenantId: string;
+  supplierName: string;
+  clientName: string;
+  status: MarketplaceOrderStatus;
+  comment: string | null;
+  cancelReason: string | null;
+  totalAmount: number;
+  createdAt: string;
+  updatedAt: string;
+  items: MarketplaceOrderItemDto[];
+}
+
+export interface CreateMarketplaceOrderRequest {
+  items: { supplierItemId: string; qty: number }[];
+  comment?: string;
+}
+
+export type SupportTicketStatus = "open" | "in_progress" | "resolved" | "closed";
+
+export interface SupportTicketMessageDto {
+  id: string;
+  ticketId: string;
+  senderTenantId: string;
+  senderUserId: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface SupplierSupportTicketDto {
+  id: string;
+  supplierTenantId: string;
+  clientTenantId: string;
+  supplierName: string;
+  clientName: string;
+  subject: string;
+  status: SupportTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  /** null у списках; заповнено в GET одного тікета (старіші перші). */
+  messages: SupportTicketMessageDto[] | null;
+}
+
+export interface CreateSupportTicketRequest {
+  subject: string;
+  message: string;
+}
+
 /** Patch-semantics update — barcodes/imageUrls are only replaced when explicitly sent. */
 export interface UpdateSupplierItemRequest {
   customName?: string;

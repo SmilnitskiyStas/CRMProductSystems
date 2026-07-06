@@ -8,9 +8,72 @@ import type { SupplierItemDto } from "../types";
 
 interface Props {
   supplierId: string;
+  /** Коли задано (активна угода про співпрацю) — рядки отримують поле
+   * кількості та кнопку «Додати» до кошика (TASK-318). */
+  onAddToCart?: (item: SupplierItemDto, qty: number) => void;
 }
 
-export function SupplierItemsTab({ supplierId }: Props) {
+/** Qty input + «Додати» — per-row local UI state (respects minQty/maxQty). */
+function AddToCartCell({
+  item,
+  onAdd,
+}: {
+  item: SupplierItemDto;
+  onAdd: (item: SupplierItemDto, qty: number) => void;
+}) {
+  const [qty, setQty] = useState(item.minQty ?? 1);
+
+  function clamp(v: number): number {
+    let q = Math.max(1, Math.round(v));
+    if (item.minQty != null && q < item.minQty) q = item.minQty;
+    if (item.maxQty != null && q > item.maxQty) q = item.maxQty;
+    return q;
+  }
+
+  if (!item.isAvailable) return null;
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <input
+        type="number"
+        value={qty}
+        min={item.minQty ?? 1}
+        max={item.maxQty ?? undefined}
+        onChange={(e) => setQty(Number(e.target.value) || 1)}
+        onBlur={() => setQty((q) => clamp(q))}
+        style={{
+          width: 62,
+          background: "#1F2937",
+          border: "1px solid #374151",
+          borderRadius: 6,
+          color: "#E8EDF5",
+          fontSize: 12,
+          padding: "4px 8px",
+          outline: "none",
+          textAlign: "right",
+        }}
+      />
+      <button
+        onClick={() => onAdd(item, clamp(qty))}
+        style={{
+          background: "#1D3461",
+          border: "1px solid #3B82F6",
+          borderRadius: 7,
+          color: "#93C5FD",
+          fontSize: 12,
+          fontWeight: 600,
+          padding: "4px 10px",
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Додати
+      </button>
+    </span>
+  );
+}
+
+export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
   const { data, isLoading, isError } = useSupplierItems(supplierId);
   const [detailItem, setDetailItem] = useState<SupplierItemDto | null>(null);
 
@@ -162,6 +225,11 @@ export function SupplierItemsTab({ supplierId }: Props) {
                   </span>
                 </td>
                 <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+                  {onAddToCart && (
+                    <span style={{ marginRight: 8 }}>
+                      <AddToCartCell item={item} onAdd={onAddToCart} />
+                    </span>
+                  )}
                   <button
                     onClick={() => setDetailItem(item)}
                     style={{

@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, MessageCircle } from "lucide-react";
+import { ChevronLeft, FileDown, HeartHandshake, LifeBuoy, MessageCircle } from "lucide-react";
 import { useParams } from "next/navigation";
+import { toast } from "sonner";
 import { useSupplier, useSupplierReviewCount } from "@/features/marketplace/hooks/useMarketplace";
+import { useMyCooperation } from "@/features/marketplace/hooks/useCooperation";
+import { marketplaceApi } from "@/features/marketplace/api/marketplace-api";
 import { reviewWord } from "@/features/marketplace/utils";
 import { SupplierMetrics } from "@/features/marketplace/components/SupplierMetrics";
 import { SupplierItemsTab } from "@/features/marketplace/components/SupplierItemsTab";
@@ -13,9 +16,14 @@ import { AddSupplierItemModal } from "@/features/marketplace/components/AddSuppl
 import { SupplierChatPanel } from "@/features/marketplace/components/SupplierChatPanel";
 import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
 import { StarRating } from "@/features/marketplace/components/StarRating";
+import { AgreementStatusBadge } from "@/features/marketplace/components/CooperationBadges";
+import { CooperationRequestModal } from "@/features/marketplace/components/CooperationRequestModal";
+import { SupplierOrderCart, type CartLine } from "@/features/marketplace/components/SupplierOrderCart";
+import { SupportTicketsPanel } from "@/features/marketplace/components/SupportTicketsPanel";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { PROVIDER_TEAM } from "@/lib/roles";
+import { PROVIDER_TEAM, TENANT_ROLES, type AppRole } from "@/lib/roles";
 import { Btn } from "@/components/ui/Btn";
+import type { SupplierItemDto } from "@/features/marketplace/types";
 
 type ActiveTab = "catalog" | "reviews";
 
@@ -24,11 +32,51 @@ export default function SupplierProfilePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("catalog");
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [cooperationModalOpen, setCooperationModalOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [cart, setCart] = useState<CartLine[]>([]);
 
   const { data: supplier, isLoading, isError } = useSupplier(id);
   const { data: reviewCount } = useSupplierReviewCount(id);
   const { data: me } = useMe();
   const isProviderTeam = PROVIDER_TEAM.has(me?.role as any);
+  // Cooperation/orders/support — тільки клієнтські tenant-ролі: провайдерська
+  // команда і supplier_admin (власний кабінет постачальника) не подають заявки.
+  const isClientTenant = Boolean(me && TENANT_ROLES.has(me.role as AppRole));
+
+  // Мої угоди: supplierTenantId ≠ публічний supplierId, тому зіставляємо за
+  // назвою постачальника (handoff 317→318). Список — новіші перші, беремо першу.
+  const { data: agreements } = useMyCooperation(isClientTenant);
+  const agreement = supplier
+    ? agreements?.find((a) => a.supplierName === supplier.supplierName)
+    : undefined;
+  const cooperationActive = agreement?.status === "active";
+
+  function handleAddToCart(item: SupplierItemDto, qty: number) {
+    setCart((prev) => {
+      const existing = prev.find((l) => l.item.id === item.id);
+      if (existing) {
+        return prev.map((l) => (l.item.id === item.id ? { ...l, qty: l.qty + qty } : l));
+      }
+      return [...prev, { item, qty }];
+    });
+    toast.success("Додано до кошика");
+  }
+
+  function handleUpdateQty(supplierItemId: string, qty: number) {
+    setCart((prev) => prev.map((l) => (l.item.id === supplierItemId ? { ...l, qty } : l)));
+  }
+
+  function handleRemoveLine(supplierItemId: string) {
+    setCart((prev) => prev.filter((l) => l.item.id !== supplierItemId));
+  }
+
+  function handleDownloadContract() {
+    if (!agreement) return;
+    marketplaceApi
+      .downloadAgreementContract(agreement.id, agreement.contractNumber)
+      .catch((err) => toast.error(err.message));
+  }
 
   if (isLoading) {
     return (
@@ -128,6 +176,9 @@ export default function SupplierProfilePage() {
               {supplier.supplierName}
             </h1>
             <PlanBadge plan={supplier.plan} />
+            {isClientTenant && agreement && (
+              <AgreementStatusBadge status={agreement.status} />
+            )}
             <Btn
               size="sm"
               icon={<MessageCircle size={13} />}
@@ -135,7 +186,57 @@ export default function SupplierProfilePage() {
             >
               Написати постачальнику
             </Btn>
+            {isClientTenant && (
+              <Btn
+                size="sm"
+                variant="ghost"
+                icon={<LifeBuoy size={13} />}
+                onClick={() => setSupportOpen(true)}
+              >
+                Служба підтримки
+              </Btn>
+            )}
+            {isClientTenant &&
+              (!agreement ||
+                agreement.status === "rejected" ||
+                agreement.status === "terminated") && (
+                <Btn
+                  size="sm"
+                  variant="success"
+                  icon={<HeartHandshake size={13} />}
+                  onClick={() => setCooperationModalOpen(true)}
+                >
+                  Подати заявку на співпрацю
+                </Btn>
+              )}
+            {isClientTenant &&
+              agreement &&
+              (agreement.status === "awaiting_signature" || agreement.status === "active") &&
+              agreement.hasContractFile && (
+                <Btn
+                  size="sm"
+                  variant="ghost"
+                  icon={<FileDown size={13} />}
+                  onClick={handleDownloadContract}
+                >
+                  Завантажити договір
+                </Btn>
+              )}
           </div>
+          {isClientTenant && agreement?.status === "awaiting_signature" && (
+            <div style={{ color: "#FBBF24", fontSize: 12, marginBottom: 8 }}>
+              Підпишіть договір через Вчасно або фізично — постачальник підтвердить
+              підписання, після чого відкриються замовлення.
+            </div>
+          )}
+          {isClientTenant &&
+            agreement &&
+            (agreement.status === "rejected" || agreement.status === "terminated") &&
+            agreement.rejectionReason && (
+              <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
+                Причина: {agreement.rejectionReason}
+              </div>
+            )}
           <div style={{ color: "#6B7280", fontSize: 13, marginBottom: 10 }}>
             {supplier.region}
           </div>
@@ -287,9 +388,24 @@ export default function SupplierProfilePage() {
           padding: 24,
         }}
       >
-        {activeTab === "catalog" && <SupplierItemsTab supplierId={id} />}
+        {activeTab === "catalog" && (
+          <SupplierItemsTab
+            supplierId={id}
+            onAddToCart={isClientTenant && cooperationActive ? handleAddToCart : undefined}
+          />
+        )}
         {activeTab === "reviews" && <SupplierReviewsTab supplierId={id} />}
       </div>
+
+      {isClientTenant && cooperationActive && (
+        <SupplierOrderCart
+          supplierId={id}
+          cart={cart}
+          onUpdateQty={handleUpdateQty}
+          onRemove={handleRemoveLine}
+          onClear={() => setCart([])}
+        />
+      )}
 
       {addItemModalOpen && (
         <AddSupplierItemModal
@@ -303,6 +419,22 @@ export default function SupplierProfilePage() {
           supplierId={id}
           supplierName={supplier.supplierName}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+
+      {cooperationModalOpen && (
+        <CooperationRequestModal
+          supplierId={id}
+          supplierName={supplier.supplierName}
+          onClose={() => setCooperationModalOpen(false)}
+        />
+      )}
+
+      {supportOpen && (
+        <SupportTicketsPanel
+          supplierId={id}
+          supplierName={supplier.supplierName}
+          onClose={() => setSupportOpen(false)}
         />
       )}
     </div>

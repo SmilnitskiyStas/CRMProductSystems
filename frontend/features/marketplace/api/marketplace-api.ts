@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { downloadFile } from "@/lib/download";
 import type {
   SupplierListItemDto,
   SupplierProfileDto,
@@ -14,6 +15,13 @@ import type {
   SupplierItemCategoryDto,
   SupplierChatMessageDto,
   SendSupplierChatMessageRequest,
+  CooperationAgreementDto,
+  CreateCooperationRequestBody,
+  MarketplaceOrderDto,
+  CreateMarketplaceOrderRequest,
+  SupplierSupportTicketDto,
+  SupportTicketMessageDto,
+  CreateSupportTicketRequest,
 } from "../types";
 
 export const marketplaceApi = {
@@ -95,4 +103,61 @@ export const marketplaceApi = {
   /** POST /api/marketplace/suppliers/{id}/chat/messages */
   sendSupplierChatMessage: (supplierId: string, body: SendSupplierChatMessageRequest) =>
     api.post<SupplierChatMessageDto>(`/api/marketplace/suppliers/${supplierId}/chat/messages`, body),
+
+  // ── Cooperation agreements (TASK-318) ──────────────────────────────────────
+
+  /** POST /api/marketplace/suppliers/{id}/cooperation-requests — 409 = уже є жива угода */
+  createCooperationRequest: (supplierId: string, body: CreateCooperationRequestBody) =>
+    api.post<CooperationAgreementDto>(
+      `/api/marketplace/suppliers/${supplierId}/cooperation-requests`,
+      body
+    ),
+
+  /** GET /api/marketplace/cooperation — мої угоди, новіші перші */
+  getMyCooperation: () =>
+    api.get<CooperationAgreementDto[]>("/api/marketplace/cooperation"),
+
+  /** GET /api/marketplace/cooperation/{agreementId}/contract — download PDF */
+  downloadAgreementContract: (agreementId: string, contractNumber: string | null) =>
+    downloadFile(
+      `/api/marketplace/cooperation/${agreementId}/contract`,
+      `Договір_${contractNumber ?? agreementId}.pdf`
+    ),
+
+  // ── Marketplace orders (TASK-318) ──────────────────────────────────────────
+
+  /** POST /api/marketplace/suppliers/{id}/orders — 403 без активного договору */
+  createOrder: (supplierId: string, body: CreateMarketplaceOrderRequest) =>
+    api.post<MarketplaceOrderDto>(`/api/marketplace/suppliers/${supplierId}/orders`, body),
+
+  /** GET /api/marketplace/my-orders */
+  getMyOrders: () => api.get<MarketplaceOrderDto[]>("/api/marketplace/my-orders"),
+
+  /** POST /api/marketplace/orders/{orderId}/cancel — лише зі статусу new */
+  cancelOrder: (orderId: string, reason: string) =>
+    api.post<MarketplaceOrderDto>(`/api/marketplace/orders/${orderId}/cancel`, { reason }),
+
+  // ── Support tickets (TASK-318, без угоди — відкрито всім клієнтам) ──────────
+
+  /** POST /api/marketplace/suppliers/{id}/support-tickets */
+  createSupportTicket: (supplierId: string, body: CreateSupportTicketRequest) =>
+    api.post<SupplierSupportTicketDto>(
+      `/api/marketplace/suppliers/${supplierId}/support-tickets`,
+      body
+    ),
+
+  /** GET /api/marketplace/my-support-tickets — messages = null */
+  getMySupportTickets: () =>
+    api.get<SupplierSupportTicketDto[]>("/api/marketplace/my-support-tickets"),
+
+  /** GET /api/marketplace/support-tickets/{ticketId} — з messages (старіші перші) */
+  getSupportTicket: (ticketId: string) =>
+    api.get<SupplierSupportTicketDto>(`/api/marketplace/support-tickets/${ticketId}`),
+
+  /** POST /api/marketplace/support-tickets/{ticketId}/messages */
+  sendSupportTicketMessage: (ticketId: string, body: string) =>
+    api.post<SupportTicketMessageDto>(
+      `/api/marketplace/support-tickets/${ticketId}/messages`,
+      { body }
+    ),
 };

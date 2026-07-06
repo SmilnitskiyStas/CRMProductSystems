@@ -1,4 +1,13 @@
 import { api } from "@/lib/api";
+import { downloadFile } from "@/lib/download";
+import type {
+  CooperationAgreementDto,
+  CooperationStatus,
+  MarketplaceOrderDto,
+  SupplierSupportTicketDto,
+  SupportTicketMessageDto,
+  SupportTicketStatus,
+} from "@/features/marketplace/types";
 import type {
   CabinetProfile,
   CabinetProfileUpdateRequest,
@@ -23,6 +32,9 @@ import type {
   SupplierChatSessionDto,
   SupplierChatMessageDto,
   SendSupplierChatMessageRequest,
+  SupplierContractSettingsDto,
+  UpsertContractSettingsRequest,
+  UpdateMarketplaceOrderStatusRequest,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 
@@ -130,4 +142,97 @@ export const supplierCabinetApi = {
   /** POST /api/supplier-cabinet/chat/sessions/{clientTenantId}/messages */
   sendChatMessage: (clientTenantId: string, body: SendSupplierChatMessageRequest) =>
     api.post<SupplierChatMessageDto>(`${BASE}/chat/sessions/${clientTenantId}/messages`, body),
+
+  // ── Cooperation requests / agreements (TASK-318) ────────────────────────────
+
+  /** GET /api/supplier-cabinet/cooperation-requests?status= — новіші перші */
+  getCooperationRequests: (status?: CooperationStatus) =>
+    api.get<CooperationAgreementDto[]>(
+      `${BASE}/cooperation-requests${status ? `?status=${status}` : ""}`
+    ),
+
+  /** POST .../approve — генерує договір, 400 якщо реквізити не заповнені */
+  approveCooperationRequest: (id: string) =>
+    api.post<CooperationAgreementDto>(`${BASE}/cooperation-requests/${id}/approve`),
+
+  /** POST .../reject */
+  rejectCooperationRequest: (id: string, reason: string) =>
+    api.post<CooperationAgreementDto>(`${BASE}/cooperation-requests/${id}/reject`, { reason }),
+
+  /** POST .../regenerate-contract — лише awaiting_signature */
+  regenerateContract: (id: string) =>
+    api.post<CooperationAgreementDto>(`${BASE}/cooperation-requests/${id}/regenerate-contract`),
+
+  /** POST .../send-to-vchasno — 400 «Інтеграцію Вчасно не налаштовано.» */
+  sendToVchasno: (id: string) =>
+    api.post<CooperationAgreementDto>(`${BASE}/cooperation-requests/${id}/send-to-vchasno`),
+
+  /** POST .../mark-signed — awaiting_signature → active */
+  markAgreementSigned: (id: string) =>
+    api.post<CooperationAgreementDto>(`${BASE}/cooperation-requests/${id}/mark-signed`),
+
+  /** POST .../terminate — active → terminated (reason optional) */
+  terminateAgreement: (id: string, reason?: string) =>
+    api.post<CooperationAgreementDto>(`${BASE}/cooperation-requests/${id}/terminate`, {
+      reason: reason || undefined,
+    }),
+
+  /** GET .../contract — download PDF */
+  downloadAgreementContract: (id: string, contractNumber: string | null) =>
+    downloadFile(
+      `${BASE}/cooperation-requests/${id}/contract`,
+      `Договір_${contractNumber ?? id}.pdf`
+    ),
+
+  // ── Contract settings (requisites, TASK-318) ────────────────────────────────
+
+  /** GET /api/supplier-cabinet/contract-settings — 404 поки не заповнено */
+  getContractSettings: () =>
+    api.get<SupplierContractSettingsDto>(`${BASE}/contract-settings`),
+
+  /** PUT /api/supplier-cabinet/contract-settings */
+  upsertContractSettings: (body: UpsertContractSettingsRequest) =>
+    api.put<SupplierContractSettingsDto>(`${BASE}/contract-settings`, body),
+
+  /** POST .../signature-image — multipart, png/jpg ≤2MB (потрібні збережені реквізити) */
+  uploadSignatureImage: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.postForm<{ imageUrl: string }>(`${BASE}/contract-settings/signature-image`, form);
+  },
+
+  /** POST .../stamp-image — multipart, png/jpg ≤2MB */
+  uploadStampImage: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.postForm<{ imageUrl: string }>(`${BASE}/contract-settings/stamp-image`, form);
+  },
+
+  // ── Marketplace orders (TASK-318) ───────────────────────────────────────────
+
+  /** GET /api/supplier-cabinet/orders — новіші перші */
+  getOrders: () => api.get<MarketplaceOrderDto[]>(`${BASE}/orders`),
+
+  /** POST /api/supplier-cabinet/orders/{id}/status — дозволені переходи:
+   * new→confirmed|cancelled, confirmed→shipped|cancelled, shipped→delivered */
+  updateOrderStatus: (id: string, body: UpdateMarketplaceOrderStatusRequest) =>
+    api.post<MarketplaceOrderDto>(`${BASE}/orders/${id}/status`, body),
+
+  // ── Support tickets (TASK-318) ──────────────────────────────────────────────
+
+  /** GET /api/supplier-cabinet/support-tickets — messages = null */
+  getSupportTickets: () =>
+    api.get<SupplierSupportTicketDto[]>(`${BASE}/support-tickets`),
+
+  /** GET /api/supplier-cabinet/support-tickets/{id} — з messages (старіші перші) */
+  getSupportTicket: (id: string) =>
+    api.get<SupplierSupportTicketDto>(`${BASE}/support-tickets/${id}`),
+
+  /** POST /api/supplier-cabinet/support-tickets/{id}/messages */
+  addSupportTicketMessage: (id: string, body: string) =>
+    api.post<SupportTicketMessageDto>(`${BASE}/support-tickets/${id}/messages`, { body }),
+
+  /** POST /api/supplier-cabinet/support-tickets/{id}/status */
+  updateSupportTicketStatus: (id: string, status: SupportTicketStatus) =>
+    api.post<SupplierSupportTicketDto>(`${BASE}/support-tickets/${id}/status`, { status }),
 };

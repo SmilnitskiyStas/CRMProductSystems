@@ -137,6 +137,27 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.ISupplierChatRepository,
             Data.Repositories.SupplierChatRepository>();
 
+        // TASK-316 - Supplier cooperation: agreements, marketplace orders, support tickets
+        services.AddScoped<Domain.Interfaces.ISupplierContractSettingsRepository,
+            Data.Repositories.SupplierContractSettingsRepository>();
+        services.AddScoped<Domain.Interfaces.ISupplierAgreementRepository,
+            Data.Repositories.SupplierAgreementRepository>();
+        services.AddScoped<Domain.Interfaces.IMarketplaceOrderRepository,
+            Data.Repositories.MarketplaceOrderRepository>();
+        services.AddScoped<Domain.Interfaces.ISupplierSupportTicketRepository,
+            Data.Repositories.SupplierSupportTicketRepository>();
+
+        // TASK-317 - Contract PDF generation (QuestPDF) + Вчасно e-signature.
+        // License is set here once at startup; ContractPdfGenerator's static ctor
+        // re-asserts it defensively for non-DI usage (tests).
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+        services.AddSingleton<Application.Features.Marketplace.IContractPdfGenerator,
+            Documents.ContractPdfGenerator>();
+        services.AddHttpClient(Integrations.Vchasno.VchasnoClientFactory.ServiceName,
+            http => http.Timeout = TimeSpan.FromSeconds(30));
+        services.AddSingleton<Application.Features.Marketplace.Vchasno.IVchasnoClientFactory,
+            Integrations.Vchasno.VchasnoClientFactory>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<Domain.Interfaces.IAutoServiceRepository,
             Data.Repositories.AutoServiceRepository>();

@@ -83,6 +83,11 @@ services.AddScoped<IAuthService, AuthService>();
         // TASK-313 - Supplier <-> client chat
         services.AddScoped<ISupplierChatService, SupplierChatService>();
 
+        // TASK-317 - Supplier cooperation: agreements + orders + support tickets
+        services.AddScoped<ISupplierAgreementService, SupplierAgreementService>();
+        services.AddScoped<IMarketplaceOrderService, MarketplaceOrderService>();
+        services.AddScoped<ISupplierSupportService, SupplierSupportService>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<IAutoServiceService, AutoServiceService>();
 

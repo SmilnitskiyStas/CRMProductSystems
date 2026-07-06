@@ -11,7 +11,7 @@ public sealed class IntegrationService : IIntegrationService
 
     // Known service identifiers â€” validated on write, not on read.
     private static readonly HashSet<string> KnownServices =
-        ["telegram", "resend", "webhook", "prro", "iot", "claude"];
+        ["telegram", "resend", "webhook", "prro", "iot", "claude", "vchasno"];
 
     public IntegrationService(IIntegrationRepository repo) => _repo = repo;
 
@@ -40,6 +40,10 @@ public sealed class IntegrationService : IIntegrationService
         if (service == "prro" && jsonObj is not null)
             PrroSecrets.MaskInPlace(jsonObj);
 
+        // Вчасно API key is write-only too (TASK-317) — same masking convention.
+        if (service == "vchasno" && jsonObj is not null)
+            VchasnoSecrets.MaskInPlace(jsonObj);
+
         return (new IntegrationConfigDto(config.Id, config.Service, jsonObj, config.IsEnabled, config.UpdatedAt), null);
     }
 
@@ -54,6 +58,15 @@ public sealed class IntegrationService : IIntegrationService
         {
             var existing = await _repo.GetByServiceAsync(tenantId, service, ct);
             PrroSecrets.MergeMaskedFromStored(
+                request.Config,
+                existing is null ? null : ParseConfigSafe(existing.Config));
+        }
+
+        // Same round-trip protection for the Вчасно API key (TASK-317).
+        if (service == "vchasno")
+        {
+            var existing = await _repo.GetByServiceAsync(tenantId, service, ct);
+            VchasnoSecrets.MergeMaskedFromStored(
                 request.Config,
                 existing is null ? null : ParseConfigSafe(existing.Config));
         }

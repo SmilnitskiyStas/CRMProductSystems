@@ -258,3 +258,48 @@ export interface SupplierChatMessageDto {
 export interface SendSupplierChatMessageRequest {
   body: string;
 }
+
+// ─── Cooperation flow — contract settings (TASK-318) ───────────────────────────
+// Shared cooperation DTO shapes (CooperationAgreementDto, MarketplaceOrderDto,
+// SupplierSupportTicketDto, SupportTicketMessageDto, статуси) живуть у
+// features/marketplace/types.ts і імпортуються звідти напряму — без дублювання.
+// Тут лише supplier-only реквізити договору (CooperationDtos.cs).
+
+/** GET /api/supplier-cabinet/contract-settings (404 until first saved). */
+export interface SupplierContractSettingsDto {
+  legalName: string;
+  edrpou: string | null;
+  iban: string | null;
+  bankName: string | null;
+  legalAddress: string | null;
+  directorName: string | null;
+  phone: string | null;
+  email: string | null;
+  serviceName: string | null;
+  serviceDescription: string | null;
+  signatureImageUrl: string | null;
+  stampImageUrl: string | null;
+  isVatPayer: boolean;
+  updatedAt: string;
+}
+
+/** PUT /api/supplier-cabinet/contract-settings — full replace; images uploaded separately. */
+export interface UpsertContractSettingsRequest {
+  legalName: string;
+  edrpou?: string | null;
+  iban?: string | null;
+  bankName?: string | null;
+  legalAddress?: string | null;
+  directorName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  serviceName?: string | null;
+  serviceDescription?: string | null;
+  isVatPayer: boolean;
+}
+
+/** POST /api/supplier-cabinet/orders/{id}/status — Reason обовʼязковий для cancelled. */
+export interface UpdateMarketplaceOrderStatusRequest {
+  status: "confirmed" | "shipped" | "delivered" | "cancelled";
+  reason?: string;
+}

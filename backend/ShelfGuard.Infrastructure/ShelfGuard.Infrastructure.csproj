@@ -17,7 +17,12 @@
     </PackageReference>
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="7.5.2" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.0" />
+    <PackageReference Include="QuestPDF" Version="2024.10.4" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.5.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- TASK-317: Cyrillic-capable fonts for contract PDF generation (QuestPDF) -->
+    <None Include="Fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ShelfGuard.Application\ShelfGuard.Application.csproj" />
