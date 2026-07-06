@@ -133,6 +133,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.ISupplierTaskRepository,
             Data.Repositories.SupplierTaskRepository>();
 
+        // TASK-313 - Supplier <-> client chat
+        services.AddScoped<Domain.Interfaces.ISupplierChatRepository,
+            Data.Repositories.SupplierChatRepository>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<Domain.Interfaces.IAutoServiceRepository,
             Data.Repositories.AutoServiceRepository>();

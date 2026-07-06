@@ -24,16 +24,18 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
     private readonly IUserService _users;
     private readonly IUserRepository _userRepo;
     private readonly ISupplierRolesRepository _rolesRepo;
+    private readonly ISupplierTaskRepository _taskRepo;
 
     public SupplierCabinetService(
         IMarketplaceRepository repo, IMarketplaceService marketplace, IUserService users,
-        IUserRepository userRepo, ISupplierRolesRepository rolesRepo)
+        IUserRepository userRepo, ISupplierRolesRepository rolesRepo, ISupplierTaskRepository taskRepo)
     {
         _repo        = repo;
         _marketplace = marketplace;
         _users       = users;
         _userRepo    = userRepo;
         _rolesRepo   = rolesRepo;
+        _taskRepo    = taskRepo;
     }
 
     // ── Profile ───────────────────────────────────────────────────────────────
@@ -236,6 +238,80 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
         var average  = Math.Round((decimal)ratings.Average(r => (int)r), 2);
 
         return new SupplierReviewStatsDto(positive, neutral, negative, ratings.Count, average);
+    }
+
+    // ── Clients (self-service, TASK-313) ─────────────────────────────────────
+
+    public async Task<(IReadOnlyList<SupplierClientDto>? Clients, string? Error)> GetClientsAsync(
+        Guid tenantId, CancellationToken ct = default)
+    {
+        var resolved = await ResolveAsync(tenantId, ct);
+        if (resolved is null) return (null, CabinetNotAvailableError);
+
+        var supplierId = resolved.Value.Supplier.Id;
+
+        // Data volume per supplier is not large enough to justify SQL-side aggregation
+        // (calm-singing-marble plan) — pull the full review set and merge in-memory.
+        var reviewCount = await _repo.CountReviewsBySupplierAsync(supplierId, ct);
+        var reviewRows = reviewCount > 0
+            ? await _repo.GetReviewsBySupplierAsync(supplierId, 1, reviewCount, ct)
+            : Array.Empty<(SupplierReview Review, string ReviewerName)>();
+
+        var taskRows = await _taskRepo.GetDistinctClientTenantsAsync(tenantId, ct);
+
+        var merged = new Dictionary<Guid, ClientAccumulator>();
+
+        foreach (var (review, reviewerName) in reviewRows)
+        {
+            if (!merged.TryGetValue(review.TenantId, out var acc))
+            {
+                acc = new ClientAccumulator { TenantName = reviewerName };
+                merged[review.TenantId] = acc;
+            }
+            acc.ReviewCount++;
+            acc.RatingSum += review.Rating;
+            if (review.CreatedAt > acc.LastInteractionAt)
+                acc.LastInteractionAt = review.CreatedAt;
+        }
+
+        foreach (var (clientTenantId, name, taskCount, lastTaskAt) in taskRows)
+        {
+            if (!merged.TryGetValue(clientTenantId, out var acc))
+            {
+                acc = new ClientAccumulator { TenantName = name ?? string.Empty };
+                merged[clientTenantId] = acc;
+            }
+            else if (string.IsNullOrEmpty(acc.TenantName) && name is not null)
+            {
+                acc.TenantName = name;
+            }
+            acc.TaskCount = taskCount;
+            var lastTaskAtOffset = new DateTimeOffset(DateTime.SpecifyKind(lastTaskAt, DateTimeKind.Utc));
+            if (lastTaskAtOffset > acc.LastInteractionAt)
+                acc.LastInteractionAt = lastTaskAtOffset;
+        }
+
+        var clients = merged
+            .Select(kv => new SupplierClientDto(
+                kv.Key,
+                kv.Value.TenantName,
+                kv.Value.ReviewCount,
+                kv.Value.ReviewCount > 0 ? Math.Round(kv.Value.RatingSum / kv.Value.ReviewCount, 2) : null,
+                kv.Value.TaskCount,
+                kv.Value.LastInteractionAt))
+            .OrderByDescending(c => c.LastInteractionAt)
+            .ToList();
+
+        return (clients, null);
+    }
+
+    private sealed class ClientAccumulator
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public int ReviewCount { get; set; }
+        public decimal RatingSum { get; set; }
+        public int TaskCount { get; set; }
+        public DateTimeOffset LastInteractionAt { get; set; } = DateTimeOffset.MinValue;
     }
 
     // ── Staff management (self-service) ──────────────────────────────────────

@@ -22,12 +22,13 @@ public sealed class SupplierCabinetServiceTests
     private readonly IUserService _userService = Substitute.For<IUserService>();
     private readonly IUserRepository _userRepo = Substitute.For<IUserRepository>();
     private readonly ISupplierRolesRepository _rolesRepo = Substitute.For<ISupplierRolesRepository>();
+    private readonly ISupplierTaskRepository _taskRepo = Substitute.For<ISupplierTaskRepository>();
     private readonly SupplierCabinetService _sut;
 
     private readonly Guid _tenantId = Guid.NewGuid();
 
     public SupplierCabinetServiceTests() =>
-        _sut = new SupplierCabinetService(_repo, _marketplace, _userService, _userRepo, _rolesRepo);
+        _sut = new SupplierCabinetService(_repo, _marketplace, _userService, _userRepo, _rolesRepo, _taskRepo);
 
     private (SupplierProfile Profile, Supplier Supplier) ArrangeOwnSupplier(bool isPublic = false)
     {
@@ -553,5 +554,73 @@ public sealed class SupplierCabinetServiceTests
         Assert.Equal(0, stats.Negative);
         Assert.Equal(0, stats.Total);
         Assert.Null(stats.AverageRating);
+    }
+
+    // ── GetClientsAsync (TASK-313) ────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetClientsAsync_MergesReviewAndTaskSources_ByTenant()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var clientTenantId = Guid.NewGuid(); // reviewed AND has tasks
+        var reviewOnlyTenantId = Guid.NewGuid();
+        var taskOnlyTenantId = Guid.NewGuid();
+
+        var reviewCreatedAt = DateTimeOffset.UtcNow.AddDays(-2);
+        var taskCreatedAt = DateTime.UtcNow.AddDays(-1); // more recent than the review
+
+        _repo.CountReviewsBySupplierAsync(supplier.Id, Arg.Any<CancellationToken>()).Returns(3);
+        _repo.GetReviewsBySupplierAsync(supplier.Id, 1, 3, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierReview, string)>
+             {
+                 (new SupplierReview { SupplierId = supplier.Id, TenantId = clientTenantId, Rating = 4, CreatedAt = reviewCreatedAt },
+                  "Shared Client"),
+                 (new SupplierReview { SupplierId = supplier.Id, TenantId = clientTenantId, Rating = 5, CreatedAt = reviewCreatedAt.AddHours(1) },
+                  "Shared Client"),
+                 (new SupplierReview { SupplierId = supplier.Id, TenantId = reviewOnlyTenantId, Rating = 3, CreatedAt = reviewCreatedAt },
+                  "Review Only Co"),
+             });
+
+        _taskRepo.GetDistinctClientTenantsAsync(_tenantId, Arg.Any<CancellationToken>())
+                 .Returns(new List<(Guid, string?, int, DateTime)>
+                 {
+                     (clientTenantId, "Shared Client", 2, taskCreatedAt),
+                     (taskOnlyTenantId, "Task Only Co", 1, taskCreatedAt),
+                 });
+
+        var (clients, error) = await _sut.GetClientsAsync(_tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(clients);
+        Assert.Equal(3, clients!.Count);
+
+        var shared = clients.Single(c => c.TenantId == clientTenantId);
+        Assert.Equal("Shared Client", shared.TenantName);
+        Assert.Equal(2, shared.ReviewCount);
+        Assert.Equal(4.5m, shared.AvgRating);
+        Assert.Equal(2, shared.TaskCount);
+        Assert.Equal(new DateTimeOffset(DateTime.SpecifyKind(taskCreatedAt, DateTimeKind.Utc)), shared.LastInteractionAt);
+
+        var reviewOnly = clients.Single(c => c.TenantId == reviewOnlyTenantId);
+        Assert.Equal(1, reviewOnly.ReviewCount);
+        Assert.Equal(3m, reviewOnly.AvgRating);
+        Assert.Equal(0, reviewOnly.TaskCount);
+
+        var taskOnly = clients.Single(c => c.TenantId == taskOnlyTenantId);
+        Assert.Equal(0, taskOnly.ReviewCount);
+        Assert.Null(taskOnly.AvgRating);
+        Assert.Equal(1, taskOnly.TaskCount);
+    }
+
+    [Fact]
+    public async Task GetClientsAsync_NoOwnerManagedProfile_ReturnsError()
+    {
+        ArrangeNoCabinet();
+
+        var (clients, error) = await _sut.GetClientsAsync(_tenantId);
+
+        Assert.Null(clients);
+        Assert.Equal(SupplierCabinetService.CabinetNotAvailableError, error);
+        await _taskRepo.DidNotReceive().GetDistinctClientTenantsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

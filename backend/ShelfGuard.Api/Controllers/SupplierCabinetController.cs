@@ -24,13 +24,16 @@ public sealed class SupplierCabinetController : ControllerBase
     private readonly ISupplierCabinetService _cabinet;
     private readonly ISupplierRolesService _roles;
     private readonly ISupplierTaskService _tasks;
+    private readonly ISupplierChatService _chat;
 
     public SupplierCabinetController(
-        ISupplierCabinetService cabinet, ISupplierRolesService roles, ISupplierTaskService tasks)
+        ISupplierCabinetService cabinet, ISupplierRolesService roles, ISupplierTaskService tasks,
+        ISupplierChatService chat)
     {
         _cabinet = cabinet;
         _roles   = roles;
         _tasks   = tasks;
+        _chat    = chat;
     }
 
     // ── Profile ───────────────────────────────────────────────────────────────
@@ -402,6 +405,82 @@ public sealed class SupplierCabinetController : ControllerBase
             return BadRequest(new { error });
 
         return Ok(task);
+    }
+
+    // ── Clients (self-service, TASK-313) ─────────────────────────────────────
+
+    /// <summary>Union of client tenants that reviewed and/or have tasks linked to the own supplier.</summary>
+    [HttpGet("clients")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierClientDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetClients(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (clients, error) = await _cabinet.GetClientsAsync(tenantId.Value, ct);
+        return error is not null ? NotFound(new { error }) : Ok(clients);
+    }
+
+    // ── Chat (self-service, TASK-313) ────────────────────────────────────────
+
+    /// <summary>Lists all chat threads of the own supplier with its clients.</summary>
+    [HttpGet("chat/sessions")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierChatSessionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetChatSessions(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var sessions = await _chat.GetSessionsAsync(tenantId.Value, isSupplierSide: true, ct);
+        return Ok(sessions);
+    }
+
+    /// <summary>Messages of the thread with a given client (creates the thread on first access).</summary>
+    [HttpGet("chat/sessions/{clientTenantId:guid}/messages")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierChatMessageDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetChatMessages(Guid clientTenantId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var callerUserId = ResolveUserId();
+        if (callerUserId is null) return Forbid();
+
+        var session = await _chat.GetOrCreateSessionAsync(
+            tenantId.Value, clientTenantId, isSupplierSide: true, callerUserId.Value, ct);
+
+        var (messages, error) = await _chat.GetMessagesAsync(session.Id, tenantId.Value, ct);
+        return error is not null ? NotFound(new { error }) : Ok(messages);
+    }
+
+    /// <summary>Sends a message on the thread with a given client (creates the thread on first access).</summary>
+    [HttpPost("chat/sessions/{clientTenantId:guid}/messages")]
+    [ProducesResponseType(typeof(SupplierChatMessageDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SendChatMessage(
+        Guid clientTenantId, [FromBody] SendSupplierChatMessageRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var callerUserId = ResolveUserId();
+        if (callerUserId is null) return Forbid();
+
+        var senderName = User.FindFirst("full_name")?.Value
+                       ?? User.FindFirst(ClaimTypes.Name)?.Value
+                       ?? User.FindFirst(ClaimTypes.Email)?.Value
+                       ?? "Unknown";
+
+        var session = await _chat.GetOrCreateSessionAsync(
+            tenantId.Value, clientTenantId, isSupplierSide: true, callerUserId.Value, ct);
+
+        var (message, error) = await _chat.SendMessageAsync(
+            session.Id, tenantId.Value, callerUserId.Value, senderName, request.Body, ct);
+
+        if (error is not null) return BadRequest(new { error });
+        return StatusCode(StatusCodes.Status201Created, message);
     }
 
     private Guid? ResolveTenantId()

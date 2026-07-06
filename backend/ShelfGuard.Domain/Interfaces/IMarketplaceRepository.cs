@@ -82,6 +82,14 @@ public interface IMarketplaceRepository
     Task<Supplier?> GetSupplierByRawIdAsync(Guid supplierId, CancellationToken ct = default);
 
     /// <summary>
+    /// Resolves a public supplierId to its owning tenant id (TASK-313, supplier↔client
+    /// chat) — the client side of the chat only knows the supplierId from the
+    /// marketplace listing/detail page, not the supplier's tenant id.
+    /// Provider-bypass read (no tenant filter).
+    /// </summary>
+    Task<Guid?> GetSupplierTenantIdAsync(Guid supplierId, CancellationToken ct = default);
+
+    /// <summary>
     /// Replaces all barcodes of <paramref name="item"/> with <paramref name="newBarcodes"/> via
     /// explicit RemoveRange/AddRange against the DbContext (not navigation-collection mutation).
     /// Avoids the DbUpdateConcurrencyException that occurs when EF's change tracker treats

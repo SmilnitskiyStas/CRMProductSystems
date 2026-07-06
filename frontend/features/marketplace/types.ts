@@ -185,6 +185,24 @@ export interface AddSupplierItemRequest {
   imageUrls?: string[];
 }
 
+// ─── Supplier ↔ client chat, client side (TASK-314, Частина 2) ────────────────
+// Same shapes as the supplier-side ones in features/supplier-cabinet/types.ts.
+
+export interface SupplierChatMessageDto {
+  id: string;
+  sessionId: string;
+  senderTenantId: string;
+  senderUserId: string;
+  senderName: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface SendSupplierChatMessageRequest {
+  body: string;
+}
+
 /** Patch-semantics update — barcodes/imageUrls are only replaced when explicitly sent. */
 export interface UpdateSupplierItemRequest {
   customName?: string;

@@ -19,6 +19,10 @@ import type {
   UpdateSupplierTaskRequest,
   UpdateSupplierTaskStatusRequest,
   SupplierTaskFilters,
+  SupplierClientDto,
+  SupplierChatSessionDto,
+  SupplierChatMessageDto,
+  SendSupplierChatMessageRequest,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 
@@ -112,4 +116,18 @@ export const supplierCabinetApi = {
   /** PUT /api/supplier-cabinet/tasks/{id}/status */
   updateTaskStatus: (id: string, body: UpdateSupplierTaskStatusRequest) =>
     api.put<SupplierTaskDto>(`${BASE}/tasks/${id}/status`, body),
+
+  /** GET /api/supplier-cabinet/clients */
+  getClients: () => api.get<SupplierClientDto[]>(`${BASE}/clients`),
+
+  /** GET /api/supplier-cabinet/chat/sessions */
+  getChatSessions: () => api.get<SupplierChatSessionDto[]>(`${BASE}/chat/sessions`),
+
+  /** GET /api/supplier-cabinet/chat/sessions/{clientTenantId}/messages */
+  getChatMessages: (clientTenantId: string) =>
+    api.get<SupplierChatMessageDto[]>(`${BASE}/chat/sessions/${clientTenantId}/messages`),
+
+  /** POST /api/supplier-cabinet/chat/sessions/{clientTenantId}/messages */
+  sendChatMessage: (clientTenantId: string, body: SendSupplierChatMessageRequest) =>
+    api.post<SupplierChatMessageDto>(`${BASE}/chat/sessions/${clientTenantId}/messages`, body),
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X, ClipboardList } from "lucide-react";
+import { Plus, X, ClipboardList, List, CalendarDays } from "lucide-react";
 import {
   useSupplierTasks,
   useCreateSupplierTask,
@@ -11,6 +11,7 @@ import {
 } from "../hooks/useSupplierCabinet";
 import type { SupplierTaskDto, SupplierTaskStatus } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { TasksCalendar } from "./TasksCalendar";
 
 const STATUS_LABELS: Record<SupplierTaskStatus, string> = {
   pending: "Очікує",
@@ -43,12 +44,16 @@ function StatusBadge({ status }: { status: SupplierTaskStatus }) {
   );
 }
 
+type ViewMode = "list" | "calendar";
+
 export function TasksBoard() {
+  const [view, setView] = useState<ViewMode>("list");
   const [scope, setScope] = useState<"mine" | "all">("all");
   const [clientFilter, setClientFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<SupplierTaskStatus | "">("");
   const [creating, setCreating] = useState(false);
   const [editTask, setEditTask] = useState<SupplierTaskDto | null>(null);
+  const [prefillDueDate, setPrefillDueDate] = useState<string | null>(null);
 
   const { data: tasks, isLoading, isError } = useSupplierTasks({
     assignedToMe: scope === "mine" ? true : undefined,
@@ -56,6 +61,16 @@ export function TasksBoard() {
     status: statusFilter || undefined,
   });
   const updateStatus = useUpdateSupplierTaskStatus();
+
+  function handleAddTaskForDay(dueDate: string) {
+    setPrefillDueDate(dueDate);
+    setCreating(true);
+  }
+
+  function closeCreate() {
+    setCreating(false);
+    setPrefillDueDate(null);
+  }
 
   return (
     <div
@@ -79,109 +94,149 @@ export function TasksBoard() {
             </span>
           )}
         </div>
-        <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-          Нове завдання
-        </Btn>
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: 3 }}>
-          <button
-            onClick={() => setScope("mine")}
-            style={{
-              padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
-              background: scope === "mine" ? "#1D3461" : "transparent",
-              color: scope === "mine" ? "#93C5FD" : "#6B7280",
-            }}
-          >
-            Мої
-          </button>
-          <button
-            onClick={() => setScope("all")}
-            style={{
-              padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
-              background: scope === "all" ? "#1D3461" : "transparent",
-              color: scope === "all" ? "#93C5FD" : "#6B7280",
-            }}
-          >
-            Усі
-          </button>
-        </div>
-
-        <input
-          value={clientFilter}
-          onChange={(e) => setClientFilter(e.target.value)}
-          placeholder="Client tenant ID (фільтр)"
-          style={{ ...filterInputStyle, minWidth: 220 }}
-        />
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as SupplierTaskStatus | "")}
-          style={{ ...filterInputStyle, appearance: "none" }}
-        >
-          <option value="">Усі статуси</option>
-          {ALL_STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-          ))}
-        </select>
-      </div>
-
-      {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>}
-      {isError && <div style={{ color: "#F87171", fontSize: 13 }}>Не вдалося завантажити завдання.</div>}
-
-      {!isLoading && !isError && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {tasks?.map((task) => (
-            <div
-              key={task.id}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: 3 }}>
+            <button
+              onClick={() => setView("list")}
               style={{
-                background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10,
-                padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: 12,
-                cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                background: view === "list" ? "#1D3461" : "transparent",
+                color: view === "list" ? "#93C5FD" : "#6B7280",
               }}
-              onClick={() => setEditTask(task)}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                  <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>{task.title}</span>
-                  <StatusBadge status={task.status} />
-                </div>
-                {task.description && (
-                  <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{task.description}</div>
-                )}
-                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", color: "#4B5563", fontSize: 11 }}>
-                  {task.clientTenantName && <span>Клієнт: {task.clientTenantName}</span>}
-                  {task.assignedToUserName && <span>Відповідальний: {task.assignedToUserName}</span>}
-                  {task.dueDate && <span>Дедлайн: {new Date(task.dueDate).toLocaleDateString("uk-UA")}</span>}
-                </div>
-              </div>
+              <List size={13} /> Список
+            </button>
+            <button
+              onClick={() => setView("calendar")}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                background: view === "calendar" ? "#1D3461" : "transparent",
+                color: view === "calendar" ? "#93C5FD" : "#6B7280",
+              }}
+            >
+              <CalendarDays size={13} /> Календар
+            </button>
+          </div>
+          <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
+            Нове завдання
+          </Btn>
+        </div>
+      </div>
 
-              <select
-                value={task.status}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) =>
-                  updateStatus.mutate({ id: task.id, body: { status: e.target.value as SupplierTaskStatus } })
-                }
-                style={{ ...filterInputStyle, width: 140, flexShrink: 0 }}
+      {view === "list" && (
+        <>
+          {/* Filters */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: 3 }}>
+              <button
+                onClick={() => setScope("mine")}
+                style={{
+                  padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  background: scope === "mine" ? "#1D3461" : "transparent",
+                  color: scope === "mine" ? "#93C5FD" : "#6B7280",
+                }}
               >
-                {ALL_STATUSES.map((s) => (
-                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                ))}
-              </select>
+                Мої
+              </button>
+              <button
+                onClick={() => setScope("all")}
+                style={{
+                  padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  background: scope === "all" ? "#1D3461" : "transparent",
+                  color: scope === "all" ? "#93C5FD" : "#6B7280",
+                }}
+              >
+                Усі
+              </button>
             </div>
-          ))}
 
-          {(!tasks || tasks.length === 0) && (
-            <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
-              Завдань немає.
+            <input
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              placeholder="Client tenant ID (фільтр)"
+              style={{ ...filterInputStyle, minWidth: 220 }}
+            />
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as SupplierTaskStatus | "")}
+              style={{ ...filterInputStyle, appearance: "none" }}
+            >
+              <option value="">Усі статуси</option>
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+          </div>
+
+          {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>}
+          {isError && <div style={{ color: "#F87171", fontSize: 13 }}>Не вдалося завантажити завдання.</div>}
+
+          {!isLoading && !isError && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {tasks?.map((task) => (
+                <div
+                  key={task.id}
+                  style={{
+                    background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10,
+                    padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: 12,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setEditTask(task)}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                      <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>{task.title}</span>
+                      <StatusBadge status={task.status} />
+                    </div>
+                    {task.description && (
+                      <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{task.description}</div>
+                    )}
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", color: "#4B5563", fontSize: 11 }}>
+                      {task.clientTenantName && <span>Клієнт: {task.clientTenantName}</span>}
+                      {task.assignedToUserName && <span>Відповідальний: {task.assignedToUserName}</span>}
+                      {task.dueDate && <span>Дедлайн: {new Date(task.dueDate).toLocaleDateString("uk-UA")}</span>}
+                    </div>
+                  </div>
+
+                  <select
+                    value={task.status}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) =>
+                      updateStatus.mutate({ id: task.id, body: { status: e.target.value as SupplierTaskStatus } })
+                    }
+                    style={{ ...filterInputStyle, width: 140, flexShrink: 0 }}
+                  >
+                    {ALL_STATUSES.map((s) => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+
+              {(!tasks || tasks.length === 0) && (
+                <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
+                  Завдань немає.
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {creating && <TaskFormModal onClose={() => setCreating(false)} />}
+      {view === "calendar" && (
+        <>
+          {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>}
+          {isError && <div style={{ color: "#F87171", fontSize: 13 }}>Не вдалося завантажити завдання.</div>}
+          {!isLoading && !isError && (
+            <TasksCalendar tasks={tasks ?? []} onAddTask={handleAddTaskForDay} />
+          )}
+        </>
+      )}
+
+      {creating && <TaskFormModal defaultDueDate={prefillDueDate ?? undefined} onClose={closeCreate} />}
       {editTask && <TaskFormModal task={editTask} onClose={() => setEditTask(null)} />}
     </div>
   );
@@ -191,10 +246,12 @@ export function TasksBoard() {
 
 interface TaskFormModalProps {
   task?: SupplierTaskDto;
+  /** Prefills the due date field — used when adding a task from a calendar day cell. */
+  defaultDueDate?: string;
   onClose: () => void;
 }
 
-function TaskFormModal({ task, onClose }: TaskFormModalProps) {
+function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
   const create = useCreateSupplierTask();
   const update = useUpdateSupplierTask();
   const { data: staff } = useCabinetStaff();
@@ -203,7 +260,9 @@ function TaskFormModal({ task, onClose }: TaskFormModalProps) {
   const [description, setDescription] = useState(task?.description ?? "");
   const [clientTenantId, setClientTenantId] = useState(task?.clientTenantId ?? "");
   const [assignedToUserId, setAssignedToUserId] = useState(task?.assignedToUserId ?? "");
-  const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.slice(0, 10) : "");
+  const [dueDate, setDueDate] = useState(
+    task?.dueDate ? task.dueDate.slice(0, 10) : (defaultDueDate ?? "")
+  );
   const [error, setError] = useState<string | null>(null);
 
   const isEdit = !!task;

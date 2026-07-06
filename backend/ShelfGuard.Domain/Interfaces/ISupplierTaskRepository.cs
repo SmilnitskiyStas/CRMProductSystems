@@ -29,5 +29,13 @@ public interface ISupplierTaskRepository
     /// <summary>Whether a user with this id belongs to the given tenant (assignment guard).</summary>
     Task<bool> UserBelongsToTenantAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Distinct client tenants referenced by this supplier tenant's tasks (TASK-313,
+    /// "Clients" tab), with task count and the most recent CreatedAt among that
+    /// client's tasks (used to compute LastInteractionAt on the merged client list).
+    /// </summary>
+    Task<IReadOnlyList<(Guid TenantId, string? Name, int TaskCount, DateTime LastTaskAt)>>
+        GetDistinctClientTenantsAsync(Guid tenantId, CancellationToken ct = default);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }

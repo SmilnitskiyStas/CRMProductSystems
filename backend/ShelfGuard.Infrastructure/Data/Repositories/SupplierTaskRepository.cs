@@ -60,5 +60,35 @@ public sealed class SupplierTaskRepository : ISupplierTaskRepository
     public Task<bool> UserBelongsToTenantAsync(Guid tenantId, Guid userId, CancellationToken ct = default) =>
         _db.Users.AnyAsync(u => u.Id == userId && u.TenantId == tenantId, ct);
 
+    public async Task<IReadOnlyList<(Guid TenantId, string? Name, int TaskCount, DateTime LastTaskAt)>>
+        GetDistinctClientTenantsAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var rows = await _db.SupplierTasks
+            .AsNoTracking()
+            .Where(t => t.TenantId == tenantId && t.ClientTenantId != null)
+            .GroupBy(t => t.ClientTenantId!.Value)
+            .Select(g => new
+            {
+                TenantId   = g.Key,
+                TaskCount  = g.Count(),
+                LastTaskAt = g.Max(t => t.CreatedAt),
+            })
+            .ToListAsync(ct);
+
+        if (rows.Count == 0)
+            return Array.Empty<(Guid, string?, int, DateTime)>();
+
+        var ids = rows.Select(r => r.TenantId).ToList();
+        var names = await _db.Tenants
+            .AsNoTracking()
+            .Where(t => ids.Contains(t.Id))
+            .Select(t => new { t.Id, t.Name })
+            .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
+
+        return rows
+            .Select(r => (r.TenantId, names.TryGetValue(r.TenantId, out var name) ? name : null, r.TaskCount, r.LastTaskAt))
+            .ToList();
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

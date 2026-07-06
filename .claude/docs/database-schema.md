@@ -166,6 +166,20 @@ client, not the owner).
 `ProviderRoleId`. Entities: `ShelfGuard.Domain/Entities/{SupplierRole,SupplierTask}.cs`,
 constants: `ShelfGuard.Domain/Constants/SupplierPermissions.cs`.
 
+## v4.2 — Supplier ↔ Client chat (TASK-312, 2026-07-06)
+
+`AddSupplierChat` — schema only (no service/controller yet; see handoff for TASK-312).
+Standalone messaging subsystem, distinct from the existing `chat_sessions`/`chat_messages`
+(Client↔Provider, single-tenant-per-session model that doesn't fit two-tenant threads).
+
+| Table | Purpose | Key constraints |
+|---|---|---|
+| `supplier_chat_sessions` | One persistent thread per (supplier tenant, client tenant) pair — no Status/close, messages just accumulate | UNIQUE(SupplierTenantId, ClientTenantId); FK SupplierTenantId → tenants CASCADE, ClientTenantId → tenants RESTRICT (avoids multi-cascade-path conflict); idx(SupplierTenantId), idx(ClientTenantId); RLS tenant_isolation (`SupplierTenantId = ... OR ClientTenantId = ...`, NULLIF guard) + provider_bypass, FORCE RLS |
+| `supplier_chat_messages` | Messages within a session. `SenderTenantId` lets the frontend derive "mine vs. theirs" via `SenderTenantId == myTenantId` regardless of which side is viewing | FK SessionId → supplier_chat_sessions CASCADE; idx(SessionId), idx(CreatedAt); RLS tenant_isolation via `EXISTS` subquery on the parent session's tenant pair (pattern: `notification_settings`) + provider_bypass, FORCE RLS |
+
+Entities: `ShelfGuard.Domain/Entities/{SupplierChatSession,SupplierChatMessage}.cs`.
+`provider` role bypasses both tables' RLS like every other `supplier_*` table.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

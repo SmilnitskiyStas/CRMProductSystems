@@ -34,6 +34,7 @@ import {
   ListOrdered,
   Calendar,
   LifeBuoy,
+  Building2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -213,6 +214,7 @@ const SUPPLIER_NAV_GROUP: NavGroup = {
     { href: "/supplier/items",   label: "Мої товари",  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
     { href: "/supplier/reviews", label: "Відгуки",     icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
     { href: "/supplier/tasks",   label: "Завдання",    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
+    { href: "/supplier/clients", label: "Клієнти",     icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
     { href: "/supplier/team",    label: "Команда",     icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
   ],
 };

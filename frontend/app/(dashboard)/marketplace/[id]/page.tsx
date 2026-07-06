@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, MessageCircle } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useSupplier, useSupplierReviewCount } from "@/features/marketplace/hooks/useMarketplace";
 import { reviewWord } from "@/features/marketplace/utils";
@@ -10,10 +10,12 @@ import { SupplierMetrics } from "@/features/marketplace/components/SupplierMetri
 import { SupplierItemsTab } from "@/features/marketplace/components/SupplierItemsTab";
 import { SupplierReviewsTab } from "@/features/marketplace/components/SupplierReviewsTab";
 import { AddSupplierItemModal } from "@/features/marketplace/components/AddSupplierItemModal";
+import { SupplierChatPanel } from "@/features/marketplace/components/SupplierChatPanel";
 import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
 import { StarRating } from "@/features/marketplace/components/StarRating";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { PROVIDER_TEAM } from "@/lib/roles";
+import { Btn } from "@/components/ui/Btn";
 
 type ActiveTab = "catalog" | "reviews";
 
@@ -21,6 +23,7 @@ export default function SupplierProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<ActiveTab>("catalog");
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const { data: supplier, isLoading, isError } = useSupplier(id);
   const { data: reviewCount } = useSupplierReviewCount(id);
@@ -125,6 +128,13 @@ export default function SupplierProfilePage() {
               {supplier.supplierName}
             </h1>
             <PlanBadge plan={supplier.plan} />
+            <Btn
+              size="sm"
+              icon={<MessageCircle size={13} />}
+              onClick={() => setChatOpen(true)}
+            >
+              Написати постачальнику
+            </Btn>
           </div>
           <div style={{ color: "#6B7280", fontSize: 13, marginBottom: 10 }}>
             {supplier.region}
@@ -285,6 +295,14 @@ export default function SupplierProfilePage() {
         <AddSupplierItemModal
           supplierId={id}
           onClose={() => setAddItemModalOpen(false)}
+        />
+      )}
+
+      {chatOpen && (
+        <SupplierChatPanel
+          supplierId={id}
+          supplierName={supplier.supplierName}
+          onClose={() => setChatOpen(false)}
         />
       )}
     </div>

@@ -218,3 +218,43 @@ export interface SupplierTaskFilters {
   clientTenantId?: string;
   status?: SupplierTaskStatus;
 }
+
+// ─── Clients tab (TASK-314, Частина 1) ─────────────────────────────────────────
+
+/** GET /api/supplier-cabinet/clients — union of reviewers + task clients. */
+export interface SupplierClientDto {
+  tenantId: string;
+  tenantName: string;
+  reviewCount: number;
+  avgRating: number | null;
+  taskCount: number;
+  lastInteractionAt: string;
+}
+
+// ─── Supplier ↔ client chat (TASK-314, Частина 2) ──────────────────────────────
+
+export interface SupplierChatSessionDto {
+  id: string;
+  otherTenantId: string;
+  otherTenantName: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+}
+
+export interface SupplierChatMessageDto {
+  id: string;
+  sessionId: string;
+  senderTenantId: string;
+  senderUserId: string;
+  senderName: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+/** POST body for sending a message on either side of the supplier↔client chat. */
+export interface SendSupplierChatMessageRequest {
+  body: string;
+}

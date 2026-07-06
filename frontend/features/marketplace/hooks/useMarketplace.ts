@@ -6,6 +6,7 @@ import type {
   CreateReviewRequest,
   SupplierProfileUpdateRequest,
   AddSupplierItemRequest,
+  SendSupplierChatMessageRequest,
 } from "../types";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -22,6 +23,8 @@ export const MARKETPLACE_KEYS = {
     ["marketplace", "supplier-reviews", id] as const,
   myProfile: ["marketplace", "my-profile"] as const,
   itemCategories: ["marketplace", "item-categories"] as const,
+  supplierChatMessages: (supplierId: string) =>
+    ["marketplace", "supplier-chat-messages", supplierId] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -170,5 +173,29 @@ export function useItemCategories() {
     queryKey: MARKETPLACE_KEYS.itemCategories,
     queryFn: () => marketplaceApi.getItemCategories(),
     staleTime: Infinity,
+  });
+}
+
+// ─── Supplier ↔ client chat, client side (TASK-314) ────────────────────────────
+
+export function useSupplierChatMessages(supplierId: string | null) {
+  return useQuery({
+    queryKey: MARKETPLACE_KEYS.supplierChatMessages(supplierId ?? ""),
+    queryFn: () => marketplaceApi.getSupplierChatMessages(supplierId!),
+    enabled: Boolean(supplierId),
+    refetchInterval: 3000,
+  });
+}
+
+export function useSendSupplierChatMessage(supplierId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SendSupplierChatMessageRequest) =>
+      marketplaceApi.sendSupplierChatMessage(supplierId!, body),
+    onSuccess: () => {
+      if (supplierId) {
+        queryClient.invalidateQueries({ queryKey: MARKETPLACE_KEYS.supplierChatMessages(supplierId) });
+      }
+    },
   });
 }

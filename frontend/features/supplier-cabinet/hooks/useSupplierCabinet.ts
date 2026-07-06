@@ -13,6 +13,7 @@ import type {
   UpdateSupplierTaskRequest,
   UpdateSupplierTaskStatusRequest,
   SupplierTaskFilters,
+  SendSupplierChatMessageRequest,
 } from "../types";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -27,6 +28,10 @@ export const CABINET_KEYS = {
   roles: ["supplier-cabinet", "roles"] as const,
   tasks: (filters?: SupplierTaskFilters) =>
     ["supplier-cabinet", "tasks", filters ?? {}] as const,
+  clients: ["supplier-cabinet", "clients"] as const,
+  chatSessions: ["supplier-cabinet", "chat", "sessions"] as const,
+  chatMessages: (clientTenantId: string) =>
+    ["supplier-cabinet", "chat", "messages", clientTenantId] as const,
 };
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -255,6 +260,50 @@ export function useUpdateSupplierTaskStatus() {
       supplierCabinetApi.updateTaskStatus(id, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["supplier-cabinet", "tasks"] });
+    },
+  });
+}
+
+// ─── Clients (TASK-314) ─────────────────────────────────────────────────────────
+
+export function useSupplierClients() {
+  return useQuery({
+    queryKey: CABINET_KEYS.clients,
+    queryFn: supplierCabinetApi.getClients,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+// ─── Supplier ↔ client chat (TASK-314) ──────────────────────────────────────────
+
+export function useSupplierChatSessions() {
+  return useQuery({
+    queryKey: CABINET_KEYS.chatSessions,
+    queryFn: supplierCabinetApi.getChatSessions,
+    refetchInterval: 3000,
+  });
+}
+
+export function useSupplierChatMessages(clientTenantId: string | null) {
+  return useQuery({
+    queryKey: CABINET_KEYS.chatMessages(clientTenantId ?? ""),
+    queryFn: () => supplierCabinetApi.getChatMessages(clientTenantId!),
+    enabled: Boolean(clientTenantId),
+    refetchInterval: 3000,
+  });
+}
+
+export function useSendSupplierChatMessage(clientTenantId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SendSupplierChatMessageRequest) =>
+      supplierCabinetApi.sendChatMessage(clientTenantId!, body),
+    onSuccess: () => {
+      if (clientTenantId) {
+        queryClient.invalidateQueries({ queryKey: CABINET_KEYS.chatMessages(clientTenantId) });
+      }
+      queryClient.invalidateQueries({ queryKey: CABINET_KEYS.chatSessions });
     },
   });
 }

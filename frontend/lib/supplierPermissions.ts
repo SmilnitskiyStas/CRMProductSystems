@@ -4,6 +4,7 @@ export const SUPPLIER_PERMISSIONS: Record<string, string> = {
   task_board:          "Дошка завдань",
   staff_management:    "Управління командою",
   profile_management:  "Профіль компанії",
+  client_management:   "Клієнти",
 };
 
 export const ALL_SUPPLIER_PERMISSIONS = Object.keys(SUPPLIER_PERMISSIONS);

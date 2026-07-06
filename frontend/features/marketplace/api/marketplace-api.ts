@@ -12,6 +12,8 @@ import type {
   SupplierPlan,
   AddSupplierItemRequest,
   SupplierItemCategoryDto,
+  SupplierChatMessageDto,
+  SendSupplierChatMessageRequest,
 } from "../types";
 
 export const marketplaceApi = {
@@ -85,4 +87,12 @@ export const marketplaceApi = {
   /** GET /api/marketplace/item-categories — static category/field registry (ADR-017). */
   getItemCategories: () =>
     api.get<SupplierItemCategoryDto[]>("/api/marketplace/item-categories"),
+
+  /** GET /api/marketplace/suppliers/{id}/chat/messages — supplierId is the public supplier id. */
+  getSupplierChatMessages: (supplierId: string) =>
+    api.get<SupplierChatMessageDto[]>(`/api/marketplace/suppliers/${supplierId}/chat/messages`),
+
+  /** POST /api/marketplace/suppliers/{id}/chat/messages */
+  sendSupplierChatMessage: (supplierId: string, body: SendSupplierChatMessageRequest) =>
+    api.post<SupplierChatMessageDto>(`/api/marketplace/suppliers/${supplierId}/chat/messages`, body),
 };

@@ -71,4 +71,15 @@ public interface ISupplierCabinetService
     /// user does not belong to the caller's own tenant.
     /// </summary>
     Task<string?> DeactivateStaffAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    // ── Clients (self-service, TASK-313) ─────────────────────────────────────
+
+    /// <summary>
+    /// Union of client tenants that interacted with the caller's own supplier —
+    /// tenants that left a review and/or have a task linked via ClientTenantId.
+    /// ReviewCount/AvgRating come from reviews, TaskCount from tasks, and
+    /// LastInteractionAt is the max of both sources' most recent dates.
+    /// </summary>
+    Task<(IReadOnlyList<SupplierClientDto>? Clients, string? Error)> GetClientsAsync(
+        Guid tenantId, CancellationToken ct = default);
 }

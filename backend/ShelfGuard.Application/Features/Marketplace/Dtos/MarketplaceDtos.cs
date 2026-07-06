@@ -258,6 +258,45 @@ public record SupplierRecommendationDto(
     SupplierItemDto? MatchedItem,
     SupplierMetricsDto? Metrics);
 
+// ── Supplier cabinet clients tab (TASK-313, calm-singing-marble) ────────────
+
+/// <summary>
+/// A client tenant the caller's own supplier has interacted with — union of tenants
+/// that left a review and/or have a task linked via ClientTenantId. LastInteractionAt
+/// is the max of the most recent review/task dates for that tenant.
+/// </summary>
+public record SupplierClientDto(
+    Guid TenantId,
+    string TenantName,
+    int ReviewCount,
+    decimal? AvgRating,
+    int TaskCount,
+    DateTimeOffset LastInteractionAt);
+
+// ── Supplier ↔ client chat (TASK-313, calm-singing-marble, TASK-312 schema) ──
+
+/// <summary>A chat session summary, with the other side's tenant id/name denormalized.</summary>
+public record SupplierChatSessionDto(
+    Guid Id,
+    Guid OtherTenantId,
+    string OtherTenantName,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    string? LastMessage,
+    DateTimeOffset? LastMessageAt);
+
+public record SupplierChatMessageDto(
+    Guid Id,
+    Guid SessionId,
+    Guid SenderTenantId,
+    Guid SenderUserId,
+    string SenderName,
+    string Body,
+    bool IsRead,
+    DateTimeOffset CreatedAt);
+
+public record SendSupplierChatMessageRequest(string Body);
+
 // ── Item category registry (TASK-294, ADR-017 §4) ────────────────────────────
 
 public record SupplierItemCategoryFieldDto(

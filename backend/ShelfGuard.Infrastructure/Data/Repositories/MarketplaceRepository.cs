@@ -247,6 +247,17 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
         return await _db.Suppliers.FirstOrDefaultAsync(s => s.Id == supplierId, ct);
     }
 
+    public async Task<Guid?> GetSupplierTenantIdAsync(Guid supplierId, CancellationToken ct = default)
+    {
+        await SetProviderRoleAsync(ct);
+        var supplier = await _db.Suppliers
+            .AsNoTracking()
+            .Where(s => s.Id == supplierId)
+            .Select(s => new { s.TenantId })
+            .FirstOrDefaultAsync(ct);
+        return supplier?.TenantId;
+    }
+
     // ── Supplier cabinet (v4.1, ADR-016) ─────────────────────────────────────
 
     public async Task<(SupplierProfile Profile, Supplier Supplier)?> GetOwnerManagedProfileAsync(

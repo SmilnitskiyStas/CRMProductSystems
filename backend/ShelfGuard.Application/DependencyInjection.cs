@@ -80,6 +80,9 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ISupplierRolesService, SupplierRolesService>();
         services.AddScoped<ISupplierTaskService, SupplierTaskService>();
 
+        // TASK-313 - Supplier <-> client chat
+        services.AddScoped<ISupplierChatService, SupplierChatService>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<IAutoServiceService, AutoServiceService>();
 

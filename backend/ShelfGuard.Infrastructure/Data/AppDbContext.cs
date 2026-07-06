@@ -118,6 +118,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierRole> SupplierRoles => Set<SupplierRole>();
     public DbSet<SupplierTask> SupplierTasks => Set<SupplierTask>();
 
+    // Supplier ↔ Client chat (TASK-312)
+    public DbSet<SupplierChatSession> SupplierChatSessions => Set<SupplierChatSession>();
+    public DbSet<SupplierChatMessage> SupplierChatMessages => Set<SupplierChatMessage>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -1522,6 +1526,47 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.SenderName).HasMaxLength(200);
             e.Property(x => x.IsSystem).HasDefaultValue(false);
             e.HasIndex(x => x.SessionId);
+        });
+
+        // ── SupplierChatSession (TASK-312) ────────────────────────────────────
+        builder.Entity<SupplierChatSession>(e =>
+        {
+            e.ToTable("supplier_chat_sessions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.CreatedByUserId).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.SupplierTenantId);
+            e.HasIndex(x => x.ClientTenantId);
+            e.HasIndex(x => new { x.SupplierTenantId, x.ClientTenantId }).IsUnique();
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.SupplierTenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Messages)
+             .WithOne(x => x.Session)
+             .HasForeignKey(x => x.SessionId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupplierChatMessage (TASK-312) ─────────────────────────────────────
+        builder.Entity<SupplierChatMessage>(e =>
+        {
+            e.ToTable("supplier_chat_messages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.SessionId).IsRequired();
+            e.Property(x => x.SenderUserId).IsRequired();
+            e.Property(x => x.SenderTenantId).IsRequired();
+            e.Property(x => x.SenderName).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Body).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.IsRead).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.SessionId);
+            e.HasIndex(x => x.CreatedAt);
         });
     }
 }
