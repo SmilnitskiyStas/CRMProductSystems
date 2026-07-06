@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSupplierReviews } from "../hooks/useMarketplace";
+import { useSupplierReviews, useSupplier } from "../hooks/useMarketplace";
 import { StarRating } from "./StarRating";
 import { ReviewModal } from "./ReviewModal";
 import { reviewWord } from "../utils";
@@ -18,7 +18,9 @@ export function SupplierReviewsTab({ supplierId }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
   const { data, isLoading, isError } = useSupplierReviews(supplierId, page, PAGE_SIZE);
+  const { data: supplier } = useSupplier(supplierId);
   const { data: me } = useMe();
+  const stats = supplier?.reviewStats;
 
   // Only client tenants may leave reviews — the backend rejects provider team
   // (no tenant_id → 403) and supplier tenants / self-reviews (400), duplicates (409).
@@ -54,6 +56,30 @@ export function SupplierReviewsTab({ supplierId }: Props) {
 
   return (
     <div>
+      {/* Stats widget */}
+      {stats && stats.total > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+            marginBottom: 16,
+            padding: "12px 16px",
+            background: "#111827",
+            border: "1px solid #1F2937",
+            borderRadius: 10,
+          }}
+        >
+          <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700 }}>
+            {stats.averageRating != null ? stats.averageRating.toFixed(1) : "—"}
+          </span>
+          <span style={{ color: "#34D399", fontSize: 12 }}>Позитивні: {stats.positive}</span>
+          <span style={{ color: "#9CA3AF", fontSize: 12 }}>Нейтральні: {stats.neutral}</span>
+          <span style={{ color: "#F87171", fontSize: 12 }}>Негативні: {stats.negative}</span>
+        </div>
+      )}
+
       {/* Header: count + leave review */}
       <div
         style={{
@@ -130,6 +156,38 @@ export function SupplierReviewsTab({ supplierId }: Props) {
                 <p style={{ color: "#9CA3AF", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
                   {review.comment}
                 </p>
+              )}
+              {review.replyText && (
+                <div
+                  style={{
+                    marginTop: 4,
+                    padding: "10px 14px",
+                    background: "#0B111C",
+                    border: "1px solid #1F2937",
+                    borderRadius: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 4,
+                    }}
+                  >
+                    <span style={{ color: "#60A5FA", fontSize: 12, fontWeight: 600 }}>
+                      Відповідь постачальника:
+                    </span>
+                    {review.repliedAt && (
+                      <span style={{ color: "#4B5563", fontSize: 11 }}>
+                        {new Date(review.repliedAt).toLocaleDateString("uk-UA")}
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ color: "#9CA3AF", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+                    {review.replyText}
+                  </p>
+                </div>
               )}
             </div>
           ))}

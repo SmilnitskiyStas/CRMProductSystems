@@ -3,6 +3,7 @@ using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Users;
 using ShelfGuard.Application.Features.Users.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 using Xunit;
@@ -19,12 +20,14 @@ public sealed class SupplierCabinetServiceTests
     private readonly IMarketplaceRepository _repo   = Substitute.For<IMarketplaceRepository>();
     private readonly IMarketplaceService _marketplace = Substitute.For<IMarketplaceService>();
     private readonly IUserService _userService = Substitute.For<IUserService>();
+    private readonly IUserRepository _userRepo = Substitute.For<IUserRepository>();
+    private readonly ISupplierRolesRepository _rolesRepo = Substitute.For<ISupplierRolesRepository>();
     private readonly SupplierCabinetService _sut;
 
     private readonly Guid _tenantId = Guid.NewGuid();
 
     public SupplierCabinetServiceTests() =>
-        _sut = new SupplierCabinetService(_repo, _marketplace, _userService);
+        _sut = new SupplierCabinetService(_repo, _marketplace, _userService, _userRepo, _rolesRepo);
 
     private (SupplierProfile Profile, Supplier Supplier) ArrangeOwnSupplier(bool isPublic = false)
     {
@@ -357,6 +360,68 @@ public sealed class SupplierCabinetServiceTests
     }
 
     [Fact]
+    public async Task InviteStaffAsync_NoSupplierRoleId_KeepsFullAccess_DoesNotTouchUserRepo()
+    {
+        _userService.InviteAsync(_tenantId, Arg.Any<InviteUserRequest>(), "Owner", Arg.Any<CancellationToken>())
+                     .Returns((MakeUserDto(), (string?)null));
+
+        var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123");
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.Null(user!.Permissions);
+        await _userRepo.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _userRepo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InviteStaffAsync_UnknownSupplierRoleId_ReturnsError_DoesNotInvite()
+    {
+        var roleId = Guid.NewGuid();
+        _rolesRepo.GetByIdAsync(_tenantId, roleId, Arg.Any<CancellationToken>())
+                  .Returns((SupplierRole?)null);
+
+        var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123", roleId);
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+
+        Assert.Null(user);
+        Assert.Equal("Role not found.", error);
+        await _userService.DidNotReceive().InviteAsync(
+            Arg.Any<Guid>(), Arg.Any<InviteUserRequest>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InviteStaffAsync_WithSupplierRoleId_ResolvesPermissionsAndAssignsRole()
+    {
+        var roleId = Guid.NewGuid();
+        var role = SupplierRole.Create(_tenantId, "Support", AppRoles.SupplierAdmin,
+            [SupplierPermissions.ClientReviews, SupplierPermissions.TaskBoard]);
+        _rolesRepo.GetByIdAsync(_tenantId, roleId, Arg.Any<CancellationToken>())
+                  .Returns(role);
+
+        var createdUser = MakeUserDto();
+        _userService.InviteAsync(_tenantId, Arg.Any<InviteUserRequest>(), "Owner", Arg.Any<CancellationToken>())
+                     .Returns((createdUser, (string?)null));
+
+        var trackedUser = User.Create(_tenantId, "new@example.com", "New Teammate", "hash", "supplier_admin");
+        _userRepo.GetByIdAsync(createdUser.Id, Arg.Any<CancellationToken>())
+                 .Returns(trackedUser);
+
+        var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123", roleId);
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.NotNull(user!.Permissions);
+        Assert.True(user.Permissions![SupplierPermissions.ClientReviews]);
+        Assert.True(user.Permissions![SupplierPermissions.TaskBoard]);
+        Assert.Equal(role.Id, trackedUser.SupplierRoleId);
+        _userRepo.Received(1).Update(trackedUser);
+        await _userRepo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task DeactivateStaffAsync_UserBelongsToOwnTenant_Deactivates()
     {
         var userId = Guid.NewGuid();
@@ -384,5 +449,109 @@ public sealed class SupplierCabinetServiceTests
         Assert.Equal("User not found.", error);
         await _userService.DidNotReceive().DeactivateAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── ReplyToReviewAsync ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ReplyToReviewAsync_OwnReview_SetsReplyAndReturnsDto()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var reviewId = Guid.NewGuid();
+        var review = new SupplierReview
+        {
+            Id = reviewId, SupplierId = supplier.Id, Rating = 5, Comment = "Great",
+            Tenant = Tenant.Create("Reviewer Co", "reviewer-co"),
+        };
+        _repo.GetReviewByIdAsync(supplier.Id, reviewId, Arg.Any<CancellationToken>())
+             .Returns(review);
+
+        var (dto, error) = await _sut.ReplyToReviewAsync(_tenantId, reviewId, "Thank you!");
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal("Thank you!", dto!.ReplyText);
+        Assert.NotNull(dto.RepliedAt);
+        Assert.Equal("Thank you!", review.ReplyText);
+        Assert.NotNull(review.RepliedAt);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ReplyToReviewAsync_ReviewBelongsToAnotherSupplier_ReturnsNotFound_DoesNotSave()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var reviewId = Guid.NewGuid();
+        // Repo is tenant/supplier-scoped: a review of a different supplier resolves to null.
+        _repo.GetReviewByIdAsync(supplier.Id, reviewId, Arg.Any<CancellationToken>())
+             .Returns((SupplierReview?)null);
+
+        var (dto, error) = await _sut.ReplyToReviewAsync(_tenantId, reviewId, "Thanks!");
+
+        Assert.Null(dto);
+        Assert.Equal(SupplierCabinetService.ReviewNotFoundError, error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ReplyToReviewAsync_BlankReplyText_ReturnsValidationError_DoesNotLookUpReview()
+    {
+        ArrangeOwnSupplier();
+
+        var (dto, error) = await _sut.ReplyToReviewAsync(_tenantId, Guid.NewGuid(), "   ");
+
+        Assert.Null(dto);
+        Assert.NotNull(error);
+        await _repo.DidNotReceive().GetReviewByIdAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ReplyToReviewAsync_NoOwnerManagedProfile_ReturnsCabinetNotAvailable()
+    {
+        ArrangeNoCabinet();
+
+        var (dto, error) = await _sut.ReplyToReviewAsync(_tenantId, Guid.NewGuid(), "Thanks!");
+
+        Assert.Null(dto);
+        Assert.Equal(SupplierCabinetService.CabinetNotAvailableError, error);
+    }
+
+    // ── GetReviewStatsAsync ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetReviewStatsAsync_BucketsRatingsCorrectly()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        _repo.GetReviewRatingsAsync(supplier.Id, Arg.Any<CancellationToken>())
+             .Returns(new List<short> { 5, 4, 3, 2, 1, 5 });
+
+        var (stats, error) = await _sut.GetReviewStatsAsync(_tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(stats);
+        Assert.Equal(3, stats!.Positive);  // 5, 4, 5
+        Assert.Equal(1, stats.Neutral);    // 3
+        Assert.Equal(2, stats.Negative);   // 2, 1
+        Assert.Equal(6, stats.Total);
+        Assert.Equal(3.33m, stats.AverageRating);
+    }
+
+    [Fact]
+    public async Task GetReviewStatsAsync_NoReviews_ReturnsAllZeros()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        _repo.GetReviewRatingsAsync(supplier.Id, Arg.Any<CancellationToken>())
+             .Returns(new List<short>());
+
+        var (stats, error) = await _sut.GetReviewStatsAsync(_tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(stats);
+        Assert.Equal(0, stats!.Positive);
+        Assert.Equal(0, stats.Neutral);
+        Assert.Equal(0, stats.Negative);
+        Assert.Equal(0, stats.Total);
+        Assert.Null(stats.AverageRating);
     }
 }

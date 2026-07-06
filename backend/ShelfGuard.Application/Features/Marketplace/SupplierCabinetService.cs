@@ -22,13 +22,18 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
     private readonly IMarketplaceRepository _repo;
     private readonly IMarketplaceService _marketplace;
     private readonly IUserService _users;
+    private readonly IUserRepository _userRepo;
+    private readonly ISupplierRolesRepository _rolesRepo;
 
     public SupplierCabinetService(
-        IMarketplaceRepository repo, IMarketplaceService marketplace, IUserService users)
+        IMarketplaceRepository repo, IMarketplaceService marketplace, IUserService users,
+        IUserRepository userRepo, ISupplierRolesRepository rolesRepo)
     {
         _repo        = repo;
         _marketplace = marketplace;
         _users       = users;
+        _userRepo    = userRepo;
+        _rolesRepo   = rolesRepo;
     }
 
     // ── Profile ───────────────────────────────────────────────────────────────
@@ -153,7 +158,8 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
 
         var items = rows
             .Select(r => new PublicSupplierReviewDto(
-                r.Review.Id, r.Review.Rating, r.Review.Comment, r.Review.CreatedAt, r.ReviewerName))
+                r.Review.Id, r.Review.Rating, r.Review.Comment, r.Review.CreatedAt, r.ReviewerName,
+                r.Review.ReplyText, r.Review.RepliedAt))
             .ToList();
 
         return (new PagedResult<PublicSupplierReviewDto>(items, total, page, pageSize), null);
@@ -174,20 +180,102 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
             m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt), null);
     }
 
+    public const int MaxReplyTextLength = 2000;
+    public const string ReviewNotFoundError = "Review not found.";
+
+    public async Task<(PublicSupplierReviewDto? Review, string? Error)> ReplyToReviewAsync(
+        Guid tenantId, Guid reviewId, string replyText, CancellationToken ct = default)
+    {
+        var resolved = await ResolveAsync(tenantId, ct);
+        if (resolved is null) return (null, CabinetNotAvailableError);
+
+        if (string.IsNullOrWhiteSpace(replyText))
+            return (null, "Reply text is required.");
+
+        var trimmed = replyText.Trim();
+        if (trimmed.Length > MaxReplyTextLength)
+            return (null, $"Reply text cannot exceed {MaxReplyTextLength} characters.");
+
+        var supplierId = resolved.Value.Supplier.Id;
+
+        // Cross-tenant guard: the review must belong to THIS supplier. Never reveal
+        // whether it exists for a different supplier — same "not found" wording
+        // used elsewhere in this controller (e.g. DeactivateStaffAsync, item lookups).
+        var review = await _repo.GetReviewByIdAsync(supplierId, reviewId, ct);
+        if (review is null) return (null, ReviewNotFoundError);
+
+        review.ReplyText = trimmed;
+        review.RepliedAt = DateTimeOffset.UtcNow;
+
+        await _repo.SaveChangesAsync(ct);
+
+        var reviewerName = review.Tenant?.Name ?? string.Empty;
+        return (new PublicSupplierReviewDto(
+            review.Id, review.Rating, review.Comment, review.CreatedAt, reviewerName,
+            review.ReplyText, review.RepliedAt), null);
+    }
+
+    public async Task<(SupplierReviewStatsDto? Stats, string? Error)> GetReviewStatsAsync(
+        Guid tenantId, CancellationToken ct = default)
+    {
+        var resolved = await ResolveAsync(tenantId, ct);
+        if (resolved is null) return (null, CabinetNotAvailableError);
+
+        var ratings = await _repo.GetReviewRatingsAsync(resolved.Value.Supplier.Id, ct);
+        return (BuildStats(ratings), null);
+    }
+
+    internal static SupplierReviewStatsDto BuildStats(IReadOnlyList<short> ratings)
+    {
+        if (ratings.Count == 0)
+            return new SupplierReviewStatsDto(0, 0, 0, 0, null);
+
+        var positive = ratings.Count(r => r >= 4);
+        var neutral  = ratings.Count(r => r == 3);
+        var negative = ratings.Count(r => r <= 2);
+        var average  = Math.Round((decimal)ratings.Average(r => (int)r), 2);
+
+        return new SupplierReviewStatsDto(positive, neutral, negative, ratings.Count, average);
+    }
+
     // ── Staff management (self-service) ──────────────────────────────────────
 
     public Task<IReadOnlyList<UserDto>> GetStaffAsync(Guid tenantId, CancellationToken ct = default) =>
         _users.GetAllAsync(tenantId, ct);
 
-    public Task<(UserDto? User, string? Error)> InviteStaffAsync(
+    public async Task<(UserDto? User, string? Error)> InviteStaffAsync(
         Guid tenantId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default)
     {
-        // Role is never accepted from the client — suppliers don't need finer role
-        // granularity for MVP, every invited teammate is a supplier_admin.
+        // Base system role is never accepted from the client — every invited teammate
+        // is a supplier_admin. Finer-grained access (TASK-306) is layered on top via
+        // SupplierRoleId → Permissions, following the same convention as ProviderTeamService.
+        SupplierRole? role = null;
+        if (request.SupplierRoleId.HasValue)
+        {
+            role = await _rolesRepo.GetByIdAsync(tenantId, request.SupplierRoleId.Value, ct);
+            if (role is null)
+                return (null, "Role not found.");
+        }
+
         var inviteRequest = new InviteUserRequest(
             request.Email, request.FullName, AppRoles.SupplierAdmin, request.Password);
 
-        return _users.InviteAsync(tenantId, inviteRequest, inviterName, ct);
+        var (user, error) = await _users.InviteAsync(tenantId, inviteRequest, inviterName, ct);
+        if (user is null) return (null, error);
+
+        // No role given → full access (Permissions = null), same as before TASK-306.
+        if (role is null) return (user, null);
+
+        var createdUser = await _userRepo.GetByIdAsync(user.Id, ct);
+        if (createdUser is null) return (user, null);
+
+        var permissions = role.Permissions.ToDictionary(p => p, _ => true);
+        createdUser.SetPermissions(permissions);
+        createdUser.SetSupplierRole(role.Id);
+        _userRepo.Update(createdUser);
+        await _userRepo.SaveChangesAsync(ct);
+
+        return (user with { Permissions = permissions }, null);
     }
 
     public async Task<string?> DeactivateStaffAsync(

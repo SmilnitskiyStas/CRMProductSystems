@@ -41,7 +41,10 @@ public sealed class MarketplaceService : IMarketplaceService
         // Premium fields visible if plan=premium OR caller is authenticated
         bool showPremium = callerIsAuthenticated || profile.Plan == "premium";
 
-        return ToFullProfileDto(profile, supplier, metrics, showPremium);
+        var ratings = await _repo.GetReviewRatingsAsync(supplierId, ct);
+        var reviewStats = SupplierCabinetService.BuildStats(ratings);
+
+        return ToFullProfileDto(profile, supplier, metrics, showPremium, reviewStats);
     }
 
     public async Task<IReadOnlyList<SupplierItemDto>?> GetSupplierItemsAsync(
@@ -115,7 +118,8 @@ public sealed class MarketplaceService : IMarketplaceService
 
         var items = rows
             .Select(r => new PublicSupplierReviewDto(
-                r.Review.Id, r.Review.Rating, r.Review.Comment, r.Review.CreatedAt, r.ReviewerName))
+                r.Review.Id, r.Review.Rating, r.Review.Comment, r.Review.CreatedAt, r.ReviewerName,
+                r.Review.ReplyText, r.Review.RepliedAt))
             .ToList();
 
         return new PagedResult<PublicSupplierReviewDto>(items, total, page, pageSize);
@@ -210,52 +214,6 @@ public sealed class MarketplaceService : IMarketplaceService
     }
 
     // ── Platform admin (ProviderOnly) ────────────────────────────────────────
-
-    public async Task<(SupplierProfileDto Profile, string? Error)> AdminCreateSupplierAsync(
-        AdminCreateSupplierDto request, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(request.CompanyName))
-            return (null!, "CompanyName is required.");
-
-        if (request.Plan is not "free" and not "premium")
-            return (null!, "Plan must be 'free' or 'premium'.");
-
-        // BUG-012: suppliers.TenantId has a FK to tenants — Guid.Empty violated it
-        // (tenant 00000000-... does not exist). Platform-managed suppliers are
-        // attached to a real system "Platform Marketplace" tenant, created lazily.
-        var platformTenantId = await _repo.GetOrCreatePlatformTenantIdAsync(ct);
-
-        var supplier = new Supplier
-        {
-            TenantId = platformTenantId,
-            Name     = request.CompanyName.Trim(),
-        };
-
-        await _repo.AddSupplierAsync(supplier, ct);
-
-        var profile = new SupplierProfile
-        {
-            SupplierId      = supplier.Id,
-            TenantId        = platformTenantId,
-            Region          = request.Region?.Trim(),
-            Categories      = request.Categories is { Length: > 0 }
-                                  ? JsonSerializer.Serialize(request.Categories)
-                                  : null,
-            Website         = request.Website?.Trim(),
-            DeliveryRegions = request.DeliveryRegions is { Length: > 0 }
-                                  ? JsonSerializer.Serialize(request.DeliveryRegions)
-                                  : null,
-            WorkingHours    = request.WorkingHours?.Trim(),
-            PaymentTerms    = request.PaymentTerms?.Trim(),
-            IsPublic        = request.IsPublic,
-            Plan            = request.Plan,
-        };
-
-        await _repo.AddSupplierProfileAsync(profile, ct);
-        await _repo.SaveChangesAsync(ct);
-
-        return (ToFullProfileDto(profile, supplier, null, showPremium: true), null);
-    }
 
     public async Task<(SupplierItemDto? Item, string? Error)> AdminAddSupplierItemAsync(
         Guid supplierId, AdminAddSupplierItemDto request, CancellationToken ct = default)
@@ -465,7 +423,8 @@ public sealed class MarketplaceService : IMarketplaceService
             p.IsPublic);
 
     private static SupplierProfileDto ToFullProfileDto(
-        SupplierProfile p, Supplier s, SupplierMetrics? m, bool showPremium) =>
+        SupplierProfile p, Supplier s, SupplierMetrics? m, bool showPremium,
+        SupplierReviewStatsDto? reviewStats = null) =>
         new(
             s.Id,
             s.Name,
@@ -477,7 +436,8 @@ public sealed class MarketplaceService : IMarketplaceService
             showPremium ? p.PaymentTerms : null,
             p.IsPublic,
             p.Plan,
-            m is not null ? ToMetricsDto(m) : null);
+            m is not null ? ToMetricsDto(m) : null,
+            reviewStats);
 
     private static SupplierMetricsDto ToMetricsDto(SupplierMetrics m) =>
         new(m.Rating, m.AvgDeliveryDays, m.OrderAccuracy, m.QualityScore,

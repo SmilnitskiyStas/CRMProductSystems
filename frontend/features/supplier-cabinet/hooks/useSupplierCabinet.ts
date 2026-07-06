@@ -7,6 +7,12 @@ import type {
   CabinetAddItemRequest,
   CabinetUpdateItemRequest,
   CabinetInviteStaffRequest,
+  CreateSupplierRoleRequest,
+  UpdateSupplierRoleRequest,
+  CreateSupplierTaskRequest,
+  UpdateSupplierTaskRequest,
+  UpdateSupplierTaskStatusRequest,
+  SupplierTaskFilters,
 } from "../types";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -15,8 +21,12 @@ export const CABINET_KEYS = {
   profile: ["supplier-cabinet", "profile"] as const,
   items: ["supplier-cabinet", "items"] as const,
   reviews: (page: number) => ["supplier-cabinet", "reviews", page] as const,
+  reviewStats: ["supplier-cabinet", "reviews", "stats"] as const,
   metrics: ["supplier-cabinet", "metrics"] as const,
   staff: ["supplier-cabinet", "staff"] as const,
+  roles: ["supplier-cabinet", "roles"] as const,
+  tasks: (filters?: SupplierTaskFilters) =>
+    ["supplier-cabinet", "tasks", filters ?? {}] as const,
 };
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -104,6 +114,26 @@ export function useCabinetReviews(page = 1, pageSize = 20) {
   });
 }
 
+export function useReplyToReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, replyText }: { id: string; replyText: string }) =>
+      supplierCabinetApi.replyToReview(id, replyText),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["supplier-cabinet", "reviews"] });
+    },
+  });
+}
+
+export function useCabinetReviewStats() {
+  return useQuery({
+    queryKey: CABINET_KEYS.reviewStats,
+    queryFn: supplierCabinetApi.getReviewStats,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 export function useCabinetMetrics() {
   return useQuery({
     queryKey: CABINET_KEYS.metrics,
@@ -140,6 +170,91 @@ export function useDeactivateCabinetStaff() {
     mutationFn: (id: string) => supplierCabinetApi.deactivateStaff(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CABINET_KEYS.staff });
+    },
+  });
+}
+
+// ─── Roles ────────────────────────────────────────────────────────────────────
+
+export function useSupplierRoles() {
+  return useQuery({
+    queryKey: CABINET_KEYS.roles,
+    queryFn: supplierCabinetApi.getRoles,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useCreateSupplierRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateSupplierRoleRequest) => supplierCabinetApi.createRole(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_KEYS.roles });
+    },
+  });
+}
+
+export function useUpdateSupplierRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateSupplierRoleRequest }) =>
+      supplierCabinetApi.updateRole(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_KEYS.roles });
+    },
+  });
+}
+
+export function useDeleteSupplierRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => supplierCabinetApi.deleteRole(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_KEYS.roles });
+    },
+  });
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+export function useSupplierTasks(filters?: SupplierTaskFilters) {
+  return useQuery({
+    queryKey: CABINET_KEYS.tasks(filters),
+    queryFn: () => supplierCabinetApi.getTasks(filters),
+    staleTime: 15_000,
+    retry: false,
+  });
+}
+
+export function useCreateSupplierTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateSupplierTaskRequest) => supplierCabinetApi.createTask(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["supplier-cabinet", "tasks"] });
+    },
+  });
+}
+
+export function useUpdateSupplierTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateSupplierTaskRequest }) =>
+      supplierCabinetApi.updateTask(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["supplier-cabinet", "tasks"] });
+    },
+  });
+}
+
+export function useUpdateSupplierTaskStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateSupplierTaskStatusRequest }) =>
+      supplierCabinetApi.updateTaskStatus(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["supplier-cabinet", "tasks"] });
     },
   });
 }

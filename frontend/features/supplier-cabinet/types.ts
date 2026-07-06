@@ -122,6 +122,22 @@ export interface CabinetReview {
   comment: string | null;
   createdAt: string;
   reviewerName: string;
+  replyText: string | null;
+  repliedAt: string | null;
+}
+
+/** PUT /api/supplier-cabinet/reviews/{id}/reply */
+export interface CabinetReplyToReviewRequest {
+  replyText: string;
+}
+
+/** GET /api/supplier-cabinet/reviews/stats */
+export interface SupplierReviewStats {
+  positive: number;
+  neutral: number;
+  negative: number;
+  total: number;
+  averageRating: number | null;
 }
 
 /** Backend PagedResult<T>. */
@@ -137,4 +153,68 @@ export interface CabinetInviteStaffRequest {
   email: string;
   fullName: string;
   password: string;
+  /** Optional — omit for full access (old behavior, unchanged). */
+  supplierRoleId?: string;
+}
+
+// ─── Supplier roles (TASK-307, Part 3) ─────────────────────────────────────────
+
+/** GET/POST/PUT /api/supplier-cabinet/roles */
+export interface SupplierRoleDto {
+  id: string;
+  displayName: string;
+  /** Always "supplier_admin" for now — no other supplier base role exists. */
+  baseRole: string;
+  /** Subset of SUPPLIER_PERMISSIONS keys (see lib/supplierPermissions.ts). */
+  permissions: string[];
+  isSystem: boolean;
+}
+
+export interface CreateSupplierRoleRequest {
+  displayName: string;
+  baseRole: string;
+  permissions: string[];
+}
+
+export type UpdateSupplierRoleRequest = CreateSupplierRoleRequest;
+
+// ─── Supplier task board (TASK-307, Part 4) ────────────────────────────────────
+
+export type SupplierTaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
+
+/** GET/POST/PUT /api/supplier-cabinet/tasks */
+export interface SupplierTaskDto {
+  id: string;
+  clientTenantId: string | null;
+  clientTenantName: string | null;
+  assignedToUserId: string | null;
+  assignedToUserName: string | null;
+  title: string;
+  description: string | null;
+  status: SupplierTaskStatus;
+  dueDate: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface CreateSupplierTaskRequest {
+  title: string;
+  description?: string | null;
+  clientTenantId?: string | null;
+  assignedToUserId?: string | null;
+  dueDate?: string | null;
+}
+
+export type UpdateSupplierTaskRequest = CreateSupplierTaskRequest;
+
+export interface UpdateSupplierTaskStatusRequest {
+  status: SupplierTaskStatus;
+}
+
+/** Query params for GET /api/supplier-cabinet/tasks */
+export interface SupplierTaskFilters {
+  assignedToMe?: boolean;
+  clientTenantId?: string;
+  status?: SupplierTaskStatus;
 }

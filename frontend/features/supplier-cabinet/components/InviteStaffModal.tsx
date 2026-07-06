@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Btn } from "@/components/ui/Btn";
-import { useInviteCabinetStaff } from "../hooks/useSupplierCabinet";
+import { useInviteCabinetStaff, useSupplierRoles } from "../hooks/useSupplierCabinet";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -30,10 +30,12 @@ interface Props {
 
 export function InviteStaffModal({ onClose }: Props) {
   const invite = useInviteCabinetStaff();
+  const { data: roles } = useSupplierRoles();
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [supplierRoleId, setSupplierRoleId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function validate() {
@@ -53,6 +55,7 @@ export function InviteStaffModal({ onClose }: Props) {
       email: email.trim().toLowerCase(),
       fullName: fullName.trim(),
       password,
+      supplierRoleId: supplierRoleId || undefined,
     });
     onClose();
   }
@@ -161,6 +164,23 @@ export function InviteStaffModal({ onClose }: Props) {
               {errors.password && (
                 <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.password}</p>
               )}
+            </div>
+
+            {/* Role */}
+            <div>
+              <label style={labelStyle}>Роль</label>
+              <select
+                value={supplierRoleId}
+                onChange={(e) => setSupplierRoleId(e.target.value)}
+                style={{ ...inputStyle, appearance: "none" }}
+              >
+                <option value="">Повний доступ (без ролі)</option>
+                {roles?.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.displayName}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

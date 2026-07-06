@@ -22,8 +22,16 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class SupplierCabinetController : ControllerBase
 {
     private readonly ISupplierCabinetService _cabinet;
+    private readonly ISupplierRolesService _roles;
+    private readonly ISupplierTaskService _tasks;
 
-    public SupplierCabinetController(ISupplierCabinetService cabinet) => _cabinet = cabinet;
+    public SupplierCabinetController(
+        ISupplierCabinetService cabinet, ISupplierRolesService roles, ISupplierTaskService tasks)
+    {
+        _cabinet = cabinet;
+        _roles   = roles;
+        _tasks   = tasks;
+    }
 
     // ── Profile ───────────────────────────────────────────────────────────────
 
@@ -171,6 +179,41 @@ public sealed class SupplierCabinetController : ControllerBase
         return error is not null ? NotFound(new { error }) : Ok(metrics);
     }
 
+    /// <summary>Posts/updates the own supplier's reply to a review left for it.</summary>
+    [HttpPut("reviews/{id:guid}/reply")]
+    [ProducesResponseType(typeof(PublicSupplierReviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReplyToReview(
+        Guid id, [FromBody] CabinetReplyToReviewDto request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (review, error) = await _cabinet.ReplyToReviewAsync(tenantId.Value, id, request.ReplyText, ct);
+
+        if (error == SupplierCabinetService.CabinetNotAvailableError
+            || error == SupplierCabinetService.ReviewNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(review);
+    }
+
+    /// <summary>Positive/neutral/negative breakdown of the own supplier's reviews.</summary>
+    [HttpGet("reviews/stats")]
+    [ProducesResponseType(typeof(SupplierReviewStatsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReviewStats(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (stats, error) = await _cabinet.GetReviewStatsAsync(tenantId.Value, ct);
+        return error is not null ? NotFound(new { error }) : Ok(stats);
+    }
+
     // ── Staff management (self-service) ─────────────────────────────────────────
 
     /// <summary>Lists all staff/team members of the caller's own tenant.</summary>
@@ -218,9 +261,158 @@ public sealed class SupplierCabinetController : ControllerBase
         return error is null ? NoContent() : NotFound(new { error });
     }
 
+    // ── Roles (self-service, TASK-306) ───────────────────────────────────────
+
+    /// <summary>Lists all custom staff roles of the caller's own tenant.</summary>
+    [HttpGet("roles")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierRoleDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetRoles(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var roles = await _roles.GetAllAsync(tenantId.Value, ct);
+        return Ok(roles);
+    }
+
+    /// <summary>Creates a new custom staff role for the caller's own tenant.</summary>
+    [HttpPost("roles")]
+    [ProducesResponseType(typeof(SupplierRoleDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateRole([FromBody] CreateSupplierRoleRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (role, error) = await _roles.CreateAsync(tenantId.Value, request, ct);
+        if (error is not null) return BadRequest(new { error });
+        return StatusCode(StatusCodes.Status201Created, role);
+    }
+
+    /// <summary>Updates a custom staff role of the caller's own tenant.</summary>
+    [HttpPut("roles/{id:guid}")]
+    [ProducesResponseType(typeof(SupplierRoleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateRole(Guid id, [FromBody] UpdateSupplierRoleRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (role, error) = await _roles.UpdateAsync(tenantId.Value, id, request, ct);
+        if (error is not null) return BadRequest(new { error });
+        return Ok(role);
+    }
+
+    /// <summary>Deletes a custom staff role of the caller's own tenant.</summary>
+    [HttpDelete("roles/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DeleteRole(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (success, error) = await _roles.DeleteAsync(tenantId.Value, id, ct);
+        if (!success) return BadRequest(new { error });
+        return NoContent();
+    }
+
+    // ── Task board (self-service, TASK-306) ──────────────────────────────────
+
+    /// <summary>Lists tasks of the caller's own tenant, optionally filtered.</summary>
+    [HttpGet("tasks")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierTaskDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetTasks(
+        [FromQuery] bool assignedToMe = false,
+        [FromQuery] Guid? clientTenantId = null,
+        [FromQuery] string? status = null,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var callerUserId = ResolveUserId();
+        if (callerUserId is null) return Forbid();
+
+        var (tasks, error) = await _tasks.GetAllAsync(
+            tenantId.Value, callerUserId.Value, assignedToMe, clientTenantId, status, ct);
+
+        return error is not null ? BadRequest(new { error }) : Ok(tasks);
+    }
+
+    /// <summary>Creates a new task on the caller's own tenant's task board.</summary>
+    [HttpPost("tasks")]
+    [ProducesResponseType(typeof(SupplierTaskDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateTask([FromBody] CreateSupplierTaskRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var callerUserId = ResolveUserId();
+        if (callerUserId is null) return Forbid();
+
+        var (task, error) = await _tasks.CreateAsync(tenantId.Value, callerUserId.Value, request, ct);
+
+        if (error == "Supplier cabinet is not available for this tenant.")
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return StatusCode(StatusCodes.Status201Created, task);
+    }
+
+    /// <summary>Patch-updates a task of the caller's own tenant.</summary>
+    [HttpPut("tasks/{id:guid}")]
+    [ProducesResponseType(typeof(SupplierTaskDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateTask(Guid id, [FromBody] UpdateSupplierTaskRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (task, error) = await _tasks.UpdateAsync(tenantId.Value, id, request, ct);
+
+        if (error == "Task not found.")
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(task);
+    }
+
+    /// <summary>Updates only the status of a task of the caller's own tenant.</summary>
+    [HttpPut("tasks/{id:guid}/status")]
+    [ProducesResponseType(typeof(SupplierTaskDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateTaskStatus(Guid id, [FromBody] UpdateSupplierTaskStatusRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (task, error) = await _tasks.UpdateStatusAsync(tenantId.Value, id, request, ct);
+
+        if (error == "Task not found.")
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(task);
+    }
+
     private Guid? ResolveTenantId()
     {
         var raw = User.FindFirst("tenant_id")?.Value;
+        return Guid.TryParse(raw, out var id) && id != Guid.Empty ? id : null;
+    }
+
+    private Guid? ResolveUserId()
+    {
+        var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         return Guid.TryParse(raw, out var id) && id != Guid.Empty ? id : null;
     }
 }

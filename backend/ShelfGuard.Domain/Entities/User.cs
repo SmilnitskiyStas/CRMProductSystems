@@ -31,6 +31,13 @@ public sealed class User
     public Guid? ProviderRoleId { get; private set; }
 
     /// <summary>
+    /// Custom supplier role assigned to this user (supplier cabinet staff only).
+    /// Null means the user's base system role applies (e.g. full access for the
+    /// supplier owner/admin).
+    /// </summary>
+    public Guid? SupplierRoleId { get; private set; }
+
+    /// <summary>
     /// Display name of the user who created/invited this account.
     /// Null for seed/self-registered users.
     /// Denormalized for fast read — not a FK to avoid cascades.
@@ -84,6 +91,8 @@ public sealed class User
     public void SetRole(string role) => Role = role;
 
     public void SetProviderRole(Guid? roleId) => ProviderRoleId = roleId;
+
+    public void SetSupplierRole(Guid? roleId) => SupplierRoleId = roleId;
 
     public void SetStore(Guid? storeId) => StoreId = storeId;
 

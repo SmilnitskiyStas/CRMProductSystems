@@ -54,9 +54,6 @@ public interface IMarketplaceService
 
     // ── Platform admin (ProviderOnly) ─────────────────────────────────────────
 
-    Task<(SupplierProfileDto Profile, string? Error)> AdminCreateSupplierAsync(
-        AdminCreateSupplierDto request, CancellationToken ct = default);
-
     Task<(SupplierItemDto? Item, string? Error)> AdminAddSupplierItemAsync(
         Guid supplierId, AdminAddSupplierItemDto request, CancellationToken ct = default);
 

@@ -2896,6 +2896,12 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<short>("Rating")
                         .HasColumnType("smallint");
 
+                    b.Property<DateTimeOffset?>("RepliedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReplyText")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("SupplierId")
                         .HasColumnType("uuid");
 
@@ -2910,6 +2916,111 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("supplier_reviews", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplierRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("BaseRole")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<List<string>>("Permissions")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("supplier_roles", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplierTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("AssignedToUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClientTenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("pending");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedToUserId");
+
+                    b.HasIndex("ClientTenantId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("supplier_tasks", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplySchedule", b =>
@@ -3320,6 +3431,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid?>("StoreId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("SupplierRoleId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TelegramChatId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -3333,6 +3447,8 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("ProviderRoleId");
+
+                    b.HasIndex("SupplierRoleId");
 
                     b.HasIndex("TenantId");
 
@@ -4491,6 +4607,46 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplierTask", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "AssignedToUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "ClientTenant")
+                        .WithMany()
+                        .HasForeignKey("ClientTenantId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedToUser");
+
+                    b.Navigation("ClientTenant");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Supplier");
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplySchedule", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Location", "Store")
@@ -4592,6 +4748,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasOne("ShelfGuard.Domain.Entities.ProviderRole", null)
                         .WithMany()
                         .HasForeignKey("ProviderRoleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.SupplierRole", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierRoleId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")

@@ -146,6 +146,26 @@ Readings tables — tenant via `EXISTS (SELECT 1 FROM iot_devices d WHERE d."Id"
 Entities: `ShelfGuard.Domain/Entities/{IotDevice,TemperatureReading,WeightReading}.cs`.
 `iot_devices.Config` (jsonb): temp sensors `{profile: fridge|freezer, alert_above?}`; weight sensors `{product_id, unit_weight_grams}`.
 
+## v4.1 — Supplier tenant migration + roles/tasks (TASK-305, 2026-07-05)
+
+`MigrateOrphanSuppliersToTenants` — data-only migration. Every `Supplier` previously
+attached to the `platform-marketplace` system tenant (ADR-016 compromise) gets its own
+real, active tenant (`BusinessType='supplier'`, `Modules=["marketplace_supplier"]`),
+`supplier_profiles.IsOwnerManaged` set `true`. Idempotent (no-op if the system tenant
+or its suppliers are gone). `supplier_reviews.TenantId` untouched (it's the reviewing
+client, not the owner).
+
+`AddSupplierRolesAndTasks`:
+
+| Table | Purpose | Key constraints |
+|---|---|---|
+| `supplier_roles` | Custom staff roles, scoped per supplier tenant (unlike global `provider_roles`) | `TenantId`, `Permissions text[]`; idx(TenantId); RLS tenant_isolation (NULLIF guard) + provider_bypass, FORCE RLS |
+| `supplier_tasks` | Supplier task board (new standalone entity) | FK → suppliers (CASCADE), tenants as ClientTenantId (SET NULL), users as AssignedToUserId/CreatedByUserId (SET NULL); idx (TenantId, SupplierId, AssignedToUserId, ClientTenantId, Status); RLS tenant_isolation + provider_bypass, FORCE RLS |
+
+`users.SupplierRoleId` (nullable FK → supplier_roles, ON DELETE SET NULL) mirrors
+`ProviderRoleId`. Entities: `ShelfGuard.Domain/Entities/{SupplierRole,SupplierTask}.cs`,
+constants: `ShelfGuard.Domain/Constants/SupplierPermissions.cs`.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

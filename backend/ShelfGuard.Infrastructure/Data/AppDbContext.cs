@@ -114,6 +114,10 @@ public sealed class AppDbContext : DbContext
     // Provider RBAC — custom roles
     public DbSet<ProviderRole> ProviderRoles => Set<ProviderRole>();
 
+    // Supplier RBAC — custom roles (tenant-scoped) + task board (TASK-305)
+    public DbSet<SupplierRole> SupplierRoles => Set<SupplierRole>();
+    public DbSet<SupplierTask> SupplierTasks => Set<SupplierTask>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -157,6 +161,9 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.ProviderRoleId).IsRequired(false);
             e.HasOne<ProviderRole>().WithMany()
              .HasForeignKey(u => u.ProviderRoleId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.Property(u => u.SupplierRoleId).IsRequired(false);
+            e.HasOne<SupplierRole>().WithMany()
+             .HasForeignKey(u => u.SupplierRoleId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.Property(u => u.Permissions)
              .HasColumnType("jsonb")
              .HasConversion(
@@ -1133,6 +1140,7 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.Rating).IsRequired();
             e.Property(r => r.Comment).HasColumnType("text");
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(r => r.ReplyText).HasColumnType("text");
             // One review per (supplier, tenant)
             e.HasIndex(r => new { r.SupplierId, r.TenantId }).IsUnique();
             e.HasOne(r => r.Supplier).WithMany()
@@ -1442,6 +1450,50 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.Permissions).HasColumnType("text[]").IsRequired();
             e.Property(r => r.IsSystem).HasDefaultValue(false);
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── SupplierRole (TASK-305) ───────────────────────────────────────────
+        builder.Entity<SupplierRole>(e =>
+        {
+            e.ToTable("supplier_roles");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.TenantId).IsRequired();
+            e.Property(r => r.DisplayName).HasMaxLength(200).IsRequired();
+            e.Property(r => r.BaseRole).HasMaxLength(50).IsRequired();
+            e.Property(r => r.Permissions).HasColumnType("text[]").IsRequired();
+            e.Property(r => r.IsSystem).HasDefaultValue(false);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => r.TenantId);
+        });
+
+        // ── SupplierTask (TASK-305) ────────────────────────────────────────────
+        builder.Entity<SupplierTask>(e =>
+        {
+            e.ToTable("supplier_tasks");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.TenantId).IsRequired();
+            e.Property(t => t.SupplierId).IsRequired();
+            e.Property(t => t.Title).HasColumnType("text").IsRequired();
+            e.Property(t => t.Description).HasColumnType("text");
+            e.Property(t => t.Status).HasMaxLength(20).HasDefaultValue("pending");
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(t => t.TenantId);
+            e.HasIndex(t => t.SupplierId);
+            e.HasIndex(t => t.AssignedToUserId);
+            e.HasIndex(t => t.ClientTenantId);
+            e.HasIndex(t => t.Status);
+            e.HasOne(t => t.Supplier).WithMany()
+             .HasForeignKey(t => t.SupplierId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(t => t.Tenant).WithMany()
+             .HasForeignKey(t => t.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.ClientTenant).WithMany()
+             .HasForeignKey(t => t.ClientTenantId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(t => t.AssignedToUser).WithMany()
+             .HasForeignKey(t => t.AssignedToUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(t => t.CreatedByUser).WithMany()
+             .HasForeignKey(t => t.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── ChatSession (TASK-278) ────────────────────────────────────────────

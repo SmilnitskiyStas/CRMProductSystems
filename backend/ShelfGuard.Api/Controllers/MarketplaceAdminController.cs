@@ -24,22 +24,6 @@ public sealed class MarketplaceAdminController : ControllerBase
         _marketplace = marketplace;
     }
 
-    /// <summary>Creates a new supplier and its marketplace profile.</summary>
-    [HttpPost("suppliers")]
-    [ProducesResponseType(typeof(SupplierProfileDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> CreateSupplier(
-        [FromBody] AdminCreateSupplierDto request,
-        CancellationToken ct)
-    {
-        var (profile, error) = await _marketplace.AdminCreateSupplierAsync(request, ct);
-
-        if (error is not null)
-            return BadRequest(new { error });
-
-        return StatusCode(StatusCodes.Status201Created, profile);
-    }
-
     /// <summary>Adds an item to a supplier's catalog.</summary>
     [HttpPost("suppliers/{id:guid}/items")]
     [ProducesResponseType(typeof(SupplierItemDto), StatusCodes.Status201Created)]

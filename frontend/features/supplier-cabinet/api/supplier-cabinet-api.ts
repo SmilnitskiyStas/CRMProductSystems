@@ -6,9 +6,19 @@ import type {
   CabinetAddItemRequest,
   CabinetUpdateItemRequest,
   CabinetReview,
+  CabinetReplyToReviewRequest,
+  SupplierReviewStats,
   CabinetMetrics,
   PagedResult,
   CabinetInviteStaffRequest,
+  SupplierRoleDto,
+  CreateSupplierRoleRequest,
+  UpdateSupplierRoleRequest,
+  SupplierTaskDto,
+  CreateSupplierTaskRequest,
+  UpdateSupplierTaskRequest,
+  UpdateSupplierTaskStatusRequest,
+  SupplierTaskFilters,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 
@@ -45,6 +55,15 @@ export const supplierCabinetApi = {
       `${BASE}/reviews?page=${page}&pageSize=${pageSize}`
     ),
 
+  /** PUT /api/supplier-cabinet/reviews/{id}/reply */
+  replyToReview: (id: string, replyText: string) =>
+    api.put<CabinetReview>(`${BASE}/reviews/${id}/reply`, {
+      replyText,
+    } satisfies CabinetReplyToReviewRequest),
+
+  /** GET /api/supplier-cabinet/reviews/stats */
+  getReviewStats: () => api.get<SupplierReviewStats>(`${BASE}/reviews/stats`),
+
   /** GET /api/supplier-cabinet/metrics */
   getMetrics: () => api.get<CabinetMetrics>(`${BASE}/metrics`),
 
@@ -57,4 +76,40 @@ export const supplierCabinetApi = {
 
   /** DELETE /api/supplier-cabinet/staff/{id} */
   deactivateStaff: (id: string) => api.delete<void>(`${BASE}/staff/${id}`),
+
+  /** GET /api/supplier-cabinet/roles */
+  getRoles: () => api.get<SupplierRoleDto[]>(`${BASE}/roles`),
+
+  /** POST /api/supplier-cabinet/roles */
+  createRole: (body: CreateSupplierRoleRequest) =>
+    api.post<SupplierRoleDto>(`${BASE}/roles`, body),
+
+  /** PUT /api/supplier-cabinet/roles/{id} */
+  updateRole: (id: string, body: UpdateSupplierRoleRequest) =>
+    api.put<SupplierRoleDto>(`${BASE}/roles/${id}`, body),
+
+  /** DELETE /api/supplier-cabinet/roles/{id} */
+  deleteRole: (id: string) => api.delete<void>(`${BASE}/roles/${id}`),
+
+  /** GET /api/supplier-cabinet/tasks */
+  getTasks: (filters?: SupplierTaskFilters) => {
+    const qs = new URLSearchParams();
+    if (filters?.assignedToMe) qs.set("assignedToMe", "true");
+    if (filters?.clientTenantId) qs.set("clientTenantId", filters.clientTenantId);
+    if (filters?.status) qs.set("status", filters.status);
+    const query = qs.toString();
+    return api.get<SupplierTaskDto[]>(`${BASE}/tasks${query ? `?${query}` : ""}`);
+  },
+
+  /** POST /api/supplier-cabinet/tasks */
+  createTask: (body: CreateSupplierTaskRequest) =>
+    api.post<SupplierTaskDto>(`${BASE}/tasks`, body),
+
+  /** PUT /api/supplier-cabinet/tasks/{id} */
+  updateTask: (id: string, body: UpdateSupplierTaskRequest) =>
+    api.put<SupplierTaskDto>(`${BASE}/tasks/${id}`, body),
+
+  /** PUT /api/supplier-cabinet/tasks/{id}/status */
+  updateTaskStatus: (id: string, body: UpdateSupplierTaskStatusRequest) =>
+    api.put<SupplierTaskDto>(`${BASE}/tasks/${id}/status`, body),
 };

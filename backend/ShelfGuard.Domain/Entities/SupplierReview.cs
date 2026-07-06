@@ -14,6 +14,9 @@ public sealed class SupplierReview
     public short Rating { get; set; }
     public string? Comment { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    /// <summary>Supplier's reply to this review (self-service, one reply per review).</summary>
+    public string? ReplyText { get; set; }
+    public DateTimeOffset? RepliedAt { get; set; }
 
     public Supplier? Supplier { get; init; }
     public Tenant? Tenant { get; init; }

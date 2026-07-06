@@ -127,6 +127,12 @@ public static class DependencyInjection
         // v4 Phase 3 - Supplier Marketplace (TASK-221)
         services.AddScoped<IMarketplaceRepository, MarketplaceRepository>();
 
+        // TASK-306 - Supplier staff roles + task board
+        services.AddScoped<Domain.Interfaces.ISupplierRolesRepository,
+            Data.Repositories.SupplierRolesRepository>();
+        services.AddScoped<Domain.Interfaces.ISupplierTaskRepository,
+            Data.Repositories.SupplierTaskRepository>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<Domain.Interfaces.IAutoServiceRepository,
             Data.Repositories.AutoServiceRepository>();

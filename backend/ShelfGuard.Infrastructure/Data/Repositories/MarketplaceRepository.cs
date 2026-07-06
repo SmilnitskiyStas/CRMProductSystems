@@ -349,6 +349,17 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
         return await _db.SupplierReviews.CountAsync(r => r.SupplierId == supplierId, ct);
     }
 
+    public async Task<SupplierReview?> GetReviewByIdAsync(
+        Guid supplierId, Guid reviewId, CancellationToken ct = default)
+    {
+        // Reviews belong to the reviewer's tenant, not the supplier's — provider bypass
+        // is required so the supplier (a different tenant) can load/reply to it.
+        await SetProviderRoleAsync(ct);
+        return await _db.SupplierReviews
+            .Include(r => r.Tenant)
+            .FirstOrDefaultAsync(r => r.Id == reviewId && r.SupplierId == supplierId, ct);
+    }
+
     public async Task<SupplierMetrics?> GetMetricsBySupplierIdAsync(
         Guid supplierId, CancellationToken ct = default)
     {

@@ -5,7 +5,6 @@ import type {
   MarketplaceSearchRequest,
   CreateReviewRequest,
   SupplierProfileUpdateRequest,
-  CreateSupplierRequest,
   AddSupplierItemRequest,
 } from "../types";
 
@@ -138,18 +137,6 @@ export function useUpdateMySupplierProfile() {
 }
 
 // ─── Admin / platform hooks (TASK-275) ───────────────────────────────────────
-
-export function useCreateSupplier() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: CreateSupplierRequest) =>
-      marketplaceApi.adminCreateSupplier(body),
-    onSuccess: () => {
-      // Invalidate all supplier list queries so the new supplier appears
-      queryClient.invalidateQueries({ queryKey: ["marketplace", "suppliers"] });
-    },
-  });
-}
 
 export function useAddSupplierItem(supplierId: string) {
   const queryClient = useQueryClient();

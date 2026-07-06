@@ -10,7 +10,6 @@ import type {
   CreateReviewRequest,
   SupplierProfileUpdateRequest,
   SupplierPlan,
-  CreateSupplierRequest,
   AddSupplierItemRequest,
   SupplierItemCategoryDto,
 } from "../types";
@@ -69,10 +68,6 @@ export const marketplaceApi = {
     api.put<SupplierProfileDto>("/api/settings/supplier-profile", body),
 
   // ── Admin / platform endpoints (TASK-275) ─────────────────────────────────
-
-  /** POST /api/admin/marketplace/suppliers */
-  adminCreateSupplier: (body: CreateSupplierRequest) =>
-    api.post<SupplierProfileDto>("/api/admin/marketplace/suppliers", body),
 
   /** POST /api/admin/marketplace/suppliers/{id}/items */
   adminAddSupplierItem: (supplierId: string, body: AddSupplierItemRequest) =>

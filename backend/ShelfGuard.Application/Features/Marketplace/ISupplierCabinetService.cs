@@ -40,12 +40,29 @@ public interface ISupplierCabinetService
     Task<(SupplierMetricsDto? Metrics, string? Error)> GetMetricsAsync(
         Guid tenantId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Posts/updates the caller's own supplier's reply to a review. Returns an error
+    /// (without leaking whether the review exists for a different supplier) if the
+    /// review does not belong to the caller's own supplier.
+    /// </summary>
+    Task<(PublicSupplierReviewDto? Review, string? Error)> ReplyToReviewAsync(
+        Guid tenantId, Guid reviewId, string replyText, CancellationToken ct = default);
+
+    /// <summary>Positive/neutral/negative breakdown of the caller's own supplier's reviews (computed on-read).</summary>
+    Task<(SupplierReviewStatsDto? Stats, string? Error)> GetReviewStatsAsync(
+        Guid tenantId, CancellationToken ct = default);
+
     // ── Staff management (self-service) ──────────────────────────────────────
 
     /// <summary>Lists all staff/team members of the caller's own tenant.</summary>
     Task<IReadOnlyList<UserDto>> GetStaffAsync(Guid tenantId, CancellationToken ct = default);
 
-    /// <summary>Invites a new staff member into the caller's own tenant, always as supplier_admin.</summary>
+    /// <summary>
+    /// Invites a new staff member into the caller's own tenant, always as supplier_admin
+    /// at the system-role level. If <paramref name="request"/>.SupplierRoleId is set, the
+    /// resolved role's Permissions are applied to narrow the invited user's effective
+    /// access (TASK-306); otherwise the invited user keeps full access (Permissions = null).
+    /// </summary>
     Task<(UserDto? User, string? Error)> InviteStaffAsync(
         Guid tenantId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default);
 

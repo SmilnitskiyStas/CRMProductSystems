@@ -76,6 +76,10 @@ services.AddScoped<IAuthService, AuthService>();
         // v4.1 - Supplier self-service cabinet (TASK-284, ADR-016)
         services.AddScoped<ISupplierCabinetService, SupplierCabinetService>();
 
+        // TASK-306 - Supplier staff roles + task board
+        services.AddScoped<ISupplierRolesService, SupplierRolesService>();
+        services.AddScoped<ISupplierTaskService, SupplierTaskService>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<IAutoServiceService, AutoServiceService>();
 

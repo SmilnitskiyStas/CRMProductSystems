@@ -27,6 +27,15 @@ export interface SupplierMetricsDto {
   updatedAt: string;
 }
 
+/** Aggregated public review stats (GET reviewStats on supplier profile). */
+export interface SupplierReviewStats {
+  positive: number;
+  neutral: number;
+  negative: number;
+  total: number;
+  averageRating: number | null;
+}
+
 /** Full supplier profile. Premium fields are null for unauthenticated/free callers. */
 export interface SupplierProfileDto {
   supplierId: string;
@@ -40,6 +49,7 @@ export interface SupplierProfileDto {
   isPublic: boolean;
   plan: SupplierPlan;
   metrics: SupplierMetricsDto | null;
+  reviewStats?: SupplierReviewStats | null;
 }
 
 /** Image of a supplier item. Ordered by sortOrder; kind "main" is the cover image. */
@@ -107,6 +117,8 @@ export interface PublicSupplierReviewDto {
   comment: string | null;
   createdAt: string;
   reviewerName: string;
+  replyText: string | null;
+  repliedAt: string | null;
 }
 
 // ─── Paginated list response ──────────────────────────────────────────────────
@@ -150,18 +162,6 @@ export interface MarketplaceFilters {
 }
 
 // ─── Admin / platform request bodies (TASK-275) ───────────────────────────────
-
-export interface CreateSupplierRequest {
-  companyName: string;
-  region?: string;
-  categories?: string[];
-  website?: string;
-  deliveryRegions?: string[];
-  workingHours?: string;
-  paymentTerms?: string;
-  isPublic: boolean;
-  plan: SupplierPlan;
-}
 
 export interface AddSupplierItemRequest {
   customName: string;

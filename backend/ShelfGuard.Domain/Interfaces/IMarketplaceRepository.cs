@@ -148,6 +148,14 @@ public interface IMarketplaceRepository
 
     Task<int> CountReviewsBySupplierAsync(Guid supplierId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Returns a review only if it belongs to the given supplier (cross-tenant guard,
+    /// mirrors <see cref="GetSupplierItemByIdAsync"/>). Tracked (no AsNoTracking) so the
+    /// caller can mutate ReplyText/RepliedAt and save. Provider-bypass read.
+    /// </summary>
+    Task<SupplierReview?> GetReviewByIdAsync(
+        Guid supplierId, Guid reviewId, CancellationToken ct = default);
+
     /// <summary>Tracked metrics row for a supplier (provider-bypass read), or null when absent.</summary>
     Task<SupplierMetrics?> GetMetricsBySupplierIdAsync(Guid supplierId, CancellationToken ct = default);
 

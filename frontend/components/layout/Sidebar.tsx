@@ -56,6 +56,7 @@ import {
   SYSTEM_ROLE_PERMISSIONS,
   resolvePermissions,
 } from "@/lib/providerPermissions";
+import { ALL_SUPPLIER_PERMISSIONS } from "@/lib/supplierPermissions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -191,17 +192,22 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-// Supplier cabinet (v4.1, TASK-286, ADR-016) — the ONLY group a supplier_admin
-// sees. Rendered instead of NAV_GROUPS for that role; not module-gated on the
-// client (the backend already gates /api/supplier-cabinet with marketplace_supplier).
+// Supplier cabinet (v4.1, TASK-286, ADR-016; permissions TASK-307) — the ONLY
+// group a supplier_admin sees. Rendered instead of NAV_GROUPS for that role;
+// not module-gated on the client (the backend already gates /api/supplier-cabinet
+// with marketplace_supplier). Items are additionally filtered by permission key
+// when the user has a non-null permissions dict (see effectiveSupplierPermissions
+// below) — null permissions = full/owner access, so nothing is hidden.
 const SUPPLIER_NAV_GROUP: NavGroup = {
   key: "supplier_cabinet",
   label: "Кабінет",
   icon: <Store size={18} />,
   items: [
-    { href: "/supplier/profile", label: "Профіль",    icon: <Store size={16} />,        roles: SUPPLIER_ONLY },
-    { href: "/supplier/items",   label: "Мої товари", icon: <Package size={16} />,      roles: SUPPLIER_ONLY },
-    { href: "/supplier/reviews", label: "Відгуки",    icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY },
+    { href: "/supplier/profile", label: "Профіль",     icon: <Store size={16} />,        roles: SUPPLIER_ONLY, permission: "profile_management" },
+    { href: "/supplier/items",   label: "Мої товари",  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
+    { href: "/supplier/reviews", label: "Відгуки",     icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
+    { href: "/supplier/tasks",   label: "Завдання",    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
+    { href: "/supplier/team",    label: "Команда",     icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
   ],
 };
 
@@ -383,6 +389,15 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     ? new Set(resolvePermissions(SYSTEM_ROLE_PERMISSIONS[userRole] ?? [], me?.permissions))
     : null;
 
+  // Resolve effective permissions for supplier cabinet staff (TASK-307).
+  // me.permissions === null/undefined means full/owner access (no filtering) —
+  // it's only set when the user was invited with a specific supplier role.
+  const isSupplierAdminRole = userRole === AppRoles.SupplierAdmin;
+  const supplierEffectivePermissions =
+    isSupplierAdminRole && me?.permissions
+      ? new Set(ALL_SUPPLIER_PERMISSIONS.filter((p) => me.permissions?.[p]))
+      : null;
+
   // Standalone top item: Dashboard
   const dashboardItem: NavItem = {
     href: "/dashboard",
@@ -430,6 +445,11 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         if (effectivePermissions && item.permission) {
           const perms = Array.isArray(item.permission) ? item.permission : [item.permission];
           return perms.some((p) => effectivePermissions.has(p));
+        }
+        // Permission check for supplier cabinet staff with a restricted role
+        if (supplierEffectivePermissions && item.permission) {
+          const perms = Array.isArray(item.permission) ? item.permission : [item.permission];
+          return perms.some((p) => supplierEffectivePermissions.has(p));
         }
         return true;
       }),

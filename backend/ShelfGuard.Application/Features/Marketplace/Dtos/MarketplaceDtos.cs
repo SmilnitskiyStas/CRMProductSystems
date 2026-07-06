@@ -23,7 +23,8 @@ public record SupplierProfileDto(
     string? PaymentTerms,
     bool IsPublic,
     string Plan,
-    SupplierMetricsDto? Metrics);
+    SupplierMetricsDto? Metrics,
+    SupplierReviewStatsDto? ReviewStats = null);
 
 public record SupplierMetricsDto(
     decimal? Rating,
@@ -83,17 +84,6 @@ public record SupplierProfileUpdateDto(
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
 // ── Platform admin DTOs (TASK-275) ───────────────────────────────────────────
-
-public record AdminCreateSupplierDto(
-    string CompanyName,
-    string? Region,
-    string[]? Categories,
-    string? Website,
-    string[]? DeliveryRegions,
-    string? WorkingHours,
-    string? PaymentTerms,
-    bool IsPublic,
-    string Plan);
 
 public record AdminAddSupplierItemDto(
     string CustomName,
@@ -155,11 +145,68 @@ public record CabinetProfileUpdateDto(
 // ── Supplier cabinet staff management (self-service) ─────────────────────────
 
 /// <summary>Invite request for a new staff member of the caller's own supplier tenant.
-/// Role is always forced to supplier_admin server-side — no role choice is exposed here.</summary>
+/// Base system role is always supplier_admin server-side. When <paramref name="SupplierRoleId"/>
+/// is provided, the invited user's effective permissions are narrowed to that custom
+/// supplier_roles row (Permissions resolved to a Dictionary&lt;string,bool&gt;). When omitted,
+/// the invited user keeps full access (Permissions = null), same as before TASK-306.</summary>
 public record CabinetInviteStaffDto(
     string Email,
     string FullName,
-    string Password);
+    string Password,
+    Guid? SupplierRoleId = null);
+
+// ── Supplier cabinet roles (TASK-306) ────────────────────────────────────────
+
+/// <summary>Custom staff role scoped to the caller's own supplier tenant.</summary>
+public record SupplierRoleDto(
+    Guid Id,
+    string DisplayName,
+    string BaseRole,
+    string[] Permissions,
+    bool IsSystem);
+
+public record CreateSupplierRoleRequest(
+    string DisplayName,
+    string BaseRole,
+    string[] Permissions);
+
+public record UpdateSupplierRoleRequest(
+    string DisplayName,
+    string BaseRole,
+    string[] Permissions);
+
+// ── Supplier cabinet task board (TASK-306) ───────────────────────────────────
+
+/// <summary>A task on the caller's own supplier task board.</summary>
+public record SupplierTaskDto(
+    Guid Id,
+    Guid? ClientTenantId,
+    string? ClientTenantName,
+    Guid? AssignedToUserId,
+    string? AssignedToUserName,
+    string Title,
+    string? Description,
+    string Status,
+    DateTime? DueDate,
+    Guid? CreatedByUserId,
+    DateTime CreatedAt,
+    DateTime? CompletedAt);
+
+public record CreateSupplierTaskRequest(
+    string Title,
+    string? Description,
+    Guid? ClientTenantId,
+    Guid? AssignedToUserId,
+    DateTime? DueDate);
+
+public record UpdateSupplierTaskRequest(
+    string Title,
+    string? Description,
+    Guid? ClientTenantId,
+    Guid? AssignedToUserId,
+    DateTime? DueDate);
+
+public record UpdateSupplierTaskStatusRequest(string Status);
 
 // ── Public reviews (v4.1, TASK-285) ──────────────────────────────────────────
 
@@ -169,7 +216,26 @@ public record PublicSupplierReviewDto(
     int Rating,
     string? Comment,
     DateTimeOffset CreatedAt,
-    string ReviewerName);
+    string ReviewerName,
+    string? ReplyText = null,
+    DateTimeOffset? RepliedAt = null);
+
+// ── Supplier cabinet review reply (self-service) ─────────────────────────────
+
+/// <summary>Request body to post/update the supplier's one reply to a review.</summary>
+public record CabinetReplyToReviewDto(string ReplyText);
+
+/// <summary>
+/// On-read review breakdown for the caller's own supplier. Convention: rating 4-5 =
+/// positive, 3 = neutral, 1-2 = negative. Not persisted — computed from the existing
+/// ratings list on every call.
+/// </summary>
+public record SupplierReviewStatsDto(
+    int Positive,
+    int Neutral,
+    int Negative,
+    int Total,
+    decimal? AverageRating);
 
 // ── AI Supplier Recommendation (TASK-223) ─────────────────────────────────────
 
