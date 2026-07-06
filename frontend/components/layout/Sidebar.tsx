@@ -76,6 +76,8 @@ interface NavGroup {
   icon: React.ReactNode;
   /** When set, the whole group is hidden unless this module is active for the tenant. */
   moduleKey?: ModuleKey;
+  /** When set, the group renders permanently expanded with no collapse toggle. */
+  alwaysExpanded?: boolean;
   items: NavItem[];
 }
 
@@ -202,6 +204,10 @@ const SUPPLIER_NAV_GROUP: NavGroup = {
   key: "supplier_cabinet",
   label: "Кабінет",
   icon: <Store size={18} />,
+  // supplier_admin only ever renders this one group (see sourceGroups below) —
+  // collapsing the sole group hid every cabinet link (items, reviews, etc.)
+  // behind an easy-to-miss toggle. Always expanded, no reason to collapse it.
+  alwaysExpanded: true,
   items: [
     { href: "/supplier/profile", label: "Профіль",     icon: <Store size={16} />,        roles: SUPPLIER_ONLY, permission: "profile_management" },
     { href: "/supplier/items",   label: "Мої товари",  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
@@ -288,7 +294,7 @@ interface NavGroupSectionProps {
 
 function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupSectionProps) {
   const hasActive = visibleItems.some((item) => isActive(pathname, item.href, item.exact));
-  const [expanded, setExpanded] = useState(hasActive);
+  const [expanded, setExpanded] = useState(hasActive || !!group.alwaysExpanded);
 
   // Auto-expand when navigating to a child route
   useEffect(() => {
@@ -319,9 +325,10 @@ function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupS
 
   return (
     <div>
-      {/* Group header — toggle button */}
+      {/* Group header — toggle button (no-op when alwaysExpanded, e.g. the
+          supplier cabinet's sole group has nothing to collapse in favor of) */}
       <button
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => !group.alwaysExpanded && setExpanded((v) => !v)}
         style={{
           width: "100%",
           display: "flex",
@@ -337,7 +344,7 @@ function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupS
           fontWeight: 600,
           letterSpacing: "0.04em",
           textTransform: "uppercase",
-          cursor: "pointer",
+          cursor: group.alwaysExpanded ? "default" : "pointer",
           transition: "background 0.1s, color 0.1s",
         }}
         onMouseEnter={(e) => {
@@ -353,10 +360,11 @@ function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupS
           <span style={{ opacity: 0.8 }}>{group.icon}</span>
           {group.label}
         </span>
-        {expanded
-          ? <ChevronDown size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
-          : <ChevronRight size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
-        }
+        {!group.alwaysExpanded && (
+          expanded
+            ? <ChevronDown size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
+            : <ChevronRight size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
+        )}
       </button>
 
       {/* Children */}
