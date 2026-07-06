@@ -9,6 +9,7 @@ import {
   useUpdateCabinetProfile,
   useTogglePublish,
 } from "../hooks/useSupplierCabinet";
+import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 
 const INPUT_STYLE: React.CSSProperties = {
   width: "100%",
@@ -49,11 +50,12 @@ function parseList(raw: string): string[] {
 
 export function CabinetProfileForm() {
   const { data: profile, isLoading, isError, error } = useCabinetProfile();
+  const { data: itemCategories = [] } = useItemCategories();
   const update = useUpdateCabinetProfile();
   const publish = useTogglePublish();
 
   const [region, setRegion] = useState("");
-  const [categoriesRaw, setCategoriesRaw] = useState("");
+  const [categories, setCategories] = useState<Set<string>>(new Set());
   const [website, setWebsite] = useState("");
   const [deliveryRegionsRaw, setDeliveryRegionsRaw] = useState("");
   const [workingHours, setWorkingHours] = useState("");
@@ -64,7 +66,7 @@ export function CabinetProfileForm() {
   useEffect(() => {
     if (!profile) return;
     setRegion(profile.region ?? "");
-    setCategoriesRaw((profile.categories ?? []).join(", "));
+    setCategories(new Set(profile.categories ?? []));
     setWebsite(profile.website ?? "");
     setDeliveryRegionsRaw((profile.deliveryRegions ?? []).join(", "));
     setWorkingHours(profile.workingHours ?? "");
@@ -90,7 +92,7 @@ export function CabinetProfileForm() {
     update.mutate(
       {
         region: region.trim() || undefined,
-        categories: parseList(categoriesRaw),
+        categories: Array.from(categories),
         website: website.trim() || undefined,
         deliveryRegions: parseList(deliveryRegionsRaw),
         workingHours: workingHours.trim() || undefined,
@@ -197,13 +199,39 @@ export function CabinetProfileForm() {
           </Field>
         </div>
 
-        <Field label="Категорії (через кому)">
-          <input
-            style={INPUT_STYLE}
-            value={categoriesRaw}
-            onChange={(e) => setCategoriesRaw(e.target.value)}
-            placeholder="Молочні продукти, Бакалія"
-          />
+        <Field label="Категорії">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 20px" }}>
+            {itemCategories.map((cat) => (
+              <label
+                key={cat.key}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  color: "#E8EDF5",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={categories.has(cat.key)}
+                  onChange={(e) => {
+                    setCategories((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) {
+                        next.add(cat.key);
+                      } else {
+                        next.delete(cat.key);
+                      }
+                      return next;
+                    });
+                  }}
+                />
+                {cat.labelUa}
+              </label>
+            ))}
+          </div>
         </Field>
 
         <Field label="Регіони доставки (через кому)">
