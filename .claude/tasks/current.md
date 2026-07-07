@@ -71,6 +71,17 @@ Fix (frontend-only): new `ChatInboxTab.tsx` renders all chat sessions via
 `useSupplierChatSessions()`, opens `SupplierClientChatPanel` on click. Wired in as
 a tab switcher ("Клієнти" / "Повідомлення") on `/supplier/clients` — no new route,
 no nav change, no backend change. `tsc --noEmit` clean, `npm run build` green.
+**Superseded by BUG-019** — the tab was still gated behind `client_management`.
+
+## BUG-019 — Chat inbox still unreachable: wrongly nested under client_management ✅ done (2026-07-07)
+Log: `.claude/logs/tasks/bug019_2026-07-07_supplier-chat-inbox-permission-gate_frontend-developer.md`
+User screenshot showed a supplier staff account missing Профіль/Клієнти/Команда nav
+items (no profile_management/client_management/staff_management permission) — so the
+BUG-018 fix, nested inside `/supplier/clients`, was unreachable for that account,
+reproducing the original complaint. Fix: moved chat inbox to its own ungated route
+`/supplier/messages` (new nav item, no `permission` key — same treatment as the
+TASK-318 cooperation items) using the existing `ChatInboxTab` unchanged;
+`/supplier/clients` reverted to always rendering just `ClientsTab`. `tsc --noEmit` clean.
 
 ---
 

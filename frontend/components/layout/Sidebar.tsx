@@ -38,6 +38,7 @@ import {
   HeartHandshake,
   ShoppingBag,
   FileText,
+  MessageCircle,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -228,6 +229,10 @@ const SUPPLIER_NAV_GROUP: NavGroup = {
     { href: "/supplier/orders",            label: "Замовлення",          icon: <ShoppingBag size={16} />, roles: SUPPLIER_ONLY },
     { href: "/supplier/contract-settings", label: "Реквізити договору",  icon: <FileText size={16} />,    roles: SUPPLIER_ONLY },
     { href: "/supplier/support",           label: "Підтримка",           icon: <LifeBuoy size={16} />,    roles: SUPPLIER_ONLY },
+    // Messaging (BUG-019) — moved out from under /supplier/clients (client_management)
+    // because staff without that permission still need to reply to client chats;
+    // same ungated treatment as the TASK-318 items above.
+    { href: "/supplier/messages",          label: "Повідомлення",        icon: <MessageCircle size={16} />, roles: SUPPLIER_ONLY },
   ],
 };
 
