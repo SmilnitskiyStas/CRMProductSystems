@@ -59,6 +59,19 @@ Backend `MarketplaceAdminController`/`AdminCreateSupplierAsync` left untouched �
 Log: `.claude/logs/tasks/bug015-017_2026-07-04_provider-storeselector-duplicate-button-detail-width_frontend-developer.md`
 Removed `maxWidth: 900` from both wrapper divs in `frontend/app/(dashboard)/marketplace/[id]/page.tsx`.
 
+## BUG-018 — Client chat messages never reach supplier (no UI inbox) ✅ done (2026-07-07)
+Log: `.claude/logs/tasks/bug018_2026-07-07_supplier-chat-inbox_frontend-developer.md`
+Root cause: `ClientsTab.tsx` (`/supplier/clients`) was the only place that opened
+`SupplierClientChatPanel`, and its list (`useSupplierClients`) only includes clients
+with a review or a task (TASK-313 design) — a client who only started a chat never
+appeared, so the supplier had no way to see/reply even though messages saved fine.
+The already-existing `GET /api/supplier-cabinet/chat/sessions` endpoint +
+`useSupplierChatSessions()` hook were dead code (no component used them).
+Fix (frontend-only): new `ChatInboxTab.tsx` renders all chat sessions via
+`useSupplierChatSessions()`, opens `SupplierClientChatPanel` on click. Wired in as
+a tab switcher ("Клієнти" / "Повідомлення") on `/supplier/clients` — no new route,
+no nav change, no backend change. `tsc --noEmit` clean, `npm run build` green.
+
 ---
 
 ## TASK-293 — DB: SupplierItem.Category + Attributes (JSONB)
