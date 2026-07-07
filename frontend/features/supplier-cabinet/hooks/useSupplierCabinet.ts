@@ -277,10 +277,11 @@ export function useSupplierClients() {
 
 // ─── Supplier ↔ client chat (TASK-314) ──────────────────────────────────────────
 
-export function useSupplierChatSessions() {
+export function useSupplierChatSessions(enabled = true) {
   return useQuery({
     queryKey: CABINET_KEYS.chatSessions,
     queryFn: supplierCabinetApi.getChatSessions,
+    enabled,
     refetchInterval: 3000,
   });
 }

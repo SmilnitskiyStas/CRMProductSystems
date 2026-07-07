@@ -283,7 +283,8 @@ public record SupplierChatSessionDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string? LastMessage,
-    DateTimeOffset? LastMessageAt);
+    DateTimeOffset? LastMessageAt,
+    int UnreadCount = 0);
 
 public record SupplierChatMessageDto(
     Guid Id,

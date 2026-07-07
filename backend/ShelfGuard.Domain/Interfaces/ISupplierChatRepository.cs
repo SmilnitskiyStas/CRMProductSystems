@@ -21,16 +21,24 @@ public interface ISupplierChatRepository
 
     /// <summary>
     /// Lists sessions where the tenant is either the supplier or the client side,
-    /// each joined with the other party's tenant display name and its most recent
-    /// message (for a session-list preview), newest activity first.
+    /// each joined with the other party's tenant display name, its most recent
+    /// message (for a session-list preview), and the count of messages sent by the
+    /// OTHER party that are still unread by this tenant — newest activity first.
     /// </summary>
-    Task<IReadOnlyList<(SupplierChatSession Session, string OtherTenantName, SupplierChatMessage? LastMessage)>>
+    Task<IReadOnlyList<(SupplierChatSession Session, string OtherTenantName, SupplierChatMessage? LastMessage, int UnreadCount)>>
         GetSessionsAsync(Guid tenantId, bool isSupplierSide, CancellationToken ct = default);
 
     Task<IReadOnlyList<SupplierChatMessage>> GetMessagesAsync(
         Guid sessionId, CancellationToken ct = default);
 
     Task AddMessageAsync(SupplierChatMessage message, CancellationToken ct = default);
+
+    /// <summary>
+    /// Bulk-marks messages in a session as read, for messages sent by the OTHER
+    /// tenant (not <paramref name="readerTenantId"/>) that aren't already read.
+    /// Idempotent — a no-op when there's nothing unread to mark.
+    /// </summary>
+    Task MarkMessagesReadAsync(Guid sessionId, Guid readerTenantId, CancellationToken ct = default);
 
     Task<string?> GetTenantDisplayNameAsync(Guid tenantId, CancellationToken ct = default);
 

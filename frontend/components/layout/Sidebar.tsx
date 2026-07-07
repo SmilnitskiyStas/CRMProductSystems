@@ -43,6 +43,7 @@ import {
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { useSupplierChatSessions } from "@/features/supplier-cabinet/hooks/useSupplierCabinet";
 import type { ModuleKey } from "@/features/modules/types";
 import {
   AppRoles,
@@ -73,6 +74,8 @@ interface NavItem {
   /** Permission key(s) required for PROVIDER_TEAM users — user needs at least one (OR logic) */
   permission?: string | string[];
   exact?: boolean;
+  /** Optional unread-count badge (currently only set on the supplier "Повідомлення" item). */
+  badge?: number;
 }
 
 interface NavGroup {
@@ -300,6 +303,24 @@ function NavLink({ item, pathname, collapsed, indented }: NavLinkProps) {
     >
       <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{item.icon}</span>
       {!collapsed && item.label}
+      {!collapsed && !!item.badge && item.badge > 0 && (
+        <span
+          style={{
+            marginLeft: "auto",
+            background: "#EF4444",
+            color: "#fff",
+            borderRadius: 999,
+            padding: "1px 6px",
+            fontSize: 10,
+            fontWeight: 700,
+            minWidth: 16,
+            textAlign: "center",
+            lineHeight: 1.4,
+          }}
+        >
+          {item.badge > 9 ? "9+" : item.badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -446,6 +467,13 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   // regular NAV_GROUPS, and no module fetch (its menu is fixed).
   const isSupplierAdmin = userRole === AppRoles.SupplierAdmin;
 
+  // Aggregate unread badge for the supplier cabinet "Повідомлення" nav item.
+  // Only fetched for supplier_admin — other roles don't have this endpoint access.
+  const { data: chatSessions } = useSupplierChatSessions(isSupplierAdmin);
+  const supplierUnreadTotal = isSupplierAdmin
+    ? (chatSessions ?? []).reduce((sum, s) => sum + (s.unreadCount ?? 0), 0)
+    : 0;
+
   // Only bare provider sessions have no tenant_id — /api/settings/modules would 403.
   // enterprise_admin (real clients AND impersonation sessions) must go through module
   // gating so only their tenant's enabled modules are visible.
@@ -481,7 +509,16 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         return true;
       }),
     }))
-    .filter(({ visibleItems }) => visibleItems.length > 0);
+    .filter(({ visibleItems }) => visibleItems.length > 0)
+    .map(({ group, visibleItems }) => ({
+      group,
+      // Attach the aggregate unread badge to the supplier "Повідомлення" item only.
+      visibleItems: visibleItems.map((item) =>
+        item.href === "/supplier/messages" && supplierUnreadTotal > 0
+          ? { ...item, badge: supplierUnreadTotal }
+          : item,
+      ),
+    }));
 
   const W = collapsed ? 64 : 240;
 

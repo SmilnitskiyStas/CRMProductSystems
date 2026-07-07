@@ -55,7 +55,7 @@ public sealed class SupplierChatService : ISupplierChatService
         }
 
         var otherTenantName = await _repo.GetTenantDisplayNameAsync(otherTenantId, ct) ?? string.Empty;
-        return ToSessionDto(session, otherTenantId, otherTenantName, null);
+        return ToSessionDto(session, otherTenantId, otherTenantName, null, 0);
     }
 
     public async Task<IReadOnlyList<SupplierChatSessionDto>> GetSessionsAsync(
@@ -66,7 +66,7 @@ public sealed class SupplierChatService : ISupplierChatService
             .Select(r =>
             {
                 var otherTenantId = isSupplierSide ? r.Session.ClientTenantId : r.Session.SupplierTenantId;
-                return ToSessionDto(r.Session, otherTenantId, r.OtherTenantName, r.LastMessage);
+                return ToSessionDto(r.Session, otherTenantId, r.OtherTenantName, r.LastMessage, r.UnreadCount);
             })
             .ToList();
     }
@@ -81,6 +81,10 @@ public sealed class SupplierChatService : ISupplierChatService
             return (null, AccessDeniedError);
 
         var messages = await _repo.GetMessagesAsync(sessionId, ct);
+
+        // Opening/polling a thread marks the other party's messages as read.
+        await _repo.MarkMessagesReadAsync(sessionId, callerTenantId, ct);
+
         return (messages.Select(ToMessageDto).ToList(), null);
     }
 
@@ -120,7 +124,8 @@ public sealed class SupplierChatService : ISupplierChatService
     }
 
     private static SupplierChatSessionDto ToSessionDto(
-        SupplierChatSession session, Guid otherTenantId, string otherTenantName, SupplierChatMessage? lastMessage) =>
+        SupplierChatSession session, Guid otherTenantId, string otherTenantName, SupplierChatMessage? lastMessage,
+        int unreadCount) =>
         new(
             session.Id,
             otherTenantId,
@@ -128,7 +133,8 @@ public sealed class SupplierChatService : ISupplierChatService
             session.CreatedAt,
             session.UpdatedAt,
             lastMessage?.Body,
-            lastMessage?.CreatedAt);
+            lastMessage?.CreatedAt,
+            unreadCount);
 
     private static SupplierChatMessageDto ToMessageDto(SupplierChatMessage m) =>
         new(m.Id, m.SessionId, m.SenderTenantId, m.SenderUserId, m.SenderName, m.Body, m.IsRead, m.CreatedAt);

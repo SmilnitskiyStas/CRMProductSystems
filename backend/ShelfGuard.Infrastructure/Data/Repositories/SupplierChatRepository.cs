@@ -28,7 +28,7 @@ public sealed class SupplierChatRepository : ISupplierChatRepository
     public async Task AddSessionAsync(SupplierChatSession session, CancellationToken ct = default) =>
         await _db.SupplierChatSessions.AddAsync(session, ct);
 
-    public async Task<IReadOnlyList<(SupplierChatSession Session, string OtherTenantName, SupplierChatMessage? LastMessage)>>
+    public async Task<IReadOnlyList<(SupplierChatSession Session, string OtherTenantName, SupplierChatMessage? LastMessage, int UnreadCount)>>
         GetSessionsAsync(Guid tenantId, bool isSupplierSide, CancellationToken ct = default)
     {
         var query = isSupplierSide
@@ -37,7 +37,7 @@ public sealed class SupplierChatRepository : ISupplierChatRepository
 
         var sessions = await query.ToListAsync(ct);
         if (sessions.Count == 0)
-            return Array.Empty<(SupplierChatSession, string, SupplierChatMessage?)>();
+            return Array.Empty<(SupplierChatSession, string, SupplierChatMessage?, int)>();
 
         var otherTenantIds = sessions
             .Select(s => isSupplierSide ? s.ClientTenantId : s.SupplierTenantId)
@@ -59,13 +59,22 @@ public sealed class SupplierChatRepository : ISupplierChatRepository
             .ToListAsync(ct);
         var lastMessageBySession = lastMessages.ToDictionary(m => m.SessionId);
 
+        var unreadCounts = await _db.SupplierChatMessages
+            .AsNoTracking()
+            .Where(m => sessionIds.Contains(m.SessionId) && m.SenderTenantId != tenantId && !m.IsRead)
+            .GroupBy(m => m.SessionId)
+            .Select(g => new { SessionId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var unreadBySession = unreadCounts.ToDictionary(x => x.SessionId, x => x.Count);
+
         return sessions
             .Select(s =>
             {
                 var otherTenantId = isSupplierSide ? s.ClientTenantId : s.SupplierTenantId;
                 var otherName = names.TryGetValue(otherTenantId, out var n) ? n : string.Empty;
                 lastMessageBySession.TryGetValue(s.Id, out var lastMessage);
-                return (s, otherName, lastMessage);
+                var unreadCount = unreadBySession.TryGetValue(s.Id, out var c) ? c : 0;
+                return (s, otherName, lastMessage, unreadCount);
             })
             .OrderByDescending(x => x.lastMessage?.CreatedAt ?? x.s.UpdatedAt)
             .ToList();
@@ -81,6 +90,11 @@ public sealed class SupplierChatRepository : ISupplierChatRepository
 
     public async Task AddMessageAsync(SupplierChatMessage message, CancellationToken ct = default) =>
         await _db.SupplierChatMessages.AddAsync(message, ct);
+
+    public async Task MarkMessagesReadAsync(Guid sessionId, Guid readerTenantId, CancellationToken ct = default) =>
+        await _db.SupplierChatMessages
+            .Where(m => m.SessionId == sessionId && m.SenderTenantId != readerTenantId && !m.IsRead)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsRead, true), ct);
 
     public Task<string?> GetTenantDisplayNameAsync(Guid tenantId, CancellationToken ct = default) =>
         _db.Tenants.AsNoTracking().Where(t => t.Id == tenantId).Select(t => (string?)t.Name).FirstOrDefaultAsync(ct);

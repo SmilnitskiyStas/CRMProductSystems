@@ -5,7 +5,11 @@ import Link from "next/link";
 import { ChevronLeft, FileDown, HeartHandshake, LifeBuoy, MessageCircle } from "lucide-react";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
-import { useSupplier, useSupplierReviewCount } from "@/features/marketplace/hooks/useMarketplace";
+import {
+  useSupplier,
+  useSupplierReviewCount,
+  useSupplierChatMessages,
+} from "@/features/marketplace/hooks/useMarketplace";
 import { useMyCooperation } from "@/features/marketplace/hooks/useCooperation";
 import { marketplaceApi } from "@/features/marketplace/api/marketplace-api";
 import { reviewWord } from "@/features/marketplace/utils";
@@ -51,6 +55,13 @@ export default function SupplierProfilePage() {
     ? agreements?.find((a) => a.supplierName === supplier.supplierName)
     : undefined;
   const cooperationActive = agreement?.status === "active";
+
+  // Hoisted to page level (not inside SupplierChatPanel) so the 3s poll keeps
+  // running — and the unread badge stays visible — while the chat is closed.
+  const { data: chatMessages = [] } = useSupplierChatMessages(isClientTenant ? id : null);
+  const unreadChatCount = chatMessages.filter(
+    (m) => m.senderTenantId !== me?.tenantId && !m.isRead,
+  ).length;
 
   function handleAddToCart(item: SupplierItemDto, qty: number) {
     setCart((prev) => {
@@ -179,13 +190,38 @@ export default function SupplierProfilePage() {
             {isClientTenant && agreement && (
               <AgreementStatusBadge status={agreement.status} />
             )}
-            <Btn
-              size="sm"
-              icon={<MessageCircle size={13} />}
-              onClick={() => setChatOpen(true)}
-            >
-              Написати постачальнику
-            </Btn>
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <Btn
+                size="sm"
+                icon={<MessageCircle size={13} />}
+                onClick={() => setChatOpen(true)}
+              >
+                Написати постачальнику
+              </Btn>
+              {!chatOpen && unreadChatCount > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -6,
+                    minWidth: 16,
+                    height: 16,
+                    padding: unreadChatCount > 9 ? "0 4px" : 0,
+                    background: "#EF4444",
+                    borderRadius: unreadChatCount > 9 ? 8 : "50%",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  {unreadChatCount > 9 ? "9+" : unreadChatCount}
+                </span>
+              )}
+            </span>
             {isClientTenant && (
               <Btn
                 size="sm"

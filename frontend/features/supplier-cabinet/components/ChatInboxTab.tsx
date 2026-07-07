@@ -80,16 +80,34 @@ export function ChatInboxTab() {
                   {session.lastMessage ?? "Немає повідомлень"}
                 </div>
               </div>
-              {session.lastMessageAt && (
-                <div style={{ color: "#4B5563", fontSize: 11, flexShrink: 0 }}>
-                  {new Date(session.lastMessageAt).toLocaleString("uk-UA", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              )}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                {session.lastMessageAt && (
+                  <div style={{ color: "#4B5563", fontSize: 11 }}>
+                    {new Date(session.lastMessageAt).toLocaleString("uk-UA", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                )}
+                {session.unreadCount > 0 && (
+                  <span
+                    style={{
+                      background: "#EF4444",
+                      color: "#fff",
+                      borderRadius: 999,
+                      padding: "1px 6px",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      minWidth: 18,
+                      textAlign: "center",
+                    }}
+                  >
+                    {session.unreadCount > 9 ? "9+" : session.unreadCount}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
 

@@ -113,6 +113,19 @@ public sealed class SupplierChatServiceTests
     }
 
     [Fact]
+    public async Task GetMessagesAsync_CallerBelongsToSession_MarksOtherPartyMessagesRead()
+    {
+        var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
+        _repo.GetSessionByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+        _repo.GetMessagesAsync(session.Id, Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierChatMessage>());
+
+        await _sut.GetMessagesAsync(session.Id, _clientTenantId);
+
+        await _repo.Received(1).MarkMessagesReadAsync(session.Id, _clientTenantId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task GetMessagesAsync_CallerNotInSession_ReturnsAccessDenied()
     {
         var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
@@ -125,6 +138,18 @@ public sealed class SupplierChatServiceTests
     }
 
     [Fact]
+    public async Task GetMessagesAsync_CallerNotInSession_DoesNotMarkMessagesRead()
+    {
+        var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
+        _repo.GetSessionByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+
+        await _sut.GetMessagesAsync(session.Id, Guid.NewGuid());
+
+        await _repo.DidNotReceive().MarkMessagesReadAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task GetMessagesAsync_SessionNotFound_ReturnsError()
     {
         var sessionId = Guid.NewGuid();
@@ -134,6 +159,18 @@ public sealed class SupplierChatServiceTests
 
         Assert.Null(messages);
         Assert.Equal(SupplierChatService.SessionNotFoundError, error);
+    }
+
+    [Fact]
+    public async Task GetMessagesAsync_SessionNotFound_DoesNotMarkMessagesRead()
+    {
+        var sessionId = Guid.NewGuid();
+        _repo.GetSessionByIdAsync(sessionId, Arg.Any<CancellationToken>()).Returns((SupplierChatSession?)null);
+
+        await _sut.GetMessagesAsync(sessionId, _supplierTenantId);
+
+        await _repo.DidNotReceive().MarkMessagesReadAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     // ── SendMessageAsync ───────────────────────────────────────────────────────
@@ -215,9 +252,9 @@ public sealed class SupplierChatServiceTests
     {
         var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
         _repo.GetSessionsAsync(_supplierTenantId, true, Arg.Any<CancellationToken>())
-             .Returns(new List<(SupplierChatSession, string, SupplierChatMessage?)>
+             .Returns(new List<(SupplierChatSession, string, SupplierChatMessage?, int)>
              {
-                 (session, "Client Co", null),
+                 (session, "Client Co", null, 0),
              });
 
         var sessions = await _sut.GetSessionsAsync(_supplierTenantId, isSupplierSide: true);
@@ -232,9 +269,9 @@ public sealed class SupplierChatServiceTests
     {
         var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
         _repo.GetSessionsAsync(_clientTenantId, false, Arg.Any<CancellationToken>())
-             .Returns(new List<(SupplierChatSession, string, SupplierChatMessage?)>
+             .Returns(new List<(SupplierChatSession, string, SupplierChatMessage?, int)>
              {
-                 (session, "Supplier Co", null),
+                 (session, "Supplier Co", null, 0),
              });
 
         var sessions = await _sut.GetSessionsAsync(_clientTenantId, isSupplierSide: false);
@@ -242,5 +279,69 @@ public sealed class SupplierChatServiceTests
         var dto = Assert.Single(sessions);
         Assert.Equal(_supplierTenantId, dto.OtherTenantId);
         Assert.Equal("Supplier Co", dto.OtherTenantName);
+    }
+
+    // ── UnreadCount (TASK-319) ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetSessionsAsync_NewMessageFromOtherParty_ShowsUnreadCountForRecipient()
+    {
+        var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
+        // Message sent by supplier -> unread for the client (recipient) side.
+        _repo.GetSessionsAsync(_clientTenantId, false, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierChatSession, string, SupplierChatMessage?, int)>
+             {
+                 (session, "Supplier Co", null, 1),
+             });
+
+        var sessions = await _sut.GetSessionsAsync(_clientTenantId, isSupplierSide: false);
+
+        var dto = Assert.Single(sessions);
+        Assert.Equal(1, dto.UnreadCount);
+    }
+
+    [Fact]
+    public async Task GetSessionsAsync_NewMessageFromSelf_ShowsZeroUnreadForSender()
+    {
+        var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
+        // The sender's own view of the session never counts their own messages as unread.
+        _repo.GetSessionsAsync(_supplierTenantId, true, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierChatSession, string, SupplierChatMessage?, int)>
+             {
+                 (session, "Client Co", null, 0),
+             });
+
+        var sessions = await _sut.GetSessionsAsync(_supplierTenantId, isSupplierSide: true);
+
+        var dto = Assert.Single(sessions);
+        Assert.Equal(0, dto.UnreadCount);
+    }
+
+    [Fact]
+    public async Task GetMessagesAsync_MarksRead_ThenGetSessionsAsync_ShowsZeroUnread()
+    {
+        // Simulates: tenant B opens the thread (GetMessagesAsync marks A's messages read),
+        // then a subsequent GetSessionsAsync call for B reflects UnreadCount == 0.
+        var session = new SupplierChatSession { SupplierTenantId = _supplierTenantId, ClientTenantId = _clientTenantId };
+        _repo.GetSessionByIdAsync(session.Id, Arg.Any<CancellationToken>()).Returns(session);
+        _repo.GetMessagesAsync(session.Id, Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierChatMessage>
+             {
+                 new() { SessionId = session.Id, SenderTenantId = _supplierTenantId, SenderName = "Sup", Body = "Hi" },
+             });
+
+        await _sut.GetMessagesAsync(session.Id, _clientTenantId);
+
+        await _repo.Received(1).MarkMessagesReadAsync(session.Id, _clientTenantId, Arg.Any<CancellationToken>());
+
+        // After marking read, the repo (mocked here) would return UnreadCount 0 for B's session list.
+        _repo.GetSessionsAsync(_clientTenantId, false, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierChatSession, string, SupplierChatMessage?, int)>
+             {
+                 (session, "Supplier Co", null, 0),
+             });
+
+        var sessions = await _sut.GetSessionsAsync(_clientTenantId, isSupplierSide: false);
+        Assert.Equal(0, Assert.Single(sessions).UnreadCount);
     }
 }

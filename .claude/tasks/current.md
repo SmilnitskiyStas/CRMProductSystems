@@ -1,3 +1,54 @@
+# Current Sprint — v4.4 «Chat UX unification» (started 2026-07-07)
+
+## TASK-319 — Marketplace chat: bottom-right floating widget + real unread badges
+**Status:** done (2026-07-07) · **Agent:** backend-developer → frontend-developer (finished directly in main session after agent stalls) · **Depends:** —
+User ask: supplier↔client marketplace chat should render bottom-right like the existing
+`SupportChatWidget` (Чат підтримки / Мій асистент), for both client and supplier side;
+closed chats should show an unread-message indicator.
+Scope decisions:
+- **Marketplace chat** (`SupplierChatSession`/`SupplierChatMessage`) — already has
+  `SenderTenantId` per message (clean two-tenant model), so a real per-message `IsRead`
+  → per-session `UnreadCount` is a same-file backend change, no schema migration.
+  Repositioned both `SupplierChatPanel.tsx` (client) and `SupplierClientChatPanel.tsx`
+  (supplier) to the bottom-right floating style; added unread badges (Sidebar
+  «Повідомлення» nav item, `ChatInboxTab` per-row, client's «Написати постачальнику»
+  button).
+- **"Чат підтримки"** (tenant↔provider `ChatMessage`/`ChatService`) — investigated:
+  `IsRead` there already means "read by provider" (used by the provider's shared queue,
+  `GetMessagesForProviderAsync` marks all `IsRead=true`), and the tenant side's own
+  `GetSessionsAsync`/`GetMessagesAsync` never had real unread tracking (hardcoded
+  `unreadCount: 0`) — no `SenderTenantId`/sender-role marker exists on `ChatMessage` to
+  disambiguate "read by tenant" without a schema change + touching a column the
+  provider queue already depends on. **Out of scope for TASK-319** — flagged as a
+  separate follow-up (see spawn_task) rather than risking the provider queue.
+- **AI Assistant** — synchronous ask/answer, no server-pushed messages while closed;
+  no unread concept applies, no changes made.
+
+**Backend half done (2026-07-07):** `SupplierChatSessionDto.UnreadCount` +
+`ISupplierChatRepository.MarkMessagesReadAsync` (auto-called from `GetMessagesAsync`) —
+log `.claude/logs/tasks/319a_2026-07-07_marketplace-chat-unread-backend_backend-developer.md`,
+handoff `.claude/logs/handoffs/319-backend-to-frontend.md`. Build 0 errors, 645/645 tests
+green.
+
+**Frontend half done (2026-07-07):** log
+`.claude/logs/tasks/319b_2026-07-07_marketplace-chat-widget-unread-frontend.md`.
+`SupplierChatPanel.tsx` (client) and `SupplierClientChatPanel.tsx` (supplier) repositioned
+from centered dimmed modal to bottom-right floating widget (fixed bottom:24 right:24,
+380×540, matches `SupportChatWidget` visual language, no backdrop). Unread badges: client's
+«Написати постачальнику» button (`marketplace/[id]/page.tsx` — hoisted `useSupplierChatMessages`
+to page level so the 3s poll runs while the panel is closed, derives unread from
+`senderTenantId`/`isRead`); supplier's `ChatInboxTab` per-row badge + aggregate badge on the
+Sidebar «Повідомлення» nav item (`useSupplierChatSessions(enabled)` gated to `supplier_admin`
+only). `tsc --noEmit` clean, `npm run build` green (48 routes), `dotnet build`/`dotnet test`
+645/645 green.
+**Note:** three spawned frontend-developer agent attempts for this half stalled (reported
+"I'll wait for the agent" instead of working — known pattern, see
+`feedback-agent-self-delegation-loop` memory) before one background instance quietly
+finished part of the Sidebar.tsx wiring; the rest was completed directly in the main
+session per the "correct once then do it directly" guidance rather than spawning a 4th
+attempt.
+
+---
 # Current Sprint — v4.3 «Supplier Cooperation & Marketplace Orders» (started 2026-07-06)
 
 Клієнт бачить каталог/рейтинг/відгуки постачальника публічно (як зараз). Для замовлень —

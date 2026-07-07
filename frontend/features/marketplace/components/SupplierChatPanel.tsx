@@ -38,30 +38,21 @@ export function SupplierChatPanel({ supplierId, supplierName, onClose }: Props) 
     <div
       style={{
         position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
+        bottom: 24,
+        right: 24,
+        width: 380,
+        height: 540,
+        maxHeight: "calc(100vh - 100px)",
+        background: "#111827",
+        border: "1px solid #1F2937",
+        borderRadius: 14,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 999,
-        padding: 20,
+        flexDirection: "column",
+        zIndex: 1000,
+        overflow: "hidden",
       }}
-      onClick={onClose}
     >
-      <div
-        style={{
-          background: "#0F1623",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          width: "100%",
-          maxWidth: 560,
-          height: "min(640px, 85vh)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div
           style={{
@@ -156,7 +147,6 @@ export function SupplierChatPanel({ supplierId, supplierName, onClose }: Props) 
             {""}
           </Btn>
         </div>
-      </div>
     </div>
   );
 }

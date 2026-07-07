@@ -241,6 +241,7 @@ export interface SupplierChatSessionDto {
   updatedAt: string;
   lastMessage: string | null;
   lastMessageAt: string | null;
+  unreadCount: number;
 }
 
 export interface SupplierChatMessageDto {

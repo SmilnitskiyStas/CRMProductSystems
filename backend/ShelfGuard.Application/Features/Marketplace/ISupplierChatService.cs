@@ -26,7 +26,9 @@ public interface ISupplierChatService
 
     /// <summary>
     /// Returns the messages of a session. Returns an error if the calling tenant is
-    /// neither the SupplierTenantId nor the ClientTenantId of the session.
+    /// neither the SupplierTenantId nor the ClientTenantId of the session. As a side
+    /// effect, marks all of the OTHER party's messages in this session as read
+    /// (TASK-319) — callers polling this endpoint naturally clear unread counts.
     /// </summary>
     Task<(IReadOnlyList<SupplierChatMessageDto>? Messages, string? Error)> GetMessagesAsync(
         Guid sessionId, Guid callerTenantId, CancellationToken ct = default);
