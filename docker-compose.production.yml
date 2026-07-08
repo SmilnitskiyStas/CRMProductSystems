@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - '5100:5100'
+    volumes:
+      - shelfguard_api_uploads:/app/wwwroot/uploads
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: ${DATABASE_URL}
@@ -90,3 +92,4 @@ services:
 volumes:
   shelfguard_redis_data:
   shelfguard_mosquitto_data:
+  shelfguard_api_uploads:

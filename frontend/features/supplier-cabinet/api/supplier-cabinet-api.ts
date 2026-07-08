@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import { downloadFile } from "@/lib/download";
+import { viewFile } from "@/lib/download";
 import type {
   CooperationAgreementDto,
   CooperationStatus,
@@ -177,12 +177,9 @@ export const supplierCabinetApi = {
       reason: reason || undefined,
     }),
 
-  /** GET .../contract — download PDF */
-  downloadAgreementContract: (id: string, contractNumber: string | null) =>
-    downloadFile(
-      `${BASE}/cooperation-requests/${id}/contract`,
-      `Договір_${contractNumber ?? id}.pdf`
-    ),
+  /** GET .../contract — view PDF in a new tab */
+  downloadAgreementContract: (id: string) =>
+    viewFile(`${BASE}/cooperation-requests/${id}/contract`),
 
   // ── Contract settings (requisites, TASK-318) ────────────────────────────────
 

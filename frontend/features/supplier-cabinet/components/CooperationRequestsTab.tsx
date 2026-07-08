@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileDown, RefreshCw, Send } from "lucide-react";
+import { Eye, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
@@ -99,9 +99,9 @@ export function CooperationRequestsTab() {
     });
   }
 
-  function handleDownload(agreement: CooperationAgreementDto) {
+  function handleViewContract(agreement: CooperationAgreementDto) {
     supplierCabinetApi
-      .downloadAgreementContract(agreement.id, agreement.contractNumber)
+      .downloadAgreementContract(agreement.id)
       .catch((err) => toast.error(err.message));
   }
 
@@ -129,8 +129,8 @@ export function CooperationRequestsTab() {
             <Btn
               size="sm"
               variant="ghost"
-              icon={<FileDown size={13} />}
-              onClick={() => handleDownload(agreement)}
+              icon={<Eye size={13} />}
+              onClick={() => handleViewContract(agreement)}
             >
               Договір
             </Btn>
@@ -183,10 +183,24 @@ export function CooperationRequestsTab() {
             <Btn
               size="sm"
               variant="ghost"
-              icon={<FileDown size={13} />}
-              onClick={() => handleDownload(agreement)}
+              icon={<Eye size={13} />}
+              onClick={() => handleViewContract(agreement)}
             >
               Договір
+            </Btn>
+            <Btn
+              size="sm"
+              variant="ghost"
+              icon={<RefreshCw size={13} />}
+              disabled={regenerate.isPending}
+              onClick={() =>
+                regenerate.mutate(agreement.id, {
+                  onSuccess: () => toast.success("Договір перегенеровано"),
+                  onError: (err) => toast.error(err.message),
+                })
+              }
+            >
+              Перегенерувати
             </Btn>
             <Btn size="sm" variant="danger" onClick={() => setTerminateTarget(agreement)}>
               Розірвати

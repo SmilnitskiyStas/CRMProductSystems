@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, FileDown, HeartHandshake, LifeBuoy, MessageCircle } from "lucide-react";
+import { ChevronLeft, Eye, HeartHandshake, LifeBuoy, MessageCircle } from "lucide-react";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -82,10 +82,10 @@ export default function SupplierProfilePage() {
     setCart((prev) => prev.filter((l) => l.item.id !== supplierItemId));
   }
 
-  function handleDownloadContract() {
+  function handleViewContract() {
     if (!agreement) return;
     marketplaceApi
-      .downloadAgreementContract(agreement.id, agreement.contractNumber)
+      .downloadAgreementContract(agreement.id)
       .catch((err) => toast.error(err.message));
   }
 
@@ -252,10 +252,10 @@ export default function SupplierProfilePage() {
                 <Btn
                   size="sm"
                   variant="ghost"
-                  icon={<FileDown size={13} />}
-                  onClick={handleDownloadContract}
+                  icon={<Eye size={13} />}
+                  onClick={handleViewContract}
                 >
-                  Завантажити договір
+                  Переглянути договір
                 </Btn>
               )}
           </div>

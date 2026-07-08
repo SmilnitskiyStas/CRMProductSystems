@@ -3,7 +3,7 @@
 // Мої marketplace-замовлення + угоди про співпрацю (клієнтська сторона, TASK-318).
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, FileDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { toast } from "sonner";
 import {
   useMyCooperation,
@@ -233,9 +233,9 @@ function FragmentRow({
 function CooperationTab() {
   const { data: agreements = [], isLoading } = useMyCooperation();
 
-  function handleDownload(agreement: CooperationAgreementDto) {
+  function handleViewContract(agreement: CooperationAgreementDto) {
     marketplaceApi
-      .downloadAgreementContract(agreement.id, agreement.contractNumber)
+      .downloadAgreementContract(agreement.id)
       .catch((err) => toast.error(err.message));
   }
 
@@ -285,10 +285,10 @@ function CooperationTab() {
                   <Btn
                     size="sm"
                     variant="ghost"
-                    icon={<FileDown size={13} />}
-                    onClick={() => handleDownload(a)}
+                    icon={<Eye size={13} />}
+                    onClick={() => handleViewContract(a)}
                   >
-                    Завантажити договір
+                    Переглянути договір
                   </Btn>
                 )}
               </td>

@@ -205,7 +205,13 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         var agreement = await GetOwnAsync(supplierTenantId, agreementId, ct);
         if (agreement is null) return (null, AgreementNotFoundError);
 
-        if (agreement.Status != SupplierAgreementStatus.AwaitingSignature)
+        // Allowed for AwaitingSignature (pre-signature re-render) and Active
+        // (recovery when the on-disk PDF was lost, e.g. a deploy without a
+        // persistent uploads volume) — both cases re-render the SAME contract
+        // number/terms from the current SupplierContractSettings; the
+        // agreement's status/dates are never touched here.
+        if (agreement.Status != SupplierAgreementStatus.AwaitingSignature
+            && agreement.Status != SupplierAgreementStatus.Active)
             return (null, InvalidStatusError);
 
         var settings = await _settings.GetByTenantAsync(supplierTenantId, ct);

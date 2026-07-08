@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import { downloadFile } from "@/lib/download";
+import { viewFile } from "@/lib/download";
 import type {
   SupplierListItemDto,
   SupplierProfileDto,
@@ -117,12 +117,9 @@ export const marketplaceApi = {
   getMyCooperation: () =>
     api.get<CooperationAgreementDto[]>("/api/marketplace/cooperation"),
 
-  /** GET /api/marketplace/cooperation/{agreementId}/contract — download PDF */
-  downloadAgreementContract: (agreementId: string, contractNumber: string | null) =>
-    downloadFile(
-      `/api/marketplace/cooperation/${agreementId}/contract`,
-      `Договір_${contractNumber ?? agreementId}.pdf`
-    ),
+  /** GET /api/marketplace/cooperation/{agreementId}/contract — view PDF in a new tab */
+  downloadAgreementContract: (agreementId: string) =>
+    viewFile(`/api/marketplace/cooperation/${agreementId}/contract`),
 
   // ── Marketplace orders (TASK-318) ──────────────────────────────────────────
 
