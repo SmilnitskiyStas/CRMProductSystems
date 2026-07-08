@@ -26,7 +26,10 @@ public record CooperationAgreementDto(
     DateTimeOffset RequestedAt,
     DateTimeOffset? DecidedAt,
     DateTimeOffset? SignedAt,
-    DateTimeOffset? TerminatedAt);
+    DateTimeOffset? TerminatedAt,
+    string? SigningMethod,
+    string? SigningEmail,
+    string? SupplierLegalAddress);
 
 /// <summary>Client → supplier cooperation request body.</summary>
 public record SubmitCooperationRequestDto(string? Message);
@@ -34,6 +37,9 @@ public record SubmitCooperationRequestDto(string? Message);
 public record RejectCooperationRequestDto(string Reason);
 
 public record TerminateAgreementDto(string? Reason);
+
+/// <summary>Client's chosen contract signing method: "physical" or "vchasno" (requires Email).</summary>
+public record ChooseSigningMethodDto(string Method, string? Email);
 
 // ── Supplier contract settings (requisites) ──────────────────────────────────
 

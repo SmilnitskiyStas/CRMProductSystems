@@ -15,6 +15,7 @@ import {
   AgreementStatusBadge,
   OrderStatusBadge,
 } from "@/features/marketplace/components/CooperationBadges";
+import { SigningMethodChoice } from "@/features/marketplace/components/SigningMethodChoice";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES, type AppRole } from "@/lib/roles";
 import { Btn } from "@/components/ui/Btn";
@@ -273,6 +274,11 @@ function CooperationTab() {
                 {a.rejectionReason && (
                   <div style={{ color: "#F87171", fontSize: 11, marginTop: 4 }}>
                     {a.rejectionReason}
+                  </div>
+                )}
+                {a.status === "awaiting_signature" && (
+                  <div style={{ marginTop: 8 }}>
+                    <SigningMethodChoice agreement={a} />
                   </div>
                 )}
               </td>

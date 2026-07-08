@@ -37,7 +37,7 @@ public sealed class VchasnoClient : IVchasnoClient
     }
 
     public async Task<string> UploadDocumentAsync(
-        string fileName, byte[] pdfBytes, string? recipientEdrpou, string title,
+        string fileName, byte[] pdfBytes, string? recipientEdrpou, string? recipientEmail, string title,
         CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
@@ -48,6 +48,8 @@ public sealed class VchasnoClient : IVchasnoClient
         form.Add(new StringContent(title), "title");
         if (!string.IsNullOrWhiteSpace(recipientEdrpou))
             form.Add(new StringContent(recipientEdrpou), "edrpou_recipient");
+        if (!string.IsNullOrWhiteSpace(recipientEmail))
+            form.Add(new StringContent(recipientEmail), "email_recipient");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "documents") { Content = form };
         request.Headers.TryAddWithoutValidation("Authorization", _apiKey);

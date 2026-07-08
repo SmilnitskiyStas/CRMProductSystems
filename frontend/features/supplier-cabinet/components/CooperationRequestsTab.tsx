@@ -278,6 +278,14 @@ export function CooperationRequestsTab() {
                         {a.vchasnoDocumentId && " · Вчасно"}
                       </div>
                     )}
+                    {a.signingMethod && (
+                      <div style={{ color: "#60A5FA", fontSize: 11, fontWeight: 400, marginTop: 4 }}>
+                        Клієнт обрав:{" "}
+                        {a.signingMethod === "vchasno"
+                          ? `Вчасно (${a.signingEmail})`
+                          : "Фізичне підписання"}
+                      </div>
+                    )}
                   </td>
                   <td style={{ ...cellStyle, color: "#9CA3AF", maxWidth: 320 }}>
                     {a.requestMessage ?? "—"}

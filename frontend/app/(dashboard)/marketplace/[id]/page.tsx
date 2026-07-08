@@ -22,6 +22,7 @@ import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
 import { StarRating } from "@/features/marketplace/components/StarRating";
 import { AgreementStatusBadge } from "@/features/marketplace/components/CooperationBadges";
 import { CooperationRequestModal } from "@/features/marketplace/components/CooperationRequestModal";
+import { SigningMethodChoice } from "@/features/marketplace/components/SigningMethodChoice";
 import { SupplierOrderCart, type CartLine } from "@/features/marketplace/components/SupplierOrderCart";
 import { SupportTicketsPanel } from "@/features/marketplace/components/SupportTicketsPanel";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -260,10 +261,7 @@ export default function SupplierProfilePage() {
               )}
           </div>
           {isClientTenant && agreement?.status === "awaiting_signature" && (
-            <div style={{ color: "#FBBF24", fontSize: 12, marginBottom: 8 }}>
-              Підпишіть договір через Вчасно або фізично — постачальник підтвердить
-              підписання, після чого відкриються замовлення.
-            </div>
+            <SigningMethodChoice agreement={agreement} />
           )}
           {isClientTenant &&
             agreement &&

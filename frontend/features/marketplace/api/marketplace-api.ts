@@ -17,6 +17,7 @@ import type {
   SendSupplierChatMessageRequest,
   CooperationAgreementDto,
   CreateCooperationRequestBody,
+  ChooseSigningMethodRequest,
   MarketplaceOrderDto,
   CreateMarketplaceOrderRequest,
   SupplierSupportTicketDto,
@@ -120,6 +121,13 @@ export const marketplaceApi = {
   /** GET /api/marketplace/cooperation/{agreementId}/contract — view PDF in a new tab */
   downloadAgreementContract: (agreementId: string) =>
     viewFile(`/api/marketplace/cooperation/${agreementId}/contract`),
+
+  /** POST /api/marketplace/cooperation/{agreementId}/signing-method — client chooses physical/vchasno (TASK-319/320) */
+  chooseSigningMethod: (agreementId: string, body: ChooseSigningMethodRequest) =>
+    api.post<CooperationAgreementDto>(
+      `/api/marketplace/cooperation/${agreementId}/signing-method`,
+      body
+    ),
 
   // ── Marketplace orders (TASK-318) ──────────────────────────────────────────
 

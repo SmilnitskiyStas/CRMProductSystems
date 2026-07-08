@@ -232,10 +232,23 @@ export interface CooperationAgreementDto {
   decidedAt?: string | null;
   signedAt?: string | null;
   terminatedAt?: string | null;
+  /** "physical" | "vchasno" | null (не обрано) — TASK-319/320. */
+  signingMethod: string | null;
+  /** Заповнено лише якщо signingMethod === "vchasno". */
+  signingEmail: string | null;
+  /** Адреса постачальника для фізичного підписання; заповнена лише поки статус awaiting_signature/active. */
+  supplierLegalAddress: string | null;
 }
 
 export interface CreateCooperationRequestBody {
   message?: string;
+}
+
+export type SigningMethod = "physical" | "vchasno";
+
+export interface ChooseSigningMethodRequest {
+  method: SigningMethod;
+  email?: string;
 }
 
 export type MarketplaceOrderStatus =

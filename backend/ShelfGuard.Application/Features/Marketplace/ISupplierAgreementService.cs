@@ -33,6 +33,14 @@ public interface ISupplierAgreementService
     Task<(byte[]? Content, string? FileName, string? Error)> DownloadContractAsync(
         Guid agreementId, Guid callerTenantId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Client chooses the contract signing method ("physical" or "vchasno").
+    /// Only while Status = awaiting_signature. "vchasno" requires Email and
+    /// immediately uploads the contract PDF for e-signature.
+    /// </summary>
+    Task<(CooperationAgreementDto? Agreement, string? Error)> ChooseSigningMethodAsync(
+        Guid clientTenantId, Guid agreementId, string method, string? email, CancellationToken ct = default);
+
     // ── Supplier side ─────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<CooperationAgreementDto>> ListForSupplierAsync(

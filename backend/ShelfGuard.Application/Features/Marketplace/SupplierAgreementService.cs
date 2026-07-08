@@ -26,6 +26,8 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
     public const string RejectReasonRequiredError = "Вкажіть причину відмови.";
     public const string LegalNameRequiredError = "Юридична назва (LegalName) — обовʼязкове поле.";
     public const string UnsupportedImageFormatError = "Непідтримуваний формат зображення. Дозволено: PNG, JPG.";
+    public const string InvalidSigningMethodError = "Невірний спосіб підписання.";
+    public const string SigningEmailRequiredError = "Вкажіть email для отримання документа у Вчасно.";
 
     public const int MaxMessageLength = 2000;
 
@@ -136,6 +138,75 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
             : $"{agreement.ContractNumber}.pdf";
 
         return (bytes, fileName, null);
+    }
+
+    /// <summary>
+    /// Client chooses how the awaiting_signature contract will be signed:
+    /// "physical" (mail to the supplier's legal address, no system action —
+    /// the supplier still confirms via the existing MarkSignedAsync) or
+    /// "vchasno" (immediately uploads the contract PDF to Вчасно with the
+    /// client-provided email as recipient — independent of the supplier's
+    /// manual edrpou-based SendToVchasnoAsync).
+    /// </summary>
+    public async Task<(CooperationAgreementDto? Agreement, string? Error)> ChooseSigningMethodAsync(
+        Guid clientTenantId, Guid agreementId, string method, string? email, CancellationToken ct = default)
+    {
+        var agreement = await _agreements.GetByIdAsync(agreementId, ct);
+        if (agreement is null || agreement.ClientTenantId != clientTenantId)
+            return (null, AgreementNotFoundError);
+
+        if (agreement.Status != SupplierAgreementStatus.AwaitingSignature)
+            return (null, InvalidStatusError);
+
+        if (method != "physical" && method != "vchasno")
+            return (null, InvalidSigningMethodError);
+
+        if (method == "vchasno")
+        {
+            var trimmedEmail = email?.Trim();
+            if (string.IsNullOrEmpty(trimmedEmail) || !trimmedEmail.Contains('@'))
+                return (null, SigningEmailRequiredError);
+
+            if (string.IsNullOrEmpty(agreement.ContractFilePath))
+                return (null, ContractNotGeneratedError);
+
+            var client = await _vchasno.GetForTenantAsync(agreement.SupplierTenantId, ct);
+            if (client is null)
+                return (null, VchasnoNotConfiguredError);
+
+            var diskPath = ToDiskPath(agreement.ContractFilePath);
+            if (!File.Exists(diskPath))
+                return (null, ContractNotGeneratedError);
+
+            var pdfBytes = await File.ReadAllBytesAsync(diskPath, ct);
+            var title = $"Договір про співпрацю № {agreement.ContractNumber}";
+
+            string documentId;
+            try
+            {
+                documentId = await client.UploadDocumentAsync(
+                    $"{agreement.ContractNumber}.pdf", pdfBytes, recipientEdrpou: null, recipientEmail: trimmedEmail, title, ct);
+            }
+            catch (Exception ex)
+            {
+                return (null, $"Не вдалося надіслати документ у Вчасно: {ex.Message}");
+            }
+
+            agreement.VchasnoDocumentId = documentId;
+            agreement.SigningEmail = trimmedEmail;
+        }
+        else
+        {
+            agreement.SigningEmail = null;
+        }
+
+        agreement.SigningMethod = method;
+        agreement.UpdatedAt = DateTimeOffset.UtcNow;
+
+        _agreements.Update(agreement);
+        await _agreements.SaveChangesAsync(ct);
+
+        return (await ToDtoAsync(agreement, ct), null);
     }
 
     // ── Supplier side ─────────────────────────────────────────────────────────
@@ -257,7 +328,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         try
         {
             documentId = await client.UploadDocumentAsync(
-                $"{agreement.ContractNumber}.pdf", pdfBytes, recipientEdrpou: null, title, ct);
+                $"{agreement.ContractNumber}.pdf", pdfBytes, recipientEdrpou: null, recipientEmail: null, title, ct);
         }
         catch (Exception ex)
         {
@@ -479,18 +550,21 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         // Tenant display names are looked up per distinct id (tenants table — no RLS);
         // per-supplier volume is small, so no SQL-side join is warranted.
         var names = new Dictionary<Guid, string>();
+        var addresses = new Dictionary<Guid, string?>();
         var result = new List<CooperationAgreementDto>(rows.Count);
         foreach (var row in rows)
             result.Add(ToDto(row,
                 await GetNameCachedAsync(row.SupplierTenantId, names, ct),
-                await GetNameCachedAsync(row.ClientTenantId, names, ct)));
+                await GetNameCachedAsync(row.ClientTenantId, names, ct),
+                await GetSupplierAddressCachedAsync(row, addresses, ct)));
         return result;
     }
 
     private async Task<CooperationAgreementDto> ToDtoAsync(SupplierAgreement a, CancellationToken ct) =>
         ToDto(a,
             await _tenantNames.GetTenantDisplayNameAsync(a.SupplierTenantId, ct) ?? string.Empty,
-            await _tenantNames.GetTenantDisplayNameAsync(a.ClientTenantId, ct) ?? string.Empty);
+            await _tenantNames.GetTenantDisplayNameAsync(a.ClientTenantId, ct) ?? string.Empty,
+            await GetSupplierLegalAddressAsync(a, ct));
 
     private async Task<string> GetNameCachedAsync(
         Guid tenantId, Dictionary<Guid, string> cache, CancellationToken ct)
@@ -501,8 +575,36 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         return name;
     }
 
+    /// <summary>
+    /// Supplier's legal address (for the client's "physical" signing option) —
+    /// only fetched for agreements where it is actually relevant
+    /// (awaiting_signature / active), to avoid pointless DB round-trips for
+    /// pending/rejected/terminated rows.
+    /// </summary>
+    private async Task<string?> GetSupplierAddressCachedAsync(
+        SupplierAgreement a, Dictionary<Guid, string?> cache, CancellationToken ct)
+    {
+        if (a.Status is not (SupplierAgreementStatus.AwaitingSignature or SupplierAgreementStatus.Active))
+            return null;
+
+        if (cache.TryGetValue(a.SupplierTenantId, out var address)) return address;
+        var settings = await _settings.GetByTenantAsync(a.SupplierTenantId, ct);
+        address = settings?.LegalAddress;
+        cache[a.SupplierTenantId] = address;
+        return address;
+    }
+
+    private async Task<string?> GetSupplierLegalAddressAsync(SupplierAgreement a, CancellationToken ct)
+    {
+        if (a.Status is not (SupplierAgreementStatus.AwaitingSignature or SupplierAgreementStatus.Active))
+            return null;
+
+        var settings = await _settings.GetByTenantAsync(a.SupplierTenantId, ct);
+        return settings?.LegalAddress;
+    }
+
     private static CooperationAgreementDto ToDto(
-        SupplierAgreement a, string supplierName, string clientName) =>
+        SupplierAgreement a, string supplierName, string clientName, string? supplierLegalAddress) =>
         new(
             a.Id,
             a.SupplierTenantId,
@@ -518,7 +620,10 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
             a.RequestedAt,
             a.DecidedAt,
             a.SignedAt,
-            a.TerminatedAt);
+            a.TerminatedAt,
+            a.SigningMethod,
+            a.SigningEmail,
+            supplierLegalAddress);
 
     private static SupplierContractSettingsDto ToSettingsDto(SupplierContractSettings s) =>
         new(

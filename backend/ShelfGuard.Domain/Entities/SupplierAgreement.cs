@@ -29,6 +29,10 @@ public sealed class SupplierAgreement
     public string? ContractFilePath { get; set; }
     /// <summary>Document id in the Vchasno e-signature service, if sent there.</summary>
     public string? VchasnoDocumentId { get; set; }
+    /// <summary>Client's chosen signing method once Status = awaiting_signature: "physical" or "vchasno".</summary>
+    public string? SigningMethod { get; set; }
+    /// <summary>Client's email for the Вчасно signing notification, when SigningMethod = "vchasno".</summary>
+    public string? SigningEmail { get; set; }
 
     public DateTimeOffset RequestedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? DecidedAt { get; set; }

@@ -10,7 +10,7 @@ public interface IVchasnoClient
 {
     /// <summary>Uploads a PDF document and returns the Вчасно document id.</summary>
     Task<string> UploadDocumentAsync(
-        string fileName, byte[] pdfBytes, string? recipientEdrpou, string title,
+        string fileName, byte[] pdfBytes, string? recipientEdrpou, string? recipientEmail, string title,
         CancellationToken ct = default);
 
     /// <summary>Returns the raw document status string, or null when the document is not found.</summary>

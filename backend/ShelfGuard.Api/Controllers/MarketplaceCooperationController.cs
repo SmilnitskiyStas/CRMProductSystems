@@ -93,6 +93,28 @@ public sealed class MarketplaceCooperationController : ControllerBase
         return File(content!, "application/pdf", fileName);
     }
 
+    /// <summary>Client chooses how to sign the contract: "physical" (mail to supplier's address) or "vchasno" (emails the doc for e-signature).</summary>
+    [HttpPost("cooperation/{id:guid}/signing-method")]
+    [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ChooseSigningMethod(
+        Guid id, [FromBody] ChooseSigningMethodDto request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (agreement, error) = await _agreements.ChooseSigningMethodAsync(
+            tenantId.Value, id, request.Method, request.Email, ct);
+
+        if (error == SupplierAgreementService.AgreementNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(agreement);
+    }
+
     // ── Marketplace orders ─────────────────────────────────────────────────────
 
     /// <summary>Places an order with a supplier. 403 without an ACTIVE cooperation agreement.</summary>

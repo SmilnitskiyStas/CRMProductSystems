@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { marketplaceApi } from "../api/marketplace-api";
 import type {
   CreateCooperationRequestBody,
+  ChooseSigningMethodRequest,
   CreateMarketplaceOrderRequest,
   CreateSupportTicketRequest,
 } from "../types";
@@ -38,6 +39,18 @@ export function useCreateCooperationRequest(supplierId: string) {
   return useMutation({
     mutationFn: (body: CreateCooperationRequestBody) =>
       marketplaceApi.createCooperationRequest(supplierId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: COOPERATION_KEYS.myAgreements });
+    },
+  });
+}
+
+/** Клієнт обирає спосіб підписання (physical/vchasno) для угоди awaiting_signature (TASK-319/320). */
+export function useChooseSigningMethod(agreementId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChooseSigningMethodRequest) =>
+      marketplaceApi.chooseSigningMethod(agreementId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: COOPERATION_KEYS.myAgreements });
     },

@@ -1618,6 +1618,8 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.ContractNumber).HasMaxLength(100).IsRequired(false);
             e.Property(x => x.ContractFilePath).HasMaxLength(1000).IsRequired(false);
             e.Property(x => x.VchasnoDocumentId).HasMaxLength(200).IsRequired(false);
+            e.Property(x => x.SigningMethod).HasMaxLength(20).IsRequired(false);
+            e.Property(x => x.SigningEmail).HasMaxLength(255).IsRequired(false);
             e.Property(x => x.RequestedAt).IsRequired();
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
