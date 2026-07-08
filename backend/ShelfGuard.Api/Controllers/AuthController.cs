@@ -5,6 +5,7 @@ using ShelfGuard.Application.Features.Auth;
 using ShelfGuard.Application.Features.Auth.Dtos;
 using ShelfGuard.Application.Features.Users;
 using ShelfGuard.Application.Features.Users.Dtos;
+using ShelfGuard.Domain.Interfaces;
 using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
@@ -15,12 +16,14 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
     private readonly IUserService _users;
+    private readonly ITenantRepository _tenants;
     private const string RefreshTokenCookie = "refreshToken";
 
-    public AuthController(IAuthService auth, IUserService users)
+    public AuthController(IAuthService auth, IUserService users, ITenantRepository tenants)
     {
-        _auth  = auth;
-        _users = users;
+        _auth    = auth;
+        _users   = users;
+        _tenants = tenants;
     }
 
     [HttpPost("login")]
@@ -92,7 +95,14 @@ public sealed class AuthController : ControllerBase
             var tenantIdRaw = User.FindFirstValue("tenant_id");
             Guid? tenantId  = Guid.TryParse(tenantIdRaw, out var tid) ? tid : null;
 
-            return Ok(new AuthUserDto(userId.Value, email, email, role, tenantId, StoreId: null, Permissions: null));
+            string? tenantName = null;
+            if (tenantId is not null)
+            {
+                var tenant = await _tenants.GetByIdAsync(tenantId.Value, ct);
+                tenantName = tenant?.Name;
+            }
+
+            return Ok(new AuthUserDto(userId.Value, email, email, role, tenantId, tenantName, StoreId: null, Permissions: null));
         }
 
         var user = await _auth.GetCurrentUserAsync(userId.Value, ct);

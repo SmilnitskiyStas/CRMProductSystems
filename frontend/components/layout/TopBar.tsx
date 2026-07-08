@@ -82,8 +82,16 @@ export function TopBar({ title }: Props) {
           zIndex: 10,
         }}
       >
-        {/* Left — store selector / breadcrumb */}
+        {/* Left — tenant name / store selector / breadcrumb */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {user?.tenantName && (
+            <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
+              {user.tenantName}
+            </span>
+          )}
+          {user?.tenantName && TENANT_ROLES.has(userRole) && (
+            <span style={{ color: "#374151", fontSize: 14 }}>/</span>
+          )}
           {/* supplier_admin has no stores — /api/stores would 403 (v4.1, ADR-016) */}
           {TENANT_ROLES.has(userRole) && <StoreSelector />}
           {title && (

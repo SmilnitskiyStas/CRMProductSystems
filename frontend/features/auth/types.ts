@@ -4,6 +4,7 @@ export interface AuthUserDto {
   fullName: string;
   role: string;
   tenantId: string | null;
+  tenantName: string | null;
   storeId: string | null;
   phone?: string | null;
   telegramChatId?: string | null;

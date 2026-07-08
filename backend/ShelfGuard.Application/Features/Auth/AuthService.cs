@@ -105,5 +105,5 @@ public sealed class AuthService : IAuthService
     }
 
     private static AuthUserDto ToDto(User u) =>
-        new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.StoreId, u.Permissions);
+        new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId, u.Permissions);
 }
