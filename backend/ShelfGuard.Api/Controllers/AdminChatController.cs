@@ -13,7 +13,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/admin/chat")]
-[Authorize(Policy = AppPolicies.ProviderOnly)]
+[Authorize(Policy = AppPolicies.ProviderTeamMember)]
 public sealed class AdminChatController : ControllerBase
 {
     private readonly IChatService _chat;
