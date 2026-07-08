@@ -128,8 +128,6 @@ public sealed class ChatService : IChatService
 
     public async Task<IReadOnlyList<ChatSessionDto>> GetAllSessionsForProviderAsync(CancellationToken ct)
     {
-        await _db.Database.ExecuteSqlRawAsync("SET LOCAL app.tenant_id = ''", ct);
-
         var rows = await _db.ChatSessions
             .AsNoTracking()
             .Include(s => s.Messages)
@@ -155,8 +153,6 @@ public sealed class ChatService : IChatService
     public async Task<IReadOnlyList<ChatMessageDto>> GetMessagesForProviderAsync(
         Guid sessionId, CancellationToken ct)
     {
-        await _db.Database.ExecuteSqlRawAsync("SET LOCAL app.tenant_id = ''", ct);
-
         var messages = await _db.ChatMessages
             .AsNoTracking()
             .Where(m => m.SessionId == sessionId)
@@ -181,8 +177,6 @@ public sealed class ChatService : IChatService
         Guid sessionId, Guid providerId, string providerName,
         SendChatMessageRequest req, CancellationToken ct)
     {
-        await _db.Database.ExecuteSqlRawAsync("SET LOCAL app.tenant_id = ''", ct);
-
         var session = await _db.ChatSessions
             .Include(s => s.Messages)
             .FirstOrDefaultAsync(s => s.Id == sessionId, ct)
@@ -231,8 +225,6 @@ public sealed class ChatService : IChatService
 
     public async Task ProviderCloseSessionAsync(Guid sessionId, CancellationToken ct)
     {
-        await _db.Database.ExecuteSqlRawAsync("SET LOCAL app.tenant_id = ''", ct);
-
         var session = await _db.ChatSessions
             .FirstOrDefaultAsync(s => s.Id == sessionId, ct)
             ?? throw new InvalidOperationException("Session not found.");

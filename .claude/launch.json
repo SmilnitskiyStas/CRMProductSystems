@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "backend-dev",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "backend/ShelfGuard.Api"],
+      "port": 5000
     }
   ]
 }
