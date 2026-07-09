@@ -1658,6 +1658,7 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(x => x.SupplierTenantId);
             e.HasIndex(x => x.ClientTenantId);
+            e.HasIndex(x => x.ClientLegalEntityId);
             // One live agreement per (supplier, client) pair — rejected/terminated
             // rows don't block a new request.
             e.HasIndex(x => new { x.SupplierTenantId, x.ClientTenantId })
@@ -1671,6 +1672,9 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany()
              .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.Property(x => x.ClientLegalEntityId).IsRequired(false);
+            e.HasOne<LegalEntity>().WithMany()
+             .HasForeignKey(x => x.ClientLegalEntityId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── MarketplaceOrder (TASK-316) ───────────────────────────────────────

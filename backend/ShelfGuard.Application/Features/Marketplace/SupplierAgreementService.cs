@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Marketplace.Vchasno;
 using ShelfGuard.Domain.Constants;
@@ -28,6 +29,8 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
     public const string UnsupportedImageFormatError = "Непідтримуваний формат зображення. Дозволено: PNG, JPG.";
     public const string InvalidSigningMethodError = "Невірний спосіб підписання.";
     public const string SigningEmailRequiredError = "Вкажіть email для отримання документа у Вчасно.";
+    public const string ClientLegalEntityNotOwnedError =
+        "Вказана юридична особа не належить вашому тенанту.";
 
     public const int MaxMessageLength = 2000;
 
@@ -39,6 +42,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
     private readonly ISupplierChatRepository _tenantNames;
     private readonly IContractPdfGenerator _pdf;
     private readonly IVchasnoClientFactory _vchasno;
+    private readonly ILegalEntityService _legalEntities;
 
     public SupplierAgreementService(
         ISupplierAgreementRepository agreements,
@@ -46,21 +50,23 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         IMarketplaceRepository marketplace,
         ISupplierChatRepository tenantNames,
         IContractPdfGenerator pdf,
-        IVchasnoClientFactory vchasno)
+        IVchasnoClientFactory vchasno,
+        ILegalEntityService legalEntities)
     {
-        _agreements  = agreements;
-        _settings    = settings;
-        _marketplace = marketplace;
-        _tenantNames = tenantNames;
-        _pdf         = pdf;
-        _vchasno     = vchasno;
+        _agreements    = agreements;
+        _settings      = settings;
+        _marketplace   = marketplace;
+        _tenantNames   = tenantNames;
+        _pdf           = pdf;
+        _vchasno       = vchasno;
+        _legalEntities = legalEntities;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
 
     public async Task<(CooperationAgreementDto? Agreement, string? Error, bool IsDuplicate)> SubmitRequestAsync(
         Guid clientTenantId, Guid supplierId, string? message, Guid userId,
-        CancellationToken ct = default)
+        Guid? clientLegalEntityId = null, CancellationToken ct = default)
     {
         var supplierTenantId = await _marketplace.GetSupplierTenantIdAsync(supplierId, ct);
         if (supplierTenantId is null)
@@ -77,6 +83,10 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         if (trimmedMessage is { Length: > MaxMessageLength })
             return (null, $"Повідомлення не може перевищувати {MaxMessageLength} символів.", false);
 
+        if (clientLegalEntityId.HasValue &&
+            !await _legalEntities.BelongsToTenantAsync(clientTenantId, clientLegalEntityId.Value, ct))
+            return (null, ClientLegalEntityNotOwnedError, false);
+
         // One live agreement per pair (partial unique index) — surface the current
         // status so the client UI can explain why a new request is not possible.
         var existing = await _agreements.GetForPairAsync(supplierTenantId.Value, clientTenantId, ct);
@@ -85,11 +95,12 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
 
         var agreement = new SupplierAgreement
         {
-            SupplierTenantId = supplierTenantId.Value,
-            ClientTenantId   = clientTenantId,
-            Status           = SupplierAgreementStatus.Pending,
-            RequestMessage   = string.IsNullOrEmpty(trimmedMessage) ? null : trimmedMessage,
-            CreatedByUserId  = userId,
+            SupplierTenantId    = supplierTenantId.Value,
+            ClientTenantId      = clientTenantId,
+            ClientLegalEntityId = clientLegalEntityId,
+            Status              = SupplierAgreementStatus.Pending,
+            RequestMessage      = string.IsNullOrEmpty(trimmedMessage) ? null : trimmedMessage,
+            CreatedByUserId     = userId,
         };
 
         await _agreements.AddAsync(agreement, ct);
@@ -276,13 +287,11 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         var agreement = await GetOwnAsync(supplierTenantId, agreementId, ct);
         if (agreement is null) return (null, AgreementNotFoundError);
 
-        // Allowed for AwaitingSignature (pre-signature re-render) and Active
-        // (recovery when the on-disk PDF was lost, e.g. a deploy without a
-        // persistent uploads volume) — both cases re-render the SAME contract
-        // number/terms from the current SupplierContractSettings; the
-        // agreement's status/dates are never touched here.
-        if (agreement.Status != SupplierAgreementStatus.AwaitingSignature
-            && agreement.Status != SupplierAgreementStatus.Active)
+        // Only allowed pre-signature. Once Active, the document is a legally
+        // signed record (physical mail or Вчасно) — re-rendering it would
+        // produce a new PDF that no longer matches what was actually signed,
+        // so regeneration must never be possible after signing.
+        if (agreement.Status != SupplierAgreementStatus.AwaitingSignature)
             return (null, InvalidStatusError);
 
         var settings = await _settings.GetByTenantAsync(supplierTenantId, ct);
@@ -491,6 +500,18 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         var clientName = await _tenantNames.GetTenantDisplayNameAsync(agreement.ClientTenantId, ct)
                          ?? string.Empty;
 
+        // TASK-327: if the client picked one of their own registered legal
+        // entities when requesting cooperation, render its requisites on the
+        // "Замовник" side of the contract too. Falls back to just the tenant
+        // display name (clientName above) when not set — unchanged behavior.
+        LegalEntities.Dtos.LegalEntityDto? clientLegalEntity = null;
+        if (agreement.ClientLegalEntityId.HasValue)
+        {
+            var (entity, _) = await _legalEntities.GetByIdAsync(
+                agreement.ClientTenantId, agreement.ClientLegalEntityId.Value, ct);
+            clientLegalEntity = entity;
+        }
+
         var data = new ContractPdfData(
             agreement.ContractNumber ?? string.Empty,
             DateTimeOffset.UtcNow,
@@ -508,7 +529,14 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
             settings.ServiceDescription,
             settings.IsVatPayer,
             ReadImageSafe(settings.SignatureImageUrl),
-            ReadImageSafe(settings.StampImageUrl));
+            ReadImageSafe(settings.StampImageUrl),
+            clientLegalEntity?.LegalName,
+            clientLegalEntity?.Edrpou,
+            clientLegalEntity?.Iban,
+            clientLegalEntity?.BankName,
+            clientLegalEntity?.LegalAddress,
+            clientLegalEntity?.DirectorName,
+            clientLegalEntity?.IsVatPayer ?? false);
 
         var pdfBytes = _pdf.Generate(data);
 

@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { useCreateCooperationRequest } from "../hooks/useCooperation";
+import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 
 interface Props {
   supplierId: string;
@@ -14,13 +15,32 @@ interface Props {
   onClose: () => void;
 }
 
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  background: "#1F2937",
+  border: "1px solid #374151",
+  borderRadius: 8,
+  color: "#E8EDF5",
+  fontSize: 13,
+  padding: "9px 12px",
+  outline: "none",
+  fontFamily: "inherit",
+};
+
 export function CooperationRequestModal({ supplierId, supplierName, onClose }: Props) {
   const [message, setMessage] = useState("");
+  const [clientLegalEntityId, setClientLegalEntityId] = useState<string>("");
   const createRequest = useCreateCooperationRequest(supplierId);
+  const { data: legalEntities } = useLegalEntities();
+  const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
 
   function handleSubmit() {
     createRequest.mutate(
-      { message: message.trim() || undefined },
+      {
+        message: message.trim() || undefined,
+        clientLegalEntityId: clientLegalEntityId || undefined,
+      },
       {
         onSuccess: () => {
           toast.success("Заявку на співпрацю подано");
@@ -101,6 +121,31 @@ export function CooperationRequestModal({ supplierId, supplierName, onClose }: P
             fontFamily: "inherit",
           }}
         />
+
+        {activeLegalEntities.length > 0 ? (
+          <div style={{ marginTop: 14 }}>
+            <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
+              Юридична особа (необовʼязково)
+            </label>
+            <select
+              value={clientLegalEntityId}
+              onChange={(e) => setClientLegalEntityId(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">— не вказано —</option>
+              {activeLegalEntities.map((entity) => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.legalName}
+                  {entity.edrpou ? ` (${entity.edrpou})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p style={{ color: "#4B5563", fontSize: 11.5, margin: "10px 0 0" }}>
+            У вас ще немає зареєстрованих юридичних осіб — додати можна в Налаштування → Юридичні особи.
+          </p>
+        )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
           <Btn variant="ghost" onClick={onClose}>

@@ -16,6 +16,10 @@ public sealed class SupplierAgreement
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid SupplierTenantId { get; set; }
     public Guid ClientTenantId { get; set; }
+    /// <summary>Optional legal entity (ТОВ/ФОП) of the client tenant that is
+    /// requesting cooperation (TASK-324). Null if the client has not
+    /// registered any legal entities yet or chose not to specify one.</summary>
+    public Guid? ClientLegalEntityId { get; set; }
     /// <summary>See <see cref="SupplierAgreementStatus"/>.</summary>
     public string Status { get; set; } = SupplierAgreementStatus.Pending;
 

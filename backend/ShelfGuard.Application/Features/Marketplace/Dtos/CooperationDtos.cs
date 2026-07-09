@@ -31,8 +31,13 @@ public record CooperationAgreementDto(
     string? SigningEmail,
     string? SupplierLegalAddress);
 
-/// <summary>Client → supplier cooperation request body.</summary>
-public record SubmitCooperationRequestDto(string? Message);
+/// <summary>
+/// Client → supplier cooperation request body. ClientLegalEntityId (TASK-327)
+/// optionally selects which of the client's own registered legal entities
+/// (ТОВ/ФОП) is requesting cooperation — validated to belong to the caller's
+/// tenant in the service layer.
+/// </summary>
+public record SubmitCooperationRequestDto(string? Message, Guid? ClientLegalEntityId = null);
 
 public record RejectCooperationRequestDto(string Reason);
 

@@ -136,6 +136,36 @@ public sealed class ContractPdfGenerator : IContractPdfGenerator
                         Row("ПДВ-статус:", data.IsVatPayer ? "платник ПДВ" : "неплатник ПДВ");
                     });
 
+                    // ── 4а. Реквізити клієнта (TASK-327) ────────────────────
+                    // Only rendered when the client picked one of their own
+                    // registered legal entities when requesting cooperation.
+                    if (data.ClientLegalName is { Length: > 0 })
+                    {
+                        Section(col, "РЕКВІЗИТИ КЛІЄНТА");
+                        col.Item().Table(table =>
+                        {
+                            table.ColumnsDefinition(cd =>
+                            {
+                                cd.ConstantColumn(150);
+                                cd.RelativeColumn();
+                            });
+
+                            void Row(string label, string? value)
+                            {
+                                if (string.IsNullOrEmpty(value)) return;
+                                table.Cell().PaddingVertical(2).Text(label).SemiBold();
+                                table.Cell().PaddingVertical(2).Text(value);
+                            }
+
+                            Row("Юридична назва:", data.ClientLegalName);
+                            Row("ЄДРПОУ / ІПН:", data.ClientEdrpou);
+                            Row("IBAN:", data.ClientIban);
+                            Row("Банк:", data.ClientBankName);
+                            Row("Юридична адреса:", data.ClientLegalAddress);
+                            Row("ПДВ-статус:", data.ClientIsVatPayer ? "платник ПДВ" : "неплатник ПДВ");
+                        });
+                    }
+
                     // ── 5. Підписи ──────────────────────────────────────────
                     Section(col, "5. ПІДПИСИ СТОРІН");
                     col.Item().PaddingTop(10).Row(row =>
@@ -170,7 +200,9 @@ public sealed class ContractPdfGenerator : IContractPdfGenerator
                         row.RelativeItem().Column(side =>
                         {
                             side.Item().Text("ЗАМОВНИК").Bold();
-                            side.Item().PaddingTop(2).Text(data.ClientDisplayName);
+                            side.Item().PaddingTop(2).Text(data.ClientLegalName ?? data.ClientDisplayName);
+                            if (data.ClientDirectorName is { Length: > 0 })
+                                side.Item().Text(data.ClientDirectorName);
                             side.Item().PaddingTop(48).LineHorizontal(0.75f).LineColor(Colors.Black);
                             side.Item().Text("(підпис)").FontSize(8).FontColor(Colors.Grey.Medium);
                         });

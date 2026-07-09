@@ -1,4 +1,5 @@
 using NSubstitute;
+using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Vchasno;
 using ShelfGuard.Domain.Constants;
@@ -21,6 +22,7 @@ public sealed class SupplierAgreementServiceTests
     private readonly ISupplierChatRepository _tenantNames = Substitute.For<ISupplierChatRepository>();
     private readonly IContractPdfGenerator _pdf = Substitute.For<IContractPdfGenerator>();
     private readonly IVchasnoClientFactory _vchasno = Substitute.For<IVchasnoClientFactory>();
+    private readonly ILegalEntityService _legalEntities = Substitute.For<ILegalEntityService>();
     private readonly SupplierAgreementService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -31,7 +33,7 @@ public sealed class SupplierAgreementServiceTests
     public SupplierAgreementServiceTests()
     {
         _sut = new SupplierAgreementService(
-            _agreements, _settings, _marketplace, _tenantNames, _pdf, _vchasno);
+            _agreements, _settings, _marketplace, _tenantNames, _pdf, _vchasno, _legalEntities);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);
@@ -88,6 +90,45 @@ public sealed class SupplierAgreementServiceTests
         Assert.NotNull(error);
         Assert.Contains(SupplierAgreementStatus.AwaitingSignature, error!);
         await _agreements.DidNotReceive().AddAsync(Arg.Any<SupplierAgreement>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SubmitRequest_WithForeignClientLegalEntity_ReturnsValidationError()
+    {
+        var legalEntityId = Guid.NewGuid();
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns((SupplierAgreement?)null);
+        _legalEntities.BelongsToTenantAsync(_clientTenantId, legalEntityId, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var (dto, error, _) = await _sut.SubmitRequestAsync(
+            _clientTenantId, _supplierId, null, _userId, legalEntityId);
+
+        Assert.Null(dto);
+        Assert.Equal(SupplierAgreementService.ClientLegalEntityNotOwnedError, error);
+        await _agreements.DidNotReceive().AddAsync(Arg.Any<SupplierAgreement>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SubmitRequest_WithOwnClientLegalEntity_PersistsIt()
+    {
+        var legalEntityId = Guid.NewGuid();
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns((SupplierAgreement?)null);
+        _legalEntities.BelongsToTenantAsync(_clientTenantId, legalEntityId, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        SupplierAgreement? created = null;
+        _agreements.AddAsync(Arg.Do<SupplierAgreement>(a => created = a), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var (dto, error, _) = await _sut.SubmitRequestAsync(
+            _clientTenantId, _supplierId, null, _userId, legalEntityId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.NotNull(created);
+        Assert.Equal(legalEntityId, created!.ClientLegalEntityId);
     }
 
     [Fact]
@@ -197,6 +238,34 @@ public sealed class SupplierAgreementServiceTests
 
         Assert.Null(error);
         Assert.Equal($"ДС-{DateTime.UtcNow.Year}-001", agreement.ContractNumber);
+    }
+
+    [Fact]
+    public async Task Approve_WithClientLegalEntity_PassesItsRequisitesToPdfGenerator()
+    {
+        var legalEntityId = Guid.NewGuid();
+        var agreement = PendingAgreement();
+        agreement.ClientLegalEntityId = legalEntityId;
+        _agreements.GetByIdAsync(agreement.Id, Arg.Any<CancellationToken>()).Returns(agreement);
+        _settings.GetByTenantAsync(_supplierTenantId, Arg.Any<CancellationToken>())
+            .Returns(CompleteSettings());
+        _agreements.ListForSupplierAsync(_supplierTenantId, null, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierAgreement> { agreement });
+
+        _legalEntities.GetByIdAsync(_clientTenantId, legalEntityId, Arg.Any<CancellationToken>())
+            .Returns((new ShelfGuard.Application.Features.LegalEntities.Dtos.LegalEntityDto(
+                legalEntityId, "ТОВ «Клієнт»", "87654321", "м. Львів", "Петренко П.П.",
+                null, null, "UA000000000000000000000000000", "Банк", true, true,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), (string?)null));
+
+        var (dto, error) = await _sut.ApproveAsync(_supplierTenantId, agreement.Id);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        _pdf.Received(1).Generate(Arg.Is<ContractPdfData>(d =>
+            d.ClientLegalName == "ТОВ «Клієнт»" &&
+            d.ClientEdrpou == "87654321" &&
+            d.ClientIsVatPayer));
     }
 
     [Fact]

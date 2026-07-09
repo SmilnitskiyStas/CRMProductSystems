@@ -52,7 +52,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
         if (userId is null) return Forbid();
 
         var (agreement, error, isDuplicate) = await _agreements.SubmitRequestAsync(
-            tenantId.Value, id, request.Message, userId.Value, ct);
+            tenantId.Value, id, request.Message, userId.Value, request.ClientLegalEntityId, ct);
 
         if (error == SupplierAgreementService.SupplierNotFoundError)
             return NotFound(new { error });

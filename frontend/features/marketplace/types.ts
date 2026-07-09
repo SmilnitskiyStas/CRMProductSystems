@@ -242,6 +242,8 @@ export interface CooperationAgreementDto {
 
 export interface CreateCooperationRequestBody {
   message?: string;
+  /** Юридична особа клієнта, від імені якої подається заявка (TASK-327/328, необовʼязково). */
+  clientLegalEntityId?: string;
 }
 
 export type SigningMethod = "physical" | "vchasno";

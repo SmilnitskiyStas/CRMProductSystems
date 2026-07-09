@@ -41,7 +41,8 @@ import {
   MessageCircle,
   Landmark,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useSupplierChatSessions } from "@/features/supplier-cabinet/hooks/useSupplierCabinet";
@@ -333,6 +334,207 @@ function NavLink({ item, pathname, collapsed, indented }: NavLinkProps) {
   );
 }
 
+interface CollapsedGroupTriggerProps {
+  group: NavGroup;
+  visibleItems: NavItem[];
+  pathname: string;
+  hasActive: boolean;
+}
+
+interface PopoverPos {
+  top: number;
+  left: number;
+}
+
+/**
+ * Collapsed-sidebar rendering of a nav group. Single-item groups navigate
+ * straight to that item (no point popping a 1-row popover); multi-item groups
+ * open a small popover — positioned like ActionMenu (portal + viewport-aware
+ * flip, outside-click + scroll/resize dismissal) — listing the child links so
+ * they stay reachable while the sidebar is collapsed.
+ */
+function CollapsedGroupTrigger({ group, visibleItems, pathname, hasActive }: CollapsedGroupTriggerProps) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<PopoverPos | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const calcPos = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+
+    // Popover sits to the right of the collapsed rail, top-aligned with the trigger.
+    let top = rect.top + window.scrollY;
+    const estimatedHeight = 40 + visibleItems.length * 36;
+    if (rect.top + estimatedHeight > viewportHeight) {
+      // flip up so it doesn't run off the bottom of the screen
+      top = Math.max(8, rect.bottom - estimatedHeight) + window.scrollY;
+    }
+
+    setPos({
+      top,
+      left: rect.right + 8 + window.scrollX,
+    });
+  }, [visibleItems.length]);
+
+  const toggle = () => {
+    if (visibleItems.length <= 1) return;
+    if (!open) calcPos();
+    setOpen((v) => !v);
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handle(e: MouseEvent) {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [open]);
+
+  // Reposition on scroll / resize
+  useEffect(() => {
+    if (!open) return;
+    const reCalc = () => calcPos();
+    window.addEventListener("scroll", reCalc, true);
+    window.addEventListener("resize", reCalc);
+    return () => {
+      window.removeEventListener("scroll", reCalc, true);
+      window.removeEventListener("resize", reCalc);
+    };
+  }, [open, calcPos]);
+
+  // Single-item "group" — just navigate directly, no popover needed.
+  const singleItem = visibleItems.length === 1 ? visibleItems[0] : null;
+
+  const popover =
+    open && pos
+      ? createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: "absolute",
+              top: pos.top,
+              left: pos.left,
+              width: 220,
+              background: "#111827",
+              border: "1px solid #1F2937",
+              borderRadius: 10,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+              zIndex: 9999,
+              overflow: "hidden",
+              padding: 4,
+            }}
+          >
+            <div
+              style={{
+                padding: "6px 10px 4px",
+                color: "#6B7280",
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              {group.label}
+            </div>
+            {visibleItems.map((item) => {
+              const active = isActive(pathname, item.href, item.exact);
+              return (
+                <Link
+                  key={item.href + group.key}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 9,
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    background: active ? "#1D3461" : "transparent",
+                    color: active ? "#93C5FD" : "#9CA3AF",
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 400,
+                    textDecoration: "none",
+                    transition: "background 0.1s, color 0.1s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) (e.currentTarget as HTMLElement).style.background = "#1F2937";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
+                  }}
+                >
+                  <span style={{ opacity: active ? 1 : 0.8, flexShrink: 0, display: "flex" }}>{item.icon}</span>
+                  {item.label}
+                  {!!item.badge && item.badge > 0 && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        background: "#EF4444",
+                        color: "#fff",
+                        borderRadius: 999,
+                        padding: "1px 6px",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        minWidth: 16,
+                        textAlign: "center",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {item.badge > 9 ? "9+" : item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  if (singleItem) {
+    return <NavLink item={singleItem} pathname={pathname} collapsed />;
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        onClick={toggle}
+        title={group.label}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "9px 0",
+          borderRadius: 8,
+          background: open ? "#111827" : "transparent",
+          border: "none",
+          color: hasActive ? "#93C5FD" : "#6B7280",
+          opacity: hasActive ? 1 : 0.7,
+          cursor: "pointer",
+          transition: "background 0.1s, color 0.1s",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "#111827";
+        }}
+        onMouseLeave={(e) => {
+          if (!open) (e.currentTarget as HTMLElement).style.background = "transparent";
+        }}
+      >
+        {group.icon}
+      </button>
+      {popover}
+    </>
+  );
+}
+
 interface NavGroupSectionProps {
   group: NavGroup;
   visibleItems: NavItem[];
@@ -349,25 +551,12 @@ function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupS
     if (hasActive) setExpanded(true);
   }, [hasActive]);
 
-  // In collapsed mode — show only group icon with tooltip (no children)
+  // In collapsed mode — show only the group icon. Groups with children open a
+  // popover on click (children are otherwise unreachable while collapsed —
+  // this used to be a static <div> with no click handler at all, see BUG report).
   if (collapsed) {
-    const groupActive = hasActive;
     return (
-      <div
-        title={group.label}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "9px 0",
-          borderRadius: 8,
-          color: groupActive ? "#93C5FD" : "#6B7280",
-          opacity: groupActive ? 1 : 0.7,
-          cursor: "default",
-        }}
-      >
-        {group.icon}
-      </div>
+      <CollapsedGroupTrigger group={group} visibleItems={visibleItems} pathname={pathname} hasActive={hasActive} />
     );
   }
 

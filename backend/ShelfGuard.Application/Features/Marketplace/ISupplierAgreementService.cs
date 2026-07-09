@@ -21,10 +21,14 @@ public interface ISupplierAgreementService
 {
     // ── Client side ───────────────────────────────────────────────────────────
 
-    /// <summary>Client submits a cooperation request to a marketplace supplier (by public supplier id).</summary>
+    /// <summary>
+    /// Client submits a cooperation request to a marketplace supplier (by public
+    /// supplier id). clientLegalEntityId (TASK-327), when provided, must belong
+    /// to the client's own tenant.
+    /// </summary>
     Task<(CooperationAgreementDto? Agreement, string? Error, bool IsDuplicate)> SubmitRequestAsync(
         Guid clientTenantId, Guid supplierId, string? message, Guid userId,
-        CancellationToken ct = default);
+        Guid? clientLegalEntityId = null, CancellationToken ct = default);
 
     Task<IReadOnlyList<CooperationAgreementDto>> ListForClientAsync(
         Guid clientTenantId, CancellationToken ct = default);
