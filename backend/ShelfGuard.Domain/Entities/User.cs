@@ -10,6 +10,8 @@ public sealed class User
     public string PasswordHash { get; private set; } = string.Empty;
     public string Role { get; private set; } = string.Empty;
     public Guid? StoreId { get; private set; }
+    /// <summary>Optional legal entity this user is registered under (TASK-321).</summary>
+    public Guid? LegalEntityId { get; private set; }
     public string? TelegramChatId { get; private set; }
     public string? PushToken { get; private set; }
     public bool IsActive { get; private set; } = true;
@@ -56,7 +58,8 @@ public sealed class User
         string passwordHash,
         string role,
         Guid? storeId = null,
-        string? invitedByName = null) => new()
+        string? invitedByName = null,
+        Guid? legalEntityId = null) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenantId,
@@ -65,6 +68,7 @@ public sealed class User
         PasswordHash = passwordHash,
         Role = role,
         StoreId = storeId,
+        LegalEntityId = legalEntityId,
         IsActive = true,
         CreatedAt = DateTime.UtcNow,
         InvitedByName = invitedByName,
@@ -95,6 +99,8 @@ public sealed class User
     public void SetSupplierRole(Guid? roleId) => SupplierRoleId = roleId;
 
     public void SetStore(Guid? storeId) => StoreId = storeId;
+
+    public void SetLegalEntity(Guid? legalEntityId) => LegalEntityId = legalEntityId;
 
     /// <summary>
     /// Replaces per-user page-access overrides.

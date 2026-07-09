@@ -10,7 +10,9 @@ public sealed record LocationDto(
     string? FloorPlan,
     bool IsActive,
     DateTime CreatedAt,
-    List<LocationZoneDto> Zones
+    List<LocationZoneDto> Zones,
+    /// <summary>Optional legal entity this location is registered under (TASK-321).</summary>
+    Guid? LegalEntityId = null
 );
 
 public sealed record LocationZoneDto(
@@ -30,7 +32,8 @@ public sealed record CreateLocationRequest(
     string? Address,
     decimal? Latitude,
     decimal? Longitude,
-    string LocationType
+    string LocationType,
+    Guid? LegalEntityId = null
 );
 
 public sealed record UpdateLocationRequest(
@@ -39,7 +42,8 @@ public sealed record UpdateLocationRequest(
     decimal? Latitude,
     decimal? Longitude,
     string LocationType,
-    bool IsActive
+    bool IsActive,
+    Guid? LegalEntityId = null
 );
 
 public sealed record UpdateFloorPlanRequest(

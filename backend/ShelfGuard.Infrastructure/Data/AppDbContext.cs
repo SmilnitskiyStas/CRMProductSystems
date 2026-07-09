@@ -130,6 +130,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierSupportTicket> SupplierSupportTickets => Set<SupplierSupportTicket>();
     public DbSet<SupplierSupportTicketMessage> SupplierSupportTicketMessages => Set<SupplierSupportTicketMessage>();
 
+    // Legal entities — multi-company support per tenant (TASK-321)
+    public DbSet<LegalEntity> LegalEntities => Set<LegalEntity>();
+
     // v4 Phase 5 — Production Module
     public DbSet<Recipe>                     Recipes                     => Set<Recipe>();
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
@@ -189,6 +192,9 @@ public sealed class AppDbContext : DbContext
                  v => v == null ? null : new Dictionary<string, bool>(v)));
             e.HasOne(u => u.Tenant).WithMany(t => t.Users)
              .HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+            e.Property(u => u.LegalEntityId).IsRequired(false);
+            e.HasOne<LegalEntity>().WithMany()
+             .HasForeignKey(u => u.LegalEntityId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── RefreshToken ────────────────────────────────────────────────────
@@ -238,6 +244,9 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasOne(s => s.Tenant).WithMany()
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(s => s.LegalEntityId).IsRequired(false);
+            e.HasOne<LegalEntity>().WithMany()
+             .HasForeignKey(s => s.LegalEntityId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── LocationZone (v4: mapped to "location_zones" table) ─────────────
@@ -1602,6 +1611,30 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(x => x.TenantId).IsUnique();
             e.HasOne<Tenant>().WithMany()
              .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── LegalEntity (TASK-321) ────────────────────────────────────────────
+        builder.Entity<LegalEntity>(e =>
+        {
+            e.ToTable("legal_entities");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.LegalName).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Edrpou).HasMaxLength(20).IsRequired(false);
+            e.Property(x => x.LegalAddress).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.DirectorName).HasMaxLength(300).IsRequired(false);
+            e.Property(x => x.Phone).HasMaxLength(30).IsRequired(false);
+            e.Property(x => x.Email).HasMaxLength(255).IsRequired(false);
+            e.Property(x => x.Iban).HasMaxLength(40).IsRequired(false);
+            e.Property(x => x.BankName).HasMaxLength(300).IsRequired(false);
+            e.Property(x => x.IsVatPayer).HasDefaultValue(false);
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.TenantId).HasDatabaseName("idx_legal_entities_tenant");
+            e.HasOne(x => x.Tenant).WithMany()
+             .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── SupplierAgreement (TASK-316) ──────────────────────────────────────

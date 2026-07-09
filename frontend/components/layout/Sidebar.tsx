@@ -39,6 +39,7 @@ import {
   ShoppingBag,
   FileText,
   MessageCircle,
+  Landmark,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -47,11 +48,13 @@ import { useSupplierChatSessions } from "@/features/supplier-cabinet/hooks/useSu
 import type { ModuleKey } from "@/features/modules/types";
 import {
   AppRoles,
+  AT_LEAST_ENTERPRISE_ADMIN,
   AT_LEAST_STORE_MANAGER,
   CAN_ACCESS_POS,
   CAN_MANAGE_WAREHOUSE,
   CAN_VIEW_ANALYTICS,
   CAN_VIEW_WAREHOUSE,
+  canManageLegalEntities,
   PROVIDER_ONLY,
   PROVIDER_TEAM,
   SUPPLIER_ONLY,
@@ -184,6 +187,11 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/users",          label: "Персонал", icon: <Users size={16} />,    roles: AT_LEAST_STORE_MANAGER },
       { href: "/schedules",      label: "Розклад",  icon: <Calendar size={16} />, permission: "schedule_management" },
       { href: "/provider/team",  label: "Команда",  icon: <Users size={16} />,    roles: PROVIDER_TEAM, permission: "team_management" },
+      // Legal Entities (TASK-323): enterprise_admin/provider always see it; other
+      // tenant roles only if granted the `legal_entities.manage` override — that
+      // check can't be expressed via `roles`/`permission` (mirrors backend role-OR-
+      // permission logic), so it's filtered in manually below via canManageLegalEntities.
+      { href: "/settings/legal-entities", label: "Юридичні особи", icon: <Landmark size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
     ],
   },
   {
@@ -494,6 +502,11 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     .map((group) => ({
       group,
       visibleItems: group.items.filter((item) => {
+        // Legal Entities (TASK-323): role check OR the `legal_entities.manage`
+        // per-user override — same OR-logic as backend LegalEntityAuthorization.CanManage.
+        if (item.href === "/settings/legal-entities") {
+          return canManageLegalEntities(userRole, me?.permissions);
+        }
         // Role check (existing logic)
         if (item.roles && !item.roles.has(userRole)) return false;
         // Permission check: only applied for PROVIDER_TEAM users on permission-gated items

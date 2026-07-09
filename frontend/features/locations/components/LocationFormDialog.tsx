@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Btn } from "@/components/ui/Btn";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { LOCATION_TYPE_LABELS, type LocationDto, type LocationType } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
@@ -22,6 +23,7 @@ const schema = z.object({
     "restaurant",
   ] as const),
   isActive: z.boolean(),
+  legalEntityId: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -38,6 +40,7 @@ interface Props {
     address: string | null;
     locationType: LocationType;
     isActive: boolean;
+    legalEntityId: string | null;
   }) => void;
 }
 
@@ -63,6 +66,9 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
   const allowedTypes = TYPES_FOR_BUSINESS[businessType] ?? (Object.keys(LOCATION_TYPE_LABELS) as LocationType[]);
   const locationTypes = allowedTypes.map((k) => [k, LOCATION_TYPE_LABELS[k]] as [LocationType, string]);
 
+  const { data: legalEntities } = useLegalEntities();
+  const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
+
   const {
     register,
     handleSubmit,
@@ -75,6 +81,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       address: "",
       locationType: "retail_store",
       isActive: true,
+      legalEntityId: "",
     },
   });
 
@@ -86,6 +93,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
         address: location.address ?? "",
         locationType: location.locationType,
         isActive: location.isActive,
+        legalEntityId: location.legalEntityId ?? "",
       });
     } else {
       reset({
@@ -93,6 +101,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
         address: "",
         locationType: "retail_store",
         isActive: true,
+        legalEntityId: "",
       });
     }
   }, [location, reset]);
@@ -103,6 +112,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       address: values.address?.trim() || null,
       locationType: values.locationType,
       isActive: values.isActive,
+      legalEntityId: values.legalEntityId || null,
     });
   }
 
@@ -169,6 +179,18 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
               placeholder="вул. Шевченка, 1, Київ"
               style={inputStyle}
             />
+          </Field>
+
+          {/* Legal entity */}
+          <Field label="Юридична особа (необов'язково)" error={errors.legalEntityId?.message}>
+            <select {...register("legalEntityId")} style={inputStyle}>
+              <option value="">— Не вказано —</option>
+              {activeLegalEntities.map((entity) => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.legalName}
+                </option>
+              ))}
+            </select>
           </Field>
 
           {/* Active */}

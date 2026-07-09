@@ -23,6 +23,7 @@ using ShelfGuard.Application.Features.AiAssistant;
 using ShelfGuard.Application.Features.Customers;
 using ShelfGuard.Application.Features.Schedules;
 using ShelfGuard.Application.Features.ServiceDesk;
+using ShelfGuard.Application.Features.LegalEntities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -114,6 +115,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // TASK-274 - Provider schedule
         services.AddScoped<IProviderScheduleService, ProviderScheduleService>();
+
+        // TASK-321/322 - Legal Entities (юридичні особи)
+        services.AddScoped<ILegalEntityService, LegalEntityService>();
 
         return services;
     }

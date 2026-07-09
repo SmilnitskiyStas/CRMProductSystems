@@ -51,6 +51,9 @@ public static class DependencyInjection
         // Locations
         services.AddScoped<ILocationRepository, LocationRepository>();
 
+        // Legal Entities
+        services.AddScoped<ILegalEntityRepository, LegalEntityRepository>();
+
         // Suppliers
         services.AddScoped<ISupplierRepository, SupplierRepository>();
 

@@ -13,6 +13,8 @@ export interface UserDto {
   permissions?: Record<string, boolean> | null;
   /** Display name of the user who invited/created this account. Null for seed users. */
   invitedByName?: string | null;
+  /** Юридична особа, до якої прив'язаний користувач (nullable). */
+  legalEntityId?: string | null;
 }
 
 export interface UpdatePermissionsRequest {
@@ -26,6 +28,7 @@ export interface InviteUserRequest {
   role: string;
   password: string;
   storeId?: string | null;
+  legalEntityId?: string | null;
 }
 
 export interface UpdateUserRequest {
@@ -33,6 +36,7 @@ export interface UpdateUserRequest {
   phone?: string | null;
   role: string;
   storeId?: string | null;
+  legalEntityId?: string | null;
 }
 
 export interface ActivityLogDto {

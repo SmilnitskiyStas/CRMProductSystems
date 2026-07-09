@@ -56,7 +56,7 @@ public sealed class AuthService : IAuthService
         }, ct);
         await _activityLogs.SaveChangesAsync(ct);
 
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, user.Permissions);
 
         return (new LoginResponse(accessToken, rawToken, ToDto(user)), null);
     }
@@ -82,7 +82,7 @@ public sealed class AuthService : IAuthService
         await _refreshTokens.AddAsync(newToken, ct);
         await _refreshTokens.SaveChangesAsync(ct);
 
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, user.Permissions);
 
         return (new LoginResponse(accessToken, newRaw, ToDto(user)), null);
     }
@@ -105,5 +105,5 @@ public sealed class AuthService : IAuthService
     }
 
     private static AuthUserDto ToDto(User u) =>
-        new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId, u.Permissions);
+        new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId, u.Permissions, u.LegalEntityId);
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useInviteUser } from "../hooks/useUsers";
 import { ROLE_LABELS } from "@/features/profile/types";
 import { Btn } from "@/components/ui/Btn";
+import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 
 const INVITE_ROLES = [
   "store_manager",
@@ -38,12 +39,15 @@ interface Props {
 
 export function InviteUserModal({ onClose }: Props) {
   const invite = useInviteUser();
+  const { data: legalEntities } = useLegalEntities();
+  const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
 
-  const [email,    setEmail]    = useState("");
-  const [fullName, setFullName] = useState("");
-  const [role,     setRole]     = useState<string>(INVITE_ROLES[0]);
-  const [password, setPassword] = useState("");
-  const [errors,   setErrors]   = useState<Record<string, string>>({});
+  const [email,        setEmail]        = useState("");
+  const [fullName,     setFullName]     = useState("");
+  const [role,         setRole]         = useState<string>(INVITE_ROLES[0]);
+  const [password,     setPassword]     = useState("");
+  const [legalEntityId, setLegalEntityId] = useState("");
+  const [errors,       setErrors]       = useState<Record<string, string>>({});
 
   function validate() {
     const e: Record<string, string> = {};
@@ -63,6 +67,7 @@ export function InviteUserModal({ onClose }: Props) {
       fullName: fullName.trim(),
       role,
       password,
+      legalEntityId: legalEntityId || null,
     });
     onClose();
   }
@@ -172,6 +177,23 @@ export function InviteUserModal({ onClose }: Props) {
                 {INVITE_ROLES.map((r) => (
                   <option key={r} value={r} style={{ background: "#0D1117" }}>
                     {ROLE_LABELS[r] ?? r}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Legal entity */}
+            <div>
+              <label style={labelStyle}>Юридична особа (необов'язково)</label>
+              <select
+                value={legalEntityId}
+                onChange={(e) => setLegalEntityId(e.target.value)}
+                style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
+              >
+                <option value="" style={{ background: "#0D1117" }}>— Не вказано —</option>
+                {activeLegalEntities.map((entity) => (
+                  <option key={entity.id} value={entity.id} style={{ background: "#0D1117" }}>
+                    {entity.legalName}
                   </option>
                 ))}
               </select>

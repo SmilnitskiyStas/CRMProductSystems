@@ -29,10 +29,16 @@ export default function LocationsPage() {
     address: string | null;
     locationType: LocationType;
     isActive: boolean;
+    legalEntityId: string | null;
   }) {
     if (dialog === "create") {
       create.mutate(
-        { name: values.name, address: values.address, locationType: values.locationType },
+        {
+          name: values.name,
+          address: values.address,
+          locationType: values.locationType,
+          legalEntityId: values.legalEntityId,
+        },
         {
           onSuccess: () => {
             toast.success("Локацію створено");

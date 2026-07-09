@@ -7,6 +7,7 @@ import { UserPermissionsEditor } from "./UserPermissionsEditor";
 import { ROLE_LABELS } from "@/features/profile/types";
 import { ROLE_RANK } from "../types";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import type { UserDto, UpdateUserRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
@@ -50,6 +51,8 @@ export function UserDetailPanel({ user, onClose }: Props) {
   const { data: me } = useMe();
   const update     = useUpdateUser(user.id);
   const deactivate = useDeactivateUser();
+  const { data: legalEntities } = useLegalEntities();
+  const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
 
   const [tab, setTab] = useState<PanelTab>("info");
 
@@ -58,6 +61,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
   const [fullName, setFullName] = useState(user.fullName);
   const [phone,    setPhone]    = useState(user.phone ?? "");
   const [role,     setRole]     = useState(user.role);
+  const [legalEntityId, setLegalEntityId] = useState(user.legalEntityId ?? "");
   const [saved,    setSaved]    = useState(false);
 
   const isSelf      = me?.id === user.id;
@@ -79,6 +83,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
       phone: phone.trim() || null,
       role,
       storeId: user.storeId,
+      legalEntityId: legalEntityId || null,
     };
     await update.mutateAsync(data);
     setSaved(true);
@@ -267,6 +272,21 @@ export function UserDetailPanel({ user, onClose }: Props) {
                           {EDITABLE_ROLES.map((r) => (
                             <option key={r} value={r} style={{ background: "#0D1117" }}>
                               {ROLE_LABELS[r] ?? r}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Юридична особа</label>
+                        <select
+                          value={legalEntityId}
+                          onChange={(e) => setLegalEntityId(e.target.value)}
+                          style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
+                        >
+                          <option value="" style={{ background: "#0D1117" }}>— Не вказано —</option>
+                          {activeLegalEntities.map((entity) => (
+                            <option key={entity.id} value={entity.id} style={{ background: "#0D1117" }}>
+                              {entity.legalName}
                             </option>
                           ))}
                         </select>

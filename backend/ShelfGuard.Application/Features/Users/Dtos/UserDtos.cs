@@ -14,7 +14,9 @@ public sealed record UserDto(
     /// <summary>Per-user overrides. null = all defaults apply.</summary>
     Dictionary<string, bool>? Permissions = null,
     /// <summary>Display name of the user who invited this account. Null for seed/provider-created users.</summary>
-    string? InvitedByName = null
+    string? InvitedByName = null,
+    /// <summary>Optional legal entity this user is registered under (TASK-322).</summary>
+    Guid? LegalEntityId = null
 );
 
 public sealed record InviteUserRequest(
@@ -22,14 +24,16 @@ public sealed record InviteUserRequest(
     string  FullName,
     string  Role,
     string  Password,
-    Guid?   StoreId = null
+    Guid?   StoreId = null,
+    Guid?   LegalEntityId = null
 );
 
 public sealed record UpdateUserRequest(
     string  FullName,
     string? Phone,
     string  Role,
-    Guid?   StoreId
+    Guid?   StoreId,
+    Guid?   LegalEntityId = null
 );
 
 public sealed record UpdateMyProfileRequest(

@@ -81,4 +81,6 @@ export interface LocationDto {
   isActive: boolean;
   createdAt: string;
   zones: LocationZoneDto[];
+  /** Юридична особа мережі, до якої прив'язана локація (nullable). */
+  legalEntityId: string | null;
 }

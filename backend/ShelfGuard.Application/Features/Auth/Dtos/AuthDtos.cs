@@ -16,5 +16,7 @@ public record AuthUserDto(
     Guid? TenantId,
     string? TenantName,
     Guid? StoreId,
-    Dictionary<string, bool>? Permissions
+    Dictionary<string, bool>? Permissions,
+    /// <summary>Optional legal entity this user is registered under (TASK-322).</summary>
+    Guid? LegalEntityId = null
 );

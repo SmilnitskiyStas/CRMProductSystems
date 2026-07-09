@@ -101,6 +101,30 @@ export const PROVIDER_TEAM = new Set<AppRole>([
 export const ENTERPRISE_ADMIN_ONLY = new Set<AppRole>([AppRoles.EnterpriseAdmin]);
 
 /**
+ * Provider + enterprise_admin — mirrors backend's AppPolicies.AtLeastEnterpriseAdminRoles.
+ * Used for Legal Entities management visibility (TASK-323): these roles can always
+ * manage legal entities; other tenant roles need the `legal_entities.manage` permission
+ * override (see `canManageLegalEntities`).
+ */
+export const AT_LEAST_ENTERPRISE_ADMIN = new Set<AppRole>([
+  AppRoles.Provider,
+  AppRoles.EnterpriseAdmin,
+]);
+
+/**
+ * True when the current user can manage (create/update/deactivate) legal entities —
+ * mirrors backend LegalEntityAuthorization.CanManage: enterprise_admin/provider always,
+ * or any role with the `legal_entities.manage` permission override set to true.
+ */
+export function canManageLegalEntities(
+  role: string | undefined,
+  permissions?: Record<string, boolean> | null,
+): boolean {
+  if (hasRole(role, AT_LEAST_ENTERPRISE_ADMIN)) return true;
+  return permissions?.["legal_entities.manage"] === true;
+}
+
+/**
  * Supplier cabinet only (v4.1, ADR-016). supplier_admin is deliberately NOT part
  * of any tenant-staff set (stock/pos/warehouse/…) — the backend returns 403 on
  * all tenant-staff endpoints for this role. Mirror that here: the only pages a

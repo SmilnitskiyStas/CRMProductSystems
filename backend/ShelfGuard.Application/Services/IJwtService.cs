@@ -2,7 +2,8 @@ namespace ShelfGuard.Application.Services;
 
 public interface IJwtService
 {
-    string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null);
+    string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
+        Dictionary<string, bool>? permissions = null);
 
     /// <summary>
     /// Generates a short-lived (60 min) impersonation token so a provider user

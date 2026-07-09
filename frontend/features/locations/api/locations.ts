@@ -14,6 +14,7 @@ export interface CreateLocationDto {
   name: string;
   address?: string | null;
   locationType: LocationType;
+  legalEntityId?: string | null;
 }
 
 export interface UpdateLocationDto {
@@ -21,6 +22,7 @@ export interface UpdateLocationDto {
   address?: string | null;
   locationType: LocationType;
   isActive: boolean;
+  legalEntityId?: string | null;
 }
 
 export interface CreateZoneDto {

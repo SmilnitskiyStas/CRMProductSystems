@@ -14,6 +14,8 @@ public sealed class Store
     public string? FloorPlan { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    /// <summary>Optional legal entity this store is registered under (TASK-321).</summary>
+    public Guid? LegalEntityId { get; set; }
 
     public Tenant? Tenant { get; init; }
     public ICollection<StoreZone> Zones { get; init; } = new List<StoreZone>();

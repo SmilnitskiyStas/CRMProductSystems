@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Users.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
@@ -10,6 +11,7 @@ public sealed class UserService : IUserService
     private readonly IUserRepository        _users;
     private readonly IActivityLogRepository _activityLogs;
     private readonly IPasswordHasher        _hasher;
+    private readonly ILegalEntityService    _legalEntities;
 
     private static readonly HashSet<string> ValidRoles =
     [
@@ -41,11 +43,13 @@ public sealed class UserService : IUserService
     public UserService(
         IUserRepository users,
         IActivityLogRepository activityLogs,
-        IPasswordHasher hasher)
+        IPasswordHasher hasher,
+        ILegalEntityService legalEntities)
     {
-        _users        = users;
-        _activityLogs = activityLogs;
-        _hasher       = hasher;
+        _users         = users;
+        _activityLogs  = activityLogs;
+        _hasher        = hasher;
+        _legalEntities = legalEntities;
     }
 
     // ── List ─────────────────────────────────────────────────────────────────
@@ -82,9 +86,16 @@ public sealed class UserService : IUserService
         if (existing is not null)
             return (null, $"Email '{request.Email}' is already registered.");
 
+        if (request.LegalEntityId.HasValue &&
+            !await _legalEntities.BelongsToTenantAsync(tenantId, request.LegalEntityId.Value, ct))
+            return (null, "Вказана юридична особа не належить цьому тенанту.");
+
         var hash = _hasher.Hash(request.Password);
         var user = User.Create(tenantId, request.Email, request.FullName, hash, request.Role,
             request.StoreId, invitedByName: string.IsNullOrWhiteSpace(inviterName) ? null : inviterName);
+
+        if (request.LegalEntityId.HasValue)
+            user.SetLegalEntity(request.LegalEntityId);
 
         await _users.AddAsync(user, ct);
 
@@ -109,9 +120,14 @@ public sealed class UserService : IUserService
         if (user is null || user.TenantId != tenantId)
             return (null, "User not found.");
 
+        if (request.LegalEntityId.HasValue &&
+            !await _legalEntities.BelongsToTenantAsync(tenantId, request.LegalEntityId.Value, ct))
+            return (null, "Вказана юридична особа не належить цьому тенанту.");
+
         user.UpdateProfile(request.FullName, request.Phone);
         user.SetRole(request.Role);
         user.SetStore(request.StoreId);
+        user.SetLegalEntity(request.LegalEntityId);
 
         _users.Update(user);
 
@@ -298,7 +314,8 @@ public sealed class UserService : IUserService
         HasTelegram: u.TelegramChatId is not null,
         u.CreatedAt, u.LastActiveAt,
         Permissions: u.Permissions,
-        InvitedByName: u.InvitedByName
+        InvitedByName: u.InvitedByName,
+        LegalEntityId: u.LegalEntityId
     );
 
     private static ActivityLogDto ToActivityDto(ActivityLog a) => new(

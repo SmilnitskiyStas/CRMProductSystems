@@ -23,7 +23,8 @@ public sealed class JwtService : IJwtService
         _accessTokenMinutes = int.Parse(config["Jwt:AccessTokenMinutes"] ?? "15");
     }
 
-    public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null)
+    public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
+        Dictionary<string, bool>? permissions = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -42,6 +43,13 @@ public sealed class JwtService : IJwtService
             claims.Add(new Claim("tenant_id", tenantId.Value.ToString()));
         if (storeId.HasValue)
             claims.Add(new Claim("store_id", storeId.Value.ToString()));
+
+        if (permissions is { Count: > 0 })
+        {
+            var granted = string.Join(',', permissions.Where(p => p.Value).Select(p => p.Key));
+            if (!string.IsNullOrEmpty(granted))
+                claims.Add(new Claim("permissions", granted));
+        }
 
         var token = new JwtSecurityToken(
             issuer: _issuer,
