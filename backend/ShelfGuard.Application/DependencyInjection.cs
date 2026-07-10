@@ -24,6 +24,7 @@ using ShelfGuard.Application.Features.Customers;
 using ShelfGuard.Application.Features.Schedules;
 using ShelfGuard.Application.Features.ServiceDesk;
 using ShelfGuard.Application.Features.LegalEntities;
+using ShelfGuard.Application.Features.Leads;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -118,6 +119,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // TASK-321/322 - Legal Entities (юридичні особи)
         services.AddScoped<ILegalEntityService, LegalEntityService>();
+
+        // TASK-333 - Landing page lead capture
+        services.AddScoped<ILandingLeadService, LandingLeadService>();
 
         return services;
     }

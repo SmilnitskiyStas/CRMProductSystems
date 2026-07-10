@@ -1,0 +1,44 @@
+/* Landing-only styles. Imported by app/page.tsx; every rule is scoped
+   to [data-landing] (or html:has([data-landing])) so the app is unaffected. */
+
+html:has([data-landing]) {
+  scroll-behavior: smooth;
+}
+
+/* Scroll-reveal: hidden state applies ONLY when JS is available and the user
+   hasn't asked for reduced motion — no-JS visitors and crawlers see everything. */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  [data-landing] .reveal {
+    opacity: 0;
+    transform: translateY(22px);
+    transition:
+      opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  [data-landing] .reveal.reveal-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Hero entrance — pure CSS, runs on load */
+@media (prefers-reduced-motion: no-preference) {
+  [data-landing] .hero-fade {
+    animation: sg-fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  [data-landing] .hero-fade-1 { animation-delay: 0.08s; }
+  [data-landing] .hero-fade-2 { animation-delay: 0.16s; }
+  [data-landing] .hero-fade-3 { animation-delay: 0.24s; }
+  [data-landing] .hero-fade-4 { animation-delay: 0.36s; }
+}
+
+@keyframes sg-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

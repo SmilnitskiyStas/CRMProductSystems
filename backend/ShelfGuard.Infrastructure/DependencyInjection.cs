@@ -210,6 +210,10 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.Provider.IProviderRolesService,
             Services.ProviderRolesService>();
 
+        // TASK-333 - Landing page leads
+        services.AddScoped<Domain.Interfaces.ILandingLeadRepository,
+            Data.Repositories.LandingLeadRepository>();
+
         return services;
     }
 }

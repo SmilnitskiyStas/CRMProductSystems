@@ -3,6 +3,27 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-334 — Frontend: public marketing landing page (/)
+**Status:** done (2026-07-10) · **Agent:** frontend-developer · **Depends:** TASK-333 (контракт leads)
+Log: `.claude/logs/tasks/334_2026-07-10_landing-page_frontend-developer.md`
+`app/page.tsx`: redirect → SSG-лендінг (укр., темна тема #0B0F17, стиль Linear/Vercel,
+SEO+OpenGraph). Нова фіча `features/landing/`: SVG-лого (щит+полиці), sticky header,
+hero зі скриншотом у browser-рамці, проблеми/можливості (8)/showcase (6 скриншотів
+`public/landing/`)/як це працює/для кого/тарифи «за запитом»/FAQ/форма заявки
+(RHF+zod, honeypot, POST `/api/public/leads` — 204/400/429). Reveal-анімації CSS+IO,
+без нових залежностей. Бонус: `app/icon.svg` (favicon), `lang="uk"`.
+tsc clean, build success, `/` prerendered static, форма і якорі перевірені в браузері.
+
+## TASK-333 — Backend: landing lead capture endpoint
+**Status:** done (2026-07-10) · **Agent:** backend-developer · **Depends:** — (frontend landing — паралельна задача)
+Log: `.claude/logs/tasks/333_2026-07-10_landing-leads_backend-developer.md`
+`POST /api/public/leads` (AllowAnonymous, rate limit `public-leads` 5/min per IP):
+honeypot `website` → 204 без збереження; валідація name 2..100 / phone 5..30 /
+company ≤150 / message ≤1000 → 400 `{error}`; happy path → `landing_leads`
+(provider-level, без tenant_id/RLS — як provider_roles) + ILogger info.
+Telegram-нотифікація відкладена (worker pipeline tenant-scoped) — TODO у сервісі.
+Міграція `20260710112137_AddLandingLeads` (additive). Build 0 err, 701/701 tests.
+
 ## TASK-329 — Backend: auth hardening (rate limit, lockout, password policy, reuse detection, headers)
 **Status:** done (2026-07-09) · **Agent:** backend-developer · **Depends:** —
 Log: `.claude/logs/tasks/329-330_2026-07-09_auth-hardening-2fa_backend-developer.md`

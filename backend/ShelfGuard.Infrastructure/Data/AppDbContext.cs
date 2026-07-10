@@ -114,6 +114,9 @@ public sealed class AppDbContext : DbContext
     // Provider RBAC — custom roles
     public DbSet<ProviderRole> ProviderRoles => Set<ProviderRole>();
 
+    // Landing page leads — provider-level, no tenant_id (TASK-333)
+    public DbSet<LandingLead> LandingLeads => Set<LandingLead>();
+
     // Supplier RBAC — custom roles (tenant-scoped) + task board (TASK-305)
     public DbSet<SupplierRole> SupplierRoles => Set<SupplierRole>();
     public DbSet<SupplierTask> SupplierTasks => Set<SupplierTask>();
@@ -1491,6 +1494,23 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.Permissions).HasColumnType("text[]").IsRequired();
             e.Property(r => r.IsSystem).HasDefaultValue(false);
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── LandingLead (TASK-333) ────────────────────────────────────────────
+        // Provider-level table: no tenant_id, no RLS (same as provider_roles).
+        builder.Entity<LandingLead>(e =>
+        {
+            e.ToTable("landing_leads");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(l => l.Name).HasMaxLength(100).IsRequired();
+            e.Property(l => l.Phone).HasMaxLength(30).IsRequired();
+            e.Property(l => l.Company).HasMaxLength(150).IsRequired(false);
+            e.Property(l => l.Message).HasMaxLength(1000).IsRequired(false);
+            e.Property(l => l.Source).HasMaxLength(50).IsRequired().HasDefaultValue("landing");
+            e.Property(l => l.IsProcessed).HasDefaultValue(false);
+            e.Property(l => l.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(l => l.CreatedAt);
         });
 
         // ── SupplierRole (TASK-305) ───────────────────────────────────────────

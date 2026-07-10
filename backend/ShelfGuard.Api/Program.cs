@@ -107,6 +107,17 @@ builder.Services.AddRateLimiter(options =>
                 Window      = TimeSpan.FromMinutes(1),
                 QueueLimit  = 0,
             }));
+
+    // TASK-333: public landing lead capture — 5 req/min per client IP (spam mitigation)
+    options.AddPolicy("public-leads", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
 });
 
 var jwtSecret = builder.Configuration["Jwt:Secret"]
