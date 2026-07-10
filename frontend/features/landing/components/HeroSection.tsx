@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
 import { BrowserFrame } from "./BrowserFrame";
 
 export function HeroSection() {
@@ -33,18 +34,12 @@ export function HeroSection() {
           </p>
 
           <div className="hero-fade hero-fade-4 mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href="#lead-form"
-              className="w-full rounded-md bg-[#2D7DD2] px-7 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-[#3E8CDD] sm:w-auto"
-            >
-              Залишити заявку
-            </a>
-            <a
-              href="#features"
-              className="w-full rounded-md border border-white/10 bg-white/[0.03] px-7 py-3 text-[15px] font-medium text-slate-200 transition-colors hover:bg-white/[0.07] sm:w-auto"
-            >
-              Подивитись можливості
-            </a>
+            <Button asChild size="lg" className="w-full sm:w-auto">
+              <a href="#lead-form">Залишити заявку</a>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
+              <a href="#features">Подивитись можливості</a>
+            </Button>
           </div>
         </div>
 

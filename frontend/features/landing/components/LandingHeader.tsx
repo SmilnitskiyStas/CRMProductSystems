@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Logo } from "./Logo";
 
 const NAV = [
@@ -49,18 +50,12 @@ export function LandingHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Link
-            href="/login"
-            className="rounded-md px-3.5 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
-          >
-            Увійти
-          </Link>
-          <a
-            href="#lead-form"
-            className="rounded-md bg-[#2D7DD2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3E8CDD]"
-          >
-            Залишити заявку
-          </a>
+          <Button asChild variant="ghost">
+            <Link href="/login">Увійти</Link>
+          </Button>
+          <Button asChild>
+            <a href="#lead-form">Залишити заявку</a>
+          </Button>
         </div>
 
         <button
@@ -92,19 +87,14 @@ export function LandingHeader() {
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-2.5">
-            <a
-              href="#lead-form"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-md bg-[#2D7DD2] px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-[#3E8CDD]"
-            >
-              Залишити заявку
-            </a>
-            <Link
-              href="/login"
-              className="rounded-md border border-white/10 px-4 py-2.5 text-center text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white"
-            >
-              Увійти
-            </Link>
+            <Button asChild className="w-full">
+              <a href="#lead-form" onClick={() => setMenuOpen(false)}>
+                Залишити заявку
+              </a>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/login">Увійти</Link>
+            </Button>
           </div>
         </nav>
       )}

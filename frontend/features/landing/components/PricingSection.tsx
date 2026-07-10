@@ -1,4 +1,5 @@
 import { Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Reveal } from "./Reveal";
 
 const INCLUDED = [
@@ -45,12 +46,9 @@ export function PricingSection() {
                 ))}
               </ul>
 
-              <a
-                href="#lead-form"
-                className="mt-9 inline-block w-full rounded-md bg-[#2D7DD2] px-7 py-3 text-center text-[15px] font-semibold text-white transition-colors hover:bg-[#3E8CDD] sm:w-auto"
-              >
-                Отримати розрахунок
-              </a>
+              <Button asChild size="lg" className="mt-9 w-full sm:w-auto">
+                <a href="#lead-form">Отримати розрахунок</a>
+              </Button>
             </div>
           </div>
         </Reveal>

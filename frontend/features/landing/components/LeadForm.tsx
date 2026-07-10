@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CheckCircle2, Loader2, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { submitLead } from "../api/leads";
 
 const leadSchema = z.object({
@@ -144,18 +145,14 @@ export function LeadForm() {
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#2D7DD2] px-6 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-[#3E8CDD] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-      >
+      <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
         {isSubmitting ? (
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         ) : (
           <Send className="h-4 w-4" aria-hidden="true" />
         )}
         {isSubmitting ? "Надсилаємо…" : "Надіслати заявку"}
-      </button>
+      </Button>
     </form>
   );
 }
