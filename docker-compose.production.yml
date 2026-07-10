@@ -5,10 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: shelfguard_api
     restart: unless-stopped
-    # Loopback-only: reachable via host nginx (TLS) and localhost, never directly
-    # from the internet (TASK-332).
+    # NOT loopback-bound: the hosting provider's edge proxy terminates TLS for the
+    # no-port URLs (https://api.agrusystems.pp.ua) and forwards straight to this
+    # port from the provider network, bypassing host nginx — a 127.0.0.1 binding
+    # breaks the whole site with 502 (incident 2026-07-10). The raw port is not
+    # internet-reachable anyway (provider only maps 10054/10048; verified by scan).
     ports:
-      - '127.0.0.1:5100:5100'
+      - '5100:5100'
     volumes:
       - shelfguard_api_uploads:/app/wwwroot/uploads
     environment:
@@ -37,9 +40,10 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     container_name: shelfguard_web
     restart: unless-stopped
-    # Loopback-only: reachable via host nginx (TLS) only (TASK-332).
+    # NOT loopback-bound — same reason as api above: the provider edge proxy
+    # serves https://agrusystems.pp.ua by forwarding directly to this port.
     ports:
-      - '127.0.0.1:3100:3100'
+      - '3100:3100'
     depends_on:
       - api
 
