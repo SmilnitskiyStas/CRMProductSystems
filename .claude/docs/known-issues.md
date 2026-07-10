@@ -53,6 +53,25 @@ Status: open
 Description: `/stock`, `/transfers`, `/write-offs`, `/analytics`, `/notifications`, `/settings` show a catch-all "in development" page. Not a bug — intended placeholder.
 Resolution: Implement each page per sprint plan.
 
+### KI-014: Per-IP rate limiting is ineffective in production (client IPs not preserved)
+Severity: medium
+Status: open (root cause outside our stack)
+Description: The API's per-IP rate limiter (TASK-329) works locally (verified: 10×401 + 5×429
+on 15 parallel wrong logins) but never triggers in production — 15 parallel wrong logins all
+return 401. The deployed build is confirmed current (new headers + 2FA endpoints live).
+Root cause (most probable): the hosting provider's port-mapping layer (external 10054 → nginx
+8443) terminates TCP and does not preserve client source IPs — each connection reaches nginx
+from a different internal address, so per-IP partitions (API RateLimiter, nginx limit_req on
+$binary_remote_addr) never accumulate. Verify via `docker logs shelfguard_api | grep "unknown email"`
+(failed logins log the perceived IP) — if IPs vary per request/connection, this is confirmed.
+Impact: volumetric/distributed brute force is not rate-limited per IP. Mitigations already live
+and IP-independent: per-account lockout (5 fails → 15 min), password policy (12+ chars, blocklist),
+opt-in 2FA TOTP. Fail2ban caveat: if SSH source IPs are also masked/shared, sshd bans could hit
+a shared egress IP (self-DoS) — check `journalctl -u ssh` / auth.log source IPs before enabling.
+Resolution options: ask the provider whether real client IPs can be preserved (PROXY protocol /
+X-Forwarded-For from their edge → then trust it in nginx `set_real_ip_from`), or move TLS/edge
+to a layer that preserves IPs (e.g., free Cloudflare in front).
+
 ### KI-013: Npgsql 8.0+ requires EnableDynamicJson() for List<string>/JSONB fields
 Severity: high (silent 500 in production)
 Status: resolved (2026-06-27)
