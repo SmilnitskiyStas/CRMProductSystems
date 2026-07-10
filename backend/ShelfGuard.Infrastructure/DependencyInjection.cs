@@ -36,6 +36,7 @@ public static class DependencyInjection
         // Auth services
         services.AddSingleton<IJwtService, JwtService>();
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
+        services.AddSingleton<ITotpService, TotpService>(); // 2FA TOTP (TASK-330)
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 

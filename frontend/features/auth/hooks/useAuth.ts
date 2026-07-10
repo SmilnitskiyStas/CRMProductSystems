@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authApi } from "../api/auth";
 import { clearToken, getToken, markLoggedOut } from "@/lib/api";
 import { clearStoredUser } from "../store";
+import { isTwoFactorChallenge, type LoginSuccessResponse } from "../types";
 import { useStoreContext } from "@/lib/useStoreContext";
 import { AppRoles, PROVIDER_TEAM, type AppRole } from "@/lib/roles";
 
@@ -21,31 +22,53 @@ export function useMe() {
   });
 }
 
-/** Login mutation — stores token + user on success, redirects to dashboard. */
-export function useLogin() {
+/** Shared post-login handler — used by both password login and 2FA verify. */
+function useCompleteLogin() {
   const queryClient = useQueryClient();
   const router = useRouter();
+
+  return (data: LoginSuccessResponse) => {
+    // Clear ALL cached data from any previous user/tenant before setting
+    // the new user — prevents cross-tenant data leakage via React Query cache.
+    queryClient.clear();
+    // Reset persisted store selection — the new tenant may not have the
+    // same stores, and a stale selectedStoreId would point to a wrong tenant.
+    useStoreContext.setState({ selectedStoreId: null });
+    queryClient.setQueryData(ME_KEY, data.user);
+    const role = data.user.role as AppRole;
+    // supplier_admin has no dashboard — land directly in the cabinet (v4.1, ADR-016)
+    router.push(
+      PROVIDER_TEAM.has(role)
+        ? "/provider"
+        : role === AppRoles.SupplierAdmin
+        ? "/supplier/profile"
+        : "/dashboard"
+    );
+  };
+}
+
+/** Login mutation — stores token + user on success, redirects to dashboard.
+ *  For a 2FA-enabled account the API returns a challenge instead of tokens —
+ *  no redirect happens here; LoginForm switches to the code step. */
+export function useLogin() {
+  const completeLogin = useCompleteLogin();
 
   return useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
-      // Clear ALL cached data from any previous user/tenant before setting
-      // the new user — prevents cross-tenant data leakage via React Query cache.
-      queryClient.clear();
-      // Reset persisted store selection — the new tenant may not have the
-      // same stores, and a stale selectedStoreId would point to a wrong tenant.
-      useStoreContext.setState({ selectedStoreId: null });
-      queryClient.setQueryData(ME_KEY, data.user);
-      const role = data.user.role as AppRole;
-      // supplier_admin has no dashboard — land directly in the cabinet (v4.1, ADR-016)
-      router.push(
-        PROVIDER_TEAM.has(role)
-          ? "/provider"
-          : role === AppRoles.SupplierAdmin
-          ? "/supplier/profile"
-          : "/dashboard"
-      );
+      if (isTwoFactorChallenge(data)) return;
+      completeLogin(data);
     },
+  });
+}
+
+/** Step 2 of a 2FA login — verifies the code, then behaves like a normal login. */
+export function useVerifyTwoFactor() {
+  const completeLogin = useCompleteLogin();
+
+  return useMutation({
+    mutationFn: authApi.verifyTwoFactor,
+    onSuccess: completeLogin,
   });
 }
 

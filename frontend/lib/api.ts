@@ -72,8 +72,12 @@ async function apiFetch<T>(
     },
   });
 
+  // Anonymous auth endpoints: a 401 here means bad credentials / bad 2FA code,
+  // not an expired session — never trigger refresh or the login redirect.
+  const isAnonAuthPath = path === "/api/auth/login" || path === "/api/auth/2fa/verify";
+
   // 401 on a protected request — try refreshing once
-  if (res.status === 401 && !isRetry && path !== "/api/auth/login") {
+  if (res.status === 401 && !isRetry && !isAnonAuthPath) {
     // Manual logout in progress: refresh cookie is already revoked, so don't
     // attempt refresh or redirect — useLogout handles the clean navigation.
     if (_loggedOut) throw new ApiError(401, "Logged out.");

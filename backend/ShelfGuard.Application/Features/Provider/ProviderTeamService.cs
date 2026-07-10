@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Provider.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
@@ -8,7 +9,8 @@ namespace ShelfGuard.Application.Features.Provider;
 
 public sealed class ProviderTeamService(
     IUserRepository users,
-    IPasswordHasher hasher) : IProviderTeamService
+    IPasswordHasher hasher,
+    IRefreshTokenRepository refreshTokens) : IProviderTeamService
 {
     private static readonly string[] TeamRoles =
         [AppRoles.Provider, AppRoles.ProviderAdmin, AppRoles.ProviderAgent];
@@ -29,9 +31,18 @@ public sealed class ProviderTeamService(
         if (existing is not null && existing.IsActive)
             return (null, $"Email '{req.Email}' is already registered.");
 
+        // TASK-329: user-supplied passwords must meet the shared policy;
+        // auto-generated fallbacks are crypto-random and policy-compliant.
+        if (!string.IsNullOrWhiteSpace(req.Password))
+        {
+            var passwordError = PasswordValidator.Validate(req.Password, req.Email);
+            if (passwordError is not null)
+                return (null, passwordError);
+        }
+
         var password = !string.IsNullOrWhiteSpace(req.Password)
             ? req.Password
-            : Guid.NewGuid().ToString("N")[..12];
+            : GenerateRandomPassword();
         var hash = hasher.Hash(password);
 
         // Reactivate deactivated account instead of creating a duplicate
@@ -43,6 +54,11 @@ public sealed class ProviderTeamService(
             existing.SetPermissions(req.PermissionsOverride is { Count: > 0 } ? req.PermissionsOverride : null);
             existing.ChangePassword(hash);
             existing.Activate();
+
+            // TASK-329: password was reset — old sessions must not survive.
+            await refreshTokens.RevokeAllForUserAsync(existing.Id, ct);
+            await refreshTokens.SaveChangesAsync(ct);
+
             users.Update(existing);
             await users.SaveChangesAsync(ct);
             return (Map(existing), null);
@@ -115,6 +131,21 @@ public sealed class ProviderTeamService(
         users.Update(user);
         await users.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>Crypto-random 16-char password guaranteed to satisfy PasswordValidator.</summary>
+    private static string GenerateRandomPassword()
+    {
+        const string alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        while (true)
+        {
+            var chars = new char[16];
+            for (var i = 0; i < chars.Length; i++)
+                chars[i] = alphabet[System.Security.Cryptography.RandomNumberGenerator.GetInt32(alphabet.Length)];
+            var candidate = new string(chars);
+            if (PasswordValidator.Validate(candidate) is null)
+                return candidate;
+        }
     }
 
     private static ProviderTeamMemberDto Map(User u) =>

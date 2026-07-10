@@ -93,6 +93,66 @@ public sealed class JwtService : IJwtService
         return (raw, HashToken(raw));
     }
 
+    // ── 2FA challenge tokens (TASK-330) ─────────────────────────────────────
+    // Dedicated audience: the API's JwtBearer validates ValidAudience=_audience,
+    // so a challenge token can never be replayed as an access token.
+    private string TwoFactorAudience => _audience + ":2fa";
+
+    /// <inheritdoc/>
+    public string GenerateTwoFactorChallengeToken(Guid userId)
+    {
+        var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new("purpose",                   "2fa"),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+
+        var token = new JwtSecurityToken(
+            issuer:             _issuer,
+            audience:           TwoFactorAudience,
+            claims:             claims,
+            expires:            DateTime.UtcNow.AddMinutes(5),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <inheritdoc/>
+    public Guid? ValidateTwoFactorChallengeToken(string token)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        try
+        {
+            var principal = handler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuer           = true,
+                ValidateAudience         = true,
+                ValidateLifetime         = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer              = _issuer,
+                ValidAudience            = TwoFactorAudience,
+                IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret)),
+                ClockSkew                = TimeSpan.Zero,
+            }, out _);
+
+            if (principal.FindFirst("purpose")?.Value != "2fa")
+                return null;
+
+            var sub = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                   ?? principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+            return Guid.TryParse(sub, out var userId) && userId != Guid.Empty ? userId : null;
+        }
+        catch
+        {
+            return null; // invalid signature / expired / malformed
+        }
+    }
+
     public string HashToken(string token)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));

@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { useChangePassword } from "../hooks/useProfile";
 import { Btn } from "@/components/ui/Btn";
+
+const POLICY_HINT = "Мінімум 12 символів, літери та цифри";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -37,12 +40,13 @@ export function ChangePasswordForm() {
   const [next, setNext]         = useState("");
   const [confirm, setConfirm]   = useState("");
   const [errors, setErrors]     = useState<FieldError>({});
-  const [success, setSuccess]   = useState(false);
 
   function validate(): boolean {
     const e: FieldError = {};
     if (!current.trim()) e.current = "Введіть поточний пароль";
-    if (next.length < 8)  e.next    = "Мінімум 8 символів";
+    if (next.length < 12) e.next = "Мінімум 12 символів";
+    else if (!/[a-zA-Zа-яА-ЯіІїЇєЄґҐ]/.test(next) || !/\d/.test(next))
+      e.next = "Пароль має містити літери та цифри";
     if (next !== confirm)  e.confirm = "Паролі не співпадають";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -50,12 +54,19 @@ export function ChangePasswordForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validate() || change.isPending) return;
 
-    await change.mutateAsync({ currentPassword: current, newPassword: next });
-    setSuccess(true);
-    setCurrent(""); setNext(""); setConfirm("");
-    setTimeout(() => setSuccess(false), 4000);
+    try {
+      await change.mutateAsync({ currentPassword: current, newPassword: next });
+      setCurrent(""); setNext(""); setConfirm("");
+      // Backend revokes all refresh sessions on password change — the current
+      // access token stays valid ≤15 min, all other devices get logged out.
+      toast.success("Пароль оновлено", {
+        description: "Інші пристрої буде розлогінено.",
+      });
+    } catch {
+      // API error is rendered below via change.error
+    }
   }
 
   function field(
@@ -83,20 +94,23 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 8 }}>
         {field("Поточний пароль", current, setCurrent, errors.current)}
-        {field("Новий пароль",    next,    setNext,    errors.next,    "Мінімум 8 символів")}
+        {field("Новий пароль",    next,    setNext,    errors.next,    POLICY_HINT)}
         {field("Підтвердження",   confirm, setConfirm, errors.confirm)}
       </div>
+
+      <p style={{ color: "#4B5563", fontSize: 11, margin: "0 0 20px", lineHeight: 1.5 }}>
+        {POLICY_HINT}. Після зміни пароля всі інші пристрої буде розлогінено.
+      </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <Btn type="submit" disabled={change.isPending}>
           {change.isPending ? "Оновлення…" : "Змінити пароль"}
         </Btn>
-        {success && <span style={{ color: "#4ADE80", fontSize: 13 }}>✓ Пароль оновлено</span>}
         {change.isError && (
           <span style={{ color: "#F87171", fontSize: 13 }}>
-            Помилка (API не реалізовано)
+            {change.error.message}
           </span>
         )}
       </div>

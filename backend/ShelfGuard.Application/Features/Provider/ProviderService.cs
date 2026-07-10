@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Provider.Dtos;
 using ShelfGuard.Application.Services;
@@ -285,8 +286,9 @@ public sealed class ProviderService : IProviderService
         if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
             return (null, "A valid email address is required.");
 
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-            return (null, "Password must be at least 6 characters long.");
+        var passwordError = PasswordValidator.Validate(request.Password, request.Email);
+        if (passwordError is not null)
+            return (null, passwordError);
 
         // Tenant must exist
         var tenant = await _tenants.GetByIdAsync(tenantId, ct);

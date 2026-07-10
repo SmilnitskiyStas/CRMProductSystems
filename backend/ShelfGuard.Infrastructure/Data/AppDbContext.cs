@@ -195,6 +195,26 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.LegalEntityId).IsRequired(false);
             e.HasOne<LegalEntity>().WithMany()
              .HasForeignKey(u => u.LegalEntityId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+
+            // Account lockout (TASK-329)
+            e.Property(u => u.FailedLoginAttempts).HasDefaultValue(0);
+            e.Property(u => u.LockoutUntil).IsRequired(false);
+
+            // 2FA TOTP (TASK-330)
+            e.Property(u => u.TotpSecret).IsRequired(false);
+            e.Property(u => u.TotpEnabled).HasDefaultValue(false);
+            e.Property(u => u.TotpLastTimestep).IsRequired(false);
+            e.Property(u => u.TotpRecoveryCodes)
+             .HasColumnType("jsonb")
+             .HasConversion(
+                 v => v == null ? null : System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                 v => v == null ? null : System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, (System.Text.Json.JsonSerializerOptions?)null))
+             .IsRequired(false)
+             .Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>?>(
+                 (a, b) => System.Text.Json.JsonSerializer.Serialize(a, (System.Text.Json.JsonSerializerOptions?)null) ==
+                            System.Text.Json.JsonSerializer.Serialize(b, (System.Text.Json.JsonSerializerOptions?)null),
+                 v => v == null ? 0 : System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
+                 v => v == null ? null : new List<string>(v)));
         });
 
         // ── RefreshToken ────────────────────────────────────────────────────

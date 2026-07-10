@@ -2,6 +2,7 @@
 
 import { ProfileInfoForm } from "@/features/profile/components/ProfileInfoForm";
 import { ChangePasswordForm } from "@/features/profile/components/ChangePasswordForm";
+import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection";
 import { TelegramLinkSection } from "@/features/profile/components/TelegramLinkSection";
 
 const sectionStyle: React.CSSProperties = {
@@ -29,21 +30,28 @@ export function ProfileTab() {
       {/* Section 1 — Personal info */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Особисті дані</h3>
-        <p style={sectionSubtitleStyle}>Ім'я та контактна інформація</p>
+        <p style={sectionSubtitleStyle}>Ім&apos;я та контактна інформація</p>
         <ProfileInfoForm />
       </div>
 
       {/* Section 2 — Password */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Зміна пароля</h3>
-        <p style={sectionSubtitleStyle}>Використовуйте надійний пароль від 8 символів</p>
+        <p style={sectionSubtitleStyle}>Мінімум 12 символів, літери та цифри</p>
         <ChangePasswordForm />
       </div>
 
-      {/* Section 3 — Telegram */}
+      {/* Section 3 — 2FA */}
+      <div style={sectionStyle}>
+        <h3 style={sectionTitleStyle}>Двофакторна автентифікація</h3>
+        <p style={sectionSubtitleStyle}>Додатковий рівень захисту входу в акаунт</p>
+        <TwoFactorSection />
+      </div>
+
+      {/* Section 4 — Telegram */}
       <div>
         <h3 style={sectionTitleStyle}>Telegram</h3>
-        <p style={sectionSubtitleStyle}>Прив'яжіть Telegram для особистих сповіщень</p>
+        <p style={sectionSubtitleStyle}>Прив&apos;яжіть Telegram для особистих сповіщень</p>
         <TelegramLinkSection />
       </div>
     </div>

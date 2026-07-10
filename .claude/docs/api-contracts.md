@@ -41,12 +41,23 @@ Paginated endpoints:
 
 ### Auth
 ```
-POST /api/auth/login        [public]
+POST /api/auth/login        [public, rate limit 10/min per IP]
   Body: { email, password }
   200: { accessToken, user: AuthUserDto } + Set-Cookie: refreshToken (HttpOnly)
-  401: { error }
+  200 (2FA увімкнено): { requiresTwoFactor: true, challengeToken } — БЕЗ токенів/cookie, challenge живе 5 хв
+  401: { error }   (generic — lockout/inactive не розкриваються)
+  429: { error: "Too many requests. Try again later." }
 
-POST /api/auth/refresh      [public — reads HttpOnly cookie]
+POST /api/auth/2fa/verify   [public, той самий ліміт]     (TASK-330)
+  Body: { challengeToken, code }   — code: 6-значний TOTP або recovery-код XXXX-XXXX
+  200: { accessToken, user: AuthUserDto } + Set-Cookie (як login)
+  401: { error: "Invalid code." } | { error: "Invalid or expired challenge token." }
+
+POST /api/auth/2fa/setup    [Authorize] → 200: { secret, otpauthUri } (pending, до enable 2FA вимкнена)
+POST /api/auth/2fa/enable   [Authorize] Body: { code } → 200: { recoveryCodes: string[8] } (показуються один раз)
+POST /api/auth/2fa/disable  [Authorize] Body: { password, code } → 204
+
+POST /api/auth/refresh      [public — reads HttpOnly cookie, rate limit 30/min per IP]
   200: { accessToken, user: AuthUserDto } + rotated Set-Cookie
   401: { error }
 
@@ -57,11 +68,16 @@ POST /api/auth/logout       [Authorize]
 GET  /api/auth/me           [Authorize]
   200: AuthUserDto
   401
+
+POST /api/auth/change-password [Authorize]
+  Body: { currentPassword, newPassword } — політика: 12+ символів, літера+цифра
+  204: усі refresh-токени відкликано (інші пристрої розлогінено)
+  400: { error } (текст політики англійською, показується as-is)
 ```
 
 #### AuthUserDto
 ```json
-{ "id": "uuid", "email": "string", "fullName": "string", "role": "string", "tenantId": "uuid|null", "storeId": "uuid|null" }
+{ "id": "uuid", "email": "string", "fullName": "string", "role": "string", "tenantId": "uuid|null", "storeId": "uuid|null", "twoFactorEnabled": false }
 ```
 
 #### JWT Claims

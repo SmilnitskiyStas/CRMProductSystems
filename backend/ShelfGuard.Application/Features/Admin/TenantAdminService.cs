@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Admin.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
@@ -54,6 +55,11 @@ public sealed class TenantAdminService : ITenantAdminService
         var slugNormalized = req.Slug.Trim().ToLowerInvariant();
         if (await _repo.SlugExistsAsync(slugNormalized, ct))
             return (null, $"Slug '{slugNormalized}' is already taken.");
+
+        // TASK-329: shared password policy for the first admin account
+        var passwordError = PasswordValidator.Validate(req.AdminPassword, req.AdminEmail);
+        if (passwordError is not null)
+            return (null, passwordError);
 
         // 2. Create tenant, set plan and business type
         var tenant = Tenant.Create(req.Name.Trim(), slugNormalized);

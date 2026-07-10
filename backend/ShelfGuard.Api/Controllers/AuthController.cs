@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.JsonWebTokens;
 using ShelfGuard.Application.Features.Auth;
 using ShelfGuard.Application.Features.Auth.Dtos;
@@ -27,11 +28,34 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting("auth-login")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken ct)
     {
-        var (response, error) = await _auth.LoginAsync(request.Email, request.Password, ct);
+        var outcome = await _auth.LoginAsync(request.Email, request.Password, ClientIp(), ct);
+        if (outcome.Error is not null)
+            return Unauthorized(new { error = outcome.Error });
+
+        // TASK-330: password ok but TOTP enabled — no tokens/cookie yet.
+        if (outcome.ChallengeToken is not null)
+            return Ok(new { requiresTwoFactor = true, challengeToken = outcome.ChallengeToken });
+
+        SetRefreshTokenCookie(outcome.Response!.RefreshToken);
+
+        return Ok(new { outcome.Response.AccessToken, outcome.Response.User });
+    }
+
+    /// <summary>Second login step: TOTP code or recovery code (TASK-330).</summary>
+    [HttpPost("2fa/verify")]
+    [EnableRateLimiting("auth-login")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> VerifyTwoFactor(
+        [FromBody] TwoFactorVerifyRequest request, CancellationToken ct)
+    {
+        var (response, error) = await _auth.VerifyTwoFactorAsync(
+            request.ChallengeToken, request.Code, ClientIp(), ct);
         if (error is not null)
             return Unauthorized(new { error });
 
@@ -40,7 +64,52 @@ public sealed class AuthController : ControllerBase
         return Ok(new { response.AccessToken, response.User });
     }
 
+    /// <summary>Generates a pending TOTP secret for enrollment (TASK-330).</summary>
+    [HttpPost("2fa/setup")]
+    [Authorize]
+    [ProducesResponseType(typeof(TwoFactorSetupResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SetupTwoFactor(CancellationToken ct)
+    {
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
+
+        var (response, error) = await _auth.SetupTwoFactorAsync(userId.Value, ct);
+        return error is not null ? BadRequest(new { error }) : Ok(response);
+    }
+
+    /// <summary>Confirms the pending secret and activates 2FA; returns one-time recovery codes.</summary>
+    [HttpPost("2fa/enable")]
+    [Authorize]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> EnableTwoFactor(
+        [FromBody] TwoFactorEnableRequest request, CancellationToken ct)
+    {
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
+
+        var (recoveryCodes, error) = await _auth.EnableTwoFactorAsync(userId.Value, request.Code, ct);
+        return error is not null ? BadRequest(new { error }) : Ok(new { recoveryCodes });
+    }
+
+    /// <summary>Disables 2FA after verifying both the password and a valid code.</summary>
+    [HttpPost("2fa/disable")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DisableTwoFactor(
+        [FromBody] TwoFactorDisableRequest request, CancellationToken ct)
+    {
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
+
+        var error = await _auth.DisableTwoFactorAsync(userId.Value, request.Password, request.Code, ct);
+        return error is not null ? BadRequest(new { error }) : NoContent();
+    }
+
     [HttpPost("refresh")]
+    [EnableRateLimiting("auth-refresh")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh(CancellationToken ct)
@@ -102,7 +171,7 @@ public sealed class AuthController : ControllerBase
                 tenantName = tenant?.Name;
             }
 
-            return Ok(new AuthUserDto(userId.Value, email, email, role, tenantId, tenantName, StoreId: null, Permissions: null));
+            return Ok(new AuthUserDto(userId.Value, email, email, role, tenantId, tenantName, StoreId: null, Permissions: null, TwoFactorEnabled: false));
         }
 
         var user = await _auth.GetCurrentUserAsync(userId.Value, ct);
@@ -162,6 +231,9 @@ public sealed class AuthController : ControllerBase
                ?? User.FindFirstValue("sub");
         return Guid.TryParse(raw, out var id) && id != Guid.Empty ? id : null;
     }
+
+    /// <summary>Real client IP — ForwardedHeaders middleware already resolved X-Forwarded-For.</summary>
+    private string? ClientIp() => HttpContext.Connection.RemoteIpAddress?.ToString();
 
     private void SetRefreshTokenCookie(string rawToken)
     {

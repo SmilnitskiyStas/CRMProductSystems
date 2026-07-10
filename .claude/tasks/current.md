@@ -1,4 +1,43 @@
-# Current Sprint — v4.4 «Chat UX unification» (started 2026-07-07)
+# Current Sprint — v4.5 «Security Hardening» (started 2026-07-09)
+
+Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
+(TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
+
+## TASK-329 — Backend: auth hardening (rate limit, lockout, password policy, reuse detection, headers)
+**Status:** done (2026-07-09) · **Agent:** backend-developer · **Depends:** —
+Log: `.claude/logs/tasks/329-330_2026-07-09_auth-hardening-2fa_backend-developer.md`
+Rate limiting 10/min login+2fa-verify, 30/min refresh (429 `{error}`), ForwardedHeaders
+за nginx; lockout 5 невдач → 15 хв (generic error, аудит `user.login_failed`/
+`user.locked_out` з IP); `PasswordValidator` (12+ символів, літера+цифра, blocklist ~100,
+email local-part) у всіх 5 місцях встановлення пароля; зміна пароля відкликає всі
+refresh-токени; повторне використання ротованого refresh-токена → revoke всієї сім'ї +
+`auth.refresh_reuse_detected`; security headers middleware. Build 0 err, 685/685 tests,
+міграція `20260709204440_AuthHardeningAnd2fa` (additive), live smoke: 401/429/headers OK.
+
+## TASK-330 — Backend: 2FA TOTP (opt-in) + recovery codes
+**Status:** done (2026-07-09) · **Agent:** backend-developer · **Depends:** TASK-329
+Log: той самий · Handoff: `.claude/logs/handoffs/330-backend-to-frontend.md` (точний API-контракт для TASK-331)
+Otp.NET (Infrastructure) за `ITotpService`; login → `{requiresTwoFactor, challengeToken}`
+(JWT 5 хв, purpose=2fa, окрема audience — не проходить bearer auth); `/api/auth/2fa/`
+verify (anonymous, ліміт auth-login, анти-replay по timestep, recovery-коди одноразові) /
+setup / enable (8 кодів XXXX-XXXX, SHA256 у jsonb) / disable (пароль+код);
+`AuthUserDto.TwoFactorEnabled`. Невірний 2FA-код рахується в той самий lockout-лічильник.
+
+## TASK-331 — Frontend: 2FA UI + password policy hints + lockout UX
+**Status:** done (2026-07-09) · **Agent:** frontend-developer · **Depends:** TASK-330
+Log: `.claude/logs/tasks/331_2026-07-09_2fa-ui_frontend-developer.md`
+Login: другий крок з 6-значним кодом / recovery-кодом (тогл), UA-помилки для 401/429,
+«Назад» до кроку 1; `LoginResponse` → discriminated union, токени не зберігаються при
+challenge. Profile: секція «Двофакторна автентифікація» (setup QR `qrcode.react` +
+секрет, enable з одноразовим показом recovery-кодів + підтвердження «Я зберіг коди»,
+disable через пароль+код), refresh `/api/auth/me` після змін. ChangePasswordForm:
+валідація 12+ символів літери+цифри, hint, серверні `{error}` as-is, toast про
+розлогінення інших пристроїв. Фікс `lib/api.ts`: 401 з `/api/auth/2fa/verify` більше
+не тригерить refresh→redirect. tsc clean, build success (50/50), eslint змінених файлів
+clean (у frontend/ немає ESLint-конфіга — pre-existing, `next lint` інтерактивний).
+
+---
+# Previous sprint — v4.4 «Chat UX unification» (started 2026-07-07)
 
 ## TASK-319 — Marketplace chat: bottom-right floating widget + real unread badges
 **Status:** done (2026-07-07) · **Agent:** backend-developer → frontend-developer (finished directly in main session after agent stalls) · **Depends:** —

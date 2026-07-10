@@ -14,4 +14,17 @@ public interface IJwtService
 
     (string RawToken, string TokenHash) GenerateRefreshToken();
     string HashToken(string token);
+
+    /// <summary>
+    /// Generates a short-lived (5 min) 2FA challenge token issued after a correct
+    /// password when TOTP is enabled (TASK-330). Claims: sub=userId, purpose="2fa".
+    /// Uses a dedicated audience so it can NEVER pass API bearer authentication.
+    /// </summary>
+    string GenerateTwoFactorChallengeToken(Guid userId);
+
+    /// <summary>
+    /// Validates a 2FA challenge token (signature, lifetime, purpose claim).
+    /// Returns the user id, or null when the token is invalid/expired.
+    /// </summary>
+    Guid? ValidateTwoFactorChallengeToken(string token);
 }

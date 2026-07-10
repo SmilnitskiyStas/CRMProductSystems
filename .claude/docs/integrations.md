@@ -31,7 +31,8 @@ Claude key (ClaudeOrderAdvisor.ResolveAsync)
 Test register: фіскальний номер TEST582378 (test mode; receipts non-fiscal)
 
 ## MQTT / Mosquitto (v3.1)
-Broker: eclipse-mosquitto:2 in docker-compose (`mosquitto` service, host port 1884 → 1883)
+Broker: eclipse-mosquitto:2 in docker-compose (`mosquitto` service, host port 1884 → 1883;
+prod binds 127.0.0.1:1884 only — TASK-332, worker reaches it via network_mode:host)
 Config: `infra/mosquitto/mosquitto.conf` (dev: allow_anonymous; prod needs password_file)
 Consumer: worker `jobs/mqtt-listener.ts` subscribes `shelfguard/#` (ADR-010)
 Payloads (v3-spec §1/§4): `{device_id, delta, weight_before/after, timestamp}` |

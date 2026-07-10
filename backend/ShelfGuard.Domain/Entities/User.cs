@@ -18,6 +18,21 @@ public sealed class User
     public DateTime? LastActiveAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
+    // ── Account lockout (TASK-329) ─────────────────────────────────────────
+    /// <summary>Consecutive failed login attempts since the last success/lockout.</summary>
+    public int FailedLoginAttempts { get; private set; }
+    /// <summary>While set and in the future, logins are rejected with a generic error.</summary>
+    public DateTime? LockoutUntil { get; private set; }
+
+    // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
+    /// <summary>Base32 TOTP secret. Non-null with TotpEnabled=false means "pending setup".</summary>
+    public string? TotpSecret { get; private set; }
+    public bool TotpEnabled { get; private set; }
+    /// <summary>SHA256 hashes of unused recovery codes (jsonb).</summary>
+    public List<string>? TotpRecoveryCodes { get; private set; }
+    /// <summary>Last accepted TOTP timestep — codes with timestep &lt;= this are replays.</summary>
+    public long? TotpLastTimestep { get; private set; }
+
     /// <summary>
     /// Per-user page-access overrides on top of role defaults.
     /// Key = page slug (e.g. "analytics"), Value = true (grant) / false (deny).
@@ -107,4 +122,80 @@ public sealed class User
     /// Pass null to clear all overrides (revert to role defaults).
     /// </summary>
     public void SetPermissions(Dictionary<string, bool>? permissions) => Permissions = permissions;
+
+    // ── Account lockout (TASK-329) ─────────────────────────────────────────
+
+    /// <summary>True while the account is temporarily locked after repeated failures.</summary>
+    public bool IsLockedOut => LockoutUntil.HasValue && LockoutUntil.Value > DateTime.UtcNow;
+
+    /// <summary>
+    /// Records a failed login/2FA attempt. When <paramref name="maxAttempts"/> is
+    /// reached the account is locked for <paramref name="lockoutDuration"/> and the
+    /// counter resets. Returns true when this call triggered the lockout.
+    /// </summary>
+    public bool RegisterFailedLogin(int maxAttempts, TimeSpan lockoutDuration)
+    {
+        FailedLoginAttempts++;
+        if (FailedLoginAttempts < maxAttempts) return false;
+
+        LockoutUntil = DateTime.UtcNow.Add(lockoutDuration);
+        FailedLoginAttempts = 0;
+        return true;
+    }
+
+    /// <summary>Clears the failure counter and any active lockout (successful auth).</summary>
+    public void ResetLockout()
+    {
+        FailedLoginAttempts = 0;
+        LockoutUntil = null;
+    }
+
+    // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
+
+    /// <summary>Stores a freshly generated secret as "pending" — not enabled yet.</summary>
+    public void SetPendingTotpSecret(string base32Secret)
+    {
+        TotpSecret = base32Secret;
+        TotpEnabled = false;
+        TotpRecoveryCodes = null;
+        TotpLastTimestep = null;
+    }
+
+    /// <summary>Activates 2FA using the pending secret and stores recovery-code hashes.</summary>
+    public void EnableTotp(List<string> recoveryCodeHashes)
+    {
+        TotpEnabled = true;
+        TotpRecoveryCodes = recoveryCodeHashes;
+    }
+
+    /// <summary>Fully clears 2FA state (secret, recovery codes, replay marker).</summary>
+    public void DisableTotp()
+    {
+        TotpSecret = null;
+        TotpEnabled = false;
+        TotpRecoveryCodes = null;
+        TotpLastTimestep = null;
+    }
+
+    /// <summary>Anti-replay: remembers the highest accepted TOTP timestep.</summary>
+    public void MarkTotpTimestepUsed(long timestep) => TotpLastTimestep = timestep;
+
+    /// <summary>
+    /// Removes a recovery-code hash if present (single use).
+    /// Returns false when the hash is unknown or already consumed.
+    /// </summary>
+    public bool TryConsumeRecoveryCode(string codeHash)
+    {
+        if (TotpRecoveryCodes is null) return false;
+
+        var index = TotpRecoveryCodes.FindIndex(h =>
+            string.Equals(h, codeHash, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+
+        // New list instance so the EF value comparer sees the change.
+        var remaining = new List<string>(TotpRecoveryCodes);
+        remaining.RemoveAt(index);
+        TotpRecoveryCodes = remaining;
+        return true;
+    }
 }

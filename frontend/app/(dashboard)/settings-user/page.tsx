@@ -1,13 +1,14 @@
 "use client";
 
-import { User, Lock, Send } from "lucide-react";
+import { User, Lock, ShieldCheck, Send } from "lucide-react";
 import { ProfileInfoForm } from "@/features/profile/components/ProfileInfoForm";
 import { ChangePasswordForm } from "@/features/profile/components/ChangePasswordForm";
+import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection";
 import { TelegramLinkSection } from "@/features/profile/components/TelegramLinkSection";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { ROLE_LABELS } from "@/features/profile/types";
 
-type Section = "profile" | "password" | "telegram";
+type Section = "profile" | "password" | "security" | "telegram";
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode; subtitle: string }[] = [
   {
@@ -21,6 +22,12 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode; subtitle: s
     label: "Зміна пароля",
     icon: <Lock size={15} />,
     subtitle: "Оновіть пароль для безпеки акаунта",
+  },
+  {
+    id: "security",
+    label: "Двофакторна автентифікація",
+    icon: <ShieldCheck size={15} />,
+    subtitle: "Додатковий рівень захисту входу в акаунт",
   },
   {
     id: "telegram",
@@ -160,6 +167,7 @@ function SectionCard({
       <div style={{ padding: 24 }}>
         {section.id === "profile"  && <ProfileInfoForm />}
         {section.id === "password" && <ChangePasswordForm />}
+        {section.id === "security" && <TwoFactorSection />}
         {section.id === "telegram" && <TelegramLinkSection />}
       </div>
     </div>

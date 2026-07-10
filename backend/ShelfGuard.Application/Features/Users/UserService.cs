@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Users.Dtos;
 using ShelfGuard.Application.Services;
@@ -8,10 +9,11 @@ namespace ShelfGuard.Application.Features.Users;
 
 public sealed class UserService : IUserService
 {
-    private readonly IUserRepository        _users;
-    private readonly IActivityLogRepository _activityLogs;
-    private readonly IPasswordHasher        _hasher;
-    private readonly ILegalEntityService    _legalEntities;
+    private readonly IUserRepository         _users;
+    private readonly IActivityLogRepository  _activityLogs;
+    private readonly IPasswordHasher         _hasher;
+    private readonly ILegalEntityService     _legalEntities;
+    private readonly IRefreshTokenRepository _refreshTokens;
 
     private static readonly HashSet<string> ValidRoles =
     [
@@ -44,12 +46,14 @@ public sealed class UserService : IUserService
         IUserRepository users,
         IActivityLogRepository activityLogs,
         IPasswordHasher hasher,
-        ILegalEntityService legalEntities)
+        ILegalEntityService legalEntities,
+        IRefreshTokenRepository refreshTokens)
     {
         _users         = users;
         _activityLogs  = activityLogs;
         _hasher        = hasher;
         _legalEntities = legalEntities;
+        _refreshTokens = refreshTokens;
     }
 
     // ── List ─────────────────────────────────────────────────────────────────
@@ -79,8 +83,9 @@ public sealed class UserService : IUserService
         if (!ValidRoles.Contains(request.Role))
             return (null, $"Invalid role '{request.Role}'.");
 
-        if (request.Password.Length < 8)
-            return (null, "Password must be at least 8 characters.");
+        var passwordError = PasswordValidator.Validate(request.Password, request.Email);
+        if (passwordError is not null)
+            return (null, passwordError);
 
         var existing = await _users.GetByEmailAsync(request.Email.ToLowerInvariant(), ct);
         if (existing is not null)
@@ -184,17 +189,22 @@ public sealed class UserService : IUserService
     public async Task<string?> ChangePasswordAsync(
         Guid userId, ChangePasswordRequest request, CancellationToken ct = default)
     {
-        if (request.NewPassword.Length < 8)
-            return "New password must be at least 8 characters.";
-
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null) return "User not found.";
+
+        var passwordError = PasswordValidator.Validate(request.NewPassword, user.Email);
+        if (passwordError is not null)
+            return passwordError;
 
         if (!_hasher.Verify(request.CurrentPassword, user.PasswordHash))
             return "Current password is incorrect.";
 
         user.ChangePassword(_hasher.Hash(request.NewPassword));
         _users.Update(user);
+
+        // TASK-329: a stolen session must not survive a password change.
+        await _refreshTokens.RevokeAllForUserAsync(userId, ct);
+        await _refreshTokens.SaveChangesAsync(ct);
 
         if (user.TenantId.HasValue)
             await LogAsync(user.TenantId.Value, userId, "user.password_changed",

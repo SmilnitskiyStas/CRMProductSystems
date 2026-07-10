@@ -17,6 +17,8 @@
     </PackageReference>
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="7.5.2" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.0" />
+    <!-- TASK-330: TOTP 2FA (RFC 6238), MIT license -->
+    <PackageReference Include="Otp.NET" Version="1.4.0" />
     <PackageReference Include="QuestPDF" Version="2024.10.4" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.5.2" />
   </ItemGroup>

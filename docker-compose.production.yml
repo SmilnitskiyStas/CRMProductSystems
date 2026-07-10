@@ -5,8 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: shelfguard_api
     restart: unless-stopped
+    # Loopback-only: reachable via host nginx (TLS) and localhost, never directly
+    # from the internet (TASK-332).
     ports:
-      - '5100:5100'
+      - '127.0.0.1:5100:5100'
     volumes:
       - shelfguard_api_uploads:/app/wwwroot/uploads
     environment:
@@ -35,8 +37,9 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     container_name: shelfguard_web
     restart: unless-stopped
+    # Loopback-only: reachable via host nginx (TLS) only (TASK-332).
     ports:
-      - '3100:3100'
+      - '127.0.0.1:3100:3100'
     depends_on:
       - api
 
@@ -46,8 +49,15 @@ services:
     restart: unless-stopped
     # 6380 on the host: 6379 is taken by another project's Redis. Sharing it
     # causes BullMQ queue-name collisions (workmate-worker steals our jobs).
+    # Loopback-only (TASK-332): worker runs with network_mode:host, so it still
+    # reaches redis at localhost:6380.
     ports:
-      - '6380:6379'
+      - '127.0.0.1:6380:6379'
+    # Optional auth (TASK-332): if REDIS_PASSWORD is set in .env, redis starts with
+    # --requirepass; if unset, behavior is unchanged (no auth), so deploys don't
+    # break before .env is updated. When setting REDIS_PASSWORD, the worker's
+    # REDIS_URL in .env MUST also include it: redis://:PASSWORD@localhost:6380
+    command: redis-server ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     volumes:
       - shelfguard_redis_data:/data
 
@@ -55,8 +65,10 @@ services:
     image: eclipse-mosquitto:2
     container_name: shelfguard_mosquitto
     restart: unless-stopped
+    # Loopback-only (TASK-332): mosquitto runs allow_anonymous — must never be
+    # internet-reachable. Worker (network_mode: host) connects via localhost:1884.
     ports:
-      - '1884:1883' # non-default host port per ADR-004
+      - '127.0.0.1:1884:1883' # non-default host port per ADR-004
     volumes:
       - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - shelfguard_mosquitto_data:/mosquitto/data
