@@ -257,6 +257,26 @@ This repository uses a **mandatory** multi-agent system. Agents are defined in `
 > For any implementation task — always spawn the appropriate role agent.
 > The main session orchestrates; agents implement.
 
+### Clarify scope before implementing (MANDATORY gate)
+
+Spawned agents run from a written brief and cannot interactively chat with the user —
+background agents work async, so a question raised mid-task comes back to the main
+session, not to the user, in real time. So clarification happens **before** spawning,
+in the main session, not inside the agent:
+
+- If the request leaves a decision only the user can make (product/UX choice, content,
+  priority between tradeoffs, branding, scope — what to build vs skip) — ask first, via
+  `AskUserQuestion` or plain text, and wait for the answer before spawning anything.
+- If the task is already fully specified — a described bug, a spec/CLAUDE.md that already
+  answers the open questions, an explicit instruction with clear scope — don't add
+  questions for their own sake. Go straight to a complete, unambiguous brief.
+- Judgment calls with an objective best-practice answer (security hardening, standard
+  error handling, following the architecture rules in this file) don't need user
+  sign-off — implement per project convention and note the decision in the task log.
+- If a spawned agent hits a genuine unresolved decision it cannot infer from its brief,
+  it must stop and report the specific question back instead of guessing — the main
+  session relays it to the user and resumes the agent (via SendMessage) once answered.
+
 ### How to spawn an agent
 
 Agents in `.claude/agents/` are **not** built-in subagent types.
@@ -303,6 +323,33 @@ The main session may act without spawning an agent **only** for:
 5. Create handoff in `.claude/logs/handoffs/` if next agent needed
 6. Update task status in `.claude/tasks/`
 7. Update `.claude/docs/` if architecture or domain behavior changes
+
+### Codex CLI as a parallel channel (optional)
+
+`codex` (OpenAI Codex CLI, ChatGPT-login auth — no API billing) is available on this
+machine and can run **alongside** Claude agents for extra throughput. It is not a
+replacement for the mandatory role-agent workflow above — use it to parallelize an
+independent workstream, or as a second-opinion reviewer, never as the only implementer
+of record for a task.
+
+Invoke non-interactively via Bash (`run_in_background: true`), same briefing discipline
+as a Claude agent prompt (self-contained, cites CLAUDE.md/spec/file paths):
+```
+codex exec -C <dir> --sandbox workspace-write --ask-for-approval never \
+  --json -o <output-file> "<full self-contained task brief>"
+```
+`-m <model>` forces a specific model (config default is set in `~/.codex/config.toml`;
+override per-call when a newer model tag is confirmed available).
+
+- **Isolation rule (mandatory, no need to ask):** if Codex's task can touch the same
+  files a concurrently-running Claude agent might touch, give Codex its own `git
+  worktree` (`git worktree add <path> <branch>`) and point `-C` at it — same principle
+  as this repo's `isolation: "worktree"` option for parallel Claude agents. Only share
+  the main working tree when the two workstreams have disjoint, explicitly-stated scope.
+- `codex review` runs a non-interactive code review against the current repo — a safe
+  read-only parallel check on a Claude agent's diff, no worktree needed.
+- After a Codex run, write the same `.claude/logs/tasks/TASK-ID_..._codex.md` log as any
+  other agent, so the trail stays consistent regardless of which tool did the work.
 
 ### Task ID Format
 ```
