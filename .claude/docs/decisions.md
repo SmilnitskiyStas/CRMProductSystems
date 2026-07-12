@@ -3,6 +3,88 @@
 **Owner:** project-architect
 **Updated:** 2026-07-12
 
+## ADR-019: Temporary/permanent access grants beyond role — additive layer over `User.Permissions`
+Date: 2026-07-12
+Status: accepted
+
+Context: User wants to grant a user MORE access than their role gives — including two users
+with the identical role diverging — either forever or until a deadline. Clarified with user
+(AskUserQuestion): the existing ~15-min JWT-refresh propagation delay is acceptable (no move to
+live per-request DB checks); granularity stays at the existing per-page level (`PAGES` /
+`ValidPages` in `frontend/features/users/types.ts` / `UserService.cs`), no new per-action
+granularity; expiry must notify the user via the ADR-018 outbox.
+
+Today `User.Permissions` (`backend/ShelfGuard.Domain/Entities/User.cs:42`) is the only
+role-independent per-user override — a `Dictionary<string,bool>?` (true=grant, false=deny,
+absent=role default), always permanent, edited via `UserService.UpdatePermissionsAsync`
+(`UserService.cs:251-297`, private `RoleRank` dict at line 29, mirrored on frontend as
+`ROLE_RANK` in `types.ts:87`) and `PUT /api/users/{id}/permissions`
+(`UsersController.cs:96`). It is baked into JWT claims at token-mint time only —
+`AuthService.cs:132` (refresh) and `:326` (login) call
+`_jwt.GenerateAccessToken(..., user.Permissions)`; `JwtService.cs:47-52` serializes only the
+`true` entries into a comma-joined `permissions` claim, which `LegalEntityAuthorization.cs`
+already reads the same way for `legal_entities.manage` — i.e. the "bake into JWT at mint time"
+mechanism the user was told about already exists and is directly reusable.
+
+Decision:
+1. **New table `user_permission_grants`**, additive only — `User.Permissions` and
+   `UpdatePermissionsAsync`/the PUT endpoint are untouched. Columns: `Id`, `TenantId`,
+   `UserId` (recipient), `PermissionKey` (validated against the same page-slug set as
+   `ValidPages`), `ExpiresAt timestamptz NOT NULL` (always temporary — permanent overrides
+   keep living exclusively in `User.Permissions`, so this table never needs a `Granted bool` or
+   a null-`ExpiresAt` "permanent" case), `GrantedByUserId`, `GrantedAt`, `RevokedAt?` (early
+   revoke), `RevokedByUserId?`, `NotifiedExpiringAt?`, `NotifiedExpiredAt?` (worker dedupe
+   markers). Standard `tenant_isolation` + `provider_bypass` RLS (pattern used by every table
+   since ADR-016/017/018, e.g. `AddLegalEntities` migration). Index on `(TenantId, UserId)` and
+   a partial index on `ExpiresAt WHERE "RevokedAt" IS NULL` for the worker scan. Rejected:
+   folding permanent grants into the same table "for one audit trail" (per the brief) — two
+   independent mechanisms with a narrow, explicit merge step is less regression risk to the
+   existing, working permanent-override path than widening it.
+2. **Merge happens once, at JWT-mint time**, not per request. `AuthService.cs` gets a new
+   private `BuildEffectivePermissionsAsync(User, ct)`: start from `user.Permissions` (or empty),
+   then for every grant with `ExpiresAt > utcNow AND RevokedAt IS NULL`, force
+   `effective[PermissionKey] = true` — a temporary grant always wins over even an explicit
+   permanent `false`, since it is the more specific and more recent authorization. Call this at
+   both existing call sites (`:132`, `:326`) in place of `user.Permissions`, and also feed the
+   same result into `ToDto`/`AuthUserDto` (`:389`) so the client's own `effectivePageAccess()`
+   sidebar logic doesn't disagree with the JWT the server issued it.
+3. **API — extend `UsersController`/`UserService`, no new controller.**
+   `POST /api/users/{id}/permission-grants` (`permissionKey`, `expiresAt`, future-only),
+   `GET /api/users/{id}/permission-grants` (active + recent, for the editor), `DELETE
+   /api/users/{id}/permission-grants/{grantId}` (early revoke). Server-side authorization reuses
+   the exact `RoleRank` check already in `UserService.UpdatePermissionsAsync` (editor rank >
+   target rank, no self-grant, target must be same tenant) — same rule, same table, just called
+   from the new methods too.
+4. **Worker job `worker/src/jobs/permission-grant-expiry.job.ts`**, cron every 15 min (matches
+   the JWT refresh cadence already accepted as the propagation delay). Two scans: expiring within
+   24h (`NotifiedExpiringAt IS NULL`) and already expired (`NotifiedExpiredAt IS NULL`), both
+   `RevokedAt IS NULL`. Each match inserts one outbox row into `notification_queue`
+   (`Channel="system"`, `Status="pending"`, `EventType = "access.temporary_expiring_soon"` /
+   `"access.temporary_expired"`) — same shape as `ReceiptService.EnqueueReceivedNotificationAsync`
+   — then stamps the corresponding `Notified*At`. New event types added to `ValidEventTypes` in
+   `NotificationService.cs:96-109`.
+5. **`notification-dispatch.job.ts` needs one new capability**: it currently only does
+   role-matrix fan-out (`DISPATCH_EVENT_ROLES`) and doesn't even `SELECT "UserId"` from the
+   intent row. This notification is for one specific person (whose access is expiring), not a
+   role broadcast — the outbox row must set `UserId = grant.UserId`, and the job needs a new
+   branch: when `row.user_id` is present, skip the role matrix and deliver straight to that user
+   (their own `notification_settings` for the event type still apply), then mark dispatched.
+6. **Frontend**: `UserPermissionsEditor.tsx` gets a second, separately-applied section —
+   temporary grants are NOT part of the existing tri-state Save-all-pages flow (different
+   backing store, different lifecycle, instant-apply is more honest than batching two mechanisms
+   behind one button). Add "Тимчасово до…" alongside the existing grant action, plus a list of
+   active grants with a revoke button. New hooks alongside `useUsers.ts`; new
+   `TemporaryGrantDto` in `types.ts`. New labels for the two event types in
+   `frontend/features/notifications/types.ts` (`EVENT_TYPE_LABELS`, `EVENT_TYPE_SOURCE`,
+   `NotificationEventType` union).
+
+Consequences:
++ Zero regression risk to the existing permanent-override path — it is untouched
++ Reuses three already-accepted mechanisms end to end: JWT-bake merge point, ADR-018 outbox, RoleRank check — no new authorization model
++ 15-min worst-case propagation is already the accepted norm for `legal_entities.manage`
+- `notification-dispatch.job.ts` needs a genuinely new (if small) code path for single-user targeted delivery, not just a new matrix entry
+- Two independent per-user permission mechanisms (dict + table) to reason about instead of one — mitigated by the merge being a single, well-documented function
+
 ## ADR-018: Notification categories expansion + filter drawer — Postgres outbox instead of C# BullMQ producer
 Date: 2026-07-12
 Status: accepted

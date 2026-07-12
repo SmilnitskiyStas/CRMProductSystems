@@ -28,4 +28,25 @@ public interface IUserService
         Guid tenantId, Guid editorUserId, string editorRole,
         Guid targetUserId, UpdatePermissionsRequest request,
         CancellationToken ct = default);
+
+    // Temporary permission grants (ADR-019, TASK-342)
+    /// <summary>
+    /// Grants the target user a temporary page-access override that expires on its own.
+    /// Server-side role-rank check: actingUser's RoleRank must exceed the target's.
+    /// </summary>
+    Task<(PermissionGrantDto? Grant, string? Error)> GrantTemporaryPermissionAsync(
+        Guid tenantId, Guid actingUserId, Guid targetUserId,
+        string permissionKey, DateTime expiresAt,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Early-revokes a temporary grant. Allowed for the original granter (own grant) or
+    /// any user whose RoleRank exceeds the grant recipient's RoleRank.
+    /// </summary>
+    Task<string?> RevokeTemporaryPermissionAsync(
+        Guid tenantId, Guid actingUserId, Guid grantId, CancellationToken ct = default);
+
+    /// <summary>Active (non-revoked, non-expired) temporary grants for a user.</summary>
+    Task<(IReadOnlyList<PermissionGrantDto>? Grants, string? Error)> GetActivePermissionGrantsAsync(
+        Guid tenantId, Guid userId, CancellationToken ct = default);
 }

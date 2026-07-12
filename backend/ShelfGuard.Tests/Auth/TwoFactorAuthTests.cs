@@ -23,12 +23,15 @@ public sealed class TwoFactorAuthTests
     private readonly IJwtService _jwt = Substitute.For<IJwtService>();
     private readonly IActivityLogRepository _activityLogs = Substitute.For<IActivityLogRepository>();
     private readonly ITotpService _totp = new TotpService(); // real implementation
+    private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly AuthService _sut;
 
     public TwoFactorAuthTests()
     {
-        _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp,
+        _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants,
             NullLogger<AuthService>.Instance);
+        _permissionGrants.GetActiveGrantsForUserAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<UserPermissionGrant>());
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>()).Returns("access_token");

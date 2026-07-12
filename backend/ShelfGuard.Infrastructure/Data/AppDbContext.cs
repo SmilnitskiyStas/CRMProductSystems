@@ -144,6 +144,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<ProductionOrder>            ProductionOrders            => Set<ProductionOrder>();
     public DbSet<ProductionOrderConsumption> ProductionOrderConsumptions => Set<ProductionOrderConsumption>();
 
+    // Temporary per-user permission grants (ADR-019, TASK-341)
+    public DbSet<UserPermissionGrant> UserPermissionGrants => Set<UserPermissionGrant>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -1857,6 +1860,33 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(x => x.TicketId);
             e.HasIndex(x => x.CreatedAt);
+        });
+
+        // ── UserPermissionGrant (ADR-019, TASK-341) ───────────────────────────
+        builder.Entity<UserPermissionGrant>(e =>
+        {
+            e.ToTable("user_permission_grants");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.PermissionKey).HasMaxLength(100).IsRequired();
+            e.Property(x => x.ExpiresAt).IsRequired();
+            e.Property(x => x.GrantedByUserId).IsRequired();
+            e.Property(x => x.GrantedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.UserId })
+             .HasDatabaseName("idx_user_permission_grants_tenant_user");
+            // Partial index for the worker's expiry scan — only rows still eligible
+            // to expire (not already revoked) need to be found by ExpiresAt.
+            e.HasIndex(x => x.ExpiresAt)
+             .HasDatabaseName("idx_user_permission_grants_expires_active")
+             .HasFilter("\"RevokedAt\" IS NULL");
+            e.HasOne(x => x.User).WithMany()
+             .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.GrantedByUser).WithMany()
+             .HasForeignKey(x => x.GrantedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.RevokedByUser).WithMany()
+             .HasForeignKey(x => x.RevokedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
     }
 }

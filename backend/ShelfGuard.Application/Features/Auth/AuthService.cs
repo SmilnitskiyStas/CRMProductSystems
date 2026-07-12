@@ -20,6 +20,7 @@ public sealed class AuthService : IAuthService
     private readonly IJwtService _jwt;
     private readonly IActivityLogRepository _activityLogs;
     private readonly ITotpService _totp;
+    private readonly IUserPermissionGrantRepository _permissionGrants;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -29,6 +30,7 @@ public sealed class AuthService : IAuthService
         IJwtService jwt,
         IActivityLogRepository activityLogs,
         ITotpService totp,
+        IUserPermissionGrantRepository permissionGrants,
         ILogger<AuthService> logger)
     {
         _users = users;
@@ -37,6 +39,7 @@ public sealed class AuthService : IAuthService
         _jwt = jwt;
         _activityLogs = activityLogs;
         _totp = totp;
+        _permissionGrants = permissionGrants;
         _logger = logger;
     }
 
@@ -129,9 +132,10 @@ public sealed class AuthService : IAuthService
         await _refreshTokens.AddAsync(newToken, ct);
         await _refreshTokens.SaveChangesAsync(ct);
 
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, user.Permissions);
+        var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, effectivePermissions);
 
-        return (new LoginResponse(accessToken, newRaw, ToDto(user)), null);
+        return (new LoginResponse(accessToken, newRaw, ToDto(user, effectivePermissions)), null);
     }
 
     public async Task RevokeAsync(string rawRefreshToken, CancellationToken ct = default)
@@ -148,7 +152,10 @@ public sealed class AuthService : IAuthService
     public async Task<AuthUserDto?> GetCurrentUserAsync(Guid userId, CancellationToken ct = default)
     {
         var user = await _users.GetByIdAsync(userId, ct);
-        return user is null ? null : ToDto(user);
+        if (user is null) return null;
+
+        var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
+        return ToDto(user, effectivePermissions);
     }
 
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
@@ -323,9 +330,38 @@ public sealed class AuthService : IAuthService
         }, ct);
         await _activityLogs.SaveChangesAsync(ct);
 
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, user.Permissions);
+        var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, effectivePermissions);
 
-        return new LoginResponse(accessToken, rawToken, ToDto(user));
+        return new LoginResponse(accessToken, rawToken, ToDto(user, effectivePermissions));
+    }
+
+    /// <summary>
+    /// ADR-019 / TASK-342: effective permissions baked into the JWT and returned to the
+    /// client = <see cref="User.Permissions"/> (permanent per-key true/false override)
+    /// with every currently-active temporary grant (<c>user_permission_grants</c>,
+    /// <c>ExpiresAt</c> in the future and <c>RevokedAt</c> null) forced to
+    /// <c>true</c> — a live temporary grant always wins, even over an explicit permanent
+    /// <c>false</c>, since it is the more specific and more recently issued authorization.
+    /// Merge happens once, here, at JWT-mint time — not per request (accepted 15-min
+    /// propagation delay, same as the existing permanent-override path).
+    /// </summary>
+    private async Task<Dictionary<string, bool>> BuildEffectivePermissionsAsync(User user, CancellationToken ct)
+    {
+        var effective = user.Permissions is null
+            ? new Dictionary<string, bool>()
+            : new Dictionary<string, bool>(user.Permissions);
+
+        if (user.TenantId is null)
+            return effective; // provider/no-tenant users have no tenant-scoped grants
+
+        var activeGrants = await _permissionGrants.GetActiveGrantsForUserAsync(
+            user.TenantId.Value, user.Id, ct) ?? Array.Empty<UserPermissionGrant>();
+
+        foreach (var grant in activeGrants)
+            effective[grant.PermissionKey] = true;
+
+        return effective;
     }
 
     /// <summary>Increments the shared failure counter, persists, and audits the attempt.</summary>
@@ -385,6 +421,8 @@ public sealed class AuthService : IAuthService
     private static string NormalizeRecoveryCode(string code) =>
         new(code.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
 
-    private static AuthUserDto ToDto(User u) =>
-        new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId, u.Permissions, u.LegalEntityId, u.TotpEnabled);
+    private static AuthUserDto ToDto(User u, IReadOnlyDictionary<string, bool>? effectivePermissions = null) =>
+        new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId,
+            effectivePermissions is null ? u.Permissions : new Dictionary<string, bool>(effectivePermissions),
+            u.LegalEntityId, u.TotpEnabled);
 }

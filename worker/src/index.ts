@@ -11,6 +11,7 @@ import { startTelegramListener } from "./jobs/telegram-listener";
 import { startMqttListener } from "./jobs/mqtt-listener";
 import { startFiscalizationRetryWorker } from "./jobs/fiscalization-retry.job";
 import { startNotificationDispatchWorker } from "./jobs/notification-dispatch.job";
+import { startPermissionGrantExpiryWorker } from "./jobs/permission-grant-expiry.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -55,6 +56,15 @@ async function scheduleRecurringJobs(): Promise<void> {
     { pattern: "* * * * *" },
     { name: "notification-dispatch" }
   );
+
+  // ADR-019 §4: every 15 min — scan user_permission_grants for expiring-soon (24h) /
+  // just-expired temporary grants and enqueue targeted outbox rows (TASK-342)
+  const permissionGrantExpiryQueue = new Queue("permission-grant-expiry", { connection: redisConnection });
+  await permissionGrantExpiryQueue.upsertJobScheduler(
+    "permission-grant-expiry-cron",
+    { pattern: "*/15 * * * *" },
+    { name: "permission-grant-expiry" }
+  );
 }
 
 async function main(): Promise<void> {
@@ -73,6 +83,7 @@ async function main(): Promise<void> {
   startMqttListener();
   startFiscalizationRetryWorker();
   startNotificationDispatchWorker();
+  startPermissionGrantExpiryWorker();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

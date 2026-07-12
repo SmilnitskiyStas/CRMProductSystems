@@ -106,6 +106,8 @@ public sealed class NotificationService : INotificationService
         "order.replenishment_suggested",
         "supplier.message",
         "supplier_agreement.signed",
+        "access.temporary_expiring_soon",
+        "access.temporary_expired",
     ];
 
     private static readonly HashSet<string> ValidChannels =

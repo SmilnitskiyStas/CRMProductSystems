@@ -17,11 +17,12 @@ public sealed class UserServicePasswordTests
     private readonly IPasswordHasher _hasher = Substitute.For<IPasswordHasher>();
     private readonly ILegalEntityService _legalEntities = Substitute.For<ILegalEntityService>();
     private readonly IRefreshTokenRepository _refreshTokens = Substitute.For<IRefreshTokenRepository>();
+    private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly UserService _sut;
 
     public UserServicePasswordTests()
     {
-        _sut = new UserService(_users, _activityLogs, _hasher, _legalEntities, _refreshTokens);
+        _sut = new UserService(_users, _activityLogs, _hasher, _legalEntities, _refreshTokens, _permissionGrants);
     }
 
     [Fact]

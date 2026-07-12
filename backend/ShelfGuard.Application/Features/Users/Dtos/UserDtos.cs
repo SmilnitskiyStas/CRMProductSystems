@@ -73,3 +73,28 @@ public sealed record ActivityLogDto(
     bool      IsImpersonated,
     DateTime  CreatedAt
 );
+
+// ── Temporary permission grants (ADR-019, TASK-342) ────────────────────────
+
+/// <summary>
+/// Grants the target user a temporary page-access override that expires on its own.
+/// Same role-rank check as <see cref="UpdatePermissionsRequest"/>'s editor/target rule —
+/// see <c>UserService.GrantTemporaryPermissionAsync</c>.
+/// </summary>
+public sealed record GrantTemporaryPermissionRequest(
+    /// <summary>Page slug. Valid pages: dashboard, inventory, stock, receipts, transfers, write-offs, analytics, users, settings.</summary>
+    string PermissionKey,
+    /// <summary>Must be in the future and no more than 90 days out.</summary>
+    DateTime ExpiresAt
+);
+
+public sealed record PermissionGrantDto(
+    Guid      Id,
+    Guid      UserId,
+    string    PermissionKey,
+    DateTime  ExpiresAt,
+    Guid      GrantedByUserId,
+    string?   GrantedByName,
+    DateTime  GrantedAt,
+    DateTime? RevokedAt
+);

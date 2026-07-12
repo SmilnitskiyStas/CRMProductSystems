@@ -217,6 +217,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.ILandingLeadRepository,
             Data.Repositories.LandingLeadRepository>();
 
+        // TASK-341 - Temporary per-user permission grants (ADR-019)
+        services.AddScoped<Domain.Interfaces.IUserPermissionGrantRepository,
+            Data.Repositories.UserPermissionGrantRepository>();
+
         return services;
     }
 }

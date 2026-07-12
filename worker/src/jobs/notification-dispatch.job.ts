@@ -13,10 +13,16 @@
 // per-user×channel rows via the existing logNotifications, then marks the intent row
 // Status = 'dispatched' (terminal — excluded from GetHistoryAsync's Channel <> 'system' filter
 // regardless, but 'dispatched' also keeps it out of future polls).
+//
+// TASK-342 / ADR-019 §5: permission-grant-expiry.job.ts enqueues a SECOND kind of outbox
+// row — UserId IS NOT NULL (the grant recipient specifically, not a role broadcast). Those
+// rows skip the role-matrix entirely and are delivered straight to that one user (their own
+// notification_settings for the event type still apply). See dispatchTargeted() below.
 
 import { Worker, Job } from "bullmq";
 import { redisConnection } from "../redis";
 import { db } from "../db";
+import type { PoolClient } from "pg";
 import { sendTelegramMessage } from "../services/telegram";
 import { sendEmail } from "../services/email";
 import { deliver, logNotifications, type DeliveryOutcome } from "../services/notification-log";
@@ -42,10 +48,18 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
   },
 };
 
+// TASK-342 / ADR-019 §5: default channel set for targeted (UserId IS NOT NULL) outbox rows,
+// keyed by event type — no role matrix involved, the recipient is already fixed.
+const TARGETED_EVENT_CHANNELS: Record<string, string[]> = {
+  "access.temporary_expiring_soon": ["telegram", "push"],
+  "access.temporary_expired": ["telegram", "push"],
+};
+
 type PendingIntentRow = {
   id: string;
   tenant_id: string;
   store_id: string | null;
+  user_id: string | null;
   title: string | null;
   event_type: string;
   payload: unknown;
@@ -56,6 +70,8 @@ function formatText(row: PendingIntentRow): string {
     "receipt.created": "📦",
     "supplier.message": "💬",
     "supplier_agreement.signed": "✍️",
+    "access.temporary_expiring_soon": "⏳",
+    "access.temporary_expired": "🔒",
   };
   const icon = icons[row.event_type] ?? "🔔";
   return `${icon} <b>ShelfGuard</b>\n\n${row.title ?? "Нове сповіщення"}`;
@@ -71,9 +87,108 @@ function formatEmail(row: PendingIntentRow): { subject: string; html: string } {
   return { subject, html };
 }
 
+// TASK-342 / ADR-019 §5: targeted delivery — the outbox row already names its one
+// recipient (UserId), so skip the role matrix and deliver straight to them. Their own
+// notification_settings for the event type still gate each channel, same as the
+// role-broadcast path; no settings row → fall back to TARGETED_EVENT_CHANNELS defaults.
+async function dispatchTargeted(
+  client: PoolClient,
+  row: PendingIntentRow & { user_id: string }
+): Promise<void> {
+  const defaultChannels = TARGETED_EVENT_CHANNELS[row.event_type];
+  if (!defaultChannels) {
+    console.warn(
+      `[notification-dispatch] targeted intent ${row.id}: unknown eventType ${row.event_type} — marking dispatched`
+    );
+    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+    return;
+  }
+
+  const userRes = await client.query<{
+    id: string;
+    email: string;
+    telegram_chat_id: string | null;
+    push_token: string | null;
+  }>(
+    `SELECT "Id" AS id, "Email" AS email, "TelegramChatId" AS telegram_chat_id, "PushToken" AS push_token
+     FROM users
+     WHERE "Id" = $1 AND "IsActive" = true`,
+    [row.user_id]
+  );
+
+  const user = userRes.rows[0];
+  if (!user) {
+    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+    return;
+  }
+
+  const settingsRes = await client.query<{ channel: string }>(
+    `SELECT "Channel" AS channel
+     FROM notification_settings
+     WHERE "UserId" = $1 AND "EventType" = $2 AND "IsEnabled" = true`,
+    [user.id, row.event_type]
+  );
+
+  // Explicit settings win; no settings row → fall back to event defaults (same rule as
+  // the role-broadcast path's enabledMap ?? channels fallback).
+  const userChannels = settingsRes.rows.length > 0
+    ? new Set(settingsRes.rows.map((r) => r.channel))
+    : new Set(defaultChannels);
+  const activeChannels = Array.from(userChannels).filter((c) => defaultChannels.includes(c));
+
+  if (activeChannels.length === 0) {
+    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+    return;
+  }
+
+  const telegramText = formatText(row);
+  const emailContent = formatEmail(row);
+
+  const outcomes: DeliveryOutcome[] = [];
+  for (const channel of activeChannels) {
+    if (channel === "telegram") {
+      outcomes.push(
+        user.telegram_chat_id
+          ? await deliver("telegram", () => sendTelegramMessage(user.telegram_chat_id!, telegramText))
+          : { channel: "telegram", status: "skipped", error: "no telegram_chat_id" }
+      );
+    } else if (channel === "email") {
+      outcomes.push(
+        user.email
+          ? await deliver("email", () => sendEmail({ to: user.email, ...emailContent }))
+          : { channel: "email", status: "skipped", error: "no email" }
+      );
+    } else if (channel === "push") {
+      outcomes.push({ channel: "push", status: "skipped", error: "push channel not implemented" });
+    }
+  }
+
+  for (const o of outcomes) {
+    if (o.status === "failed") {
+      console.error(`[notification-dispatch] targeted ${o.channel} send failed for user ${user.id}: ${o.error}`);
+    }
+  }
+
+  await logNotifications(client, {
+    tenantId: row.tenant_id,
+    userId: user.id,
+    eventType: row.event_type,
+    payload: row.payload,
+    outcomes,
+  });
+
+  await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+}
+
 async function dispatchOne(row: PendingIntentRow): Promise<void> {
   const client = await db.connect();
   try {
+    // Targeted rows (UserId set) bypass the role matrix entirely — deliver to that one user.
+    if (row.user_id) {
+      await dispatchTargeted(client, row as PendingIntentRow & { user_id: string });
+      return;
+    }
+
     const matrix = DISPATCH_EVENT_ROLES[row.event_type];
     if (!matrix) {
       console.warn(`[notification-dispatch] intent ${row.id}: unknown eventType ${row.event_type} — marking dispatched`);
@@ -178,6 +293,7 @@ async function runNotificationDispatch(): Promise<void> {
       `SELECT "Id"         AS id,
               "TenantId"   AS tenant_id,
               "LocationId" AS store_id,
+              "UserId"     AS user_id,
               "Title"      AS title,
               "EventType"  AS event_type,
               "Payload"    AS payload

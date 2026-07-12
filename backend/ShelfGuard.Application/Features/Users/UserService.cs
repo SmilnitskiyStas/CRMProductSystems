@@ -14,6 +14,10 @@ public sealed class UserService : IUserService
     private readonly IPasswordHasher         _hasher;
     private readonly ILegalEntityService     _legalEntities;
     private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IUserPermissionGrantRepository _permissionGrants;
+
+    /// <summary>ADR-019: temporary grants may not extend more than this far into the future.</summary>
+    private const int MaxGrantDurationDays = 90;
 
     private static readonly HashSet<string> ValidRoles =
     [
@@ -47,13 +51,15 @@ public sealed class UserService : IUserService
         IActivityLogRepository activityLogs,
         IPasswordHasher hasher,
         ILegalEntityService legalEntities,
-        IRefreshTokenRepository refreshTokens)
+        IRefreshTokenRepository refreshTokens,
+        IUserPermissionGrantRepository permissionGrants)
     {
-        _users         = users;
-        _activityLogs  = activityLogs;
-        _hasher        = hasher;
-        _legalEntities = legalEntities;
-        _refreshTokens = refreshTokens;
+        _users             = users;
+        _activityLogs      = activityLogs;
+        _hasher            = hasher;
+        _legalEntities     = legalEntities;
+        _refreshTokens     = refreshTokens;
+        _permissionGrants  = permissionGrants;
     }
 
     // ── List ─────────────────────────────────────────────────────────────────
@@ -295,6 +301,140 @@ public sealed class UserService : IUserService
         return (ToDto(target), null);
     }
 
+    // ── Temporary permission grants (ADR-019, TASK-342) ────────────────────────
+
+    /// <summary>
+    /// Grants a temporary, self-expiring page-access override to <paramref name="targetUserId"/>.
+    /// Mirrors the <see cref="UpdatePermissionsAsync"/> role-hierarchy rule (editor rank
+    /// must exceed target rank) — no self-grant, same tenant required for both users,
+    /// <paramref name="permissionKey"/> validated against <see cref="ValidPages"/>,
+    /// <paramref name="expiresAt"/> must be strictly in the future and no more than
+    /// <see cref="MaxGrantDurationDays"/> (90) days out.
+    /// </summary>
+    public async Task<(PermissionGrantDto? Grant, string? Error)> GrantTemporaryPermissionAsync(
+        Guid tenantId, Guid actingUserId, Guid targetUserId,
+        string permissionKey, DateTime expiresAt,
+        CancellationToken ct = default)
+    {
+        if (!ValidPages.Contains(permissionKey))
+            return (null, $"Unknown page '{permissionKey}'. Valid pages: {string.Join(", ", ValidPages)}.");
+
+        var expiresAtUtc = expiresAt.Kind == DateTimeKind.Utc ? expiresAt : expiresAt.ToUniversalTime();
+        var now = DateTime.UtcNow;
+
+        if (expiresAtUtc <= now)
+            return (null, "expiresAt must be in the future.");
+
+        if (expiresAtUtc > now.AddDays(MaxGrantDurationDays))
+            return (null, $"expiresAt cannot be more than {MaxGrantDurationDays} days from now.");
+
+        if (targetUserId == actingUserId)
+            return (null, "You cannot grant yourself temporary access.");
+
+        var actingUser = await _users.GetByIdAsync(actingUserId, ct);
+        if (actingUser is null || actingUser.TenantId != tenantId)
+            return (null, "Acting user not found.");
+
+        var target = await _users.GetByIdAsync(targetUserId, ct);
+        if (target is null || target.TenantId != tenantId)
+            return (null, "User not found.");
+
+        // Role hierarchy check — acting user must outrank target (same rule as UpdatePermissionsAsync).
+        var actingRank = RoleRank.GetValueOrDefault(actingUser.Role, 0);
+        var targetRank = RoleRank.GetValueOrDefault(target.Role, 0);
+
+        if (actingRank <= targetRank)
+            return (null, $"You do not have permission to grant access to a '{target.Role}' user.");
+
+        var grant = UserPermissionGrant.Create(tenantId, targetUserId, permissionKey, expiresAtUtc, actingUserId);
+        await _permissionGrants.AddAsync(grant, ct);
+
+        await LogAsync(tenantId, actingUserId, "user.permission_granted",
+            entityType: "User", entityId: targetUserId,
+            meta: $"{{\"target\":\"{target.Email}\",\"permissionKey\":\"{permissionKey}\",\"expiresAt\":\"{expiresAtUtc:o}\"}}",
+            ct: ct);
+
+        await _permissionGrants.SaveChangesAsync(ct);
+
+        return (ToGrantDto(grant, actingUser.FullName), null);
+    }
+
+    /// <summary>
+    /// Early-revokes a temporary grant before its natural expiry.
+    /// Judgment call (ADR-019 left this unspecified): allowed for (a) the user who
+    /// originally created the grant (<see cref="UserPermissionGrant.GrantedByUserId"/>),
+    /// revoking their own decision, OR (b) any acting user whose RoleRank exceeds the
+    /// grant recipient's RoleRank — same hierarchy rule as granting. Self-revoke by the
+    /// recipient is NOT allowed (a user must not be able to extend/mutate their own access).
+    /// </summary>
+    public async Task<string?> RevokeTemporaryPermissionAsync(
+        Guid tenantId, Guid actingUserId, Guid grantId, CancellationToken ct = default)
+    {
+        var grant = await _permissionGrants.GetByIdAsync(tenantId, grantId, ct);
+        if (grant is null)
+            return "Grant not found.";
+
+        if (grant.RevokedAt is not null)
+            return "Grant is already revoked.";
+
+        if (grant.UserId == actingUserId)
+            return "You cannot revoke your own temporary access.";
+
+        var isOriginalGranter = grant.GrantedByUserId == actingUserId;
+
+        if (!isOriginalGranter)
+        {
+            var actingUser = await _users.GetByIdAsync(actingUserId, ct);
+            if (actingUser is null || actingUser.TenantId != tenantId)
+                return "Acting user not found.";
+
+            var recipient = await _users.GetByIdAsync(grant.UserId, ct);
+            if (recipient is null || recipient.TenantId != tenantId)
+                return "User not found.";
+
+            var actingRank    = RoleRank.GetValueOrDefault(actingUser.Role, 0);
+            var recipientRank = RoleRank.GetValueOrDefault(recipient.Role, 0);
+
+            if (actingRank <= recipientRank)
+                return "You do not have permission to revoke this grant.";
+        }
+
+        var revoked = await _permissionGrants.RevokeAsync(tenantId, grantId, actingUserId, ct);
+        if (!revoked)
+            return "Grant not found or already revoked.";
+
+        await LogAsync(tenantId, actingUserId, "user.permission_revoked",
+            entityType: "User", entityId: grant.UserId,
+            meta: $"{{\"grantId\":\"{grantId}\",\"permissionKey\":\"{grant.PermissionKey}\"}}",
+            ct: ct);
+
+        await _permissionGrants.SaveChangesAsync(ct);
+        return null;
+    }
+
+    /// <summary>Active (non-revoked, non-expired) temporary grants for a user, for the UI grant list.</summary>
+    public async Task<(IReadOnlyList<PermissionGrantDto>? Grants, string? Error)> GetActivePermissionGrantsAsync(
+        Guid tenantId, Guid userId, CancellationToken ct = default)
+    {
+        var target = await _users.GetByIdAsync(userId, ct);
+        if (target is null || target.TenantId != tenantId)
+            return (null, "User not found.");
+
+        var grants = await _permissionGrants.GetActiveGrantsForUserAsync(tenantId, userId, ct);
+
+        // Repository queries are AsNoTracking without Include — resolve granter display
+        // names with a small, deduped batch of lookups (active-grant lists are short).
+        var granterNames = new Dictionary<Guid, string>();
+        foreach (var granterId in grants.Select(g => g.GrantedByUserId).Distinct())
+        {
+            var granter = await _users.GetByIdAsync(granterId, ct);
+            if (granter is not null)
+                granterNames[granterId] = granter.FullName;
+        }
+
+        return (grants.Select(g => ToGrantDto(g, granterNames.GetValueOrDefault(g.GrantedByUserId))).ToList(), null);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private async Task LogAsync(
@@ -331,5 +471,10 @@ public sealed class UserService : IUserService
     private static ActivityLogDto ToActivityDto(ActivityLog a) => new(
         a.Id, a.Action, a.EntityType, a.EntityId,
         a.Meta, a.IpAddress, a.IsImpersonated, a.CreatedAt
+    );
+
+    private static PermissionGrantDto ToGrantDto(UserPermissionGrant g, string? grantedByName = null) => new(
+        g.Id, g.UserId, g.PermissionKey, g.ExpiresAt,
+        g.GrantedByUserId, grantedByName, g.GrantedAt, g.RevokedAt
     );
 }

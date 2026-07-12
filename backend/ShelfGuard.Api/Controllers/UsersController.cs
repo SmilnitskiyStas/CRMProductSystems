@@ -135,6 +135,77 @@ public sealed class UsersController : ControllerBase
         return error is null ? NoContent() : NotFound(new { error });
     }
 
+    /// <summary>
+    /// Grants a temporary, self-expiring page-access override to a user (ADR-019).
+    /// Acting user must outrank the target (same rule as PUT .../permissions); no self-grant;
+    /// expiresAt must be in the future and at most 90 days out.
+    /// </summary>
+    [HttpPost("{id:guid}/permission-grants")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(PermissionGrantDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GrantTemporaryPermission(
+        Guid id,
+        [FromBody] GrantTemporaryPermissionRequest request,
+        CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var actingUserId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var (grant, error) = await _users.GrantTemporaryPermissionAsync(
+            tenantId.Value, actingUserId, id, request.PermissionKey, request.ExpiresAt, ct);
+
+        if (grant is null)
+            return error!.Contains("not found")          ? NotFound(new { error })
+                 : error.Contains("do not have permission") ? Forbid()
+                 : BadRequest(new { error });
+
+        return CreatedAtAction(nameof(GetActivePermissionGrants), new { id }, grant);
+    }
+
+    /// <summary>Returns active (non-revoked, non-expired) temporary permission grants for a user.</summary>
+    [HttpGet("{id:guid}/permission-grants")]
+    [ProducesResponseType(typeof(IReadOnlyList<PermissionGrantDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetActivePermissionGrants(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (grants, error) = await _users.GetActivePermissionGrantsAsync(tenantId.Value, id, ct);
+        return grants is null ? NotFound(new { error }) : Ok(grants);
+    }
+
+    /// <summary>
+    /// Early-revokes a temporary permission grant. Allowed for the original granter
+    /// (revoking their own decision) or any user whose role outranks the grant recipient's.
+    /// </summary>
+    [HttpDelete("{id:guid}/permission-grants/{grantId:guid}")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RevokeTemporaryPermission(Guid id, Guid grantId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var actingUserId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var error = await _users.RevokeTemporaryPermissionAsync(tenantId.Value, actingUserId, grantId, ct);
+
+        if (error is null) return NoContent();
+        return error.Contains("not found")             ? NotFound(new { error })
+             : error.Contains("do not have permission") ? Forbid()
+             : error.Contains("cannot revoke")           ? Forbid()
+             : BadRequest(new { error });
+    }
+
     /// <summary>Returns the activity log for a specific user (last 50 entries by default).</summary>
     [HttpGet("{id:guid}/activity")]
     [ProducesResponseType(typeof(IReadOnlyList<ActivityLogDto>), StatusCodes.Status200OK)]
