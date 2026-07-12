@@ -319,7 +319,9 @@ public sealed class UserService : IUserService
         if (!ValidPages.Contains(permissionKey))
             return (null, $"Unknown page '{permissionKey}'. Valid pages: {string.Join(", ", ValidPages)}.");
 
-        var expiresAtUtc = expiresAt.Kind == DateTimeKind.Utc ? expiresAt : expiresAt.ToUniversalTime();
+        var expiresAtUtc = expiresAt.Kind == DateTimeKind.Utc
+            ? expiresAt
+            : DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc);
         var now = DateTime.UtcNow;
 
         if (expiresAtUtc <= now)

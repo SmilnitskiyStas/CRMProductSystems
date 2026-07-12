@@ -2,11 +2,20 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usersApi } from "../api/users";
-import type { ActivityLogDto, InviteUserRequest, UpdatePermissionsRequest, UpdateUserRequest, UserDto } from "../types";
+import type {
+  ActivityLogDto,
+  InviteUserRequest,
+  UpdatePermissionsRequest,
+  UpdateUserRequest,
+  UserDto,
+  PermissionGrantDto,
+  GrantTemporaryPermissionRequest,
+} from "../types";
 
 export const USERS_KEY = ["users"] as const;
 const userKey = (id: string) => ["users", id] as const;
 const activityKey = (id: string) => ["users", id, "activity"] as const;
+const grantsKey = (id: string) => ["users", id, "permission-grants"] as const;
 
 /** Fetch all users in the tenant */
 export function useUsers() {
@@ -84,6 +93,40 @@ export function useUpdatePermissions(id: string) {
         prev?.map((u) => (u.id === updated.id ? updated : u)),
       );
       qc.setQueryData(["users", id], updated);
+    },
+  });
+}
+
+// ── Temporary permission grants (ADR-019, TASK-342/344) ───────────────────────
+
+/** Active (non-revoked, non-expired) temporary grants for a user */
+export function useActivePermissionGrants(id: string, enabled = true) {
+  return useQuery({
+    queryKey: grantsKey(id),
+    queryFn: () => usersApi.getActivePermissionGrants(id),
+    staleTime: 30_000,
+    enabled: Boolean(id) && enabled,
+  });
+}
+
+/** Grant a temporary, self-expiring page-access override */
+export function useGrantTemporaryPermission(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: GrantTemporaryPermissionRequest) => usersApi.grantTemporaryPermission(id, data),
+    onSuccess: (grant) => {
+      qc.setQueryData<PermissionGrantDto[]>(grantsKey(id), (prev) => (prev ? [...prev, grant] : [grant]));
+    },
+  });
+}
+
+/** Early-revoke a temporary permission grant */
+export function useRevokeTemporaryPermission(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (grantId: string) => usersApi.revokeTemporaryPermission(id, grantId),
+    onSuccess: (_, grantId) => {
+      qc.setQueryData<PermissionGrantDto[]>(grantsKey(id), (prev) => prev?.filter((g) => g.id !== grantId));
     },
   });
 }

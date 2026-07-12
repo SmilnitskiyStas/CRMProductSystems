@@ -11,7 +11,9 @@ export type NotificationEventType =
   | "supplier.message"
   | "supplier_agreement.signed"
   | "iot.temp_alert"
-  | "iot.offline";
+  | "iot.offline"
+  | "access.temporary_expiring_soon"
+  | "access.temporary_expired";
 
 export interface NotificationSetting {
   id: string;
@@ -70,6 +72,8 @@ export const EVENT_TYPE_SOURCE: Record<NotificationEventType, { service: string;
   "supplier_agreement.signed":  { service: "Маркетплейс", actor: "Угода про співпрацю" },
   "iot.temp_alert":              { service: "IoT моніторинг", actor: "Датчик температури" },
   "iot.offline":                 { service: "IoT моніторинг", actor: "Стан пристрою" },
+  "access.temporary_expiring_soon": { service: "Управління доступом", actor: "Тимчасові гранти (ADR-019)" },
+  "access.temporary_expired":       { service: "Управління доступом", actor: "Тимчасові гранти (ADR-019)" },
 };
 
 export const EVENT_TYPE_LABELS: Record<NotificationEventType, string> = {
@@ -84,6 +88,8 @@ export const EVENT_TYPE_LABELS: Record<NotificationEventType, string> = {
   "supplier_agreement.signed": "Договір підписано",
   "iot.temp_alert": "Температурний алерт",
   "iot.offline": "Пристрій офлайн",
+  "access.temporary_expiring_soon": "Тимчасовий доступ незабаром закінчується",
+  "access.temporary_expired": "Тимчасовий доступ закінчився",
 };
 
 export const CHANNEL_LABELS: Record<NotificationChannel, string> = {

@@ -39,6 +39,30 @@ export interface UpdateUserRequest {
   legalEntityId?: string | null;
 }
 
+// ── Temporary permission grants (ADR-019, TASK-342/344) ───────────────────────
+
+/** A temporary, self-expiring page-access override granted on top of the user's role/permissions. */
+export interface PermissionGrantDto {
+  id: string;
+  userId: string;
+  permissionKey: string;
+  expiresAt: string;
+  grantedByUserId: string;
+  grantedByName?: string | null;
+  grantedAt: string;
+  revokedAt?: string | null;
+}
+
+export interface GrantTemporaryPermissionRequest {
+  /** Page slug — same set as {@link PAGES}. */
+  permissionKey: string;
+  /** Must be in the future and no more than 90 days out (enforced server-side; mirrored client-side for fast feedback). */
+  expiresAt: string;
+}
+
+/** ADR-019: temporary grants may not extend more than this far into the future. */
+export const MAX_GRANT_DURATION_DAYS = 90;
+
 export interface ActivityLogDto {
   id: string;
   action: string;

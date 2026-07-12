@@ -1,5 +1,13 @@
 import { api } from "@/lib/api";
-import type { UserDto, InviteUserRequest, UpdateUserRequest, UpdatePermissionsRequest, ActivityLogDto } from "../types";
+import type {
+  UserDto,
+  InviteUserRequest,
+  UpdateUserRequest,
+  UpdatePermissionsRequest,
+  ActivityLogDto,
+  PermissionGrantDto,
+  GrantTemporaryPermissionRequest,
+} from "../types";
 
 export const usersApi = {
   /** GET /api/users — all users in tenant */
@@ -35,5 +43,20 @@ export const usersApi = {
   /** PUT /api/users/:id/permissions */
   updatePermissions(id: string, data: UpdatePermissionsRequest): Promise<UserDto> {
     return api.put<UserDto>(`/api/users/${id}/permissions`, data);
+  },
+
+  /** POST /api/users/:id/permission-grants — ADR-019 temporary access grant */
+  grantTemporaryPermission(id: string, data: GrantTemporaryPermissionRequest): Promise<PermissionGrantDto> {
+    return api.post<PermissionGrantDto>(`/api/users/${id}/permission-grants`, data);
+  },
+
+  /** GET /api/users/:id/permission-grants — active (non-revoked, non-expired) grants */
+  getActivePermissionGrants(id: string): Promise<PermissionGrantDto[]> {
+    return api.get<PermissionGrantDto[]>(`/api/users/${id}/permission-grants`);
+  },
+
+  /** DELETE /api/users/:id/permission-grants/:grantId — early revoke */
+  revokeTemporaryPermission(id: string, grantId: string): Promise<void> {
+    return api.delete<void>(`/api/users/${id}/permission-grants/${grantId}`);
   },
 };
