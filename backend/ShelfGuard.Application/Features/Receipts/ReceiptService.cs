@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Receipts.Dtos;
 using ShelfGuard.Application.Features.Stock;
@@ -9,8 +10,13 @@ namespace ShelfGuard.Application.Features.Receipts;
 public sealed class ReceiptService : IReceiptService
 {
     private readonly IReceiptRepository _repo;
+    private readonly INotificationRepository _notifications;
 
-    public ReceiptService(IReceiptRepository repo) => _repo = repo;
+    public ReceiptService(IReceiptRepository repo, INotificationRepository notifications)
+    {
+        _repo = repo;
+        _notifications = notifications;
+    }
 
     public async Task<List<ReceiptDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
     {
@@ -186,10 +192,41 @@ public sealed class ReceiptService : IReceiptService
         receipt.ReceivedBy = receivedBy;
 
         _repo.Update(receipt);
+        await EnqueueReceivedNotificationAsync(receipt, ct);
         await _repo.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(id, ct);
         return (saved is null ? null : ToDto(saved), null);
+    }
+
+    /// <summary>
+    /// ADR-018 §2: Postgres outbox row for the worker's notification-dispatch job to pick
+    /// up and fan out to store staff (EventType = "receipt.created"). UserId = null,
+    /// Channel = "system", Status = "pending" — excluded from GetHistoryAsync until dispatched.
+    /// </summary>
+    private async Task EnqueueReceivedNotificationAsync(StockReceipt receipt, CancellationToken ct)
+    {
+        var supplierName = receipt.Supplier?.Name ?? "Постачальник";
+        var payload = JsonSerializer.Serialize(new
+        {
+            receiptId = receipt.Id,
+            supplierId = receipt.SupplierId,
+            supplierName,
+            destinationStoreId = receipt.DestinationStoreId,
+            itemCount = receipt.Items.Count,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = receipt.TenantId,
+            UserId    = null,
+            StoreId   = receipt.DestinationStoreId,
+            Title     = $"Надходження товару: {supplierName}",
+            Channel   = "system",
+            EventType = "receipt.created",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
     }
 
     public async Task<(ReceiptDto? Receipt, string? Error)> CancelAsync(

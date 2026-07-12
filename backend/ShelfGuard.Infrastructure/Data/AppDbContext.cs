@@ -626,6 +626,8 @@ public sealed class AppDbContext : DbContext
             e.ToTable("notification_queue");
             e.HasKey(n => n.Id);
             e.Property(n => n.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(n => n.StoreId).HasColumnName("LocationId");
+            e.Property(n => n.Title).HasMaxLength(255);
             e.Property(n => n.Channel).HasMaxLength(50).IsRequired();
             e.Property(n => n.EventType).HasMaxLength(100);
             e.Property(n => n.Payload).HasColumnType("jsonb");
@@ -634,6 +636,20 @@ public sealed class AppDbContext : DbContext
             // Worker queue polling: find pending items by tenant, ordered by time
             e.HasIndex(n => new { n.TenantId, n.Status, n.CreatedAt })
              .HasDatabaseName("idx_notification_queue_tenant_status");
+            // Notifications page filter drawer (TASK-338, ADR-018 §3)
+            e.HasIndex(n => new { n.TenantId, n.CreatedAt })
+             .HasDatabaseName("idx_notification_queue_tenant_createdat");
+            e.HasIndex(n => new { n.TenantId, n.EventType })
+             .HasDatabaseName("idx_notification_queue_tenant_eventtype");
+            e.HasIndex(n => new { n.TenantId, n.StoreId })
+             .HasDatabaseName("idx_notification_queue_tenant_store");
+            e.HasIndex(n => new { n.TenantId, n.UserId })
+             .HasDatabaseName("idx_notification_queue_tenant_user");
+            // Keyword search on Title without parsing Payload JSONB per-query
+            e.HasIndex(n => n.Title)
+             .HasDatabaseName("idx_notification_queue_title_trgm")
+             .HasMethod("gin")
+             .HasOperators("gin_trgm_ops");
         });
 
         // ── IntegrationConfig ───────────────────────────────────────────────

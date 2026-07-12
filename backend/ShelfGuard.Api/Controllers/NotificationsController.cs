@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Notifications;
 using ShelfGuard.Application.Features.Notifications.Dtos;
 using System.Security.Claims;
@@ -50,15 +51,18 @@ public sealed class NotificationsController : ControllerBase
         }
     }
 
-    /// <summary>Returns notification history for the current tenant (last 100 items).</summary>
+    /// <summary>
+    /// Returns filtered, paginated notification history for the current tenant (ADR-018 §3/§4).
+    /// </summary>
     [HttpGet("history")]
-    [ProducesResponseType(typeof(IReadOnlyList<NotificationHistoryDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetHistory(CancellationToken ct)
+    [ProducesResponseType(typeof(PagedResult<NotificationHistoryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetHistory(
+        [FromQuery] NotificationHistoryQuery query, CancellationToken ct)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
-        var result = await _notifications.GetHistoryAsync(tenantId.Value, ct);
+        var result = await _notifications.GetHistoryAsync(tenantId.Value, query, ct);
         return Ok(result);
     }
 

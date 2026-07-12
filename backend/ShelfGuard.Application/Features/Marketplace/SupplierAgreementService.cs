@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Marketplace.Vchasno;
@@ -43,6 +44,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
     private readonly IContractPdfGenerator _pdf;
     private readonly IVchasnoClientFactory _vchasno;
     private readonly ILegalEntityService _legalEntities;
+    private readonly INotificationRepository _notifications;
 
     public SupplierAgreementService(
         ISupplierAgreementRepository agreements,
@@ -51,7 +53,8 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         ISupplierChatRepository tenantNames,
         IContractPdfGenerator pdf,
         IVchasnoClientFactory vchasno,
-        ILegalEntityService legalEntities)
+        ILegalEntityService legalEntities,
+        INotificationRepository notifications)
     {
         _agreements    = agreements;
         _settings      = settings;
@@ -60,6 +63,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         _pdf           = pdf;
         _vchasno       = vchasno;
         _legalEntities = legalEntities;
+        _notifications = notifications;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -367,9 +371,42 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         agreement.UpdatedAt = DateTimeOffset.UtcNow;
 
         _agreements.Update(agreement);
+        await EnqueueSignedNotificationAsync(agreement, ct);
         await _agreements.SaveChangesAsync(ct);
 
         return (await ToDtoAsync(agreement, ct), null);
+    }
+
+    /// <summary>
+    /// ADR-018 §2: Postgres outbox row (EventType = "supplier_agreement.signed") for the
+    /// client tenant, picked up by the worker's notification-dispatch job. UserId = null,
+    /// Channel = "system", Status = "pending".
+    /// </summary>
+    private async Task EnqueueSignedNotificationAsync(SupplierAgreement agreement, CancellationToken ct)
+    {
+        var supplierName = await _tenantNames.GetTenantDisplayNameAsync(agreement.SupplierTenantId, ct)
+                           ?? "Постачальник";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            agreementId = agreement.Id,
+            supplierTenantId = agreement.SupplierTenantId,
+            supplierName,
+            contractNumber = agreement.ContractNumber,
+            signedAt = agreement.SignedAt,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = agreement.ClientTenantId,
+            UserId    = null,
+            StoreId   = null,
+            Title     = $"Договір підписано: {supplierName}",
+            Channel   = "system",
+            EventType = "supplier_agreement.signed",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
     }
 
     public async Task<(CooperationAgreementDto? Agreement, string? Error)> TerminateAsync(

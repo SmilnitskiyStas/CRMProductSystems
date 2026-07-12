@@ -2,6 +2,11 @@ import { Worker, Job } from "bullmq";
 import { redisConnection } from "../redis";
 import { db } from "../db";
 import { sendTelegramMessage } from "../services/telegram";
+import { deliver, logNotifications, type DeliveryOutcome } from "../services/notification-log";
+
+const EVENT_TYPE = "order.replenishment_suggested";
+const NOTIFY_ROLES = ["store_manager", "network_manager", "enterprise_admin"];
+const DEFAULT_CHANNELS = ["telegram"]; // only telegram is implemented for this event today
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:5100";
 const SERVICE_EMAIL = process.env.WORKER_API_EMAIL ?? "";
@@ -28,10 +33,10 @@ async function runAiOrderGeneration(): Promise<void> {
   const token = await login();
 
   const client = await db.connect();
-  let stores: { id: string; name: string }[];
+  let stores: { id: string; tenant_id: string; name: string }[];
   try {
-    const res = await client.query<{ id: string; name: string }>(
-      'SELECT "Id" AS id, "Name" AS name FROM stores WHERE "IsActive"',
+    const res = await client.query<{ id: string; tenant_id: string; name: string }>(
+      'SELECT "Id" AS id, "TenantId" AS tenant_id, "Name" AS name FROM stores WHERE "IsActive"',
     );
     stores = res.rows;
   } finally {
@@ -58,34 +63,85 @@ async function runAiOrderGeneration(): Promise<void> {
       const order = (await res.json()) as { id: string; items: unknown[] };
       console.log(`[ai-order] ${store.name}: suggestion ${order.id} (${order.items.length} items)`);
 
-      await notifyManagers(store.id, store.name, order.items.length);
+      await notifyManagers(store.tenant_id, store.id, store.name, order.id, order.items.length);
     } catch (e) {
       console.error(`[ai-order] ${store.name}: ${(e as Error).message}`);
     }
   }
 }
 
-async function notifyManagers(storeId: string, storeName: string, itemCount: number): Promise<void> {
+// TASK-339 / ADR-018 §2: rewired from a direct sendTelegramMessage loop to the same
+// in-process pattern as handleIotAlert/handleExpiryAlert in notification.job.ts — role
+// lookup scoped to the tenant, notification_settings respected (with role defaults as
+// fallback), delivery outcomes logged via logNotifications. No outbox hop needed here:
+// this job already runs in the Node worker with direct DB access.
+async function notifyManagers(
+  tenantId: string,
+  storeId: string,
+  storeName: string,
+  orderId: string,
+  itemCount: number,
+): Promise<void> {
   const client = await db.connect();
   try {
-    const { rows: managers } = await client.query<{ telegram_chat_id: string }>(
-      `SELECT "TelegramChatId" AS telegram_chat_id
+    const usersRes = await client.query<{ id: string; telegram_chat_id: string | null }>(
+      `SELECT "Id" AS id, "TelegramChatId" AS telegram_chat_id
        FROM users
-       WHERE "IsActive"
-         AND "TelegramChatId" IS NOT NULL
-         AND "Role" IN ('store_manager', 'network_manager', 'enterprise_admin')`,
+       WHERE "TenantId" = $1 AND "Role" = ANY($2::text[]) AND "IsActive" = true`,
+      [tenantId, NOTIFY_ROLES],
     );
+
+    if (usersRes.rows.length === 0) return;
+
+    const settingsRes = await client.query<{ user_id: string; channel: string }>(
+      `SELECT "UserId" AS user_id, "Channel" AS channel
+       FROM notification_settings
+       WHERE "UserId" = ANY($1::uuid[]) AND "EventType" = $2 AND "IsEnabled" = true`,
+      [usersRes.rows.map((u) => u.id), EVENT_TYPE],
+    );
+
+    const enabledMap = new Map<string, Set<string>>();
+    for (const s of settingsRes.rows) {
+      if (!enabledMap.has(s.user_id)) enabledMap.set(s.user_id, new Set());
+      enabledMap.get(s.user_id)!.add(s.channel);
+    }
 
     const text =
       `🤖 <b>ShelfGuard — AI замовлення готове</b>\n\n` +
       `<b>Магазин:</b> ${storeName}\n` +
       `<b>Позицій:</b> ${itemCount}\n\n` +
       `Перегляньте і підтвердіть у розділі «AI Замовлення».`;
+    const payload = { type: "ai_order_suggestion", tenantId, storeId, storeName, orderId, itemCount };
 
-    for (const m of managers) {
-      await sendTelegramMessage(m.telegram_chat_id, text).catch((e) =>
-        console.error(`[ai-order] telegram failed: ${e.message}`),
-      );
+    for (const user of usersRes.rows) {
+      const userChannels = enabledMap.get(user.id) ?? new Set(DEFAULT_CHANNELS);
+      const activeChannels = Array.from(userChannels).filter((c) => DEFAULT_CHANNELS.includes(c));
+
+      const outcomes: DeliveryOutcome[] = [];
+      for (const channel of activeChannels) {
+        if (channel === "telegram") {
+          outcomes.push(
+            user.telegram_chat_id
+              ? await deliver("telegram", () => sendTelegramMessage(user.telegram_chat_id!, text))
+              : { channel: "telegram", status: "skipped", error: "no telegram_chat_id" },
+          );
+        }
+      }
+      if (outcomes.length === 0) continue;
+
+      for (const o of outcomes) {
+        if (o.status === "failed") {
+          console.error(`[ai-order] ${o.channel} send failed for user ${user.id}: ${o.error}`);
+        }
+      }
+
+      await logNotifications(client, {
+        tenantId,
+        userId: user.id,
+        eventType: EVENT_TYPE,
+        payload,
+        outcomes,
+      });
     }
   } finally {
     client.release();

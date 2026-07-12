@@ -14,13 +14,14 @@ namespace ShelfGuard.Tests.Marketplace;
 public sealed class SupplierChatServiceTests
 {
     private readonly ISupplierChatRepository _repo = Substitute.For<ISupplierChatRepository>();
+    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly SupplierChatService _sut;
 
     private readonly Guid _supplierTenantId = Guid.NewGuid();
     private readonly Guid _clientTenantId = Guid.NewGuid();
     private readonly Guid _userId = Guid.NewGuid();
 
-    public SupplierChatServiceTests() => _sut = new SupplierChatService(_repo);
+    public SupplierChatServiceTests() => _sut = new SupplierChatService(_repo, _notifications);
 
     // ── GetOrCreateSessionAsync ────────────────────────────────────────────────
 

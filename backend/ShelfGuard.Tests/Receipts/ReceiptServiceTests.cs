@@ -10,13 +10,14 @@ namespace ShelfGuard.Tests.Receipts;
 public sealed class ReceiptServiceTests
 {
     private readonly IReceiptRepository _repo = Substitute.For<IReceiptRepository>();
+    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly ReceiptService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly Guid _userId = Guid.NewGuid();
     private readonly Guid _storeId = Guid.NewGuid();
     private readonly Guid _productId = Guid.NewGuid();
 
-    public ReceiptServiceTests() => _sut = new ReceiptService(_repo);
+    public ReceiptServiceTests() => _sut = new ReceiptService(_repo, _notifications);
 
     // ── Create ─────────────────────────────────────────────────────────────
 

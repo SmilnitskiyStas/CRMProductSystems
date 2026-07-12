@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -16,9 +17,16 @@ public sealed class SupplierChatService : ISupplierChatService
     public const string AccessDeniedError = "You do not have access to this chat session.";
     public const string BodyRequiredError = "Message body is required.";
 
-    private readonly ISupplierChatRepository _repo;
+    private const int TitleExcerptLength = 80;
 
-    public SupplierChatService(ISupplierChatRepository repo) => _repo = repo;
+    private readonly ISupplierChatRepository _repo;
+    private readonly INotificationRepository _notifications;
+
+    public SupplierChatService(ISupplierChatRepository repo, INotificationRepository notifications)
+    {
+        _repo = repo;
+        _notifications = notifications;
+    }
 
     public async Task<SupplierChatSessionDto> GetOrCreateSessionAsync(
         Guid myTenantId, Guid otherTenantId, bool isSupplierSide, Guid createdByUserId,
@@ -118,9 +126,47 @@ public sealed class SupplierChatService : ISupplierChatService
 
         session.UpdatedAt = DateTimeOffset.UtcNow;
 
+        // ADR-018 §2: only supplier → client messages notify (the client isn't otherwise
+        // watching this thread); client → supplier messages don't enqueue anything here.
+        if (session.SupplierTenantId == senderTenantId)
+            await EnqueueSupplierMessageNotificationAsync(session, message, ct);
+
         await _repo.SaveChangesAsync(ct);
 
         return (ToMessageDto(message), null);
+    }
+
+    /// <summary>
+    /// ADR-018 §2: Postgres outbox row (EventType = "supplier.message") for the client
+    /// tenant, picked up by the worker's notification-dispatch job. UserId = null,
+    /// Channel = "system", Status = "pending".
+    /// </summary>
+    private async Task EnqueueSupplierMessageNotificationAsync(
+        SupplierChatSession session, SupplierChatMessage message, CancellationToken ct)
+    {
+        var excerpt = message.Body.Length > TitleExcerptLength
+            ? message.Body[..TitleExcerptLength] + "…"
+            : message.Body;
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            sessionId = session.Id,
+            supplierTenantId = session.SupplierTenantId,
+            senderName = message.SenderName,
+            excerpt,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = session.ClientTenantId,
+            UserId    = null,
+            StoreId   = null,
+            Title     = $"Повідомлення від {message.SenderName}: {excerpt}",
+            Channel   = "system",
+            EventType = "supplier.message",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
     }
 
     private static SupplierChatSessionDto ToSessionDto(

@@ -1,11 +1,17 @@
-export type NotificationChannel = "telegram" | "push" | "email";
+export type NotificationChannel = "telegram" | "push" | "email" | "webhook";
 
 export type NotificationEventType =
   | "stock.expiry_warning"
   | "stock.expiry_critical"
   | "stock.expired"
   | "stock.needs_verification"
-  | "weekly_report";
+  | "weekly_report"
+  | "receipt.created"
+  | "order.replenishment_suggested"
+  | "supplier.message"
+  | "supplier_agreement.signed"
+  | "iot.temp_alert"
+  | "iot.offline";
 
 export interface NotificationSetting {
   id: string;
@@ -29,6 +35,27 @@ export interface NotificationHistoryItem {
   createdAt: string;
   isRead: boolean;
   readAt: string | null;
+  /** NEW (TASK-339/340) — short human-readable line; null on rows created before TASK-338. */
+  title: string | null;
+  /** NEW (TASK-339/340) — guid; null on rows created before TASK-338 or events with no store context. */
+  storeId: string | null;
+  /** Client-side enrichment only (backend doesn't join it) — resolved from the locations list when available. */
+  storeName?: string | null;
+  /** NEW (TASK-339/340) — the notified employee's guid; null on rows created before TASK-338. */
+  userId: string | null;
+}
+
+export interface NotificationHistoryFilters {
+  search?: string;
+  eventType?: NotificationEventType | "";
+  userId?: string;
+  storeId?: string;
+  /** yyyy-MM-dd or ISO datetime — sent as-is to `dateFrom` */
+  dateFrom?: string;
+  /** yyyy-MM-dd or ISO datetime — sent as-is to `dateTo` */
+  dateTo?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export const EVENT_TYPE_SOURCE: Record<NotificationEventType, { service: string; actor: string }> = {
@@ -37,6 +64,12 @@ export const EVENT_TYPE_SOURCE: Record<NotificationEventType, { service: string;
   "stock.expired":           { service: "Модуль інвентаризації", actor: "Контроль якості" },
   "stock.needs_verification":{ service: "Модуль інвентаризації", actor: "Контроль якості" },
   "weekly_report":           { service: "Планувальник завдань",  actor: "Автоматичний звіт" },
+  "receipt.created":            { service: "Модуль надходжень", actor: "Підтвердження поставки" },
+  "order.replenishment_suggested": { service: "AI замовлення", actor: "Автоматичний прогноз" },
+  "supplier.message":           { service: "Маркетплейс", actor: "Чат з постачальником" },
+  "supplier_agreement.signed":  { service: "Маркетплейс", actor: "Угода про співпрацю" },
+  "iot.temp_alert":              { service: "IoT моніторинг", actor: "Датчик температури" },
+  "iot.offline":                 { service: "IoT моніторинг", actor: "Стан пристрою" },
 };
 
 export const EVENT_TYPE_LABELS: Record<NotificationEventType, string> = {
@@ -45,16 +78,24 @@ export const EVENT_TYPE_LABELS: Record<NotificationEventType, string> = {
   "stock.expired": "Прострочено",
   "stock.needs_verification": "Потребує перевірки",
   "weekly_report": "Тижневий звіт",
+  "receipt.created": "Надходження товару",
+  "order.replenishment_suggested": "AI-замовлення готове",
+  "supplier.message": "Повідомлення постачальника",
+  "supplier_agreement.signed": "Договір підписано",
+  "iot.temp_alert": "Температурний алерт",
+  "iot.offline": "Пристрій офлайн",
 };
 
 export const CHANNEL_LABELS: Record<NotificationChannel, string> = {
   telegram: "Telegram",
   push: "Push",
   email: "Email",
+  webhook: "Webhook",
 };
 
 export const CHANNEL_ICONS: Record<NotificationChannel, string> = {
   telegram: "✈️",
   push: "📱",
   email: "📧",
+  webhook: "🔗",
 };

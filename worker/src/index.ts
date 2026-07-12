@@ -10,6 +10,7 @@ import { startAiOrderWorker } from "./jobs/ai-order.job";
 import { startTelegramListener } from "./jobs/telegram-listener";
 import { startMqttListener } from "./jobs/mqtt-listener";
 import { startFiscalizationRetryWorker } from "./jobs/fiscalization-retry.job";
+import { startNotificationDispatchWorker } from "./jobs/notification-dispatch.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -44,6 +45,16 @@ async function scheduleRecurringJobs(): Promise<void> {
     { pattern: "*/5 * * * *" },
     { name: "fiscalization-retry" }
   );
+
+  // ADR-018 §2: every minute — dispatch Postgres outbox rows (Channel = 'system',
+  // Status = 'pending') enqueued by backend services with no BullMQ producer of their own
+  // (TASK-339)
+  const notificationDispatchQueue = new Queue("notification-dispatch", { connection: redisConnection });
+  await notificationDispatchQueue.upsertJobScheduler(
+    "notification-dispatch-cron",
+    { pattern: "* * * * *" },
+    { name: "notification-dispatch" }
+  );
 }
 
 async function main(): Promise<void> {
@@ -61,6 +72,7 @@ async function main(): Promise<void> {
   startTelegramListener();
   startMqttListener();
   startFiscalizationRetryWorker();
+  startNotificationDispatchWorker();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

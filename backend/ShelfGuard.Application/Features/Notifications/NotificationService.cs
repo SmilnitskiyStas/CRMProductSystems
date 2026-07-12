@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Notifications.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -27,11 +28,31 @@ public sealed class NotificationService : INotificationService
         return _repo.UpsertSettingAsync(userId, request.EventType, request.Channel, request.IsEnabled, ct);
     }
 
-    public async Task<IReadOnlyList<NotificationHistoryDto>> GetHistoryAsync(
-        Guid tenantId, CancellationToken ct = default)
+    public async Task<PagedResult<NotificationHistoryDto>> GetHistoryAsync(
+        Guid tenantId, NotificationHistoryQuery query, CancellationToken ct = default)
     {
-        var items = await _repo.GetHistoryAsync(tenantId, limit: 100, ct);
-        return items.Select(ToDto).ToList();
+        var page = query.ClampedPage;
+        var pageSize = query.ClampedPageSize;
+
+        var (items, total) = await _repo.GetHistoryAsync(
+            tenantId,
+            query.Search,
+            query.EventType,
+            query.UserId,
+            query.StoreId,
+            query.DateFrom,
+            query.DateTo,
+            page,
+            pageSize,
+            ct);
+
+        return new PagedResult<NotificationHistoryDto>
+        {
+            Items = items.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<NotificationHistoryDto?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default)
@@ -79,6 +100,12 @@ public sealed class NotificationService : INotificationService
         "stock.expired",
         "stock.needs_verification",
         "weekly_report",
+        "iot.temp_alert",
+        "iot.offline",
+        "receipt.created",
+        "order.replenishment_suggested",
+        "supplier.message",
+        "supplier_agreement.signed",
     ];
 
     private static readonly HashSet<string> ValidChannels =
@@ -91,7 +118,8 @@ public sealed class NotificationService : INotificationService
     }
 
     private static NotificationHistoryDto ToDto(NotificationQueue q) =>
-        new(q.Id, q.EventType ?? string.Empty, q.Channel, q.Status, q.Payload, q.CreatedAt, q.IsRead, q.ReadAt);
+        new(q.Id, q.EventType ?? string.Empty, q.Channel, q.Status, q.Payload, q.CreatedAt, q.IsRead, q.ReadAt,
+            q.Title, q.StoreId, q.UserId);
 
     private static void ValidateChannel(string value)
     {

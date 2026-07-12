@@ -45,15 +45,54 @@ public sealed class NotificationRepository : INotificationRepository
         await _db.SaveChangesAsync(ct);
     }
 
-    public async Task<IReadOnlyList<NotificationQueue>> GetHistoryAsync(
-        Guid tenantId, int limit, CancellationToken ct = default)
+    public async Task<(IReadOnlyList<NotificationQueue> Items, int Total)> GetHistoryAsync(
+        Guid tenantId,
+        string? search,
+        string? eventType,
+        Guid? userId,
+        Guid? storeId,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
     {
-        return await _db.NotificationQueues
-            .Where(q => q.TenantId == tenantId)
+        // Channel = 'system' rows are undispatched outbox intents (ADR-018 §1/§2) — never
+        // real per-user notifications, so they must never leak into the UI history feed.
+        var query = _db.NotificationQueues
+            .Where(q => q.TenantId == tenantId && q.Channel != "system")
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+            // ILike hits the pg_trgm GIN index on Title (TASK-338) — plain .Contains()/LIKE
+            // translation is not guaranteed to.
+            query = query.Where(q => q.Title != null && EF.Functions.ILike(q.Title, $"%{search}%"));
+
+        if (!string.IsNullOrWhiteSpace(eventType))
+            query = query.Where(q => q.EventType == eventType);
+
+        if (userId.HasValue)
+            query = query.Where(q => q.UserId == userId);
+
+        if (storeId.HasValue)
+            query = query.Where(q => q.StoreId == storeId);
+
+        if (dateFrom.HasValue)
+            query = query.Where(q => q.CreatedAt >= dateFrom.Value);
+
+        if (dateTo.HasValue)
+            query = query.Where(q => q.CreatedAt <= dateTo.Value);
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
             .OrderByDescending(q => q.CreatedAt)
-            .Take(limit)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .AsNoTracking()
             .ToListAsync(ct);
+
+        return (items, total);
     }
 
     public async Task EnqueueAsync(NotificationQueue item, CancellationToken ct = default)

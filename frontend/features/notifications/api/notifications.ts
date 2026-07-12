@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
-import type { NotificationSetting, NotificationHistoryItem } from "../types";
+import type { PagedResult } from "@/lib/api-types";
+import type { NotificationSetting, NotificationHistoryItem, NotificationHistoryFilters } from "../types";
 
 export async function fetchNotificationSettings(): Promise<NotificationSetting[]> {
   return api.get<NotificationSetting[]>("/api/notifications/settings");
@@ -13,8 +14,22 @@ export async function updateNotificationSetting(
   await api.put("/api/notifications/settings", { eventType, channel, isEnabled });
 }
 
-export async function fetchNotificationHistory(): Promise<NotificationHistoryItem[]> {
-  return api.get<NotificationHistoryItem[]>("/api/notifications/history");
+export async function fetchNotificationHistory(
+  filters: NotificationHistoryFilters = {},
+): Promise<PagedResult<NotificationHistoryItem>> {
+  const qs = new URLSearchParams();
+  if (filters.search) qs.set("search", filters.search);
+  if (filters.eventType) qs.set("eventType", filters.eventType);
+  if (filters.userId) qs.set("userId", filters.userId);
+  if (filters.storeId) qs.set("storeId", filters.storeId);
+  if (filters.dateFrom) qs.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) qs.set("dateTo", filters.dateTo);
+  if (filters.page) qs.set("page", String(filters.page));
+  if (filters.pageSize) qs.set("pageSize", String(filters.pageSize));
+  const q = qs.toString();
+  return api.get<PagedResult<NotificationHistoryItem>>(
+    `/api/notifications/history${q ? `?${q}` : ""}`,
+  );
 }
 
 export async function sendTestNotification(

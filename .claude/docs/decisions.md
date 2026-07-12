@@ -1,7 +1,68 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-03
+**Updated:** 2026-07-12
+
+## ADR-018: Notification categories expansion + filter drawer — Postgres outbox instead of C# BullMQ producer
+Date: 2026-07-12
+Status: accepted
+
+Context: `notifications` page only surfaces `weekly_report` in practice (expiry/IoT alerts exist
+but `iot.temp_alert`/`iot.offline` have no frontend label — display bug). User wants 4 new
+categories (надходження, поповнення/AI order, повідомлення постачальника, підписання документів)
+with full triggers, plus a collapsible filter drawer (search/employee/category/date/store).
+Today's delivery pipeline: `worker/src/jobs/notification.job.ts` (BullMQ "notifications" queue)
+resolves role-based recipients + `notification_settings`, delivers via `deliver()`, and is the
+only writer of real `NotificationQueue` history rows (`logNotifications`, one row per
+user×channel, `Status` = sent/skipped/failed). `expiry-check.job.ts`/`mqtt-listener.ts` are
+BullMQ producers, both in Node. `ai-order.job.ts` bypasses this pipeline entirely — it calls
+`sendTelegramMessage` directly, no settings check, no history row. Backend (ASP.NET Core) has
+**no** existing Redis/BullMQ producer (`grep` for `StackExchange.Redis`/`bullmq` under
+`/backend` — zero hits) — the three new backend-originated triggers (receipt received, supplier
+chat message, agreement signed) have no way to reach the worker's delivery logic today.
+
+Decision:
+1. **Backend-originated events use a Postgres outbox, not a new C# BullMQ producer.** Adding a
+   BullMQ-compatible job producer in .NET (matching BullMQ's Lua-script job format) is new
+   cross-language infra for 3 call sites. Instead, the triggering C# service inserts one
+   broadcast-intent row directly into `NotificationQueue` (`UserId = null`, `Channel = "system"`,
+   `Status = "pending"`) via `INotificationRepository` — reuses the existing table, no new
+   dependency. A new worker cron `notification-dispatch.job.ts` (poll every 1 min, same shape as
+   `fiscalization-retry.job.ts`) selects `Status = 'pending' AND Channel = 'system'` rows,
+   resolves recipients by role (same matrix pattern as `EXPIRY_EVENT_ROLES`) +
+   `notification_settings`, delivers, writes real per-user×channel rows via the existing
+   `logNotifications`, then marks the intent row `Status = 'dispatched'` (terminal, excluded from
+   `GetHistoryAsync` so it never appears as a phantom "system" notification in the feed).
+2. **`ai-order.job.ts` is rewired to the same in-process pattern as `handleIotAlert`** (query
+   users by role → check `notification_settings` → `deliver()` → `logNotifications()`), dropping
+   its direct `sendTelegramMessage` loop — it already runs in the Node worker with DB access, so
+   no outbox hop is needed there, only the missing settings/history integration.
+3. **`NotificationQueue` gains `StoreId Guid?` and `Title string?`.** `StoreId` backs the "by
+   store" filter (repeats the `EventType.namespace.action` DB-only-hardcoded-set pattern already
+   used for events/channels — no new enum table). `Title` is a short human-readable line
+   (e.g. "Надійшла поставка №1234 — Хрещатик") populated by whichever service enqueues the row,
+   so keyword search runs `ILIKE`/trigram against `Title` instead of parsing the `Payload` JSONB
+   on every query — cheaper and matches the existing "Payload is opaque, UI parses it lazily"
+   convention in `NotificationDetailDrawer.tsx`. Add `pg_trgm` GIN index on `Title` for the
+   keyword filter, plus btree indexes on `(TenantId, CreatedAt)`, `(TenantId, EventType)`,
+   `(TenantId, StoreId)`, `(TenantId, UserId)` for the other filters.
+4. **Filter drawer is a hand-rolled overlay, not a new shadcn `Sheet`.** `components/ui/sheet.tsx`
+   does not exist in this repo and `NotificationDetailDrawer.tsx` already implements a fixed-panel
+   + backdrop drawer by hand — the new `NotificationFilterDrawer` follows the same pattern for
+   visual/behavioral consistency rather than introducing a new shadcn primitive for one page.
+5. **Filter state lives in component state + React Query key, not the URL.** No page in this repo
+   currently syncs filters to `useSearchParams` (checked — zero matches under `frontend/features`
+   outside auth). Introducing URL-synced filters here would be a new, unprecedented pattern for a
+   single page; skip it. React Query key includes the filter object so results stay cached per
+   filter combination.
+
+Consequences: `notification.job.ts` and the new `notification-dispatch.job.ts` share the
+role-matrix + settings-check + `logNotifications` pattern — worth extracting to a shared helper
+in a follow-up if a 4th producer appears. `Channel = "system"` is an internal sentinel, not added
+to `ValidChannels` in `NotificationService.cs` (backend inserts the outbox row directly via the
+repository, bypassing the public validate path, same way the worker's `logNotifications` already
+bypasses `NotificationService` entirely). `GetHistoryAsync` must filter out `Channel = 'system'`
+rows so undispatched intents never leak into the UI feed.
 
 ## ADR-017: Provider nav split (Клієнти/Постачальники) + per-item категорії з JSONB attributes
 Date: 2026-07-03

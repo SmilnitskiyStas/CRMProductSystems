@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCheck } from "lucide-react";
+import { CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNotificationHistory, useMarkAsRead, useMarkAllAsRead, useMarkAsUnread } from "../hooks/useNotifications";
+import { useLocations } from "@/features/locations/hooks/useLocations";
 import { NotificationDetailDrawer } from "./NotificationDetailDrawer";
-import type { NotificationHistoryItem } from "../types";
+import type { NotificationHistoryItem, NotificationHistoryFilters } from "../types";
 import { EVENT_TYPE_LABELS, CHANNEL_LABELS, CHANNEL_ICONS } from "../types";
 
 function formatDate(iso: string): string {
@@ -68,21 +69,39 @@ const STATUS_COLOR: Record<string, { bg: string; text: string; label: string }> 
   pending: { bg: "#1c1917", text: "#FACC15", label: "Очікує"    },
 };
 
-export function NotificationHistoryList() {
-  const { data: history, isLoading } = useNotificationHistory();
+interface Props {
+  filters: NotificationHistoryFilters;
+  onFiltersChange: (updater: (prev: NotificationHistoryFilters) => NotificationHistoryFilters) => void;
+}
+
+export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
+  const { data: result, isLoading, isFetching } = useNotificationHistory(filters);
+  const { data: locations } = useLocations();
   const markAsRead    = useMarkAsRead();
   const markAllAsRead = useMarkAllAsRead();
   const markAsUnread  = useMarkAsUnread();
 
+  const history = result?.items ?? [];
+  const page = result?.page ?? filters.page ?? 1;
+  const pageSize = result?.pageSize ?? filters.pageSize ?? 20;
+  const totalCount = result?.totalCount ?? 0;
+  const totalPages = result?.totalPages ?? Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const storeNameById = new Map((locations ?? []).map((l) => [l.id, l.name]));
+
   // Store only the ID so the drawer always gets the fresh item from the cache
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = history?.find((n) => n.id === selectedId) ?? null;
+  const selected = history.find((n) => n.id === selectedId) ?? null;
 
-  const unreadCount = history?.filter((n) => !n.isRead).length ?? 0;
+  const unreadCount = history.filter((n) => !n.isRead).length;
 
   function handleClick(item: NotificationHistoryItem) {
     setSelectedId(item.id);
     if (!item.isRead) markAsRead.mutate(item.id);
+  }
+
+  function goToPage(next: number) {
+    onFiltersChange((prev) => ({ ...prev, page: next }));
   }
 
   if (isLoading) {
@@ -93,10 +112,10 @@ export function NotificationHistoryList() {
     );
   }
 
-  if (!history?.length) {
+  if (!history.length) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 14 }}>
-        Сповіщень ще не надсилалось
+        Сповіщень не знайдено
       </div>
     );
   }
@@ -136,6 +155,8 @@ export function NotificationHistoryList() {
         {history.map((item) => {
           const statusMeta = STATUS_COLOR[item.status] ?? STATUS_COLOR.pending;
           const isUnread   = !item.isRead;
+          const storeName  = item.storeId ? storeNameById.get(item.storeId) : undefined;
+          const description = item.title || formatPayloadPreview(item.eventType, item.payload);
 
           return (
             <div
@@ -190,12 +211,17 @@ export function NotificationHistoryList() {
                   <span style={{ color: "#4B5563", fontSize: 12 }}>
                     via {CHANNEL_LABELS[item.channel]}
                   </span>
+                  {storeName && (
+                    <span style={{ color: "#4B5563", fontSize: 12 }}>
+                      · {storeName}
+                    </span>
+                  )}
                 </div>
                 <div style={{
                   color: "#6B7280", fontSize: 12,
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
-                  {formatPayloadPreview(item.eventType, item.payload)}
+                  {description}
                 </div>
               </div>
 
@@ -219,6 +245,49 @@ export function NotificationHistoryList() {
           );
         })}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          marginTop: 16, paddingTop: 16, borderTop: "1px solid #1F2937",
+        }}>
+          <span style={{ color: "#4B5563", fontSize: 12 }}>
+            Сторінка {page} з {totalPages} · усього {totalCount}
+            {isFetching && " · оновлення…"}
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => goToPage(page - 1)}
+              disabled={page <= 1 || isFetching}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                background: "transparent", border: "1px solid #1F2937",
+                borderRadius: 8, padding: "6px 12px",
+                color: page <= 1 ? "#374151" : "#9CA3AF", fontSize: 12,
+                cursor: page <= 1 || isFetching ? "default" : "pointer",
+              }}
+            >
+              <ChevronLeft size={14} />
+              Назад
+            </button>
+            <button
+              onClick={() => goToPage(page + 1)}
+              disabled={page >= totalPages || isFetching}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                background: "transparent", border: "1px solid #1F2937",
+                borderRadius: 8, padding: "6px 12px",
+                color: page >= totalPages ? "#374151" : "#9CA3AF", fontSize: 12,
+                cursor: page >= totalPages || isFetching ? "default" : "pointer",
+              }}
+            >
+              Далі
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Detail drawer */}
       <NotificationDetailDrawer

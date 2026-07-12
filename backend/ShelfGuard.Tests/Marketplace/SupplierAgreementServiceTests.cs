@@ -23,6 +23,7 @@ public sealed class SupplierAgreementServiceTests
     private readonly IContractPdfGenerator _pdf = Substitute.For<IContractPdfGenerator>();
     private readonly IVchasnoClientFactory _vchasno = Substitute.For<IVchasnoClientFactory>();
     private readonly ILegalEntityService _legalEntities = Substitute.For<ILegalEntityService>();
+    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly SupplierAgreementService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -33,7 +34,7 @@ public sealed class SupplierAgreementServiceTests
     public SupplierAgreementServiceTests()
     {
         _sut = new SupplierAgreementService(
-            _agreements, _settings, _marketplace, _tenantNames, _pdf, _vchasno, _legalEntities);
+            _agreements, _settings, _marketplace, _tenantNames, _pdf, _vchasno, _legalEntities, _notifications);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);

@@ -11,11 +11,13 @@ import {
   markAllNotificationsAsRead,
   fetchUnreadCount,
 } from "../api/notifications";
+import type { PagedResult } from "@/lib/api-types";
 import type {
   NotificationSettingsMap,
   NotificationChannel,
   NotificationEventType,
   NotificationHistoryItem,
+  NotificationHistoryFilters,
 } from "../types";
 
 // ── Mock data (backend TASK-017 not yet implemented) ──────────────────────────
@@ -43,49 +45,6 @@ const MOCK_SETTINGS_MAP: NotificationSettingsMap = {
   },
 };
 
-const MOCK_HISTORY: NotificationHistoryItem[] = [
-  {
-    id: "h1",
-    eventType: "stock.expiry_critical",
-    channel: "telegram",
-    status: "sent",
-    payload: "Молоко 2.5% — залишилось 2 дні",
-    createdAt: "2026-06-06T08:15:00Z",
-    isRead: false,
-    readAt: null,
-  },
-  {
-    id: "h2",
-    eventType: "stock.expired",
-    channel: "email",
-    status: "sent",
-    payload: "Йогурт полуниця — прострочено",
-    createdAt: "2026-06-05T09:00:00Z",
-    isRead: true,
-    readAt: "2026-06-05T10:00:00Z",
-  },
-  {
-    id: "h3",
-    eventType: "weekly_report",
-    channel: "email",
-    status: "sent",
-    payload: "Тижневий звіт за 26.05–01.06.2026",
-    createdAt: "2026-06-01T08:00:00Z",
-    isRead: true,
-    readAt: "2026-06-01T09:00:00Z",
-  },
-  {
-    id: "h4",
-    eventType: "stock.expiry_warning",
-    channel: "push",
-    status: "failed",
-    payload: "Сир Гауда — залишилось 8 днів",
-    createdAt: "2026-06-04T11:30:00Z",
-    isRead: false,
-    readAt: null,
-  },
-];
-
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 
 export function useNotificationSettings() {
@@ -107,17 +66,16 @@ export function useNotificationSettings() {
   });
 }
 
-export function useNotificationHistory() {
-  return useQuery<NotificationHistoryItem[]>({
-    queryKey: ["notifications", "history"],
-    queryFn: async () => {
-      try {
-        return await fetchNotificationHistory();
-      } catch {
-        return MOCK_HISTORY;
-      }
-    },
+const HISTORY_KEY_PREFIX = ["notifications", "history"] as const;
+
+export function useNotificationHistory(filters: NotificationHistoryFilters = {}) {
+  return useQuery<PagedResult<NotificationHistoryItem>>({
+    queryKey: [...HISTORY_KEY_PREFIX, filters],
+    queryFn: () => fetchNotificationHistory(filters),
     staleTime: 15_000,
+    // Keep the previous page's rows on screen while the next page loads —
+    // avoids a full-list flash on pagination/filter changes.
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -170,7 +128,6 @@ export function useSendTestNotification() {
   });
 }
 
-const HISTORY_KEY = ["notifications", "history"] as const;
 const UNREAD_KEY  = ["notifications", "unread-count"] as const;
 
 export function useUnreadCount() {
@@ -184,15 +141,16 @@ export function useUnreadCount() {
   });
 }
 
+// Query key now carries the active filters (`[...HISTORY_KEY_PREFIX, filters]`), so a
+// single `setQueryData` can no longer target "the" history cache — there may be several
+// filtered variants cached at once. Invalidate by prefix instead; React Query matches
+// all queries whose key starts with HISTORY_KEY_PREFIX and refetches the active ones.
 export function useMarkAsRead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => markNotificationAsRead(id),
-    onSuccess: (_data, id) => {
-      // Optimistic update in history cache
-      qc.setQueryData<NotificationHistoryItem[]>(HISTORY_KEY, (old) =>
-        old?.map((n) => n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)
-      );
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: HISTORY_KEY_PREFIX });
       qc.invalidateQueries({ queryKey: UNREAD_KEY });
     },
   });
@@ -203,11 +161,8 @@ export function useMarkAllAsRead() {
   return useMutation({
     mutationFn: markAllNotificationsAsRead,
     onSuccess: () => {
-      qc.setQueryData<NotificationHistoryItem[]>(HISTORY_KEY, (old) =>
-        old?.map((n) => ({ ...n, isRead: true, readAt: n.readAt ?? new Date().toISOString() }))
-      );
       qc.setQueryData(UNREAD_KEY, 0);
-      qc.invalidateQueries({ queryKey: HISTORY_KEY });
+      qc.invalidateQueries({ queryKey: HISTORY_KEY_PREFIX });
     },
   });
 }
@@ -216,10 +171,8 @@ export function useMarkAsUnread() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => markNotificationAsUnread(id),
-    onSuccess: (_data, id) => {
-      qc.setQueryData<NotificationHistoryItem[]>(HISTORY_KEY, (old) =>
-        old?.map((n) => n.id === id ? { ...n, isRead: false, readAt: null } : n)
-      );
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: HISTORY_KEY_PREFIX });
       qc.invalidateQueries({ queryKey: UNREAD_KEY });
     },
   });
