@@ -1,7 +1,9 @@
 import { api } from "@/lib/api";
 import type {
   PosAnalyticsSummaryDto,
+  PosAnalyticsSummaryCompareDto,
   PosRevenueTrendDto,
+  PosRevenueTrendCompareDto,
   PosTopProductsDto,
   PosCashierStatsDto,
 } from "../types";
@@ -10,6 +12,12 @@ export interface PosDateRangeParams {
   from: string;
   to: string;
   store_id?: string;
+}
+
+export interface PosCompareParams {
+  compare?: boolean;
+  compareFrom?: string;
+  compareTo?: string;
 }
 
 function buildQs(entries: Array<[string, string | undefined]>): string {
@@ -29,16 +37,48 @@ function rangeEntries(p: PosDateRangeParams): Array<[string, string | undefined]
   ];
 }
 
-export const posAnalyticsApi = {
-  getSummary: (params: PosDateRangeParams) =>
-    api.get<PosAnalyticsSummaryDto>(
-      `/api/analytics/pos/summary${buildQs(rangeEntries(params))}`,
-    ),
+function compareEntries(p: PosCompareParams | undefined): Array<[string, string | undefined]> {
+  return [
+    ["compare", p?.compare ? "true" : undefined],
+    ["compareFrom", p?.compareFrom],
+    ["compareTo", p?.compareTo],
+  ];
+}
 
-  getRevenueTrend: (params: PosDateRangeParams & { group_by?: "day" | "week" }) =>
-    api.get<PosRevenueTrendDto>(
-      `/api/analytics/pos/revenue-trend${buildQs([...rangeEntries(params), ["group_by", params.group_by]])}`,
-    ),
+// Backward compatible: `compare` omitted/false → flat DTO (unchanged shape).
+// `compare: true` → wrapped comparison DTO.
+function getSummary(params: PosDateRangeParams & { compare?: false }): Promise<PosAnalyticsSummaryDto>;
+function getSummary(
+  params: PosDateRangeParams & { compare: true } & PosCompareParams,
+): Promise<PosAnalyticsSummaryCompareDto>;
+function getSummary(
+  params: PosDateRangeParams & PosCompareParams,
+): Promise<PosAnalyticsSummaryDto | PosAnalyticsSummaryCompareDto> {
+  return api.get(`/api/analytics/pos/summary${buildQs([...rangeEntries(params), ...compareEntries(params)])}`);
+}
+
+function getRevenueTrend(
+  params: PosDateRangeParams & { group_by?: "day" | "week"; compare?: false },
+): Promise<PosRevenueTrendDto>;
+function getRevenueTrend(
+  params: PosDateRangeParams & { group_by?: "day" | "week"; compare: true } & PosCompareParams,
+): Promise<PosRevenueTrendCompareDto>;
+function getRevenueTrend(
+  params: PosDateRangeParams & { group_by?: "day" | "week" } & PosCompareParams,
+): Promise<PosRevenueTrendDto | PosRevenueTrendCompareDto> {
+  return api.get(
+    `/api/analytics/pos/revenue-trend${buildQs([
+      ...rangeEntries(params),
+      ["group_by", params.group_by],
+      ...compareEntries(params),
+    ])}`,
+  );
+}
+
+export const posAnalyticsApi = {
+  getSummary,
+
+  getRevenueTrend,
 
   getTopProducts: (params: PosDateRangeParams & { limit?: string }) =>
     api.get<PosTopProductsDto>(

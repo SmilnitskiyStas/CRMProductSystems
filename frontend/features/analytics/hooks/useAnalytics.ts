@@ -51,3 +51,27 @@ export function useLosses(params?: { store_id?: string; from?: string; to?: stri
     enabled,
   });
 }
+
+// ── Period comparison (ADR-016) ─────────────────────────────────────────────
+
+export function useWriteOffAnalyticsCompare(
+  params: { store_id?: string; from?: string; to?: string; compareFrom?: string; compareTo?: string },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["analytics-writeoffs-compare", params],
+    queryFn: () => analyticsApi.getWriteOffs({ ...params, compare: true }),
+    enabled,
+  });
+}
+
+export function useLossesCompare(
+  params: { store_id?: string; from?: string; to?: string; compareFrom?: string; compareTo?: string },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["analytics-losses-compare", params],
+    queryFn: () => analyticsApi.getLosses({ ...params, compare: true }),
+    enabled,
+  });
+}

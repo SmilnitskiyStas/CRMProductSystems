@@ -86,6 +86,22 @@ export interface LossesDto {
   byStore: LossByStoreDto[];
 }
 
+// ── Period comparison (ADR-016) ─────────────────────────────────────────────
+// Opt-in via `?compare=true` on the existing endpoints below. When omitted
+// (or false) the response shape is unchanged — see the flat DTOs above/below.
+
+export interface WriteOffAnalyticsCompareDto {
+  current: WriteOffAnalyticsDto;
+  comparison: WriteOffAnalyticsDto;
+  totalLossPercentChange: number | null;
+}
+
+export interface LossesCompareDto {
+  current: LossesDto;
+  comparison: LossesDto;
+  totalLossPercentChange: number | null;
+}
+
 // ── POS Analytics ──────────────────────────────────────────────────────────────
 
 export interface PosAnalyticsSummaryDto {
@@ -134,4 +150,24 @@ export interface PosCashierStat {
 
 export interface PosCashierStatsDto {
   cashiers: PosCashierStat[];
+}
+
+// ── POS Analytics — period comparison (ADR-016) ─────────────────────────────
+
+export interface PosAnalyticsSummaryCompareDto {
+  current: PosAnalyticsSummaryDto;
+  comparison: PosAnalyticsSummaryDto;
+  revenuePercentChange: number | null;
+  transactionCountPercentChange: number | null;
+}
+
+/** Unlike PosRevenueTrendDto, compare mode returns two flat (sparse) point arrays, not a `points` wrapper. */
+export interface PosRevenueTrendCompareDto {
+  current: PosRevenueTrendPoint[];
+  comparison: PosRevenueTrendPoint[];
+  groupBy: "day" | "week";
+  from: string;
+  to: string;
+  compareFrom: string;
+  compareTo: string;
 }

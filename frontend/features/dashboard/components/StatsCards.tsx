@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { DashboardStats } from "../types";
+import { TrendIndicator } from "@/components/ui/TrendIndicator";
+import type { DashboardStats, ExpirySummaryCompareDto } from "../types";
 
 interface StatCard {
   label: string;
@@ -23,52 +24,61 @@ const CARDS: StatCard[] = [
 interface Props {
   stats: DashboardStats | undefined;
   isLoading: boolean;
+  /** Period-over-period comparison (ADR-016). `previous` in it is null until the worker snapshot exists. */
+  compare?: ExpirySummaryCompareDto;
 }
 
-export function StatsCards({ stats, isLoading }: Props) {
+export function StatsCards({ stats, isLoading, compare }: Props) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {CARDS.map((card) => (
-        <Link
-          key={card.key}
-          href={`/stock?status=${card.key}`}
-          style={{
-            background: card.bg,
-            border: `1px solid ${card.border}`,
-            borderRadius: 12,
-            padding: "20px 24px",
-            display: "block",
-            textDecoration: "none",
-            transition: "background 0.15s",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = card.bgHover; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = card.bg; }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: card.dot,
-                display: "inline-block",
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ color: "#8A94A8", fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              {card.label}
-            </span>
-          </div>
-          <div style={{ color: card.color, fontSize: 40, fontWeight: 700, lineHeight: 1 }}>
-            {isLoading ? (
-              <span style={{ color: "#374151", fontSize: 24 }}>—</span>
-            ) : (
-              stats?.[card.key] ?? 0
-            )}
-          </div>
-          <div style={{ color: "#4B5563", fontSize: 12, marginTop: 6 }}>items</div>
-        </Link>
-      ))}
+      {CARDS.map((card) => {
+        const current = stats?.[card.key] ?? 0;
+        const previous = compare?.previous ? compare.previous[card.key] ?? null : null;
+        return (
+          <Link
+            key={card.key}
+            href={`/stock?status=${card.key}`}
+            style={{
+              background: card.bg,
+              border: `1px solid ${card.border}`,
+              borderRadius: 12,
+              padding: "20px 24px",
+              display: "block",
+              textDecoration: "none",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = card.bgHover; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = card.bg; }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: card.dot,
+                  display: "inline-block",
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ color: "#8A94A8", fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {card.label}
+              </span>
+            </div>
+            <div style={{ color: card.color, fontSize: 40, fontWeight: 700, lineHeight: 1 }}>
+              {isLoading ? (
+                <span style={{ color: "#374151", fontSize: 24 }}>—</span>
+              ) : (
+                current
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <span style={{ color: "#4B5563", fontSize: 12 }}>items</span>
+              {!isLoading && <TrendIndicator current={current} previous={previous} size="sm" />}
+            </div>
+          </Link>
+        );
+      })}
     </div>
   );
 }

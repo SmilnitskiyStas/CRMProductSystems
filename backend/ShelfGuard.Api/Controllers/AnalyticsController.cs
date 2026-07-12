@@ -30,19 +30,64 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("write-offs")]
-    [ProducesResponseType(typeof(WriteOffAnalyticsDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetWriteOffAnalytics(
-        [FromQuery] Guid? store_id,
-        [FromQuery] DateOnly? from,
-        [FromQuery] DateOnly? to,
+    // TASK-336: current live Safe/Warning/Critical/Expired vs. a persisted snapshot
+    // from `compareWeeksAgo` weeks back (dashboard status cards).
+    [HttpGet("expiry-summary/compare")]
+    [ProducesResponseType(typeof(ExpirySummaryComparisonDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetExpirySummaryComparison(
+        [FromQuery] Guid? storeId,
+        [FromQuery] int compareWeeksAgo = 1,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
-        var result = await _analytics.GetWriteOffAnalyticsAsync(tenantId, store_id, from, to, ct);
+        if (compareWeeksAgo < 1) compareWeeksAgo = 1;
+
+        var result = await _analytics.GetExpirySummaryComparisonAsync(tenantId, storeId, compareWeeksAgo, ct);
         return Ok(result);
+    }
+
+    // TASK-336: dashboard week-over-week KPI (sales count / revenue / write-off loss).
+    [HttpGet("dashboard/weekly-kpi")]
+    [ProducesResponseType(typeof(WeeklyKpiDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetWeeklyKpi(
+        [FromQuery] Guid? store_id,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var result = await _analytics.GetWeeklyKpiAsync(tenantId, store_id, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("write-offs")]
+    [ProducesResponseType(typeof(WriteOffAnalyticsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(WriteOffsComparisonDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetWriteOffAnalytics(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] bool compare = false,
+        [FromQuery] DateOnly? compareFrom = null,
+        [FromQuery] DateOnly? compareTo = null,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        // Backward-compatible: unwrapped shape unless comparison is explicitly requested.
+        if (!compare)
+        {
+            var result = await _analytics.GetWriteOffAnalyticsAsync(tenantId, store_id, from, to, ct);
+            return Ok(result);
+        }
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
+        var comparison = await _analytics.GetWriteOffAnalyticsComparisonAsync(tenantId, store_id, resolvedFrom, resolvedTo, cFrom, cTo, ct);
+        return Ok(comparison);
     }
 
     [HttpGet("movements")]
@@ -89,52 +134,88 @@ public sealed class AnalyticsController : ControllerBase
 
     [HttpGet("losses")]
     [ProducesResponseType(typeof(LossesDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(LossesComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLosses(
         [FromQuery] Guid? store_id,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
+        [FromQuery] bool compare = false,
+        [FromQuery] DateOnly? compareFrom = null,
+        [FromQuery] DateOnly? compareTo = null,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
-        var result = await _analytics.GetLossesAsync(tenantId, store_id, from, to, ct);
-        return Ok(result);
+        if (!compare)
+        {
+            var result = await _analytics.GetLossesAsync(tenantId, store_id, from, to, ct);
+            return Ok(result);
+        }
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
+        var comparison = await _analytics.GetLossesComparisonAsync(tenantId, store_id, resolvedFrom, resolvedTo, cFrom, cTo, ct);
+        return Ok(comparison);
     }
 
     // ── POS analytics ─────────────────────────────────────────────────────
 
     [HttpGet("pos/summary")]
     [ProducesResponseType(typeof(PosAnalyticsSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PosSummaryComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPosSummary(
         [FromQuery] Guid? store_id,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
+        [FromQuery] bool compare = false,
+        [FromQuery] DateOnly? compareFrom = null,
+        [FromQuery] DateOnly? compareTo = null,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
-        var result = await _analytics.GetPosSummaryAsync(tenantId, store_id, resolvedFrom, resolvedTo, ct);
-        return Ok(result);
+
+        if (!compare)
+        {
+            var result = await _analytics.GetPosSummaryAsync(tenantId, store_id, resolvedFrom, resolvedTo, ct);
+            return Ok(result);
+        }
+
+        var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
+        var comparison = await _analytics.GetPosSummaryComparisonAsync(tenantId, store_id, resolvedFrom, resolvedTo, cFrom, cTo, ct);
+        return Ok(comparison);
     }
 
     [HttpGet("pos/revenue-trend")]
     [ProducesResponseType(typeof(PosRevenueTrendDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PosRevenueTrendComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPosRevenueTrend(
         [FromQuery] Guid? store_id,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] string group_by = "day",
+        [FromQuery] bool compare = false,
+        [FromQuery] DateOnly? compareFrom = null,
+        [FromQuery] DateOnly? compareTo = null,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
-        var result = await _analytics.GetPosRevenueTrendAsync(tenantId, store_id, resolvedFrom, resolvedTo, group_by, ct);
-        return Ok(result);
+
+        if (!compare)
+        {
+            var result = await _analytics.GetPosRevenueTrendAsync(tenantId, store_id, resolvedFrom, resolvedTo, group_by, ct);
+            return Ok(result);
+        }
+
+        var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
+        var comparison = await _analytics.GetPosRevenueTrendComparisonAsync(tenantId, store_id, resolvedFrom, resolvedTo, group_by, cFrom, cTo, ct);
+        return Ok(comparison);
     }
 
     [HttpGet("pos/top-products")]
@@ -178,6 +259,21 @@ public sealed class AnalyticsController : ControllerBase
     {
         var resolvedTo   = to   ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var resolvedFrom = from ?? resolvedTo.AddDays(-30);
+        return (resolvedFrom, resolvedTo);
+    }
+
+    // TASK-336: when the caller doesn't pass explicit compareFrom/compareTo, default to the
+    // same-length period immediately preceding `from` (e.g. from=Jul1..to=Jul7 -> compare
+    // Jun24..Jun30).
+    private static (DateOnly From, DateOnly To) ResolveCompareRange(
+        DateOnly from, DateOnly to, DateOnly? compareFrom, DateOnly? compareTo)
+    {
+        if (compareFrom.HasValue && compareTo.HasValue)
+            return (compareFrom.Value, compareTo.Value);
+
+        var lengthDays     = to.DayNumber - from.DayNumber;
+        var resolvedTo     = from.AddDays(-1);
+        var resolvedFrom   = from.AddDays(-lengthDays - 1);
         return (resolvedFrom, resolvedTo);
     }
 

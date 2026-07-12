@@ -90,6 +90,9 @@ public static class DependencyInjection
 
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
+
+        // TASK-335 - Daily stock status snapshots (dashboard week-over-week diff)
+        services.AddScoped<IStockStatusSnapshotRepository, StockStatusSnapshotRepository>();
         services.AddScoped<IAduRepository, AduRepository>();
         services.AddScoped<ISupplyScheduleRepository, SupplyScheduleRepository>();
         services.AddScoped<IBufferRepository, BufferRepository>();

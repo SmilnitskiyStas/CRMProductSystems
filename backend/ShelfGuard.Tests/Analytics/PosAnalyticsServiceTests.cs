@@ -1,6 +1,7 @@
 using NSubstitute;
 using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Application.Features.Analytics.Dtos;
+using ShelfGuard.Domain.Interfaces;
 using Xunit;
 
 namespace ShelfGuard.Tests.Analytics;
@@ -8,13 +9,14 @@ namespace ShelfGuard.Tests.Analytics;
 public sealed class PosAnalyticsServiceTests
 {
     private readonly IAnalyticsRepository _repo = Substitute.For<IAnalyticsRepository>();
+    private readonly IStockStatusSnapshotRepository _snapshots = Substitute.For<IStockStatusSnapshotRepository>();
     private readonly AnalyticsService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
 
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
     private static readonly DateOnly From30  = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
 
-    public PosAnalyticsServiceTests() => _sut = new AnalyticsService(_repo);
+    public PosAnalyticsServiceTests() => _sut = new AnalyticsService(_repo, _snapshots);
 
     // ── GetPosSummary ──────────────────────────────────────────────────────
 

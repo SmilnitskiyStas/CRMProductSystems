@@ -6,10 +6,13 @@ import { StatsCards } from "@/features/dashboard/components/StatsCards";
 import { AttentionTable } from "@/features/dashboard/components/AttentionTable";
 import { QuickActions } from "@/features/dashboard/components/QuickActions";
 import { StoreMap } from "@/features/dashboard/components/StoreMap";
+import { WeeklyKpiCards } from "@/features/dashboard/components/WeeklyKpiCards";
 import {
   useAttentionItems,
   useDashboardStats,
+  useExpirySummaryCompare,
   useStoreZones,
+  useWeeklyKpi,
 } from "@/features/dashboard/hooks/useDashboard";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { PROVIDER_TEAM, type AppRole } from "@/lib/roles";
@@ -20,6 +23,8 @@ export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: attentionItems, isLoading: attentionLoading } = useAttentionItems();
   const { data: zones, isLoading: zonesLoading } = useStoreZones();
+  const { data: expiryCompare } = useExpirySummaryCompare();
+  const { data: weeklyKpi, isLoading: weeklyKpiLoading } = useWeeklyKpi();
 
   useEffect(() => {
     if (me && PROVIDER_TEAM.has(me.role as AppRole)) router.replace("/provider");
@@ -36,7 +41,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats cards */}
-      <StatsCards stats={stats} isLoading={statsLoading} />
+      <StatsCards stats={stats} isLoading={statsLoading} compare={expiryCompare} />
+
+      {/* Weekly KPI cards */}
+      <WeeklyKpiCards data={weeklyKpi} isLoading={weeklyKpiLoading} />
 
       {/* Main content: table + quick actions */}
       <div

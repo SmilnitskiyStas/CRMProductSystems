@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useExpirySummary,
   useWriteOffAnalytics,
+  useWriteOffAnalyticsCompare,
   useZoneAnalytics,
   useCategoryAnalytics,
   useLosses,
+  useLossesCompare,
 } from "@/features/analytics/hooks/useAnalytics";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
@@ -16,6 +18,15 @@ import { ExpiryDonut } from "@/features/analytics/components/ExpiryDonut";
 import { LossesByReasonChart } from "@/features/analytics/components/LossesByReasonChart";
 import { LossesByStoreChart } from "@/features/analytics/components/LossesByStoreChart";
 import { CategoryStatusChart } from "@/features/analytics/components/CategoryStatusChart";
+import { TrendIndicator } from "@/components/ui/TrendIndicator";
+import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
+
+function defaultRange(): SimpleDateRange {
+  const to = parseDateInputValue(toDateInputValue(new Date()));
+  const from = new Date(to);
+  from.setUTCDate(from.getUTCDate() - 30);
+  return { from, to };
+}
 
 function MetricCard({
   label,
@@ -23,12 +34,14 @@ function MetricCard({
   sub,
   color,
   onClick,
+  trend,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   color?: string;
   onClick?: () => void;
+  trend?: React.ReactNode;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -65,6 +78,7 @@ function MetricCard({
       <div style={{ color: color ?? "#E8EDF5", fontSize: 22, fontWeight: 700, fontFamily: "monospace" }}>
         {value}
       </div>
+      {trend && <div style={{ marginTop: 4 }}>{trend}</div>}
       {sub && <div style={{ color: "#4B5563", fontSize: 11, marginTop: 4 }}>{sub}</div>}
     </div>
   );
@@ -155,11 +169,42 @@ export default function AnalyticsPage() {
   const access = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
 
   const enabled = access === true;
+
+  const [range, setRange] = useState<SimpleDateRange>(defaultRange);
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [compareRange, setCompareRange] = useState<SimpleDateRange | undefined>(undefined);
+
+  const from = useMemo(() => toDateInputValue(range.from), [range]);
+  const to = useMemo(() => toDateInputValue(range.to), [range]);
+  const compareFrom = compareRange ? toDateInputValue(compareRange.from) : undefined;
+  const compareTo = compareRange ? toDateInputValue(compareRange.to) : undefined;
+  const compareActive = enabled && compareEnabled && !!compareRange;
+
   const { data: expiry, isLoading: expiryLoading } = useExpirySummary(undefined, enabled);
-  const { data: writeoffs } = useWriteOffAnalytics(undefined, enabled);
+  const { data: writeoffsFlat, isLoading: writeoffsLoading } = useWriteOffAnalytics(
+    { from, to },
+    enabled && !compareEnabled,
+  );
+  const { data: writeoffsCompare, isLoading: writeoffsCompareLoading } = useWriteOffAnalyticsCompare(
+    { from, to, compareFrom, compareTo },
+    compareActive,
+  );
   const { data: zones } = useZoneAnalytics(undefined, enabled);
   const { data: categories } = useCategoryAnalytics(undefined, enabled);
-  const { data: losses } = useLosses(undefined, enabled);
+  const { data: lossesFlat, isLoading: lossesLoading } = useLosses({ from, to }, enabled && !compareEnabled);
+  const { data: lossesCompare, isLoading: lossesCompareLoading } = useLossesCompare(
+    { from, to, compareFrom, compareTo },
+    compareActive,
+  );
+
+  // Unified view of write-offs/losses regardless of compare mode.
+  const writeoffs = compareEnabled ? writeoffsCompare?.current : writeoffsFlat;
+  const writeoffsLoadingEffective = compareEnabled ? writeoffsCompareLoading : writeoffsLoading;
+  const writeoffsPrevious = compareEnabled ? writeoffsCompare?.comparison : undefined;
+
+  const losses = compareEnabled ? lossesCompare?.current : lossesFlat;
+  const lossesLoadingEffective = compareEnabled ? lossesCompareLoading : lossesLoading;
+  const lossesPrevious = compareEnabled ? lossesCompare?.comparison : undefined;
 
   // Row hover states
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
@@ -178,6 +223,25 @@ export default function AnalyticsPage() {
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
           Зведена аналітика по термінах, списаннях та рухах товарів
         </p>
+      </div>
+
+      {/* ── Date filter (applies to write-offs / losses below) ─────── */}
+      <div
+        style={{
+          background: "#0D1117",
+          border: "1px solid #1F2937",
+          borderRadius: 10,
+          padding: "16px 20px",
+        }}
+      >
+        <DateRangePicker
+          range={range}
+          onRangeChange={setRange}
+          compareEnabled={compareEnabled}
+          onCompareToggle={setCompareEnabled}
+          compareRange={compareRange}
+          onCompareRangeChange={setCompareRange}
+        />
       </div>
 
       {/* ── Expiry summary ────────────────────────────────────────── */}
@@ -276,7 +340,12 @@ export default function AnalyticsPage() {
       </section>
 
       {/* ── Write-off analytics ───────────────────────────────────── */}
-      {writeoffs && (
+      {writeoffsLoadingEffective ? (
+        <section>
+          <h2 style={sectionTitle}>Списання</h2>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+        </section>
+      ) : writeoffs && (
         <section>
           <h2 style={sectionTitle}>Списання</h2>
           <div
@@ -287,12 +356,31 @@ export default function AnalyticsPage() {
               marginBottom: 16,
             }}
           >
-            <MetricCard label="Всього документів" value={writeoffs.totalDocuments} onClick={() => router.push("/write-offs")} />
+            <MetricCard
+              label="Всього документів"
+              value={writeoffs.totalDocuments}
+              onClick={() => router.push("/write-offs")}
+              trend={
+                compareEnabled && writeoffsPrevious ? (
+                  <TrendIndicator current={writeoffs.totalDocuments} previous={writeoffsPrevious.totalDocuments} size="sm" />
+                ) : undefined
+              }
+            />
             <MetricCard
               label="Загальні збитки"
               value={`${writeoffs.totalLoss.toLocaleString("uk-UA")} ₴`}
               color="#F87171"
               onClick={() => router.push("/write-offs")}
+              trend={
+                compareEnabled && writeoffsPrevious ? (
+                  <TrendIndicator
+                    current={writeoffs.totalLoss}
+                    previous={writeoffsPrevious.totalLoss}
+                    format="currency"
+                    size="sm"
+                  />
+                ) : undefined
+              }
             />
           </div>
 
@@ -443,7 +531,12 @@ export default function AnalyticsPage() {
       )}
 
       {/* ── Losses by store ───────────────────────────────────────── */}
-      {losses && losses.byStore.length > 0 && (
+      {lossesLoadingEffective ? (
+        <section>
+          <h2 style={sectionTitle}>Збитки по магазинах</h2>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+        </section>
+      ) : losses && losses.byStore.length > 0 && (
         <section>
           <h2 style={sectionTitle}>Збитки по магазинах</h2>
           <div
@@ -459,8 +552,22 @@ export default function AnalyticsPage() {
               value={`${losses.totalLoss.toLocaleString("uk-UA")} ₴`}
               color="#F87171"
               onClick={() => router.push("/write-offs")}
+              trend={
+                compareEnabled && lossesPrevious ? (
+                  <TrendIndicator current={losses.totalLoss} previous={lossesPrevious.totalLoss} format="currency" size="sm" />
+                ) : undefined
+              }
             />
-            <MetricCard label="Всього списань" value={losses.totalWriteOffs} onClick={() => router.push("/write-offs")} />
+            <MetricCard
+              label="Всього списань"
+              value={losses.totalWriteOffs}
+              onClick={() => router.push("/write-offs")}
+              trend={
+                compareEnabled && lossesPrevious ? (
+                  <TrendIndicator current={losses.totalWriteOffs} previous={lossesPrevious.totalWriteOffs} size="sm" />
+                ) : undefined
+              }
+            />
             <MetricCard
               label="Середнє на документ"
               value={`${losses.averageLossPerWriteOff.toLocaleString("uk-UA")} ₴`}

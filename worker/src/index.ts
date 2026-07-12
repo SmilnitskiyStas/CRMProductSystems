@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import { redisConnection } from "./redis";
 import { startExpiryCheckWorker } from "./jobs/expiry-check.job";
+import { startStockSnapshotWorker } from "./jobs/stock-snapshot.job";
 import { startNotificationWorker } from "./jobs/notification.job";
 import { startWeeklyReportWorker } from "./jobs/weekly-report.job";
 import { startCleanupWorker } from "./jobs/cleanup.job";
@@ -16,6 +17,11 @@ async function scheduleRecurringJobs(): Promise<void> {
   // otherwise the job fires twice every hour.
   await expiryQueue.removeJobScheduler("expiry-check-hourly").catch(() => {});
   await expiryQueue.upsertJobScheduler("expiry-check-cron", { pattern: "0 * * * *" }, { name: "expiry-check" });
+
+  // TASK-336: daily 00:10 — snapshot product_stock status counts, right after the
+  // hourly expiry-check cycle has settled each batch's status for the day.
+  const stockSnapshotQueue = new Queue("stock-snapshot", { connection: redisConnection });
+  await stockSnapshotQueue.upsertJobScheduler("stock-snapshot-cron", { pattern: "10 0 * * *" }, { name: "stock-snapshot" });
 
   const weeklyQueue = new Queue("weekly-report", { connection: redisConnection });
   await weeklyQueue.upsertJobScheduler("weekly-report-cron", { pattern: "0 8 * * 0" }, { name: "weekly-report" });
@@ -46,6 +52,7 @@ async function main(): Promise<void> {
   await scheduleRecurringJobs();
 
   startExpiryCheckWorker();
+  startStockSnapshotWorker();
   startNotificationWorker();
   startWeeklyReportWorker();
   startCleanupWorker();

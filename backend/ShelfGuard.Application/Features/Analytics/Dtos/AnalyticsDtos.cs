@@ -1,5 +1,33 @@
 namespace ShelfGuard.Application.Features.Analytics.Dtos;
 
+// ── TASK-336: period comparison (dashboard week-over-week + analytics compare) ─
+
+public sealed record PeriodMetricDto(decimal Current, decimal Previous, decimal? PercentChange)
+{
+    public static PeriodMetricDto Of(decimal current, decimal previous) =>
+        new(current, previous, previous == 0m ? null : Math.Round((current - previous) / previous * 100m, 2));
+}
+
+public sealed record WeeklyKpiDto(
+    PeriodMetricDto Sales,
+    PeriodMetricDto Revenue,
+    PeriodMetricDto WriteOffLoss
+);
+
+public sealed record ExpirySummaryComparisonDto(ExpirySummaryDto Current, ExpirySummaryDto? Previous);
+
+public sealed record WriteOffsComparisonDto(
+    WriteOffAnalyticsDto Current,
+    WriteOffAnalyticsDto? Comparison,
+    decimal? TotalLossPercentChange
+);
+
+public sealed record LossesComparisonDto(
+    LossesDto Current,
+    LossesDto? Comparison,
+    decimal? TotalLossPercentChange
+);
+
 public sealed record ExpirySummaryDto(
     int Safe,
     int Warning,

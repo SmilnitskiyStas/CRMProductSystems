@@ -1,6 +1,13 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
-import type { AttentionItem, DashboardStats, ItemStatus, StoreZone } from "../types";
+import type {
+  AttentionItem,
+  DashboardStats,
+  ExpirySummaryCompareDto,
+  ItemStatus,
+  StoreZone,
+  WeeklyKpiDto,
+} from "../types";
 
 interface StockSummaryDto {
   safe: number;
@@ -94,8 +101,28 @@ async function getStoreZones(storeId: string | null): Promise<StoreZone[]> {
   }));
 }
 
+// ── Period comparison (ADR-016) ─────────────────────────────────────────────
+
+async function getExpirySummaryCompare(
+  storeId: string | null,
+  compareWeeksAgo = 1,
+): Promise<ExpirySummaryCompareDto> {
+  const qs = new URLSearchParams();
+  // Note: unlike the rest of this file, this endpoint's query key is camelCase (`storeId`).
+  if (storeId) qs.set("storeId", storeId);
+  if (compareWeeksAgo !== 1) qs.set("compareWeeksAgo", String(compareWeeksAgo));
+  const q = qs.toString();
+  return api.get<ExpirySummaryCompareDto>(`/api/analytics/expiry-summary/compare${q ? `?${q}` : ""}`);
+}
+
+async function getWeeklyKpi(storeId: string | null): Promise<WeeklyKpiDto> {
+  return api.get<WeeklyKpiDto>(withStore("/api/analytics/dashboard/weekly-kpi", storeId));
+}
+
 export const dashboardApi = {
   getStats: getDashboardStats,
   getAttentionItems,
   getStoreZones,
+  getExpirySummaryCompare,
+  getWeeklyKpi,
 };

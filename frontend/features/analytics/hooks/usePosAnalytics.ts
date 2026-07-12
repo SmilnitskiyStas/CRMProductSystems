@@ -38,3 +38,27 @@ export function usePosCashiers(params: PosDateRangeParams, enabled = true) {
     enabled,
   });
 }
+
+// ── Period comparison (ADR-016) ─────────────────────────────────────────────
+
+export function usePosSummaryCompare(
+  params: PosDateRangeParams & { compareFrom?: string; compareTo?: string },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["pos-analytics-summary-compare", params],
+    queryFn: () => posAnalyticsApi.getSummary({ ...params, compare: true }),
+    enabled,
+  });
+}
+
+export function usePosRevenueTrendCompare(
+  params: PosDateRangeParams & { group_by?: "day" | "week"; compareFrom?: string; compareTo?: string },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["pos-analytics-trend-compare", params],
+    queryFn: () => posAnalyticsApi.getRevenueTrend({ ...params, compare: true }),
+    enabled,
+  });
+}

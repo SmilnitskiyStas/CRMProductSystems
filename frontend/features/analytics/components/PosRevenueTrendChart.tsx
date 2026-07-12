@@ -3,27 +3,40 @@
 import {
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import type { PosRevenueTrendDto } from "../types";
+import type { PosRevenueTrendDto, PosRevenueTrendPoint } from "../types";
+
+interface ComparisonSeries {
+  points: PosRevenueTrendPoint[];
+  /** Start date (yyyy-mm-dd) of the comparison range — used to align points with the current series by offset, not array index. */
+  from: string;
+}
 
 interface Props {
   data: PosRevenueTrendDto;
+  /** Start date (yyyy-mm-dd) of the current range — required to align with `comparison` by offset. */
+  from?: string;
+  comparison?: ComparisonSeries;
 }
 
-function formatDate(dateStr: string, groupBy: "day" | "week"): string {
-  const d = new Date(dateStr);
-  if (groupBy === "week") {
-    return d.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
-  }
-  return d.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+const MS_PER_DAY = 86_400_000;
+
+function daysBetween(fromStr: string, dateStr: string): number {
+  return Math.round((new Date(`${dateStr}T00:00:00Z`).getTime() - new Date(`${fromStr}T00:00:00Z`).getTime()) / MS_PER_DAY);
 }
 
-export function PosRevenueTrendChart({ data }: Props) {
+function formatDate(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+}
+
+export function PosRevenueTrendChart({ data, from, comparison }: Props) {
   if (!data || data.points.length === 0) {
     return (
       <div
@@ -42,12 +55,57 @@ export function PosRevenueTrendChart({ data }: Props) {
     );
   }
 
-  const chartData = data.points.map((p) => ({
-    date: formatDate(p.date, data.groupBy),
-    rawDate: p.date,
-    revenue: p.revenue,
-    transactions: p.transactions,
-  }));
+  const hasComparison = !!(comparison && comparison.points.length > 0 && from);
+
+  let chartData: Array<{
+    x: string;
+    date: string;
+    revenue: number | undefined;
+    transactions: number | undefined;
+    comparisonDate?: string;
+    comparisonRevenue?: number;
+    comparisonTransactions?: number;
+  }>;
+
+  if (!hasComparison) {
+    chartData = data.points.map((p) => ({
+      x: formatDate(p.date),
+      date: p.date,
+      revenue: p.revenue,
+      transactions: p.transactions,
+    }));
+  } else {
+    // Points are sparse (no entry for zero-activity days) and may not share array
+    // length/order — align by day offset from each series' own start date.
+    const byOffset = new Map<
+      number,
+      { date?: string; revenue?: number; transactions?: number; comparisonDate?: string; comparisonRevenue?: number; comparisonTransactions?: number }
+    >();
+    for (const p of data.points) {
+      const offset = daysBetween(from!, p.date);
+      byOffset.set(offset, { ...byOffset.get(offset), date: p.date, revenue: p.revenue, transactions: p.transactions });
+    }
+    for (const p of comparison!.points) {
+      const offset = daysBetween(comparison!.from, p.date);
+      byOffset.set(offset, {
+        ...byOffset.get(offset),
+        comparisonDate: p.date,
+        comparisonRevenue: p.revenue,
+        comparisonTransactions: p.transactions,
+      });
+    }
+    chartData = Array.from(byOffset.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([offset, v]) => ({
+        x: `День ${offset + 1}`,
+        date: v.date ?? "",
+        revenue: v.revenue,
+        transactions: v.transactions,
+        comparisonDate: v.comparisonDate,
+        comparisonRevenue: v.comparisonRevenue,
+        comparisonTransactions: v.comparisonTransactions,
+      }));
+  }
 
   return (
     <div
@@ -71,7 +129,7 @@ export function PosRevenueTrendChart({ data }: Props) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" vertical={false} />
           <XAxis
-            dataKey="date"
+            dataKey="x"
             tick={{ fill: "#6B7280", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
@@ -91,24 +149,42 @@ export function PosRevenueTrendChart({ data }: Props) {
               color: "#E8EDF5",
               fontSize: 13,
             }}
-            formatter={(val, name) => {
+            formatter={(val, name, props) => {
               const v = Number(val);
-              if (name === "revenue") {
-                return [`${v.toLocaleString("uk-UA")} ₴`, "Виручка"];
+              if (name === "comparisonRevenue") {
+                const d = (props.payload as { comparisonDate?: string }).comparisonDate;
+                return [`${v.toLocaleString("uk-UA")} ₴${d ? ` (${formatDate(d)})` : ""}`, "Попередній період"];
               }
-              return [v.toLocaleString("uk-UA"), "Транзакцій"];
+              const d = (props.payload as { date?: string }).date;
+              return [`${v.toLocaleString("uk-UA")} ₴${d ? ` (${formatDate(d)})` : ""}`, "Поточний період"];
             }}
             cursor={{ stroke: "#374151", strokeWidth: 1 }}
           />
+          {hasComparison && <Legend wrapperStyle={{ fontSize: 12, color: "#9CA3AF" }} />}
           <Area
             type="monotone"
             dataKey="revenue"
+            name={hasComparison ? "Поточний період" : "revenue"}
             stroke="#3B82F6"
             strokeWidth={2}
             fill="url(#revenueGradient)"
             dot={false}
             activeDot={{ r: 4, fill: "#3B82F6" }}
+            connectNulls
           />
+          {hasComparison && (
+            <Line
+              type="monotone"
+              dataKey="comparisonRevenue"
+              name="Попередній період"
+              stroke="#A78BFA"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={false}
+              activeDot={{ r: 4, fill: "#A78BFA" }}
+              connectNulls
+            />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </div>

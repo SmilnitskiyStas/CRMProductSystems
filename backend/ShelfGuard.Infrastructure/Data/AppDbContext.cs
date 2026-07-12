@@ -33,6 +33,8 @@ public sealed class AppDbContext : DbContext
     public DbSet<ProductStock> ProductStocks => Set<ProductStock>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<StockEvent> StockEvents => Set<StockEvent>();
+    // Daily Safe/Warning/Critical/Expired count snapshots, one row per (tenant, store, day) (TASK-335)
+    public DbSet<StockStatusSnapshot> StockStatusSnapshots => Set<StockStatusSnapshot>();
 
     // Documents
     public DbSet<StockReceipt> StockReceipts => Set<StockReceipt>();
@@ -437,6 +439,34 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(s => s.Zone).WithMany()
              .HasForeignKey(s => s.ZoneId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── StockStatusSnapshot (TASK-335) ─────────────────────────────────────
+        // Daily per-store snapshot of product_stock Status counts, written by a
+        // worker cron job so the dashboard can diff "today vs a week ago". The
+        // network-wide (all stores) view is a SUM over rows for (TenantId, SnapshotDate)
+        // computed at query time — no separate rollup row is stored.
+        builder.Entity<StockStatusSnapshot>(e =>
+        {
+            e.ToTable("stock_status_snapshots");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.SnapshotDate).HasColumnType("date").IsRequired();
+            e.Property(s => s.SafeCount).IsRequired();
+            e.Property(s => s.WarningCount).IsRequired();
+            e.Property(s => s.CriticalCount).IsRequired();
+            e.Property(s => s.ExpiredCount).IsRequired();
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.StoreId).HasColumnName("LocationId");
+            // Idempotent upsert key — worker does ON CONFLICT (TenantId, LocationId, SnapshotDate)
+            e.HasIndex(s => new { s.TenantId, s.StoreId, s.SnapshotDate })
+             .IsUnique()
+             .HasDatabaseName("idx_stock_status_snapshots_tenant_store_date");
+            // Network-wide (all-store) rollup query
+            e.HasIndex(s => new { s.TenantId, s.SnapshotDate })
+             .HasDatabaseName("idx_stock_status_snapshots_tenant_date");
+            e.HasOne(s => s.Store).WithMany()
+             .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── StockMovement ───────────────────────────────────────────────────

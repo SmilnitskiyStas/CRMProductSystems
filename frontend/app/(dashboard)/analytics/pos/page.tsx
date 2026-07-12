@@ -6,7 +6,9 @@ import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
 import {
   usePosSummary,
+  usePosSummaryCompare,
   usePosRevenueTrend,
+  usePosRevenueTrendCompare,
   usePosTopProducts,
   usePosCashiers,
 } from "@/features/analytics/hooks/usePosAnalytics";
@@ -17,6 +19,7 @@ import { PosCashierStatsTable } from "@/features/analytics/components/PosCashier
 import { PosPaymentPieChart } from "@/features/analytics/components/PosPaymentPieChart";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -104,6 +107,13 @@ export default function PosAnalyticsPage() {
   const [to, setTo] = useState<string>(defaultTo);
   const [storeId, setStoreId] = useState<string>("");
   const [groupBy, setGroupBy] = useState<"day" | "week">("day");
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [compareRange, setCompareRange] = useState<SimpleDateRange | undefined>(undefined);
+
+  const range: SimpleDateRange = useMemo(
+    () => ({ from: parseDateInputValue(from), to: parseDateInputValue(to) }),
+    [from, to],
+  );
 
   const { data: stores } = useStores();
 
@@ -112,15 +122,27 @@ export default function PosAnalyticsPage() {
     [from, to, storeId],
   );
 
+  const compareFrom = compareRange ? toDateInputValue(compareRange.from) : undefined;
+  const compareTo = compareRange ? toDateInputValue(compareRange.to) : undefined;
+
   const enabled = access === true;
+  const compareActive = enabled && compareEnabled && !!compareRange;
 
   const { data: summary, isLoading: summaryLoading } = usePosSummary(
     { from, to, store_id: storeId || undefined },
-    enabled,
+    enabled && !compareEnabled,
+  );
+  const { data: summaryCompare, isLoading: summaryCompareLoading } = usePosSummaryCompare(
+    { from, to, store_id: storeId || undefined, compareFrom, compareTo },
+    compareActive,
   );
   const { data: trend, isLoading: trendLoading } = usePosRevenueTrend(
     { ...params, group_by: groupBy },
-    enabled,
+    enabled && !compareEnabled,
+  );
+  const { data: trendCompare, isLoading: trendCompareLoading } = usePosRevenueTrendCompare(
+    { ...params, group_by: groupBy, compareFrom, compareTo },
+    compareActive,
   );
   const { data: topProducts, isLoading: topLoading } = usePosTopProducts(
     { ...params, limit: "10" },
@@ -130,6 +152,12 @@ export default function PosAnalyticsPage() {
     { from, to, store_id: storeId || undefined },
     enabled,
   );
+
+  // Unified view of summary/trend regardless of compare mode.
+  const effectiveSummary = compareEnabled ? summaryCompare?.current : summary;
+  const effectiveSummaryLoading = compareEnabled ? summaryCompareLoading : summaryLoading;
+  const effectiveTrend = compareEnabled ? (trendCompare ? { points: trendCompare.current, groupBy: trendCompare.groupBy } : undefined) : trend;
+  const effectiveTrendLoading = compareEnabled ? trendCompareLoading : trendLoading;
 
   if (access === null) return null;
   if (!access) return <AccessDenied title="POS Аналітика" />;
@@ -157,24 +185,14 @@ export default function PosAnalyticsPage() {
           alignItems: "flex-end",
         }}
       >
-        <div>
-          <label style={labelStyle}>З дати</label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>По дату</label>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+        <DateRangePicker
+          range={range}
+          onRangeChange={(r) => { setFrom(toDateInputValue(r.from)); setTo(toDateInputValue(r.to)); }}
+          compareEnabled={compareEnabled}
+          onCompareToggle={setCompareEnabled}
+          compareRange={compareRange}
+          onCompareRangeChange={setCompareRange}
+        />
         <div>
           <label style={labelStyle}>Магазин</label>
           <select
@@ -212,10 +230,13 @@ export default function PosAnalyticsPage() {
       {/* KPI summary cards */}
       <section>
         <h2 style={sectionTitle}>Зведення</h2>
-        {summaryLoading ? (
+        {effectiveSummaryLoading ? (
           <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
-        ) : summary ? (
-          <PosSummaryCards data={summary} />
+        ) : effectiveSummary ? (
+          <PosSummaryCards
+            data={effectiveSummary}
+            previous={compareEnabled ? summaryCompare?.comparison : undefined}
+          />
         ) : (
           <div style={{ color: "#4B5563", fontSize: 13 }}>Немає даних</div>
         )}
@@ -224,10 +245,18 @@ export default function PosAnalyticsPage() {
       {/* Revenue trend */}
       <section>
         <h2 style={sectionTitle}>Динаміка виручки</h2>
-        {trendLoading ? (
+        {effectiveTrendLoading ? (
           <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
-        ) : trend ? (
-          <PosRevenueTrendChart data={trend} />
+        ) : effectiveTrend ? (
+          <PosRevenueTrendChart
+            data={effectiveTrend}
+            from={from}
+            comparison={
+              compareEnabled && trendCompare
+                ? { points: trendCompare.comparison, from: trendCompare.compareFrom }
+                : undefined
+            }
+          />
         ) : (
           <div
             style={{
@@ -265,11 +294,11 @@ export default function PosAnalyticsPage() {
       </section>
 
       {/* Payment pie */}
-      {summary && summary.totalRevenue > 0 && (
+      {effectiveSummary && effectiveSummary.totalRevenue > 0 && (
         <section>
           <h2 style={sectionTitle}>Методи оплати</h2>
           <div style={{ maxWidth: 400 }}>
-            <PosPaymentPieChart data={summary} />
+            <PosPaymentPieChart data={effectiveSummary} />
           </div>
         </section>
       )}

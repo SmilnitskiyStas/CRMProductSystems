@@ -28,3 +28,42 @@ export interface StoreZone {
   warning: number;
   critical: number;
 }
+
+// ── Period comparison (ADR-016) ─────────────────────────────────────────────
+
+export interface ExpirySummaryCompareStoreDto {
+  storeId: string;
+  storeName: string;
+  safe: number;
+  warning: number;
+  critical: number;
+  expired: number;
+}
+
+export interface ExpirySummaryCompareStat {
+  safe: number;
+  warning: number;
+  critical: number;
+  expired: number;
+  needsVerification: number;
+  total: number;
+  stores: ExpirySummaryCompareStoreDto[];
+}
+
+export interface ExpirySummaryCompareDto {
+  current: ExpirySummaryCompareStat;
+  /** null when no snapshot exists yet for that date (first week after deploy, cross-tenant view, etc). */
+  previous: ExpirySummaryCompareStat | null;
+}
+
+export interface PeriodMetric {
+  current: number;
+  previous: number;
+  percentChange: number | null;
+}
+
+export interface WeeklyKpiDto {
+  sales: PeriodMetric;
+  revenue: PeriodMetric;
+  writeOffLoss: PeriodMetric;
+}
