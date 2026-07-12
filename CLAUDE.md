@@ -333,13 +333,28 @@ independent workstream, or as a second-opinion reviewer, never as the only imple
 of record for a task.
 
 Invoke non-interactively via Bash (`run_in_background: true`), same briefing discipline
-as a Claude agent prompt (self-contained, cites CLAUDE.md/spec/file paths):
+as a Claude agent prompt (self-contained, cites CLAUDE.md/spec/file paths). `exec` mode
+has **no** `--ask-for-approval` flag (that's interactive-only) — the sandbox flag alone
+governs what it may do without asking:
 ```
-codex exec -C <dir> --sandbox workspace-write --ask-for-approval never \
+codex exec -C <dir> --sandbox workspace-write \
+  -m <model> -c model_reasoning_effort=<effort> \
   --json -o <output-file> "<full self-contained task brief>"
 ```
-`-m <model>` forces a specific model (config default is set in `~/.codex/config.toml`;
-override per-call when a newer model tag is confirmed available).
+
+**Models (verified 2026-07-12 by direct `codex exec` call on codex-cli 0.144.1 — older
+CLI errors "requires a newer version of Codex"; run `codex update` if that happens):**
+
+| Model ID | Tier | Use for |
+|---|---|---|
+| `gpt-5.6-terra` | balanced, ~2x cheaper than Sol, competitive with GPT-5.5 | **Default.** Everyday feature work — the Codex-side equivalent of what backend/frontend-developer agents do |
+| `gpt-5.6-sol` | flagship, most capable | Ambiguous/high-stakes work only: architecture calls, security review, gnarly bugs, migrations |
+| `gpt-5.6-luna` | fastest/cheapest | High-volume mechanical work: boilerplate, docstrings, simple pattern-following transforms |
+
+`model_reasoning_effort` values (only `low`/`medium` directly verified; `high`/`xhigh` per
+OpenAI's public docs, not independently tested): scale effort up with task difficulty,
+default `medium`. Never edit the *global* `~/.codex/config.toml` default for this — it's
+shared across every project on this machine; always pass `-m`/`-c` per call instead.
 
 - **Isolation rule (mandatory, no need to ask):** if Codex's task can touch the same
   files a concurrently-running Claude agent might touch, give Codex its own `git
