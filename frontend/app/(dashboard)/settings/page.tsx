@@ -8,8 +8,7 @@ import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab"
 import { ModulesTab } from "@/features/settings/components/ModulesTab";
 import { MarketplaceProfileTab } from "@/features/settings/components/MarketplaceProfileTab";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { hasRole, PROVIDER_TEAM } from "@/lib/roles";
-import { useModules } from "@/features/modules/hooks/useModules";
+import { hasRole, PROVIDER_TEAM, SUPPLIER_ONLY } from "@/lib/roles";
 
 type Tab = "general" | "notifications" | "integrations" | "modules" | "marketplace-profile";
 
@@ -25,12 +24,11 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { data: me } = useMe();
   const canViewModules = hasRole(me?.role, PROVIDER_TEAM);
-  const { data: modulesData } = useModules(!!me?.role && me.role !== "provider");
-  const marketplaceActive = modulesData?.modules.includes("marketplace") ?? false;
+  const isSupplier = hasRole(me?.role, SUPPLIER_ONLY);
 
   const TABS = ALL_TABS.filter((t) => {
     if (t.id === "modules") return canViewModules;
-    if (t.id === "marketplace-profile") return marketplaceActive;
+    if (t.id === "marketplace-profile") return isSupplier;
     return true;
   });
 
@@ -107,7 +105,7 @@ export default function SettingsPage() {
         {activeTab === "notifications"       && <NotificationsTab />}
         {activeTab === "integrations"        && <IntegrationsTab />}
         {activeTab === "modules" && canViewModules && <ModulesTab />}
-        {activeTab === "marketplace-profile" && marketplaceActive && <MarketplaceProfileTab />}
+        {activeTab === "marketplace-profile" && isSupplier && <MarketplaceProfileTab />}
       </div>
     </div>
   );
