@@ -3,6 +3,22 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-349 — Frontend: InviteUserModal — вибір TenantRole шаблону при створенні користувача
+**Status:** done (2026-07-13) · **Agent:** frontend-developer · **Depends:** TASK-345..348 (ADR-020)
+Log: `.claude/logs/tasks/349_2026-07-13_invite-with-tenant-role_frontend-developer.md`
+Bug: щойно створений TenantRole-шаблон не з'являвся у "Запросити користувача" —
+`INVITE_ROLES` була жорстко закодована на 4 базові ролі, призначення шаблону існувало
+лише постфактум через `TenantRoleSelector` у `UserDetailPanel`. UX-фікс без змін
+бекенду (`InviteAsync` не чіпали — сьогоднішній privilege-escalation review,
+TASK-346/347): `InviteUserModal.tsx` оркеструє два вже готові виклики —
+`useInviteUser()` → `useAssignTenantRole()`. Додано `"staff"` (ADR-020) в
+`INVITE_ROLES` + лейбл у `ROLE_LABELS`; новий select "Шаблон ролі (необов'язково)" з
+`useTenantRoles()`; вибір шаблону дефолтить Role на "staff" лише якщо адмін ще не
+чіпав поле вручну. Частковий збій (invite ok, assign fail) не ховає створеного
+користувача — модалка лишається відкритою з чіткою помилкою, кнопка стає "Закрити".
+`tsc --noEmit` + `npm run build` чисті; live-verified обидва шляхи (success +
+simulated race → archived-template 400) на локальному стеку.
+
 ## TASK-334 — Frontend: public marketing landing page (/)
 **Status:** done (2026-07-10) · **Agent:** frontend-developer · **Depends:** TASK-333 (контракт leads)
 Log: `.claude/logs/tasks/334_2026-07-10_landing-page_frontend-developer.md`

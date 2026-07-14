@@ -22,4 +22,8 @@ export const ROLE_LABELS: Record<string, string> = {
   merchandiser:      "Мерчандайзер",
   storekeeper:       "Комірник",
   cashier:           "Касир",
+  /** v4.5 (ADR-020): minimal base tier, rank 0 — no default operational access, only
+   *  whatever an assigned TenantRole template grants. Kept short for the compact role
+   *  pill badges (UsersList/UserDetailPanel) — full explanation lives in InviteUserModal. */
+  staff:             "Спеціаліст (без доступу)",
 };
