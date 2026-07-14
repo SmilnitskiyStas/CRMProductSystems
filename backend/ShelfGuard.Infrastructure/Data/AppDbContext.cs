@@ -147,6 +147,9 @@ public sealed class AppDbContext : DbContext
     // Temporary per-user permission grants (ADR-019, TASK-341)
     public DbSet<UserPermissionGrant> UserPermissionGrants => Set<UserPermissionGrant>();
 
+    // Tenant custom role templates (ADR-020, TASK-345)
+    public DbSet<TenantRole> TenantRoles => Set<TenantRole>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -187,6 +190,9 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.SupplierRoleId).IsRequired(false);
             e.HasOne<SupplierRole>().WithMany()
              .HasForeignKey(u => u.SupplierRoleId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.Property(u => u.TenantRoleId).IsRequired(false);
+            e.HasOne<TenantRole>().WithMany()
+             .HasForeignKey(u => u.TenantRoleId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.Property(u => u.Permissions)
              .HasColumnType("jsonb")
              .HasConversion(
@@ -1887,6 +1893,37 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(x => x.GrantedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.RevokedByUser).WithMany()
              .HasForeignKey(x => x.RevokedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── TenantRole (ADR-020, TASK-345) ────────────────────────────────────
+        // Same shape as SupplierRole: no explicit Tenant FK (TenantId is a plain
+        // indexed/RLS-scoped column, not a hard DB constraint — mirrors SupplierRole,
+        // which has none either, avoiding yet another cascade path onto tenants).
+        builder.Entity<TenantRole>(e =>
+        {
+            e.ToTable("tenant_roles");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.TenantId).IsRequired();
+            e.Property(r => r.Name).HasMaxLength(200).IsRequired();
+            // text[], not jsonb — matches ProviderRole.Permissions/SupplierRole.Permissions
+            // exactly (both are List<string> stored as a native Postgres array via Npgsql's
+            // built-in array support). No EnableDynamicJson/converter needed, unlike the
+            // jsonb Dictionary<string,object?> pattern used elsewhere (e.g. SupplierItem.
+            // Attributes) — that mechanism is for non-list JSON shapes, not simple string lists.
+            e.Property(r => r.Capabilities).HasColumnType("text[]").IsRequired();
+            e.Property(r => r.IsActive).HasDefaultValue(true);
+            e.Property(r => r.CreatedByUserId).IsRequired(false);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(r => r.UpdatedAt).IsRequired(false);
+            // Partial unique: only active templates block reusing a name — an archived
+            // ("deactivated") template never prevents creating a fresh one with the same name.
+            e.HasIndex(r => new { r.TenantId, r.Name })
+             .IsUnique()
+             .HasDatabaseName("uq_tenant_roles_tenant_name_active")
+             .HasFilter("\"IsActive\"");
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(r => r.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
     }
 }

@@ -77,6 +77,7 @@ public sealed class TenantConnectionInterceptorTests
     [InlineData("merchandiser")]
     [InlineData("storekeeper")]
     [InlineData("cashier")]
+    [InlineData("staff")]
     public void BuildSetSql_accepts_all_valid_roles(string role)
     {
         var sql = TenantConnectionInterceptor.BuildSetSql(null, role);

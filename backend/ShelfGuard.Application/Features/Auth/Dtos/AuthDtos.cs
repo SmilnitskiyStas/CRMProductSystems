@@ -33,7 +33,14 @@ public record AuthUserDto(
     /// <summary>Optional legal entity this user is registered under (TASK-322).</summary>
     Guid? LegalEntityId = null,
     /// <summary>Whether TOTP 2FA is enabled for this account (TASK-330).</summary>
-    bool TwoFactorEnabled = false
+    bool TwoFactorEnabled = false,
+    /// <summary>
+    /// Effective TenantRole capabilities (ADR-020, TASK-346) — empty when the user has no
+    /// TenantRoleId or the referenced template is archived. Mirrors the JWT "capabilities"
+    /// claim so the client's own UI logic doesn't disagree with what the server issued —
+    /// UI-only signal, real enforcement is server-side (RoleOrCapabilityRequirement).
+    /// </summary>
+    IReadOnlyList<string>? Capabilities = null
 );
 
 // ── 2FA (TASK-330) ──────────────────────────────────────────────────────────

@@ -7,9 +7,12 @@ using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
 
+// ADR-020 (TASK-346): every action in this controller is a GET behind the same gate, so the
+// capability OR is applied once at the class level rather than duplicated onto ~9 identical
+// per-action attributes — functionally identical to decorating every method individually.
 [ApiController]
 [Route("api/analytics")]
-[Authorize(Policy = AppPolicies.CanViewAnalytics)]
+[Authorize(Policy = AppPolicies.AnalyticsViewOrCapability)]
 public sealed class AnalyticsController : ControllerBase
 {
     private readonly IAnalyticsService _analytics;

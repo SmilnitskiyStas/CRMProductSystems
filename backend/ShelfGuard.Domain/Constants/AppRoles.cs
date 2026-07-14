@@ -2,7 +2,7 @@ namespace ShelfGuard.Domain.Constants;
 
 /// <summary>
 /// Role name constants. Must match the values stored in users.role and emitted in JWT claims.
-/// Hierarchy (highest → lowest): Provider > EnterpriseAdmin > NetworkManager > StoreManager > Merchandiser / Storekeeper > Cashier
+/// Hierarchy (highest → lowest): Provider > EnterpriseAdmin > NetworkManager > StoreManager > Merchandiser / Storekeeper > Cashier > Staff
 /// </summary>
 public static class AppRoles
 {
@@ -15,6 +15,14 @@ public static class AppRoles
     public const string Merchandiser    = "merchandiser";
     public const string Storekeeper     = "storekeeper";
     public const string Cashier         = "cashier";
+    /// <summary>
+    /// v4.5 (ADR-020): minimal base tier, rank 0 — below Cashier. For users whose job is
+    /// entirely described by an assigned TenantRole capability template (HR, accountant,
+    /// purchasing) with no operational (POS/stock) needs. Grants nothing beyond bare auth
+    /// by itself — not added to any existing AppPolicies role array; access comes only
+    /// from the user's TenantRoleId capabilities.
+    /// </summary>
+    public const string Staff           = "staff";
     /// <summary>v4.1 (ADR-016): self-service supplier tenant admin. Access limited to /api/supplier-cabinet — not part of any tenant-staff policy.</summary>
     public const string SupplierAdmin   = "supplier_admin";
 
@@ -25,7 +33,7 @@ public static class AppRoles
     public static readonly IReadOnlyList<string> All = new[]
     {
         Provider, ProviderAdmin, ProviderAgent,
-        EnterpriseAdmin, NetworkManager, StoreManager, Merchandiser, Storekeeper, Cashier,
+        EnterpriseAdmin, NetworkManager, StoreManager, Merchandiser, Storekeeper, Cashier, Staff,
         SupplierAdmin,
     };
 }

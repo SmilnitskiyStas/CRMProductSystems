@@ -6,9 +6,10 @@ using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
 
+// ADR-020 (TASK-346): no class-level policy — Get* keep AtLeastStoreManager OR "ai_orders.view",
+// Generate/UpdateItem/Accept/Reject keep AtLeastStoreManager OR "ai_orders.manage".
 [ApiController]
 [Route("api/ai-orders")]
-[Authorize(Policy = AppPolicies.AtLeastStoreManager)]
 public sealed class AiOrdersController : ControllerBase
 {
     private readonly IAiOrderService _aiOrders;
@@ -16,11 +17,13 @@ public sealed class AiOrdersController : ControllerBase
     public AiOrdersController(IAiOrderService aiOrders) => _aiOrders = aiOrders;
 
     [HttpGet]
+    [Authorize(Policy = AppPolicies.AiOrdersViewOrCapability)]
     [ProducesResponseType(typeof(List<AiOrderListItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetList([FromQuery] Guid? store_id, CancellationToken ct)
         => Ok(await _aiOrders.GetListAsync(store_id, ct));
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = AppPolicies.AiOrdersViewOrCapability)]
     [ProducesResponseType(typeof(AiOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -30,6 +33,7 @@ public sealed class AiOrdersController : ControllerBase
     }
 
     [HttpPost("generate")]
+    [Authorize(Policy = AppPolicies.AiOrdersManageOrCapability)]
     [ProducesResponseType(typeof(AiOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -46,6 +50,7 @@ public sealed class AiOrdersController : ControllerBase
     }
 
     [HttpPut("{id:guid}/items/{itemId:guid}")]
+    [Authorize(Policy = AppPolicies.AiOrdersManageOrCapability)]
     [ProducesResponseType(typeof(AiOrderItemDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -59,6 +64,7 @@ public sealed class AiOrdersController : ControllerBase
     }
 
     [HttpPost("{id:guid}/accept")]
+    [Authorize(Policy = AppPolicies.AiOrdersManageOrCapability)]
     [ProducesResponseType(typeof(AiOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -72,6 +78,7 @@ public sealed class AiOrdersController : ControllerBase
     }
 
     [HttpPost("{id:guid}/reject")]
+    [Authorize(Policy = AppPolicies.AiOrdersManageOrCapability)]
     [ProducesResponseType(typeof(AiOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Reject(Guid id, CancellationToken ct)

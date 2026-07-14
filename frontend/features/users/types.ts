@@ -15,6 +15,8 @@ export interface UserDto {
   invitedByName?: string | null;
   /** Юридична особа, до якої прив'язаний користувач (nullable). */
   legalEntityId?: string | null;
+  /** Assigned custom capability-template role (ADR-020). Null = no template beyond the base Role. */
+  tenantRoleId?: string | null;
 }
 
 export interface UpdatePermissionsRequest {

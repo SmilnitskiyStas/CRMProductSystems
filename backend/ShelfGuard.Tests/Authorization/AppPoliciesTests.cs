@@ -201,6 +201,103 @@ public sealed class AppPoliciesTests
     public void All_policies_are_registered(string policyName)
         => Assert.NotNull(_options.GetPolicy(policyName));
 
+    // ── ADR-020 (TASK-346): role-or-capability policies ─────────────────────
+    // Each policy must carry exactly the capability it claims AND the exact pre-existing
+    // role array of the action(s) it protects — the whole point is zero regression for
+    // every role that isn't relying on the new capability path.
+
+    [Theory]
+    [InlineData(AppPolicies.SchedulesManageOrCapability, TenantRoleCapabilities.SchedulesManage)]
+    [InlineData(AppPolicies.AnalyticsViewOrCapability, TenantRoleCapabilities.AnalyticsView)]
+    [InlineData(AppPolicies.IntegrationsViewOrCapability, TenantRoleCapabilities.IntegrationsView)]
+    [InlineData(AppPolicies.IntegrationsManageOrCapability, TenantRoleCapabilities.IntegrationsManage)]
+    [InlineData(AppPolicies.OrdersManageOrCapability, TenantRoleCapabilities.OrdersManage)]
+    [InlineData(AppPolicies.SuppliersViewOrCapability, TenantRoleCapabilities.SuppliersView)]
+    [InlineData(AppPolicies.SuppliersManageOrCapability, TenantRoleCapabilities.SuppliersManage)]
+    [InlineData(AppPolicies.ReceiptsViewOrCapability, TenantRoleCapabilities.ReceiptsView)]
+    [InlineData(AppPolicies.AiOrdersViewOrCapability, TenantRoleCapabilities.AiOrdersView)]
+    [InlineData(AppPolicies.AiOrdersManageOrCapability, TenantRoleCapabilities.AiOrdersManage)]
+    [InlineData(AppPolicies.EnterpriseAdminOrUsersManage, TenantRoleCapabilities.UsersManage)]
+    [InlineData(AppPolicies.StoreManagerOrUsersManage, TenantRoleCapabilities.UsersManage)]
+    public void RoleOrCapabilityPolicy_carries_expected_capability(string policyName, string expectedCapability)
+        => Assert.Equal(expectedCapability, RequirementFor(policyName).Capability);
+
+    [Fact]
+    public void SchedulesManageOrCapability_base_roles_match_AtLeastStoreManager()
+        => AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.SchedulesManageOrCapability);
+
+    [Fact]
+    public void AnalyticsViewOrCapability_base_roles_match_CanViewAnalytics()
+        => AssertSameRoles(AppPolicies.CanViewAnalyticsRoles, AppPolicies.AnalyticsViewOrCapability);
+
+    [Fact]
+    public void IntegrationsPolicies_base_roles_match_AtLeastStoreManager()
+    {
+        AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.IntegrationsViewOrCapability);
+        AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.IntegrationsManageOrCapability);
+    }
+
+    [Fact]
+    public void OrdersManageOrCapability_base_roles_match_AtLeastStoreManager()
+        => AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.OrdersManageOrCapability);
+
+    [Fact]
+    public void SuppliersViewOrCapability_base_roles_match_AtLeastStoreManager()
+        => AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.SuppliersViewOrCapability);
+
+    // Create/Update/Delete were AtLeastNetworkManager (tighter than the class-level
+    // AtLeastStoreManager they used to be AND-combined with) — must stay tighter, not loosen
+    // to StoreManager, when the class-level gate is removed.
+    [Fact]
+    public void SuppliersManageOrCapability_base_roles_match_AtLeastNetworkManager_excludes_StoreManager()
+    {
+        var roles = RequirementFor(AppPolicies.SuppliersManageOrCapability).AllowedRoles;
+        Assert.DoesNotContain(AppRoles.StoreManager, roles);
+        AssertSameRoles(AppPolicies.AtLeastNetworkManagerRoles, AppPolicies.SuppliersManageOrCapability);
+    }
+
+    [Fact]
+    public void ReceiptsViewOrCapability_base_roles_match_CanReceiveStock()
+        => AssertSameRoles(AppPolicies.CanReceiveStockRoles, AppPolicies.ReceiptsViewOrCapability);
+
+    [Fact]
+    public void AiOrdersPolicies_base_roles_match_AtLeastStoreManager()
+    {
+        AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.AiOrdersViewOrCapability);
+        AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.AiOrdersManageOrCapability);
+    }
+
+    // Invite/Deactivate were AtLeastEnterpriseAdmin — must NOT loosen to StoreManager/NetworkManager
+    // just because the capability is meant to admit a "staff"-rank HR user via the OTHER policy.
+    [Fact]
+    public void EnterpriseAdminOrUsersManage_base_roles_exclude_StoreManager_and_NetworkManager()
+    {
+        var roles = RequirementFor(AppPolicies.EnterpriseAdminOrUsersManage).AllowedRoles;
+        Assert.DoesNotContain(AppRoles.StoreManager, roles);
+        Assert.DoesNotContain(AppRoles.NetworkManager, roles);
+        AssertSameRoles(AppPolicies.AtLeastEnterpriseAdminRoles, AppPolicies.EnterpriseAdminOrUsersManage);
+    }
+
+    [Fact]
+    public void StoreManagerOrUsersManage_base_roles_match_AtLeastStoreManager()
+        => AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.StoreManagerOrUsersManage);
+
+    [Theory]
+    [InlineData(AppPolicies.SchedulesManageOrCapability)]
+    [InlineData(AppPolicies.AnalyticsViewOrCapability)]
+    [InlineData(AppPolicies.IntegrationsViewOrCapability)]
+    [InlineData(AppPolicies.IntegrationsManageOrCapability)]
+    [InlineData(AppPolicies.OrdersManageOrCapability)]
+    [InlineData(AppPolicies.SuppliersViewOrCapability)]
+    [InlineData(AppPolicies.SuppliersManageOrCapability)]
+    [InlineData(AppPolicies.ReceiptsViewOrCapability)]
+    [InlineData(AppPolicies.AiOrdersViewOrCapability)]
+    [InlineData(AppPolicies.AiOrdersManageOrCapability)]
+    [InlineData(AppPolicies.EnterpriseAdminOrUsersManage)]
+    [InlineData(AppPolicies.StoreManagerOrUsersManage)]
+    public void RoleOrCapabilityPolicy_is_registered(string policyName)
+        => Assert.NotNull(_options.GetPolicy(policyName));
+
     // ── helper ──────────────────────────────────────────────────────────────
 
     private IEnumerable<string> RolesFor(string policyName)
@@ -212,4 +309,17 @@ public sealed class AppPoliciesTests
             .OfType<RolesAuthorizationRequirement>()
             .SelectMany(r => r.AllowedRoles);
     }
+
+    private RoleOrCapabilityRequirement RequirementFor(string policyName)
+    {
+        var policy = _options.GetPolicy(policyName)
+            ?? throw new InvalidOperationException($"Policy '{policyName}' not registered.");
+
+        return policy.Requirements.OfType<RoleOrCapabilityRequirement>().Single();
+    }
+
+    private void AssertSameRoles(IReadOnlyCollection<string> expected, string policyName) =>
+        Assert.Equal(
+            expected.OrderBy(r => r, StringComparer.Ordinal),
+            RequirementFor(policyName).AllowedRoles.OrderBy(r => r, StringComparer.Ordinal));
 }

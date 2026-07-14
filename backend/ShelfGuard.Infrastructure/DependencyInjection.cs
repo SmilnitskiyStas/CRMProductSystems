@@ -221,6 +221,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IUserPermissionGrantRepository,
             Data.Repositories.UserPermissionGrantRepository>();
 
+        // TASK-345 - Tenant custom role capability templates (ADR-020)
+        services.AddScoped<Domain.Interfaces.ITenantRoleRepository,
+            Data.Repositories.TenantRoleRepository>();
+
         return services;
     }
 }

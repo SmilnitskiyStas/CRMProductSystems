@@ -18,11 +18,12 @@ public sealed class UserServicePasswordTests
     private readonly ILegalEntityService _legalEntities = Substitute.For<ILegalEntityService>();
     private readonly IRefreshTokenRepository _refreshTokens = Substitute.For<IRefreshTokenRepository>();
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
+    private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
     private readonly UserService _sut;
 
     public UserServicePasswordTests()
     {
-        _sut = new UserService(_users, _activityLogs, _hasher, _legalEntities, _refreshTokens, _permissionGrants);
+        _sut = new UserService(_users, _activityLogs, _hasher, _legalEntities, _refreshTokens, _permissionGrants, _tenantRoles);
     }
 
     [Fact]
@@ -74,13 +75,17 @@ public sealed class UserServicePasswordTests
     public async Task Invite_rejects_password_that_violates_policy()
     {
         var tenantId = Guid.NewGuid();
+        // Password validation (TASK-347: InviteAsync now also takes actingUserId) runs before
+        // the acting-user lookup/rank check, so this short-circuits without ever touching
+        // _users.GetByIdAsync — an arbitrary actingUserId is fine, no extra mock needed.
+        var actingUserId = Guid.NewGuid();
         var request = new InviteUserRequest(
             Email: "new.user@example.com",
             FullName: "New User",
             Role: "storekeeper",
             Password: "qwerty123456"); // common password
 
-        var (user, error) = await _sut.InviteAsync(tenantId, request, "Inviter", default);
+        var (user, error) = await _sut.InviteAsync(tenantId, actingUserId, request, "Inviter", default);
 
         Assert.Null(user);
         Assert.Equal("This password is too common. Choose a more unique password.", error);

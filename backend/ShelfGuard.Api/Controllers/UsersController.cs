@@ -10,10 +10,22 @@ namespace ShelfGuard.Api.Controllers;
 /// <summary>
 /// User management (within a tenant). Store managers see only their store's users.
 /// Enterprise admins manage all users in their tenant.
+/// ADR-020 (TASK-346): no class-level policy — every action below carries its own explicit
+/// policy. Invite/Update/Deactivate additionally admit a "users.manage" TenantRole capability
+/// holder past the coarse `[Authorize(Policy=...)]` gate regardless of role rank;
+/// UpdatePermissions/GrantTemporaryPermission/RevokeTemporaryPermission/AssignTenantRole are
+/// deliberately left role-gated only (anti-escalation — a capability-only user must never be
+/// able to grant itself or others more access than the template intends).
+/// TASK-347 (security review of the above): that coarse gate has no notion of RoleRank, so a
+/// capability holder who cleared it could still act on/assign roles above their own station —
+/// <see cref="IUserService.InviteAsync"/>/<see cref="IUserService.UpdateAsync"/>/
+/// <see cref="IUserService.DeactivateAsync"/> now each re-check RoleRank server-side
+/// (acting user vs. target's current role, and vs. any newly-requested role) regardless of
+/// which policy path let the caller in, closing that gap for both the new capability path and
+/// a pre-existing store_manager self-escalation hole in Update.
 /// </summary>
 [ApiController]
 [Route("api/users")]
-[Authorize(Policy = AppPolicies.AtLeastStoreManager)]
 public sealed class UsersController : ControllerBase
 {
     private readonly IUserService _users;
@@ -22,6 +34,7 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>Returns all users for the current tenant.</summary>
     [HttpGet]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(IReadOnlyList<UserDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
@@ -34,6 +47,7 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>Returns a single user by id.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -46,16 +60,19 @@ public sealed class UsersController : ControllerBase
         return Ok(user);
     }
 
-    /// <summary>Creates a new user (invite). Enterprise admin only.</summary>
+    /// <summary>Creates a new user (invite). Enterprise admin, or a "users.manage" TenantRole capability holder.</summary>
     [HttpPost("invite")]
-    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [Authorize(Policy = AppPolicies.EnterpriseAdminOrUsersManage)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Invite(
         [FromBody] InviteUserRequest request, CancellationToken ct)
     {
         var tenantId    = ResolveTenantId();
         if (tenantId is null) return Forbid();
+
+        var actingUserId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
         // Pass inviter's display name for audit trail
         var inviterName = User.FindFirst("full_name")?.Value
@@ -63,16 +80,18 @@ public sealed class UsersController : ControllerBase
                        ?? User.FindFirst(ClaimTypes.Email)?.Value
                        ?? "Unknown";
 
-        var (user, error) = await _users.InviteAsync(tenantId.Value, request, inviterName, ct);
-        if (user is null) return BadRequest(new { error });
+        var (user, error) = await _users.InviteAsync(tenantId.Value, actingUserId, request, inviterName, ct);
+        if (user is null)
+            return error!.Contains("do not have permission") ? Forbid() : BadRequest(new { error });
         return CreatedAtAction(nameof(GetById), new { id = user.Id }, user);
     }
 
     /// <summary>Updates a user's profile, role, and store assignment.</summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [Authorize(Policy = AppPolicies.StoreManagerOrUsersManage)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
         Guid id,
@@ -82,9 +101,13 @@ public sealed class UsersController : ControllerBase
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
-        var (user, error) = await _users.UpdateAsync(tenantId.Value, id, request, ct);
+        var actingUserId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var (user, error) = await _users.UpdateAsync(tenantId.Value, actingUserId, id, request, ct);
         if (user is null)
-            return error!.Contains("not found") ? NotFound(new { error }) : BadRequest(new { error });
+            return error!.Contains("not found")            ? NotFound(new { error })
+                 : error.Contains("do not have permission") ? Forbid()
+                 : BadRequest(new { error });
         return Ok(user);
     }
 
@@ -121,18 +144,22 @@ public sealed class UsersController : ControllerBase
         return Ok(user);
     }
 
-    /// <summary>Deactivates a user (soft delete). Enterprise admin only.</summary>
+    /// <summary>Deactivates a user (soft delete). Enterprise admin, or a "users.manage" TenantRole capability holder.</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [Authorize(Policy = AppPolicies.EnterpriseAdminOrUsersManage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
-        var error = await _users.DeactivateAsync(tenantId.Value, id, ct);
-        return error is null ? NoContent() : NotFound(new { error });
+        var actingUserId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var error = await _users.DeactivateAsync(tenantId.Value, actingUserId, id, ct);
+        if (error is null) return NoContent();
+        return error.Contains("do not have permission") ? Forbid() : NotFound(new { error });
     }
 
     /// <summary>
@@ -169,6 +196,7 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>Returns active (non-revoked, non-expired) temporary permission grants for a user.</summary>
     [HttpGet("{id:guid}/permission-grants")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(IReadOnlyList<PermissionGrantDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetActivePermissionGrants(Guid id, CancellationToken ct)
@@ -208,6 +236,7 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>Returns the activity log for a specific user (last 50 entries by default).</summary>
     [HttpGet("{id:guid}/activity")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(IReadOnlyList<ActivityLogDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetActivity(
@@ -222,6 +251,31 @@ public sealed class UsersController : ControllerBase
 
         var (logs, error) = await _users.GetActivityAsync(tenantId.Value, id, limit, ct);
         return error is null ? Ok(logs) : NotFound(new { error });
+    }
+
+    /// <summary>
+    /// Assigns (or clears, when TenantRoleId is null) a custom capability-template role to a
+    /// user (ADR-020, TASK-346). AtLeastEnterpriseAdmin-only, STRICTLY no capability bypass —
+    /// otherwise a "users.manage" capability holder could grant themselves or others a
+    /// higher-privilege template (anti-escalation).
+    /// </summary>
+    [HttpPost("{id:guid}/tenant-role")]
+    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AssignTenantRole(
+        Guid id, [FromBody] AssignTenantRoleRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (success, error) = await _users.AssignTenantRoleAsync(tenantId.Value, id, request.TenantRoleId, ct);
+
+        if (success) return NoContent();
+        return error == "Cannot assign an archived TenantRole."
+            ? BadRequest(new { error })
+            : NotFound(new { error });
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

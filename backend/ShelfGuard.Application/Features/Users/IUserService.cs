@@ -6,9 +6,36 @@ public interface IUserService
 {
     Task<IReadOnlyList<UserDto>> GetAllAsync(Guid tenantId, CancellationToken ct = default);
     Task<(UserDto? User, string? Error)> GetByIdAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
-    Task<(UserDto? User, string? Error)> InviteAsync(Guid tenantId, InviteUserRequest request, string inviterName, CancellationToken ct = default);
-    Task<(UserDto? User, string? Error)> UpdateAsync(Guid tenantId, Guid userId, UpdateUserRequest request, CancellationToken ct = default);
-    Task<string?> DeactivateAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Invites (creates) a new user. Server-side role-rank check (TASK-347): the acting user
+    /// cannot invite a role ranked higher than their own — closes the ADR-020 "users.manage"
+    /// capability escalation path (a staff-rank capability holder could otherwise invite a
+    /// brand-new enterprise_admin with no rank check at all).
+    /// </summary>
+    Task<(UserDto? User, string? Error)> InviteAsync(Guid tenantId, Guid actingUserId, InviteUserRequest request, string inviterName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates a user's profile, role, and store assignment. Server-side role-rank checks
+    /// (TASK-347): the acting user must have a strictly higher rank than the target's CURRENT
+    /// role, and (when the role is actually changing) cannot assign a role ranked higher than
+    /// their own. Self-update (<paramref name="actingUserId"/> == <paramref name="userId"/>) is
+    /// allowed for profile fields but never for a role change, even a demotion — see
+    /// UserService.UpdateAsync for the exact rule. Exception: two "supplier_admin" peers
+    /// (ADR-016 flat cabinet domain, no rank hierarchy) skip the outrank check — see
+    /// UserService.IsExemptFromOutrankGate.
+    /// </summary>
+    Task<(UserDto? User, string? Error)> UpdateAsync(Guid tenantId, Guid actingUserId, Guid userId, UpdateUserRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deactivates (soft-deletes) a user. Server-side role-rank check (TASK-347): the acting
+    /// user must have a strictly higher rank than the target's role — this also rules out
+    /// self-deactivation (equal rank never satisfies "strictly higher"). Exception: two
+    /// "supplier_admin" peers skip the outrank check — see UserService.IsExemptFromOutrankGate
+    /// (without it, SupplierCabinetService's staff deactivation would always fail, since every
+    /// supplier-tenant user shares that one flat role).
+    /// </summary>
+    Task<string?> DeactivateAsync(Guid tenantId, Guid actingUserId, Guid userId, CancellationToken ct = default);
 
     // Self-service (any authenticated user)
     Task<(UserDto? User, string? Error)> UpdateMyProfileAsync(Guid userId, UpdateMyProfileRequest request, CancellationToken ct = default);
@@ -49,4 +76,14 @@ public interface IUserService
     /// <summary>Active (non-revoked, non-expired) temporary grants for a user.</summary>
     Task<(IReadOnlyList<PermissionGrantDto>? Grants, string? Error)> GetActivePermissionGrantsAsync(
         Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    // Tenant-role (capability template) assignment (ADR-020, TASK-346)
+    /// <summary>
+    /// Assigns or clears (tenantRoleId = null) the target user's TenantRole template.
+    /// When tenantRoleId is not null it must belong to the SAME tenant as the target user and
+    /// be active — otherwise "not found"/"archived" is returned (never a 403, so a caller
+    /// cannot use this to probe for another tenant's template ids).
+    /// </summary>
+    Task<(bool Success, string? Error)> AssignTenantRoleAsync(
+        Guid tenantId, Guid targetUserId, Guid? tenantRoleId, CancellationToken ct = default);
 }

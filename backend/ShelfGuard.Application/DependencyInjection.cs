@@ -123,6 +123,9 @@ services.AddScoped<IAuthService, AuthService>();
         // TASK-333 - Landing page lead capture
         services.AddScoped<ILandingLeadService, LandingLeadService>();
 
+        // ADR-020 / TASK-345/346 - Tenant custom role capability templates
+        services.AddScoped<Features.TenantRoles.ITenantRoleService, Features.TenantRoles.TenantRoleService>();
+
         return services;
     }
 }

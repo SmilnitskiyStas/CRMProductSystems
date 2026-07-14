@@ -10,6 +10,9 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import type { UserDto, UpdateUserRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
+import { TenantRoleBadge } from "@/features/tenant-roles/components/TenantRoleBadge";
+import { TenantRoleSelector } from "@/features/tenant-roles/components/TenantRoleSelector";
 
 const EDITABLE_ROLES = [
   "store_manager",
@@ -73,6 +76,12 @@ export function UserDetailPanel({ user, onClose }: Props) {
   const editorRank  = ROLE_RANK[me?.role ?? ""] ?? 0;
   const targetRank  = ROLE_RANK[user.role] ?? 0;
   const canSeeAccessTab = !isSelf && editorRank > targetRank;
+
+  // TenantRole template assignment (ADR-020): enterprise_admin+ only, independent of the
+  // rank check above — backend's POST /api/users/:id/tenant-role has no rank comparison
+  // (AtLeastEnterpriseAdmin-only), so an admin can assign a template to a peer admin too.
+  const canManageTenantRole = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN) && !isSelf;
+  const showAccessTab = canSeeAccessTab || canManageTenantRole;
 
   const initials = user.fullName
     .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
@@ -174,6 +183,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
               >
                 {ROLE_LABELS[user.role] ?? user.role}
               </span>
+              <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
               {!user.isActive && (
                 <span
                   style={{
@@ -209,7 +219,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
           }}
         >
           <button style={tabBtnStyle(tab === "info")}     onClick={() => setTab("info")}>Інформація</button>
-          {canSeeAccessTab && (
+          {showAccessTab && (
             <button style={tabBtnStyle(tab === "access")} onClick={() => setTab("access")}>Доступ</button>
           )}
           <button style={tabBtnStyle(tab === "activity")} onClick={() => setTab("activity")}>Активність</button>
@@ -336,7 +346,10 @@ export function UserDetailPanel({ user, onClose }: Props) {
           )}
 
           {tab === "access" && (
-            <UserPermissionsEditor user={user} editorRole={me?.role ?? ""} />
+            <div>
+              {canManageTenantRole && <TenantRoleSelector user={user} />}
+              {canSeeAccessTab && <UserPermissionsEditor user={user} editorRole={me?.role ?? ""} />}
+            </div>
           )}
 
           {tab === "activity" && (

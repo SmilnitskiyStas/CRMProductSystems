@@ -18,6 +18,10 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
         "provider", "provider_admin", "provider_agent",
         "enterprise_admin", "network_manager",
         "store_manager", "merchandiser", "storekeeper", "cashier",
+        // ADR-020 (TASK-345): minimal base tier, tenant-scoped like the roles above —
+        // grants no RLS bypass, just lets app.role be set to a real value for a
+        // capability-template-only user.
+        "staff",
     };
 
     private readonly IHttpContextAccessor _http;

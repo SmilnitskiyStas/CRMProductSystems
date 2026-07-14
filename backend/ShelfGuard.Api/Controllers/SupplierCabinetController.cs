@@ -241,12 +241,15 @@ public sealed class SupplierCabinetController : ControllerBase
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
+        var callerUserId = ResolveUserId();
+        if (callerUserId is null) return Forbid();
+
         var inviterName = User.FindFirst("full_name")?.Value
                        ?? User.FindFirst(ClaimTypes.Name)?.Value
                        ?? User.FindFirst(ClaimTypes.Email)?.Value
                        ?? "Unknown";
 
-        var (user, error) = await _cabinet.InviteStaffAsync(tenantId.Value, request, inviterName, ct);
+        var (user, error) = await _cabinet.InviteStaffAsync(tenantId.Value, callerUserId.Value, request, inviterName, ct);
         if (user is null) return BadRequest(new { error });
         return StatusCode(StatusCodes.Status201Created, user);
     }
@@ -260,7 +263,10 @@ public sealed class SupplierCabinetController : ControllerBase
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
-        var error = await _cabinet.DeactivateStaffAsync(tenantId.Value, id, ct);
+        var callerUserId = ResolveUserId();
+        if (callerUserId is null) return Forbid();
+
+        var error = await _cabinet.DeactivateStaffAsync(tenantId.Value, callerUserId.Value, id, ct);
         return error is null ? NoContent() : NotFound(new { error });
     }
 

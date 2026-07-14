@@ -16,7 +16,10 @@ public sealed record UserDto(
     /// <summary>Display name of the user who invited this account. Null for seed/provider-created users.</summary>
     string? InvitedByName = null,
     /// <summary>Optional legal entity this user is registered under (TASK-322).</summary>
-    Guid? LegalEntityId = null
+    Guid? LegalEntityId = null,
+    /// <summary>Assigned custom capability-template role (ADR-020, TASK-346). Null = no template
+    /// beyond whatever the base Role already grants.</summary>
+    Guid? TenantRoleId = null
 );
 
 public sealed record InviteUserRequest(
@@ -47,6 +50,13 @@ public sealed record ChangePasswordRequest(
 );
 
 public sealed record LinkTelegramRequest(string ChatId);
+
+/// <summary>
+/// Assigns (or clears, when TenantRoleId is null) a custom capability-template role to a user
+/// (ADR-020, TASK-346). AtLeastEnterpriseAdmin-only, no capability bypass — see
+/// UsersController.AssignTenantRole.
+/// </summary>
+public sealed record AssignTenantRoleRequest(Guid? TenantRoleId);
 
 /// <summary>
 /// Replaces all per-user page-access overrides for a target user.

@@ -8,9 +8,12 @@ using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
 
+// ADR-020 (TASK-346): no class-level policy. Get* keep the pre-existing CanReceiveStock floor
+// OR "receipts.view". Create/UpdateItems/Receive/Cancel are deliberately untouched — the
+// write-heavy stock path stays role-gated only (explicit per-action now, same effective
+// policy as before), no capability bypass (ADR-020 point 3).
 [ApiController]
 [Route("api/receipts")]
-[Authorize(Policy = AppPolicies.CanReceiveStock)]
 public sealed class ReceiptsController : ControllerBase
 {
     private readonly IReceiptService _receipts;
@@ -18,6 +21,7 @@ public sealed class ReceiptsController : ControllerBase
     public ReceiptsController(IReceiptService receipts) => _receipts = receipts;
 
     [HttpGet]
+    [Authorize(Policy = AppPolicies.ReceiptsViewOrCapability)]
     [ProducesResponseType(typeof(PagedResult<ReceiptDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] Guid? store_id,
@@ -32,6 +36,7 @@ public sealed class ReceiptsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = AppPolicies.ReceiptsViewOrCapability)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -41,6 +46,7 @@ public sealed class ReceiptsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(CreateReceiptRequest request, CancellationToken ct)
@@ -55,6 +61,7 @@ public sealed class ReceiptsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/items")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -69,6 +76,7 @@ public sealed class ReceiptsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/receive")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

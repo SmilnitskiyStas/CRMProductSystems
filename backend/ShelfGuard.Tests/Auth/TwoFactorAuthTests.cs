@@ -24,17 +24,19 @@ public sealed class TwoFactorAuthTests
     private readonly IActivityLogRepository _activityLogs = Substitute.For<IActivityLogRepository>();
     private readonly ITotpService _totp = new TotpService(); // real implementation
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
+    private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
     private readonly AuthService _sut;
 
     public TwoFactorAuthTests()
     {
-        _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants,
+        _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants, _tenantRoles,
             NullLogger<AuthService>.Instance);
         _permissionGrants.GetActiveGrantsForUserAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(Array.Empty<UserPermissionGrant>());
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>()).Returns("access_token");
+            Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(),
+            Arg.Any<List<string>?>()).Returns("access_token");
         // Deterministic fake hash — enough to prove hashes (not plaintext) are stored/compared.
         _jwt.HashToken(Arg.Any<string>()).Returns(ci => "sha256:" + ci.Arg<string>());
     }

@@ -44,7 +44,7 @@ public sealed class SchedulesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [Authorize(Policy = AppPolicies.SchedulesManageOrCapability)]
     [ProducesResponseType(typeof(WorkScheduleDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(CreateWorkScheduleDto dto, CancellationToken ct)
@@ -63,7 +63,7 @@ public sealed class SchedulesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [Authorize(Policy = AppPolicies.SchedulesManageOrCapability)]
     [ProducesResponseType(typeof(WorkScheduleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -80,7 +80,7 @@ public sealed class SchedulesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [Authorize(Policy = AppPolicies.SchedulesManageOrCapability)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
@@ -95,7 +95,7 @@ public sealed class SchedulesController : ControllerBase
     // ── Shifts ───────────────────────────────────────────────────────────────
 
     [HttpPost("{id:guid}/shifts")]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [Authorize(Policy = AppPolicies.SchedulesManageOrCapability)]
     [ProducesResponseType(typeof(ScheduleShiftDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -112,7 +112,7 @@ public sealed class SchedulesController : ControllerBase
     }
 
     [HttpPut("{scheduleId:guid}/shifts/{shiftId:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [Authorize(Policy = AppPolicies.SchedulesManageOrCapability)]
     [ProducesResponseType(typeof(ScheduleShiftDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -129,7 +129,7 @@ public sealed class SchedulesController : ControllerBase
     }
 
     [HttpDelete("{scheduleId:guid}/shifts/{shiftId:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [Authorize(Policy = AppPolicies.SchedulesManageOrCapability)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteShift(Guid scheduleId, Guid shiftId, CancellationToken ct)

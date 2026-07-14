@@ -59,4 +59,9 @@ export const usersApi = {
   revokeTemporaryPermission(id: string, grantId: string): Promise<void> {
     return api.delete<void>(`/api/users/${id}/permission-grants/${grantId}`);
   },
+
+  /** POST /api/users/:id/tenant-role — assign (or clear, when null) a TenantRole template (ADR-020). */
+  assignTenantRole(id: string, tenantRoleId: string | null): Promise<void> {
+    return api.post<void>(`/api/users/${id}/tenant-role`, { tenantRoleId });
+  },
 };

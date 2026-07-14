@@ -15,6 +15,7 @@ public sealed class UserService : IUserService
     private readonly ILegalEntityService     _legalEntities;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IUserPermissionGrantRepository _permissionGrants;
+    private readonly ITenantRoleRepository   _tenantRoles;
 
     /// <summary>ADR-019: temporary grants may not extend more than this far into the future.</summary>
     private const int MaxGrantDurationDays = 90;
@@ -22,13 +23,15 @@ public sealed class UserService : IUserService
     private static readonly HashSet<string> ValidRoles =
     [
         "enterprise_admin", "network_manager", "store_manager",
-        "merchandiser", "storekeeper", "cashier",
+        "merchandiser", "storekeeper", "cashier", "staff",
         "supplier_admin",
     ];
 
     /// <summary>
     /// Role rank — higher number = higher authority.
     /// Used to ensure only higher-ranked users can edit lower-ranked ones.
+    /// "staff" (ADR-020, TASK-345) is intentionally the lowest rank — a capability-only
+    /// user (TenantRoleId) never outranks anyone via base Role alone.
     /// </summary>
     private static readonly Dictionary<string, int> RoleRank = new()
     {
@@ -38,7 +41,26 @@ public sealed class UserService : IUserService
         ["storekeeper"]      = 1,
         ["merchandiser"]     = 1,
         ["cashier"]          = 1,
+        ["staff"]            = 0,
     };
+
+    /// <summary>
+    /// True when the RoleRank outrank gate below (TASK-347) must be skipped for this
+    /// actor/other-role pair. Supplier cabinet (ADR-016) is a flat, single-role domain —
+    /// every supplier tenant user, from the first onboarded admin to every teammate they
+    /// invite, is role="supplier_admin" (see AppRoles.cs, TenantAdminService,
+    /// ProviderService). RoleRank has no entry for it, so <c>GetValueOrDefault(role, 0)</c>
+    /// silently gives it rank 0 — identical to "staff" — and two supplier_admin peers always
+    /// compare as equal rank. Applying "strictly higher rank required" there would
+    /// permanently block SupplierCabinetService's Invite/Deactivate-staff flow (100% of
+    /// calls, since caller and target always share this role) even though nothing is being
+    /// escalated: supplier_admin cannot reach UsersController's Invite/Update/Deactivate at
+    /// all (absent from every AppPolicies role array, including the "users.manage"
+    /// capability-OR policies — AppPolicies.cs), so exempting it here does not reopen the
+    /// ADR-020 escalation path this gate exists to close.
+    /// </summary>
+    private static bool IsExemptFromOutrankGate(string actingRole, string otherRole) =>
+        actingRole == "supplier_admin" && otherRole == "supplier_admin";
 
     private static readonly HashSet<string> ValidPages =
     [
@@ -52,7 +74,8 @@ public sealed class UserService : IUserService
         IPasswordHasher hasher,
         ILegalEntityService legalEntities,
         IRefreshTokenRepository refreshTokens,
-        IUserPermissionGrantRepository permissionGrants)
+        IUserPermissionGrantRepository permissionGrants,
+        ITenantRoleRepository tenantRoles)
     {
         _users             = users;
         _activityLogs      = activityLogs;
@@ -60,6 +83,7 @@ public sealed class UserService : IUserService
         _legalEntities     = legalEntities;
         _refreshTokens     = refreshTokens;
         _permissionGrants  = permissionGrants;
+        _tenantRoles       = tenantRoles;
     }
 
     // ── List ─────────────────────────────────────────────────────────────────
@@ -84,7 +108,7 @@ public sealed class UserService : IUserService
     // ── Invite (create) ───────────────────────────────────────────────────────
 
     public async Task<(UserDto? User, string? Error)> InviteAsync(
-        Guid tenantId, InviteUserRequest request, string inviterName, CancellationToken ct = default)
+        Guid tenantId, Guid actingUserId, InviteUserRequest request, string inviterName, CancellationToken ct = default)
     {
         if (!ValidRoles.Contains(request.Role))
             return (null, $"Invalid role '{request.Role}'.");
@@ -92,6 +116,23 @@ public sealed class UserService : IUserService
         var passwordError = PasswordValidator.Validate(request.Password, request.Email);
         if (passwordError is not null)
             return (null, passwordError);
+
+        var actingUser = await _users.GetByIdAsync(actingUserId, ct);
+        if (actingUser is null || actingUser.TenantId != tenantId)
+            return (null, "Acting user not found.");
+
+        var actingRank    = RoleRank.GetValueOrDefault(actingUser.Role, 0);
+        var requestedRank = RoleRank.GetValueOrDefault(request.Role, 0);
+
+        // Cannot invite a user with a role ranked higher than your own (TASK-347) — closes the
+        // ADR-020 "users.manage" capability escalation path: a staff-rank capability holder
+        // could otherwise invite a brand-new enterprise_admin with zero rank check.
+        // (supplier_admin peers already pass unaided here — both default to rank 0 via
+        // GetValueOrDefault, so 0 > 0 is false; no IsExemptFromOutrankGate call needed. That
+        // helper only guards the "<=" gates in UpdateAsync/DeactivateAsync below, where equal
+        // rank is otherwise rejected.)
+        if (requestedRank > actingRank)
+            return (null, $"You do not have permission to invite a role higher than your own ('{actingUser.Role}').");
 
         var existing = await _users.GetByEmailAsync(request.Email.ToLowerInvariant(), ct);
         if (existing is not null)
@@ -122,25 +163,65 @@ public sealed class UserService : IUserService
     // ── Update (by manager) ───────────────────────────────────────────────────
 
     public async Task<(UserDto? User, string? Error)> UpdateAsync(
-        Guid tenantId, Guid userId, UpdateUserRequest request, CancellationToken ct = default)
+        Guid tenantId, Guid actingUserId, Guid userId, UpdateUserRequest request, CancellationToken ct = default)
     {
         if (!ValidRoles.Contains(request.Role))
             return (null, $"Invalid role '{request.Role}'.");
 
-        var user = await _users.GetByIdAsync(userId, ct);
-        if (user is null || user.TenantId != tenantId)
+        var target = await _users.GetByIdAsync(userId, ct);
+        if (target is null || target.TenantId != tenantId)
             return (null, "User not found.");
 
         if (request.LegalEntityId.HasValue &&
             !await _legalEntities.BelongsToTenantAsync(tenantId, request.LegalEntityId.Value, ct))
             return (null, "Вказана юридична особа не належить цьому тенанту.");
 
-        user.UpdateProfile(request.FullName, request.Phone);
-        user.SetRole(request.Role);
-        user.SetStore(request.StoreId);
-        user.SetLegalEntity(request.LegalEntityId);
+        var roleChanging = !string.Equals(request.Role, target.Role, StringComparison.Ordinal);
 
-        _users.Update(user);
+        if (actingUserId == userId)
+        {
+            // Self-update (TASK-347): RoleRank[actor] can never be *strictly* greater than
+            // RoleRank[self], so the outrank gate below is meaningless for this case — a role
+            // change is simply never allowed through this endpoint when acting on yourself,
+            // even a demotion (simplest/safest of the two options considered, see task log).
+            // Non-role fields (name, phone, store, legal entity) still go through.
+            if (roleChanging)
+                return (null, "You do not have permission to change your own role.");
+        }
+        else
+        {
+            var actingUser = await _users.GetByIdAsync(actingUserId, ct);
+            if (actingUser is null || actingUser.TenantId != tenantId)
+                return (null, "Acting user not found.");
+
+            var actingRank = RoleRank.GetValueOrDefault(actingUser.Role, 0);
+            var targetRank = RoleRank.GetValueOrDefault(target.Role, 0);
+
+            // Outrank gate — same rule as UpdatePermissionsAsync: acting user must have a
+            // STRICTLY higher rank than the target's CURRENT role. Exempt supplier_admin
+            // peers — see IsExemptFromOutrankGate.
+            if (!IsExemptFromOutrankGate(actingUser.Role, target.Role) && actingRank <= targetRank)
+                return (null, $"You do not have permission to edit a '{target.Role}' user.");
+
+            if (roleChanging)
+            {
+                var requestedRank = RoleRank.GetValueOrDefault(request.Role, 0);
+
+                // Cannot assign a role ranked higher than the actor's own (TASK-347) — closes
+                // the ADR-020 "users.manage" capability escalation path (self-escalation via
+                // this same check, and also a pre-existing gap: store_manager could already
+                // promote anyone to enterprise_admin here before this fix).
+                if (requestedRank > actingRank)
+                    return (null, $"You do not have permission to assign a role higher than your own ('{actingUser.Role}').");
+            }
+        }
+
+        target.UpdateProfile(request.FullName, request.Phone);
+        target.SetRole(request.Role);
+        target.SetStore(request.StoreId);
+        target.SetLegalEntity(request.LegalEntityId);
+
+        _users.Update(target);
 
         await LogAsync(tenantId, userId, "user.updated",
             entityType: "User", entityId: userId,
@@ -148,19 +229,37 @@ public sealed class UserService : IUserService
             ct: ct);
 
         await _users.SaveChangesAsync(ct);
-        return (ToDto(user), null);
+        return (ToDto(target), null);
     }
 
     // ── Deactivate (soft delete) ──────────────────────────────────────────────
 
-    public async Task<string?> DeactivateAsync(Guid tenantId, Guid userId, CancellationToken ct = default)
+    public async Task<string?> DeactivateAsync(Guid tenantId, Guid actingUserId, Guid userId, CancellationToken ct = default)
     {
-        var user = await _users.GetByIdAsync(userId, ct);
-        if (user is null || user.TenantId != tenantId)
+        // Explicit, friendlier message for the self case — otherwise covered by the generic
+        // rank check below anyway (equal rank never satisfies "strictly higher").
+        if (actingUserId == userId)
+            return "You do not have permission to deactivate your own account.";
+
+        var target = await _users.GetByIdAsync(userId, ct);
+        if (target is null || target.TenantId != tenantId)
             return "User not found.";
 
-        user.Deactivate();
-        _users.Update(user);
+        var actingUser = await _users.GetByIdAsync(actingUserId, ct);
+        if (actingUser is null || actingUser.TenantId != tenantId)
+            return "Acting user not found.";
+
+        var actingRank = RoleRank.GetValueOrDefault(actingUser.Role, 0);
+        var targetRank = RoleRank.GetValueOrDefault(target.Role, 0);
+
+        // Outrank gate (TASK-347) — same rule as UpdatePermissionsAsync/UpdateAsync: cannot
+        // deactivate someone whose rank is >= your own. Exempt supplier_admin peers — see
+        // IsExemptFromOutrankGate.
+        if (!IsExemptFromOutrankGate(actingUser.Role, target.Role) && actingRank <= targetRank)
+            return $"You do not have permission to deactivate a '{target.Role}' user.";
+
+        target.Deactivate();
+        _users.Update(target);
 
         await LogAsync(tenantId, userId, "user.deactivated",
             entityType: "User", entityId: userId,
@@ -437,6 +536,40 @@ public sealed class UserService : IUserService
         return (grants.Select(g => ToGrantDto(g, granterNames.GetValueOrDefault(g.GrantedByUserId))).ToList(), null);
     }
 
+    // ── Tenant-role (capability template) assignment (ADR-020, TASK-346) ───────
+
+    public async Task<(bool Success, string? Error)> AssignTenantRoleAsync(
+        Guid tenantId, Guid targetUserId, Guid? tenantRoleId, CancellationToken ct = default)
+    {
+        var target = await _users.GetByIdAsync(targetUserId, ct);
+        if (target is null || target.TenantId != tenantId)
+            return (false, "User not found.");
+
+        if (tenantRoleId.HasValue)
+        {
+            // Tenant-scoped lookup: a template belonging to a DIFFERENT tenant is
+            // indistinguishable from a non-existent one here — 404, never 403, so this
+            // cannot be used to confirm another tenant's template ids exist.
+            var role = await _tenantRoles.GetByIdAsync(tenantId, tenantRoleId.Value, ct);
+            if (role is null)
+                return (false, "TenantRole not found.");
+
+            if (!role.IsActive)
+                return (false, "Cannot assign an archived TenantRole.");
+        }
+
+        target.SetTenantRole(tenantRoleId);
+        _users.Update(target);
+
+        await LogAsync(tenantId, targetUserId, "user.tenant_role_assigned",
+            entityType: "User", entityId: targetUserId,
+            meta: $"{{\"tenantRoleId\":{(tenantRoleId.HasValue ? $"\"{tenantRoleId}\"" : "null")}}}",
+            ct: ct);
+
+        await _users.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private async Task LogAsync(
@@ -467,7 +600,8 @@ public sealed class UserService : IUserService
         u.CreatedAt, u.LastActiveAt,
         Permissions: u.Permissions,
         InvitedByName: u.InvitedByName,
-        LegalEntityId: u.LegalEntityId
+        LegalEntityId: u.LegalEntityId,
+        TenantRoleId: u.TenantRoleId
     );
 
     private static ActivityLogDto ToActivityDto(ActivityLog a) => new(

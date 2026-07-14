@@ -1,7 +1,109 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-12
+**Updated:** 2026-07-13
+
+## ADR-020: TenantRole — named custom-role templates with real backend capability enforcement
+Date: 2026-07-13
+Status: accepted
+
+Context: User (enterprise_admin) wants named, reusable custom-role templates ("HR",
+"Бухгалтер", "Фінансист", "Відділ закупки" — cashier skipped, already in `AppRoles`), each
+an arbitrary capability set, assignable to many users, edited centrally (propagates to all
+assignees). Clarified: (1) enforcement must be real on the backend, not UI-only; (2)
+templates, not per-user snapshots; (3) sane per-specialty defaults, hand-tunable later via
+UI. Precedent: `ProviderRole`/`SupplierRole` (`backend/ShelfGuard.Domain/Entities/
+{ProviderRole,SupplierRole}.cs`) — free-form `List<string> Permissions`, resolved via
+`User.ProviderRoleId`/`SupplierRoleId`. `User.Role` cannot become a free-form template
+string — `AppPolicies.cs` gates ~50 controllers with `RequireRole(fixedRoleArray)`,
+entirely independent of `User.Permissions`.
+
+**The blocking discovery**: every controller the 5 specialties need (`SchedulesController`,
+`AnalyticsController`, `IntegrationsController`, `OrdersController`, `SuppliersController`,
+`ReceiptsController`, `AiOrdersController`, `UsersController`) already gates its *entire*
+action set behind one class-level `[Authorize(Policy = X)]` — `AtLeastStoreManager` or
+tighter (`CanViewAnalytics`, `CanReceiveStock`) — evaluated by ASP.NET Core's authorization
+middleware *before* the action body runs. An imperative in-body check (the
+`LegalEntityAuthorization.CanManage` pattern, `backend/ShelfGuard.Infrastructure/
+Authorization/LegalEntityAuthorization.cs`) only ever *narrows* access the class-level gate
+already let through — it cannot admit a user that gate rejected. `LegalEntitiesController`
+works only because its class-level gate (`AtLeastStoreManager`) is *looser* than the
+enterprise-admin-only check layered on top. A capability-only user below store_manager
+rank is 403'd before any per-action logic runs, on 7 of these 8 controllers.
+
+Decision:
+1. **New minimal base role `AppRoles.Staff = "staff"`**, rank 0 (below cashier) in
+   `UserService.RoleRank`, added to `UserService.ValidRoles` (invite whitelist) and
+   `TenantConnectionInterceptor.ValidRoles` (session `app.role` whitelist) — it is a real,
+   sanctioned role string, not a template name. Added to `AppRoles.All`. It is **not** added
+   to any existing `AppPolicies` role array — by itself it grants nothing beyond bare auth
+   (own profile, own notifications, `GET /api/schedules/my-shifts`, already ungated).
+2. **`tenant_roles` table**: `Id, TenantId, Name, Capabilities (jsonb List<string>), IsActive,
+   CreatedByUserId, CreatedAt, UpdatedAt`. Partial unique index `(TenantId, Name) WHERE
+   "IsActive"`. `User.TenantRoleId Guid?` FK `ON DELETE SET NULL` (mirrors `ProviderRoleId`).
+   Archiving sets `IsActive = false`; never hard-deleted (users may still reference it).
+3. **New `TenantRoleCapabilities` constants class** (`ShelfGuard.Domain.Constants`, format
+   `module.action`, shape of `TenantUserPermissions`) — capability → unlocked actions:
+   `users.manage` (HR — Invite/Update/Deactivate on `UsersController`; excludes
+   `UpdatePermissions`/`GrantTemporaryPermission`/tenant-role assignment, enterprise_admin-
+   only, no escalation path), `schedules.manage` (HR — Create/Update/Delete + shift CRUD on
+   `SchedulesController`), `analytics.view` (Бухгалтер/Фінансист — all GET on
+   `AnalyticsController`, read-only controller), `integrations.view`/`integrations.manage`
+   (Бухгалтер — GetAll/GetByService vs Upsert/Delete on `IntegrationsController`),
+   `legal_entities.manage` (Бухгалтер — **reuse** the existing `TenantUserPermissions.
+   LegalEntitiesManage` key), `orders.manage` (Закупка — `OrdersController.Calculate`),
+   `suppliers.view`/`suppliers.manage` (Закупка — Get* vs Create/Update/Delete on
+   `SuppliersController`), `receipts.view` (Закупка — Get* on `ReceiptsController`;
+   Create/Receive/Cancel stay role-gated, write-heavy stock path), `ai_orders.view`/
+   `ai_orders.manage` (Закупка — Get* vs Generate/Update/Accept/Reject on `AiOrdersController`).
+4. **Enforcement — custom `IAuthorizationHandler`, not in-body checks.** New
+   `RoleOrCapabilityRequirement(string[] allowedRoles, string capability)` +
+   `RoleOrCapabilityHandler` (`ShelfGuard.Infrastructure/Authorization/`) succeeds when the
+   caller's role ∈ `allowedRoles` (unchanged for every existing role) **OR** the JWT
+   `capabilities` claim contains `capability`. For each capability in point 3, register one
+   new named policy in `AppPolicies.Configure` (e.g. `AnalyticsViewOrCapability` =
+   `CanViewAnalyticsRoles` ∪ `"analytics.view"`) and move the affected actions from the
+   controller's class-level policy to **per-action** `[Authorize(Policy = ...)]` — class-level
+   attribute removed only on these 8 controllers. `LegalEntitiesController` instead extends
+   `LegalEntityAuthorization.CanManage` to OR-in `TenantRoleAuthorization.HasCapability(user,
+   "legal_entities.manage")` — already has the imperative-check shape, no new policy needed.
+   **Every other controller (POS, stock write-off, transfers, fiscalization) is untouched.**
+5. **`TenantRoleAuthorization.HasCapability(ClaimsPrincipal, string)`** (mirrors
+   `LegalEntityAuthorization`) reads the new `capabilities` claim — shared by point 4's
+   handler and the `LegalEntitiesController` extension.
+6. **Template CRUD**: `TenantRolesController` (`/api/tenant-roles`, GET list/GET id/POST/
+   PUT/DELETE-archives) and `POST /api/users/{id}/tenant-role` (new action on
+   `UsersController`) — both `[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]`, no
+   capability bypass, per the brief's anti-escalation requirement.
+7. **JWT merge**: new `AuthService.BuildEffectiveCapabilitiesAsync(User, ct)`, parallel to
+   `BuildEffectivePermissionsAsync` (ADR-019) — resolves `user.TenantRoleId` (empty if null
+   or inactive) into a `List<string>`. `JwtService.GenerateAccessToken` gets an optional
+   `capabilities` param, serialized as a comma-joined claim (shape of `permissions`). Called
+   at both mint sites (login, refresh) and fed into `AuthUserDto`. Same ~15-min propagation
+   delay already accepted in ADR-019.
+8. **RLS**: `tenant_roles` gets `tenant_isolation` + `provider_bypass` + `worker_bypass` in
+   one migration — worker will never touch this table, added anyway per convention.
+9. **Frontend contract**: new tab on `/users` (or `/users/roles`), reusing the
+   `frontend/features/supplier-cabinet/components/RolesTab.tsx` +
+   `frontend/features/provider/components/RolesSection.tsx` skeleton — name field + checkbox
+   list of capabilities grouped by specialty, sourced from `GET /api/tenant-roles/
+   capabilities` (backend is the source of truth for grouping, ADR-017 pattern, not a
+   frontend hardcode). Assignment: new `<TenantRoleSelector>` next to `frontend/features/
+   users/components/UserPermissionsEditor.tsx`, enterprise_admin-only visible, calling
+   `POST /api/users/{id}/tenant-role`.
+
+Consequences:
++ Real backend enforcement — a capability-only user cannot bypass it via direct API calls,
+  unlike the page-slug `Permissions` mechanism this extends alongside
++ Zero behavior change for every existing role on every untouched controller — additive,
+  OR-composed with the current `RequireRole` arrays; template edits propagate to every
+  assignee automatically, bounded by the same JWT delay as ADR-019
++ `legal_entities.manage` reuses the existing key — one definition, two grant paths
+- New per-action policy surface (~10 policies) instead of one blanket class-level gate on
+  7 controllers — more `AppPolicies.Configure` entries, but each a narrow, auditable OR
+- Two role-hierarchy mechanisms now compose (base `Role` rank + `TenantRoleId` capabilities)
+  — mitigated by capabilities never granting rank and template management staying
+  enterprise_admin-only
 
 ## ADR-019: Temporary/permanent access grants beyond role — additive layer over `User.Permissions`
 Date: 2026-07-12

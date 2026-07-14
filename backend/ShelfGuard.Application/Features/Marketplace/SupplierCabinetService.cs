@@ -320,7 +320,7 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
         _users.GetAllAsync(tenantId, ct);
 
     public async Task<(UserDto? User, string? Error)> InviteStaffAsync(
-        Guid tenantId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default)
+        Guid tenantId, Guid actingUserId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default)
     {
         // Base system role is never accepted from the client — every invited teammate
         // is a supplier_admin. Finer-grained access (TASK-306) is layered on top via
@@ -336,7 +336,7 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
         var inviteRequest = new InviteUserRequest(
             request.Email, request.FullName, AppRoles.SupplierAdmin, request.Password);
 
-        var (user, error) = await _users.InviteAsync(tenantId, inviteRequest, inviterName, ct);
+        var (user, error) = await _users.InviteAsync(tenantId, actingUserId, inviteRequest, inviterName, ct);
         if (user is null) return (null, error);
 
         // No role given → full access (Permissions = null), same as before TASK-306.
@@ -355,14 +355,14 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
     }
 
     public async Task<string?> DeactivateStaffAsync(
-        Guid tenantId, Guid userId, CancellationToken ct = default)
+        Guid tenantId, Guid actingUserId, Guid userId, CancellationToken ct = default)
     {
         // Verify the target belongs to the caller's own tenant before deactivating —
         // never trust a client-supplied id to cross tenant boundaries.
         var (user, error) = await _users.GetByIdAsync(tenantId, userId, ct);
         if (user is null) return error ?? "User not found.";
 
-        return await _users.DeactivateAsync(tenantId, userId, ct);
+        return await _users.DeactivateAsync(tenantId, actingUserId, userId, ct);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

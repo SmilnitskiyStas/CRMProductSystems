@@ -44,6 +44,12 @@ public sealed class IntegrationService : IIntegrationService
         if (service == "vchasno" && jsonObj is not null)
             VchasnoSecrets.MaskInPlace(jsonObj);
 
+        // All other known services (claude/telegram/resend/webhook/iot) carry secrets too —
+        // mask those the same way (TASK-347: "integrations.view", ADR-020, first made this
+        // endpoint reachable by a staff-rank capability holder, exposing them unmasked).
+        if (jsonObj is not null)
+            GenericIntegrationSecrets.MaskInPlace(service, jsonObj);
+
         return (new IntegrationConfigDto(config.Id, config.Service, jsonObj, config.IsEnabled, config.UpdatedAt), null);
     }
 
@@ -68,6 +74,17 @@ public sealed class IntegrationService : IIntegrationService
             var existing = await _repo.GetByServiceAsync(tenantId, service, ct);
             VchasnoSecrets.MergeMaskedFromStored(
                 request.Config,
+                existing is null ? null : ParseConfigSafe(existing.Config));
+        }
+
+        // Same round-trip protection for the other services now masked on GET (TASK-347) —
+        // without this, saving an unrelated field (e.g. toggling isEnabled) after a GET would
+        // write the literal "••••xxxx" placeholder over the real stored secret.
+        if (GenericIntegrationSecrets.HasSecretField(service))
+        {
+            var existing = await _repo.GetByServiceAsync(tenantId, service, ct);
+            GenericIntegrationSecrets.MergeMaskedFromStored(
+                service, request.Config,
                 existing is null ? null : ParseConfigSafe(existing.Config));
         }
 

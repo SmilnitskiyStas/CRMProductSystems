@@ -24,7 +24,7 @@ public sealed class JwtService : IJwtService
     }
 
     public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
-        Dictionary<string, bool>? permissions = null)
+        Dictionary<string, bool>? permissions = null, List<string>? capabilities = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -50,6 +50,10 @@ public sealed class JwtService : IJwtService
             if (!string.IsNullOrEmpty(granted))
                 claims.Add(new Claim("permissions", granted));
         }
+
+        // ADR-020 (TASK-346): TenantRole capabilities, same comma-joined shape as "permissions".
+        if (capabilities is { Count: > 0 })
+            claims.Add(new Claim("capabilities", string.Join(',', capabilities)));
 
         var token = new JwtSecurityToken(
             issuer: _issuer,

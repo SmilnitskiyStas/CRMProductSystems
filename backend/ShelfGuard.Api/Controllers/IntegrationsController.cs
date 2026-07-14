@@ -9,13 +9,14 @@ namespace ShelfGuard.Api.Controllers;
 
 /// <summary>
 /// Manages per-tenant external service integrations (Telegram, Resend, Webhook, ПРРО, IoT).
-/// Only tenant admins (AtLeastStoreManager) and provider can access.
-/// GET list/detail is read-only for store managers.
-/// POST/DELETE require enterprise_admin role.
+/// Tenant admins (AtLeastStoreManager) and provider can access; ADR-020 (TASK-346) additionally
+/// admits a TenantRole capability holder ("integrations.view"/"integrations.manage") regardless
+/// of role rank — per-action policies below, no class-level attribute (see AppPolicies.Configure).
+/// GET list/detail is read-only (integrations.view). POST/DELETE require integrations.manage
+/// (or the pre-existing AtLeastStoreManager+ role gate, unchanged).
 /// </summary>
 [ApiController]
 [Route("api/integrations")]
-[Authorize(Policy = AppPolicies.AtLeastStoreManager)]
 public sealed class IntegrationsController : ControllerBase
 {
     private readonly IIntegrationService _integrations;
@@ -25,6 +26,7 @@ public sealed class IntegrationsController : ControllerBase
 
     /// <summary>Returns a summary list of all configured integrations for the current tenant.</summary>
     [HttpGet]
+    [Authorize(Policy = AppPolicies.IntegrationsViewOrCapability)]
     [ProducesResponseType(typeof(IReadOnlyList<IntegrationSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
@@ -37,6 +39,7 @@ public sealed class IntegrationsController : ControllerBase
 
     /// <summary>Returns full config for a specific service. Config may contain credentials.</summary>
     [HttpGet("{service}")]
+    [Authorize(Policy = AppPolicies.IntegrationsViewOrCapability)]
     [ProducesResponseType(typeof(IntegrationConfigDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -55,6 +58,7 @@ public sealed class IntegrationsController : ControllerBase
 
     /// <summary>Creates or updates the config for a service. Merges credentials into JSONB.</summary>
     [HttpPut("{service}")]
+    [Authorize(Policy = AppPolicies.IntegrationsManageOrCapability)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Upsert(
@@ -71,6 +75,7 @@ public sealed class IntegrationsController : ControllerBase
 
     /// <summary>Removes the integration config entirely (clears credentials).</summary>
     [HttpDelete("{service}")]
+    [Authorize(Policy = AppPolicies.IntegrationsManageOrCapability)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]

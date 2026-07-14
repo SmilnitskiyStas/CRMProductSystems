@@ -344,12 +344,13 @@ public sealed class SupplierCabinetServiceTests
     [Fact]
     public async Task InviteStaffAsync_AlwaysForcesSupplierAdminRole()
     {
+        var actingUserId = Guid.NewGuid();
         InviteUserRequest? captured = null;
-        _userService.InviteAsync(_tenantId, Arg.Do<InviteUserRequest>(r => captured = r), "Owner", Arg.Any<CancellationToken>())
+        _userService.InviteAsync(_tenantId, actingUserId, Arg.Do<InviteUserRequest>(r => captured = r), "Owner", Arg.Any<CancellationToken>())
                      .Returns((MakeUserDto(), (string?)null));
 
         var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123");
-        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, actingUserId, request, "Owner");
 
         Assert.Null(error);
         Assert.NotNull(user);
@@ -363,11 +364,12 @@ public sealed class SupplierCabinetServiceTests
     [Fact]
     public async Task InviteStaffAsync_NoSupplierRoleId_KeepsFullAccess_DoesNotTouchUserRepo()
     {
-        _userService.InviteAsync(_tenantId, Arg.Any<InviteUserRequest>(), "Owner", Arg.Any<CancellationToken>())
+        var actingUserId = Guid.NewGuid();
+        _userService.InviteAsync(_tenantId, actingUserId, Arg.Any<InviteUserRequest>(), "Owner", Arg.Any<CancellationToken>())
                      .Returns((MakeUserDto(), (string?)null));
 
         var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123");
-        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, actingUserId, request, "Owner");
 
         Assert.Null(error);
         Assert.NotNull(user);
@@ -384,17 +386,18 @@ public sealed class SupplierCabinetServiceTests
                   .Returns((SupplierRole?)null);
 
         var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123", roleId);
-        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, Guid.NewGuid(), request, "Owner");
 
         Assert.Null(user);
         Assert.Equal("Role not found.", error);
         await _userService.DidNotReceive().InviteAsync(
-            Arg.Any<Guid>(), Arg.Any<InviteUserRequest>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<InviteUserRequest>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task InviteStaffAsync_WithSupplierRoleId_ResolvesPermissionsAndAssignsRole()
     {
+        var actingUserId = Guid.NewGuid();
         var roleId = Guid.NewGuid();
         var role = SupplierRole.Create(_tenantId, "Support", AppRoles.SupplierAdmin,
             [SupplierPermissions.ClientReviews, SupplierPermissions.TaskBoard]);
@@ -402,7 +405,7 @@ public sealed class SupplierCabinetServiceTests
                   .Returns(role);
 
         var createdUser = MakeUserDto();
-        _userService.InviteAsync(_tenantId, Arg.Any<InviteUserRequest>(), "Owner", Arg.Any<CancellationToken>())
+        _userService.InviteAsync(_tenantId, actingUserId, Arg.Any<InviteUserRequest>(), "Owner", Arg.Any<CancellationToken>())
                      .Returns((createdUser, (string?)null));
 
         var trackedUser = User.Create(_tenantId, "new@example.com", "New Teammate", "hash", "supplier_admin");
@@ -410,7 +413,7 @@ public sealed class SupplierCabinetServiceTests
                  .Returns(trackedUser);
 
         var request = new CabinetInviteStaffDto("new@example.com", "New Teammate", "Password123", roleId);
-        var (user, error) = await _sut.InviteStaffAsync(_tenantId, request, "Owner");
+        var (user, error) = await _sut.InviteStaffAsync(_tenantId, actingUserId, request, "Owner");
 
         Assert.Null(error);
         Assert.NotNull(user);
@@ -425,31 +428,33 @@ public sealed class SupplierCabinetServiceTests
     [Fact]
     public async Task DeactivateStaffAsync_UserBelongsToOwnTenant_Deactivates()
     {
+        var actingUserId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         _userService.GetByIdAsync(_tenantId, userId, Arg.Any<CancellationToken>())
                      .Returns((MakeUserDto(userId), (string?)null));
-        _userService.DeactivateAsync(_tenantId, userId, Arg.Any<CancellationToken>())
+        _userService.DeactivateAsync(_tenantId, actingUserId, userId, Arg.Any<CancellationToken>())
                      .Returns((string?)null);
 
-        var error = await _sut.DeactivateStaffAsync(_tenantId, userId);
+        var error = await _sut.DeactivateStaffAsync(_tenantId, actingUserId, userId);
 
         Assert.Null(error);
-        await _userService.Received(1).DeactivateAsync(_tenantId, userId, Arg.Any<CancellationToken>());
+        await _userService.Received(1).DeactivateAsync(_tenantId, actingUserId, userId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task DeactivateStaffAsync_UserFromAnotherTenant_ReturnsError_DoesNotDeactivate()
     {
+        var actingUserId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         // GetByIdAsync is tenant-scoped in UserService — a foreign user resolves to "not found".
         _userService.GetByIdAsync(_tenantId, userId, Arg.Any<CancellationToken>())
                      .Returns(((UserDto?)null, "User not found."));
 
-        var error = await _sut.DeactivateStaffAsync(_tenantId, userId);
+        var error = await _sut.DeactivateStaffAsync(_tenantId, actingUserId, userId);
 
         Assert.Equal("User not found.", error);
         await _userService.DidNotReceive().DeactivateAsync(
-            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     // ── ReplyToReviewAsync ─────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { UserDetailPanel } from "./UserDetailPanel";
 import { ROLE_LABELS } from "@/features/profile/types";
 import { PAGES } from "../types";
 import type { UserDto } from "../types";
+import { TenantRoleBadge } from "@/features/tenant-roles/components/TenantRoleBadge";
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -122,7 +123,10 @@ const HEADERS = [
 
 export function UsersList() {
   const { data: users, isLoading, isError } = useUsers();
-  const [selected,    setSelected]    = useState<UserDto | null>(null);
+  // Holds only the id — the panel's `user` is derived live from `users` below, so an
+  // already-open panel picks up cache patches (e.g. a TenantRole assignment) without
+  // needing to be closed and reopened.
+  const [selectedId,  setSelectedId] = useState<string | null>(null);
   const [search,      setSearch]      = useState("");
   const [roleFilter,  setRoleFilter]  = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -140,6 +144,8 @@ export function UsersList() {
       (statusFilter === "inactive" && !u.isActive);
     return matchSearch && matchRole && matchStatus;
   });
+
+  const selected = selectedId ? (users ?? []).find((u) => u.id === selectedId) ?? null : null;
 
   if (isLoading) {
     return (
@@ -267,7 +273,7 @@ export function UsersList() {
             return (
               <div
                 key={user.id}
-                onClick={() => setSelected(user)}
+                onClick={() => setSelectedId(user.id)}
                 style={{
                   display: "grid",
                   gridTemplateColumns: GRID,
@@ -312,7 +318,10 @@ export function UsersList() {
                 </div>
 
                 {/* 2. Role */}
-                <div><RoleBadge role={user.role} /></div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                  <RoleBadge role={user.role} />
+                  <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
+                </div>
 
                 {/* 3. Phone */}
                 <div style={{ color: user.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>
@@ -361,7 +370,7 @@ export function UsersList() {
       {selected && (
         <UserDetailPanel
           user={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => setSelectedId(null)}
         />
       )}
     </>

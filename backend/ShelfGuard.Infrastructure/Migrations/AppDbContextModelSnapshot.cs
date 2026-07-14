@@ -3990,6 +3990,53 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("tenants", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.TenantRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<List<string>>("Capabilities")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("uq_tenant_roles_tenant_name_active")
+                        .HasFilter("\"IsActive\"");
+
+                    b.ToTable("tenant_roles", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.TicketComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4111,6 +4158,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("TenantRoleId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("TotpEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -4137,6 +4187,8 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("SupplierRoleId");
 
                     b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantRoleId");
 
                     b.ToTable("users", (string)null);
                 });
@@ -5631,6 +5683,14 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Device");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.TenantRole", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.TicketComment", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.User", "Author")
@@ -5671,6 +5731,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .WithMany("Users")
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.TenantRole", null)
+                        .WithMany()
+                        .HasForeignKey("TenantRoleId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Tenant");
                 });

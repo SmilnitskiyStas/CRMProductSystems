@@ -140,6 +140,8 @@ builder.Services
         };
     });
 
+// ADR-020 (TASK-346): stateless singleton handler backing every RoleOrCapability* policy.
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RoleOrCapabilityHandler>();
 builder.Services.AddAuthorization(AppPolicies.Configure);
 
 var allowedOrigins = (builder.Configuration["Cors:Origins"] ?? "http://localhost:3000")

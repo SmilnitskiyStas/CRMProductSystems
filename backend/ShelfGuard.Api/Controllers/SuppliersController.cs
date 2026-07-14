@@ -7,9 +7,11 @@ using ShelfGuard.Infrastructure.Authorization;
 
 namespace ShelfGuard.Api.Controllers;
 
+// ADR-020 (TASK-346): no class-level policy — Get* keep the pre-existing AtLeastStoreManager
+// floor OR "suppliers.view"; Create/Update/Delete keep the pre-existing, tighter
+// AtLeastNetworkManager floor OR "suppliers.manage" (must NOT loosen to StoreManager).
 [ApiController]
 [Route("api/suppliers")]
-[Authorize(Policy = AppPolicies.AtLeastStoreManager)]
 public sealed class SuppliersController : ControllerBase
 {
     private readonly ISupplierService _suppliers;
@@ -17,6 +19,7 @@ public sealed class SuppliersController : ControllerBase
     public SuppliersController(ISupplierService suppliers) => _suppliers = suppliers;
 
     [HttpGet]
+    [Authorize(Policy = AppPolicies.SuppliersViewOrCapability)]
     [ProducesResponseType(typeof(PagedResult<SupplierDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] bool include_inactive = false,
@@ -30,6 +33,7 @@ public sealed class SuppliersController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = AppPolicies.SuppliersViewOrCapability)]
     [ProducesResponseType(typeof(SupplierDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -39,7 +43,7 @@ public sealed class SuppliersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = AppPolicies.AtLeastNetworkManager)]
+    [Authorize(Policy = AppPolicies.SuppliersManageOrCapability)]
     [ProducesResponseType(typeof(SupplierDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(CreateSupplierRequest request, CancellationToken ct)
@@ -54,7 +58,7 @@ public sealed class SuppliersController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastNetworkManager)]
+    [Authorize(Policy = AppPolicies.SuppliersManageOrCapability)]
     [ProducesResponseType(typeof(SupplierDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -69,7 +73,7 @@ public sealed class SuppliersController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastNetworkManager)]
+    [Authorize(Policy = AppPolicies.SuppliersManageOrCapability)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)

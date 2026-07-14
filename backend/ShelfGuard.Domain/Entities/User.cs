@@ -55,6 +55,14 @@ public sealed class User
     public Guid? SupplierRoleId { get; private set; }
 
     /// <summary>
+    /// Custom capability-template role assigned to this user (ADR-020, TASK-345).
+    /// Additive on top of <see cref="Role"/>/its rank — grants specific capabilities
+    /// (e.g. HR, accountant) without changing hierarchy. Null means no template
+    /// capabilities beyond whatever the base <see cref="Role"/> already grants.
+    /// </summary>
+    public Guid? TenantRoleId { get; private set; }
+
+    /// <summary>
     /// Display name of the user who created/invited this account.
     /// Null for seed/self-registered users.
     /// Denormalized for fast read — not a FK to avoid cascades.
@@ -112,6 +120,8 @@ public sealed class User
     public void SetProviderRole(Guid? roleId) => ProviderRoleId = roleId;
 
     public void SetSupplierRole(Guid? roleId) => SupplierRoleId = roleId;
+
+    public void SetTenantRole(Guid? roleId) => TenantRoleId = roleId;
 
     public void SetStore(Guid? storeId) => StoreId = storeId;
 

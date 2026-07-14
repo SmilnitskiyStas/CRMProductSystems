@@ -62,15 +62,20 @@ public interface ISupplierCabinetService
     /// at the system-role level. If <paramref name="request"/>.SupplierRoleId is set, the
     /// resolved role's Permissions are applied to narrow the invited user's effective
     /// access (TASK-306); otherwise the invited user keeps full access (Permissions = null).
+    /// <paramref name="actingUserId"/> is the calling cabinet user, threaded down to
+    /// IUserService.InviteAsync's RoleRank check (TASK-347) — a no-op in practice here since
+    /// every cabinet user is base-role supplier_admin (rank 0 on both sides), but still
+    /// required so that check has a real acting user to load.
     /// </summary>
     Task<(UserDto? User, string? Error)> InviteStaffAsync(
-        Guid tenantId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default);
+        Guid tenantId, Guid actingUserId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default);
 
     /// <summary>
     /// Deactivates a staff member. Returns an error (and does nothing) if the target
-    /// user does not belong to the caller's own tenant.
+    /// user does not belong to the caller's own tenant. <paramref name="actingUserId"/> is
+    /// threaded down to IUserService.DeactivateAsync's RoleRank/self check (TASK-347).
     /// </summary>
-    Task<string?> DeactivateStaffAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+    Task<string?> DeactivateStaffAsync(Guid tenantId, Guid actingUserId, Guid userId, CancellationToken ct = default);
 
     // ── Clients (self-service, TASK-313) ─────────────────────────────────────
 

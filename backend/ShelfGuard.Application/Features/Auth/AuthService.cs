@@ -21,6 +21,7 @@ public sealed class AuthService : IAuthService
     private readonly IActivityLogRepository _activityLogs;
     private readonly ITotpService _totp;
     private readonly IUserPermissionGrantRepository _permissionGrants;
+    private readonly ITenantRoleRepository _tenantRoles;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -31,6 +32,7 @@ public sealed class AuthService : IAuthService
         IActivityLogRepository activityLogs,
         ITotpService totp,
         IUserPermissionGrantRepository permissionGrants,
+        ITenantRoleRepository tenantRoles,
         ILogger<AuthService> logger)
     {
         _users = users;
@@ -40,6 +42,7 @@ public sealed class AuthService : IAuthService
         _activityLogs = activityLogs;
         _totp = totp;
         _permissionGrants = permissionGrants;
+        _tenantRoles = tenantRoles;
         _logger = logger;
     }
 
@@ -133,9 +136,11 @@ public sealed class AuthService : IAuthService
         await _refreshTokens.SaveChangesAsync(ct);
 
         var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, effectivePermissions);
+        var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName,
+            effectivePermissions, effectiveCapabilities);
 
-        return (new LoginResponse(accessToken, newRaw, ToDto(user, effectivePermissions)), null);
+        return (new LoginResponse(accessToken, newRaw, ToDto(user, effectivePermissions, effectiveCapabilities)), null);
     }
 
     public async Task RevokeAsync(string rawRefreshToken, CancellationToken ct = default)
@@ -155,7 +160,8 @@ public sealed class AuthService : IAuthService
         if (user is null) return null;
 
         var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
-        return ToDto(user, effectivePermissions);
+        var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
+        return ToDto(user, effectivePermissions, effectiveCapabilities);
     }
 
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
@@ -331,9 +337,11 @@ public sealed class AuthService : IAuthService
         await _activityLogs.SaveChangesAsync(ct);
 
         var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
-        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName, effectivePermissions);
+        var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
+        var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName,
+            effectivePermissions, effectiveCapabilities);
 
-        return new LoginResponse(accessToken, rawToken, ToDto(user, effectivePermissions));
+        return new LoginResponse(accessToken, rawToken, ToDto(user, effectivePermissions, effectiveCapabilities));
     }
 
     /// <summary>
@@ -362,6 +370,27 @@ public sealed class AuthService : IAuthService
             effective[grant.PermissionKey] = true;
 
         return effective;
+    }
+
+    /// <summary>
+    /// ADR-020 (TASK-346): effective capabilities baked into the JWT and returned to the
+    /// client — empty when <see cref="User.TenantRoleId"/> is null, the user has no tenant
+    /// (provider), or the referenced <see cref="TenantRole"/> is archived (IsActive=false),
+    /// otherwise the template's live <see cref="TenantRole.Capabilities"/> list. Merge happens
+    /// once, here, at JWT-mint time — same ~15-min propagation delay already accepted for
+    /// <see cref="BuildEffectivePermissionsAsync"/> (ADR-019). Editing a template propagates to
+    /// every assignee on their next login/refresh, no per-user snapshot.
+    /// </summary>
+    private async Task<List<string>> BuildEffectiveCapabilitiesAsync(User user, CancellationToken ct)
+    {
+        if (user.TenantRoleId is null || user.TenantId is null)
+            return [];
+
+        var role = await _tenantRoles.GetByIdAsync(user.TenantId.Value, user.TenantRoleId.Value, ct);
+        if (role is null || !role.IsActive)
+            return [];
+
+        return role.Capabilities;
     }
 
     /// <summary>Increments the shared failure counter, persists, and audits the attempt.</summary>
@@ -421,8 +450,11 @@ public sealed class AuthService : IAuthService
     private static string NormalizeRecoveryCode(string code) =>
         new(code.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
 
-    private static AuthUserDto ToDto(User u, IReadOnlyDictionary<string, bool>? effectivePermissions = null) =>
+    private static AuthUserDto ToDto(
+        User u,
+        IReadOnlyDictionary<string, bool>? effectivePermissions = null,
+        IReadOnlyList<string>? effectiveCapabilities = null) =>
         new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId,
             effectivePermissions is null ? u.Permissions : new Dictionary<string, bool>(effectivePermissions),
-            u.LegalEntityId, u.TotpEnabled);
+            u.LegalEntityId, u.TotpEnabled, effectiveCapabilities);
 }

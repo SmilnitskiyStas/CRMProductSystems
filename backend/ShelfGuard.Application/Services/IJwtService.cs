@@ -2,8 +2,12 @@ namespace ShelfGuard.Application.Services;
 
 public interface IJwtService
 {
+    /// <param name="capabilities">
+    /// Effective TenantRole capabilities (ADR-020, TASK-346) — serialized into a comma-joined
+    /// "capabilities" claim, same shape as <paramref name="permissions"/>. Empty/null → claim omitted.
+    /// </param>
     string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
-        Dictionary<string, bool>? permissions = null);
+        Dictionary<string, bool>? permissions = null, List<string>? capabilities = null);
 
     /// <summary>
     /// Generates a short-lived (60 min) impersonation token so a provider user
