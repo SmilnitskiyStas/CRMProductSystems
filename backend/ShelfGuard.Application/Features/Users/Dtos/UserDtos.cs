@@ -19,7 +19,9 @@ public sealed record UserDto(
     Guid? LegalEntityId = null,
     /// <summary>Assigned custom capability-template role (ADR-020, TASK-346). Null = no template
     /// beyond whatever the base Role already grants.</summary>
-    Guid? TenantRoleId = null
+    Guid? TenantRoleId = null,
+    /// <summary>UI locale ("uk"/"en"); null = browser fallback (i18n Block 1, TASK-375).</summary>
+    string? PreferredLocale = null
 );
 
 public sealed record InviteUserRequest(
@@ -41,7 +43,13 @@ public sealed record UpdateUserRequest(
 
 public sealed record UpdateMyProfileRequest(
     string  FullName,
-    string? Phone
+    string? Phone,
+    /// <summary>
+    /// Optional UI locale ("uk"/"en") — i18n Block 1, TASK-375. Null/omitted = leave the
+    /// stored value unchanged (NOT "clear"), so older clients that don't send the field
+    /// can't silently reset a chosen locale on a name/phone edit.
+    /// </summary>
+    string? PreferredLocale = null
 );
 
 public sealed record ChangePasswordRequest(

@@ -49,7 +49,12 @@ public record AuthUserDto(
     /// client-side optimistic cache patch from the now-removed unverified link endpoint, never
     /// real server state, and silently reverted to "not linked" on any cache invalidation/reload.
     /// </summary>
-    string? TelegramChatId = null
+    string? TelegramChatId = null,
+    /// <summary>
+    /// UI locale the user picked ("uk"/"en"); null = client falls back to the browser
+    /// language (i18n rollout Block 1, TASK-375).
+    /// </summary>
+    string? PreferredLocale = null
 );
 
 // ── 2FA (TASK-330) ──────────────────────────────────────────────────────────

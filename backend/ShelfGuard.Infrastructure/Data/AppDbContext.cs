@@ -181,6 +181,8 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.PasswordHash).HasMaxLength(255).IsRequired();
             e.Property(u => u.Role).HasMaxLength(50).IsRequired();
             e.Property(u => u.TelegramChatId).HasMaxLength(100);
+            // i18n Block 1 (TASK-375): "uk"/"en"; null = browser fallback. Length 5 leaves room for "uk-UA"-style tags.
+            e.Property(u => u.PreferredLocale).HasMaxLength(5).IsRequired(false);
             e.Property(u => u.IsActive).HasDefaultValue(true);
             e.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(u => u.InvitedByName).HasMaxLength(255).IsRequired(false);

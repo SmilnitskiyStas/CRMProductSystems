@@ -464,5 +464,6 @@ public sealed class AuthService : IAuthService
         IReadOnlyList<string>? effectiveCapabilities = null) =>
         new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId,
             effectivePermissions is null ? u.Permissions : new Dictionary<string, bool>(effectivePermissions),
-            u.LegalEntityId, u.TotpEnabled, effectiveCapabilities, u.TelegramChatId);
+            u.LegalEntityId, u.TotpEnabled, effectiveCapabilities, u.TelegramChatId,
+            u.PreferredLocale);
 }

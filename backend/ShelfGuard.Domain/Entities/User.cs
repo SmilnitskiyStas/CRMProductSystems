@@ -14,6 +14,12 @@ public sealed class User
     public Guid? LegalEntityId { get; private set; }
     public string? TelegramChatId { get; private set; }
     public string? PushToken { get; private set; }
+
+    /// <summary>
+    /// UI locale the user picked ("uk" / "en"). Null = no explicit choice —
+    /// client falls back to the browser language (i18n rollout Block 1, TASK-375).
+    /// </summary>
+    public string? PreferredLocale { get; private set; }
     public bool IsActive { get; private set; } = true;
     public DateTime? LastActiveAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -110,6 +116,9 @@ public sealed class User
     }
 
     public void ChangePassword(string newHash) => PasswordHash = newHash;
+
+    /// <summary>Sets the preferred UI locale ("uk"/"en"); null = browser fallback. Value is validated at the Application boundary.</summary>
+    public void SetPreferredLocale(string? locale) => PreferredLocale = locale;
 
     public void Deactivate() => IsActive = false;
 

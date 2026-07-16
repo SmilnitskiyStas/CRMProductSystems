@@ -68,6 +68,9 @@ public sealed class UserService : IUserService
         "transfers", "write-offs", "analytics", "users", "settings",
     ];
 
+    /// <summary>UI locales the platform ships message catalogs for (i18n Block 1, TASK-375).</summary>
+    private static readonly HashSet<string> SupportedLocales = ["uk", "en"];
+
     public UserService(
         IUserRepository users,
         IActivityLogRepository activityLogs,
@@ -277,10 +280,16 @@ public sealed class UserService : IUserService
         if (string.IsNullOrWhiteSpace(request.FullName))
             return (null, "Full name is required.");
 
+        // i18n Block 1 (TASK-375): only "uk"/"en" are supported; null = leave unchanged.
+        if (request.PreferredLocale is not null && !SupportedLocales.Contains(request.PreferredLocale))
+            return (null, $"Unsupported locale '{request.PreferredLocale}'. Supported: {string.Join(", ", SupportedLocales)}.");
+
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null) return (null, "User not found.");
 
         user.UpdateProfile(request.FullName.Trim(), request.Phone?.Trim());
+        if (request.PreferredLocale is not null)
+            user.SetPreferredLocale(request.PreferredLocale);
         _users.Update(user);
 
         if (user.TenantId.HasValue)
@@ -586,7 +595,8 @@ public sealed class UserService : IUserService
         Permissions: u.Permissions,
         InvitedByName: u.InvitedByName,
         LegalEntityId: u.LegalEntityId,
-        TenantRoleId: u.TenantRoleId
+        TenantRoleId: u.TenantRoleId,
+        PreferredLocale: u.PreferredLocale
     );
 
     private static ActivityLogDto ToActivityDto(ActivityLog a) => new(
