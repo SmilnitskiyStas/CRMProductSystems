@@ -1,13 +1,29 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using ShelfGuard.Infrastructure.Data;
 
 #nullable disable
 
 namespace ShelfGuard.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260716120000_FixActivityLogsInsertUnderFailClosedRls")]
     public partial class FixActivityLogsInsertUnderFailClosedRls : Migration
     {
         // Hotfix for a production regression introduced by 20260714180000_FixFailOpenTenantIsolationOnReset.
+        //
+        // ROOT CAUSE OF A SECOND BUG FOUND WHILE DEPLOYING THIS FIX: this file was originally
+        // written without the [DbContext]/[Migration] attributes above. Without [Migration("id")],
+        // EF Core's migrations-assembly scanner does not register the class as belonging to
+        // AppDbContext's migration set at all, so `MigrateAsync()` silently never saw it as
+        // pending — logged "No migrations were applied. The database is already up to date."
+        // even though the compiled DLL (verified rebuilt correctly, image/DLL timestamps matched
+        // the deploy window) genuinely contained this class. Confirmed via `grep -a` on the
+        // running container's ShelfGuard.Infrastructure.dll — the class WAS present, so this was
+        // never a Docker build-caching problem, only a missing-attribute bug in this file. Applied
+        // manually to production instead (DROP/CREATE POLICY + manual __EFMigrationsHistory
+        // insert, user-authorized) while this attribute fix rides along in the next deploy.
         // That migration made activity_logs / notification_queue's tenant_isolation policy fail-closed
         // using a `FOR ALL ... USING (...)` policy with NO `WITH CHECK`. Postgres then applies the USING
         // expression as the INSERT check as well — so a row written with a non-null "TenantId" while the
