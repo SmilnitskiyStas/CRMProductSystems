@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 export type TrendFormat = "number" | "currency" | "percent";
@@ -16,14 +17,15 @@ interface TrendIndicatorProps {
   className?: string;
 }
 
-function formatValue(value: number, format: TrendFormat): string {
+function formatValue(value: number, format: TrendFormat, locale: string): string {
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   switch (format) {
     case "currency":
-      return `${value.toLocaleString("uk-UA", { maximumFractionDigits: 2 })} ₴`;
+      return `${value.toLocaleString(intlLocale, { maximumFractionDigits: 2 })} ₴`;
     case "percent":
-      return `${value.toLocaleString("uk-UA", { maximumFractionDigits: 1 })}%`;
+      return `${value.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%`;
     default:
-      return value.toLocaleString("uk-UA");
+      return value.toLocaleString(intlLocale);
   }
 }
 
@@ -33,6 +35,8 @@ function formatValue(value: number, format: TrendFormat): string {
  * a neutral dash when there's no comparable baseline.
  */
 export function TrendIndicator({ current, previous, format = "number", size = "md", className }: TrendIndicatorProps) {
+  const t = useTranslations("Dashboard.ui.trendIndicator");
+  const locale = useLocale();
   const neutral = previous === null || previous === 0;
   const percentChange = neutral ? null : ((current - previous) / previous) * 100;
   const isUp = percentChange !== null && percentChange > 0;
@@ -45,8 +49,8 @@ export function TrendIndicator({ current, previous, format = "number", size = "m
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus;
 
   const title = neutral
-    ? "Немає даних за попередній період"
-    : `Поточне: ${formatValue(current, format)} · Попереднє: ${formatValue(previous as number, format)}`;
+    ? t("noData")
+    : t("tooltip", { current: formatValue(current, format, locale), previous: formatValue(previous as number, format, locale) });
 
   return (
     <span

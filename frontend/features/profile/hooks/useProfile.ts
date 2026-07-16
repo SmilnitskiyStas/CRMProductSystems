@@ -12,10 +12,13 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: updateProfile,
     onSuccess: (updated) => {
-      // Patch cached user with the latest name and phone
+      // Patch cached user with the latest name, phone and preferred locale (the
+      // language switcher — LanguageSwitcher.tsx, i18n Block 1 — reuses this same
+      // mutation so DashboardIntlProvider's cookie->user.preferredLocale fallback
+      // stays in sync with the server).
       qc.setQueryData<AuthUserDto>(ME_KEY, (prev) =>
         prev
-          ? { ...prev, fullName: updated.fullName, phone: updated.phone }
+          ? { ...prev, fullName: updated.fullName, phone: updated.phone, preferredLocale: updated.preferredLocale }
           : prev,
       );
     },

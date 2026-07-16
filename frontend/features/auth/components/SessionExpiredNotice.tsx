@@ -1,11 +1,13 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 // Shown on /login when the API client redirects after a failed token refresh
 // (lib/api.ts → /login?reason=session_expired). Amber warning tone — this is
 // an expected event, not an error.
 export function SessionExpiredNotice() {
+  const t = useTranslations("Dashboard.auth");
   const searchParams = useSearchParams();
 
   if (searchParams.get("reason") !== "session_expired") return null;
@@ -24,7 +26,7 @@ export function SessionExpiredNotice() {
         fontFamily: '"Inter", sans-serif',
       }}
     >
-      Час сеансу сплив. Будь ласка, увійдіть знову.
+      {t("sessionExpired")}
     </div>
   );
 }

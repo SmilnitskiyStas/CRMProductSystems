@@ -4,12 +4,13 @@
 // Used for order cancellation, request rejection and agreement termination.
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { Btn } from "./Btn";
 
 interface Props {
   title: string;
-  /** Label above the textarea. */
+  /** Label above the textarea. Defaults to the translated "Reason" when omitted. */
   label?: string;
   placeholder?: string;
   confirmLabel?: string;
@@ -24,15 +25,20 @@ interface Props {
 
 export function ReasonModal({
   title,
-  label = "Причина",
-  placeholder = "Вкажіть причину...",
-  confirmLabel = "Підтвердити",
+  label,
+  placeholder,
+  confirmLabel,
   required = false,
   variant = "danger",
   pending = false,
   onConfirm,
   onClose,
 }: Props) {
+  const t = useTranslations("Dashboard.ui.reasonModal");
+  const tCommon = useTranslations("Common");
+  const resolvedLabel = label ?? t("reasonLabel");
+  const resolvedPlaceholder = placeholder ?? t("reasonPlaceholder");
+  const resolvedConfirmLabel = confirmLabel ?? tCommon("confirm");
   const [reason, setReason] = useState("");
 
   return (
@@ -80,13 +86,13 @@ export function ReasonModal({
         </div>
 
         <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
-          {label}
+          {resolvedLabel}
           {required && <span style={{ color: "#F87171" }}> *</span>}
         </label>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           rows={3}
           style={{
             width: "100%",
@@ -105,14 +111,14 @@ export function ReasonModal({
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
           <Btn variant="ghost" onClick={onClose}>
-            Скасувати
+            {tCommon("cancel")}
           </Btn>
           <Btn
             variant={variant}
             disabled={pending || (required && !reason.trim())}
             onClick={() => onConfirm(reason.trim())}
           >
-            {pending ? "Зачекайте..." : confirmLabel}
+            {pending ? t("pending") : resolvedConfirmLabel}
           </Btn>
         </div>
       </div>

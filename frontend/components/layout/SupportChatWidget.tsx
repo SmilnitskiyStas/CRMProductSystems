@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   X,
   LifeBuoy,
@@ -37,18 +38,18 @@ interface Props {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("uk-UA", {
+function formatTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleTimeString(locale === "en" ? "en-US" : "uk-UA", {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
   const today = new Date();
-  if (d.toDateString() === today.toDateString()) return formatTime(iso);
-  return d.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
+  if (d.toDateString() === today.toDateString()) return formatTime(iso, locale);
+  return d.toLocaleDateString(locale === "en" ? "en-US" : "uk-UA", { day: "2-digit", month: "2-digit" });
 }
 
 // ── Session list item ─────────────────────────────────────────────────────────
@@ -60,6 +61,8 @@ function SessionItem({
   session: ChatSessionDto;
   onClick: () => void;
 }) {
+  const t = useTranslations("Common");
+  const locale = useLocale();
   return (
     <div
       onClick={onClick}
@@ -94,7 +97,7 @@ function SessionItem({
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
           <span style={{ color: "#4B5563", fontSize: 11 }}>
-            {formatDate(session.updatedAt)}
+            {formatDate(session.updatedAt, locale)}
           </span>
           {session.unreadCount > 0 && (
             <span
@@ -137,7 +140,7 @@ function SessionItem({
             padding: "1px 6px",
           }}
         >
-          {session.status === "open" ? "Активний" : "Закритий"}
+          {session.status === "open" ? t("statusActive") : t("statusClosed")}
         </span>
       </div>
     </div>
@@ -155,6 +158,9 @@ function ChatView({
   currentUserId: string;
   onBack: () => void;
 }) {
+  const t = useTranslations("Common");
+  const tChat = useTranslations("Dashboard.supportChat");
+  const locale = useLocale();
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const { data: messages } = useChatMessages(session.id);
@@ -200,7 +206,7 @@ function ChatView({
         <div style={{ flex: 1 }}>
           <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>{session.subject}</div>
           <div style={{ color: "#4B5563", fontSize: 11 }}>
-            {session.status === "open" ? "Активний" : "Закритий"}
+            {session.status === "open" ? t("statusActive") : t("statusClosed")}
           </div>
         </div>
         {session.status === "open" && (
@@ -217,7 +223,7 @@ function ChatView({
               cursor: "pointer",
             }}
           >
-            Закрити
+            {t("close")}
           </button>
         )}
       </div>
@@ -234,7 +240,7 @@ function ChatView({
       >
         {!messages?.length && (
           <div style={{ color: "#4B5563", fontSize: 12, textAlign: "center", padding: "20px 0" }}>
-            Повідомлень ще немає
+            {tChat("noMessages")}
           </div>
         )}
         {(messages ?? []).map((msg) => {
@@ -269,7 +275,7 @@ function ChatView({
                 {msg.body}
               </div>
               <div style={{ color: "#374151", fontSize: 10, marginTop: 2, paddingLeft: 4, paddingRight: 4 }}>
-                {formatTime(msg.createdAt)}
+                {formatTime(msg.createdAt, locale)}
               </div>
             </div>
           );
@@ -292,7 +298,7 @@ function ChatView({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Написати… (Enter — відправити)"
+            placeholder={tChat("typePlaceholder")}
             rows={2}
             style={{
               flex: 1,
@@ -335,6 +341,8 @@ function ChatView({
 // ── New chat form ─────────────────────────────────────────────────────────────
 
 function NewChatForm({ onBack }: { onBack: () => void }) {
+  const t = useTranslations("Common");
+  const tChat = useTranslations("Dashboard.supportChat");
   const [subject, setSubject] = useState("");
   const [firstMessage, setFirstMessage] = useState("");
   const createChat = useCreateChat();
@@ -385,33 +393,33 @@ function NewChatForm({ onBack }: { onBack: () => void }) {
         >
           <ChevronLeft size={16} />
         </button>
-        <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>Новий чат</div>
+        <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>{tChat("newChat")}</div>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
-            <label style={labelStyle}>Тема *</label>
+            <label style={labelStyle}>{tChat("subjectLabel")}</label>
             <input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Коротко опишіть питання"
+              placeholder={tChat("subjectPlaceholder")}
               style={inputStyle}
             />
           </div>
           <div>
-            <label style={labelStyle}>Перше повідомлення *</label>
+            <label style={labelStyle}>{tChat("firstMessageLabel")}</label>
             <textarea
               value={firstMessage}
               onChange={(e) => setFirstMessage(e.target.value)}
-              placeholder="Детально опишіть ситуацію…"
+              placeholder={tChat("firstMessagePlaceholder")}
               rows={5}
               style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
             />
           </div>
           {createChat.isError && (
             <div style={{ color: "#EF4444", fontSize: 12 }}>
-              Не вдалося створити чат. Спробуйте ще раз.
+              {tChat("createError")}
             </div>
           )}
         </div>
@@ -438,7 +446,7 @@ function NewChatForm({ onBack }: { onBack: () => void }) {
           }}
         >
           <Send size={14} />
-          {createChat.isPending ? "Надсилання…" : "Надіслати"}
+          {createChat.isPending ? t("sending") : t("send")}
         </button>
       </div>
     </>
@@ -454,6 +462,7 @@ interface AiMessage {
 }
 
 function AiAssistantTab() {
+  const tChat = useTranslations("Dashboard.supportChat");
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -480,7 +489,7 @@ function AiAssistantTab() {
         onError: (err) => {
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", text: `Помилка: ${err.message ?? "AI сервіс недоступний"}` },
+            { role: "assistant", text: tChat("aiError", { message: err.message ?? tChat("aiUnavailable") }) },
           ]);
         },
       },
@@ -508,11 +517,11 @@ function AiAssistantTab() {
       >
         {messages.length === 0 && (
           <div style={{ color: "#4B5563", fontSize: 12, textAlign: "center", padding: "24px 8px", lineHeight: 1.8 }}>
-            Привіт! Запитай про стан магазину.
+            {tChat("greeting")}
             <br />
-            <em style={{ color: "#6B7280" }}>«Які товари закінчуються?»</em>
+            <em style={{ color: "#6B7280" }}>{tChat("exampleQuery1")}</em>
             <br />
-            <em style={{ color: "#6B7280" }}>«Що продається найкраще цього тижня?»</em>
+            <em style={{ color: "#6B7280" }}>{tChat("exampleQuery2")}</em>
           </div>
         )}
 
@@ -551,7 +560,7 @@ function AiAssistantTab() {
         {isPending && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#4B5563", fontSize: 12 }}>
             <PulsingDots />
-            <span>AI аналізує дані…</span>
+            <span>{tChat("aiThinking")}</span>
           </div>
         )}
 
@@ -572,7 +581,7 @@ function AiAssistantTab() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Запитай AI (Enter — надіслати)"
+          placeholder={tChat("askPlaceholder")}
           rows={2}
           disabled={isPending}
           style={{
@@ -613,11 +622,12 @@ function AiAssistantTab() {
 }
 
 function AiContextBadges({ context }: { context: AiAssistantContextSummary }) {
+  const tChat = useTranslations("Dashboard.supportChat");
   const badges = [
-    { label: `${context.criticalStockBatchesCount} критичних партій`, color: "#EF4444" },
-    { label: `${context.pendingOrdersCount} замовлень`, color: "#F59E0B" },
-    { label: `${context.salesDaysCount} рядків продажів`, color: "#3B82F6" },
-    { label: `${context.activeSuppliersCount} постачальників`, color: "#10B981" },
+    { label: tChat("criticalBatches", { count: context.criticalStockBatchesCount }), color: "#EF4444" },
+    { label: tChat("pendingOrders", { count: context.pendingOrdersCount }), color: "#F59E0B" },
+    { label: tChat("salesRows", { count: context.salesDaysCount }), color: "#3B82F6" },
+    { label: tChat("activeSuppliers", { count: context.activeSuppliersCount }), color: "#10B981" },
   ].filter((b) => parseInt(b.label) > 0);
 
   if (badges.length === 0) return null;
@@ -673,6 +683,9 @@ function PulsingDots() {
 type SupportView = "list" | "new" | "chat";
 
 export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }: Props) {
+  const t = useTranslations("Common");
+  const tTopBar = useTranslations("Dashboard.topBar");
+  const tChat = useTranslations("Dashboard.supportChat");
   const isProvider = PROVIDER_TEAM.has(userRole as AppRole);
   const { data: me } = useMe();
   const [view, setView] = useState<SupportView>("list");
@@ -737,7 +750,7 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
               : <LifeBuoy size={14} color="#60A5FA" />}
           </div>
           <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-            {activeTab === "assistant" ? "AI Бізнес-Асистент" : "Підтримка"}
+            {activeTab === "assistant" ? tTopBar("aiAssistant") : tTopBar("support")}
           </span>
         </div>
         <button
@@ -791,7 +804,7 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
                 }}
               >
                 {tab === "support" ? <LifeBuoy size={13} /> : <Bot size={13} />}
-                {tab === "support" ? "Підтримка" : "Мій асистент"}
+                {tab === "support" ? tTopBar("support") : tTopBar("myAssistant")}
               </button>
             );
           })}
@@ -821,10 +834,10 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
                 <LifeBuoy size={26} color="#60A5FA" />
               </div>
               <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                Ви — агент підтримки
+                {tChat("providerTitle")}
               </div>
               <div style={{ color: "#4B5563", fontSize: 12, lineHeight: 1.6, marginBottom: 20 }}>
-                Всі тікети та чати клієнтів доступні в Service Desk.
+                {tChat("providerBody")}
               </div>
               <a
                 href="/service-desk"
@@ -842,7 +855,7 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
                   textDecoration: "none",
                 }}
               >
-                Відкрити Service Desk
+                {tChat("openServiceDesk")}
                 <ChevronRight size={14} />
               </a>
             </div>
@@ -855,7 +868,7 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
             <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
               {isLoading ? (
                 <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "20px 0" }}>
-                  Завантаження…
+                  {t("loading")}
                 </div>
               ) : !sessions?.length ? (
                 <div style={{ textAlign: "center", padding: "32px 0" }}>
@@ -864,10 +877,10 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
                     style={{ color: "#374151", margin: "0 auto 10px", display: "block" }}
                   />
                   <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                    Немає активних чатів
+                    {tChat("noChatsTitle")}
                   </div>
                   <div style={{ color: "#4B5563", fontSize: 12 }}>
-                    Натисніть «Новий чат» щоб звернутись до підтримки
+                    {tChat("noChatsBody")}
                   </div>
                 </div>
               ) : (
@@ -903,7 +916,7 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
                 }}
               >
                 <Plus size={14} />
-                Новий чат
+                {tChat("newChat")}
               </button>
             </div>
           </>

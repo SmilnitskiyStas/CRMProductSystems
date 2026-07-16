@@ -4,6 +4,7 @@ import { ProfileInfoForm } from "@/features/profile/components/ProfileInfoForm";
 import { ChangePasswordForm } from "@/features/profile/components/ChangePasswordForm";
 import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection";
 import { TelegramLinkSection } from "@/features/profile/components/TelegramLinkSection";
+import { LanguageSwitcher } from "@/features/profile/components/LanguageSwitcher";
 
 const sectionStyle: React.CSSProperties = {
   paddingBottom: 28,
@@ -49,10 +50,15 @@ export function ProfileTab() {
       </div>
 
       {/* Section 4 — Telegram */}
-      <div>
+      <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Telegram</h3>
         <p style={sectionSubtitleStyle}>Прив&apos;яжіть Telegram для особистих сповіщень</p>
         <TelegramLinkSection />
+      </div>
+
+      {/* Section 5 — Language (i18n Block 1, TASK-376) */}
+      <div>
+        <LanguageSwitcher />
       </div>
     </div>
   );

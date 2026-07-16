@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronDown, Store, Check } from "lucide-react";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useStoreContext } from "@/lib/useStoreContext";
 
 export function StoreSelector() {
+  const t = useTranslations("Dashboard.storeSelector");
   const { data: stores = [] } = useStores();
   const { data: user } = useMe();
   const { selectedStoreId, setSelectedStoreId } = useStoreContext();
@@ -62,7 +64,7 @@ export function StoreSelector() {
       >
         <Store size={14} color="#6B7280" />
         <span style={{ fontSize: 13, fontWeight: 600, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {selectedStore?.name ?? "Магазин"}
+          {selectedStore?.name ?? t("fallbackName")}
         </span>
         <ChevronDown
           size={13}
@@ -88,7 +90,7 @@ export function StoreSelector() {
         >
           <div style={{ padding: "6px 12px 4px", borderBottom: "1px solid #1F2937" }}>
             <span style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Оберіть магазин
+              {t("choose")}
             </span>
           </div>
           <div style={{ maxHeight: 280, overflowY: "auto" }}>

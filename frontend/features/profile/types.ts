@@ -1,6 +1,9 @@
 export interface UpdateProfileRequest {
   fullName: string;
   phone?: string;
+  /** Optional UI locale ("uk"/"en") — i18n Block 1, TASK-376. Omitted by the regular
+   * profile form; only the language switcher (LanguageSwitcher.tsx) sets this. */
+  preferredLocale?: string;
 }
 
 export interface ChangePasswordRequest {

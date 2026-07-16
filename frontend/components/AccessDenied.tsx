@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { ShieldOff } from "lucide-react";
 
 interface AccessDeniedProps {
@@ -7,6 +8,7 @@ interface AccessDeniedProps {
 }
 
 export function AccessDenied({ title }: AccessDeniedProps) {
+  const t = useTranslations("Dashboard.ui.accessDenied");
   return (
     <div
       style={{
@@ -26,7 +28,7 @@ export function AccessDenied({ title }: AccessDeniedProps) {
         <h1 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>{title}</h1>
       )}
       <p style={{ fontSize: 13, margin: 0, maxWidth: 340 }}>
-        У вас немає доступу до цього розділу. Зверніться до менеджера магазину або адміністратора.
+        {t("body")}
       </p>
     </div>
   );

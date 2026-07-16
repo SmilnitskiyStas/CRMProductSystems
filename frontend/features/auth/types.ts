@@ -10,6 +10,9 @@ export interface AuthUserDto {
   telegramChatId?: string | null;
   permissions?: Record<string, boolean> | null;
   twoFactorEnabled: boolean;
+  /** UI locale the user picked ("uk"/"en"); null/undefined = client falls back to the
+   * `sg_locale` cookie or browser language (i18n rollout Block 1, TASK-375/376). */
+  preferredLocale?: string | null;
 }
 
 export interface LoginRequest {

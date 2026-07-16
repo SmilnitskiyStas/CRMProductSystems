@@ -251,5 +251,199 @@
       "rights": "© 2026 AgruSystems. All rights reserved.",
       "login": "Log in"
     }
+  },
+  "Common": {
+    "loading": "Loading…",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "back": "Back",
+    "send": "Send",
+    "sending": "Sending…",
+    "statusActive": "Active",
+    "statusClosed": "Closed"
+  },
+  "Dashboard": {
+    "layout": {
+      "loading": "Loading…"
+    },
+    "sidebar": {
+      "dashboard": "Dashboard",
+      "settings": "Settings",
+      "expandTooltip": "Expand menu",
+      "collapseTooltip": "Collapse menu",
+      "collapseLabel": "Collapse",
+      "groups": {
+        "operations": {
+          "label": "Operations",
+          "catalog": "Catalog",
+          "stock": "Stock",
+          "receipts": "Receiving",
+          "transfers": "Transfers",
+          "writeOffs": "Write-offs",
+          "locations": "Locations",
+          "iot": "IoT Devices"
+        },
+        "sales": {
+          "label": "Sales",
+          "pos": "POS",
+          "sales": "Sales",
+          "customers": "Customers",
+          "events": "Events"
+        },
+        "procurement": {
+          "label": "Procurement",
+          "orders": "Purchase Orders",
+          "aiOrders": "AI Orders"
+        },
+        "marketplace": {
+          "label": "Marketplace",
+          "suppliers": "Suppliers",
+          "myOrders": "My Orders"
+        },
+        "autoService": {
+          "label": "Auto Service",
+          "workOrders": "Work Orders",
+          "customers": "Customers",
+          "serviceCatalog": "Service Catalog"
+        },
+        "production": {
+          "label": "Production",
+          "recipes": "Recipes",
+          "orders": "Orders"
+        },
+        "analytics": {
+          "label": "Analytics",
+          "analytics": "Analytics",
+          "posAnalytics": "POS Analytics"
+        },
+        "workforce": {
+          "label": "Staff",
+          "users": "Staff",
+          "schedules": "Schedules",
+          "team": "Team",
+          "legalEntities": "Legal Entities"
+        },
+        "support": {
+          "label": "Support",
+          "serviceDesk": "Service Desk"
+        },
+        "admin": {
+          "label": "Admin",
+          "provider": "Provider",
+          "admin": "Admin"
+        },
+        "supplierCabinet": {
+          "label": "Cabinet",
+          "profile": "Profile",
+          "myItems": "My Items",
+          "reviews": "Reviews",
+          "tasks": "Tasks",
+          "clients": "Clients",
+          "team": "Team",
+          "requests": "Cooperation Requests",
+          "orders": "Orders",
+          "contractSettings": "Contract Details",
+          "support": "Support",
+          "messages": "Messages"
+        }
+      }
+    },
+    "topBar": {
+      "support": "Support",
+      "supportChat": "Support Chat",
+      "aiAssistant": "AI Business Assistant",
+      "myAssistant": "My Assistant",
+      "notifications": "Notifications"
+    },
+    "userMenu": {
+      "profile": "Profile",
+      "settings": "Settings",
+      "logout": "Log out",
+      "accountInfo": "Account information"
+    },
+    "storeSelector": {
+      "fallbackName": "Store",
+      "choose": "Select store"
+    },
+    "supportChat": {
+      "noMessages": "No messages yet",
+      "typePlaceholder": "Write a message… (Enter to send)",
+      "newChat": "New chat",
+      "subjectLabel": "Subject *",
+      "subjectPlaceholder": "Briefly describe the issue",
+      "firstMessageLabel": "First message *",
+      "firstMessagePlaceholder": "Describe the situation in detail…",
+      "createError": "Failed to create the chat. Please try again.",
+      "greeting": "Hi! Ask about your store's status.",
+      "exampleQuery1": "“Which items are running low?”",
+      "exampleQuery2": "“What's selling best this week?”",
+      "aiThinking": "AI is analyzing data…",
+      "askPlaceholder": "Ask AI (Enter to send)",
+      "aiError": "Error: {message}",
+      "aiUnavailable": "AI service unavailable",
+      "providerTitle": "You are a support agent",
+      "providerBody": "All client tickets and chats are available in Service Desk.",
+      "openServiceDesk": "Open Service Desk",
+      "noChatsTitle": "No active chats",
+      "noChatsBody": "Click “New chat” to contact support",
+      "criticalBatches": "{count} critical batches",
+      "pendingOrders": "{count} pending orders",
+      "salesRows": "{count} sales rows",
+      "activeSuppliers": "{count} active suppliers"
+    },
+    "auth": {
+      "tagline": "Inventory management system",
+      "emailFieldLabel": "EMAIL",
+      "passwordFieldLabel": "PASSWORD",
+      "emailInvalid": "Enter a valid email",
+      "passwordRequired": "Password is required",
+      "tooManyAttempts": "Too many attempts. Try again later.",
+      "invalidCredentials": "Invalid email or password",
+      "challengeExpired": "The confirmation window expired. Go back and sign in again.",
+      "invalidCode": "Invalid code",
+      "recoveryCodeHint": "Enter the recovery code in XXXX-XXXX format",
+      "totpCodeHint": "Enter the 6-digit code",
+      "recoveryStepInfo": "Enter one of the recovery codes saved when you set up 2FA.",
+      "totpStepInfo": "Enter the 6-digit code from your authenticator app.",
+      "recoveryCodeLabel": "RECOVERY CODE",
+      "totpCodeLabel": "CONFIRMATION CODE",
+      "verifying": "Verifying…",
+      "useRecoveryCode": "Use a recovery code",
+      "useAuthenticatorCode": "Use the authenticator app code",
+      "signingIn": "Signing in…",
+      "signIn": "Sign in",
+      "sessionExpired": "Your session has expired. Please sign in again."
+    },
+    "ui": {
+      "dateRange": {
+        "from": "From",
+        "to": "To",
+        "comparePeriod": "Compare with previous period",
+        "compareFrom": "Compare: from",
+        "compareTo": "Compare: to"
+      },
+      "reasonModal": {
+        "reasonLabel": "Reason",
+        "reasonPlaceholder": "Enter a reason...",
+        "pending": "Please wait..."
+      },
+      "trendIndicator": {
+        "noData": "No data for the previous period",
+        "tooltip": "Current: {current} · Previous: {previous}"
+      },
+      "productAnalyticsLink": {
+        "title": "Product analytics"
+      },
+      "accessDenied": {
+        "body": "You don't have access to this section. Contact your store manager or administrator."
+      }
+    },
+    "profile": {
+      "language": {
+        "title": "Interface language",
+        "subtitle": "Choose the dashboard interface language"
+      }
+    }
   }
 }

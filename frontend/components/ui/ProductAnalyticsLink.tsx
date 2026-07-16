@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { BarChart2 } from "lucide-react";
 
 interface Props {
@@ -10,10 +11,11 @@ interface Props {
 }
 
 export function ProductAnalyticsLink({ productId, size = 13, style }: Props) {
+  const t = useTranslations("Dashboard.ui.productAnalyticsLink");
   return (
     <Link
       href={`/inventory/${productId}?tab=analytics`}
-      title="Аналітика товару"
+      title={t("title")}
       onClick={(e) => e.stopPropagation()}
       style={{
         display: "inline-flex",

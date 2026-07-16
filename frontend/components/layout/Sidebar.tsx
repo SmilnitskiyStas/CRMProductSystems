@@ -41,8 +41,9 @@ import {
   MessageCircle,
   Landmark,
 } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useSupplierChatSessions } from "@/features/supplier-cabinet/hooks/useSupplierCabinet";
@@ -100,119 +101,129 @@ interface NavGroup {
 // Service Desk only exists today as the "Підтримка" tab inside Settings). Add them
 // once their pages exist; don't render empty/dead-link groups.
 
-const NAV_GROUPS: NavGroup[] = [
+// NAV_GROUPS/SUPPLIER_NAV_GROUP are built by functions (not module-level consts)
+// because their `label` strings now come from next-intl — `t` is only available
+// inside the component, via `useTranslations` (i18n Block 1, TASK-376). Untyped to
+// the specific "Dashboard.sidebar.groups" namespace on purpose — this project has no
+// global `Messages`/`IntlMessages` augmentation, so the generic-namespace form of
+// `useTranslations<...>` isn't wired up; the general translator shape is enough here.
+type SidebarGroupsT = ReturnType<typeof useTranslations>;
+
+function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
+  return [
   {
     key: "operations",
-    label: "Операції",
+    label: t("operations.label"),
     icon: <Package size={18} />,
     moduleKey: "inventory",
     items: [
-      { href: "/inventory",  label: "Каталог",      icon: <Package size={16} />,      roles: CAN_VIEW_WAREHOUSE },
-      { href: "/stock",      label: "Залишки",      icon: <ShoppingCart size={16} />, roles: CAN_VIEW_WAREHOUSE },
-      { href: "/receipts",   label: "Прийомка",     icon: <ClipboardList size={16} />, roles: CAN_MANAGE_WAREHOUSE },
-      { href: "/transfers",  label: "Переміщення",  icon: <ArrowLeftRight size={16} />, roles: CAN_MANAGE_WAREHOUSE },
-      { href: "/write-offs", label: "Списання",     icon: <Trash2 size={16} />,       roles: CAN_VIEW_WAREHOUSE },
-      { href: "/locations",  label: "Локації",      icon: <Map size={16} />,          roles: AT_LEAST_STORE_MANAGER },
-      { href: "/iot",        label: "IoT пристрої", icon: <Cpu size={16} />,          roles: AT_LEAST_STORE_MANAGER },
+      { href: "/inventory",  label: t("operations.catalog"),   icon: <Package size={16} />,      roles: CAN_VIEW_WAREHOUSE },
+      { href: "/stock",      label: t("operations.stock"),     icon: <ShoppingCart size={16} />, roles: CAN_VIEW_WAREHOUSE },
+      { href: "/receipts",   label: t("operations.receipts"),  icon: <ClipboardList size={16} />, roles: CAN_MANAGE_WAREHOUSE },
+      { href: "/transfers",  label: t("operations.transfers"), icon: <ArrowLeftRight size={16} />, roles: CAN_MANAGE_WAREHOUSE },
+      { href: "/write-offs", label: t("operations.writeOffs"), icon: <Trash2 size={16} />,       roles: CAN_VIEW_WAREHOUSE },
+      { href: "/locations",  label: t("operations.locations"), icon: <Map size={16} />,          roles: AT_LEAST_STORE_MANAGER },
+      { href: "/iot",        label: t("operations.iot"),       icon: <Cpu size={16} />,          roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
     key: "sales",
-    label: "Продажі",
+    label: t("sales.label"),
     icon: <TrendingUp size={18} />,
     moduleKey: "pos",
     items: [
-      { href: "/pos",       label: "Каса",     icon: <CreditCard size={16} />,   roles: CAN_ACCESS_POS },
-      { href: "/sales",     label: "Продажі",  icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
-      { href: "/customers", label: "Клієнти",  icon: <Users size={16} />,        roles: AT_LEAST_STORE_MANAGER },
-      { href: "/events",    label: "Події",    icon: <CalendarDays size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      { href: "/pos",       label: t("sales.pos"),       icon: <CreditCard size={16} />,   roles: CAN_ACCESS_POS },
+      { href: "/sales",     label: t("sales.sales"),     icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/customers", label: t("sales.customers"), icon: <Users size={16} />,        roles: AT_LEAST_STORE_MANAGER },
+      { href: "/events",    label: t("sales.events"),    icon: <CalendarDays size={16} />,  roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
     key: "procurement",
-    label: "Постачання",
+    label: t("procurement.label"),
     icon: <Truck size={18} />,
     moduleKey: "procurement",
     items: [
-      { href: "/orders",    label: "Замовлення постачання", icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER },
-      { href: "/ai-orders", label: "AI Постачання",          icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/orders",    label: t("procurement.orders"),   icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/ai-orders", label: t("procurement.aiOrders"), icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
     key: "marketplace",
-    label: "Маркетплейс",
+    label: t("marketplace.label"),
     icon: <Store size={18} />,
     moduleKey: "marketplace",
     items: [
-      { href: "/marketplace", label: "Постачальники", icon: <Store size={16} />, exact: true, permission: "marketplace" },
+      { href: "/marketplace", label: t("marketplace.suppliers"), icon: <Store size={16} />, exact: true, permission: "marketplace" },
       // Клієнтські marketplace-замовлення (TASK-318) — тільки tenant-ролі:
       // провайдерська команда і supplier_admin не мають своїх замовлень.
-      { href: "/marketplace/orders", label: "Мої замовлення", icon: <ShoppingBag size={16} />, roles: TENANT_ROLES },
+      { href: "/marketplace/orders", label: t("marketplace.myOrders"), icon: <ShoppingBag size={16} />, roles: TENANT_ROLES },
     ],
   },
   {
     key: "auto_service",
-    label: "Auto Service",
+    label: t("autoService.label"),
     icon: <Wrench size={18} />,
     moduleKey: "auto_service",
     items: [
-      { href: "/auto-service",                  label: "Наряди",          icon: <Wrench size={16} />,   roles: AT_LEAST_STORE_MANAGER, exact: true },
-      { href: "/auto-service/customers",         label: "Клієнти",         icon: <Car size={16} />,      roles: AT_LEAST_STORE_MANAGER },
-      { href: "/auto-service/service-catalog",   label: "Каталог послуг",  icon: <BookOpen size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/auto-service",                  label: t("autoService.workOrders"),     icon: <Wrench size={16} />,   roles: AT_LEAST_STORE_MANAGER, exact: true },
+      { href: "/auto-service/customers",         label: t("autoService.customers"),      icon: <Car size={16} />,      roles: AT_LEAST_STORE_MANAGER },
+      { href: "/auto-service/service-catalog",   label: t("autoService.serviceCatalog"), icon: <BookOpen size={16} />, roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
     key: "production",
-    label: "Виробництво",
+    label: t("production.label"),
     icon: <FlaskConical size={18} />,
     moduleKey: "production",
     items: [
-      { href: "/production/recipes", label: "Рецепти",  icon: <FlaskConical size={16} />, roles: AT_LEAST_STORE_MANAGER },
-      { href: "/production/orders",  label: "Ордери",   icon: <ListOrdered size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/recipes", label: t("production.recipes"), icon: <FlaskConical size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/orders",  label: t("production.orders"),  icon: <ListOrdered size={16} />,  roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
     key: "analytics",
-    label: "Аналітика",
+    label: t("analytics.label"),
     icon: <BarChart2 size={18} />,
     items: [
-      { href: "/analytics",     label: "Аналітика",    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
-      { href: "/analytics/pos", label: "POS Аналітика", icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
+      { href: "/analytics",     label: t("analytics.analytics"),    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
+      { href: "/analytics/pos", label: t("analytics.posAnalytics"), icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
     ],
   },
   {
     key: "workforce",
-    label: "Персонал",
+    label: t("workforce.label"),
     icon: <Users size={18} />,
     items: [
-      { href: "/users",          label: "Персонал", icon: <Users size={16} />,    roles: AT_LEAST_STORE_MANAGER },
-      { href: "/schedules",      label: "Розклад",  icon: <Calendar size={16} />, permission: "schedule_management" },
-      { href: "/provider/team",  label: "Команда",  icon: <Users size={16} />,    roles: PROVIDER_TEAM, permission: "team_management" },
+      { href: "/users",          label: t("workforce.users"),     icon: <Users size={16} />,    roles: AT_LEAST_STORE_MANAGER },
+      { href: "/schedules",      label: t("workforce.schedules"), icon: <Calendar size={16} />, permission: "schedule_management" },
+      { href: "/provider/team",  label: t("workforce.team"),      icon: <Users size={16} />,    roles: PROVIDER_TEAM, permission: "team_management" },
       // Legal Entities (TASK-323): enterprise_admin/provider always see it; other
       // tenant roles only if granted the `legal_entities.manage` override — that
       // check can't be expressed via `roles`/`permission` (mirrors backend role-OR-
       // permission logic), so it's filtered in manually below via canManageLegalEntities.
-      { href: "/settings/legal-entities", label: "Юридичні особи", icon: <Landmark size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/settings/legal-entities", label: t("workforce.legalEntities"), icon: <Landmark size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
     ],
   },
   {
     key: "support",
-    label: "Підтримка",
+    label: t("support.label"),
     icon: <LifeBuoy size={18} />,
     items: [
-      { href: "/service-desk", label: "Service Desk", icon: <LifeBuoy size={16} />, permission: "service_desk" },
+      { href: "/service-desk", label: t("support.serviceDesk"), icon: <LifeBuoy size={16} />, permission: "service_desk" },
     ],
   },
   {
     key: "admin",
-    label: "Адмін",
+    label: t("admin.label"),
     icon: <Shield size={18} />,
     items: [
-      { href: "/provider", label: "Провайдер", icon: <Shield size={16} />,   roles: PROVIDER_TEAM, exact: true, permission: ["view_clients", "manage_clients"] },
-      { href: "/admin",    label: "Адмін",     icon: <Settings size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
+      { href: "/provider", label: t("admin.provider"), icon: <Shield size={16} />,   roles: PROVIDER_TEAM, exact: true, permission: ["view_clients", "manage_clients"] },
+      { href: "/admin",    label: t("admin.admin"),    icon: <Settings size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
     ],
   },
-];
+  ];
+}
 
 // Supplier cabinet (v4.1, TASK-286, ADR-016; permissions TASK-307) — the ONLY
 // group a supplier_admin sees. Rendered instead of NAV_GROUPS for that role;
@@ -220,21 +231,22 @@ const NAV_GROUPS: NavGroup[] = [
 // with marketplace_supplier). Items are additionally filtered by permission key
 // when the user has a non-null permissions dict (see effectiveSupplierPermissions
 // below) — null permissions = full/owner access, so nothing is hidden.
-const SUPPLIER_NAV_GROUP: NavGroup = {
+function buildSupplierNavGroup(t: SidebarGroupsT): NavGroup {
+  return {
   key: "supplier_cabinet",
-  label: "Кабінет",
+  label: t("supplierCabinet.label"),
   icon: <Store size={18} />,
   // supplier_admin only ever renders this one group (see sourceGroups below) —
   // collapsing the sole group hid every cabinet link (items, reviews, etc.)
   // behind an easy-to-miss toggle. Always expanded, no reason to collapse it.
   alwaysExpanded: true,
   items: [
-    { href: "/supplier/profile", label: "Профіль",     icon: <Store size={16} />,        roles: SUPPLIER_ONLY, permission: "profile_management" },
-    { href: "/supplier/items",   label: "Мої товари",  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
-    { href: "/supplier/reviews", label: "Відгуки",     icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
-    { href: "/supplier/tasks",   label: "Завдання",    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
-    { href: "/supplier/clients", label: "Клієнти",     icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
-    { href: "/supplier/team",    label: "Команда",     icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
+    { href: "/supplier/profile", label: t("supplierCabinet.profile"),  icon: <Store size={16} />,        roles: SUPPLIER_ONLY, permission: "profile_management" },
+    { href: "/supplier/items",   label: t("supplierCabinet.myItems"),  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
+    { href: "/supplier/reviews", label: t("supplierCabinet.reviews"),  icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
+    { href: "/supplier/tasks",   label: t("supplierCabinet.tasks"),    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
+    { href: "/supplier/clients", label: t("supplierCabinet.clients"), icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
+    { href: "/supplier/team",    label: t("supplierCabinet.team"),    icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
     // Cooperation flow (TASK-318) — без permission-ключів: у довіднику
     // supplierPermissions поки немає відповідних прав. NOTE (TASK-359 audit):
     // the backend does NOT gate these routes either — any supplier_admin
@@ -242,16 +254,17 @@ const SUPPLIER_NAV_GROUP: NavGroup = {
     // Flagged as an open product decision (which permission key(s), if any,
     // should cover cooperation-requests/orders/contract-settings/support-tickets);
     // not fixed here.
-    { href: "/supplier/requests",          label: "Заявки на співпрацю", icon: <HeartHandshake size={16} />, roles: SUPPLIER_ONLY },
-    { href: "/supplier/orders",            label: "Замовлення",          icon: <ShoppingBag size={16} />, roles: SUPPLIER_ONLY },
-    { href: "/supplier/contract-settings", label: "Реквізити договору",  icon: <FileText size={16} />,    roles: SUPPLIER_ONLY },
-    { href: "/supplier/support",           label: "Підтримка",           icon: <LifeBuoy size={16} />,    roles: SUPPLIER_ONLY },
+    { href: "/supplier/requests",          label: t("supplierCabinet.requests"),          icon: <HeartHandshake size={16} />, roles: SUPPLIER_ONLY },
+    { href: "/supplier/orders",            label: t("supplierCabinet.orders"),            icon: <ShoppingBag size={16} />, roles: SUPPLIER_ONLY },
+    { href: "/supplier/contract-settings", label: t("supplierCabinet.contractSettings"),  icon: <FileText size={16} />,    roles: SUPPLIER_ONLY },
+    { href: "/supplier/support",           label: t("supplierCabinet.support"),           icon: <LifeBuoy size={16} />,    roles: SUPPLIER_ONLY },
     // Messaging (BUG-019) — moved out from under /supplier/clients (client_management)
     // because staff without that permission still need to reply to client chats;
     // same ungated treatment as the TASK-318 items above.
-    { href: "/supplier/messages",          label: "Повідомлення",        icon: <MessageCircle size={16} />, roles: SUPPLIER_ONLY },
+    { href: "/supplier/messages",          label: t("supplierCabinet.messages"),          icon: <MessageCircle size={16} />, roles: SUPPLIER_ONLY },
   ],
-};
+  };
+}
 
 /**
  * True when the group should be visible given the tenant's active modules.
@@ -633,6 +646,11 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
 
+  const t = useTranslations("Dashboard.sidebar");
+  const tGroups = useTranslations("Dashboard.sidebar.groups");
+  const navGroups = useMemo(() => buildNavGroups(tGroups), [tGroups]);
+  const supplierNavGroup = useMemo(() => buildSupplierNavGroup(tGroups), [tGroups]);
+
   // Resolve effective permissions for PROVIDER_TEAM users
   const isProviderTeamMember = PROVIDER_TEAM.has(userRole);
   const effectivePermissions = isProviderTeamMember
@@ -651,7 +669,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   // Standalone top item: Dashboard
   const dashboardItem: NavItem = {
     href: "/dashboard",
-    label: "Дашборд",
+    label: t("dashboard"),
     icon: <LayoutDashboard size={18} />,
     roles: TENANT_ROLES,
     exact: true,
@@ -659,7 +677,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   // Standalone bottom item: Settings
   const settingsItem: NavItem = {
     href: "/settings",
-    label: "Налаштування",
+    label: t("settings"),
     icon: <Settings size={18} />,
   };
 
@@ -690,7 +708,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
 
   // Filter groups by module activation, then by role and permissions.
   // supplier_admin bypasses NAV_GROUPS entirely — only the cabinet group.
-  const sourceGroups = isSupplierAdmin ? [SUPPLIER_NAV_GROUP] : NAV_GROUPS;
+  const sourceGroups = isSupplierAdmin ? [supplierNavGroup] : navGroups;
   const visibleGroups = sourceGroups
     .filter((group) => isModuleActive(group.moduleKey, modulesSet))
     .map((group) => ({
@@ -820,7 +838,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         {/* Collapse / Expand toggle */}
         <button
           onClick={onToggle}
-          title={collapsed ? "Розгорнути меню" : "Приховати меню"}
+          title={collapsed ? t("expandTooltip") : t("collapseTooltip")}
           style={{
             width: "100%",
             display: "flex",
@@ -848,7 +866,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         >
           {collapsed
             ? <PanelLeftOpen size={18} style={{ opacity: 0.7 }} />
-            : <><PanelLeftClose size={18} style={{ opacity: 0.7 }} />Приховати</>
+            : <><PanelLeftClose size={18} style={{ opacity: 0.7 }} />{t("collapseLabel")}</>
           }
         </button>
       </div>

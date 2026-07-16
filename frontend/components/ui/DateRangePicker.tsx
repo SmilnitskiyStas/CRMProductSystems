@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Switch } from "@/components/ui/switch";
 
 export interface SimpleDateRange {
@@ -77,6 +78,7 @@ export function DateRangePicker({
   compareRange,
   onCompareRangeChange,
 }: DateRangePickerProps) {
+  const t = useTranslations("Dashboard.ui.dateRange");
   const wasEnabled = useRef(compareEnabled);
 
   useEffect(() => {
@@ -91,7 +93,7 @@ export function DateRangePicker({
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-end" }}>
       <div>
-        <label style={labelStyle}>З дати</label>
+        <label style={labelStyle}>{t("from")}</label>
         <input
           type="date"
           value={toDateInputValue(range.from)}
@@ -101,7 +103,7 @@ export function DateRangePicker({
         />
       </div>
       <div>
-        <label style={labelStyle}>По дату</label>
+        <label style={labelStyle}>{t("to")}</label>
         <input
           type="date"
           value={toDateInputValue(range.to)}
@@ -113,13 +115,13 @@ export function DateRangePicker({
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 7 }}>
         <Switch checked={compareEnabled} onCheckedChange={onCompareToggle} />
-        <span style={{ color: "#9CA3AF", fontSize: 13 }}>Порівняти з попереднім періодом</span>
+        <span style={{ color: "#9CA3AF", fontSize: 13 }}>{t("comparePeriod")}</span>
       </div>
 
       {compareEnabled && (
         <>
           <div>
-            <label style={labelStyle}>Порівняння: з дати</label>
+            <label style={labelStyle}>{t("compareFrom")}</label>
             <input
               type="date"
               value={compareRange ? toDateInputValue(compareRange.from) : ""}
@@ -135,7 +137,7 @@ export function DateRangePicker({
             />
           </div>
           <div>
-            <label style={labelStyle}>Порівняння: по дату</label>
+            <label style={labelStyle}>{t("compareTo")}</label>
             <input
               type="date"
               value={compareRange ? toDateInputValue(compareRange.to) : ""}

@@ -26,9 +26,14 @@ export default async function LocaleLayout({
   setRequestLocale(locale);
 
   const messages = await getMessages();
+  // frontend/messages/{locale}.json also carries `Dashboard`/`Common` (i18n Block 1,
+  // TASK-376) for the authenticated dashboard's own client-side provider — the landing
+  // only ever used (and should only ever ship) `Landing.*`, so scope it down explicitly
+  // rather than passing the whole file to the client.
+  const landingMessages = { Landing: messages.Landing };
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={landingMessages}>
       {/* Root layout (app/layout.tsx) is shared with dashboard/auth and keeps
           `lang="uk"` hardcoded — it can't be changed structurally here.
           This client-side effect keeps <html lang> in sync for the landing. */}

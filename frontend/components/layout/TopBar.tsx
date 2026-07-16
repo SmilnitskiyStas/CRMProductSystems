@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Bell, LifeBuoy, Bot } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES } from "@/lib/roles";
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function TopBar({ title }: Props) {
+  const t = useTranslations("Dashboard.topBar");
   const { data: user } = useMe();
   const { data: unreadCount = 0 } = useUnreadCount();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -107,31 +109,31 @@ export function TopBar({ title }: Props) {
           {/* Support chat button */}
           <button
             onClick={() => supportActive ? setPanelOpen(false) : openPanel("support")}
-            title="Підтримка"
+            title={t("support")}
             style={btnStyle(supportActive)}
             onMouseEnter={(e) => onMouseEnter(e, supportActive)}
             onMouseLeave={(e) => onMouseLeave(e, supportActive)}
           >
             <LifeBuoy size={16} />
-            <span style={{ fontSize: 13, fontWeight: 500 }}>Чат підтримка</span>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>{t("supportChat")}</span>
           </button>
 
           {/* AI assistant button */}
           <button
             onClick={() => assistantActive ? setPanelOpen(false) : openPanel("assistant")}
-            title="AI Бізнес-Асистент"
+            title={t("aiAssistant")}
             style={btnStyle(assistantActive)}
             onMouseEnter={(e) => onMouseEnter(e, assistantActive)}
             onMouseLeave={(e) => onMouseLeave(e, assistantActive)}
           >
             <Bot size={16} />
-            <span style={{ fontSize: 13, fontWeight: 500 }}>Мій асистент</span>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>{t("myAssistant")}</span>
           </button>
 
           {/* Notification bell */}
           <Link
             href="/notifications"
-            title="Сповіщення"
+            title={t("notifications")}
             style={{
               background: "transparent",
               border: "1px solid #1F2937",

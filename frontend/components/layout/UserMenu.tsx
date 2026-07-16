@@ -2,12 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Settings, User, LogOut } from "lucide-react";
 import { useMe, useLogout } from "@/features/auth/hooks/useAuth";
 import { ROLE_LABELS } from "@/features/profile/types";
 import { UserProfileCard } from "@/features/profile/components/UserProfileCard";
 
 export function UserMenu() {
+  const t = useTranslations("Dashboard.userMenu");
   const { data: user } = useMe();
   const logout = useLogout();
 
@@ -162,7 +164,7 @@ export function UserMenu() {
               }}
             >
               <User size={15} />
-              Профіль
+              {t("profile")}
             </button>
 
             {/* Settings */}
@@ -180,7 +182,7 @@ export function UserMenu() {
               }}
             >
               <Settings size={15} />
-              Налаштування
+              {t("settings")}
             </Link>
 
             {/* Divider */}
@@ -200,7 +202,7 @@ export function UserMenu() {
               }}
             >
               <LogOut size={15} />
-              Вийти
+              {t("logout")}
             </button>
           </div>
         )}
@@ -215,6 +217,7 @@ export function UserMenu() {
 }
 
 function ProfileModal({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("Dashboard.userMenu");
   return (
     <>
       {/* Backdrop */}
@@ -255,10 +258,10 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         >
           <div>
             <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-              Профіль
+              {t("profile")}
             </h2>
             <p style={{ color: "#4B5563", fontSize: 12, margin: "3px 0 0" }}>
-              Інформація про акаунт
+              {t("accountInfo")}
             </p>
           </div>
           <button

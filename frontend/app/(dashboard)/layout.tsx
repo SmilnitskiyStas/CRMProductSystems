@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { getToken } from "@/lib/api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { ImpersonationBanner } from "@/features/provider/components/ImpersonationBanner";
+import { DashboardIntlProvider } from "@/i18n/DashboardIntlProvider";
 
 interface ImpersonationInfo {
   tenantName: string;
@@ -23,23 +25,26 @@ function readImpersonation(): ImpersonationInfo | null {
   }
 }
 
-const Loading = () => (
-  <div
-    style={{
-      minHeight: "100vh",
-      background: "#0F1117",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <div style={{ color: "#8A94A8", fontFamily: '"Inter", sans-serif', fontSize: 13 }}>
-      Завантаження…
+function Loading() {
+  const t = useTranslations("Common");
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0F1117",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div style={{ color: "#8A94A8", fontFamily: '"Inter", sans-serif', fontSize: 13 }}>
+        {t("loading")}
+      </div>
     </div>
-  </div>
-);
+  );
+}
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function DashboardChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { error, isLoading } = useMe();
   const [mounted, setMounted] = useState(false);
@@ -92,5 +97,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </div>
     </>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <DashboardIntlProvider>
+      <DashboardChrome>{children}</DashboardChrome>
+    </DashboardIntlProvider>
   );
 }

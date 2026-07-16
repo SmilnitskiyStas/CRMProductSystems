@@ -1,19 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { useLogin, useVerifyTwoFactor } from "../hooks/useAuth";
 import { isTwoFactorChallenge } from "../types";
 import { ApiError } from "@/lib/api";
 
-const schema = z.object({
-  email:    z.string().email("Введіть коректний email"),
-  password: z.string().min(1, "Пароль обов'язковий"),
-});
-
-type FormValues = z.infer<typeof schema>;
+// zod's message shape doesn't change across locales — only the strings inside
+// .email()/.min() do — so the inferred value type is stable and can be hand-written
+// here rather than derived per-render from a locale-dependent schema instance.
+interface FormValues {
+  email: string;
+  password: string;
+}
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
@@ -71,30 +73,32 @@ const linkBtnStyle: React.CSSProperties = {
   textUnderlineOffset: 3,
 };
 
-/** Maps API errors from the credentials step to Ukrainian UI messages. */
-function loginErrorMessage(error: Error): string {
+/** Maps API errors from the credentials step to a translated UI message. */
+function loginErrorMessage(error: Error, t: ReturnType<typeof useTranslations>): string {
   if (error instanceof ApiError) {
-    if (error.status === 429) return "Забагато спроб. Спробуйте пізніше.";
-    if (error.status === 401) return "Невірний email або пароль";
+    if (error.status === 429) return t("tooManyAttempts");
+    if (error.status === 401) return t("invalidCredentials");
   }
   return error.message;
 }
 
-/** Maps API errors from the 2FA verify step to Ukrainian UI messages. */
-function verifyErrorMessage(error: Error): string {
+/** Maps API errors from the 2FA verify step to a translated UI message. */
+function verifyErrorMessage(error: Error, t: ReturnType<typeof useTranslations>): string {
   if (error instanceof ApiError) {
-    if (error.status === 429) return "Забагато спроб. Спробуйте пізніше.";
+    if (error.status === 429) return t("tooManyAttempts");
     if (error.status === 401) {
       // Expired/invalid challenge (5 min TTL) vs. a wrong code
       if (error.message.toLowerCase().includes("challenge"))
-        return "Час підтвердження вичерпано. Поверніться назад і увійдіть знову.";
-      return "Невірний код";
+        return t("challengeExpired");
+      return t("invalidCode");
     }
   }
   return error.message;
 }
 
 export function LoginForm() {
+  const t = useTranslations("Dashboard.auth");
+  const tCommon = useTranslations("Common");
   const login = useLogin();
   const verify = useVerifyTwoFactor();
 
@@ -103,6 +107,15 @@ export function LoginForm() {
   const [code, setCode] = useState("");
   const [useRecovery, setUseRecovery] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
+
+  const schema = useMemo(
+    () =>
+      z.object({
+        email: z.string().email(t("emailInvalid")),
+        password: z.string().min(1, t("passwordRequired")),
+      }),
+    [t],
+  );
 
   const {
     register,
@@ -134,11 +147,11 @@ export function LoginForm() {
     const trimmed = code.trim();
     if (useRecovery) {
       if (trimmed.replace(/-/g, "").length < 8) {
-        setCodeError("Введіть код відновлення у форматі XXXX-XXXX");
+        setCodeError(t("recoveryCodeHint"));
         return;
       }
     } else if (!/^\d{6}$/.test(trimmed)) {
-      setCodeError("Введіть 6-значний код");
+      setCodeError(t("totpCodeHint"));
       return;
     }
     setCodeError(null);
@@ -169,13 +182,13 @@ export function LoginForm() {
       <form onSubmit={onVerifySubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <p style={{ margin: 0, fontSize: 13, color: "#8A94A8", fontFamily: '"Inter", sans-serif', lineHeight: 1.5 }}>
           {useRecovery
-            ? "Введіть один із кодів відновлення, збережених під час налаштування 2FA."
-            : "Введіть 6-значний код із застосунку-автентифікатора."}
+            ? t("recoveryStepInfo")
+            : t("totpStepInfo")}
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label style={labelStyle}>
-            {useRecovery ? "КОД ВІДНОВЛЕННЯ" : "КОД ПІДТВЕРДЖЕННЯ"}
+            {useRecovery ? t("recoveryCodeLabel") : t("totpCodeLabel")}
           </label>
           <input
             key={useRecovery ? "recovery" : "totp"}
@@ -210,7 +223,7 @@ export function LoginForm() {
           )}
         </div>
 
-        {verify.error && <div style={errorBoxStyle}>{verifyErrorMessage(verify.error)}</div>}
+        {verify.error && <div style={errorBoxStyle}>{verifyErrorMessage(verify.error, t)}</div>}
 
         <button
           type="submit"
@@ -219,15 +232,15 @@ export function LoginForm() {
           onMouseEnter={(e) => { if (!verify.isPending) e.currentTarget.style.background = "#3A8FE8"; }}
           onMouseLeave={(e) => { if (!verify.isPending) e.currentTarget.style.background = "#2D7DD2"; }}
         >
-          {verify.isPending ? "Перевірка…" : "Підтвердити"}
+          {verify.isPending ? t("verifying") : tCommon("confirm")}
         </button>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <button type="button" onClick={backToCredentials} style={{ ...linkBtnStyle, color: "#8A94A8" }}>
-            ← Назад
+            {"← "}{tCommon("back")}
           </button>
           <button type="button" onClick={switchCodeMode} style={linkBtnStyle}>
-            {useRecovery ? "Використати код із застосунку" : "Використати код відновлення"}
+            {useRecovery ? t("useAuthenticatorCode") : t("useRecoveryCode")}
           </button>
         </div>
       </form>
@@ -240,7 +253,7 @@ export function LoginForm() {
 
       {/* Email */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label style={labelStyle}>EMAIL</label>
+        <label style={labelStyle}>{t("emailFieldLabel")}</label>
         <input
           {...register("email")}
           type="email"
@@ -259,7 +272,7 @@ export function LoginForm() {
 
       {/* Password */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label style={labelStyle}>ПАРОЛЬ</label>
+        <label style={labelStyle}>{t("passwordFieldLabel")}</label>
         <input
           {...register("password")}
           type="password"
@@ -277,7 +290,7 @@ export function LoginForm() {
       </div>
 
       {/* API error */}
-      {login.error && <div style={errorBoxStyle}>{loginErrorMessage(login.error)}</div>}
+      {login.error && <div style={errorBoxStyle}>{loginErrorMessage(login.error, t)}</div>}
 
       {/* Submit */}
       <button
@@ -287,7 +300,7 @@ export function LoginForm() {
         onMouseEnter={(e) => { if (!login.isPending) e.currentTarget.style.background = "#3A8FE8"; }}
         onMouseLeave={(e) => { if (!login.isPending) e.currentTarget.style.background = "#2D7DD2"; }}
       >
-        {login.isPending ? "Вхід…" : "Увійти"}
+        {login.isPending ? t("signingIn") : t("signIn")}
       </button>
     </form>
   );

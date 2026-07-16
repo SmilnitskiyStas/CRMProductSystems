@@ -251,5 +251,199 @@
       "rights": "© 2026 AgruSystems. Усі права захищено.",
       "login": "Увійти"
     }
+  },
+  "Common": {
+    "loading": "Завантаження…",
+    "cancel": "Скасувати",
+    "confirm": "Підтвердити",
+    "close": "Закрити",
+    "back": "Назад",
+    "send": "Надіслати",
+    "sending": "Надсилання…",
+    "statusActive": "Активний",
+    "statusClosed": "Закритий"
+  },
+  "Dashboard": {
+    "layout": {
+      "loading": "Завантаження…"
+    },
+    "sidebar": {
+      "dashboard": "Дашборд",
+      "settings": "Налаштування",
+      "expandTooltip": "Розгорнути меню",
+      "collapseTooltip": "Приховати меню",
+      "collapseLabel": "Приховати",
+      "groups": {
+        "operations": {
+          "label": "Операції",
+          "catalog": "Каталог",
+          "stock": "Залишки",
+          "receipts": "Прийомка",
+          "transfers": "Переміщення",
+          "writeOffs": "Списання",
+          "locations": "Локації",
+          "iot": "IoT пристрої"
+        },
+        "sales": {
+          "label": "Продажі",
+          "pos": "Каса",
+          "sales": "Продажі",
+          "customers": "Клієнти",
+          "events": "Події"
+        },
+        "procurement": {
+          "label": "Постачання",
+          "orders": "Замовлення постачання",
+          "aiOrders": "AI Постачання"
+        },
+        "marketplace": {
+          "label": "Маркетплейс",
+          "suppliers": "Постачальники",
+          "myOrders": "Мої замовлення"
+        },
+        "autoService": {
+          "label": "Auto Service",
+          "workOrders": "Наряди",
+          "customers": "Клієнти",
+          "serviceCatalog": "Каталог послуг"
+        },
+        "production": {
+          "label": "Виробництво",
+          "recipes": "Рецепти",
+          "orders": "Ордери"
+        },
+        "analytics": {
+          "label": "Аналітика",
+          "analytics": "Аналітика",
+          "posAnalytics": "POS Аналітика"
+        },
+        "workforce": {
+          "label": "Персонал",
+          "users": "Персонал",
+          "schedules": "Розклад",
+          "team": "Команда",
+          "legalEntities": "Юридичні особи"
+        },
+        "support": {
+          "label": "Підтримка",
+          "serviceDesk": "Service Desk"
+        },
+        "admin": {
+          "label": "Адмін",
+          "provider": "Провайдер",
+          "admin": "Адмін"
+        },
+        "supplierCabinet": {
+          "label": "Кабінет",
+          "profile": "Профіль",
+          "myItems": "Мої товари",
+          "reviews": "Відгуки",
+          "tasks": "Завдання",
+          "clients": "Клієнти",
+          "team": "Команда",
+          "requests": "Заявки на співпрацю",
+          "orders": "Замовлення",
+          "contractSettings": "Реквізити договору",
+          "support": "Підтримка",
+          "messages": "Повідомлення"
+        }
+      }
+    },
+    "topBar": {
+      "support": "Підтримка",
+      "supportChat": "Чат підтримка",
+      "aiAssistant": "AI Бізнес-Асистент",
+      "myAssistant": "Мій асистент",
+      "notifications": "Сповіщення"
+    },
+    "userMenu": {
+      "profile": "Профіль",
+      "settings": "Налаштування",
+      "logout": "Вийти",
+      "accountInfo": "Інформація про акаунт"
+    },
+    "storeSelector": {
+      "fallbackName": "Магазин",
+      "choose": "Оберіть магазин"
+    },
+    "supportChat": {
+      "noMessages": "Повідомлень ще немає",
+      "typePlaceholder": "Написати… (Enter — відправити)",
+      "newChat": "Новий чат",
+      "subjectLabel": "Тема *",
+      "subjectPlaceholder": "Коротко опишіть питання",
+      "firstMessageLabel": "Перше повідомлення *",
+      "firstMessagePlaceholder": "Детально опишіть ситуацію…",
+      "createError": "Не вдалося створити чат. Спробуйте ще раз.",
+      "greeting": "Привіт! Запитай про стан магазину.",
+      "exampleQuery1": "«Які товари закінчуються?»",
+      "exampleQuery2": "«Що продається найкраще цього тижня?»",
+      "aiThinking": "AI аналізує дані…",
+      "askPlaceholder": "Запитай AI (Enter — надіслати)",
+      "aiError": "Помилка: {message}",
+      "aiUnavailable": "AI сервіс недоступний",
+      "providerTitle": "Ви — агент підтримки",
+      "providerBody": "Всі тікети та чати клієнтів доступні в Service Desk.",
+      "openServiceDesk": "Відкрити Service Desk",
+      "noChatsTitle": "Немає активних чатів",
+      "noChatsBody": "Натисніть «Новий чат» щоб звернутись до підтримки",
+      "criticalBatches": "{count} критичних партій",
+      "pendingOrders": "{count} замовлень",
+      "salesRows": "{count} рядків продажів",
+      "activeSuppliers": "{count} постачальників"
+    },
+    "auth": {
+      "tagline": "Система управління залишками",
+      "emailFieldLabel": "EMAIL",
+      "passwordFieldLabel": "ПАРОЛЬ",
+      "emailInvalid": "Введіть коректний email",
+      "passwordRequired": "Пароль обов'язковий",
+      "tooManyAttempts": "Забагато спроб. Спробуйте пізніше.",
+      "invalidCredentials": "Невірний email або пароль",
+      "challengeExpired": "Час підтвердження вичерпано. Поверніться назад і увійдіть знову.",
+      "invalidCode": "Невірний код",
+      "recoveryCodeHint": "Введіть код відновлення у форматі XXXX-XXXX",
+      "totpCodeHint": "Введіть 6-значний код",
+      "recoveryStepInfo": "Введіть один із кодів відновлення, збережених під час налаштування 2FA.",
+      "totpStepInfo": "Введіть 6-значний код із застосунку-автентифікатора.",
+      "recoveryCodeLabel": "КОД ВІДНОВЛЕННЯ",
+      "totpCodeLabel": "КОД ПІДТВЕРДЖЕННЯ",
+      "verifying": "Перевірка…",
+      "useRecoveryCode": "Використати код відновлення",
+      "useAuthenticatorCode": "Використати код із застосунку",
+      "signingIn": "Вхід…",
+      "signIn": "Увійти",
+      "sessionExpired": "Час сеансу сплив. Будь ласка, увійдіть знову."
+    },
+    "ui": {
+      "dateRange": {
+        "from": "З дати",
+        "to": "По дату",
+        "comparePeriod": "Порівняти з попереднім періодом",
+        "compareFrom": "Порівняння: з дати",
+        "compareTo": "Порівняння: по дату"
+      },
+      "reasonModal": {
+        "reasonLabel": "Причина",
+        "reasonPlaceholder": "Вкажіть причину...",
+        "pending": "Зачекайте..."
+      },
+      "trendIndicator": {
+        "noData": "Немає даних за попередній період",
+        "tooltip": "Поточне: {current} · Попереднє: {previous}"
+      },
+      "productAnalyticsLink": {
+        "title": "Аналітика товару"
+      },
+      "accessDenied": {
+        "body": "У вас немає доступу до цього розділу. Зверніться до менеджера магазину або адміністратора."
+      }
+    },
+    "profile": {
+      "language": {
+        "title": "Мова інтерфейсу",
+        "subtitle": "Оберіть мову інтерфейсу дашборду"
+      }
+    }
   }
 }
