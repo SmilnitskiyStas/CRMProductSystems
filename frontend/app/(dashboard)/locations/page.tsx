@@ -67,7 +67,7 @@ export default function LocationsPage() {
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Локації</h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Магазини, склади та інші об'єкти мережі
+            Магазини, склади та інші об&apos;єкти мережі
           </p>
         </div>
         <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>

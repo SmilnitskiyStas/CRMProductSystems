@@ -206,7 +206,7 @@ function GeneralTab() {
             Особисті налаштування
           </div>
           <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>
-            Ім'я, пароль та Telegram — у розділі налаштувань вашого профілю
+            Ім&apos;я, пароль та Telegram — у розділі налаштувань вашого профілю
           </div>
         </div>
         <a
