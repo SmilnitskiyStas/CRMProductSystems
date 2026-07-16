@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 interface StockFilters {
   status: string;
   search: string;
@@ -8,14 +12,7 @@ interface Props {
   onChange: (f: StockFilters) => void;
 }
 
-const STATUS_OPTIONS = [
-  { value: "", label: "Всі статуси" },
-  { value: "warning", label: "Попередження" },
-  { value: "critical", label: "Критично" },
-  { value: "expired", label: "Прострочено" },
-  { value: "safe", label: "Норма" },
-  { value: "needs_verification", label: "Перевірка" },
-];
+const STATUS_VALUES = ["warning", "critical", "expired", "safe", "needs_verification"] as const;
 
 const inputStyle: React.CSSProperties = {
   background: "#111827",
@@ -28,11 +25,14 @@ const inputStyle: React.CSSProperties = {
 };
 
 export function StockFilters({ filters, onChange }: Props) {
+  const t = useTranslations("Dashboard.shelf.stockFilters");
+  const tStatus = useTranslations("Dashboard.shelf.status");
+
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
       <input
         type="text"
-        placeholder="Пошук по назві або штрихкоду…"
+        placeholder={t("searchPlaceholder")}
         value={filters.search}
         onChange={(e) => onChange({ ...filters, search: e.target.value })}
         style={{ ...inputStyle, width: 260 }}
@@ -43,9 +43,10 @@ export function StockFilters({ filters, onChange }: Props) {
         onChange={(e) => onChange({ ...filters, status: e.target.value })}
         style={{ ...inputStyle, cursor: "pointer" }}
       >
-        {STATUS_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
+        <option value="">{t("allStatuses")}</option>
+        {STATUS_VALUES.map((value) => (
+          <option key={value} value={value}>
+            {tStatus(value)}
           </option>
         ))}
       </select>
@@ -63,7 +64,7 @@ export function StockFilters({ filters, onChange }: Props) {
             cursor: "pointer",
           }}
         >
-          Скинути
+          {t("reset")}
         </button>
       )}
     </div>

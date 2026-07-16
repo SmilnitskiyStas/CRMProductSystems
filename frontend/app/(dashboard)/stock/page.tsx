@@ -3,6 +3,7 @@
 import { Suspense, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useStock, useVerifyStock } from "@/features/shelf/hooks/useStock";
 import { useStoreContext } from "@/lib/useStoreContext";
 import { useStores } from "@/features/stores/hooks/useStores";
@@ -21,6 +22,7 @@ interface Filters {
 }
 
 function StockPageContent() {
+  const t = useTranslations("Dashboard.stock");
   const searchParams = useSearchParams();
   const { selectedStoreId } = useStoreContext();
   const [filters, setFilters] = useState<Filters>({
@@ -84,7 +86,7 @@ function StockPageContent() {
 
   const countLabel =
     filtered.length !== batches.length
-      ? `${filtered.length} з ${batches.length}`
+      ? t("countOfTotal", { filtered: filtered.length, total: batches.length })
       : String(filtered.length);
 
   const chipStyle: React.CSSProperties = {
@@ -114,13 +116,13 @@ function StockPageContent() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Залишки</h1>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Партії товарів — терміни придатності та кількості
+            {t("subtitle")}
           </p>
         </div>
         <Btn icon={<Plus size={15} />} onClick={() => setShowAddModal(true)}>
-          Додати партію
+          {t("addButton")}
         </Btn>
       </div>
 
@@ -135,7 +137,7 @@ function StockPageContent() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {filters.store_id && (
             <span style={chipStyle}>
-              Магазин: {filters.store_id}
+              {t("storeChip", { value: filters.store_id })}
               <button
                 onClick={() => setFilters((p) => ({ ...p, store_id: "" }))}
                 style={chipBtnStyle}
@@ -146,7 +148,7 @@ function StockPageContent() {
           )}
           {filters.zone_id && (
             <span style={chipStyle}>
-              Зона: {filters.zone_id}
+              {t("zoneChip", { value: filters.zone_id })}
               <button
                 onClick={() => setFilters((p) => ({ ...p, zone_id: "" }))}
                 style={chipBtnStyle}
@@ -172,7 +174,7 @@ function StockPageContent() {
           }}
         >
           <span style={{ color: "#93C5FD", fontSize: 13, fontWeight: 600 }}>
-            Обрано: {selectedIds.size}
+            {t("selectedCount", { count: selectedIds.size })}
           </span>
           <button
             onClick={() => setSelectedIds(new Set())}
@@ -185,7 +187,7 @@ function StockPageContent() {
               marginLeft: "auto",
             }}
           >
-            Зняти вибір
+            {t("clearSelection")}
           </button>
         </div>
       )}
@@ -210,7 +212,7 @@ function StockPageContent() {
           }}
         >
           <span style={{ color: "#4B5563", fontSize: 12 }}>
-            Партій: <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{countLabel}</span>
+            {t("batchesLabel")} <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{countLabel}</span>
           </span>
         </div>
 
@@ -226,7 +228,7 @@ function StockPageContent() {
 
       {/* Add batch modal */}
       {showAddModal && (
-        <Modal title="Нова партія" onClose={() => setShowAddModal(false)}>
+        <Modal title={t("modalTitle")} onClose={() => setShowAddModal(false)}>
           <AddBatchForm
             stores={storeOptions}
             products={productOptions}

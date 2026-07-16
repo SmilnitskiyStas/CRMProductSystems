@@ -444,6 +444,266 @@
         "title": "Interface language",
         "subtitle": "Choose the dashboard interface language"
       }
+    },
+    "inventory": {
+      "page": {
+        "title": "Product Catalog",
+        "addButton": "Add product",
+        "errorLoading": "Failed to load the catalog. Check your API connection.",
+        "count": "{count, plural, one {# product} other {# products}}",
+        "toastCreated": "Product added",
+        "toastUpdated": "Product updated",
+        "toastDeleted": "Product deleted"
+      },
+      "itemTypes": {
+        "product": "Product",
+        "service": "Service",
+        "spare_part": "Spare Part",
+        "consumable": "Consumable",
+        "raw_material": "Raw Material",
+        "kit": "Kit"
+      },
+      "fields": {
+        "name": "Name",
+        "barcode": "Barcode",
+        "unit": "Unit",
+        "category": "Category",
+        "segment": "Segment",
+        "managementType": "Management type",
+        "itemType": "Item type",
+        "perishabilityClass": "Perishability class",
+        "statusLabel": "Status",
+        "statusActive": "Active",
+        "statusInactive": "Inactive",
+        "noCategory": "No category",
+        "pricePurchase": "Purchase price",
+        "priceRetail": "Retail price",
+        "vatRate": "VAT rate",
+        "defaultSupplier": "Default supplier",
+        "minStock": "Min stock",
+        "maxStock": "Max stock",
+        "safetyBuffer": "Safety buffer",
+        "shelfLifeDays": "Shelf life",
+        "shelfLifeDaysSuffix": "days",
+        "storageTempMin": "Min temp.",
+        "storageTempMax": "Max temp.",
+        "id": "ID",
+        "createdAt": "Created",
+        "sectionMain": "General information",
+        "sectionPricing": "Pricing & VAT",
+        "sectionStock": "Stock & buffers",
+        "sectionStorage": "Storage conditions",
+        "sectionSystem": "System information",
+        "tabInfo": "Info",
+        "tabAnalytics": "Analytics"
+      },
+      "form": {
+        "titleCreate": "Add product",
+        "titleEdit": "Edit product",
+        "nameLabel": "Product name *",
+        "namePlaceholder": "Milk 2.5% 1L",
+        "barcodesLabel": "Barcodes",
+        "barcodePlaceholder": "4820029300128",
+        "lookupSearching": "Searching…",
+        "lookupFind": "Find",
+        "lookupError": "Barcode not found in the OpenFoodFacts database",
+        "imageLabel": "Product image",
+        "imageChange": "Change photo",
+        "imageUpload": "Upload photo",
+        "imageRemove": "Remove",
+        "unitLabel": "Unit *",
+        "unitPlaceholder": "kg, pcs, l, pack…",
+        "managementTypeLabel": "Management type",
+        "managementTypeMts": "MTS — to stock",
+        "managementTypeMto": "MTO — to order",
+        "itemTypeLabel": "Item type",
+        "shelfLifeLabel": "Shelf life (days)",
+        "vatRateLabel": "VAT %",
+        "perishabilityLabel": "Perishability class",
+        "perishability": {
+          "fresh": "🥦 Fresh — vegetables, fruit, bread (≤1/3 days)",
+          "chilled": "🥛 Chilled — milk, meat, fish (≤2/5 days)",
+          "standard": "📦 Standard — packaged goods (≤6/14 days)",
+          "durable": "🥫 Durable — canned goods, dry goods (≤14/30 days)"
+        },
+        "manufacturerLabel": "Manufacturer",
+        "manufacturerPlaceholder": "Acme Dairy LLC",
+        "countryOriginLabel": "Country of origin",
+        "countryOriginPlaceholder": "Ukraine",
+        "minStockLabel": "Min stock",
+        "maxStockLabel": "Max stock",
+        "safetyBufferLabel": "Safety buffer",
+        "pricePurchaseLabel": "Purchase price (₴)",
+        "priceRetailLabel": "Retail price (₴)",
+        "isActiveLabel": "Active product",
+        "saving": "Saving…",
+        "saveChanges": "Save changes",
+        "validationRequired": "This field is required"
+      },
+      "table": {
+        "headers": {
+          "class": "Class",
+          "purchase": "Purchase",
+          "retail": "Retail",
+          "min": "Min",
+          "max": "Max",
+          "actions": "Actions"
+        },
+        "empty": "No products yet. Add your first product.",
+        "openFullPage": "Open full page",
+        "actionMenu": {
+          "view": "View",
+          "analytics": "Analytics",
+          "openPage": "Open page",
+          "edit": "Edit",
+          "delete": "Delete"
+        },
+        "deleteDialog": {
+          "title": "Delete product?",
+          "body": "{name} will be permanently removed from the catalog. This action cannot be undone.",
+          "confirming": "Deleting…",
+          "confirm": "Delete"
+        }
+      },
+      "productPage": {
+        "notFound": "Product not found",
+        "unitLabel": "Unit of measure"
+      },
+      "analytics": {
+        "series": {
+          "stock": "Stock",
+          "receipt": "Receipts",
+          "transfer": "Transfers",
+          "write_off": "Write-offs",
+          "adjustment": "Adjustments"
+        },
+        "movementType": {
+          "receipt": "Receipt",
+          "transfer": "Transfer",
+          "write_off": "Write-off",
+          "adjustment": "Adjustment"
+        },
+        "zones": {
+          "critical": "Critical zone",
+          "low": "Low zone",
+          "normal": "Normal zone",
+          "excess": "Excess zone"
+        },
+        "bufferShort": {
+          "safetyBuffer": "Safety: {value}",
+          "minStock": "Min: {value}",
+          "maxStock": "Max: {value}"
+        },
+        "ranges": {
+          "d7": "7d",
+          "d14": "14d",
+          "d30": "30d",
+          "d90": "90d",
+          "d180": "180d",
+          "y1": "1y"
+        },
+        "legend": {
+          "show": "Show “{label}”",
+          "hide": "Hide “{label}”"
+        },
+        "tooltipZoneLabel": "Zone",
+        "currentStock": "Current stock",
+        "chartTitle": "Stock trend",
+        "eventsSummary": "{count} events over {days}d",
+        "noMovements": "No movements in the selected period",
+        "eventLog": "Event log",
+        "balancePrefix": "balance:"
+      }
+    },
+    "shelf": {
+      "status": {
+        "safe": "Safe",
+        "warning": "Warning",
+        "critical": "Critical",
+        "expired": "Expired",
+        "sold_out": "Sold Out",
+        "archived": "Archived",
+        "needs_verification": "Verification"
+      },
+      "stockFilters": {
+        "searchPlaceholder": "Search by name or barcode…",
+        "allStatuses": "All statuses",
+        "reset": "Reset"
+      },
+      "stockTable": {
+        "loading": "Loading stock…",
+        "empty": "No batches match the selected filters",
+        "headers": {
+          "name": "Name",
+          "barcode": "Barcode",
+          "zone": "Zone",
+          "batch": "Batch",
+          "qty": "Qty",
+          "expiry": "Expiry",
+          "days": "Days",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "overdue": "overdue ({days}d)",
+        "actionMenu": {
+          "viewDetails": "View details",
+          "markVerified": "Mark as verified",
+          "statusLabel": "Status: {status}",
+          "analytics": "Product analytics"
+        },
+        "drawer": {
+          "sectionProductBatch": "Product & batch",
+          "sectionLocation": "Location",
+          "sectionStock": "Stock & expiry",
+          "sectionTimestamps": "Timestamps",
+          "productName": "Product name",
+          "barcode": "Barcode",
+          "batch": "Batch",
+          "store": "Store",
+          "zone": "Zone",
+          "shelf": "Shelf",
+          "source": "Source",
+          "quantity": "Quantity",
+          "quantityInitial": "Initial quantity",
+          "expiryDate": "Expiry date",
+          "daysLeft": "Days left",
+          "status": "Status",
+          "used": "Used",
+          "added": "Added",
+          "lastChecked": "Last checked"
+        }
+      },
+      "addBatchForm": {
+        "errorRequired": "Fill in all required fields",
+        "errorQuantity": "Quantity must be greater than 0",
+        "errorSaveFailed": "Failed to save",
+        "productLabel": "Product *",
+        "productPlaceholder": "Select product…",
+        "storeLabel": "Store *",
+        "storePlaceholder": "Select store…",
+        "zoneLabel": "Zone",
+        "zoneNone": "No zone",
+        "quantityLabel": "Quantity *",
+        "expiryDateLabel": "Expiry date *",
+        "batchNumberLabel": "Batch number",
+        "batchNumberPlaceholder": "optional",
+        "shelfNumberLabel": "Shelf #",
+        "shelfNumberPlaceholder": "optional",
+        "saving": "Saving…",
+        "submit": "Add batch"
+      }
+    },
+    "stock": {
+      "title": "Stock",
+      "subtitle": "Product batches — expiry dates and quantities",
+      "addButton": "Add batch",
+      "storeChip": "Store: {value}",
+      "zoneChip": "Zone: {value}",
+      "selectedCount": "Selected: {count}",
+      "clearSelection": "Clear selection",
+      "batchesLabel": "Batches:",
+      "countOfTotal": "{filtered} of {total}",
+      "modalTitle": "New batch"
     }
   }
 }

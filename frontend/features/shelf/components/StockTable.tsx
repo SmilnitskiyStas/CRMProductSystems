@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { Eye, ShieldCheck, BarChart2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import type { ProductStockDto, BatchStatus } from "../types";
-import { STATUS_COLOR, STATUS_LABEL } from "../types";
+import { STATUS_COLOR } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import {
@@ -63,6 +64,11 @@ const tdStyle: React.CSSProperties = {
 
 // ── Detail drawer ────────────────────────────────────────────────────────────
 function StockDetail({ item }: { item: ProductStockDto }) {
+  const t = useTranslations("Dashboard.shelf.stockTable.drawer");
+  const tOverdue = useTranslations("Dashboard.shelf.stockTable");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   const fillPct =
     item.quantityInitial > 0
       ? Math.round((item.quantity / item.quantityInitial) * 100)
@@ -70,11 +76,11 @@ function StockDetail({ item }: { item: ProductStockDto }) {
 
   return (
     <>
-      <DrawerSection title="Товар та партія">
-        <DrawerField label="Назва товару" value={item.productName} />
+      <DrawerSection title={t("sectionProductBatch")}>
+        <DrawerField label={t("productName")} value={item.productName} />
         <DrawerGrid>
           <DrawerField
-            label="Штрихкод"
+            label={t("barcode")}
             value={
               <span style={{ fontFamily: "monospace", color: "#4B5563" }}>
                 {item.productBarcode ?? "—"}
@@ -82,7 +88,7 @@ function StockDetail({ item }: { item: ProductStockDto }) {
             }
           />
           <DrawerField
-            label="Партія"
+            label={t("batch")}
             value={
               <span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>
                 {item.batchNumber ?? "—"}
@@ -92,55 +98,55 @@ function StockDetail({ item }: { item: ProductStockDto }) {
         </DrawerGrid>
       </DrawerSection>
 
-      <DrawerSection title="Розміщення">
+      <DrawerSection title={t("sectionLocation")}>
         <DrawerGrid>
-          <DrawerField label="Магазин" value={item.storeName} />
-          <DrawerField label="Зона" value={item.zoneName ?? "—"} />
+          <DrawerField label={t("store")} value={item.storeName} />
+          <DrawerField label={t("zone")} value={item.zoneName ?? "—"} />
           <DrawerField
-            label="Полиця"
+            label={t("shelf")}
             value={item.shelfNumber != null ? `#${item.shelfNumber}` : "—"}
           />
-          <DrawerField label="Джерело" value={item.sourceType ?? "—"} />
+          <DrawerField label={t("source")} value={item.sourceType ?? "—"} />
         </DrawerGrid>
       </DrawerSection>
 
-      <DrawerSection title="Залишок та терміни">
+      <DrawerSection title={t("sectionStock")}>
         <DrawerGrid>
           <DrawerField
-            label="Залишок"
+            label={t("quantity")}
             value={
               <span style={{ fontFamily: "monospace" }}>
-                {item.quantity.toLocaleString("uk-UA")}
+                {item.quantity.toLocaleString(intlLocale)}
               </span>
             }
           />
           <DrawerField
-            label="Початкова к-сть"
+            label={t("quantityInitial")}
             value={
               <span style={{ fontFamily: "monospace", color: "#4B5563" }}>
-                {item.quantityInitial.toLocaleString("uk-UA")}
+                {item.quantityInitial.toLocaleString(intlLocale)}
               </span>
             }
           />
           <DrawerField
-            label="Термін придатності"
+            label={t("expiryDate")}
             value={formatDate(item.expiryDate)}
           />
           <DrawerField
-            label="Днів залишилось"
+            label={t("daysLeft")}
             value={
               <span
                 style={{ fontFamily: "monospace", fontWeight: 700, color: getDaysColor(item.daysLeft) }}
               >
-                {item.daysLeft <= 0 ? `прострочено (${Math.abs(item.daysLeft)} д.)` : item.daysLeft}
+                {item.daysLeft <= 0 ? tOverdue("overdue", { days: Math.abs(item.daysLeft) }) : item.daysLeft}
               </span>
             }
           />
           <DrawerField
-            label="Статус"
+            label={t("status")}
             value={<StatusBadge status={item.status} />}
           />
-          <DrawerField label="Використано" value={`${fillPct}%`} />
+          <DrawerField label={t("used")} value={`${fillPct}%`} />
         </DrawerGrid>
 
         {/* Fill bar */}
@@ -167,15 +173,15 @@ function StockDetail({ item }: { item: ProductStockDto }) {
         </div>
       </DrawerSection>
 
-      <DrawerSection title="Часові мітки">
+      <DrawerSection title={t("sectionTimestamps")}>
         <DrawerGrid>
           <DrawerField
-            label="Додано"
-            value={new Date(item.addedAt).toLocaleString("uk-UA")}
+            label={t("added")}
+            value={new Date(item.addedAt).toLocaleString(intlLocale)}
           />
           <DrawerField
-            label="Остання перевірка"
-            value={new Date(item.lastCheckedAt).toLocaleString("uk-UA")}
+            label={t("lastChecked")}
+            value={new Date(item.lastCheckedAt).toLocaleString(intlLocale)}
           />
         </DrawerGrid>
       </DrawerSection>
@@ -193,13 +199,17 @@ export function StockTable({
   onVerify,
 }: Props) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.shelf.stockTable");
+  const tStatus = useTranslations("Dashboard.shelf.status");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<ProductStockDto | null>(null);
 
   if (isLoading) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-        Завантаження залишків…
+        {t("loading")}
       </div>
     );
   }
@@ -207,7 +217,7 @@ export function StockTable({
   if (items.length === 0) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-        Немає партій за вибраними фільтрами
+        {t("empty")}
       </div>
     );
   }
@@ -232,15 +242,15 @@ export function StockTable({
                   style={{ cursor: "pointer", accentColor: "#3B82F6" }}
                 />
               </th>
-              <th style={thStyle}>Назва</th>
-              <th style={thStyle}>Штрихкод</th>
-              <th style={thStyle}>Зона</th>
-              <th style={thStyle}>Партія</th>
-              <th style={thStyle}>К-сть</th>
-              <th style={thStyle}>Термін</th>
-              <th style={{ ...thStyle, fontFamily: "monospace" }}>Дні</th>
-              <th style={thStyle}>Статус</th>
-              <th style={{ ...thStyle, borderRight: "none" }}>Дії</th>
+              <th style={thStyle}>{t("headers.name")}</th>
+              <th style={thStyle}>{t("headers.barcode")}</th>
+              <th style={thStyle}>{t("headers.zone")}</th>
+              <th style={thStyle}>{t("headers.batch")}</th>
+              <th style={thStyle}>{t("headers.qty")}</th>
+              <th style={thStyle}>{t("headers.expiry")}</th>
+              <th style={{ ...thStyle, fontFamily: "monospace" }}>{t("headers.days")}</th>
+              <th style={thStyle}>{t("headers.status")}</th>
+              <th style={{ ...thStyle, borderRight: "none" }}>{t("headers.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -295,7 +305,7 @@ export function StockTable({
                   </td>
 
                   <td style={{ ...tdStyle, color: "#E8EDF5" }}>
-                    {item.quantity.toLocaleString("uk-UA")}
+                    {item.quantity.toLocaleString(intlLocale)}
                   </td>
 
                   <td style={tdStyle}>{formatDate(item.expiryDate)}</td>
@@ -325,7 +335,7 @@ export function StockTable({
                     <ActionMenu
                       items={[
                         {
-                          label: "Переглянути деталі",
+                          label: t("actionMenu.viewDetails"),
                           icon: <Eye size={13} />,
                           onClick: () => setSelected(item),
                         },
@@ -333,7 +343,7 @@ export function StockTable({
                         ...(item.status === "needs_verification" && onVerify
                           ? [
                               {
-                                label: "Позначити перевіреним",
+                                label: t("actionMenu.markVerified"),
                                 icon: <ShieldCheck size={13} />,
                                 variant: "success" as const,
                                 onClick: () => onVerify(item.id),
@@ -341,13 +351,13 @@ export function StockTable({
                             ]
                           : []),
                         {
-                          label: `Статус: ${STATUS_LABEL[item.status]}`,
+                          label: t("actionMenu.statusLabel", { status: tStatus(item.status) }),
                           variant: "warning" as const,
                           disabled: true,
                         },
                         { separator: true },
                         {
-                          label: "Аналітика товару",
+                          label: t("actionMenu.analytics"),
                           icon: <BarChart2 size={13} />,
                           onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
                         },

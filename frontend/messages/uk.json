@@ -444,6 +444,266 @@
         "title": "Мова інтерфейсу",
         "subtitle": "Оберіть мову інтерфейсу дашборду"
       }
+    },
+    "inventory": {
+      "page": {
+        "title": "Каталог товарів",
+        "addButton": "Додати товар",
+        "errorLoading": "Помилка завантаження каталогу. Перевірте підключення до API.",
+        "count": "{count, plural, one {# товар} other {# товарів}}",
+        "toastCreated": "Товар додано",
+        "toastUpdated": "Товар оновлено",
+        "toastDeleted": "Товар видалено"
+      },
+      "itemTypes": {
+        "product": "Товар",
+        "service": "Послуга",
+        "spare_part": "Запчастина",
+        "consumable": "Розхідник",
+        "raw_material": "Сировина",
+        "kit": "Комплект"
+      },
+      "fields": {
+        "name": "Назва",
+        "barcode": "Штрихкод",
+        "unit": "Одиниця",
+        "category": "Категорія",
+        "segment": "Сегмент",
+        "managementType": "Тип управління",
+        "itemType": "Тип товару",
+        "perishabilityClass": "Клас псуємості",
+        "statusLabel": "Статус",
+        "statusActive": "Активний",
+        "statusInactive": "Неактивний",
+        "noCategory": "Без категорії",
+        "pricePurchase": "Закупівельна ціна",
+        "priceRetail": "Роздрібна ціна",
+        "vatRate": "Ставка ПДВ",
+        "defaultSupplier": "Постачальник за замовч.",
+        "minStock": "Мін. залишок",
+        "maxStock": "Макс. залишок",
+        "safetyBuffer": "Буфер безпеки",
+        "shelfLifeDays": "Термін зберігання",
+        "shelfLifeDaysSuffix": "дн.",
+        "storageTempMin": "Темп. мін.",
+        "storageTempMax": "Темп. макс.",
+        "id": "ID",
+        "createdAt": "Дата створення",
+        "sectionMain": "Основна інформація",
+        "sectionPricing": "Ціни та ПДВ",
+        "sectionStock": "Залишки та буфери",
+        "sectionStorage": "Умови зберігання",
+        "sectionSystem": "Системна інформація",
+        "tabInfo": "Інформація",
+        "tabAnalytics": "Аналітика"
+      },
+      "form": {
+        "titleCreate": "Додати товар",
+        "titleEdit": "Редагувати товар",
+        "nameLabel": "Назва товару *",
+        "namePlaceholder": "Молоко 2,5% Галичина 1л",
+        "barcodesLabel": "Штрихкоди",
+        "barcodePlaceholder": "4820029300128",
+        "lookupSearching": "Пошук…",
+        "lookupFind": "Знайти",
+        "lookupError": "Штрихкод не знайдено у базі OpenFoodFacts",
+        "imageLabel": "Зображення товару",
+        "imageChange": "Змінити фото",
+        "imageUpload": "Завантажити фото",
+        "imageRemove": "Видалити",
+        "unitLabel": "Одиниця *",
+        "unitPlaceholder": "кг, шт, л, упак…",
+        "managementTypeLabel": "Тип управління",
+        "managementTypeMts": "MTS — на склад",
+        "managementTypeMto": "MTO — на замовлення",
+        "itemTypeLabel": "Тип товару",
+        "shelfLifeLabel": "Термін придатності (днів)",
+        "vatRateLabel": "ПДВ %",
+        "perishabilityLabel": "Клас псуємості",
+        "perishability": {
+          "fresh": "🥦 Fresh — овочі, фрукти, хліб (≤1/3 дні)",
+          "chilled": "🥛 Chilled — молоко, м'ясо, риба (≤2/5 дні)",
+          "standard": "📦 Standard — пакована продукція (≤6/14 дні)",
+          "durable": "🥫 Durable — консерви, крупи (≤14/30 дні)"
+        },
+        "manufacturerLabel": "Виробник",
+        "manufacturerPlaceholder": "ТОВ Молочний Дім",
+        "countryOriginLabel": "Країна походження",
+        "countryOriginPlaceholder": "Україна",
+        "minStockLabel": "Мін. залишок",
+        "maxStockLabel": "Макс. залишок",
+        "safetyBufferLabel": "Буфер безпеки",
+        "pricePurchaseLabel": "Закупівельна ціна (₴)",
+        "priceRetailLabel": "Роздрібна ціна (₴)",
+        "isActiveLabel": "Активний товар",
+        "saving": "Збереження…",
+        "saveChanges": "Зберегти зміни",
+        "validationRequired": "Обов'язкове поле"
+      },
+      "table": {
+        "headers": {
+          "class": "Клас",
+          "purchase": "Закупівля",
+          "retail": "Роздриб",
+          "min": "Мін.",
+          "max": "Макс.",
+          "actions": "Дії"
+        },
+        "empty": "Товарів ще немає. Додайте перший товар.",
+        "openFullPage": "Відкрити на повній сторінці",
+        "actionMenu": {
+          "view": "Переглянути",
+          "analytics": "Аналітика",
+          "openPage": "Відкрити сторінку",
+          "edit": "Редагувати",
+          "delete": "Видалити"
+        },
+        "deleteDialog": {
+          "title": "Видалити товар?",
+          "body": "{name} буде видалено з каталогу назавжди. Цю дію не можна скасувати.",
+          "confirming": "Видалення…",
+          "confirm": "Видалити"
+        }
+      },
+      "productPage": {
+        "notFound": "Товар не знайдено",
+        "unitLabel": "Одиниця виміру"
+      },
+      "analytics": {
+        "series": {
+          "stock": "Залишок",
+          "receipt": "Поставки",
+          "transfer": "Передачі",
+          "write_off": "Списання",
+          "adjustment": "Коригування"
+        },
+        "movementType": {
+          "receipt": "Поставка",
+          "transfer": "Передача",
+          "write_off": "Списання",
+          "adjustment": "Коригування"
+        },
+        "zones": {
+          "critical": "Критична зона",
+          "low": "Зона мінімуму",
+          "normal": "Зона норми",
+          "excess": "Зона надлишку"
+        },
+        "bufferShort": {
+          "safetyBuffer": "Буфер: {value}",
+          "minStock": "Мін: {value}",
+          "maxStock": "Макс: {value}"
+        },
+        "ranges": {
+          "d7": "7 дн.",
+          "d14": "14 дн.",
+          "d30": "30 дн.",
+          "d90": "90 дн.",
+          "d180": "180 дн.",
+          "y1": "1 рік"
+        },
+        "legend": {
+          "show": "Показати «{label}»",
+          "hide": "Приховати «{label}»"
+        },
+        "tooltipZoneLabel": "Зона",
+        "currentStock": "Поточний залишок",
+        "chartTitle": "Динаміка залишків",
+        "eventsSummary": "{count} подій за {days} дн.",
+        "noMovements": "Немає рухів за вибраний період",
+        "eventLog": "Журнал подій",
+        "balancePrefix": "залишок:"
+      }
+    },
+    "shelf": {
+      "status": {
+        "safe": "Норма",
+        "warning": "Попередження",
+        "critical": "Критично",
+        "expired": "Прострочено",
+        "sold_out": "Продано",
+        "archived": "Архів",
+        "needs_verification": "Перевірка"
+      },
+      "stockFilters": {
+        "searchPlaceholder": "Пошук по назві або штрихкоду…",
+        "allStatuses": "Всі статуси",
+        "reset": "Скинути"
+      },
+      "stockTable": {
+        "loading": "Завантаження залишків…",
+        "empty": "Немає партій за вибраними фільтрами",
+        "headers": {
+          "name": "Назва",
+          "barcode": "Штрихкод",
+          "zone": "Зона",
+          "batch": "Партія",
+          "qty": "К-сть",
+          "expiry": "Термін",
+          "days": "Дні",
+          "status": "Статус",
+          "actions": "Дії"
+        },
+        "overdue": "прострочено ({days} д.)",
+        "actionMenu": {
+          "viewDetails": "Переглянути деталі",
+          "markVerified": "Позначити перевіреним",
+          "statusLabel": "Статус: {status}",
+          "analytics": "Аналітика товару"
+        },
+        "drawer": {
+          "sectionProductBatch": "Товар та партія",
+          "sectionLocation": "Розміщення",
+          "sectionStock": "Залишок та терміни",
+          "sectionTimestamps": "Часові мітки",
+          "productName": "Назва товару",
+          "barcode": "Штрихкод",
+          "batch": "Партія",
+          "store": "Магазин",
+          "zone": "Зона",
+          "shelf": "Полиця",
+          "source": "Джерело",
+          "quantity": "Залишок",
+          "quantityInitial": "Початкова к-сть",
+          "expiryDate": "Термін придатності",
+          "daysLeft": "Днів залишилось",
+          "status": "Статус",
+          "used": "Використано",
+          "added": "Додано",
+          "lastChecked": "Остання перевірка"
+        }
+      },
+      "addBatchForm": {
+        "errorRequired": "Заповніть усі обов'язкові поля",
+        "errorQuantity": "Кількість має бути більше 0",
+        "errorSaveFailed": "Помилка збереження",
+        "productLabel": "Товар *",
+        "productPlaceholder": "Оберіть товар…",
+        "storeLabel": "Магазин *",
+        "storePlaceholder": "Оберіть магазин…",
+        "zoneLabel": "Зона",
+        "zoneNone": "Без зони",
+        "quantityLabel": "Кількість *",
+        "expiryDateLabel": "Термін придатності *",
+        "batchNumberLabel": "Номер партії",
+        "batchNumberPlaceholder": "необов'язково",
+        "shelfNumberLabel": "Полиця №",
+        "shelfNumberPlaceholder": "необов'язково",
+        "saving": "Збереження…",
+        "submit": "Додати партію"
+      }
+    },
+    "stock": {
+      "title": "Залишки",
+      "subtitle": "Партії товарів — терміни придатності та кількості",
+      "addButton": "Додати партію",
+      "storeChip": "Магазин: {value}",
+      "zoneChip": "Зона: {value}",
+      "selectedCount": "Обрано: {count}",
+      "clearSelection": "Зняти вибір",
+      "batchesLabel": "Партій:",
+      "countOfTotal": "{filtered} з {total}",
+      "modalTitle": "Нова партія"
     }
   }
 }

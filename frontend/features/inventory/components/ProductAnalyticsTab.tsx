@@ -6,41 +6,61 @@ import {
   ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from "recharts";
 import { Loader2, TrendingUp, ArrowDownToLine, Trash2, RefreshCw, Package } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useProductMovements } from "../hooks/useProductMovements";
 import type { MovementDto } from "../api/movements";
 
 // ── Line config ───────────────────────────────────────────────────────────────
+// Labels come from i18n (`Dashboard.inventory.analytics.series`), built inside the
+// component via `useTranslations` — mirrors the `buildNavGroups(t)` pattern in
+// components/layout/Sidebar.tsx (i18n Block 1). Colors/dash/width stay static since
+// they're not language-dependent.
 
-const LINES = [
-  { key: "stock",      label: "Залишок",    color: "#38BDF8", dash: undefined, width: 2.5 },
-  { key: "receipt",    label: "Поставки",   color: "#3B82F6", dash: "6 3",     width: 1.5 },
-  { key: "transfer",   label: "Передачі",   color: "#A78BFA", dash: undefined, width: 1.5 },
-  { key: "write_off",  label: "Списання",   color: "#F87171", dash: undefined, width: 1.5 },
-  { key: "adjustment", label: "Коригування",color: "#4ADE80", dash: undefined, width: 1.5 },
-];
+type SeriesT = ReturnType<typeof useTranslations>;
 
-const MOVEMENT_LABELS: Record<string, string> = {
-  receipt:    "Поставка",
-  transfer:   "Передача",
-  write_off:  "Списання",
-  adjustment: "Коригування",
-};
+function buildLines(t: SeriesT) {
+  return [
+    { key: "stock",      label: t("stock"),      color: "#38BDF8", dash: undefined, width: 2.5 },
+    { key: "receipt",    label: t("receipt"),    color: "#3B82F6", dash: "6 3",     width: 1.5 },
+    { key: "transfer",   label: t("transfer"),   color: "#A78BFA", dash: undefined, width: 1.5 },
+    { key: "write_off",  label: t("write_off"),  color: "#F87171", dash: undefined, width: 1.5 },
+    { key: "adjustment", label: t("adjustment"), color: "#4ADE80", dash: undefined, width: 1.5 },
+  ];
+}
+
+function buildMovementLabels(t: SeriesT): Record<string, string> {
+  return {
+    receipt:    t("receipt"),
+    transfer:   t("transfer"),
+    write_off:  t("write_off"),
+    adjustment: t("adjustment"),
+  };
+}
 
 // ── Zone config (background bands) ───────────────────────────────────────────
 
-const ZONES = [
-  { label: "Критична зона", color: "#EF4444", fill: "#EF444418" },
-  { label: "Зона мінімуму", color: "#FACC15", fill: "#FACC1514" },
-  { label: "Зона норми",    color: "#22C55E", fill: "#22C55E0C" },
-  { label: "Зона надлишку", color: "#3B82F6", fill: "#3B82F60A" },
+type ZoneKey = "critical" | "low" | "normal" | "excess";
+
+const ZONES: { key: ZoneKey; color: string; fill: string }[] = [
+  { key: "critical", color: "#EF4444", fill: "#EF444418" },
+  { key: "low",       color: "#FACC15", fill: "#FACC1514" },
+  { key: "normal",    color: "#22C55E", fill: "#22C55E0C" },
+  { key: "excess",    color: "#3B82F6", fill: "#3B82F60A" },
 ];
+
+function zoneForStock(stock: number, buffers: ProductBuffers): { key: ZoneKey; color: string } {
+  if (stock <= buffers.safetyBuffer) return { key: "critical", color: "#EF4444" };
+  if (stock <= buffers.minStock)     return { key: "low",      color: "#FACC15" };
+  if (stock <= buffers.maxStock)     return { key: "normal",   color: "#22C55E" };
+  return                                    { key: "excess",   color: "#3B82F6" };
+}
 
 // ── Buffer reference lines ────────────────────────────────────────────────────
 
-const BUFFER_LINES = [
-  { key: "safetyBuffer", label: "Буфер безпеки", color: "#F97316", dash: "4 2" },
-  { key: "minStock",     label: "Мін. залишок",  color: "#FACC15", dash: "4 2" },
-  { key: "maxStock",     label: "Макс. залишок", color: "#34D399", dash: "4 2" },
+const BUFFER_LINES: { key: "safetyBuffer" | "minStock" | "maxStock"; color: string; dash: string }[] = [
+  { key: "safetyBuffer", color: "#F97316", dash: "4 2" },
+  { key: "minStock",     color: "#FACC15", dash: "4 2" },
+  { key: "maxStock",     color: "#34D399", dash: "4 2" },
 ];
 
 export interface ProductBuffers {
@@ -51,14 +71,10 @@ export interface ProductBuffers {
 
 // ── Date ranges ───────────────────────────────────────────────────────────────
 
-const RANGES = [
-  { label: "7 дн.",  days: 7   },
-  { label: "14 дн.", days: 14  },
-  { label: "30 дн.", days: 30  },
-  { label: "90 дн.", days: 90  },
-  { label: "180 дн.",days: 180 },
-  { label: "1 рік",  days: 365 },
-];
+const RANGE_DAYS = [7, 14, 30, 90, 180, 365] as const;
+const RANGE_KEY: Record<number, string> = {
+  7: "d7", 14: "d14", 30: "d30", 90: "d90", 180: "d180", 365: "y1",
+};
 
 function daysAgoStr(days: number): string {
   const d = new Date();
@@ -116,8 +132,8 @@ function groupByDay(items: MovementDto[], from: string): ChartPoint[] {
   return Array.from(map.values());
 }
 
-function formatDateTick(iso: string): string {
-  return new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+function formatDateTick(iso: string, intlLocale: string): string {
+  return new Date(iso).toLocaleDateString(intlLocale, { day: "numeric", month: "short" });
 }
 
 // ── Summary cards ─────────────────────────────────────────────────────────────
@@ -159,22 +175,27 @@ function ChartLegend({
   showBuffers,
   hidden,
   onToggle,
+  lines,
 }: {
   showBuffers: boolean;
   hidden: Set<string>;
   onToggle: (key: string) => void;
+  lines: ReturnType<typeof buildLines>;
 }) {
+  const t = useTranslations("Dashboard.inventory.analytics");
+  const tFields = useTranslations("Dashboard.inventory.fields");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
       {/* Clickable data lines */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
-        {LINES.map(({ key, label, color, dash, width }) => {
+        {lines.map(({ key, label, color, dash, width }) => {
           const off = hidden.has(key);
           return (
             <button
               key={key}
               onClick={() => onToggle(key)}
-              title={off ? `Показати «${label}»` : `Приховати «${label}»`}
+              title={off ? t("legend.show", { label }) : t("legend.hide", { label })}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
                 background: off ? "#0A0F1A" : "transparent",
@@ -208,21 +229,21 @@ function ChartLegend({
       {/* Buffer lines + zones (display-only, not toggleable) */}
       {showBuffers && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", paddingTop: 6, borderTop: "1px solid #1F2937" }}>
-          {BUFFER_LINES.map(({ key, label, color, dash }) => (
+          {BUFFER_LINES.map(({ key, color, dash }) => (
             <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <svg width="24" height="10">
                 <line x1="0" y1="5" x2="24" y2="5" stroke={color} strokeWidth="1.5" strokeDasharray={dash} />
               </svg>
-              <span style={{ color: "#6B7280", fontSize: 11 }}>{label}</span>
+              <span style={{ color: "#6B7280", fontSize: 11 }}>{tFields(key)}</span>
             </div>
           ))}
-          {ZONES.map(({ label, color, fill }) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {ZONES.map(({ key, color, fill }) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{
                 width: 14, height: 10, borderRadius: 2,
                 background: fill, border: `1px solid ${color}50`,
               }} />
-              <span style={{ color: "#6B7280", fontSize: 11 }}>{label}</span>
+              <span style={{ color: "#6B7280", fontSize: 11 }}>{t(`zones.${key}`)}</span>
             </div>
           ))}
         </div>
@@ -239,20 +260,20 @@ function CustomTooltip({ active, payload, label, buffers }: {
   label?: string;
   buffers?: ProductBuffers;
 }) {
+  const t = useTranslations("Dashboard.inventory.analytics");
+  const tSeries = useTranslations("Dashboard.inventory.analytics.series");
+  const tFields = useTranslations("Dashboard.inventory.fields");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const lines = buildLines(tSeries);
+
   if (!active || !payload?.length) return null;
 
   const stock = payload.find((p) => p.dataKey === "stock")?.value ?? null;
   const movements = payload.filter((p) => p.dataKey !== "stock" && (p.value ?? 0) > 0);
 
   // Determine zone
-  let zone: string | null = null;
-  let zoneColor = "#6B7280";
-  if (buffers && stock != null) {
-    if (stock <= buffers.safetyBuffer) { zone = "Критична зона"; zoneColor = "#EF4444"; }
-    else if (stock <= buffers.minStock) { zone = "Зона мінімуму"; zoneColor = "#FACC15"; }
-    else if (stock <= buffers.maxStock) { zone = "Зона норми";    zoneColor = "#22C55E"; }
-    else                               { zone = "Зона надлишку"; zoneColor = "#3B82F6"; }
-  }
+  const zone = buffers && stock != null ? zoneForStock(stock, buffers) : null;
 
   return (
     <div style={{
@@ -260,25 +281,25 @@ function CustomTooltip({ active, payload, label, buffers }: {
       borderRadius: 10, padding: "10px 14px", fontSize: 12, minWidth: 180,
     }}>
       <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 8, fontWeight: 600 }}>
-        {label ? new Date(label).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" }) : ""}
+        {label ? new Date(label).toLocaleDateString(intlLocale, { day: "numeric", month: "long", year: "numeric" }) : ""}
       </div>
 
       {stock != null && (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1F2937" }}>
-          <span style={{ color: "#38BDF8", fontWeight: 600 }}>Залишок</span>
+          <span style={{ color: "#38BDF8", fontWeight: 600 }}>{t("series.stock")}</span>
           <span style={{ color: "#38BDF8", fontFamily: "monospace", fontWeight: 700 }}>{stock}</span>
         </div>
       )}
 
       {zone && (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1F2937" }}>
-          <span style={{ color: "#4B5563" }}>Зона</span>
-          <span style={{ color: zoneColor, fontWeight: 600, fontSize: 11 }}>{zone}</span>
+          <span style={{ color: "#4B5563" }}>{t("tooltipZoneLabel")}</span>
+          <span style={{ color: zone.color, fontWeight: 600, fontSize: 11 }}>{t(`zones.${zone.key}`)}</span>
         </div>
       )}
 
       {movements.map((p) => {
-        const line = LINES.find((l) => l.key === p.dataKey);
+        const line = lines.find((l) => l.key === p.dataKey);
         return (
           <div key={p.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
             <span style={{ color: "#6B7280" }}>{line?.label ?? p.dataKey}</span>
@@ -290,15 +311,15 @@ function CustomTooltip({ active, payload, label, buffers }: {
       {buffers && stock != null && (
         <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid #1F2937", display: "flex", flexDirection: "column", gap: 3 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-            <span style={{ color: "#4B5563", fontSize: 10 }}>Буфер безпеки</span>
+            <span style={{ color: "#4B5563", fontSize: 10 }}>{tFields("safetyBuffer")}</span>
             <span style={{ color: "#F97316", fontFamily: "monospace", fontSize: 10 }}>{buffers.safetyBuffer}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-            <span style={{ color: "#4B5563", fontSize: 10 }}>Мін. залишок</span>
+            <span style={{ color: "#4B5563", fontSize: 10 }}>{tFields("minStock")}</span>
             <span style={{ color: "#FACC15", fontFamily: "monospace", fontSize: 10 }}>{buffers.minStock}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-            <span style={{ color: "#4B5563", fontSize: 10 }}>Макс. залишок</span>
+            <span style={{ color: "#4B5563", fontSize: 10 }}>{tFields("maxStock")}</span>
             <span style={{ color: "#34D399", fontFamily: "monospace", fontSize: 10 }}>{buffers.maxStock}</span>
           </div>
         </div>
@@ -318,6 +339,14 @@ export function ProductAnalyticsTab({
   chartHeight?: number;
   buffers?: ProductBuffers;
 }) {
+  const t = useTranslations("Dashboard.inventory.analytics");
+  const tSeries = useTranslations("Dashboard.inventory.analytics.series");
+  const tFields = useTranslations("Dashboard.inventory.fields");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const lines = useMemo(() => buildLines(tSeries), [tSeries]);
+  const movementLabels = useMemo(() => buildMovementLabels(tSeries), [tSeries]);
+
   const [rangeDays, setRangeDays] = useState(30);
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
 
@@ -363,10 +392,7 @@ export function ProductAnalyticsTab({
   // Determine current zone
   const currentZone = useMemo(() => {
     if (!buffers || currentStock == null) return null;
-    if (currentStock <= buffers.safetyBuffer) return { label: "Критична зона", color: "#EF4444" };
-    if (currentStock <= buffers.minStock)     return { label: "Зона мінімуму", color: "#FACC15" };
-    if (currentStock <= buffers.maxStock)     return { label: "Зона норми",    color: "#22C55E" };
-    return                                           { label: "Зона надлишку", color: "#3B82F6" };
+    return zoneForStock(currentStock, buffers);
   }, [buffers, currentStock]);
 
   if (isLoading) {
@@ -383,26 +409,26 @@ export function ProductAnalyticsTab({
 
       {/* Date range selector */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        {RANGES.map((r) => (
+        {RANGE_DAYS.map((days) => (
           <button
-            key={r.days}
-            onClick={() => setRangeDays(r.days)}
+            key={days}
+            onClick={() => setRangeDays(days)}
             style={{
               padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600,
               cursor: "pointer",
-              background: rangeDays === r.days ? "#1D3461" : "transparent",
-              border: `1px solid ${rangeDays === r.days ? "#3B82F6" : "#1F2937"}`,
-              color: rangeDays === r.days ? "#60A5FA" : "#6B7280",
+              background: rangeDays === days ? "#1D3461" : "transparent",
+              border: `1px solid ${rangeDays === days ? "#3B82F6" : "#1F2937"}`,
+              color: rangeDays === days ? "#60A5FA" : "#6B7280",
               transition: "all 0.1s",
             }}
           >
-            {r.label}
+            {t(`ranges.${RANGE_KEY[days]}`)}
           </button>
         ))}
         <span style={{ color: "#4B5563", fontSize: 11, marginLeft: 4 }}>
-          {new Date(from).toLocaleDateString("uk-UA", { day: "numeric", month: "short" })}
+          {new Date(from).toLocaleDateString(intlLocale, { day: "numeric", month: "short" })}
           {" — "}
-          {new Date(to).toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" })}
+          {new Date(to).toLocaleDateString(intlLocale, { day: "numeric", month: "short", year: "numeric" })}
         </span>
       </div>
 
@@ -411,16 +437,16 @@ export function ProductAnalyticsTab({
         {currentStock != null && (
           <SummaryCard
             icon={<Package size={14} color="#38BDF8" />}
-            label="Поточний залишок"
+            label={t("currentStock")}
             value={currentStock}
-            sub={currentZone?.label}
+            sub={currentZone ? t(`zones.${currentZone.key}`) : undefined}
             color="#38BDF8"
           />
         )}
-        <SummaryCard icon={<ArrowDownToLine size={14} color="#3B82F6" />} label="Поставки" value={totals.receipt}    color="#3B82F6" />
-        <SummaryCard icon={<TrendingUp      size={14} color="#A78BFA" />} label="Передачі" value={totals.transfer}   color="#A78BFA" />
-        <SummaryCard icon={<Trash2          size={14} color="#F87171" />} label="Списання" value={totals.write_off}  color="#F87171" />
-        <SummaryCard icon={<RefreshCw       size={14} color="#4ADE80" />} label="Коригування" value={totals.adjustment} color="#4ADE80" />
+        <SummaryCard icon={<ArrowDownToLine size={14} color="#3B82F6" />} label={tSeries("receipt")} value={totals.receipt}    color="#3B82F6" />
+        <SummaryCard icon={<TrendingUp      size={14} color="#A78BFA" />} label={tSeries("transfer")} value={totals.transfer}   color="#A78BFA" />
+        <SummaryCard icon={<Trash2          size={14} color="#F87171" />} label={tSeries("write_off")} value={totals.write_off}  color="#F87171" />
+        <SummaryCard icon={<RefreshCw       size={14} color="#4ADE80" />} label={tSeries("adjustment")} value={totals.adjustment} color="#4ADE80" />
       </div>
 
       {/* Chart */}
@@ -429,15 +455,15 @@ export function ProductAnalyticsTab({
         borderRadius: 10, padding: "16px 16px 8px",
       }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>Динаміка залишків</div>
-          <div style={{ color: "#4B5563", fontSize: 11 }}>{movements.length} подій за {rangeDays} дн.</div>
+          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>{t("chartTitle")}</div>
+          <div style={{ color: "#4B5563", fontSize: 11 }}>{t("eventsSummary", { count: movements.length, days: rangeDays })}</div>
         </div>
 
-        <ChartLegend showBuffers={!!buffers} hidden={hiddenLines} onToggle={toggleLine} />
+        <ChartLegend showBuffers={!!buffers} hidden={hiddenLines} onToggle={toggleLine} lines={lines} />
 
         {movements.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#374151", fontSize: 13 }}>
-            Немає рухів за вибраний період
+            {t("noMovements")}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={chartHeight}>
@@ -459,7 +485,7 @@ export function ProductAnalyticsTab({
                 tick={{ fill: "#6B7280", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={formatDateTick}
+                tickFormatter={(value: string) => formatDateTick(value, intlLocale)}
                 interval="preserveStartEnd"
               />
               <YAxis
@@ -478,17 +504,17 @@ export function ProductAnalyticsTab({
                   <ReferenceLine
                     y={buffers.safetyBuffer}
                     stroke="#F97316" strokeWidth={1.5} strokeDasharray="4 2"
-                    label={{ value: `Буфер: ${buffers.safetyBuffer}`, fill: "#F97316", fontSize: 10, position: "insideTopRight" }}
+                    label={{ value: t("bufferShort.safetyBuffer", { value: buffers.safetyBuffer }), fill: "#F97316", fontSize: 10, position: "insideTopRight" }}
                   />
                   <ReferenceLine
                     y={buffers.minStock}
                     stroke="#FACC15" strokeWidth={1.5} strokeDasharray="4 2"
-                    label={{ value: `Мін: ${buffers.minStock}`, fill: "#FACC15", fontSize: 10, position: "insideTopRight" }}
+                    label={{ value: t("bufferShort.minStock", { value: buffers.minStock }), fill: "#FACC15", fontSize: 10, position: "insideTopRight" }}
                   />
                   <ReferenceLine
                     y={buffers.maxStock}
                     stroke="#34D399" strokeWidth={1.5} strokeDasharray="4 2"
-                    label={{ value: `Макс: ${buffers.maxStock}`, fill: "#34D399", fontSize: 10, position: "insideTopRight" }}
+                    label={{ value: t("bufferShort.maxStock", { value: buffers.maxStock }), fill: "#34D399", fontSize: 10, position: "insideTopRight" }}
                   />
                 </>
               )}
@@ -506,7 +532,7 @@ export function ProductAnalyticsTab({
               />
 
               {/* Movement lines */}
-              {LINES.filter((l) => l.key !== "stock").map(({ key, color, dash, width }) => (
+              {lines.filter((l) => l.key !== "stock").map(({ key, color, dash, width }) => (
                 <Line
                   key={key}
                   type="monotone"
@@ -532,11 +558,11 @@ export function ProductAnalyticsTab({
             textTransform: "uppercase", letterSpacing: "0.05em",
             marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid #1F2937",
           }}>
-            Журнал подій
+            {t("eventLog")}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 320, overflowY: "auto" }}>
             {movements.slice(0, 50).map((m) => {
-              const line = LINES.find((l) => l.key === m.movementType);
+              const line = lines.find((l) => l.key === m.movementType);
               const isPlus = m.movementType === "receipt" || m.movementType === "adjustment";
               return (
                 <div
@@ -559,7 +585,7 @@ export function ProductAnalyticsTab({
                     color: line?.color ?? "#6B7280",
                     fontWeight: 600,
                   }}>
-                    {MOVEMENT_LABELS[m.movementType] ?? m.movementType}
+                    {movementLabels[m.movementType] ?? m.movementType}
                   </span>
 
                   <span style={{
@@ -580,7 +606,7 @@ export function ProductAnalyticsTab({
                     </span>
                   ) : m.quantityAfter != null ? (
                     <span style={{ color: "#4B5563", fontSize: 11, flexShrink: 0 }}>
-                      залишок: <span style={{ fontFamily: "monospace", color: "#38BDF8" }}>{m.quantityAfter}</span>
+                      {t("balancePrefix")} <span style={{ fontFamily: "monospace", color: "#38BDF8" }}>{m.quantityAfter}</span>
                     </span>
                   ) : null}
 
@@ -592,7 +618,7 @@ export function ProductAnalyticsTab({
                   </span>
 
                   <span style={{ color: "#4B5563", fontSize: 10, flexShrink: 0 }}>
-                    {new Date(m.createdAt).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })}
+                    {new Date(m.createdAt).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit" })}
                   </span>
                 </div>
               );

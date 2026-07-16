@@ -1,11 +1,15 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { BatchStatus } from "../types";
-import { STATUS_COLOR, STATUS_LABEL } from "../types";
+import { STATUS_COLOR } from "../types";
 
 interface Props {
   status: BatchStatus;
 }
 
 export function StatusBadge({ status }: Props) {
+  const t = useTranslations("Dashboard.shelf.status");
   const colors = STATUS_COLOR[status] ?? STATUS_COLOR.safe;
   return (
     <span
@@ -31,7 +35,7 @@ export function StatusBadge({ status }: Props) {
           flexShrink: 0,
         }}
       />
-      {STATUS_LABEL[status] ?? status}
+      {t.has(status) ? t(status) : status}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useCreateStock } from "../hooks/useStock";
 import type { CreateStockRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
@@ -44,6 +45,8 @@ const labelStyle: React.CSSProperties = {
 };
 
 export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
+  const t = useTranslations("Dashboard.shelf.addBatchForm");
+  const tCommon = useTranslations("Common");
   const create = useCreateStock();
 
   const [form, setForm] = useState<{
@@ -78,13 +81,13 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
     setError(null);
 
     if (!form.productId || !form.storeId || !form.quantity || !form.expiryDate) {
-      setError("Заповніть усі обов'язкові поля");
+      setError(t("errorRequired"));
       return;
     }
 
     const qty = parseFloat(form.quantity);
     if (isNaN(qty) || qty <= 0) {
-      setError("Кількість має бути більше 0");
+      setError(t("errorQuantity"));
       return;
     }
 
@@ -102,21 +105,21 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
       await create.mutateAsync(data);
       onSuccess();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Помилка збереження");
+      setError(err instanceof Error ? err.message : t("errorSaveFailed"));
     }
   }
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
-        <label style={labelStyle}>Товар *</label>
+        <label style={labelStyle}>{t("productLabel")}</label>
         <select
           value={form.productId}
           onChange={(e) => set("productId", e.target.value)}
           style={inputStyle}
           required
         >
-          <option value="">Оберіть товар…</option>
+          <option value="">{t("productPlaceholder")}</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} {p.barcode ? `(${p.barcode})` : ""}
@@ -127,7 +130,7 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
-          <label style={labelStyle}>Магазин *</label>
+          <label style={labelStyle}>{t("storeLabel")}</label>
           <select
             value={form.storeId}
             onChange={(e) => {
@@ -136,7 +139,7 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
             style={inputStyle}
             required
           >
-            <option value="">Оберіть магазин…</option>
+            <option value="">{t("storePlaceholder")}</option>
             {stores.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -146,14 +149,14 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
         </div>
 
         <div>
-          <label style={labelStyle}>Зона</label>
+          <label style={labelStyle}>{t("zoneLabel")}</label>
           <select
             value={form.zoneId}
             onChange={(e) => set("zoneId", e.target.value)}
             style={inputStyle}
             disabled={!selectedStore}
           >
-            <option value="">Без зони</option>
+            <option value="">{t("zoneNone")}</option>
             {selectedStore?.zones.map((z) => (
               <option key={z.id} value={z.id}>
                 {z.name}
@@ -165,7 +168,7 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
-          <label style={labelStyle}>Кількість *</label>
+          <label style={labelStyle}>{t("quantityLabel")}</label>
           <input
             type="number"
             min="0.01"
@@ -179,7 +182,7 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
         </div>
 
         <div>
-          <label style={labelStyle}>Термін придатності *</label>
+          <label style={labelStyle}>{t("expiryDateLabel")}</label>
           <input
             type="date"
             value={form.expiryDate}
@@ -192,25 +195,25 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
-          <label style={labelStyle}>Номер партії</label>
+          <label style={labelStyle}>{t("batchNumberLabel")}</label>
           <input
             type="text"
             value={form.batchNumber}
             onChange={(e) => set("batchNumber", e.target.value)}
-            placeholder="необов'язково"
+            placeholder={t("batchNumberPlaceholder")}
             style={inputStyle}
           />
         </div>
 
         <div>
-          <label style={labelStyle}>Полиця №</label>
+          <label style={labelStyle}>{t("shelfNumberLabel")}</label>
           <input
             type="number"
             min="1"
             step="1"
             value={form.shelfNumber}
             onChange={(e) => set("shelfNumber", e.target.value)}
-            placeholder="необов'язково"
+            placeholder={t("shelfNumberPlaceholder")}
             style={inputStyle}
           />
         </div>
@@ -233,10 +236,10 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
         <Btn variant="ghost" type="button" onClick={onCancel}>
-          Скасувати
+          {tCommon("cancel")}
         </Btn>
         <Btn type="submit" disabled={create.isPending}>
-          {create.isPending ? "Збереження…" : "Додати партію"}
+          {create.isPending ? t("saving") : t("submit")}
         </Btn>
       </div>
     </form>

@@ -1,63 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import type { CreateProductPayload, Product, UpdateProductPayload } from "../types";
 import { productsApi } from "../api/products";
 
-export const PERISHABILITY_CLASS_OPTIONS: { value: string; label: string }[] = [
-  { value: "fresh",    label: "🥦 Fresh — овочі, фрукти, хліб (≤1/3 дні)" },
-  { value: "chilled",  label: "🥛 Chilled — молоко, м'ясо, риба (≤2/5 дні)" },
-  { value: "standard", label: "📦 Standard — пакована продукція (≤6/14 дні)" },
-  { value: "durable",  label: "🥫 Durable — консерви, крупи (≤14/30 дні)" },
-];
+export const PERISHABILITY_CLASS_VALUES = ["fresh", "chilled", "standard", "durable"] as const;
 
-export const ITEM_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: "product",      label: "Товар" },
-  { value: "service",      label: "Послуга" },
-  { value: "spare_part",   label: "Запчастина" },
-  { value: "consumable",   label: "Розхідник" },
-  { value: "raw_material", label: "Сировина" },
-  { value: "kit",          label: "Комплект" },
-];
+export const ITEM_TYPE_VALUES = [
+  "product",
+  "service",
+  "spare_part",
+  "consumable",
+  "raw_material",
+  "kit",
+] as const;
 
-export const ITEM_TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  ITEM_TYPE_OPTIONS.map((o) => [o.value, o.label]),
-);
+// Zod .min(1, message) needs a translated message, but next-intl's `useTranslations` is a
+// hook and this schema is built once per render inside the component (see
+// `useMemo(() => buildProductSchema(t), [t])` below) rather than at module scope — mirrors
+// the `buildNavGroups(t)` pattern in components/layout/Sidebar.tsx (i18n Block 1).
+function buildProductSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name:           z.string().min(1, t("validationRequired")).max(200),
+    unit:           z.string().min(1, t("validationRequired")).max(50),
+    managementType: z.enum(["MTS", "MTO"]),
+    itemType:       z.string().min(1),
+    minStock:       z.coerce.number().min(0),
+    maxStock:       z.coerce.number().min(0),
+    safetyBuffer:   z.coerce.number().min(0),
+    shelfLifeDays:  z.coerce.number().int().min(1).optional().or(z.literal("")),
+    vatRate:        z.coerce.number().min(0).max(100),
+    pricePurchase:  z.coerce.number().min(0).optional().or(z.literal("")),
+    priceRetail:    z.coerce.number().min(0).optional().or(z.literal("")),
+    isActive:       z.boolean(),
+    manufacturer:        z.string().max(255).optional(),
+    countryOrigin:       z.string().max(100).optional(),
+    perishabilityClass:  z.string().min(1),
+  });
+}
 
-const productSchema = z.object({
-  name:           z.string().min(1, "Обов'язкове поле").max(200),
-  unit:           z.string().min(1, "Обов'язкове поле").max(50),
-  managementType: z.enum(["MTS", "MTO"]),
-  itemType:       z.string().min(1),
-  minStock:       z.coerce.number().min(0),
-  maxStock:       z.coerce.number().min(0),
-  safetyBuffer:   z.coerce.number().min(0),
-  shelfLifeDays:  z.coerce.number().int().min(1).optional().or(z.literal("")),
-  vatRate:        z.coerce.number().min(0).max(100),
-  pricePurchase:  z.coerce.number().min(0).optional().or(z.literal("")),
-  priceRetail:    z.coerce.number().min(0).optional().or(z.literal("")),
-  isActive:       z.boolean(),
-  manufacturer:        z.string().max(255).optional(),
-  countryOrigin:       z.string().max(100).optional(),
-  perishabilityClass:  z.string().min(1),
-});
+type FormValues = z.infer<ReturnType<typeof buildProductSchema>>;
 
-type FormValues = z.infer<typeof productSchema>;
-
-const defaultValues: FormValues = {
-  name: "", unit: "шт", managementType: "MTS", itemType: "product",
-  minStock: 0, maxStock: 100, safetyBuffer: 5,
-  shelfLifeDays: "", vatRate: 20,
-  pricePurchase: "", priceRetail: "",
-  isActive: true,
-  manufacturer: "",
-  countryOrigin: "",
-  perishabilityClass: "standard",
-};
+// `unit` default is locale-aware ("шт"/"pcs") so a brand-new product form doesn't show a
+// Ukrainian abbreviation in the English UI — everything else here is language-neutral.
+function buildDefaultValues(locale: string): FormValues {
+  return {
+    name: "", unit: locale === "en" ? "pcs" : "шт", managementType: "MTS", itemType: "product",
+    minStock: 0, maxStock: 100, safetyBuffer: 5,
+    shelfLifeDays: "", vatRate: 20,
+    pricePurchase: "", priceRetail: "",
+    isActive: true,
+    manufacturer: "",
+    countryOrigin: "",
+    perishabilityClass: "standard",
+  };
+}
 
 interface Props {
   open: boolean;
@@ -90,6 +92,11 @@ const labelStyle: React.CSSProperties = {
 };
 
 export function ProductForm({ open, product, isPending, onClose, onCreate, onUpdate, onImageUpload }: Props) {
+  const t = useTranslations("Dashboard.inventory.form");
+  const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const defaultValues = useMemo(() => buildDefaultValues(locale), [locale]);
   const isEditing = product !== null;
 
   const [barcodes, setBarcodes] = useState<string[]>([]);
@@ -98,6 +105,8 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
+
+  const productSchema = useMemo(() => buildProductSchema(t), [t]);
 
   const {
     register,
@@ -171,7 +180,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
       if (data.barcodes.length > 0) setBarcodes(data.barcodes);
       if (data.imageUrl) setImagePreview(data.imageUrl);
     } catch {
-      setLookupError("Штрихкод не знайдено у базі OpenFoodFacts");
+      setLookupError(t("lookupError"));
     } finally {
       setLookupLoading(false);
     }
@@ -251,7 +260,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
           }}
         >
           <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-            {isEditing ? "Редагувати товар" : "Додати товар"}
+            {isEditing ? t("titleEdit") : t("titleCreate")}
           </h2>
           <button
             onClick={onClose}
@@ -270,8 +279,8 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Name */}
             <div>
-              <label style={labelStyle}>Назва товару *</label>
-              <input {...register("name")} placeholder="Молоко 2,5% Галичина 1л" style={inputStyle} />
+              <label style={labelStyle}>{t("nameLabel")}</label>
+              <input {...register("name")} placeholder={t("namePlaceholder")} style={inputStyle} />
               {errors.name && (
                 <p style={{ color: "#EF4444", fontSize: 11, marginTop: 3 }}>{errors.name.message}</p>
               )}
@@ -279,7 +288,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
 
             {/* Штрихкоди */}
             <div>
-              <label style={labelStyle}>Штрихкоди</label>
+              <label style={labelStyle}>{t("barcodesLabel")}</label>
 
               {/* Теги */}
               {barcodes.length > 0 && (
@@ -307,7 +316,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                   value={barcodeInput}
                   onChange={e => setBarcodeInput(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addBarcode())}
-                  placeholder="4820029300128"
+                  placeholder={t("barcodePlaceholder")}
                   style={{ ...inputStyle, flex: 1 }}
                 />
                 <button type="button" onClick={addBarcode}
@@ -324,7 +333,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                     background: lookupLoading ? "#1F2937" : "#0F2D1A", border: "1px solid #166534",
                     color: lookupLoading ? "#4B5563" : "#4ADE80", fontSize: 12, whiteSpace: "nowrap",
                   }}>
-                  {lookupLoading ? "Пошук…" : "Знайти"}
+                  {lookupLoading ? t("lookupSearching") : t("lookupFind")}
                 </button>
               </div>
               {lookupError && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{lookupError}</p>}
@@ -332,7 +341,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
 
             {/* Зображення */}
             <div>
-              <label style={labelStyle}>Зображення товару</label>
+              <label style={labelStyle}>{t("imageLabel")}</label>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {imagePreview && (
                   <img
@@ -345,7 +354,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                   background: "#111827", border: "1px solid #374151",
                   color: "#9CA3AF", fontSize: 12,
                 }}>
-                  {imagePreview ? "Змінити фото" : "Завантажити фото"}
+                  {imagePreview ? t("imageChange") : t("imageUpload")}
                   <input
                     type="file"
                     accept="image/*"
@@ -361,7 +370,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                 {imagePreview && (
                   <button type="button" onClick={() => { setImageFile(null); setImagePreview(null); }}
                     style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 12 }}>
-                    Видалити
+                    {t("imageRemove")}
                   </button>
                 )}
               </div>
@@ -369,8 +378,8 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
 
             {/* Unit */}
             <div>
-              <label style={labelStyle}>Одиниця *</label>
-              <input {...register("unit")} placeholder="кг, шт, л, упак…" style={inputStyle} />
+              <label style={labelStyle}>{t("unitLabel")}</label>
+              <input {...register("unit")} placeholder={t("unitPlaceholder")} style={inputStyle} />
               {errors.unit && (
                 <p style={{ color: "#EF4444", fontSize: 11, marginTop: 3 }}>{errors.unit.message}</p>
               )}
@@ -379,17 +388,17 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             {/* ManagementType + ItemType */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Тип управління</label>
+                <label style={labelStyle}>{t("managementTypeLabel")}</label>
                 <select {...register("managementType")} style={{ ...inputStyle, cursor: "pointer" }}>
-                  <option value="MTS">MTS — на склад</option>
-                  <option value="MTO">MTO — на замовлення</option>
+                  <option value="MTS">{t("managementTypeMts")}</option>
+                  <option value="MTO">{t("managementTypeMto")}</option>
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Тип товару</label>
+                <label style={labelStyle}>{t("itemTypeLabel")}</label>
                 <select {...register("itemType")} style={{ ...inputStyle, cursor: "pointer" }}>
-                  {ITEM_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  {ITEM_TYPE_VALUES.map((value) => (
+                    <option key={value} value={value}>{tItemTypes(value)}</option>
                   ))}
                 </select>
               </div>
@@ -398,21 +407,21 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             {/* ShelfLife + VatRate */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Термін придатності (днів)</label>
+                <label style={labelStyle}>{t("shelfLifeLabel")}</label>
                 <input {...register("shelfLifeDays")} type="number" min="1" placeholder="7" style={inputStyle} />
               </div>
               <div>
-                <label style={labelStyle}>ПДВ %</label>
+                <label style={labelStyle}>{t("vatRateLabel")}</label>
                 <input {...register("vatRate")} type="number" step="0.01" min="0" max="100" style={inputStyle} />
               </div>
             </div>
 
             {/* PerishabilityClass */}
             <div>
-              <label style={labelStyle}>Клас псуємості</label>
+              <label style={labelStyle}>{t("perishabilityLabel")}</label>
               <select {...register("perishabilityClass")} style={{ ...inputStyle, cursor: "pointer" }}>
-                {PERISHABILITY_CLASS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                {PERISHABILITY_CLASS_VALUES.map((value) => (
+                  <option key={value} value={value}>{t(`perishability.${value}`)}</option>
                 ))}
               </select>
             </div>
@@ -420,27 +429,27 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             {/* Manufacturer + CountryOrigin */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Виробник</label>
-                <input {...register("manufacturer")} placeholder="ТОВ Молочний Дім" style={inputStyle} />
+                <label style={labelStyle}>{t("manufacturerLabel")}</label>
+                <input {...register("manufacturer")} placeholder={t("manufacturerPlaceholder")} style={inputStyle} />
               </div>
               <div>
-                <label style={labelStyle}>Країна походження</label>
-                <input {...register("countryOrigin")} placeholder="Україна" style={inputStyle} />
+                <label style={labelStyle}>{t("countryOriginLabel")}</label>
+                <input {...register("countryOrigin")} placeholder={t("countryOriginPlaceholder")} style={inputStyle} />
               </div>
             </div>
 
             {/* Stock levels */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Мін. залишок</label>
+                <label style={labelStyle}>{t("minStockLabel")}</label>
                 <input {...register("minStock")} type="number" step="0.01" min="0" style={inputStyle} />
               </div>
               <div>
-                <label style={labelStyle}>Макс. залишок</label>
+                <label style={labelStyle}>{t("maxStockLabel")}</label>
                 <input {...register("maxStock")} type="number" step="0.01" min="0" style={inputStyle} />
               </div>
               <div>
-                <label style={labelStyle}>Буфер безпеки</label>
+                <label style={labelStyle}>{t("safetyBufferLabel")}</label>
                 <input {...register("safetyBuffer")} type="number" step="0.01" min="0" style={inputStyle} />
               </div>
             </div>
@@ -448,11 +457,11 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             {/* Prices */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Закупівельна ціна (₴)</label>
+                <label style={labelStyle}>{t("pricePurchaseLabel")}</label>
                 <input {...register("pricePurchase")} type="number" step="0.01" min="0" placeholder="0.00" style={inputStyle} />
               </div>
               <div>
-                <label style={labelStyle}>Роздрібна ціна (₴)</label>
+                <label style={labelStyle}>{t("priceRetailLabel")}</label>
                 <input {...register("priceRetail")} type="number" step="0.01" min="0" placeholder="0.00" style={inputStyle} />
               </div>
             </div>
@@ -467,7 +476,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                   style={{ accentColor: "#3B82F6", width: 16, height: 16, cursor: "pointer" }}
                 />
                 <label htmlFor="isActive" style={{ ...labelStyle, marginBottom: 0, cursor: "pointer" }}>
-                  Активний товар
+                  {t("isActiveLabel")}
                 </label>
               </div>
             )}
@@ -476,10 +485,10 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, marginTop: 22, justifyContent: "flex-end" }}>
             <Btn variant="ghost" type="button" onClick={onClose}>
-              Скасувати
+              {tCommon("cancel")}
             </Btn>
             <Btn type="submit" disabled={isPending}>
-              {isPending ? "Збереження…" : isEditing ? "Зберегти зміни" : "Додати товар"}
+              {isPending ? t("saving") : isEditing ? t("saveChanges") : t("titleCreate")}
             </Btn>
           </div>
         </form>

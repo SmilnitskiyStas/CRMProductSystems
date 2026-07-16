@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { ProductForm } from "@/features/inventory/components/ProductForm";
 import { ProductsTable } from "@/features/inventory/components/ProductsTable";
@@ -15,6 +16,8 @@ import {
 import type { CreateProductPayload, Product, UpdateProductPayload } from "@/features/inventory/types";
 
 export default function InventoryPage() {
+  const t = useTranslations("Dashboard.inventory.page");
+  const tCommon = useTranslations("Common");
   const [formOpen, setFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
@@ -41,7 +44,7 @@ export default function InventoryPage() {
   const handleCreate = (payload: CreateProductPayload) => {
     createProduct.mutate(payload, {
       onSuccess: () => {
-        toast.success("Товар додано");
+        toast.success(t("toastCreated"));
         handleClose();
       },
       onError: (err) => toast.error(err.message),
@@ -53,7 +56,7 @@ export default function InventoryPage() {
       { id, payload },
       {
         onSuccess: () => {
-          toast.success("Товар оновлено");
+          toast.success(t("toastUpdated"));
           handleClose();
         },
         onError: (err) => toast.error(err.message),
@@ -63,7 +66,7 @@ export default function InventoryPage() {
 
   const handleDelete = (id: string) => {
     deleteProduct.mutate(id, {
-      onSuccess: () => toast.success("Товар видалено"),
+      onSuccess: () => toast.success(t("toastDeleted")),
       onError: (err) => toast.error(err.message),
     });
   };
@@ -71,7 +74,7 @@ export default function InventoryPage() {
   if (isError) {
     return (
       <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
-        Помилка завантаження каталогу. Перевірте підключення до API.
+        {t("errorLoading")}
       </div>
     );
   }
@@ -89,19 +92,19 @@ export default function InventoryPage() {
       >
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Каталог товарів
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {isLoading ? "Завантаження…" : `${products.length} товар${products.length === 1 ? "" : "ів"}`}
+            {isLoading ? tCommon("loading") : t("count", { count: products.length })}
           </p>
         </div>
         <Btn icon={<Plus size={15} />} onClick={openCreate}>
-          Додати товар
+          {t("addButton")}
         </Btn>
       </div>
 
       {isLoading ? (
-        <p style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</p>
+        <p style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</p>
       ) : (
         <ProductsTable
           products={products}

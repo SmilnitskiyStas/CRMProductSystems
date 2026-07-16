@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, Pencil, Trash2, BarChart2, ExternalLink } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import type { Product } from "../types";
-import { ITEM_TYPE_LABELS } from "./ProductForm";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import {
   DetailDrawer,
@@ -82,6 +82,8 @@ function DeleteDialog({
   onCancel: () => void;
   isDeleting: boolean;
 }) {
+  const t = useTranslations("Dashboard.inventory.table.deleteDialog");
+  const tCommon = useTranslations("Common");
   return (
     <>
       <div
@@ -107,11 +109,10 @@ function DeleteDialog({
         }}
       >
         <h3 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: "0 0 8px" }}>
-          Видалити товар?
+          {t("title")}
         </h3>
         <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px" }}>
-          <span style={{ color: "#9CA3AF" }}>{product.name}</span> буде видалено з каталогу
-          назавжди. Цю дію не можна скасувати.
+          {t("body", { name: product.name })}
         </p>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
@@ -127,7 +128,7 @@ function DeleteDialog({
               cursor: "pointer",
             }}
           >
-            Скасувати
+            {tCommon("cancel")}
           </button>
           <button
             onClick={onConfirm}
@@ -144,7 +145,7 @@ function DeleteDialog({
               opacity: isDeleting ? 0.6 : 1,
             }}
           >
-            {isDeleting ? "Видалення…" : "Видалити"}
+            {isDeleting ? t("confirming") : t("confirm")}
           </button>
         </div>
       </div>
@@ -156,9 +157,10 @@ function DeleteDialog({
 type DrawerTab = "info" | "analytics";
 
 function TabBar({ active, onChange }: { active: DrawerTab; onChange: (t: DrawerTab) => void }) {
+  const tFields = useTranslations("Dashboard.inventory.fields");
   const tabs: { key: DrawerTab; label: string; icon: React.ReactNode }[] = [
-    { key: "info",      label: "Інформація", icon: null },
-    { key: "analytics", label: "Аналітика",  icon: <BarChart2 size={13} /> },
+    { key: "info",      label: tFields("tabInfo"), icon: null },
+    { key: "analytics", label: tFields("tabAnalytics"),  icon: <BarChart2 size={13} /> },
   ];
   return (
     // Negative margins break out of DetailDrawer's 20px/24px padding
@@ -193,30 +195,35 @@ function TabBar({ active, onChange }: { active: DrawerTab; onChange: (t: DrawerT
 
 // ── Detail drawer content ────────────────────────────────────────────────────
 function ProductDetail({ p }: { p: Product }) {
+  const t = useTranslations("Dashboard.inventory.fields");
+  const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   return (
     <>
-      <DrawerSection title="Основна інформація">
-        <DrawerField label="Назва" value={p.name} />
+      <DrawerSection title={t("sectionMain")}>
+        <DrawerField label={t("name")} value={p.name} />
         <DrawerGrid>
           <DrawerField
-            label="Штрихкод"
+            label={t("barcode")}
             value={
               <span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>
                 {p.barcodes?.[0] ?? "—"}
               </span>
             }
           />
-          <DrawerField label="Одиниця" value={p.unit} />
-          <DrawerField label="Категорія" value={p.categoryName ?? "—"} />
-          <DrawerField label="Сегмент" value={p.segmentName ?? "—"} />
-          <DrawerField label="Тип управління" value={p.managementType} />
-          <DrawerField label="Тип товару" value={ITEM_TYPE_LABELS[p.itemType] ?? p.itemType} />
+          <DrawerField label={t("unit")} value={p.unit} />
+          <DrawerField label={t("category")} value={p.categoryName ?? "—"} />
+          <DrawerField label={t("segment")} value={p.segmentName ?? "—"} />
+          <DrawerField label={t("managementType")} value={p.managementType} />
+          <DrawerField label={t("itemType")} value={tItemTypes.has(p.itemType) ? tItemTypes(p.itemType) : p.itemType} />
           <DrawerField
-            label="Клас псуємості"
+            label={t("perishabilityClass")}
             value={<PerishabilityBadge value={p.perishabilityClass ?? "standard"} />}
           />
           <DrawerField
-            label="Статус"
+            label={t("statusLabel")}
             value={
               <span
                 style={{
@@ -229,85 +236,85 @@ function ProductDetail({ p }: { p: Product }) {
                   fontWeight: 600,
                 }}
               >
-                {p.isActive ? "Активний" : "Неактивний"}
+                {p.isActive ? t("statusActive") : t("statusInactive")}
               </span>
             }
           />
         </DrawerGrid>
       </DrawerSection>
 
-      <DrawerSection title="Ціни та ПДВ">
+      <DrawerSection title={t("sectionPricing")}>
         <DrawerGrid>
           <DrawerField
-            label="Закупівельна ціна"
+            label={t("pricePurchase")}
             value={
               p.pricePurchase != null
-                ? `${p.pricePurchase.toLocaleString("uk-UA")} ₴`
+                ? `${p.pricePurchase.toLocaleString(intlLocale)} ₴`
                 : "—"
             }
           />
           <DrawerField
-            label="Роздрібна ціна"
+            label={t("priceRetail")}
             value={
               p.priceRetail != null
-                ? `${p.priceRetail.toLocaleString("uk-UA")} ₴`
+                ? `${p.priceRetail.toLocaleString(intlLocale)} ₴`
                 : "—"
             }
             color="#4ADE80"
           />
-          <DrawerField label="Ставка ПДВ" value={`${p.vatRate}%`} />
+          <DrawerField label={t("vatRate")} value={`${p.vatRate}%`} />
           <DrawerField
-            label="Постачальник за замовч."
+            label={t("defaultSupplier")}
             value={p.defaultSupplierName ?? "—"}
           />
         </DrawerGrid>
       </DrawerSection>
 
-      <DrawerSection title="Залишки та буфери">
+      <DrawerSection title={t("sectionStock")}>
         <DrawerGrid>
           <DrawerField
-            label="Мін. залишок"
+            label={t("minStock")}
             value={
               <span style={{ fontFamily: "monospace" }}>{p.minStock}</span>
             }
           />
           <DrawerField
-            label="Макс. залишок"
+            label={t("maxStock")}
             value={
               <span style={{ fontFamily: "monospace" }}>{p.maxStock}</span>
             }
           />
           <DrawerField
-            label="Буфер безпеки"
+            label={t("safetyBuffer")}
             value={
               <span style={{ fontFamily: "monospace" }}>{p.safetyBuffer}</span>
             }
           />
           <DrawerField
-            label="Термін зберігання"
-            value={p.shelfLifeDays != null ? `${p.shelfLifeDays} дн.` : "—"}
+            label={t("shelfLifeDays")}
+            value={p.shelfLifeDays != null ? `${p.shelfLifeDays} ${t("shelfLifeDaysSuffix")}` : "—"}
           />
         </DrawerGrid>
       </DrawerSection>
 
       {(p.storageTempMin != null || p.storageTempMax != null) && (
-        <DrawerSection title="Умови зберігання">
+        <DrawerSection title={t("sectionStorage")}>
           <DrawerGrid>
             <DrawerField
-              label="Темп. мін."
+              label={t("storageTempMin")}
               value={p.storageTempMin != null ? `${p.storageTempMin}°C` : "—"}
             />
             <DrawerField
-              label="Темп. макс."
+              label={t("storageTempMax")}
               value={p.storageTempMax != null ? `${p.storageTempMax}°C` : "—"}
             />
           </DrawerGrid>
         </DrawerSection>
       )}
 
-      <DrawerSection title="Системна інформація">
+      <DrawerSection title={t("sectionSystem")}>
         <DrawerField
-          label="ID"
+          label={t("id")}
           value={
             <span style={{ fontFamily: "monospace", fontSize: 11, color: "#4B5563" }}>
               {p.id}
@@ -315,8 +322,8 @@ function ProductDetail({ p }: { p: Product }) {
           }
         />
         <DrawerField
-          label="Дата створення"
-          value={new Date(p.createdAt).toLocaleDateString("uk-UA")}
+          label={t("createdAt")}
+          value={new Date(p.createdAt).toLocaleDateString(intlLocale)}
         />
       </DrawerSection>
     </>
@@ -326,11 +333,31 @@ function ProductDetail({ p }: { p: Product }) {
 // ── Table ────────────────────────────────────────────────────────────────────
 export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.inventory.table");
+  const tFields = useTranslations("Dashboard.inventory.fields");
+  const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("info");
 
   const pendingProduct = products.find((p) => p.id === pendingDeleteId) ?? null;
+
+  const headers: { key: string; label: string }[] = [
+    { key: "barcode", label: tFields("barcode") },
+    { key: "name", label: tFields("name") },
+    { key: "class", label: t("headers.class") },
+    { key: "category", label: tFields("category") },
+    { key: "itemType", label: tFields("itemType") },
+    { key: "unit", label: tFields("unit") },
+    { key: "purchase", label: t("headers.purchase") },
+    { key: "retail", label: t("headers.retail") },
+    { key: "min", label: t("headers.min") },
+    { key: "max", label: t("headers.max") },
+    { key: "status", label: tFields("statusLabel") },
+    { key: "actions", label: t("headers.actions") },
+  ];
 
   function openProduct(product: Product, tab: DrawerTab = "info") {
     setSelected(product);
@@ -350,13 +377,9 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
           <thead>
             <tr>
-              {[
-                "Штрихкод", "Назва", "Клас", "Категорія", "Тип товару", "Одиниця",
-                "Закупівля", "Роздриб", "Мін.", "Макс.",
-                "Статус", "Дії",
-              ].map((h) => (
-                <th key={h} style={h === "Дії" ? { ...thStyle, borderRight: "none" } : thStyle}>
-                  {h}
+              {headers.map((h) => (
+                <th key={h.key} style={h.key === "actions" ? { ...thStyle, borderRight: "none" } : thStyle}>
+                  {h.label}
                 </th>
               ))}
             </tr>
@@ -373,7 +396,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                     fontSize: 13,
                   }}
                 >
-                  Товарів ще немає. Додайте перший товар.
+                  {t("empty")}
                 </td>
               </tr>
             ) : (
@@ -405,16 +428,16 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                     <PerishabilityBadge value={product.perishabilityClass ?? "standard"} />
                   </td>
                   <td style={tdStyle}>{product.categoryName ?? "—"}</td>
-                  <td style={tdStyle}>{ITEM_TYPE_LABELS[product.itemType] ?? product.itemType ?? "—"}</td>
+                  <td style={tdStyle}>{(product.itemType && tItemTypes.has(product.itemType) ? tItemTypes(product.itemType) : product.itemType) ?? "—"}</td>
                   <td style={tdStyle}>{product.unit}</td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>
                     {product.pricePurchase != null
-                      ? product.pricePurchase.toLocaleString("uk-UA") + " ₴"
+                      ? product.pricePurchase.toLocaleString(intlLocale) + " ₴"
                       : "—"}
                   </td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>
                     {product.priceRetail != null
-                      ? product.priceRetail.toLocaleString("uk-UA") + " ₴"
+                      ? product.priceRetail.toLocaleString(intlLocale) + " ₴"
                       : "—"}
                   </td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>{product.minStock}</td>
@@ -431,35 +454,35 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
                         fontWeight: 600,
                       }}
                     >
-                      {product.isActive ? "Активний" : "Неактивний"}
+                      {product.isActive ? tFields("statusActive") : tFields("statusInactive")}
                     </span>
                   </td>
                   <td style={{ ...tdStyle, borderRight: "none" }}>
                     <ActionMenu
                       items={[
                         {
-                          label: "Переглянути",
+                          label: t("actionMenu.view"),
                           icon: <Eye size={13} />,
                           onClick: () => openProduct(product, "info"),
                         },
                         {
-                          label: "Аналітика",
+                          label: t("actionMenu.analytics"),
                           icon: <BarChart2 size={13} />,
                           onClick: () => openProduct(product, "analytics"),
                         },
                         {
-                          label: "Відкрити сторінку",
+                          label: t("actionMenu.openPage"),
                           icon: <ExternalLink size={13} />,
                           onClick: () => router.push(`/inventory/${product.id}`),
                         },
                         { separator: true },
                         {
-                          label: "Редагувати",
+                          label: t("actionMenu.edit"),
                           icon: <Pencil size={13} />,
                           onClick: () => onEdit(product),
                         },
                         {
-                          label: "Видалити",
+                          label: t("actionMenu.delete"),
                           icon: <Trash2 size={13} />,
                           variant: "danger",
                           onClick: () => setPendingDeleteId(product.id),
@@ -492,13 +515,13 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
         isOpen={selected !== null}
         onClose={() => setSelected(null)}
         title={selected?.name ?? ""}
-        subtitle={selected ? `${selected.categoryName ?? "Без категорії"} · ${selected.unit}` : ""}
+        subtitle={selected ? `${selected.categoryName ?? tFields("noCategory")} · ${selected.unit}` : ""}
         width={580}
         actions={
           selected && (
             <button
               onClick={() => router.push(`/inventory/${selected.id}`)}
-              title="Відкрити на повній сторінці"
+              title={t("openFullPage")}
               style={{
                 background: "transparent",
                 border: "1px solid #1F2937",

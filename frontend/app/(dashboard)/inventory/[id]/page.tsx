@@ -6,18 +6,19 @@ import {
   ArrowLeft, BarChart2, Info, ExternalLink,
   ArrowDownToLine, TrendingUp, Trash2, RefreshCw, Loader2,
 } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useProduct } from "@/features/inventory/hooks/useProducts";
 import { ProductAnalyticsTab } from "@/features/inventory/components/ProductAnalyticsTab";
-import { ITEM_TYPE_LABELS } from "@/features/inventory/components/ProductForm";
 
 // ── Tab ───────────────────────────────────────────────────────────────────────
 
 type PageTab = "info" | "analytics";
 
 function TabBar({ active, onChange }: { active: PageTab; onChange: (t: PageTab) => void }) {
+  const tFields = useTranslations("Dashboard.inventory.fields");
   const tabs: { key: PageTab; label: string; icon: React.ReactNode }[] = [
-    { key: "info",      label: "Інформація", icon: <Info size={14} /> },
-    { key: "analytics", label: "Аналітика",  icon: <BarChart2 size={14} /> },
+    { key: "info",      label: tFields("tabInfo"), icon: <Info size={14} /> },
+    { key: "analytics", label: tFields("tabAnalytics"),  icon: <BarChart2 size={14} /> },
   ];
   return (
     <div style={{ display: "flex", gap: 4 }}>
@@ -119,6 +120,12 @@ function StatCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ProductPage() {
+  const t = useTranslations("Dashboard.inventory.fields");
+  const tProductPage = useTranslations("Dashboard.inventory.productPage");
+  const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { id } = useParams<{ id: string }>();
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -140,7 +147,7 @@ export default function ProductPage() {
   if (!product) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#F87171", fontSize: 13 }}>
-        Товар не знайдено
+        {tProductPage("notFound")}
       </div>
     );
   }
@@ -159,7 +166,7 @@ export default function ProductPage() {
             fontSize: 13, padding: 0, flexShrink: 0,
           }}
         >
-          <ArrowLeft size={15} /> Назад
+          <ArrowLeft size={15} /> {tCommon("back")}
         </button>
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -173,11 +180,11 @@ export default function ProductPage() {
               color: product.isActive ? "#4ADE80" : "#6B7280",
               fontSize: 11, fontWeight: 600,
             }}>
-              {product.isActive ? "Активний" : "Неактивний"}
+              {product.isActive ? t("statusActive") : t("statusInactive")}
             </span>
           </div>
           <p style={{ color: "#4B5563", fontSize: 12, marginTop: 3, marginBottom: 0 }}>
-            {product.categoryName ?? "Без категорії"}
+            {product.categoryName ?? t("noCategory")}
             {product.barcodes?.[0] && ` · ${product.barcodes[0]}`}
             {` · ${product.unit}`}
           </p>
@@ -199,27 +206,27 @@ export default function ProductPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
             <StatCard
               icon={<ArrowDownToLine size={16} color="#3B82F6" />}
-              label="Мін. залишок"
+              label={t("minStock")}
               value={product.minStock}
               color="#3B82F6"
             />
             <StatCard
               icon={<TrendingUp size={16} color="#A78BFA" />}
-              label="Макс. залишок"
+              label={t("maxStock")}
               value={product.maxStock}
               color="#A78BFA"
             />
             <StatCard
               icon={<RefreshCw size={16} color="#4ADE80" />}
-              label="Буфер безпеки"
+              label={t("safetyBuffer")}
               value={product.safetyBuffer}
               color="#4ADE80"
             />
             {product.shelfLifeDays != null && (
               <StatCard
                 icon={<Trash2 size={16} color="#F87171" />}
-                label="Термін зберігання"
-                value={`${product.shelfLifeDays} дн.`}
+                label={t("shelfLifeDays")}
+                value={`${product.shelfLifeDays} ${t("shelfLifeDaysSuffix")}`}
                 color="#F87171"
               />
             )}
@@ -229,74 +236,74 @@ export default function ProductPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
 
             {/* Main info */}
-            <Section title="Основна інформація">
+            <Section title={t("sectionMain")}>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <Field label="Назва" value={product.name} />
+                <Field label={t("name")} value={product.name} />
                 <Grid>
-                  <Field label="Штрихкод" value={<span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>{product.barcodes?.[0] ?? "—"}</span>} />
-                  <Field label="Одиниця виміру" value={product.unit} />
-                  <Field label="Категорія" value={product.categoryName ?? "—"} />
-                  <Field label="Сегмент" value={product.segmentName ?? "—"} />
-                  <Field label="Тип управління" value={product.managementType} />
-                  <Field label="Тип товару" value={ITEM_TYPE_LABELS[product.itemType] ?? product.itemType} />
+                  <Field label={t("barcode")} value={<span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>{product.barcodes?.[0] ?? "—"}</span>} />
+                  <Field label={tProductPage("unitLabel")} value={product.unit} />
+                  <Field label={t("category")} value={product.categoryName ?? "—"} />
+                  <Field label={t("segment")} value={product.segmentName ?? "—"} />
+                  <Field label={t("managementType")} value={product.managementType} />
+                  <Field label={t("itemType")} value={tItemTypes.has(product.itemType) ? tItemTypes(product.itemType) : product.itemType} />
                 </Grid>
               </div>
             </Section>
 
             {/* Prices */}
-            <Section title="Ціни та ПДВ">
+            <Section title={t("sectionPricing")}>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <Grid>
                   <div>
-                    <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 3 }}>Закупівельна ціна</div>
+                    <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 3 }}>{t("pricePurchase")}</div>
                     <div style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, fontFamily: "monospace" }}>
-                      {product.pricePurchase != null ? `${product.pricePurchase.toLocaleString("uk-UA")} ₴` : "—"}
+                      {product.pricePurchase != null ? `${product.pricePurchase.toLocaleString(intlLocale)} ₴` : "—"}
                     </div>
                   </div>
                   <div>
-                    <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 3 }}>Роздрібна ціна</div>
+                    <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 3 }}>{t("priceRetail")}</div>
                     <div style={{ color: "#4ADE80", fontSize: 18, fontWeight: 700, fontFamily: "monospace" }}>
-                      {product.priceRetail != null ? `${product.priceRetail.toLocaleString("uk-UA")} ₴` : "—"}
+                      {product.priceRetail != null ? `${product.priceRetail.toLocaleString(intlLocale)} ₴` : "—"}
                     </div>
                   </div>
                 </Grid>
                 <Grid>
-                  <Field label="Ставка ПДВ" value={`${product.vatRate}%`} />
-                  <Field label="Постачальник за замовч." value={product.defaultSupplierName ?? "—"} />
+                  <Field label={t("vatRate")} value={`${product.vatRate}%`} />
+                  <Field label={t("defaultSupplier")} value={product.defaultSupplierName ?? "—"} />
                 </Grid>
               </div>
             </Section>
 
             {/* Stock */}
-            <Section title="Залишки та буфери">
+            <Section title={t("sectionStock")}>
               <Grid>
-                <Field label="Мін. залишок" value={<span style={{ fontFamily: "monospace" }}>{product.minStock}</span>} />
-                <Field label="Макс. залишок" value={<span style={{ fontFamily: "monospace" }}>{product.maxStock}</span>} />
-                <Field label="Буфер безпеки" value={<span style={{ fontFamily: "monospace" }}>{product.safetyBuffer}</span>} />
-                <Field label="Термін зберігання" value={product.shelfLifeDays != null ? `${product.shelfLifeDays} дн.` : "—"} />
+                <Field label={t("minStock")} value={<span style={{ fontFamily: "monospace" }}>{product.minStock}</span>} />
+                <Field label={t("maxStock")} value={<span style={{ fontFamily: "monospace" }}>{product.maxStock}</span>} />
+                <Field label={t("safetyBuffer")} value={<span style={{ fontFamily: "monospace" }}>{product.safetyBuffer}</span>} />
+                <Field label={t("shelfLifeDays")} value={product.shelfLifeDays != null ? `${product.shelfLifeDays} ${t("shelfLifeDaysSuffix")}` : "—"} />
               </Grid>
             </Section>
 
             {/* Storage conditions */}
             {(product.storageTempMin != null || product.storageTempMax != null) && (
-              <Section title="Умови зберігання">
+              <Section title={t("sectionStorage")}>
                 <Grid>
-                  <Field label="Темп. мін." value={product.storageTempMin != null ? `${product.storageTempMin}°C` : "—"} />
-                  <Field label="Темп. макс." value={product.storageTempMax != null ? `${product.storageTempMax}°C` : "—"} />
+                  <Field label={t("storageTempMin")} value={product.storageTempMin != null ? `${product.storageTempMin}°C` : "—"} />
+                  <Field label={t("storageTempMax")} value={product.storageTempMax != null ? `${product.storageTempMax}°C` : "—"} />
                 </Grid>
               </Section>
             )}
 
             {/* System */}
-            <Section title="Системна інформація">
+            <Section title={t("sectionSystem")}>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <Field
-                  label="ID"
+                  label={t("id")}
                   value={<span style={{ fontFamily: "monospace", fontSize: 11, color: "#4B5563" }}>{product.id}</span>}
                 />
                 <Field
-                  label="Дата створення"
-                  value={new Date(product.createdAt).toLocaleDateString("uk-UA")}
+                  label={t("createdAt")}
+                  value={new Date(product.createdAt).toLocaleDateString(intlLocale)}
                 />
               </div>
             </Section>

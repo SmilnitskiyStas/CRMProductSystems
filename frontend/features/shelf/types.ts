@@ -76,15 +76,11 @@ export interface FefoConsumeResult {
   error: string | null;
 }
 
-export const STATUS_LABEL: Record<BatchStatus, string> = {
-  safe: "Норма",
-  warning: "Попередження",
-  critical: "Критично",
-  expired: "Прострочено",
-  sold_out: "Продано",
-  archived: "Архів",
-  needs_verification: "Перевірка",
-};
+// Display labels moved to i18n messages under `Dashboard.shelf.status` (i18n Block 2a,
+// TASK-379) — this Record<BatchStatus, string> is intentionally gone. Components render
+// the label via `useTranslations("Dashboard.shelf.status")` keyed by the status value
+// itself (e.g. `t("safe")`), since the BatchStatus union already matches the message keys
+// 1:1. Colors stay here since they're not language-dependent.
 
 export const STATUS_COLOR: Record<BatchStatus, { bg: string; text: string; dot: string }> = {
   safe: { bg: "#052E16", text: "#4ADE80", dot: "#22C55E" },
