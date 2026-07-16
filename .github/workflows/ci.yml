@@ -42,12 +42,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
+
+      # TASK-377: frontend/package-lock.json was last regenerated with npm >=11
+      # (next-intl pulls a nested @swc/core whose peerDependency @swc/helpers>=0.5.17
+      # isn't satisfied by the hoisted @swc/helpers@0.5.5 next depends on). npm 11
+      # treats that as in-sync; npm 10.x's `ci` sync-check does not and hard-fails
+      # with EUSAGE "Missing: @swc/helpers@0.5.23 from lock file" in ~seconds, before
+      # tsc/lint ever run. Both Node 20.x and Node 22.x bundle npm 10.x, so bumping
+      # node-version alone does not fix this — the runner's npm must be >=11.
+      - name: Ensure npm >= 11 (required for lockfile sync check)
+        run: npm install -g npm@11
 
       - name: Install dependencies
         run: npm ci
@@ -67,10 +77,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: worker/package-lock.json
 
@@ -88,10 +98,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: mobile/package-lock.json
 
