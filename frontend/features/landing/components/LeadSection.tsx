@@ -1,7 +1,11 @@
+import { getTranslations } from "next-intl/server";
 import { Reveal } from "./Reveal";
 import { LeadForm } from "./LeadForm";
 
-export function LeadSection() {
+export async function LeadSection() {
+  const t = await getTranslations("Landing.leadSection");
+  const bullets = t.raw("bullets") as string[];
+
   return (
     <section id="lead-form" className="scroll-mt-20 py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
@@ -13,25 +17,16 @@ export function LeadSection() {
           <div className="relative grid gap-10 lg:grid-cols-2 lg:gap-16">
             <Reveal>
               <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                Залишити заявку
+                {t("heading")}
               </h2>
-              <p className="mt-4 text-lg leading-relaxed text-slate-400">
-                Розкажіть кілька слів про ваш магазин — ми передзвонимо, покажемо систему
-                наживо та підготуємо індивідуальний розрахунок.
-              </p>
+              <p className="mt-4 text-lg leading-relaxed text-slate-400">{t("text")}</p>
               <ul className="mt-8 space-y-3 text-[15px] text-slate-300">
-                <li className="flex items-center gap-3">
-                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-                  Демонстрація на реальних даних
-                </li>
-                <li className="flex items-center gap-3">
-                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-                  Розрахунок вартості протягом одного дня
-                </li>
-                <li className="flex items-center gap-3">
-                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-                  Без зобов&apos;язань і передоплат
-                </li>
+                {bullets.map((bullet) => (
+                  <li key={bullet} className="flex items-center gap-3">
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+                    {bullet}
+                  </li>
+                ))}
               </ul>
             </Reveal>
 

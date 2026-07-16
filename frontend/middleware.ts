@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import createIntlMiddleware from "next-intl/middleware";
+import { routing } from "@/i18n/routing";
 
 // Runs on the Edge. Redirects unauthenticated users away from protected routes.
 // Only checks the HttpOnly refreshToken cookie as a lightweight proxy;
@@ -7,8 +9,18 @@ import { NextRequest, NextResponse } from "next/server";
 const PROTECTED = ["/dashboard", "/stock", "/products", "/analytics", "/provider"];
 const AUTH_ROUTES = ["/login"];
 
+// next-intl handles locale routing/detection only for the public landing
+// (`/` = uk, `/en` = en). Everything else (dashboard, auth, API routes) keeps
+// going through the existing auth logic below, untouched.
+const intlMiddleware = createIntlMiddleware(routing);
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const isLandingPath = pathname === "/" || pathname.startsWith("/en");
+  if (isLandingPath) {
+    return intlMiddleware(request);
+  }
 
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAuth = AUTH_ROUTES.some((p) => pathname.startsWith(p));

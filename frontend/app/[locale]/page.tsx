@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import "@/features/landing/landing.css";
+import { routing } from "@/i18n/routing";
 import { LandingHeader } from "@/features/landing/components/LandingHeader";
 import { HeroSection } from "@/features/landing/components/HeroSection";
 import { ProblemSection } from "@/features/landing/components/ProblemSection";
@@ -12,35 +14,51 @@ import { FaqSection } from "@/features/landing/components/FaqSection";
 import { LeadSection } from "@/features/landing/components/LeadSection";
 import { LandingFooter } from "@/features/landing/components/LandingFooter";
 
-const TITLE = "ShelfGuard — контроль термінів придатності та залишків для магазинів";
-const DESCRIPTION =
-  "Система обліку для продуктових магазинів і мереж: FEFO-контроль термінів придатності, AI-автозамовлення, POS-каса з ПРРО (Checkbox), аналітика та мобільний застосунок зі сканером.";
+export function generateStaticParams() {
+  return routing.locales.map((locale) => ({ locale }));
+}
 
-export const metadata: Metadata = {
-  metadataBase: new URL("https://agrusystems.pp.ua"),
-  title: TITLE,
-  description: DESCRIPTION,
-  openGraph: {
-    title: TITLE,
-    description: DESCRIPTION,
-    url: "/",
-    siteName: "ShelfGuard",
-    locale: "uk_UA",
-    type: "website",
-    images: [
-      {
-        url: "/landing/dashboard-1.jpg",
-        width: 1280,
-        height: 574,
-        alt: "Дашборд ShelfGuard",
-      },
-    ],
-  },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "Landing.meta" });
+
+  return {
+    metadataBase: new URL("https://agrusystems.pp.ua"),
+    title: t("title"),
+    description: t("description"),
+    openGraph: {
+      title: t("title"),
+      description: t("description"),
+      url: locale === "en" ? "/en" : "/",
+      siteName: t("ogSiteName"),
+      locale: locale === "en" ? "en_US" : "uk_UA",
+      type: "website",
+      images: [
+        {
+          url: "/landing/dashboard-1.jpg",
+          width: 1280,
+          height: 574,
+          alt: t("ogImageAlt"),
+        },
+      ],
+    },
+  };
+}
 
 // Public marketing landing. Server component — prerendered for SEO;
 // client islands: header, scroll-reveal, lead form.
-export default function LandingPage() {
+export default async function LandingPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
   return (
     <div data-landing className="min-h-screen bg-[#0B0F17] text-slate-200 antialiased">
       <LandingHeader />

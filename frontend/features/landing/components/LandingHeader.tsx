@@ -3,19 +3,27 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { Link as LocaleLink, usePathname } from "@/i18n/navigation";
 import { Logo } from "./Logo";
 
-const NAV = [
-  { href: "#features", label: "Можливості" },
-  { href: "#how-it-works", label: "Як це працює" },
-  { href: "#pricing", label: "Тарифи" },
-  { href: "#faq", label: "FAQ" },
-];
-
 export function LandingHeader() {
+  const t = useTranslations("Landing.header");
+  const locale = useLocale();
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const nav = t.raw("nav") as { href: string; label: string }[];
+  const [hash, setHash] = useState("");
+
+  useEffect(() => {
+    const syncHash = () => setHash(window.location.hash);
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -33,12 +41,12 @@ export function LandingHeader() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <a href="#top" aria-label="ShelfGuard — на початок сторінки">
+        <a href="#top" aria-label={t("logoAriaLabel")}>
           <Logo />
         </a>
 
-        <nav className="hidden items-center gap-7 md:flex" aria-label="Основна навігація">
-          {NAV.map((item) => (
+        <nav className="hidden items-center gap-7 md:flex" aria-label={t("mainNavAriaLabel")}>
+          {nav.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -50,11 +58,12 @@ export function LandingHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
+          <LangSwitch locale={locale} pathname={pathname} hash={hash} t={t} />
           <Button asChild variant="ghost">
-            <Link href="/login">Увійти</Link>
+            <Link href="/login">{t("login")}</Link>
           </Button>
           <Button asChild>
-            <a href="#lead-form">Залишити заявку</a>
+            <a href="#lead-form">{t("cta")}</a>
           </Button>
         </div>
 
@@ -63,7 +72,7 @@ export function LandingHeader() {
           className="rounded-md p-2 text-slate-300 hover:bg-white/5 hover:text-white md:hidden"
           onClick={() => setMenuOpen((v) => !v)}
           aria-expanded={menuOpen}
-          aria-label={menuOpen ? "Закрити меню" : "Відкрити меню"}
+          aria-label={menuOpen ? t("menuCloseAriaLabel") : t("menuOpenAriaLabel")}
         >
           {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -72,10 +81,10 @@ export function LandingHeader() {
       {menuOpen && (
         <nav
           className="border-t border-white/[0.07] bg-[#0B0F17]/95 px-4 pb-5 pt-3 backdrop-blur-md md:hidden"
-          aria-label="Мобільна навігація"
+          aria-label={t("mobileNavAriaLabel")}
         >
           <div className="flex flex-col gap-1">
-            {NAV.map((item) => (
+            {nav.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
@@ -87,17 +96,60 @@ export function LandingHeader() {
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-2.5">
+            <div className="flex justify-center">
+              <LangSwitch locale={locale} pathname={pathname} hash={hash} t={t} />
+            </div>
             <Button asChild className="w-full">
               <a href="#lead-form" onClick={() => setMenuOpen(false)}>
-                Залишити заявку
+                {t("cta")}
               </a>
             </Button>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/login">Увійти</Link>
+              <Link href="/login">{t("login")}</Link>
             </Button>
           </div>
         </nav>
       )}
     </header>
+  );
+}
+
+function LangSwitch({
+  locale,
+  pathname,
+  hash,
+  t,
+}: {
+  locale: string;
+  pathname: string;
+  hash: string;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const href = { pathname, hash: hash.replace(/^#/, "") };
+
+  return (
+    <div
+      className="flex items-center rounded-full border border-white/10 bg-white/[0.03] p-0.5 text-xs font-medium"
+      aria-label={t("langSwitchLabel")}
+    >
+      <LocaleLink
+        href={href}
+        locale="uk"
+        className={`rounded-full px-2.5 py-1 transition-colors ${
+          locale === "uk" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"
+        }`}
+      >
+        {t("langUk")}
+      </LocaleLink>
+      <LocaleLink
+        href={href}
+        locale="en"
+        className={`rounded-full px-2.5 py-1 transition-colors ${
+          locale === "en" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"
+        }`}
+      >
+        {t("langEn")}
+      </LocaleLink>
+    </div>
   );
 }

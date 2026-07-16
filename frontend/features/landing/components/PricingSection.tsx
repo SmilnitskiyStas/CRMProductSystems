@@ -1,25 +1,20 @@
 import { Check } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "./Reveal";
 
-const INCLUDED = [
-  "Усі модулі системи: терміни, залишки, каса, аналітика, маркетплейс",
-  "Мобільний застосунок зі сканером штрихкодів",
-  "Налаштування під ваш магазин та імпорт товарів",
-  "Навчання команди — від касира до керівника",
-  "Технічна підтримка й оновлення",
-];
+export async function PricingSection() {
+  const t = await getTranslations("Landing.pricing");
+  const included = t.raw("included") as string[];
 
-export function PricingSection() {
   return (
     <section id="pricing" className="scroll-mt-20 py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Тарифи</h2>
-          <p className="mt-4 text-lg text-slate-400">
-            Вартість залежить від кількості магазинів і потрібних модулів — тому рахуємо
-            індивідуально.
-          </p>
+          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            {t("heading")}
+          </h2>
+          <p className="mt-4 text-lg text-slate-400">{t("subheading")}</p>
         </Reveal>
 
         <Reveal className="mx-auto mt-12 max-w-2xl" delay={100}>
@@ -30,15 +25,13 @@ export function PricingSection() {
             />
             <div className="relative">
               <p className="text-sm font-semibold uppercase tracking-wider text-[#5EA3E8]">
-                Індивідуальна пропозиція
+                {t("badge")}
               </p>
-              <p className="mt-3 text-3xl font-bold text-white">Вартість — за запитом</p>
-              <p className="mt-2 text-slate-400">
-                Залиште заявку — підготуємо розрахунок під ваш формат протягом одного дня.
-              </p>
+              <p className="mt-3 text-3xl font-bold text-white">{t("priceTitle")}</p>
+              <p className="mt-2 text-slate-400">{t("priceText")}</p>
 
               <ul className="mt-8 space-y-3.5">
-                {INCLUDED.map((item) => (
+                {included.map((item) => (
                   <li key={item} className="flex items-start gap-3 text-[15px] text-slate-300">
                     <Check className="mt-0.5 h-5 w-5 shrink-0 text-[#22c55e]" aria-hidden="true" />
                     {item}
@@ -47,7 +40,7 @@ export function PricingSection() {
               </ul>
 
               <Button asChild size="lg" className="mt-9 w-full sm:w-auto">
-                <a href="#lead-form">Отримати розрахунок</a>
+                <a href="#lead-form">{t("cta")}</a>
               </Button>
             </div>
           </div>

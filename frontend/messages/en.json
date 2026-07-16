@@ -1,0 +1,255 @@
+{
+  "Landing": {
+    "meta": {
+      "title": "ShelfGuard — expiry tracking and stock control for retail stores",
+      "description": "Inventory management for grocery stores and chains: FEFO expiry tracking, AI auto-ordering, fiscal POS checkout (Checkbox), analytics, and a mobile app with a built-in scanner.",
+      "ogSiteName": "ShelfGuard",
+      "ogImageAlt": "ShelfGuard dashboard"
+    },
+    "header": {
+      "logoAriaLabel": "ShelfGuard — back to top",
+      "mainNavAriaLabel": "Main navigation",
+      "mobileNavAriaLabel": "Mobile navigation",
+      "menuOpenAriaLabel": "Open menu",
+      "menuCloseAriaLabel": "Close menu",
+      "login": "Log in",
+      "cta": "Request a demo",
+      "nav": [
+        { "href": "#features", "label": "Features" },
+        { "href": "#how-it-works", "label": "How it works" },
+        { "href": "#pricing", "label": "Pricing" },
+        { "href": "#faq", "label": "FAQ" }
+      ],
+      "langSwitchLabel": "Language",
+      "langUk": "UA",
+      "langEn": "EN"
+    },
+    "hero": {
+      "badge": "Inventory management for grocery stores and chains",
+      "titleLine": "Expiring stock shows up weeks out.",
+      "titleHighlight": "Your customers never see it.",
+      "description": "ShelfGuard tracks every batch's expiry date using FEFO, tells you what and how much to order, prints fiscal receipts through ПРРО, and shows the status of every store on a single screen.",
+      "ctaPrimary": "Request a demo",
+      "ctaSecondary": "See what it does",
+      "imageAlt": "ShelfGuard dashboard: batch statuses Safe, Warning, Critical, Expired, a list of items needing attention, and quick actions"
+    },
+    "problem": {
+      "heading": "Sound familiar?",
+      "subheading": "Three reasons grocery retail loses money every single day.",
+      "items": [
+        {
+          "title": "Write-offs eat your margin",
+          "text": "Expired stock gets noticed once it's already sitting on the shelf — or once a customer returns it. Every such batch is money the store simply throws away."
+        },
+        {
+          "title": "Expiry dates live in notebooks and spreadsheets",
+          "text": "Dates get logged by hand, checked on a walk through the store \"whenever there's time.\" Human error guarantees something always slips through."
+        },
+        {
+          "title": "Orders placed by gut feel",
+          "text": "Without real sales data, orders are guesswork. The result: either surplus stock that sits around and spoils, or empty shelves and lost sales."
+        }
+      ]
+    },
+    "features": {
+      "heading": "Everything a store needs, in one system",
+      "subheading": "From receiving stock to a fiscal receipt. Modules turn on based on your type of business.",
+      "items": [
+        {
+          "title": "Expiry tracking (FEFO)",
+          "text": "Every batch has its own expiry date and status: normal, warning, critical, expired. The system tells you what to sell first."
+        },
+        {
+          "title": "AI auto-ordering",
+          "text": "AI analyzes sales, stock levels, and seasonality, and prepares an order suggestion every morning. All you do is review and confirm it."
+        },
+        {
+          "title": "Fiscal POS checkout",
+          "text": "A full point-of-sale system fiscalized through Checkbox: receipts, shifts, Z-reports. Every sale deducts stock instantly — batch by batch, following FEFO."
+        },
+        {
+          "title": "Analytics and reports",
+          "text": "Stock levels by zone and category, write-off losses, sales trends. Numbers for each store and for the whole chain."
+        },
+        {
+          "title": "B2B supplier marketplace",
+          "text": "A supplier catalog with prices and terms. Orders go straight to the supplier from within the system — no calls, no messaging apps."
+        },
+        {
+          "title": "IoT temperature monitoring",
+          "text": "Sensors in refrigerated display cases report temperature in real time. Any deviation triggers an instant alert, while the stock can still be saved."
+        },
+        {
+          "title": "Mobile app with a scanner",
+          "text": "Receiving, write-offs, stocktaking, and sales — all from a phone. The barcode scanner works through the camera, no extra hardware needed."
+        },
+        {
+          "title": "Staff scheduling",
+          "text": "Shift schedules for the store team live in the same system: who's working, where, and when — visible to both managers and staff in the app."
+        }
+      ]
+    },
+    "showcase": {
+      "heading": "See it in action",
+      "subheading": "The actual interface — dark theme, real screens, nothing extra.",
+      "blocks": [
+        {
+          "eyebrow": "Dashboard",
+          "title": "Store status at a glance",
+          "text": "Four batch statuses — Safe, Warning, Critical, Expired — show you exactly where the problem is. Quick actions and a zone map sit right alongside.",
+          "points": [
+            "Items needing attention in a dedicated list",
+            "Quick actions: check critical items, write off, reorder",
+            "Zone map: shelves and fridges with live statuses"
+          ],
+          "image1Alt": "ShelfGuard dashboard with status cards and a list of items needing attention",
+          "image2Alt": "Store zone map: shelves and fridges with Safe, Warning, Critical statuses"
+        },
+        {
+          "eyebrow": "Stock and expiry",
+          "title": "The system flags the problem right away",
+          "text": "Every batch shows its expiry date, days remaining, and status. Expired stock is highlighted in red — impossible to miss.",
+          "points": [
+            "Red \"Expired\" label with the exact day count",
+            "Search by name or barcode, filter by status",
+            "Healthy batches marked green \"Normal\", no extra noise"
+          ],
+          "image1Alt": "Batch table with expired items highlighted in red under the \"Expired\" status",
+          "image2Alt": "Batches with \"Normal\" status — green markers and days remaining until expiry"
+        },
+        {
+          "eyebrow": "Analytics",
+          "title": "Numbers that show you the money",
+          "text": "Batch status breakdown, stock by zone and category, write-off losses in your currency. For a single store — and for the whole chain.",
+          "points": [
+            "Status breakdown: how much is normal, how much has expired",
+            "Breakdowns by zone and product category",
+            "Write-off losses in real currency, not gut feel"
+          ],
+          "image1Alt": "ShelfGuard analytics: batch status distribution chart and a store summary",
+          "image2Alt": "Category analytics: bar chart of stock status by product category"
+        }
+      ]
+    },
+    "howItWorks": {
+      "heading": "How it works",
+      "subheading": "There's no self-service signup — we onboard you personally, step by step.",
+      "steps": [
+        {
+          "number": "01",
+          "title": "You submit a request",
+          "text": "Fill out a short form — we call you back, ask a few questions about your store, and show you the system live."
+        },
+        {
+          "number": "02",
+          "title": "We set it up and train your team",
+          "text": "We configure the system around your product range and workflows, import your items, and train your staff. No \"figure out the docs yourself.\""
+        },
+        {
+          "number": "03",
+          "title": "You run everything from one screen",
+          "text": "Expiry dates, stock, orders, and checkout — all in one system. You spot problems before they cost you money."
+        }
+      ]
+    },
+    "audience": {
+      "heading": "Who it's for",
+      "mainBadge": "Primary focus",
+      "mainTitle": "Grocery stores and chains",
+      "mainText": "ShelfGuard is built first and foremost for grocery retail: short expiry dates, daily deliveries, dozens of categories. A single store or a whole chain — the system shows every location separately and all of them together.",
+      "secondary": [
+        {
+          "title": "Manufacturing",
+          "text": "Recipes, production batches, finished-goods expiry dates."
+        },
+        {
+          "title": "Warehouses",
+          "text": "Batch tracking, transfers, storage-condition monitoring."
+        },
+        {
+          "title": "Auto service shops",
+          "text": "Parts, labor, work orders — a dedicated module."
+        }
+      ],
+      "footer": "The system is modular: we turn on only what your business needs."
+    },
+    "pricing": {
+      "heading": "Pricing",
+      "subheading": "Cost depends on the number of stores and the modules you need — so we quote it individually.",
+      "badge": "Custom quote",
+      "priceTitle": "Pricing — on request",
+      "priceText": "Leave a request and we'll prepare a quote tailored to your business within one day.",
+      "included": [
+        "Every module: expiry tracking, stock, checkout, analytics, marketplace",
+        "Mobile app with a barcode scanner",
+        "Setup tailored to your store plus product import",
+        "Team training — from cashiers to managers",
+        "Technical support and updates"
+      ],
+      "cta": "Get a quote"
+    },
+    "faq": {
+      "heading": "Frequently asked questions",
+      "items": [
+        {
+          "q": "Do I need special hardware?",
+          "a": "No. The system runs in a browser on any computer, and the mobile app turns an ordinary smartphone into a barcode scanner. IoT temperature sensors are an optional module you can add if you want."
+        },
+        {
+          "q": "How long does setup take?",
+          "a": "Usually a few business days: we configure the system for your store, import your product range, and train your team. For a chain with multiple locations, we agree on a timeline separately."
+        },
+        {
+          "q": "Does it work with fiscal registrars (ПРРО)?",
+          "a": "Yes. Built-in integration with Checkbox: fiscal receipts, opening and closing shifts, Z-reports. Every sale automatically deducts stock following FEFO."
+        },
+        {
+          "q": "I have multiple stores — is that supported?",
+          "a": "Yes, the system is built for chains from the ground up: each location is tracked separately, transfers between stores are recorded as documents, and consolidated analytics show the whole chain on one screen."
+        },
+        {
+          "q": "Is my data secure?",
+          "a": "Yes. Connections are encrypted (HTTPS/TLS), each customer's data is isolated at the database level, access is protected by two-factor authentication (2FA), and backups run regularly."
+        },
+        {
+          "q": "Can I work from my phone?",
+          "a": "Yes. The mobile app covers day-to-day operations: scanning, receiving deliveries, write-offs, stocktaking, and even checkout. Managers see the dashboard and notifications right on their phone."
+        }
+      ]
+    },
+    "leadSection": {
+      "heading": "Request a demo",
+      "text": "Tell us a bit about your store — we'll call you back, show you the system live, and prepare a custom quote.",
+      "bullets": [
+        "Live demo with real data",
+        "Quote ready within one day",
+        "No commitment, no upfront payment"
+      ]
+    },
+    "leadForm": {
+      "nameLabel": "Name",
+      "phoneLabel": "Phone",
+      "companyLabel": "Company",
+      "messageLabel": "Message",
+      "namePlaceholder": "How should we address you",
+      "phonePlaceholder": "+1 ___ ___ ____",
+      "companyPlaceholder": "Your store or chain name",
+      "messagePlaceholder": "Tell us briefly about your business: number of locations, what you want to control",
+      "submit": "Send request",
+      "submitting": "Sending…",
+      "successTitle": "Thank you! Your request has been received.",
+      "successText": "We'll get in touch with you shortly.",
+      "validation": {
+        "nameRequired": "Please enter your name",
+        "phoneRequired": "Please enter a phone number",
+        "phoneInvalid": "Invalid phone number format",
+        "companyTooLong": "Name is too long",
+        "messageTooLong": "Message is too long"
+      }
+    },
+    "footer": {
+      "rights": "© 2026 AgruSystems. All rights reserved.",
+      "login": "Log in"
+    }
+  }
+}
