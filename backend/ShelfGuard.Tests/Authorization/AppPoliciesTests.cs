@@ -217,7 +217,6 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.ReceiptsViewOrCapability, TenantRoleCapabilities.ReceiptsView)]
     [InlineData(AppPolicies.AiOrdersViewOrCapability, TenantRoleCapabilities.AiOrdersView)]
     [InlineData(AppPolicies.AiOrdersManageOrCapability, TenantRoleCapabilities.AiOrdersManage)]
-    [InlineData(AppPolicies.EnterpriseAdminOrUsersManage, TenantRoleCapabilities.UsersManage)]
     [InlineData(AppPolicies.StoreManagerOrUsersManage, TenantRoleCapabilities.UsersManage)]
     public void RoleOrCapabilityPolicy_carries_expected_capability(string policyName, string expectedCapability)
         => Assert.Equal(expectedCapability, RequirementFor(policyName).Capability);
@@ -267,20 +266,22 @@ public sealed class AppPoliciesTests
         AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.AiOrdersManageOrCapability);
     }
 
-    // Invite/Deactivate were AtLeastEnterpriseAdmin — must NOT loosen to StoreManager/NetworkManager
-    // just because the capability is meant to admit a "staff"-rank HR user via the OTHER policy.
-    [Fact]
-    public void EnterpriseAdminOrUsersManage_base_roles_exclude_StoreManager_and_NetworkManager()
-    {
-        var roles = RequirementFor(AppPolicies.EnterpriseAdminOrUsersManage).AllowedRoles;
-        Assert.DoesNotContain(AppRoles.StoreManager, roles);
-        Assert.DoesNotContain(AppRoles.NetworkManager, roles);
-        AssertSameRoles(AppPolicies.AtLeastEnterpriseAdminRoles, AppPolicies.EnterpriseAdminOrUsersManage);
-    }
-
+    // TASK-352 (Block 1 audit, user decision): Invite/Deactivate were previously
+    // AtLeastEnterpriseAdmin-only (narrower than v1-spec.md §3.2, which grants staff
+    // management to network_manager/store_manager too) — now widened to share the same
+    // AtLeastStoreManagerRoles floor as Update, via this one policy for all three actions.
     [Fact]
     public void StoreManagerOrUsersManage_base_roles_match_AtLeastStoreManager()
         => AssertSameRoles(AppPolicies.AtLeastStoreManagerRoles, AppPolicies.StoreManagerOrUsersManage);
+
+    [Fact]
+    public void StoreManagerOrUsersManage_base_roles_include_StoreManager_and_NetworkManager()
+    {
+        var roles = RequirementFor(AppPolicies.StoreManagerOrUsersManage).AllowedRoles;
+        Assert.Contains(AppRoles.StoreManager, roles);
+        Assert.Contains(AppRoles.NetworkManager, roles);
+        Assert.Contains(AppRoles.EnterpriseAdmin, roles);
+    }
 
     [Theory]
     [InlineData(AppPolicies.SchedulesManageOrCapability)]
@@ -293,7 +294,6 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.ReceiptsViewOrCapability)]
     [InlineData(AppPolicies.AiOrdersViewOrCapability)]
     [InlineData(AppPolicies.AiOrdersManageOrCapability)]
-    [InlineData(AppPolicies.EnterpriseAdminOrUsersManage)]
     [InlineData(AppPolicies.StoreManagerOrUsersManage)]
     public void RoleOrCapabilityPolicy_is_registered(string policyName)
         => Assert.NotNull(_options.GetPolicy(policyName));

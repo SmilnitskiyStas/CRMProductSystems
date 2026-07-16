@@ -8,9 +8,11 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
-export interface TelegramLinkResponse {
-  linkUrl: string;   // e.g. t.me/ShelfGuardBot?start=CODE
+/** POST /api/telegram/link-code response — matches backend LinkCodeDto (camelCase on the wire). */
+export interface TelegramLinkCodeResponse {
   code: string;
+  /** e.g. https://t.me/shelfguard_bot?start=CODE — opens the bot with the code pre-filled. */
+  deepLink: string;
   expiresAt: string;
 }
 

@@ -104,6 +104,23 @@ export interface CreateProviderTicketPayload {
   priority: TicketPriority;
 }
 
+export interface ProviderTicketDetailDto {
+  id: string;
+  number: number;
+  tenantId: string;
+  tenantName: string;
+  title: string;
+  description: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  status: TicketStatus;
+  createdBy: string;
+  createdByName: string;
+  createdByProvider: boolean;
+  createdAt: string;
+  comments: TicketCommentDto[];
+}
+
 export interface ProviderTicketFilters {
   status?: TicketStatus | "";
   tenantId?: string;

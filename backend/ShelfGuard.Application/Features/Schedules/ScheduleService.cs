@@ -113,6 +113,16 @@ public sealed class ScheduleService : IScheduleService
         if (dto.BreakMinutes < 0)
             return (null, "BreakMinutes cannot be negative.");
 
+        // Previously overlap was only checked at publish time (DetectShiftConflicts, below) —
+        // adding a shift to an already-published schedule, or to a still-draft one that never
+        // gets re-checked before another add, could silently double-book an employee. Found in
+        // TASK-360 (Block 9 audit). Checked here regardless of schedule status, same rule
+        // DetectShiftConflicts uses (same user, same day, time ranges overlap).
+        var existingShifts = await _repo.GetShiftsByUserAsync(dto.UserId, tenantId, dto.ShiftDate, dto.ShiftDate, ct);
+        var conflict = FindOverlap(existingShifts, dto.StartTime, dto.EndTime, excludeShiftId: null);
+        if (conflict is not null)
+            return (null, $"User already has a shift on {dto.ShiftDate:yyyy-MM-dd} from {conflict.StartTime} to {conflict.EndTime} that overlaps.");
+
         var shift = new ScheduleShift
         {
             TenantId     = tenantId,
@@ -152,6 +162,16 @@ public sealed class ScheduleService : IScheduleService
         if (!validStatuses.Contains(dto.Status))
             return (null, $"Invalid status '{dto.Status}'. Allowed: scheduled, confirmed, completed, cancelled.");
 
+        // Same overlap guard as AddShiftAsync — re-check on every time-window edit, not just at
+        // publish time (found in TASK-360, Block 9 audit).
+        if (dto.Status != "cancelled")
+        {
+            var existingShifts = await _repo.GetShiftsByUserAsync(shift.UserId, tenantId, shift.ShiftDate, shift.ShiftDate, ct);
+            var conflict = FindOverlap(existingShifts, dto.StartTime, dto.EndTime, excludeShiftId: shift.Id);
+            if (conflict is not null)
+                return (null, $"User already has a shift on {shift.ShiftDate:yyyy-MM-dd} from {conflict.StartTime} to {conflict.EndTime} that overlaps.");
+        }
+
         shift.StartTime    = dto.StartTime;
         shift.EndTime      = dto.EndTime;
         shift.BreakMinutes = dto.BreakMinutes;
@@ -180,6 +200,19 @@ public sealed class ScheduleService : IScheduleService
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Finds an existing (non-cancelled) shift that overlaps the given time window, excluding
+    /// the shift currently being edited (if any). Used by AddShiftAsync/UpdateShiftAsync to
+    /// reject double-booking a single employee on the same day, independent of the schedule's
+    /// draft/published status.
+    /// </summary>
+    private static Domain.Entities.ScheduleShift? FindOverlap(
+        List<Domain.Entities.ScheduleShift> candidates, TimeOnly startTime, TimeOnly endTime, Guid? excludeShiftId) =>
+        candidates.FirstOrDefault(s =>
+            s.Status != "cancelled" &&
+            s.Id != excludeShiftId &&
+            startTime < s.EndTime && s.StartTime < endTime);
 
     /// <summary>
     /// Detects if any employee has two shifts on the same day that overlap in time.

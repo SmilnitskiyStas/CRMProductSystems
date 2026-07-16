@@ -177,18 +177,97 @@ public sealed class WriteOffServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    // TASK-354: this used to assert the buggy behavior (no ProductStockId → silently
+    // skipped, no deduction, no movement) — which is exactly what the mobile "quick
+    // write-off" create flow sends for every item (it never picks a batch). Approving
+    // one of those write-offs therefore never touched product_stock and never wrote a
+    // stock_movements row. Fixed: no-batch items now FEFO-consume across the product's
+    // batches at the write-off's store, nearest-expiry first.
     [Fact]
-    public async Task ApproveAsync_ItemWithoutStockRef_NoStockDeduction()
+    public async Task ApproveAsync_ItemWithoutStockRef_FefoConsumesNearestExpiryBatchAndLogsMovement()
     {
-        var writeOff = BuildWriteOff(stock: null, withStockRef: false);
+        var nearExpiry = new ProductStock
+        {
+            TenantId = _tenantId, ProductId = _productId, StoreId = _storeId,
+            Quantity = 4, QuantityInitial = 4,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)),
+            Status = "critical", LastCheckedAt = DateTime.UtcNow,
+        };
+        var farExpiry = new ProductStock
+        {
+            TenantId = _tenantId, ProductId = _productId, StoreId = _storeId,
+            Quantity = 20, QuantityInitial = 20,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)),
+            Status = "safe", LastCheckedAt = DateTime.UtcNow,
+        };
+
+        var writeOff = BuildWriteOff(stock: null, withStockRef: false); // item.Quantity = 10
         _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
+        _repo.GetFefoOrderedAsync(_productId, _storeId, Arg.Any<CancellationToken>())
+             .Returns([nearExpiry, farExpiry]); // FEFO order: nearest expiry first
 
         var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
 
         Assert.Null(error);
         Assert.Equal("approved", writeOff.Status);
+        // 10 requested: 4 from the near-expiry batch (fully drained), 6 from the far one.
+        Assert.Equal(0, nearExpiry.Quantity);
+        Assert.Equal(14, farExpiry.Quantity);
+        _repo.Received(1).UpdateStock(nearExpiry);
+        _repo.Received(1).UpdateStock(farExpiry);
+        await _repo.Received(2).AddMovementAsync(
+            Arg.Is<StockMovement>(m => m.MovementType == "write_off"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApproveAsync_ItemWithoutStockRef_InsufficientStock_ReturnsErrorAndDoesNotSave()
+    {
+        var onlyBatch = new ProductStock
+        {
+            TenantId = _tenantId, ProductId = _productId, StoreId = _storeId,
+            Quantity = 3, QuantityInitial = 3, // item requests 10 — not enough
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5)),
+            Status = "safe", LastCheckedAt = DateTime.UtcNow,
+        };
+
+        var writeOff = BuildWriteOff(stock: null, withStockRef: false);
+        _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
+        _repo.GetFefoOrderedAsync(_productId, _storeId, Arg.Any<CancellationToken>())
+             .Returns([onlyBatch]);
+
+        var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
+
+        Assert.Null(result);
+        Assert.Contains("Insufficient stock", error);
+        Assert.NotEqual("approved", writeOff.Status);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApproveAsync_ExplicitStockRef_InsufficientQuantity_ReturnsErrorWithoutMutating()
+    {
+        var stock = new ProductStock
+        {
+            TenantId = _tenantId, ProductId = _productId, StoreId = _storeId,
+            Quantity = 2, QuantityInitial = 2, // item requests 10 — not enough
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
+            Status = "expired", LastCheckedAt = DateTime.UtcNow,
+        };
+
+        var writeOff = BuildWriteOff(stock: stock);
+        _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
+        _repo.GetStockByIdAsync(stock.Id, Arg.Any<CancellationToken>()).Returns(stock);
+
+        var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
+
+        Assert.Null(result);
+        Assert.Contains("Insufficient quantity", error);
+        Assert.Equal(2, stock.Quantity); // untouched
+        Assert.NotEqual("approved", writeOff.Status);
         _repo.DidNotReceive().UpdateStock(Arg.Any<ProductStock>());
         await _repo.DidNotReceive().AddMovementAsync(Arg.Any<StockMovement>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     // ── Reject ─────────────────────────────────────────────────────────────

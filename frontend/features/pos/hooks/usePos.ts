@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { posApi } from "../api/pos";
 import { ApiError } from "@/lib/api";
-import type { OpenShiftRequest } from "../types";
+import type { OpenShiftRequest, CloseShiftRequest } from "../types";
 
 const SHIFT_KEY = ["pos-shift-current"];
 
@@ -38,7 +38,7 @@ export function useOpenShift() {
 export function useCloseShift() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => posApi.closeShift(),
+    mutationFn: (body?: CloseShiftRequest) => posApi.closeShift(body),
     onSuccess: (closed) => {
       // Place the closed shift into the cache so the Z-report renders immediately
       qc.setQueryData(SHIFT_KEY, closed);

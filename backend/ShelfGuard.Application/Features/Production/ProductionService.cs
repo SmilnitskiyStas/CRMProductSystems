@@ -252,6 +252,18 @@ public sealed class ProductionService : IProductionService
         if (recipe is null || recipe.Ingredients.Count == 0)
             return (null, "Recipe has no ingredients.", 422, null, null);
 
+        // Output item must have a real shelf life configured — the produced batch's
+        // ExpiryDate is derived from it (FEFO is sacred: no silent placeholder dates).
+        var outputItem = await _repo.GetItemByIdAsync(recipe.OutputItemId, ct);
+        if (outputItem is null)
+            return (null, $"Output item '{recipe.OutputItemId}' not found.", 422, null, null);
+
+        if (outputItem.ShelfLifeDays is not int shelfLifeDays || shelfLifeDays <= 0)
+            return (null,
+                $"Item '{outputItem.Name}' has no ShelfLifeDays configured — set a shelf life " +
+                "before completing production so the produced batch gets a real expiry date.",
+                422, null, null);
+
         // Scale factor: how many times the recipe output_qty fits into planned_qty
         decimal scale = order.PlannedQty / recipe.OutputQty;
 
@@ -318,14 +330,9 @@ public sealed class ProductionService : IProductionService
             }
         }
 
-        // Create finished product stock batch
-        var outputItem = await _repo.GetItemByIdAsync(recipe.OutputItemId, ct);
-        DateOnly? expiryDate = null;
-        if (outputItem?.ShelfLifeDays is int days && days > 0)
-            expiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(days));
-
-        // Use a fallback expiry far in the future when recipe has no shelf life defined
-        var actualExpiry = expiryDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddYears(10));
+        // Create finished product stock batch — expiry derived from the shelf life
+        // validated above (production date + ShelfLifeDays), never a placeholder.
+        var actualExpiry = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(shelfLifeDays));
 
         var shortId = order.Id.ToString("N")[..8].ToUpper();
         var dateStr = DateTime.UtcNow.ToString("yyyyMMdd");

@@ -16,9 +16,9 @@ import {
   useRecentMovements,
 } from '@/features/dashboard/hooks/useDashboard';
 import { useAuthStore } from '@/features/auth/store';
+import { AT_LEAST_STORE_MANAGER_OR_PROVIDER, hasRole } from '@/lib/roles';
 import {
   MOVEMENT_LABELS,
-  AT_LEAST_STORE_MANAGER_ROLES,
   type RecentMovement,
 } from '@/features/dashboard/types';
 
@@ -76,7 +76,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
-  const isManager = user ? AT_LEAST_STORE_MANAGER_ROLES.includes(user.role) : false;
+  const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER_OR_PROVIDER);
 
   const {
     data: stats,

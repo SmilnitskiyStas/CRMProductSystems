@@ -2,6 +2,7 @@
 
 **Owner:** frontend-developer
 **Updated:** 2026-06-04
+**Last reviewed:** 2026-07-16 (pre-launch audit) — KI-004 note and pages table below refreshed to reality.
 
 ## Feature Directory Structure
 ```
@@ -24,7 +25,10 @@ import { api } from "@/lib/api";
 ```
 `lib/api.ts` handles: Authorization header, 401 → refresh → retry, window.location redirect on session expiry.
 
-> ⚠️ KI-004: `features/inventory/api/products.ts` and `features/dashboard/api/dashboard.ts` currently use local `apiFetch` — this is a known bug to be fixed.
+> ✅ KI-004 resolved (2026-07-15): no local `apiFetch` remains anywhere in `frontend/` — every feature
+> API module imports the shared `api` from `@/lib/api`. The 401→refresh→retry state machine is now unit-
+> tested (`lib/api.test.ts`). Note KI-021 still open: the access token is mirrored into `localStorage`
+> (survives reload) — an accepted-with-mitigations XSS blast-radius item, see `known-issues.md`.
 
 ## Naming Conventions
 - Hooks: `useProducts`, `useCreateProduct`, `useDeleteProduct`
@@ -44,20 +48,23 @@ import { api } from "@/lib/api";
 - `components/layout/TopBar.tsx` — store name, user avatar, notification bell
 
 ## Pages Implemented
+The 2026-06-04 table below is a v1 snapshot. The app now has ~43 App-Router pages across ~35 feature
+directories (POS, marketplace, ai-orders, ai-assistant, suppliers, customers, auto-service, production,
+iot, schedules, users, integrations, service-desk, chat, provider, admin, settings, profile, events,
+modules, plus a public marketing landing at `/`). `/notifications` and `/settings` (marked pending
+below) are both implemented. Error boundaries (`app/error.tsx`, `app/global-error.tsx`) were added in
+Block 13. For the current inventory see CLAUDE.md's frontend layout.
+
 | Route | Status | Notes |
 |---|---|---|
-| /login | ✅ done | Auth form, JWT stored in localStorage |
-| /dashboard | ✅ done | Stats cards, attention table, quick actions, store map |
-| /inventory | ✅ done | POC product catalog CRUD |
-| /stock | ✅ done | dense table, filters, add batch modal |
-| /receipts | ✅ done | list with status tabs |
-| /receipts/:id | ✅ done | pre-populated workflow, progress bar |
-| /transfers | ✅ done | list with confirm/cancel actions |
-| /write-offs | ✅ done | approve/reject, pending counter badge |
-| /analytics | ✅ done | expiry summary, write-offs, by-zone, by-category, losses |
-| /notifications | 🕐 pending | TASK-024 (API not built) |
-| /settings | 🕐 pending | TASK-023 (Users API not built) |
-| /* (catch-all) | ✅ placeholder | "Сторінка в розробці" |
+| / | ✅ done | Public SSG marketing landing + lead form (TASK-334) |
+| /login | ✅ done | Auth form + 2FA step (TOTP/recovery); token in localStorage (KI-021) |
+| /dashboard | ✅ done | Stats cards, attention table, quick actions, store map (KI-007/010 = placeholder data) |
+| /inventory /stock /receipts /transfers /write-offs /analytics | ✅ done | Core v1 flows |
+| /pos | ✅ done | Shifts, cash reconciliation (close-shift dialog) |
+| /notifications /settings /profile | ✅ done | (were pending in the old snapshot) |
+| /marketplace /suppliers /ai-orders /ai-assistant /service-desk /provider /admin ... | ✅ done | v2–v4 feature pages |
+| /* (catch-all) | ✅ placeholder | "Сторінка в розробці" (KI-011, intended) |
 
 ## shadcn/ui Components
 Install via: `npx shadcn@latest add {component}`

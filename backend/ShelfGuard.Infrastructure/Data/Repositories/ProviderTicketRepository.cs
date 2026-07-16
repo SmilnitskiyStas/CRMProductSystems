@@ -62,11 +62,41 @@ public sealed class ProviderTicketRepository : IProviderTicketRepository
         return (row.Ticket, row.TenantName);
     }
 
+    public async Task<(SupportTicket Ticket, string TenantName)?> GetByIdWithCommentsAsync(
+        Guid id, CancellationToken ct)
+    {
+        var row = await _db.SupportTickets
+            .AsNoTracking()
+            .Include(t => t.CreatedByUser)
+            .Include(t => t.Comments).ThenInclude(c => c.Author)
+            .Join(
+                _db.Tenants,
+                ticket => ticket.TenantId,
+                tenant => tenant.Id,
+                (ticket, tenant) => new { Ticket = ticket, TenantName = tenant.Name })
+            .FirstOrDefaultAsync(r => r.Ticket.Id == id, ct);
+
+        if (row is null) return null;
+        return (row.Ticket, row.TenantName);
+    }
+
     public async Task<SupportTicket> CreateAsync(SupportTicket ticket, CancellationToken ct)
     {
         await _db.SupportTickets.AddAsync(ticket, ct);
         await _db.SaveChangesAsync(ct);
         return ticket;
+    }
+
+    public async Task<TicketComment> AddCommentAsync(TicketComment comment, CancellationToken ct)
+    {
+        await _db.TicketComments.AddAsync(comment, ct);
+        await _db.SaveChangesAsync(ct);
+
+        var withAuthor = await _db.TicketComments
+            .AsNoTracking()
+            .Include(c => c.Author)
+            .FirstAsync(c => c.Id == comment.Id, ct);
+        return withAuthor;
     }
 
     public Task SaveChangesAsync(CancellationToken ct) => _db.SaveChangesAsync(ct);

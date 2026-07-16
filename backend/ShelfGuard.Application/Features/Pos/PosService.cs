@@ -3,6 +3,7 @@ using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Exceptions;
 using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Application.Features.Pos;
@@ -16,6 +17,12 @@ public sealed class PosService : IPosService
 {
     private const int ShiftOpenPollIntervalMs = 2_000;
     private const int ShiftOpenTimeoutMs = 60_000;
+
+    // Bounded synchronous attempt at online fiscalization (TASK-356 fix — see CreateSaleAsync).
+    // Short enough to not meaningfully stall a checkout queue if Checkbox is slow/unreachable;
+    // long enough to cover the typical happy-path round trip so the printed receipt already
+    // carries a real fiscal number in the common case.
+    private const int OnlineFiscalizationTimeoutMs = 8_000;
 
     private readonly IPosRepository _pos;
     private readonly IStockRepository _stock;
@@ -119,11 +126,17 @@ public sealed class PosService : IPosService
     // ── Close shift ────────────────────────────────────────────────────────
 
     public async Task<(ShiftDto? Shift, string? Error, int? StatusCode)> CloseShiftAsync(
-        Guid tenantId, CancellationToken ct = default)
+        Guid tenantId, CloseShiftRequest? request = null, CancellationToken ct = default)
     {
         var shift = await _pos.GetOpenShiftAsync(tenantId, ct);
         if (shift is null)
             return (null, "No open shift found.", 404);
+
+        // TASK-356: validate before touching the fiscal provider — a bad cash count
+        // shouldn't trigger a real Checkbox Z-report call.
+        var actualClosingCash = request?.ActualClosingCash;
+        if (actualClosingCash is < 0)
+            return (null, "ActualClosingCash cannot be negative.", 400);
 
         string fiscalStatus = "pending_fiscalization";
         string? providerShiftId = shift.FiscalShiftNumber; // may already be set
@@ -151,11 +164,27 @@ public sealed class PosService : IPosService
             fiscalStatus = "close_failed";
         }
 
+        // TASK-356: cash-drawer reconciliation — independent of the fiscal Z-report
+        // outcome above (cash counting doesn't depend on Checkbox being reachable).
+        // ExpectedCashAmount only counts CASH-payment sales: card payments never touch
+        // the physical drawer, so including them would make every card-heavy shift look
+        // like a "shortage".
+        decimal? expectedCashAmount = null;
+        decimal? cashDiscrepancy = null;
+
+        if (actualClosingCash.HasValue)
+        {
+            var cashSalesTotal = await _pos.GetCashSalesTotalForShiftAsync(shift.Id, ct);
+            expectedCashAmount = (shift.OpeningCash ?? 0m) + cashSalesTotal;
+            cashDiscrepancy = actualClosingCash.Value - expectedCashAmount.Value;
+            shift.ClosingCash = actualClosingCash.Value;
+        }
+
         shift.ClosedAt = DateTime.UtcNow;
         _pos.UpdateShift(shift);
         await _pos.SaveChangesAsync(ct);
 
-        return (ToShiftDto(shift, fiscalStatus, providerShiftId), null, null);
+        return (ToShiftDto(shift, fiscalStatus, providerShiftId, expectedCashAmount, cashDiscrepancy), null, null);
     }
 
     // ── Create sale ────────────────────────────────────────────────────────
@@ -324,41 +353,72 @@ public sealed class PosService : IPosService
         shift.TotalSales += tx.TotalAmount;
         _pos.UpdateShift(shift);
 
-        await _pos.SaveChangesAsync(ct); // COMMIT
-
-        // 4. Fiscalization — async, non-blocking (offline-first ADR-011)
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                var fiscal = await _fiscalFactory.GetForTenantAsync(tenantId);
-                var fiscalRequest = new FiscalReceiptRequest(
-                    Items: resolvedItems.Select((r, idx) => new FiscalReceiptItem(
-                        Code: r.Product.Id.ToString(),
-                        Name: r.Product.Name,
-                        UnitPrice: r.PriceRetail - r.DiscountAmount,
-                        Quantity: r.Quantity,
-                        Barcode: r.Product.Barcodes.Count > 0 ? r.Product.Barcodes[0] : null)).ToList(),
-                    Payments: [new FiscalPayment(
-                        string.Equals(request.PaymentType, "Card", StringComparison.OrdinalIgnoreCase)
-                            ? FiscalPaymentKind.Cashless : FiscalPaymentKind.Cash,
-                        request.PaymentAmount)],
-                    LocalReceiptId: tx.Id.ToString());
+            await _pos.SaveChangesAsync(ct); // COMMIT (FEFO write-down + tx + items + stock events)
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            // Two concurrent sales raced on the same batch's Quantity (e.g. last unit sold
+            // twice at the same moment). ProductStock uses xmin optimistic concurrency
+            // (TASK-356) — nothing was persisted, so it's safe to just ask the cashier to
+            // retry with fresh stock rather than silently overselling.
+            _log.LogWarning(ex,
+                "Concurrent stock update conflict while creating sale for tenant {TenantId}", tenantId);
+            return (null, "Stock was updated concurrently by another sale. Please retry.", 409);
+        }
 
-                var receipt = await fiscal.CreateReceiptAsync(fiscalRequest);
+        // 4. Fiscalization — attempted synchronously, bounded by a short timeout, so a healthy
+        // Checkbox response reaches the cashier before the receipt is printed (v3-spec: the
+        // fiscal code belongs on the printed receipt). Still never blocks the sale beyond that
+        // budget — the DB commit above already succeeded regardless of the fiscal outcome
+        // (ADR-011 offline-first); on timeout/failure the transaction simply stays
+        // pending_fiscalization and the 5-minute retry job (worker fiscalization-retry.job.ts)
+        // picks it up later, safely (Checkbox honors LocalReceiptId as an idempotency key).
+        //
+        // This used to be a detached `Task.Run(...)` that captured this request's *scoped*
+        // _pos repository (backed by the request's DbContext) and, transitively via
+        // _fiscalFactory, a fresh DbContext whose RLS tenant context is resolved from
+        // IHttpContextAccessor.HttpContext (TenantConnectionInterceptor). Because the task
+        // was never awaited, it kept running after the HTTP response completed and the
+        // request's DI scope was disposed — a near-guaranteed ObjectDisposedException on
+        // _pos.SaveChangesAsync (silently swallowed), and, worse, an unreliable read of a
+        // pooled/possibly-already-reused HttpContext for RLS purposes. In practice this meant
+        // sales were fiscalized only by the retry job, never inline, with no diagnostics
+        // pointing at why. Running the attempt inline keeps everything inside the one valid,
+        // correctly-scoped request.
+        using var fiscalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        fiscalCts.CancelAfter(OnlineFiscalizationTimeoutMs);
 
-                tx.FiscalNumber = receipt.FiscalNumber;
-                tx.Status = receipt.Status == FiscalReceiptStatus.Done
-                    ? "fiscalized"
-                    : "pending_fiscalization";
-                _pos.UpdateTransaction(tx);
-                await _pos.SaveChangesAsync();
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(ex, "Fiscal receipt failed for tx {TxId} — stays pending_fiscalization", tx.Id);
-            }
-        }, CancellationToken.None);
+        try
+        {
+            var fiscal = await _fiscalFactory.GetForTenantAsync(tenantId, fiscalCts.Token);
+            var fiscalRequest = new FiscalReceiptRequest(
+                Items: resolvedItems.Select(r => new FiscalReceiptItem(
+                    Code: r.Product.Id.ToString(),
+                    Name: r.Product.Name,
+                    UnitPrice: r.PriceRetail - r.DiscountAmount,
+                    Quantity: r.Quantity,
+                    Barcode: r.Product.Barcodes.Count > 0 ? r.Product.Barcodes[0] : null)).ToList(),
+                Payments: [new FiscalPayment(
+                    string.Equals(request.PaymentType, "Card", StringComparison.OrdinalIgnoreCase)
+                        ? FiscalPaymentKind.Cashless : FiscalPaymentKind.Cash,
+                    request.PaymentAmount)],
+                LocalReceiptId: tx.Id.ToString());
+
+            var receipt = await fiscal.CreateReceiptAsync(fiscalRequest, fiscalCts.Token);
+
+            tx.FiscalNumber = receipt.FiscalNumber;
+            tx.Status = receipt.Status == FiscalReceiptStatus.Done
+                ? "fiscalized"
+                : "pending_fiscalization";
+            _pos.UpdateTransaction(tx);
+            await _pos.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Fiscal receipt failed/timed out for tx {TxId} — stays pending_fiscalization", tx.Id);
+        }
 
         var change = Math.Max(0, request.PaymentAmount - tx.TotalAmount);
 
@@ -562,7 +622,9 @@ public sealed class PosService : IPosService
         return last ?? new FiscalShiftResult(providerShiftId, FiscalShiftStatus.PendingFiscalization, null, null, null);
     }
 
-    private static ShiftDto ToShiftDto(PosShift shift, string fiscalStatus, string? providerShiftId) => new(
+    private static ShiftDto ToShiftDto(
+        PosShift shift, string fiscalStatus, string? providerShiftId,
+        decimal? expectedCashAmount = null, decimal? cashDiscrepancy = null) => new(
         ShiftId: shift.Id,
         StoreId: shift.StoreId,
         Status: shift.ClosedAt.HasValue ? "Closed" : "Open",
@@ -571,7 +633,11 @@ public sealed class PosService : IPosService
         ProviderShiftId: providerShiftId,
         FiscalStatus: fiscalStatus,
         TotalSales: shift.TotalSales,
-        ShiftNumber: shift.ShiftNumber);
+        ShiftNumber: shift.ShiftNumber,
+        OpeningCash: shift.OpeningCash,
+        ClosingCash: shift.ClosingCash,
+        ExpectedCashAmount: expectedCashAmount,
+        CashDiscrepancy: cashDiscrepancy);
 
     // ── Private types ──────────────────────────────────────────────────────
 

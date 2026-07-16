@@ -1,27 +1,24 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-06-04
+**Updated:** 2026-07-16
 
 ## Active Issues
 
-### KI-004: Duplicate `apiFetch` in feature API modules
-Severity: high
-Status: open
-Description: `features/inventory/api/products.ts` and `features/dashboard/api/dashboard.ts` define their own local `apiFetch` instead of using `lib/api.ts`. The inventory version sends no Authorization header; the dashboard version skips 401 retry. Product API calls will silently break once the endpoint requires auth.
-Resolution: Delete local `apiFetch` in both files and use `import { api } from "@/lib/api"`.
+### KI-004: Duplicate `apiFetch` in feature API modules ✅ resolved (2026-07-15, confirmed during Block 13 pre-launch audit)
+Resolution: Verified both `features/inventory/api/products.ts` and `features/dashboard/api/dashboard.ts` already `import { api } from "@/lib/api"` — no local `apiFetch` remains anywhere in `frontend/` (`grep -rn "function apiFetch\|const apiFetch"` matches only `lib/api.ts` itself). Not clear from git history exactly which prior task fixed this (products.ts/dashboard.ts have both been touched by several since KI-004 was filed); no code change was needed here, doc was just stale.
 
 ### KI-005: Hardcoded bcrypt hash in DbSeeder.cs
 Severity: high
-Status: open
-Description: `DbSeeder.cs` contains a hardcoded bcrypt hash (`$2a$12$eump...`) committed to source control. Anyone with repo access knows the demo password.
-Resolution: Inject `IPasswordHasher` into `DbSeeder` and call `.Hash(config["Seed:DefaultPassword"])` at runtime. Or read from env/config.
+Status: resolved (2026-07-14)
+Description: `DbSeeder.cs` contained a hardcoded bcrypt hash (`$2a$12$eump...`) committed to source control (git history too). Anyone with repo access knew the demo password.
+Resolution: `DbSeeder.SeedAsync` now takes `IPasswordHasher hasher` + optional `IConfiguration config` and hashes the password at runtime — `config["Seed:DefaultPassword"]`, falling back to `"password"` only when that key is unset (dev-only default, documented in code). `Program.cs` resolves `IPasswordHasher` via `scope.ServiceProvider.GetRequiredService<...>()` and passes `app.Configuration` at the call site. No hardcoded hash remains in source; still gated to Development/`SEED_ON_START=true` by KI-006 so it never runs unattended in production. `dotnet build` clean, `dotnet test` 805/805 green (incl. new `UserServiceCrossTenantTests`).
 
 ### KI-006: Auto-migrate + seed runs in all environments
 Severity: medium
-Status: open
+Status: resolved (2026-07-14)
 Description: `Program.cs` calls `MigrateAsync()` and `DbSeeder.SeedAsync()` unconditionally. In production this risks migration race conditions (multiple replicas) and seeds demo users.
-Resolution: Guard with `if (app.Environment.IsDevelopment())` or a dedicated `--seed` CLI flag.
+Resolution: `MigrateAsync()` stays unconditional (deploy process depends on it). `DbSeeder.SeedAsync()` is now gated: `app.Environment.IsDevelopment() || SEED_ON_START == "true"` — always seeds in Development, seeds in staging via `SEED_ON_START=true` (set in `docker-compose.staging.yml`), never seeds in Production by default (not set in `docker-compose.production.yml`).
 
 ### KI-007: Dashboard stats derived from POC Products table (fake data)
 Severity: medium
@@ -31,9 +28,19 @@ Resolution: Implement TASK-011 (`/api/stock` endpoint) and TASK-012 (seed real b
 
 ### KI-008: No pagination on GET /api/products
 Severity: medium
-Status: open
+Status: resolved (2026-07-14, verified during Block 3 pre-launch audit)
 Description: Returns all products in one response. Will degrade at 1000+ items.
-Resolution: Add `?page=&pageSize=` query params before staging deploy.
+Resolution: Already fixed by commit `206b2534` (2026-06-18, "perf(db): database
+optimization"), predating this doc's last update. The old unauthenticated POC
+`/api/products` (no `tenant_id`) described below no longer exists as a real
+endpoint — `ProductsLegacyController` now only issues `RedirectPermanent` to
+`/api/items/*` for every verb. The real catalog lives at `/api/items`
+(`ItemsController`), which is `[Authorize(Policy = CanViewStock)]`, RLS-scoped
+by tenant, and paginated: `GET /api/items?page=&pageSize=` →
+`PagedResult<ItemDto>` (default page=1/pageSize=50, matches the standard
+envelope in `api-contracts.md`). No code change was needed — this entry is
+kept only as a paper trail; the "POC products endpoint" section further below
+in this file is stale and superseded by the same fix.
 
 ### KI-009: `staleTime` missing on `useProducts` hook
 Severity: low
@@ -53,6 +60,26 @@ Status: open
 Description: `/stock`, `/transfers`, `/write-offs`, `/analytics`, `/notifications`, `/settings` show a catch-all "in development" page. Not a bug — intended placeholder.
 Resolution: Implement each page per sprint plan.
 
+### KI-015: POS shift-open is scoped per tenant, not per store — blocks simultaneous multi-store POS
+Severity: medium (real limitation for retail chains, invisible for single-store tenants)
+Status: open — plan written, not implemented (2026-07-15, Block 6 pre-launch audit, TASK-356)
+Description: `PosRepository.GetOpenShiftAsync(tenantId)` has no `StoreId` filter, so
+`PosService.OpenShiftAsync`'s "already open" `409` check blocks opening a shift at Store B
+while Store A (same tenant) still has one open — even though `PosShift` has a per-store
+unique DB constraint suggesting per-store shifts were the original intent. Root cause:
+`IFiscalServiceFactory.GetForTenantAsync` and the `integration_configs` schema
+(`UNIQUE (TenantId, Service)`, no `StoreId` column) only support ONE Checkbox ПРРО
+registration per tenant today — that's the actual constraint, not a Checkbox platform
+limitation (Checkbox's `X-License-Key` identifies one cash register; nothing stops a
+tenant from holding multiple license keys, one per store). A chain wanting POS running at
+more than one location simultaneously cannot today.
+Resolution: full migration plan (schema, `IFiscalServiceFactory`, `IPosRepository`,
+`PrroSettingsController`, frontend store selector, rollout/back-compat strategy, risk
+estimate) written in `.claude/logs/tasks/356_2026-07-15_pos-fiscalization-audit_backend-developer.md`
+§"Per-store shift plan" — not implemented, needs a scope decision (worth the schema
+migration + multi-register Checkbox setup vs. acceptable single-register-per-tenant
+limitation for now).
+
 ### KI-014: Per-IP rate limiting is ineffective in production (client IPs not preserved)
 Severity: medium
 Status: open (root cause outside our stack)
@@ -71,6 +98,212 @@ a shared egress IP (self-DoS) — check `journalctl -u ssh` / auth.log source IP
 Resolution options: ask the provider whether real client IPs can be preserved (PROXY protocol /
 X-Forwarded-For from their edge → then trust it in nginx `set_real_ip_from`), or move TLS/edge
 to a layer that preserves IPs (e.g., free Cloudflare in front).
+**Live-reverified 2026-07-16 (Block 18 security audit):** the IP-independent mitigations actually
+work end-to-end, not just in theory — 6 sequential wrong passwords against a real staging account
+locked it out (5-fail threshold), the *correct* password was then also rejected with the same
+generic error while locked, `LockoutUntil` in the DB was set ~15 min out, and a different account
+logged in fine at the same time (confirms per-account, not a global outage). Also confirmed TOTP
+brute-force is covered by the **same** account-lockout counter, not just the (IP-partitioned, thus
+KI-014-affected) per-request rate limiter: enabled real TOTP 2FA on a test account, sent 5 wrong
+codes to `/api/auth/2fa/verify`, then confirmed a subsequent login with the *correct* password was
+rejected (account locked) before even reaching the 2FA prompt. This meaningfully narrows KI-014's
+real-world impact — password and TOTP brute force are both stopped by the IP-independent lockout
+regardless of whether per-IP partitioning works in prod.
+
+### KI-016: weather-fetch/mqtt-listener still reference the pre-rename "StoreId" column
+Severity: high (silent runtime crash, not caught by `tsc`/`dotnet test`)
+Status: **resolved** (Block 11, TASK-362, 2026-07-15)
+Description: Found in TASK-360 (Block 9 audit) while fixing the same bug class in
+`expiry-check.job.ts`/`notification.job.ts`/`stock-snapshot.job.ts`. Confirmed live against the
+dev DB (`\d` per table): `weather_data`, `iot_devices`, `temperature_readings`, and
+`product_stock` all have their store-scoping column as `"LocationId"` (v4 Store→Location
+rename); `stock_events`/`weight_readings` were genuinely never renamed and correctly kept
+`"StoreId"`/no store column at all — confirmed against `AppDbContextModelSnapshot.cs` and a live
+`\d stock_events`.
+- `worker/src/jobs/weather-fetch.job.ts`'s `INSERT INTO weather_data (...)` — fixed
+  `"StoreId"` → `"LocationId"` in both the column list and `ON CONFLICT`.
+- `worker/src/jobs/mqtt-listener.ts` — fixed the `iot_devices` device lookup (2 places:
+  `handleMessage`, `checkOfflineDevices`), the `temperature_readings` INSERT, and the
+  `product_stock` FEFO write-down SELECT. Left `stock_events` inserts untouched (already
+  correct — genuine `"StoreId"` column there).
+- **Also found in this same investigation** (same bug class, one level deeper): `weather-fetch.job.ts`
+  and `ai-order.job.ts` (both `db.connect()` blocks) never called `SET app.role = 'worker'` at
+  all, and `notification.job.ts`'s `handleExpiryAlert`/`handleIotAlert` likewise never set it —
+  under the Block 2 fail-closed RLS fix (`20260714180000_FixFailOpenTenantIsolationOnReset`),
+  every one of these queries silently returns zero rows unless the pooled pg connection happened
+  to inherit `app.role` from another job reusing the same physical connection (node-pg doesn't
+  reset session state on release) — correctness was depending on connection-pool luck. Fixed by
+  adding the explicit `SET app.role = 'worker'` each function was missing, matching the
+  established pattern in every other worker job file.
+Live-verified end-to-end on the dev stack (rebuilt + restarted the worker container): enqueued a
+real `weather-fetch` job with a location's lat/long temporarily set → `weather_data` populated
+(7 rows, correct `LocationId`); published real MQTT messages to a temp test device → 
+`temperature_readings` written with correct `LocationId`, alert threshold correctly fired at
+9.5°C (fridge profile, >8°C alert) and correctly filtered a garbage 9999°C reading (see the new
+plausibility check below); the resulting `temp_alert` notification job found and logged all 3
+real matching users (`store_manager`/`network_manager`/`enterprise_admin`) in `notification_queue`
+— proof the `SET app.role='worker'` fix actually restores RLS visibility, not just that the SQL
+parses. Test rows cleaned up after verification; no dev seed data left behind.
+Also added (same investigation, v3-spec §4/§1 "чи є валідація діапазонів" ask): MQTT temperature
+readings now have a sanity-bounds check (`isPlausibleTemperature`/`isPlausibleHumidity` in
+`worker/src/services/iot-rules.ts`, -60..60°C) before insert — a broken/miswired sensor can no
+longer write physically-impossible values into `temperature_readings` or trigger a false
+`temp_violation` batch flag. Weight sensors already had equivalent protection via the existing
+confidence-based `assessWeightDelta` (non-multiple deltas → confidence 60, never auto-applied).
+Why not caught earlier: the local dev `docker-compose.yml` worker `DATABASE_URL` was itself
+broken until TASK-360 — every worker DB job failed to even connect in dev, so none of these SQL/
+RLS errors surfaced until an audit could watch real job runs against a real DB.
+
+### KI-017: `needs_verification` status never triggers a notification from the hourly cron
+Severity: low (data/UX gap, not a regression)
+Status: open
+Description: v1-spec §2.2 defines `last_checked_at > 90 днів → status = 'needs_verification' →
+сповіщення без терміну`, and `NotificationService.ValidEventTypes` already lists
+`stock.needs_verification` as a real event type (v1-spec §8.2 routes it to store_manager via
+Telegram). Found in TASK-360 (Block 9 audit) while fixing `expiry-check.job.ts`'s threshold
+bug: the cron never computes or transitions to `needs_verification` at all, and there's no
+dedicated `NotifiedNeedsVerificationAt` column to dedupe a repeat notification if it did. The
+backend's own `StockStatus.Compute` (used for every live read) already computes this status
+correctly for display — only the cron-triggered notification side is missing.
+Resolution: needs a `product_stock` schema migration (new notified-at column) plus a new
+`notification.job.ts` payload/handler — small but non-trivial scope, deliberately left out of
+this task (which focused on fixing the crash bugs + aligning existing warning/critical
+thresholds). Candidate for a dedicated small task.
+
+### KI-018: Auto Service spare-part FEFO write-down is tenant-wide, not location-scoped
+Severity: medium (invisible for single-location auto-service tenants, real cross-location
+stock leak for chains — v4-spec explicitly lists `location_type = auto_service`, so
+multi-location auto-service tenants are a supported case)
+Status: **planned** (2026-07-15) — full remediation plan written, no code changed yet, see
+`.claude/logs/tasks/361_2026-07-15_autoservice-production-audit_backend-developer.md`
+("Addendum — KI-018 remediation plan")
+Description: Found in TASK-361 (Block 10 pre-launch audit). `AsCustomer`/`AsVehicle`/
+`AsWorkOrder`/`AsWorkOrderLine` have no `LocationId`/`StoreId` at all, unlike `ProductionOrder`
+(which correctly scopes FEFO consumption to `order.LocationId`, see `ProductionRepository
+.GetFefoOrderedAsync`). `AutoServiceRepository.GetFefoOrderedAsync(itemId, ct)` and
+`AutoServiceService.CompleteWorkOrderAsync` consume spare-part stock FEFO across ALL of the
+tenant's locations — a work order created at Service Bay A can write down a spare-part batch
+physically sitting at Bay B. Matches the same location-scoping gap class production doesn't
+have, but auto-service does.
+Resolution (planned, ~1 day total): additive migration — nullable `AsWorkOrder.LocationId`
+uuid FK → `locations.Id` (RESTRICT), new `(TenantId, LocationId)` index; no RLS policy
+changes needed (verified live that no RLS qual in this codebase ever filters on
+`LocationId`, only `TenantId`). Backend: `IAutoServiceRepository.GetFefoOrderedAsync` gets a
+`locationId` param mirroring the already-correct `IProductionRepository` signature;
+`CreateWorkOrderAsync`/`CompleteWorkOrderAsync` thread it through;
+`GetWorkOrdersAsync`/controller gain an optional `locationId` filter, matching
+`ProductionOrder`'s existing shape exactly. Frontend: `CreateWorkOrderModal.tsx` sources the
+value from the already-existing `useStoreContext`/`StoreSelector` (no new UI component
+needed — same wiring KI-015 already identified for POS). Open product question not yet
+resolved: whether pre-migration work orders with `LocationId = NULL` fall back to today's
+tenant-wide FEFO (recommended — additive, no forced backfill) or get hard-blocked until a
+location is set. See the task log for full file-by-file scope and effort breakdown.
+Candidate for a dedicated implementation task once scheduled.
+
+### KI-019: IoT/Weather/Events/Cannibalization (and most of v2/v3) have no `[RequireModule]` gate
+Severity: medium (billing/entitlement gap, not a security/tenant-isolation leak — role-based
+`[Authorize]` still applies, RLS still scopes by tenant; a tenant simply isn't blocked from
+calling a module's API even when that module isn't in their `tenants.modules` set)
+Status: open — needs a product decision, not fixed here
+Description: Found in TASK-362 (Block 11 audit) while reviewing `IotController.cs`. CLAUDE.md's
+architecture rule states "Module activation. Feature endpoints guarded by
+`[RequireModule("module_key")]`", but `IotController`/`WeatherController`/`EventsController`/
+`CannibalizationController` have no `[RequireModule]` attribute at all — only role-based
+`[Authorize(Policy = ...)]`. Checked how widespread this is: `grep -c RequireModule
+*Controller.cs` shows only 8 controllers use it at all (`AiAssistant`→`inventory`,
+`AutoService`→`auto_service`, `Marketplace`/`MarketplaceChat`/`MarketplaceCooperation`→
+`marketplace`, `Production`→`production`, `SupplierCabinet`/`SupplierCabinetCooperation`→
+`marketplace_supplier`) — every other controller from v2 (`Orders`, `Adu`, `Buffer`,
+`AiOrders`, `Weather`, `Events`, `Cannibalization`) and v3 (`Iot`, `Pos`) has none, despite
+`"auto_order"`, `"iot"`, and `"pos"` all being defined, valid module keys in `Tenant.cs`'s
+`UpdateModules` allowlist.
+Why not fixed here: `Tenant.DefaultModulesForBusinessType` (v4, ADR-015) does **not** grant any
+business type `"auto_order"`, `"iot"`, or `"pos"` by default — e.g. `"retail"` only gets
+`["inventory", "procurement", "pos"]` minus the fact `"pos"` here is the string literal but POS
+endpoints aren't gated either way. Naively adding `[RequireModule("iot")]`/
+`[RequireModule("auto_order")]`/`[RequireModule("pos")]` now would immediately 403 every
+currently-working tenant that hasn't been manually granted that module (unknown how many —
+no query run, out of caution) — a real risk of breaking already-functioning features for
+near-launch clients, not a safe "objective best practice" fix. This needs a product decision:
+(a) should these modules be added to the relevant default sets going forward, (b) should
+existing tenants be backfilled with them, (c) is per-endpoint module gating even the intended
+model for v2/v3 features, or were they deliberately left role-gated-only. Candidate for a
+dedicated task once the product question is answered — do not add `[RequireModule]` blind.
+
+### KI-020: No frontend error tracking (Sentry or equivalent)
+Severity: medium (no visibility into production JS errors — a real error boundary was added in
+Block 13 that catches and console.errors client crashes, but nothing ships that log anywhere
+except the browser console; the dev has zero after-the-fact way to learn a user hit an error)
+Status: open — cannot be closed without a real account/DSN the user must provision
+Description: Confirmed via `grep -ri sentry frontend/` (zero matches) and `package.json` (no
+`@sentry/*` dependency) — there is no error-tracking SDK anywhere in the frontend. `app/error.tsx`
+and `app/global-error.tsx` (new, Block 13) log to `console.error` with a `TODO(KI-020)` marker at
+the exact spot Sentry's `captureException` would go, but that's it — nothing is durably recorded.
+Resolution (needs the user to do the account/DSN part first, code part is small once that
+exists):
+1. User creates a Sentry project (sentry.io, free tier is fine to start) and gets a DSN + org/
+   project slug — this step needs real credentials only the user can create, not something an
+   agent can provision.
+2. `npm install @sentry/nextjs` in `frontend/`, run `npx @sentry/wizard@latest -i nextjs` (sets
+   up `sentry.client.config.ts`/`sentry.server.config.ts`/`sentry.edge.config.ts` +
+   `next.config.js` source-map upload wiring) — or wire manually if the wizard's CI/source-map
+   step is unwanted.
+3. `SENTRY_DSN` (public, safe client-side) → `.env`/`.env.production`; `SENTRY_AUTH_TOKEN` (for
+   source-map upload at build time) → CI secret, never committed.
+4. Replace the two `console.error` calls in `app/error.tsx`/`app/global-error.tsx` with
+   `Sentry.captureException(error)` (keep the console.error too, harmless in dev).
+5. Decide whether to also wrap `lib/api.ts`'s `ApiError` throws (probably not — most 4xx there
+   are expected/handled by the calling mutation's `onError`, would be noisy; reserve Sentry for
+   actually-unhandled crashes, matching what the two boundaries already catch).
+Not attempted in Block 13 — explicitly out of scope per this task's brief (needs a DSN the agent
+does not have).
+
+### KI-021: Access token stored in `localStorage`, not just in-memory (XSS exposure)
+Severity: medium (defense-in-depth gap, not a currently-exploited hole — no known XSS in this
+codebase today; this is about blast radius if one is ever introduced)
+Status: open — evaluated in Block 13, deliberately NOT changed (real architectural change, real
+risk of breaking login-persistence-across-reload if done carelessly — see below)
+Description: `lib/api.ts` keeps the JWT access token in a module-level `_token` variable AND
+mirrors it into `localStorage` (`sg_token`) so it survives a full page reload (`getToken()` falls
+back to `localStorage.getItem(TOKEN_KEY)` when `_token` is null). Any JS that runs on the page —
+including an injected XSS payload — can read `localStorage` synchronously, so a successful XSS
+anywhere in the app becomes a full session-token theft, not just a same-tab DOM-manipulation bug.
+The refresh token is already the safer pattern (`HttpOnly` cookie, `credentials: "include"`,
+never touched by JS) — only the short-lived access token is the exposed one.
+Why not fixed in Block 13 (evaluated, not a "quick safe refactor"): removing the `localStorage`
+mirror and relying purely on "silent refresh from the HttpOnly cookie on app load" requires code
+that **does not exist today** — traced the actual boot sequence:
+- `app/(dashboard)/layout.tsx` line ~60: `if (mounted && !getToken()) router.replace("/login")` —
+  a synchronous, hard gate on a token existing in memory/localStorage *before* any network call.
+  With `_token` reset to `null` on every fresh page load (in-memory only) and no localStorage
+  fallback, this would fire and bounce every user to `/login` on every reload/new tab, even with
+  a perfectly valid `HttpOnly` refresh cookie sitting right there unused.
+- `features/auth/hooks/useAuth.ts`'s `useMe()` is gated `enabled: Boolean(getToken())` — same
+  problem, the "am I logged in" query would never even fire without a token already present.
+- `middleware.ts` (Edge) independently checks `request.cookies.has("sg_session") ||
+  request.cookies.has("refreshToken")` for its own redirect — this one is fine as-is (doesn't
+  read the access token), but shows auth state is threaded through three separate layers
+  (Edge middleware cookie check, client layout `getToken()` check, `useMe()` gate) that would all
+  need to agree on a new "always attempt silent refresh first, then decide" bootstrap sequence.
+- No code anywhere today calls `POST /api/auth/refresh` on app mount — `tryRefresh()` in
+  `lib/api.ts` is currently only reachable reactively, from inside a request that already got a
+  401. Removing the localStorage token requires *adding* a real "attempt refresh once on mount,
+  block rendering behind it, then fall through to `/login` only if that fails" bootstrap — new
+  loading-state UX, new race-condition handling with the existing 2FA challenge flow
+  (`useCompleteLogin`), and new interaction with `SessionExpiredNotice`.
+This is real surface area across auth boot, not a same-file fix — matches this project's existing
+bar for "needs a product/architecture decision" (same caution already applied to KI-015/KI-018/
+KI-019 rather than guessing). Candidate mitigations short of a full rewrite, for the user to
+choose from:
+(a) do nothing extra beyon what's already true — this app has no known XSS today, and every
+    dependency is npm-audited per TASK-350; accept the residual risk;
+(b) add a Content-Security-Policy header (defense-in-depth even with localStorage still in use —
+    blocks most injection vectors from ever running attacker JS at all, which matters more than
+    where the token lives);
+(c) do the full bootstrap-refresh rewrite described above and drop localStorage entirely — real
+    effort (touches `lib/api.ts`, `app/(dashboard)/layout.tsx`, `useAuth.ts`, `middleware.ts`,
+    needs manual regression pass on login/2FA/logout/session-expiry/multi-tab), not attempted
+    here without an explicit go-ahead.
 
 ### KI-013: Npgsql 8.0+ requires EnableDynamicJson() for List<string>/JSONB fields
 Severity: high (silent 500 in production)
@@ -78,6 +311,202 @@ Status: resolved (2026-06-27)
 Description: Npgsql 8.0+ breaking change — `List<string>` та інші складні .NET типи більше не десеріалізуються з JSONB-колонок автоматично. Без `EnableDynamicJson()` API повертає `System.NotSupportedException` → 500 на всіх GET-ендпоінтах, що читають JSONB. Проявилось після деплою поля `Barcodes: List<string>`.
 Resolution: У `backend/ShelfGuard.Infrastructure/DependencyInjection.cs` замінено `UseNpgsql(connectionString)` на `NpgsqlDataSourceBuilder(...).EnableDynamicJson().Build()`, результат передається у `UseNpgsql(dataSource)`.
 Rule: **При кожному новому полі `List<T>` / JSONB** — перевіряти, що `EnableDynamicJson()` вже є у `DependencyInjection.cs`. Якщо у prod-логах з'явився `InvalidCastException` / `NotSupportedException` з текстом `jsonb` — перша підозра саме тут.
+
+### KI-022: Mobile app has no offline support
+Severity: medium-high (POS register / warehouse scanning routinely run on unstable wifi/cellular)
+Status: open
+Description: no `NetInfo`, no offline queue, no local draft persistence anywhere in `mobile/` —
+confirmed via `grep -ri "netinfo|offline|asyncstorage"`, zero matches, and `package.json` has
+neither `@react-native-community/netinfo` nor `@react-native-async-storage/async-storage`. Every
+mutation (POS sale, write-off, transfer, stock scan) requires a live connection at the moment of
+submit; a dropped connection mid-action surfaces as a generic Axios error with no retry/resume,
+and the in-progress draft (cart, scanned items) is not persisted anywhere durable — only in
+React state, lost on any screen unmount/crash.
+Resolution: not attempted — offline-first (local queue + optimistic UI + conflict resolution,
+likely `@tanstack/query-async-storage-persister` + a `NetInfo`-driven `onlineManager`) is a
+substantial dedicated effort, out of scope for a pre-launch audit pass. The POS concurrency
+work from Block 6 (optimistic locking, 409 on double-sell) at least makes *retrying* a failed
+sale safe — it just isn't automatic. Needs a product decision on priority before scheduling.
+
+### KI-023: Mobile login silently mishandled 2FA-enabled accounts — now fails loudly, full 2FA UI still missing
+Severity: medium
+Status: partially fixed (2026-07-15, Block 14 mobile audit)
+Description: TASK-330/331 added opt-in TOTP 2FA on web. `POST /api/auth/login` returns
+`{requiresTwoFactor: true, challengeToken}` (no tokens) for 2FA-enabled accounts, but mobile's
+`login()` blindly destructured `{accessToken, user}` from every response — a 2FA-enabled user
+logging in via mobile got `setAuth(undefined, undefined)` and was silently navigated into the
+app with a broken token, no visible error.
+Resolution (this block): `mobile/features/auth/api/authApi.ts::login()` now detects
+`requiresTwoFactor`/a missing `accessToken`/`user` and throws `Error('TWO_FACTOR_REQUIRED')`;
+`(auth)/login.tsx` shows a clear Ukrainian message instead of silently proceeding. This makes
+the failure honest, it does not add the missing capability.
+Still open: mobile has no 2FA input screen at all (no TOTP code entry, no recovery-code
+fallback) — a tenant user who opts into 2FA from web cannot log in on mobile until they disable
+it again. Needs a product decision: build a mobile 2FA step (mirrors web's TASK-331 UX), or
+document 2FA as web-only for now.
+
+### KI-024: Every role-based UI gate in the mobile app used non-existent PascalCase role names ✅ resolved (2026-07-15, Block 14 mobile audit)
+Severity: was critical
+Description: real backend role strings are lowercase snake_case (`enterprise_admin`,
+`network_manager`, `store_manager`, `merchandiser`, `storekeeper`, `cashier`, `provider`,
+`provider_admin`, ...) per `UserService.ValidRoles` / `AppPolicies.cs` / web's
+`frontend/lib/roles.ts`. Nine mobile screens independently declared PascalCase role arrays that
+matched no real role string at all — e.g. `CASHIER_ROLES = ['Cashier', 'StoreManager',
+'Director', 'Admin']`, `MANAGER_ROLES = ['StoreManager', 'Director', 'NetworkManager', 'Admin']`
+('Director'/'Admin' aren't even real roles). Every `.includes(user.role)` check built from these
+always evaluated `false` for real accounts: the POS tab was invisible to real cashiers
+(`(app)/_layout.tsx`), and write-off/customer/transfer manager approve-reject actions, plus the
+dashboard's manager summary, never appeared for real store/network managers. One file
+(`features/dashboard/types.ts`) already had the correct lowercase strings, confirming this was
+an accumulated per-screen mistake rather than an intentional convention.
+Resolution: added `mobile/lib/roles.ts` (mirrors `frontend/lib/roles.ts` as the mobile app's
+single source of truth) exporting `AppRoles`, `CAN_ACCESS_POS`, `AT_LEAST_STORE_MANAGER`,
+`AT_LEAST_STORE_MANAGER_OR_PROVIDER`, and a `hasRole()` helper. Every ad hoc array in
+`(app)/_layout.tsx`, `index.tsx` (dashboard), `write-offs/[id].tsx`, `customers/index.tsx`,
+`customers/[id].tsx`, `transfers/[id].tsx`, `schedules/index.tsx`, `service-desk/index.tsx`,
+`service-desk/[id].tsx` now imports from it. `npx tsc --noEmit` clean.
+
+### KI-025: Mobile `user.locationId` was never populated + write-offs/transfers/stock location filters used the wrong query-param name ✅ resolved (2026-07-15, Block 14 mobile audit)
+Severity: was critical
+Description: two compounding wire-contract mismatches. (1) Backend's `AuthUserDto` still names
+the assigned-store field `StoreId` (never renamed in the v4 Store→Location pass) → JSON key
+`storeId`; mobile's `AuthUser` type expected `locationId` and `authApi.ts` returned the raw
+response with no mapping, so `user.locationId` was `undefined` for every logged-in user. This
+unconditionally blocked write-off creation (`write-offs/create.tsx`'s
+`if (!user?.locationId) { ...return; }` guard always fired), transfer creation, production
+order creation, and made the "incoming transfer confirm" button permanently invisible.
+(2) Separately, `WriteOffsController`/`TransfersController`/`StockController`'s GET-list query
+param is `store_id` (snake_case); mobile sent `location_id` (write-offs/transfers) or
+`locationId` (stock) — none matching — so even with `user.locationId` populated, those three
+lists would have stayed unfiltered across all locations. (`SchedulesController`/
+`ProductionController` already use `locationId` camelCase — mobile already matched, no bug
+there.)
+Resolution: `authApi.ts` now maps wire `storeId` → `AuthUser.locationId` at the API boundary
+(`mapAuthUser()`, used by both `login()` and `getMe()`); `writeOffApi.ts`/`transferApi.ts`/
+`stockApi.ts` now send `store_id` on the wire while keeping their external `locationId`
+parameter name (no call-site changes needed). Confirmed the real backend param names by reading
+the five controllers directly rather than guessing. `npx tsc --noEmit` clean.
+
+### KI-026: Mobile `user` was never restored after a cold app restart ✅ resolved (2026-07-15, Block 14 mobile audit)
+Severity: was high
+Description: `useAuthStore.loadToken()` (called once on boot in `app/_layout.tsx`) only
+restored `accessToken` from `expo-secure-store` — `user` stayed `null` until the next real
+login. Since nearly every role-gated screen reads `user` from the store (the KI-024 manager
+gates, the POS tab, the KI-025 location checks), a cold restart (device reboot, OS memory
+eviction, force-quit — all routine on mobile) with a still-valid token silently broke every
+role-gated UI element until the user logged out and back in. `getMe()` (`GET /auth/me`) already
+existed in `authApi.ts` but was dead code, never called anywhere.
+Resolution: `app/_layout.tsx`'s boot effect now calls `getMe()` after `loadToken()` when a
+token is present but `user` is still null, populating the store via a new `setUser()` action;
+falls back to `clearAuth()` (clean redirect to login) if the token turns out to be
+expired/invalid. `npx tsc --noEmit` clean.
+
+### KI-027: Staging (and dev) Postgres connection role is a superuser — RLS is completely bypassed
+Severity: critical for the validity of any live security/RLS test run against staging/dev; NOT
+confirmed to be a live production issue (see KI-028 note below)
+Status: ✅ resolved (2026-07-16, Block 18) on both staging and dev — user-authorized in chat.
+Resolution: created a dedicated `NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS` role that OWNS all
+84 public tables + sequences on each stack (`shelfguard_staging_app` on staging,
+`shelfguard_app_dev` on dev), transferred ownership via a `DO $$ ... ALTER TABLE %I OWNER TO $$`
+loop, `GRANT CONNECT` + `GRANT USAGE, CREATE ON SCHEMA public`, and repointed the app connection
+strings at it (`.env.staging` `DATABASE_URL`/`WORKER_DATABASE_URL`; dev `appsettings.Development.json`
+`DefaultConnection` + `docker-compose.yml` worker `DATABASE_URL`). The bootstrap superusers
+(`shelfguard_staging` / `crm`, = `POSTGRES_USER`) stay ONLY for initdb/admin/psql and now own
+nothing. Restarted api+worker on both stacks; verified live: as the app role, `rolsuper=f
+rolbypassrls=f`; scoped to one tenant, `product_stock`/`items` show that tenant's rows with **0
+cross-tenant leak**; with `app.tenant_id` unset (RESET) → **0 rows** (fail-closed); as `app.role =
+'worker'` → sees all rows (worker_bypass intact for cron jobs). Dev API boots clean, dev worker
+connects clean, `dotnet test` 854/854. **Known follow-up (not blocking):** the `DbSeeder` has only
+ever run under a superuser; on a *fresh empty* DB, seeding tenant-scoped rows (e.g. `users`, FORCE
+RLS) as the new non-superuser role would be blocked by the fail-closed `tenant_isolation` policy
+with no tenant context set. Both current dev/staging DBs are already seeded so `DbSeeder`'s
+`if (Tenants.AnyAsync()) return` short-circuits and this path is never hit — but a `docker compose
+down -v` + fresh boot would fail at seeding until `DbSeeder` sets `SET app.role='provider'` (or
+equivalent provider_bypass) around its inserts. Production never seeds (KI-006), so prod is
+unaffected. Also worth baking the role-separation into any future environment-bootstrap script so
+it can't be forgotten again (this is exactly how staging shipped without it in Block 0).
+Description: Found while live-testing cross-tenant IDOR on staging for Block 18. Created a second
+tenant via `POST /api/admin/tenants` and confirmed, with real HTTP requests, that its user could
+read tenant 1's item/stock-batch/location records in full via `GET /api/items/{id}`,
+`GET /api/stock/{id}`, `GET /api/locations/{id}` (all HTTP 200 with complete cross-tenant data) —
+despite RLS `tenant_isolation` policies existing on every one of those tables. Root cause:
+`docker exec shelfguard_staging_postgres psql -U shelfguard_staging -d shelfguard_staging -c
+"SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname='shelfguard_staging'"` shows
+`rolsuper=t, rolbypassrls=t` — Postgres superusers bypass RLS unconditionally, `FORCE ROW LEVEL
+SECURITY` notwithstanding (this is documented Postgres behavior, not a bug in the policies
+themselves — same class of issue as the historical production incident in
+`feedback-rls-superuser-bypass` memory, where the bootstrap user `shelfguard` was found to be a
+superuser and fixed by creating a separate non-superuser `shelfguard_app` role + `ALTER TABLE ...
+OWNER TO` for every table). `docker-compose.staging.yml`/`.env.staging` never repeated that fix
+when Block 0 stood up the staging stack — `POSTGRES_USER=shelfguard_staging` was used directly as
+the app's `DATABASE_URL`/`WORKER_DATABASE_URL` connection user, and Docker's postgres image always
+makes the `POSTGRES_USER` value a cluster superuser at initdb time. All 84 tables in the staging DB
+are owned by `shelfguard_staging`.
+Why not fixed directly: applying the proven fix (create `shelfguard_staging_app` non-superuser
+role, `ALTER TABLE ... OWNER TO` for all 84 tables, update `.env.staging`, restart api+worker) was
+attempted live and blocked by the harness's auto-mode permission classifier as "a persistent
+infrastructure change beyond the requested security-audit task, not explicitly authorized for this
+session." Did not attempt a workaround — flagging for the user to explicitly authorize instead.
+Impact while open: any further "live" IDOR/cross-tenant test against staging is meaningless (RLS
+never runs) until this is fixed. Does not by itself prove a production vulnerability — see KI-028.
+Resolution (ready to execute once authorized): same pattern as the documented production fix —
+`CREATE ROLE shelfguard_staging_app WITH LOGIN PASSWORD '<new>' NOSUPERUSER NOCREATEDB NOCREATEROLE
+NOBYPASSRLS;`, transfer ownership of all `public` tables (and sequences) via a `DO $$ ... ALTER
+TABLE %I OWNER TO shelfguard_staging_app $$` loop, `GRANT CONNECT`/`GRANT USAGE, CREATE ON SCHEMA
+public`, then update `DATABASE_URL`/`WORKER_DATABASE_URL` in `.env.staging` to the new user and
+restart `shelfguard_staging_api`/`shelfguard_staging_worker`. Also worth a `devops-engineer`
+follow-up: bake this into whatever script/compose file stands up a fresh Postgres cluster (staging
+or any future environment) so it can't be forgotten again — nothing today automates or checks it.
+
+### KI-028: Single-object `GetByIdAsync` repository methods have zero app-level tenant filter — RLS is the *sole* tenant-isolation layer for these reads
+Severity: medium (architectural observation/hardening gap, not a currently-exploited hole in
+production — see rationale below)
+Status: ✅ mitigated (2026-07-16, Block 18) via option (b) — a startup canary, user-authorized in
+chat. `Program.cs` now runs, right after `MigrateAsync`, a check of whether the connected role
+bypasses RLS (`SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user`). The
+decision policy lives in the pure, unit-tested `RlsRoleGuard.Evaluate(roleBypassesRls,
+isDevelopment)` (`ShelfGuard.Infrastructure/Data/RlsRoleGuard.cs`, 4 tests in
+`ShelfGuard.Tests/Infrastructure/RlsRoleGuardTests.cs`): a role that bypasses RLS **fails the app's
+startup outside Development** (throws → refuses to boot) and **logs CRITICAL but allows boot in
+Development** (a fresh clone / CI / not-yet-migrated local box may legitimately still be a superuser;
+warned loudly, not blocked). This catches the exact KI-027 class of misconfiguration the moment any
+environment boots, automatically, in any future stack — the root cause of KI-027 shipping unnoticed
+in Block 0. The deeper defense-in-depth options below (explicit `&& TenantId==` filters in every
+repo) were NOT done — the canary + KI-027's role fix are judged sufficient; left as an optional
+future hardening decision. Original write-up retained below for context.
+Original status: open — flagged, not fixed (would require touching ~15-20 repository methods across
+modules, out of scope for an audit-only pass without a broader decision)
+Description: Found while investigating KI-027. Read `ItemRepository.GetByIdAsync`,
+`LocationRepository.GetByIdAsync`, `StockRepository.GetByIdAsync` (and this pattern repeats across
+most `Get*ByIdAsync` methods in `ShelfGuard.Infrastructure/Data/Repositories/*`) — all three query
+only `WHERE x.Id == id`, with **no** `&& x.TenantId == tenantId` clause at the application/LINQ
+level. Tenant scoping for these reads depends 100% on the Postgres RLS policy (`app.tenant_id`
+session variable set by `TenantConnectionInterceptor`) ever actually being enforced by the
+connected role. This matches the codebase's documented intent (`CLAUDE.md`: "Tenant isolation via
+RLS" — the app is deliberately not supposed to duplicate `WHERE TenantId=` in every repository
+method, trusting the DB layer completely) and is a legitimate, common pattern for RLS-based
+multi-tenancy — but it means there is no defense-in-depth second layer: if RLS is ever bypassed for
+any reason (KI-027's superuser-role class of bug, a future migration mistake, a maintenance script
+connecting as a different role, connection-pool misconfiguration), single-object reads leak
+cross-tenant data completely silently, with no error, no log line, nothing to catch it.
+Why this is currently believed NOT to be a live production issue: `feedback-rls-superuser-bypass`
+memory documents that production already went through exactly this incident once and fixed it by
+switching the real app connection to a dedicated non-superuser `shelfguard_app` role with
+`ALTER TABLE ... OWNER TO` applied — i.e., production's `DATABASE_URL`/`WORKER_DATABASE_URL` are
+believed to use `shelfguard_app`, not a superuser. This audit could not directly re-verify
+production's current role (`.env.production` doesn't exist locally, and re-verifying via SSH was
+out of scope — "прод не чіпаємо" for this block) — flagging this as the one open assumption behind
+"production is fine."
+Resolution options for the user to choose from, none executed here: (a) accept the risk as-is,
+matching the codebase's existing "trust RLS completely" architecture, and treat KI-027's fix
+(restoring proper role separation on staging) as sufficient going forward — cheapest; (b) add a
+cheap canary: a startup health check that runs `SELECT usesuper FROM pg_user WHERE usename =
+current_user` against the configured connection and refuses to start (or logs CRITICAL) if true —
+catches this exact class of misconfiguration the moment a new environment is stood up, in any
+environment, automatically; (c) add explicit `&& x.TenantId == tenantId` defense-in-depth filters
+to the highest-risk single-object endpoints (items/stock/locations/customers/receipts/write-offs) —
+real code change across many files, most thorough but not a quick fix. No code changed for this
+finding.
 
 ## Resolved Issues
 

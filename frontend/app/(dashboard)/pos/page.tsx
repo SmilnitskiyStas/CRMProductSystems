@@ -7,6 +7,8 @@ import { ShiftStatusCard } from "@/features/pos/components/ShiftStatusCard";
 import { SalesTable } from "@/features/pos/components/SalesTable";
 import { SaleDetailDrawer } from "@/features/pos/components/SaleDetailDrawer";
 import { OpenShiftDialog } from "@/features/pos/components/OpenShiftDialog";
+import { CloseShiftDialog } from "@/features/pos/components/CloseShiftDialog";
+import { CashReconciliationSummary } from "@/features/pos/components/CashReconciliationSummary";
 import {
   useCurrentShift,
   useShiftSales,
@@ -36,6 +38,8 @@ export default function PosPage() {
   const closeShift = useCloseShift();
 
   const [openDialogVisible, setOpenDialogVisible] = useState(false);
+  const [closeDialogVisible, setCloseDialogVisible] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const [selectedSale, setSelectedSale] = useState<SaleDto | null>(null);
 
   const noShift =
@@ -52,9 +56,17 @@ export default function PosPage() {
     );
   }
 
-  function handleCloseShift() {
-    if (!window.confirm("Закрити зміну? Продажі будуть неможливі до відкриття нової зміни.")) return;
-    closeShift.mutate();
+  function handleConfirmClose(actualClosingCash?: number) {
+    setCloseError(null);
+    closeShift.mutate(
+      { actualClosingCash },
+      {
+        onSuccess: () => setCloseDialogVisible(false),
+        onError: (err) => {
+          setCloseError(err instanceof ApiError ? err.message : "Не вдалося закрити зміну.");
+        },
+      },
+    );
   }
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -146,7 +158,7 @@ export default function PosPage() {
         <>
           <ShiftStatusCard
             shift={shift}
-            onClose={handleCloseShift}
+            onClose={() => setCloseDialogVisible(true)}
             isClosing={closeShift.isPending}
           />
 
@@ -246,6 +258,8 @@ export default function PosPage() {
                 }
               />
             </div>
+
+            <CashReconciliationSummary shift={shift} />
           </div>
 
           {/* Sales history for the closed shift */}
@@ -286,7 +300,7 @@ export default function PosPage() {
       {shift && !isOpen && !isClosed && (
         <ShiftStatusCard
           shift={shift}
-          onClose={handleCloseShift}
+          onClose={() => setCloseDialogVisible(true)}
           isClosing={closeShift.isPending}
         />
       )}
@@ -297,6 +311,17 @@ export default function PosPage() {
         onClose={() => setOpenDialogVisible(false)}
         onConfirm={handleOpenShift}
         isLoading={openShift.isPending}
+      />
+
+      <CloseShiftDialog
+        isOpen={closeDialogVisible}
+        onClose={() => {
+          setCloseDialogVisible(false);
+          setCloseError(null);
+        }}
+        onConfirm={handleConfirmClose}
+        isLoading={closeShift.isPending}
+        error={closeError}
       />
 
       <SaleDetailDrawer sale={selectedSale} onClose={() => setSelectedSale(null)} />

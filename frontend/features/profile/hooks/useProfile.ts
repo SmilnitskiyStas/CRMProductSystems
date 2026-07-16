@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateProfile, changePassword, linkTelegram } from "../api/profile";
+import { updateProfile, changePassword, createTelegramLinkCode } from "../api/profile";
 import { authApi } from "@/features/auth/api/auth";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
 import type { AuthUserDto } from "@/features/auth/types";
@@ -62,15 +62,7 @@ export function useTwoFactorDisable() {
   });
 }
 
-export function useLinkTelegram() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: linkTelegram,
-    onSuccess: () => {
-      // Mark telegram as linked in the cached user
-      qc.setQueryData<AuthUserDto>(ME_KEY, (prev) =>
-        prev ? { ...prev, telegramChatId: "linked" } : prev,
-      );
-    },
-  });
+/** Issues a one-time link code (TelegramLinkSection then polls /api/auth/me for the result). */
+export function useCreateTelegramLinkCode() {
+  return useMutation({ mutationFn: createTelegramLinkCode });
 }

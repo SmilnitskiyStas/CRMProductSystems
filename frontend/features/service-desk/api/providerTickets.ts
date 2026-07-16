@@ -1,8 +1,11 @@
 import { api } from "@/lib/api";
 import type {
   ProviderTicketListItemDto,
+  ProviderTicketDetailDto,
   CreateProviderTicketPayload,
   ProviderTicketFilters,
+  AddCommentPayload,
+  TicketCommentDto,
 } from "../types";
 
 export const providerTicketsApi = {
@@ -18,5 +21,13 @@ export const providerTicketsApi = {
 
   create(data: CreateProviderTicketPayload): Promise<ProviderTicketListItemDto> {
     return api.post<ProviderTicketListItemDto>("/api/admin/service-desk", data);
+  },
+
+  getTicket(id: string): Promise<ProviderTicketDetailDto> {
+    return api.get<ProviderTicketDetailDto>(`/api/admin/service-desk/${id}`);
+  },
+
+  addComment(id: string, data: AddCommentPayload): Promise<TicketCommentDto> {
+    return api.post<TicketCommentDto>(`/api/admin/service-desk/${id}/comments`, data);
   },
 };

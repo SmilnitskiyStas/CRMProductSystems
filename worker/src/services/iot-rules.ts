@@ -70,3 +70,34 @@ export function isTempAlert(temperature: number, threshold: number | null): bool
 export const TEMP_VIOLATION_HOURS = 2;
 // Device silent for this long → offline alert (v3-spec §4: > 30 min)
 export const OFFLINE_AFTER_MINUTES = 30;
+
+// ── Sensor sanity bounds (Block 11 audit) ──────────────────────────────────
+// Neither temp_sensor nor weight_sensor payloads were range-checked before insert —
+// a malfunctioning/miswired sensor (or garbage MQTT payload) could write physically
+// impossible readings straight into temperature_readings/weight_readings, trigger
+// false temp_violation batch flags, and spam notification queues. Generous bounds
+// (retail/warehouse cold-chain plus ambient — not just the -18..+6 fridge/freezer
+// range from v3-spec §4, since devices can be temporarily moved/tested) — this is a
+// "sensor is physically broken" filter, not a business-rule threshold (that's
+// tempAlertThreshold above).
+const PLAUSIBLE_TEMPERATURE_MIN = -60; // colder than any commercial freezer
+const PLAUSIBLE_TEMPERATURE_MAX = 60; // hotter than any cold-chain storage use case
+const PLAUSIBLE_HUMIDITY_MIN = 0;
+const PLAUSIBLE_HUMIDITY_MAX = 100;
+
+export function isPlausibleTemperature(temperature: number): boolean {
+  return (
+    Number.isFinite(temperature) &&
+    temperature >= PLAUSIBLE_TEMPERATURE_MIN &&
+    temperature <= PLAUSIBLE_TEMPERATURE_MAX
+  );
+}
+
+export function isPlausibleHumidity(humidity: number | null | undefined): boolean {
+  if (humidity === null || humidity === undefined) return true; // optional field
+  return (
+    Number.isFinite(humidity) &&
+    humidity >= PLAUSIBLE_HUMIDITY_MIN &&
+    humidity <= PLAUSIBLE_HUMIDITY_MAX
+  );
+}

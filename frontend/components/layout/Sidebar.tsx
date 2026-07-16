@@ -236,7 +236,12 @@ const SUPPLIER_NAV_GROUP: NavGroup = {
     { href: "/supplier/clients", label: "Клієнти",     icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
     { href: "/supplier/team",    label: "Команда",     icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
     // Cooperation flow (TASK-318) — без permission-ключів: у довіднику
-    // supplierPermissions поки немає відповідних прав, бекенд гейтить сам.
+    // supplierPermissions поки немає відповідних прав. NOTE (TASK-359 audit):
+    // the backend does NOT gate these routes either — any supplier_admin
+    // staff member has full access regardless of their assigned SupplierRole.
+    // Flagged as an open product decision (which permission key(s), if any,
+    // should cover cooperation-requests/orders/contract-settings/support-tickets);
+    // not fixed here.
     { href: "/supplier/requests",          label: "Заявки на співпрацю", icon: <HeartHandshake size={16} />, roles: SUPPLIER_ONLY },
     { href: "/supplier/orders",            label: "Замовлення",          icon: <ShoppingBag size={16} />, roles: SUPPLIER_ONLY },
     { href: "/supplier/contract-settings", label: "Реквізити договору",  icon: <FileText size={16} />,    roles: SUPPLIER_ONLY },

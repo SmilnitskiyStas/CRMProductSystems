@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Users.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
@@ -46,6 +47,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ProfileManagement)) return Forbid();
 
         var (profile, error) = await _cabinet.GetProfileAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(profile);
@@ -60,6 +62,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ProfileManagement)) return Forbid();
 
         var (profile, error) = await _cabinet.UpdateProfileAsync(tenantId.Value, request, ct);
         return error is not null ? NotFound(new { error }) : Ok(profile);
@@ -73,6 +76,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ProfileManagement)) return Forbid();
 
         var (profile, error) = await _cabinet.TogglePublishAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(profile);
@@ -88,6 +92,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.CatalogManagement)) return Forbid();
 
         var (items, error) = await _cabinet.GetItemsAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(items);
@@ -103,6 +108,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.CatalogManagement)) return Forbid();
 
         var (item, error) = await _cabinet.AddItemAsync(tenantId.Value, request, ct);
 
@@ -124,6 +130,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.CatalogManagement)) return Forbid();
 
         var (item, error) = await _cabinet.UpdateItemAsync(tenantId.Value, id, request, ct);
 
@@ -143,6 +150,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.CatalogManagement)) return Forbid();
 
         var error = await _cabinet.DeleteItemAsync(tenantId.Value, id, ct);
         return error is not null ? NotFound(new { error }) : NoContent();
@@ -161,6 +169,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ClientReviews)) return Forbid();
 
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 100) pageSize = 20;
@@ -177,6 +186,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ClientReviews)) return Forbid();
 
         var (metrics, error) = await _cabinet.GetMetricsAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(metrics);
@@ -192,6 +202,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ClientReviews)) return Forbid();
 
         var (review, error) = await _cabinet.ReplyToReviewAsync(tenantId.Value, id, request.ReplyText, ct);
 
@@ -212,6 +223,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ClientReviews)) return Forbid();
 
         var (stats, error) = await _cabinet.GetReviewStatsAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(stats);
@@ -226,6 +238,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.StaffManagement)) return Forbid();
 
         var staff = await _cabinet.GetStaffAsync(tenantId.Value, ct);
         return Ok(staff);
@@ -240,6 +253,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.StaffManagement)) return Forbid();
 
         var callerUserId = ResolveUserId();
         if (callerUserId is null) return Forbid();
@@ -262,6 +276,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.StaffManagement)) return Forbid();
 
         var callerUserId = ResolveUserId();
         if (callerUserId is null) return Forbid();
@@ -279,6 +294,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.StaffManagement)) return Forbid();
 
         var roles = await _roles.GetAllAsync(tenantId.Value, ct);
         return Ok(roles);
@@ -292,6 +308,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.StaffManagement)) return Forbid();
 
         var (role, error) = await _roles.CreateAsync(tenantId.Value, request, ct);
         if (error is not null) return BadRequest(new { error });
@@ -306,6 +323,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.StaffManagement)) return Forbid();
 
         var (role, error) = await _roles.UpdateAsync(tenantId.Value, id, request, ct);
         if (error is not null) return BadRequest(new { error });
@@ -320,6 +338,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.StaffManagement)) return Forbid();
 
         var (success, error) = await _roles.DeleteAsync(tenantId.Value, id, ct);
         if (!success) return BadRequest(new { error });
@@ -340,6 +359,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.TaskBoard)) return Forbid();
 
         var callerUserId = ResolveUserId();
         if (callerUserId is null) return Forbid();
@@ -359,6 +379,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.TaskBoard)) return Forbid();
 
         var callerUserId = ResolveUserId();
         if (callerUserId is null) return Forbid();
@@ -382,6 +403,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.TaskBoard)) return Forbid();
 
         var (task, error) = await _tasks.UpdateAsync(tenantId.Value, id, request, ct);
 
@@ -402,6 +424,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.TaskBoard)) return Forbid();
 
         var (task, error) = await _tasks.UpdateStatusAsync(tenantId.Value, id, request, ct);
 
@@ -423,6 +446,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ClientManagement)) return Forbid();
 
         var (clients, error) = await _cabinet.GetClientsAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(clients);

@@ -1,0 +1,142 @@
+name: shelfguard_staging
+# ^ MANDATORY: without an explicit project name, Compose defaults to the
+# basename of the directory this file lives in (`crmproductsystems`) — the
+# exact same default docker-compose.yml (dev) resolves to when invoked from
+# the repo root. Because both files define services with identical keys
+# (postgres, redis, mosquitto, worker), an implicit name collision makes
+# Compose treat the running dev containers as stale instances of the staging
+# spec and RECREATE (stop+remove) them on `up`, even though container_name
+# below differs. This happened for real on 2026-07-15: `docker compose -f
+# docker-compose.staging.yml --env-file .env.staging up -d --build` deleted
+# the running dev postgres/redis/mosquitto/worker containers outright. Data
+# survived only because named volumes are project-scoped by name and none of
+# this file's volume names collide with docker-compose.yml's — but the
+# containers themselves were gone until manually recreated. Never remove
+# this line, and never invoke either compose file with an explicit `-p` that
+# overrides it to something colliding with the dev project.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: shelfguard_staging_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-shelfguard_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-shelfguard_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    # 5436 on host: dev uses 5435, prod's postgres (external_links) is not
+    # published on the host at all — 5436 avoids both.
+    ports:
+      - '127.0.0.1:5436:5432'
+    volumes:
+      - shelfguard_staging_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-shelfguard_staging}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shelfguard_staging_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Dockerfile hardcodes ASPNETCORE_URLS=http://+:5100 inside the container
+    # (same image as production) — only the host-side port differs here.
+    ports:
+      - '127.0.0.1:5101:5100'
+    volumes:
+      - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+    environment:
+      ASPNETCORE_ENVIRONMENT: Staging
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL}
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
+      Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
+      Cors__Origins: ${Cors__Origins:-http://localhost:3101}
+      Claude__ApiKey: ${CLAUDE_API_KEY:-}
+      Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      PRRO__PROVIDER: ${PRRO__PROVIDER:-}
+      PRRO__BASEURL: ${PRRO__BASEURL:-https://api.checkbox.in.ua/api/v1}
+      PRRO__LICENSEKEY: ${PRRO__LICENSEKEY:-}
+      PRRO__CASHIER__PINCODE: ${PRRO__CASHIER__PINCODE:-}
+      PRRO__CASHIER__LOGIN: ${PRRO__CASHIER__LOGIN:-}
+      PRRO__CASHIER__PASSWORD: ${PRRO__CASHIER__PASSWORD:-}
+      # KI-006 fix: staging opts into DbSeeder on every fresh boot so the audit
+      # environment always has test data. Production never sets this.
+      SEED_ON_START: ${SEED_ON_START:-true}
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5101}
+    container_name: shelfguard_staging_web
+    restart: unless-stopped
+    # Dockerfile hardcodes PORT=3100 inside the container — only the host-side
+    # port differs here.
+    ports:
+      - '127.0.0.1:3101:3100'
+    depends_on:
+      - api
+
+  redis:
+    image: redis:7-alpine
+    container_name: shelfguard_staging_redis
+    restart: unless-stopped
+    # 6381 on host: dev uses 6380, prod uses loopback 6380 — 6381 avoids both.
+    ports:
+      - '127.0.0.1:6381:6379'
+    command: redis-server ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    volumes:
+      - shelfguard_staging_redis_data:/data
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: shelfguard_staging_mosquitto
+    restart: unless-stopped
+    # 1885 on host: dev uses 1884, prod uses loopback 1884 — 1885 avoids both.
+    ports:
+      - '127.0.0.1:1885:1883'
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - shelfguard_staging_mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ['CMD', 'mosquitto_sub', '-t', '$$SYS/#', '-C', '1', '-W', '3']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: shelfguard_staging_worker
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - mosquitto
+      - api
+    environment:
+      REDIS_URL: ${WORKER_REDIS_URL:-redis://localhost:6381}
+      # node-pg needs a postgres:// URL - DATABASE_URL is the .NET-format string for the API
+      DATABASE_URL: ${WORKER_DATABASE_URL}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      FROM_EMAIL: ${FROM_EMAIL:-noreply@shelfguard.app}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:5101}
+      WORKER_API_EMAIL: ${WORKER_API_EMAIL:-}
+      WORKER_API_PASSWORD: ${WORKER_API_PASSWORD:-}
+      MQTT_URL: ${WORKER_MQTT_URL:-mqtt://localhost:1885}
+    network_mode: host
+
+volumes:
+  shelfguard_staging_pgdata:
+  shelfguard_staging_redis_data:
+  shelfguard_staging_mosquitto_data:
+  shelfguard_staging_api_uploads:

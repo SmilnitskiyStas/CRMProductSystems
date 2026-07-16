@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -70,12 +71,25 @@ public sealed class ItemRepository : IItemRepository
             .Include(p => p.DefaultSupplier)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-    public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) =>
-        _db.Items
+    // TASK-356: `p.Barcodes.Contains(barcode)` over a List<string> mapped to a jsonb
+    // column (see AppDbContext: Item.Barcodes .HasColumnType("jsonb")) does NOT
+    // translate to a working query — Npgsql's default `Contains` translation assumes
+    // native Postgres array semantics and generates a query that tries (and fails) to
+    // cast a text[] value to jsonb ("42846: cannot cast type text[] to jsonb"),
+    // throwing on every call against a real database (confirmed live — this repo's
+    // tests only ever exercised this method against an in-memory fake, never Postgres).
+    // Same root cause as BUG-008 (AnalyticsRepository, ~jsonb `.Count`/indexer), just a
+    // different LINQ shape. Fix: use the jsonb containment operator explicitly via
+    // EF.Functions.JsonContains, which Npgsql does translate to "Barcodes" @> @value.
+    public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default)
+    {
+        var needle = JsonSerializer.Serialize(new[] { barcode });
+        return _db.Items
             .Include(p => p.Category)
             .Include(p => p.Segment)
             .Include(p => p.DefaultSupplier)
-            .FirstOrDefaultAsync(p => p.Barcodes.Contains(barcode), ct);
+            .FirstOrDefaultAsync(p => EF.Functions.JsonContains(p.Barcodes, needle), ct);
+    }
 
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) =>
         _db.ProductSupplierSettings

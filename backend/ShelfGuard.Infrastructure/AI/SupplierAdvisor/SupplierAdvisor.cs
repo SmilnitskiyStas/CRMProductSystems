@@ -19,6 +19,10 @@ namespace ShelfGuard.Infrastructure.AI.SupplierAdvisor;
 /// </summary>
 public sealed class SupplierAdvisor : ISupplierAdvisor
 {
+    // See ClaudeOrderAdvisor — SDK default (10 min, retried) is too long for a synchronous
+    // request. Block 7 audit.
+    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
+
     private readonly AppDbContext _db;
     private readonly string? _envApiKey;
     private readonly string _defaultModel;
@@ -69,7 +73,7 @@ public sealed class SupplierAdvisor : ISupplierAdvisor
         var candidateList = candidates.ToList();
         var prompt = BuildUserPrompt(request, candidateList);
 
-        var client = new AnthropicClient { ApiKey = apiKey };
+        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
 
         var parameters = new MessageCreateParams
         {

@@ -183,6 +183,13 @@ async function dispatchTargeted(
 async function dispatchOne(row: PendingIntentRow): Promise<void> {
   const client = await db.connect();
   try {
+    // 2026-07-14 (Block 2 pre-launch audit follow-up): notification_queue's tenant_isolation
+    // no longer has a fail-open branch for RESET-state connections (see
+    // 20260714180000_FixFailOpenTenantIsolationOnReset — the old branch was a P0 cross-tenant
+    // leak). This job never set app.tenant_id, so it needs worker_bypass instead — same
+    // pattern as every other worker/src/jobs/*.job.ts.
+    await client.query("SET app.role = 'worker'");
+
     // Targeted rows (UserId set) bypass the role matrix entirely — deliver to that one user.
     if (row.user_id) {
       await dispatchTargeted(client, row as PendingIntentRow & { user_id: string });
@@ -289,6 +296,9 @@ async function runNotificationDispatch(): Promise<void> {
   const client = await db.connect();
   let pending: PendingIntentRow[];
   try {
+    // See dispatchOne() above for why this SET is now required.
+    await client.query("SET app.role = 'worker'");
+
     const res = await client.query<PendingIntentRow>(
       `SELECT "Id"         AS id,
               "TenantId"   AS tenant_id,

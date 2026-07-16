@@ -161,7 +161,63 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
-    await DbSeeder.SeedAsync(db);
+
+    // KI-028: fail fast if the app connects as a role that bypasses RLS. RLS is the sole
+    // tenant-isolation layer for single-object reads (Get*ByIdAsync repos have no app-level
+    // TenantId filter, by CLAUDE.md design), and a superuser/BYPASSRLS role silently defeats
+    // every policy — exactly the staging leak found in KI-027. Development is warned but allowed;
+    // every other environment refuses to start.
+    {
+        var conn = db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT current_user, (rolsuper OR rolbypassrls) FROM pg_roles WHERE rolname = current_user";
+        string roleName = "?";
+        bool bypassesRls = false;
+        await using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            if (await reader.ReadAsync())
+            {
+                roleName = reader.GetString(0);
+                bypassesRls = !reader.IsDBNull(1) && reader.GetBoolean(1);
+            }
+        }
+
+        var canaryLogger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>().CreateLogger("RlsRoleGuard");
+        switch (RlsRoleGuard.Evaluate(bypassesRls, app.Environment.IsDevelopment()))
+        {
+            case RlsRoleGuard.Decision.WarnDevelopment:
+                canaryLogger.LogCritical(
+                    "SECURITY: database role '{Role}' is a superuser or has BYPASSRLS — Row Level "
+                    + "Security is NOT enforced and tenant isolation is silently disabled. Allowed "
+                    + "only because ASPNETCORE_ENVIRONMENT=Development. Fix by connecting as a "
+                    + "dedicated NOSUPERUSER NOBYPASSRLS role that owns the tables (see KI-027).",
+                    roleName);
+                break;
+            case RlsRoleGuard.Decision.FailFast:
+                throw new InvalidOperationException(
+                    $"FATAL (KI-028): database role '{roleName}' is a superuser or has BYPASSRLS, "
+                    + "so Row Level Security is bypassed and tenant isolation is disabled. Refusing "
+                    + "to start. Connect as a dedicated NOSUPERUSER NOBYPASSRLS role that owns the "
+                    + "tables (see KI-027 in .claude/docs/known-issues.md).");
+        }
+    }
+
+    // KI-006: seeding must never run unattended in Production (hardcoded demo
+    // credentials — see KI-005). Always seed in Development; staging opts in
+    // explicitly via SEED_ON_START=true (docker-compose.staging.yml); Production
+    // never sets this env var, so it never seeds by default.
+    var shouldSeed = app.Environment.IsDevelopment()
+        || Environment.GetEnvironmentVariable("SEED_ON_START") == "true";
+    if (shouldSeed)
+    {
+        // KI-005: password is hashed at runtime via IPasswordHasher, not a hardcoded hash.
+        var hasher = scope.ServiceProvider.GetRequiredService<ShelfGuard.Application.Services.IPasswordHasher>();
+        await DbSeeder.SeedAsync(db, hasher, app.Configuration);
+    }
 }
 
 if (app.Environment.IsDevelopment())

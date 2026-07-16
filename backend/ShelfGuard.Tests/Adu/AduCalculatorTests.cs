@@ -132,6 +132,23 @@ public sealed class AduCalculatorTests
     }
 
     [Fact]
+    public void Brand_new_product_with_no_sales_history_is_null_not_an_exception()
+    {
+        // No daily_sales rows at all yet (product just added to catalog) — must not
+        // divide by zero and must report "insufficient data", not throw or default to 0.
+        var r = AduCalculator.Compute([], Today);
+
+        Assert.Null(r.ProductGroup);
+        Assert.Null(r.AduEffective);
+        Assert.Null(r.Adu30d);
+        Assert.Null(r.Adu60d);
+        Assert.Null(r.Adu90d);
+        Assert.Equal(0, r.ValidDays30);
+        Assert.Equal(0, r.ValidDays60);
+        Assert.Equal(0, r.ValidDays90);
+    }
+
+    [Fact]
     public void Windows_are_cumulative_30_inside_60_inside_90()
     {
         // 1 valid day at age 20, one at 45, one at 80

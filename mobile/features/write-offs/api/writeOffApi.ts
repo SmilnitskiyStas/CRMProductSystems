@@ -2,8 +2,10 @@ import { apiClient } from '@/lib/api-client';
 import type { WriteOff, CreateWriteOffPayload } from '../types';
 
 export async function getWriteOffs(locationId?: string, status?: string): Promise<WriteOff[]> {
+  // Backend query param is still `store_id` (WriteOffsController never got the
+  // v4 Store→Location rename) — `location_id` is silently ignored, unfiltered.
   const { data } = await apiClient.get<WriteOff[]>('/write-offs', {
-    params: { location_id: locationId, status },
+    params: { store_id: locationId, status },
   });
   return data;
 }

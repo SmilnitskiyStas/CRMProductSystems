@@ -14,8 +14,7 @@ import { useMyShifts, useSchedules } from '@/features/schedules/hooks/useSchedul
 import { ShiftCard } from '@/features/schedules/components/ShiftCard';
 import { ScheduleCard } from '@/features/schedules/components/ScheduleCard';
 import type { ScheduleShift, WorkSchedule } from '@/features/schedules/types';
-
-const MANAGER_ROLES = ['StoreManager', 'NetworkManager', 'EnterpriseAdmin', 'Provider', 'ProviderAdmin'];
+import { AT_LEAST_STORE_MANAGER_OR_PROVIDER, hasRole } from '@/lib/roles';
 
 const UA_DAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const UA_MONTHS = [
@@ -61,7 +60,7 @@ function formatWeekLabel(monday: Date): string {
 export default function SchedulesScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const isManager = user ? MANAGER_ROLES.includes(user.role) : false;
+  const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER_OR_PROVIDER);
 
   const [activeTab, setActiveTab] = useState<Tab>('my');
   const [weekOffset, setWeekOffset] = useState(0);

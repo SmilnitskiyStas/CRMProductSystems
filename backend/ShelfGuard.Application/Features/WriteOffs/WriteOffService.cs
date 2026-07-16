@@ -106,37 +106,90 @@ public sealed class WriteOffService : IWriteOffService
         if (writeOff.Status == "rejected")
             return (null, "Cannot approve a rejected write-off.");
 
-        // Deduct stock and log movements for items with a stock reference
+        // Deduct stock and log movements for every item. Two shapes are supported:
+        //  - item.ProductStockId set  → deduct that exact batch (explicit selection).
+        //  - item.ProductStockId null → FEFO-consume across the product's batches at
+        //    writeOff.StoreId (this is the ONLY shape the mobile "quick write-off" create
+        //    flow sends — it never picks a batch). Previously this branch was silently
+        //    skipped (`continue`), so approving a write-off created from the mobile app
+        //    never touched product_stock and never wrote a stock_movements row at all
+        //    (TASK-354 audit finding, P0). Both branches now hard-fail the whole approval
+        //    if requested quantity exceeds what's actually in stock — no more approving
+        //    a write-off for more than is on the shelf, and no more silent partial-deduct
+        //    that left TotalLossAmount inconsistent with the real quantity removed.
         foreach (var item in writeOff.Items)
         {
-            if (item.ProductStockId is null) continue;
-
-            var stock = await _repo.GetStockByIdAsync(item.ProductStockId.Value, ct);
-            if (stock is null) continue;
-
-            var before = stock.Quantity;
-            var deduct = Math.Min(item.Quantity, stock.Quantity);
-
-            stock.Quantity -= deduct;
-            stock.Status = StockStatus.Compute(stock.Quantity, stock.ExpiryDate, stock.LastCheckedAt);
-            _repo.UpdateStock(stock);
-
-            await _repo.AddMovementAsync(new StockMovement
+            if (item.ProductStockId.HasValue)
             {
-                TenantId = writeOff.TenantId,
-                MovementType = "write_off",
-                ProductStockId = stock.Id,
-                ProductId = item.ProductId,
-                FromStoreId = writeOff.StoreId,
-                Quantity = deduct,
-                QuantityBefore = before,
-                QuantityAfter = stock.Quantity,
-                UnitPrice = item.UnitPrice,
-                TotalAmount = item.LossAmount,
-                ReferenceId = writeOff.Id,
-                ReferenceType = "write_off",
-                PerformedBy = approvedBy,
-            }, ct);
+                var stock = await _repo.GetStockByIdAsync(item.ProductStockId.Value, ct);
+                if (stock is null)
+                    return (null, $"Stock batch {item.ProductStockId} not found.");
+
+                if (stock.Quantity < item.Quantity)
+                    return (null, $"Insufficient quantity in batch {item.ProductStockId}. Available: {stock.Quantity}, requested: {item.Quantity}.");
+
+                var before = stock.Quantity;
+                stock.Quantity -= item.Quantity;
+                stock.Status = StockStatus.Compute(stock.Quantity, stock.ExpiryDate, stock.LastCheckedAt);
+                _repo.UpdateStock(stock);
+
+                await _repo.AddMovementAsync(new StockMovement
+                {
+                    TenantId = writeOff.TenantId,
+                    MovementType = "write_off",
+                    ProductStockId = stock.Id,
+                    ProductId = item.ProductId,
+                    FromStoreId = writeOff.StoreId,
+                    FromZoneId = stock.ZoneId,
+                    Quantity = item.Quantity,
+                    QuantityBefore = before,
+                    QuantityAfter = stock.Quantity,
+                    UnitPrice = item.UnitPrice,
+                    TotalAmount = item.LossAmount,
+                    ReferenceId = writeOff.Id,
+                    ReferenceType = "write_off",
+                    PerformedBy = approvedBy,
+                }, ct);
+            }
+            else
+            {
+                var batches = await _repo.GetFefoOrderedAsync(item.ProductId, writeOff.StoreId, ct);
+                var remaining = item.Quantity;
+
+                foreach (var batch in batches)
+                {
+                    if (remaining <= 0) break;
+
+                    var take = Math.Min(batch.Quantity, remaining);
+                    var before = batch.Quantity;
+
+                    batch.Quantity -= take;
+                    batch.Status = StockStatus.Compute(batch.Quantity, batch.ExpiryDate, batch.LastCheckedAt);
+                    remaining -= take;
+                    _repo.UpdateStock(batch);
+
+                    await _repo.AddMovementAsync(new StockMovement
+                    {
+                        TenantId = writeOff.TenantId,
+                        MovementType = "write_off",
+                        ProductStockId = batch.Id,
+                        ProductId = item.ProductId,
+                        FromStoreId = writeOff.StoreId,
+                        FromZoneId = batch.ZoneId,
+                        Quantity = take,
+                        QuantityBefore = before,
+                        QuantityAfter = batch.Quantity,
+                        UnitPrice = item.UnitPrice,
+                        TotalAmount = item.UnitPrice.HasValue ? item.UnitPrice.Value * take : null,
+                        ReferenceId = writeOff.Id,
+                        ReferenceType = "write_off",
+                        PerformedBy = approvedBy,
+                    }, ct);
+                }
+
+                if (remaining > 0)
+                    return (null, $"Insufficient stock for product {item.ProductId} in store {writeOff.StoreId}. Available: {item.Quantity - remaining}, requested: {item.Quantity}.");
+            }
         }
 
         writeOff.Status = "approved";

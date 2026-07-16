@@ -51,7 +51,18 @@ services:
         condition: service_healthy
     environment:
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: Host=postgres;Port=5432;Database=crm;Username=crm;Password=crm_dev_password
+      # node-pg (the worker's `pg` Pool) needs a postgres:// URL, not the .NET-format
+      # "Host=...;Database=..." string. The API (run outside Docker for local dev, see
+      # CLAUDE.md) is the only consumer of the .NET format, so no shared-env conflict here
+      # unlike docker-compose.staging.yml/production.yml's WORKER_DATABASE_URL split.
+      # TASK-360 (Block 9 audit): this was still the broken .NET-format string, so every
+      # worker DB query failed with `getaddrinfo ENOTFOUND base` on every job run in local
+      # dev — the exact bug TASK-033 (2026-06-11) already diagnosed and fixed for
+      # staging/production, just never applied here.
+      # KI-027 (2026-07-16): connect as the NOSUPERUSER NOBYPASSRLS app role that owns the
+      # tables, NOT the `crm` bootstrap superuser (a superuser bypasses RLS, silently disabling
+      # tenant isolation — worker jobs would then read/write across every tenant).
+      DATABASE_URL: postgresql://shelfguard_app_dev:307823f594357b97c27a046f33bc5549ad09@postgres:5432/crm
       MQTT_URL: mqtt://mosquitto:1883
     restart: unless-stopped
 

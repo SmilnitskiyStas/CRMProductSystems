@@ -8,6 +8,8 @@ import {
   OFFLINE_AFTER_MINUTES,
   TEMP_VIOLATION_HOURS,
   assessWeightDelta,
+  isPlausibleHumidity,
+  isPlausibleTemperature,
   isTempAlert,
   parseDeviceConfig,
   tempAlertThreshold,
@@ -58,8 +60,13 @@ async function handleMessage(rawTopic: string, raw: Buffer): Promise<void> {
   try {
     await client.query("SET app.role = 'worker'");
 
+    // NOTE (Block 11 audit, KI-016): iot_devices' store-scoping column is "LocationId", not
+    // "StoreId" (v4 Store→Location rename) — same bug class as ai-order.job.ts/notification.job.ts
+    // (Blocks 7/9). This threw "column StoreId does not exist" on every MQTT message, so the
+    // entire IoT sensor pipeline (temp/weight readings, offline watchdog, FEFO write-down) never
+    // ran. Aliased back to store_id in JS-land — only the SQL column name was wrong.
     const deviceRes = await client.query<DeviceRow>(
-      `SELECT "Id" AS id, "TenantId" AS tenant_id, "StoreId" AS store_id,
+      `SELECT "Id" AS id, "TenantId" AS tenant_id, "LocationId" AS store_id,
               "ZoneId" AS zone_id, "DeviceType" AS device_type, "Config" AS config
        FROM iot_devices
        WHERE "DeviceId" = $1 AND "IsActive" = true
@@ -83,7 +90,16 @@ async function handleMessage(rawTopic: string, raw: Buffer): Promise<void> {
     offlineAlerted.delete(device.id); // device is talking again
 
     if (device.device_type === "temp_sensor" && typeof payload.temperature === "number") {
-      await handleTemperature(client, device, payload, recordedAt);
+      // Block 11 audit: sanity-bound the reading before it ever reaches temperature_readings —
+      // a broken/miswired sensor sending an implausible value would otherwise get inserted,
+      // potentially trip isTempAlert, and (if sustained) falsely flag batches temp_violation.
+      if (!isPlausibleTemperature(payload.temperature) || !isPlausibleHumidity(payload.humidity)) {
+        console.warn(
+          `[mqtt] implausible reading from device '${payload.device_id}' (temp=${payload.temperature}, humidity=${payload.humidity}) — ignored, not inserted`
+        );
+      } else {
+        await handleTemperature(client, device, payload, recordedAt);
+      }
     } else if (device.device_type === "weight_sensor" && typeof payload.delta === "number") {
       await handleWeight(client, device, payload, recordedAt);
     }
@@ -105,8 +121,9 @@ async function handleTemperature(
   const alert = isTempAlert(payload.temperature!, threshold);
 
   await client.query(
+    // NOTE (Block 11 audit, KI-016): temperature_readings' column is "LocationId", not "StoreId".
     `INSERT INTO temperature_readings
-       ("DeviceId", "StoreId", "ZoneId", "Temperature", "Humidity", "IsAlert", "RecordedAt")
+       ("DeviceId", "LocationId", "ZoneId", "Temperature", "Humidity", "IsAlert", "RecordedAt")
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [device.id, device.store_id, device.zone_id, payload.temperature, payload.humidity ?? null, alert, recordedAt]
   );
@@ -219,10 +236,11 @@ async function handleWeight(
 
   // FEFO write-down: consume from batches with the nearest expiry first
   let remaining = units;
+  // NOTE (Block 11 audit, KI-016): product_stock's column is "LocationId", not "StoreId".
   const batches = await client.query<{ id: string; quantity: number }>(
     `SELECT "Id" AS id, "Quantity" AS quantity
      FROM product_stock
-     WHERE "TenantId" = $1 AND "StoreId" = $2 AND "ProductId" = $3
+     WHERE "TenantId" = $1 AND "LocationId" = $2 AND "ProductId" = $3
        AND "Quantity" > 0 AND "Status" NOT IN ('sold_out', 'archived')
      ORDER BY "ExpiryDate" ASC
      FOR UPDATE`,
@@ -257,8 +275,9 @@ async function checkOfflineDevices(): Promise<void> {
   const client = await db.connect();
   try {
     await client.query("SET app.role = 'worker'");
+    // NOTE (Block 11 audit, KI-016): iot_devices' column is "LocationId", not "StoreId".
     const { rows } = await client.query<{ id: string; tenant_id: string; store_id: string; name: string | null; device_id: string }>(
-      `SELECT "Id" AS id, "TenantId" AS tenant_id, "StoreId" AS store_id, "Name" AS name, "DeviceId" AS device_id
+      `SELECT "Id" AS id, "TenantId" AS tenant_id, "LocationId" AS store_id, "Name" AS name, "DeviceId" AS device_id
        FROM iot_devices
        WHERE "IsActive" = true
          AND "LastSeenAt" IS NOT NULL

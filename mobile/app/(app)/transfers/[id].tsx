@@ -9,14 +9,13 @@ import {
 } from '@/features/transfers/hooks/useTransfers';
 import { STATUS_LABELS, STATUS_COLORS } from '@/features/transfers/types';
 import { useAuthStore } from '@/features/auth/store';
-
-const MANAGER_ROLES = ['StoreManager', 'Director', 'NetworkManager', 'Admin'];
+import { AT_LEAST_STORE_MANAGER, hasRole } from '@/lib/roles';
 
 export default function TransferDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const isManager = user ? MANAGER_ROLES.includes(user.role) : false;
+  const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER);
 
   const { data, isLoading, isError } = useTransfer(id);
   const confirm = useConfirmTransfer();

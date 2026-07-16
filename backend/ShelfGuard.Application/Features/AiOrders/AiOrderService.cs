@@ -70,16 +70,13 @@ public sealed class AiOrderService : IAiOrderService
 
     public async Task<List<AiOrderListItemDto>> GetListAsync(Guid? storeId, CancellationToken ct = default)
     {
+        // GetListAsync now eager-loads Items, so Items.Count is free — previously this looped
+        // and called GetByIdAsync per suggestion (N+1: up to 30 extra full round-trips just to
+        // count items). Fixed as part of the Block 7 AI Orders/Assistant audit.
         var list = await _repo.GetListAsync(storeId, limit: 30, ct);
-        var result = new List<AiOrderListItemDto>();
-        foreach (var s in list)
-        {
-            var full = await _repo.GetByIdAsync(s.Id, ct);
-            result.Add(new AiOrderListItemDto(
-                s.Id, s.StoreId, s.Store?.Name ?? "", s.GeneratedAt, s.OrderDate.ToString("yyyy-MM-dd"),
-                s.Status, full?.Items.Count ?? 0, s.AiModel, s.TokensUsed));
-        }
-        return result;
+        return list.Select(s => new AiOrderListItemDto(
+            s.Id, s.StoreId, s.Store?.Name ?? "", s.GeneratedAt, s.OrderDate.ToString("yyyy-MM-dd"),
+            s.Status, s.Items.Count, s.AiModel, s.TokensUsed)).ToList();
     }
 
     public async Task<(AiOrderDto? Order, string? Error)> GetByIdAsync(Guid id, CancellationToken ct = default)

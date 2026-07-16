@@ -127,10 +127,6 @@ public static class DependencyInjection
         // Movements audit log
         services.AddScoped<IMovementRepository, MovementRepository>();
 
-        // Support tickets
-        services.AddScoped<ISupportTicketRepository,  SupportTicketRepository>();
-        services.AddScoped<ISupportMessageRepository, SupportMessageRepository>();
-
         // v4 Phase 3 - Supplier Marketplace (TASK-221)
         services.AddScoped<IMarketplaceRepository, MarketplaceRepository>();
 

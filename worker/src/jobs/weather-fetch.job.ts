@@ -25,6 +25,17 @@ async function fetchForecast(lat: number, lon: number): Promise<MeteoDaily> {
 async function runWeatherFetch(): Promise<void> {
   const client = await db.connect();
   try {
+    // Block 11 audit: this job never set app.role='worker' — under the post-Block-2
+    // fail-closed RLS policy (20260714180000_FixFailOpenTenantIsolationOnReset), both the
+    // SELECT locations below and the INSERT INTO weather_data further down would return/affect
+    // zero rows without it (RLS blocks by default when app.tenant_id is unset, and this job
+    // legitimately spans every tenant — no per-request tenant context exists here). Same fix as
+    // every other worker/src/jobs/*.ts file; both tables already carry worker_bypass.
+    await client.query("SET app.role = 'worker'");
+
+    // NOTE: "stores" was renamed to "locations" in migration 20260615183318_V4LocationsRename
+    // (v4 Store→Location rename). Querying "stores" here silently threw every run — weather_data
+    // was never populated, so AiOrderService's weather context was always an empty array.
     const { rows: stores } = await client.query<{
       id: string;
       name: string;
@@ -32,7 +43,7 @@ async function runWeatherFetch(): Promise<void> {
       longitude: string;
     }>(`
       SELECT "Id" AS id, "Name" AS name, "Latitude" AS latitude, "Longitude" AS longitude
-      FROM stores
+      FROM locations
       WHERE "IsActive" AND "Latitude" IS NOT NULL AND "Longitude" IS NOT NULL
     `);
 
@@ -53,10 +64,15 @@ async function runWeatherFetch(): Promise<void> {
         const tavg = tmin !== null && tmax !== null ? Math.round(((tmin + tmax) / 2) * 10) / 10 : null;
 
         await client.query(
+          // NOTE (Block 11 audit, KI-016): weather_data's store-scoping column is "LocationId",
+          // not "StoreId" (v4 Store→Location rename) — same bug class as ai-order.job.ts's
+          // FROM stores fix above, but here it was the INSERT's column name, not the table
+          // name. This threw "column StoreId of relation weather_data does not exist" on
+          // every run, so no forecast row was ever written even after the FROM-clause fix.
           `INSERT INTO weather_data
-             ("StoreId", "Date", "TempMin", "TempMax", "TempAvg", "Precipitation", "WeatherCode", "IsForecast", "FetchedAt")
+             ("LocationId", "Date", "TempMin", "TempMax", "TempAvg", "Precipitation", "WeatherCode", "IsForecast", "FetchedAt")
            VALUES ($1, $2, $3, $4, $5, $6, $7, ($2::date >= CURRENT_DATE), NOW())
-           ON CONFLICT ("StoreId", "Date") DO UPDATE SET
+           ON CONFLICT ("LocationId", "Date") DO UPDATE SET
              "TempMin" = EXCLUDED."TempMin",
              "TempMax" = EXCLUDED."TempMax",
              "TempAvg" = EXCLUDED."TempAvg",

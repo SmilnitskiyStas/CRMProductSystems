@@ -1,33 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { useMe } from "@/features/auth/hooks/useAuth";
-import { useLinkTelegram } from "../hooks/useProfile";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Copy, ExternalLink, RefreshCw } from "lucide-react";
+import { useMe, ME_KEY } from "@/features/auth/hooks/useAuth";
+import { useCreateTelegramLinkCode } from "../hooks/useProfile";
 import { Btn } from "@/components/ui/Btn";
+import type { TelegramLinkCodeResponse } from "../types";
+
+/** Re-checks /api/auth/me while a code is pending, so linking is detected without a reload. */
+const POLL_INTERVAL_MS = 3000;
+
+function copyText(text: string, message: string) {
+  navigator.clipboard
+    .writeText(text)
+    .then(() => toast.success(message))
+    .catch(() => toast.error("Не вдалося скопіювати"));
+}
 
 export function TelegramLinkSection() {
   const { data: me } = useMe();
-  const link = useLinkTelegram();
+  const qc = useQueryClient();
+  const createCode = useCreateTelegramLinkCode();
 
-  const [chatId,  setChatId]  = useState("");
-  const [success, setSuccess] = useState(false);
-  const [error,   setError]   = useState("");
+  const [pending, setPending] = useState<TelegramLinkCodeResponse | null>(null);
+  const [expired, setExpired] = useState(false);
 
   const isLinked = Boolean(me?.telegramChatId);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const id = chatId.trim();
-    if (!id) { setError("Введіть Telegram Chat ID"); return; }
-    setError("");
+  // Poll /api/auth/me while a code is outstanding — the worker's /start <code> listener
+  // writes TelegramChatId server-side, there is nothing for the frontend to submit.
+  useEffect(() => {
+    if (!pending || isLinked) return;
 
-    try {
-      await link.mutateAsync(id);
-      setSuccess(true);
-      setChatId("");
-    } catch (err) {
-      setError((err as Error)?.message ?? "Помилка підключення");
+    const interval = setInterval(() => {
+      if (Date.now() > new Date(pending.expiresAt).getTime()) {
+        setExpired(true);
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ME_KEY });
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [pending, isLinked, qc]);
+
+  // Linked while a code was pending — clear local state, nothing left to show but the status.
+  useEffect(() => {
+    if (isLinked && pending) {
+      setPending(null);
+      setExpired(false);
+      toast.success("Telegram підключено");
     }
+  }, [isLinked, pending]);
+
+  function handleGenerate() {
+    setExpired(false);
+    createCode.mutate(undefined, {
+      onSuccess: (data) => setPending(data),
+      onError: () => toast.error("Не вдалося згенерувати код. Спробуйте пізніше."),
+    });
+  }
+
+  function handleCheckNow() {
+    qc.invalidateQueries({ queryKey: ME_KEY });
   }
 
   return (
@@ -66,11 +102,89 @@ export function TelegramLinkSection() {
             fontSize: 13,
           }}
         >
-          Telegram успішно прив'язано. Ви отримуватимете сповіщення в боті.
+          Telegram успішно прив&apos;язано. Ви отримуватимете сповіщення в боті.
         </div>
+      ) : pending && !expired ? (
+        <>
+          {/* Pending code */}
+          <div
+            style={{
+              padding: "14px 16px",
+              background: "#0A1020",
+              border: "1px solid #1F2937",
+              borderRadius: 9,
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 13, marginBottom: 10 }}>
+              Код прив&apos;язки
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <code
+                style={{
+                  background: "#0D1117",
+                  border: "1px solid #374151",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  color: "#38BDF8",
+                  fontSize: 18,
+                  fontFamily: "monospace",
+                  letterSpacing: "0.15em",
+                  flex: 1,
+                  textAlign: "center",
+                }}
+              >
+                {pending.code}
+              </code>
+              <Btn
+                variant="ghost"
+                size="sm"
+                icon={<Copy size={12} />}
+                onClick={() => copyText(pending.code, "Код скопійовано")}
+              >
+                Копіювати
+              </Btn>
+            </div>
+
+            <ol style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 12, color: "#9CA3AF", lineHeight: 1.7 }}>
+              <li>Натисніть «Відкрити в Telegram» — бот отримає код автоматично</li>
+              <li>Якщо посилання не відкрилось: знайдіть бота вручну і надішліть <code style={{ color: "#38BDF8" }}>/start {pending.code}</code></li>
+              <li>Натисніть Start у боті — акаунт прив&apos;яжеться сам, без дій тут</li>
+            </ol>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <a href={pending.deepLink} target="_blank" rel="noopener noreferrer">
+                <Btn type="button" icon={<ExternalLink size={13} />}>
+                  Відкрити в Telegram
+                </Btn>
+              </a>
+              <Btn variant="ghost" icon={<RefreshCw size={13} />} onClick={handleCheckNow}>
+                Перевірити зараз
+              </Btn>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              color: "#6B7280", fontSize: 12,
+            }}
+          >
+            <span
+              style={{
+                width: 6, height: 6, borderRadius: "50%",
+                background: "#FBBF24",
+                animation: "sg-pulse 1.4s ease-in-out infinite",
+              }}
+            />
+            Очікуємо підтвердження в Telegram… Код дійсний до{" "}
+            {new Date(pending.expiresAt).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}
+            <style>{`@keyframes sg-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }`}</style>
+          </div>
+        </>
       ) : (
         <>
-          {/* Instructions */}
+          {/* Idle / expired — instructions + generate button */}
           <div
             style={{
               padding: "12px 14px",
@@ -87,68 +201,31 @@ export function TelegramLinkSection() {
               Як підключити Telegram:
             </div>
             <ol style={{ margin: 0, paddingLeft: 18 }}>
-              <li>Відкрийте Telegram та знайдіть бот <code style={{ color: "#38BDF8" }}>@userinfobot</code></li>
-              <li>Надішліть йому будь-яке повідомлення</li>
-              <li>Скопіюйте ваш <strong>Chat ID</strong> з відповіді</li>
-              <li>Вставте його у поле нижче</li>
+              <li>Натисніть «Згенерувати код» нижче</li>
+              <li>Перейдіть за посиланням у Telegram та натисніть Start</li>
+              <li>Готово — акаунт прив&apos;яжеться автоматично, підтвердження не потрібне</li>
             </ol>
           </div>
 
-          {success && (
+          {expired && (
             <div
               style={{
                 padding: "10px 14px",
-                background: "#052e16",
-                border: "1px solid #166534",
+                background: "#2d0a0a",
+                border: "1px solid #7F1D1D",
                 borderRadius: 8,
-                color: "#4ADE80",
+                color: "#F87171",
                 fontSize: 13,
                 marginBottom: 14,
               }}
             >
-              ✓ Telegram успішно підключено!
+              Код прострочено (діяв 15 хвилин). Згенеруйте новий.
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: 12 }}>
-              <label
-                style={{
-                  display: "block",
-                  color: "#9CA3AF", fontSize: 12, fontWeight: 500,
-                  marginBottom: 6,
-                }}
-              >
-                Telegram Chat ID
-              </label>
-              <input
-                value={chatId}
-                onChange={(e) => { setChatId(e.target.value); setError(""); }}
-                placeholder="123456789"
-                type="text"
-                inputMode="numeric"
-                style={{
-                  width: "100%",
-                  background: "#0D1117",
-                  border: `1px solid ${error ? "#EF4444" : "#374151"}`,
-                  borderRadius: 8,
-                  padding: "9px 12px",
-                  color: "#E8EDF5",
-                  fontSize: 13,
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-              {error && (
-                <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{error}</p>
-              )}
-            </div>
-
-            <Btn type="submit" disabled={link.isPending}>
-              {link.isPending ? "Підключення…" : "Підключити"}
-            </Btn>
-          </form>
+          <Btn onClick={handleGenerate} disabled={createCode.isPending}>
+            {createCode.isPending ? "Генерація…" : "Згенерувати код"}
+          </Btn>
         </>
       )}
     </div>

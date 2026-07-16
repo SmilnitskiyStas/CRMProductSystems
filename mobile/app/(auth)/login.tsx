@@ -78,7 +78,9 @@ export default function LoginScreen() {
 
           {error && (
             <Text className="text-red-500 text-sm text-center">
-              Невірний email або пароль
+              {error instanceof Error && error.message === 'TWO_FACTOR_REQUIRED'
+                ? 'Двофакторна автентифікація ще не підтримується в мобільному застосунку. Увійдіть через веб-версію або вимкніть 2FA у профілі.'
+                : 'Невірний email або пароль'}
             </Text>
           )}
 

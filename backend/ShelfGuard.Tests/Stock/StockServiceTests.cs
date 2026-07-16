@@ -182,6 +182,95 @@ public sealed class StockServiceTests
         Assert.Equal("sold_out", batch.Status);
     }
 
+    [Fact]
+    public async Task FefoConsumeAsync_TiedExpiryDates_ConsumesAcrossBothBatches()
+    {
+        // Two batches share the exact same expiry_date — FEFO doesn't mandate a specific
+        // tie-break order, but consumption must still walk through both and fully satisfy
+        // the request (neither batch should be skipped just because dates are equal).
+        var sameExpiry = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+        var batchA = CreateBatch(quantity: 10, daysToExpiry: 5);
+        var batchB = CreateBatch(quantity: 10, daysToExpiry: 5);
+        Assert.Equal(sameExpiry, batchA.ExpiryDate);
+        Assert.Equal(sameExpiry, batchB.ExpiryDate);
+
+        _repo.GetFefoOrderedAsync(_productId, _storeId, Arg.Any<CancellationToken>())
+             .Returns([batchA, batchB]);
+
+        var req = new FefoConsumeRequest(_productId, _storeId, 15, null);
+        var result = await _sut.FefoConsumeAsync(_tenantId, _userId, req);
+
+        Assert.True(result.Success);
+        Assert.Equal(15, result.QuantityConsumed);
+        Assert.Equal(0, result.QuantityShortfall);
+        Assert.Equal(2, result.BatchesConsumed.Count);
+        // Total remaining across both tied batches must be exactly 5 — no quantity lost or
+        // double-counted regardless of which of the two equally-eligible batches went first.
+        Assert.Equal(5, batchA.Quantity + batchB.Quantity);
+    }
+
+    // ── Suggestions (deficit-transfer lookup) ────────────────────────────────
+
+    [Fact]
+    public async Task GetSuggestionsAsync_UsesBulkDeficitLookup_NotPerBatchQuery()
+    {
+        // Regression guard: GetSuggestionsAsync must resolve deficit stocks for all
+        // action-required batches via a single GetDeficitStocksBulkAsync call, not one
+        // GetDeficitStocksAsync round-trip per batch (N+1).
+        var batch1 = CreateBatch(quantity: 5, daysToExpiry: 3);
+        var batch2 = CreateBatch(quantity: 5, daysToExpiry: 4);
+        _repo.GetActionRequiredAsync(Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+             .Returns([batch1, batch2]);
+        _repo.GetProductionStoresAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _repo.GetDeficitStocksBulkAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+             .Returns(new Dictionary<Guid, List<ProductStock>>());
+
+        await _sut.GetSuggestionsAsync(null);
+
+        await _repo.Received(1).GetDeficitStocksBulkAsync(
+            Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().GetDeficitStocksAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSuggestionsAsync_DeficitInOwnStore_IsExcludedFromTransferSuggestion()
+    {
+        // A "deficit" row belonging to the SAME store as the batch itself must never be
+        // offered as a transfer target (that would suggest moving stock to itself).
+        var batch = CreateBatch(quantity: 5, daysToExpiry: 3);
+        var otherStoreId = Guid.NewGuid();
+        var otherStore = new Location { Id = otherStoreId, Name = "Filія 2" };
+
+        var deficitSameStore = CreateBatch(quantity: 1, daysToExpiry: 20);
+        var deficitOtherStore = new ProductStock
+        {
+            TenantId = _tenantId,
+            ProductId = _productId,
+            StoreId = otherStoreId,
+            Quantity = 1,
+            QuantityInitial = 1,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(25)),
+            Status = "safe",
+            LastCheckedAt = DateTime.UtcNow,
+            Store = otherStore,
+        };
+
+        _repo.GetActionRequiredAsync(Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([batch]);
+        _repo.GetProductionStoresAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _repo.GetDeficitStocksBulkAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+             .Returns(new Dictionary<Guid, List<ProductStock>>
+             {
+                 [_productId] = [deficitSameStore, deficitOtherStore], // same-store entry ordered first
+             });
+
+        var suggestions = await _sut.GetSuggestionsAsync(null);
+
+        var transferAction = Assert.Single(suggestions).Actions.SingleOrDefault(a => a.Type == "transfer");
+        Assert.NotNull(transferAction);
+        Assert.Equal(otherStoreId, transferAction!.TargetStoreId);
+    }
+
     // ── Verify ─────────────────────────────────────────────────────────────
 
     [Fact]

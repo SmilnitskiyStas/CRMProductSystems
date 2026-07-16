@@ -38,10 +38,12 @@ public interface IStockRepository
     Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default);
 
     /// <summary>
-    /// Bulk variant: returns deficit stocks for many products in one query.
-    /// Key = productId, Value = first deficit batch (or null when none).
+    /// Bulk variant: returns deficit stocks (quantity &lt; min_stock, quantity &gt; 0) for many
+    /// products in one query, grouped by productId and ordered by expiry_date ascending within
+    /// each group (across all stores — caller must filter out the source batch's own store).
+    /// Every requested productId is present in the result (empty list when no deficit exists).
     /// </summary>
-    Task<Dictionary<Guid, ProductStock?>> GetDeficitStocksBulkAsync(
+    Task<Dictionary<Guid, List<ProductStock>>> GetDeficitStocksBulkAsync(
         IReadOnlyCollection<Guid> productIds, CancellationToken ct = default);
 
     /// <summary>Returns locations of type 'production' or 'distribution' for the tenant.</summary>

@@ -274,6 +274,44 @@ public sealed class ProductionServiceTests
         Assert.Empty(repo.StockEvents);
     }
 
+    // ── CompleteOrderAsync — output item missing ShelfLifeDays → 422, no writes ──
+
+    [Fact]
+    public async Task CompleteOrderAsync_OutputItemMissingShelfLifeDays_Returns422_NoPartialWrites()
+    {
+        var repo       = new FakeProductionRepo();
+        var svc        = BuildSvc(repo);
+        var rawMat     = Build.RawMaterial("Flour");
+        // Output item with no ShelfLifeDays configured (unlike Build.FinishedProduct)
+        var output     = new Item { TenantId = Guid.NewGuid(), Name = "Bread", ItemType = "product" };
+        var recipe     = Build.Recipe(output.Id);
+        var ingredient = Build.Ingredient(recipe.Id, rawMat.Id, qty: 1m);
+        var order      = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+
+        repo.Items.Add(rawMat);
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Ingredients.Add(ingredient);
+        repo.Orders.Add(order);
+        repo.Stock.Add(Build.StockBatch(rawMat.Id, qty: 10m));
+
+        var (resultOrder, error, statusCode, _, outputStockBatchId) =
+            await svc.CompleteOrderAsync(order.Id, TenantId, UserId);
+
+        Assert.Null(resultOrder);
+        Assert.Equal(422, statusCode);
+        Assert.NotNull(error);
+        Assert.Contains("ShelfLifeDays", error);
+        Assert.Null(outputStockBatchId);
+
+        // No consumption may happen before the shelf-life check — order stays Planned,
+        // raw material stock untouched.
+        Assert.Equal(ProductionOrderStatus.Planned, order.Status);
+        Assert.Equal(10m, repo.Stock.First(s => s.ProductId == rawMat.Id).Quantity);
+        Assert.Empty(repo.Consumptions);
+        Assert.Empty(repo.StockEvents);
+    }
+
     // ── CompleteOrderAsync — happy path (Planned status) ─────────────────────
 
     [Fact]

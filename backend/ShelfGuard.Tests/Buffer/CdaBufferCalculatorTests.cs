@@ -47,6 +47,33 @@ public sealed class CdaBufferCalculatorTests
     }
 
     [Fact]
+    public void Cycle_from_misconfigured_empty_schedule_does_not_divide_by_zero()
+    {
+        // An active SupplySchedule row with no DayOfWeek set (data-entry gap) must fall
+        // back to the weekly cycle, not throw DivideByZeroException in 7m / count.
+        var schedule = new SupplySchedule { DayOfWeek = [], OrderLeadDays = null };
+
+        var (lt, oc) = CdaBufferCalculator.CycleFromSchedule(schedule);
+
+        Assert.Equal(1m, lt);   // default lead time
+        Assert.Equal(7.0m, oc); // Math.Max(1, 0) deliveries/week → OC = 7
+    }
+
+    [Fact]
+    public void Zero_effective_adu_yields_zero_buffer_not_an_exception()
+    {
+        // A product can reach the minimum valid-day threshold while every valid day sold
+        // nothing (e.g. shelf-stocked but untouched) — AduEffective = 0, not null.
+        // The buffer must resolve to all-zero zones, never throw or go negative.
+        var z = CdaBufferCalculator.Compute(0m, leadTime: 2m, orderCycle: 3m, variability: 0.5m);
+
+        Assert.Equal(0m, z.Green);
+        Assert.Equal(0m, z.Yellow);
+        Assert.Equal(0m, z.Red);
+        Assert.Equal(0m, z.Total);
+    }
+
+    [Fact]
     public void Variability_is_cv_of_valid_day_sales()
     {
         // Sales 8 and 12 → mean 10, σ = 2 → CV = 0.2

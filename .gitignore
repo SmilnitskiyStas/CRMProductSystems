@@ -8,6 +8,10 @@ dist/
 .env.local
 .env*.local
 
+# Real environment files (only the .example variants are tracked)
+.env.staging
+.env.production
+
 # ── .NET / Backend ───────────────────────────────────────────────────────────
 bin/
 obj/

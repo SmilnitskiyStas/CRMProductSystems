@@ -20,8 +20,7 @@ import {
   useDeleteCustomer,
 } from '@/features/customers/hooks/useCustomers';
 import type { UpdateCustomerPayload } from '@/features/customers/types';
-
-const MANAGER_ROLES = ['StoreManager', 'NetworkManager', 'Admin'];
+import { AT_LEAST_STORE_MANAGER, hasRole } from '@/lib/roles';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   cash: 'Готівка',
@@ -45,7 +44,7 @@ export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const isManager = user ? MANAGER_ROLES.includes(user.role) : false;
+  const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER);
 
   const { data, isLoading, isError } = useCustomer(id);
   const updateCustomer = useUpdateCustomer();

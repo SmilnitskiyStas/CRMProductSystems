@@ -48,10 +48,3 @@ export const MOVEMENT_LABELS: Record<string, string> = {
   adjustment:  'Коригування',
   pos_sale:    'Продаж',
 };
-
-export const AT_LEAST_STORE_MANAGER_ROLES = [
-  'provider',
-  'enterprise_admin',
-  'network_manager',
-  'store_manager',
-];

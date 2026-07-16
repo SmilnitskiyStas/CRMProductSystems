@@ -129,7 +129,8 @@ public sealed class StockRepository : IStockRepository
             .Include(s => s.Product).ThenInclude(p => p!.DefaultSupplier)
             .Include(s => s.Store)
             .Include(s => s.Zone)
-            .Where(s => s.ProductId == productId && s.StoreId == storeId && s.Quantity > 0)
+            .Where(s => s.ProductId == productId && s.StoreId == storeId && s.Quantity > 0
+                     && s.Status != "sold_out" && s.Status != "archived")
             .OrderBy(s => s.ExpiryDate)
             .ToListAsync(ct);
 
@@ -161,11 +162,12 @@ public sealed class StockRepository : IStockRepository
                 && s.Quantity < s.Product.MinStock)
             .ToListAsync(ct);
 
-    public async Task<Dictionary<Guid, ProductStock?>> GetDeficitStocksBulkAsync(
+    public async Task<Dictionary<Guid, List<ProductStock>>> GetDeficitStocksBulkAsync(
         IReadOnlyCollection<Guid> productIds, CancellationToken ct = default)
     {
-        // One query: load first deficit batch per product across all stores.
-        // We order by ExpiryDate so FirstOrDefault gives the FEFO-nearest deficit.
+        // One query for all products: load every deficit batch across all stores.
+        // Ordered by ExpiryDate so a caller taking the first (store-filtered) entry
+        // gets the FEFO-nearest deficit — mirrors GetDeficitStocksAsync's per-call ordering.
         var rows = await _db.ProductStocks
             .Include(s => s.Store)
             .Include(s => s.Product)
@@ -176,13 +178,13 @@ public sealed class StockRepository : IStockRepository
             .OrderBy(s => s.ExpiryDate)
             .ToListAsync(ct);
 
-        // Build a lookup: productId → first matching row (null when absent).
+        // Build a lookup: productId → all matching rows (ExpiryDate ascending).
         var lookup = rows.GroupBy(s => s.ProductId)
-            .ToDictionary(g => g.Key, g => (ProductStock?)g.First());
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         // Ensure every requested productId has an entry so callers can do lookup[id].
         foreach (var id in productIds)
-            lookup.TryAdd(id, null);
+            lookup.TryAdd(id, []);
 
         return lookup;
     }

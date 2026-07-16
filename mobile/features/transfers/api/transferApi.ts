@@ -2,8 +2,10 @@ import { apiClient } from '@/lib/api-client';
 import type { Transfer, CreateTransferPayload, LocationOption } from '../types';
 
 export async function getTransfers(locationId?: string, status?: string): Promise<Transfer[]> {
+  // Backend query param is still `store_id` (TransfersController never got the
+  // v4 Store→Location rename) — `location_id` is silently ignored, unfiltered.
   const { data } = await apiClient.get<Transfer[]>('/transfers', {
-    params: { location_id: locationId, status },
+    params: { store_id: locationId, status },
   });
   return data;
 }

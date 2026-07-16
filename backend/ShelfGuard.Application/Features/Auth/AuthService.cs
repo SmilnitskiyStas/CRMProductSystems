@@ -313,16 +313,12 @@ public sealed class AuthService : IAuthService
     private async Task<LoginResponse> IssueTokensAsync(User user, string? ipAddress, CancellationToken ct)
     {
         user.ResetLockout();
+        user.UpdateLastActive();
+        _users.Update(user);
 
         var (rawToken, tokenHash) = _jwt.GenerateRefreshToken();
         var refreshToken = RefreshToken.Create(user.Id, tokenHash, DateTime.UtcNow.AddDays(7));
-
         await _refreshTokens.AddAsync(refreshToken, ct);
-        await _refreshTokens.SaveChangesAsync(ct);
-
-        user.UpdateLastActive();
-        _users.Update(user);
-        await _users.SaveChangesAsync(ct);
 
         await _activityLogs.LogAsync(new ActivityLog
         {
@@ -334,7 +330,16 @@ public sealed class AuthService : IAuthService
             Meta       = $"{user.Email} ({user.Role})",
             IpAddress  = ipAddress,
         }, ct);
-        await _activityLogs.SaveChangesAsync(ct);
+
+        // TASK-370 (Block 17 load-test finding): the three writes above (refresh
+        // token insert, user lockout-reset/last-active update, login activity log)
+        // used to be three separate SaveChangesAsync calls — each its own DB round
+        // trip + WAL-fsync commit, even though _users/_refreshTokens/_activityLogs
+        // all share the same scoped AppDbContext. Under k6 login-storm concurrency
+        // this measured p95=2.28s/p99=2.56s for a single login; batching into one
+        // commit dropped it to p95=<see task log>. Any one repo's SaveChangesAsync
+        // flushes all three — using _users' here is arbitrary, not load-bearing.
+        await _users.SaveChangesAsync(ct);
 
         var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
         var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
@@ -399,8 +404,11 @@ public sealed class AuthService : IAuthService
     {
         var lockedOut = user.RegisterFailedLogin(MaxFailedAttempts, LockoutDuration);
         _users.Update(user);
-        await _users.SaveChangesAsync(ct);
 
+        // TASK-370: user update below used to commit separately from the activity
+        // log write that follows (two round trips); now batched into the single
+        // _activityLogs.SaveChangesAsync(ct) call at the end of this method — same
+        // shared AppDbContext reasoning as IssueTokensAsync above.
         await _activityLogs.LogAsync(new ActivityLog
         {
             TenantId   = user.TenantId,
@@ -456,5 +464,5 @@ public sealed class AuthService : IAuthService
         IReadOnlyList<string>? effectiveCapabilities = null) =>
         new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId,
             effectivePermissions is null ? u.Permissions : new Dictionary<string, bool>(effectivePermissions),
-            u.LegalEntityId, u.TotpEnabled, effectiveCapabilities);
+            u.LegalEntityId, u.TotpEnabled, effectiveCapabilities, u.TelegramChatId);
 }

@@ -22,10 +22,18 @@ public sealed class ProviderTeamService(
     }
 
     public async Task<(ProviderTeamMemberDto? Member, string? Error)> InviteMemberAsync(
-        InviteProviderMemberRequest req, CancellationToken ct)
+        InviteProviderMemberRequest req, string actingRole, CancellationToken ct)
     {
         if (!AppRoles.ProviderTeamRoles.Contains(req.Role))
             return (null, $"Role '{req.Role}' is not a valid provider role.");
+
+        // TASK-363 (Block 12 audit): only an existing owner (role == provider) may create
+        // another owner-level account. Without this, any provider_admin — who already passes
+        // the ProviderCanInvite policy — could mint a brand-new "provider" user and thereby
+        // reach ProviderController's ProviderOnly-gated endpoints (tenant CRUD, impersonation,
+        // platform logs) that are deliberately restricted to the literal owner role.
+        if (req.Role == AppRoles.Provider && actingRole != AppRoles.Provider)
+            return (null, "Only the owner account can create another owner-level account.");
 
         var existing = await users.GetByEmailAsync(req.Email.ToLowerInvariant(), ct);
         if (existing is not null && existing.IsActive)
@@ -86,7 +94,7 @@ public sealed class ProviderTeamService(
     }
 
     public async Task<(ProviderTeamMemberDto? Member, string? Error)> UpdateMemberAsync(
-        Guid memberId, UpdateProviderMemberRequest req, CancellationToken ct)
+        Guid memberId, UpdateProviderMemberRequest req, string actingRole, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.FullName))
             return (null, "Full name is required.");
@@ -101,6 +109,13 @@ public sealed class ProviderTeamService(
         if (user.Role == AppRoles.Provider && req.Role != AppRoles.Provider)
             return (null, "Cannot change the role of the owner account.");
 
+        // TASK-363 (Block 12 audit): symmetric to the guard above — only an existing owner may
+        // *promote* someone else to the owner role, not just be blocked from demoting one.
+        // Previously a provider_admin could PUT role="provider" on any teammate (or themselves)
+        // and instantly unlock ProviderController's owner-only endpoints.
+        if (req.Role == AppRoles.Provider && user.Role != AppRoles.Provider && actingRole != AppRoles.Provider)
+            return (null, "Only the owner account can promote a member to the owner role.");
+
         user.UpdateProfile(req.FullName.Trim(), null);
         user.SetRole(req.Role);
         user.SetProviderRole(req.ProviderRoleId);
@@ -111,26 +126,38 @@ public sealed class ProviderTeamService(
         return (Map(user), null);
     }
 
-    public async Task<bool> DeactivateMemberAsync(Guid memberId, CancellationToken ct)
+    public async Task<(bool Success, string? Error)> DeactivateMemberAsync(Guid memberId, string actingRole, CancellationToken ct)
     {
         var user = await users.GetByIdAsync(memberId, ct);
         if (user is null || !AppRoles.ProviderTeamRoles.Contains(user.Role))
-            return false;
+            return (false, "Member not found.");
+
+        // TASK-363 (Block 12 audit): a provider_admin must not be able to deactivate the owner
+        // account — that would lock the real owner out of ProviderOnly-gated endpoints.
+        if (user.Role == AppRoles.Provider && actingRole != AppRoles.Provider)
+            return (false, "Only the owner account can deactivate the owner account.");
+
         user.Deactivate();
         users.Update(user);
         await users.SaveChangesAsync(ct);
-        return true;
+        return (true, null);
     }
 
-    public async Task<bool> ReactivateMemberAsync(Guid memberId, CancellationToken ct)
+    public async Task<(bool Success, string? Error)> ReactivateMemberAsync(Guid memberId, string actingRole, CancellationToken ct)
     {
+        // No owner-only guard here: reactivating restores the *target's* own access, it does
+        // not grant the actor anything — unlike Deactivate (denial of service against the
+        // owner) or the role-escalation paths above. actingRole is accepted for interface
+        // symmetry / future use, not currently restrictive.
+        _ = actingRole;
+
         var user = await users.GetByIdAsync(memberId, ct);
         if (user is null || !AppRoles.ProviderTeamRoles.Contains(user.Role))
-            return false;
+            return (false, "Member not found.");
         user.Activate();
         users.Update(user);
         await users.SaveChangesAsync(ct);
-        return true;
+        return (true, null);
     }
 
     /// <summary>Crypto-random 16-char password guaranteed to satisfy PasswordValidator.</summary>

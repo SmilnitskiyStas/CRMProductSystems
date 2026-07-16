@@ -188,20 +188,6 @@ export function CooperationRequestsTab() {
             >
               Договір
             </Btn>
-            <Btn
-              size="sm"
-              variant="ghost"
-              icon={<RefreshCw size={13} />}
-              disabled={regenerate.isPending}
-              onClick={() =>
-                regenerate.mutate(agreement.id, {
-                  onSuccess: () => toast.success("Договір перегенеровано"),
-                  onError: (err) => toast.error(err.message),
-                })
-              }
-            >
-              Перегенерувати
-            </Btn>
             <Btn size="sm" variant="danger" onClick={() => setTerminateTarget(agreement)}>
               Розірвати
             </Btn>

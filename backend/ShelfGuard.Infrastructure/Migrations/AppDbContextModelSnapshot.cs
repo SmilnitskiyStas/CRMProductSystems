@@ -65,6 +65,18 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt")
+                        .IsDescending()
+                        .HasDatabaseName("idx_activity_logs_created");
+
+                    b.HasIndex("TenantId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("idx_activity_logs_tenant_created");
+
+                    b.HasIndex("TenantId", "UserId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("idx_activity_logs_tenant_user_created");
+
                     b.ToTable("activity_logs", (string)null);
                 });
 
@@ -530,6 +542,10 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "UpdatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("idx_chat_sessions_tenant_updated");
 
                     b.ToTable("chat_sessions", (string)null);
                 });
@@ -2008,6 +2024,12 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid?>("ZoneId")
                         .HasColumnType("uuid");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");
@@ -2674,6 +2696,10 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasIndex("SupplierId");
 
+                    b.HasIndex("TenantId", "DestinationStoreId", "Status", "CreatedAt")
+                        .IsDescending(false, false, false, true)
+                        .HasDatabaseName("idx_stock_receipts_tenant_store_status");
+
                     b.ToTable("stock_receipts", (string)null);
                 });
 
@@ -2814,6 +2840,14 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("FromStoreId");
 
                     b.HasIndex("ToStoreId");
+
+                    b.HasIndex("TenantId", "FromStoreId", "Status", "CreatedAt")
+                        .IsDescending(false, false, false, true)
+                        .HasDatabaseName("idx_stock_transfers_tenant_from_status");
+
+                    b.HasIndex("TenantId", "ToStoreId", "Status", "CreatedAt")
+                        .IsDescending(false, false, false, true)
+                        .HasDatabaseName("idx_stock_transfers_tenant_to_status");
 
                     b.ToTable("stock_transfers", (string)null);
                 });
@@ -3719,6 +3753,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("SupplierId");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("idx_supply_schedules_tenant");
 
                     b.HasIndex("StoreId", "SupplierId");
 

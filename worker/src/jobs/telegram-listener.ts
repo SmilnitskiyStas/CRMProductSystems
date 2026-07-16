@@ -29,6 +29,16 @@ async function handleStart(chatId: number, firstName: string, code: string | nul
 
   const client = await db.connect();
   try {
+    // 2026-07-14 (Block 2 pre-launch audit follow-up): this listener runs outside any HTTP
+    // request/tenant context (it's a long-polling Telegram getUpdates loop, not a BullMQ cron
+    // job), and never previously set app.role — it worked only because tenant_isolation's
+    // fail-open "IS NULL OR" branch on RESET-state connections let it see all tenants'
+    // telegram_link_codes. That branch was a P0 cross-tenant leak and has been removed
+    // (20260714180000_FixFailOpenTenantIsolationOnReset). Without this SET, the /start <code>
+    // account-linking flow would 0-row every lookup (worker_bypass exists specifically for
+    // this: same pattern as every other worker/src/jobs/*.job.ts file).
+    await client.query("SET app.role = 'worker'");
+
     const { rows } = await client.query<{ id: string; user_id: string; full_name: string }>(
       `SELECT c."Id" AS id, c."UserId" AS user_id, u."FullName" AS full_name
        FROM telegram_link_codes c

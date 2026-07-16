@@ -59,6 +59,13 @@ npm install
 npm run dev
 ```
 
+### Staging environment
+
+A fully containerized environment (api/web/postgres/redis/mosquitto/worker all
+in Docker, mirroring production's topology) is available for the pre-launch
+audit to run functional/load/security tests without touching dev or prod —
+see [`docs/staging.md`](docs/staging.md).
+
 ## Project Structure
 
 ```

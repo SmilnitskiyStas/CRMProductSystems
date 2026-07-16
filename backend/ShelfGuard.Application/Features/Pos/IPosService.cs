@@ -9,8 +9,18 @@ public interface IPosService
 
     Task<ShiftDto?> GetCurrentShiftAsync(Guid tenantId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Closes the current open shift and generates a Z-report via the fiscal provider.
+    /// TASK-356: when <paramref name="request"/>.ActualClosingCash is provided, performs
+    /// cash-drawer reconciliation — compares it against ExpectedCashAmount (OpeningCash +
+    /// this shift's cash-only sales) and returns CashDiscrepancy in the response. Omit (or
+    /// pass null) to close without reconciliation, unchanged from prior behavior.
+    /// Returns (null, error, statusCode) on business-rule errors:
+    ///   404 — no open shift
+    ///   400 — ActualClosingCash is negative
+    /// </summary>
     Task<(ShiftDto? Shift, string? Error, int? StatusCode)> CloseShiftAsync(
-        Guid tenantId, CancellationToken ct = default);
+        Guid tenantId, CloseShiftRequest? request = null, CancellationToken ct = default);
 
     /// <summary>
     /// Creates a sale (DB tx: FEFO write-down + stock_events + pos_transaction + items).

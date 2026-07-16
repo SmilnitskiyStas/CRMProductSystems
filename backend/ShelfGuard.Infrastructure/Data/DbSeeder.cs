@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
 
 namespace ShelfGuard.Infrastructure.Data;
@@ -8,7 +10,19 @@ namespace ShelfGuard.Infrastructure.Data;
 /// </summary>
 public static class DbSeeder
 {
-    public static async Task SeedAsync(AppDbContext db, CancellationToken ct = default)
+    /// <summary>
+    /// KI-005 fix: the demo password is no longer a hardcoded bcrypt hash committed to
+    /// source control (previously readable by anyone with repo access, incl. git history).
+    /// It is now hashed at runtime via <see cref="IPasswordHasher"/>, from
+    /// <c>Seed:DefaultPassword</c> config (env var <c>Seed__DefaultPassword</c>). The
+    /// "password" fallback below only ever applies when that key is unset — dev-only,
+    /// never relied upon in staging/production (SeedAsync itself is gated to
+    /// Development/SEED_ON_START=true by KI-006, so this path never runs unattended in prod).
+    /// </summary>
+    private const string DefaultSeedPassword = "password";
+
+    public static async Task SeedAsync(
+        AppDbContext db, IPasswordHasher hasher, IConfiguration? config = null, CancellationToken ct = default)
     {
         if (await db.Tenants.AnyAsync(ct)) return;
 
@@ -17,8 +31,10 @@ public static class DbSeeder
         db.Tenants.Add(tenant);
 
         // ── Users ─────────────────────────────────────────────────────────────
-        // password for all demo users: password
-        const string hash = "$2a$12$eumpgqTete7WjCGRn2h1vedr0qXfTCjkKvYNowxeogQNGBEadHHUa";
+        var seedPassword = config?["Seed:DefaultPassword"];
+        if (string.IsNullOrWhiteSpace(seedPassword))
+            seedPassword = DefaultSeedPassword;
+        var hash = hasher.Hash(seedPassword);
 
         var provider  = User.Create(null,        "admin@shelfguard.local", "Admin ShelfGuard",  hash, "provider");
         var entAdmin  = User.Create(tenant.Id,   "ea@demo.local",          "Василь Мороз",      hash, "enterprise_admin");

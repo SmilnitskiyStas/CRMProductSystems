@@ -62,16 +62,25 @@ public sealed class PosController : ControllerBase
     /// <summary>
     /// Closes the current open shift and generates a Z-report via the fiscal provider.
     /// Returns 404 when no shift is open.
+    ///
+    /// TASK-356: body is optional. Omit it (or send no ActualClosingCash) to close
+    /// without cash reconciliation, unchanged from before. Send
+    /// { "actualClosingCash": 1234.56 } (cash counted by the cashier) to reconcile —
+    /// the response's ExpectedCashAmount/CashDiscrepancy fields are populated
+    /// (ExpectedCashAmount = OpeningCash + this shift's cash-only sales; discrepancy =
+    /// actual - expected; positive = surplus, negative = shortage). Returns 400 if
+    /// ActualClosingCash is negative.
     /// </summary>
     [HttpPost("shifts/close")]
     [ProducesResponseType(typeof(ShiftDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CloseShift(CancellationToken ct)
+    public async Task<IActionResult> CloseShift([FromBody] CloseShiftRequest? request, CancellationToken ct)
     {
         var (tenantId, _) = GetContext();
         if (tenantId is null) return Forbid();
 
-        var (shift, error, status) = await _pos.CloseShiftAsync(tenantId.Value, ct);
+        var (shift, error, status) = await _pos.CloseShiftAsync(tenantId.Value, request, ct);
 
         if (error is not null)
             return status == 404 ? NotFound(new { error }) : BadRequest(new { error });

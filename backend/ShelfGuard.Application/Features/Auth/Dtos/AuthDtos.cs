@@ -40,7 +40,16 @@ public record AuthUserDto(
     /// claim so the client's own UI logic doesn't disagree with what the server issued —
     /// UI-only signal, real enforcement is server-side (RoleOrCapabilityRequirement).
     /// </summary>
-    IReadOnlyList<string>? Capabilities = null
+    IReadOnlyList<string>? Capabilities = null,
+    /// <summary>
+    /// Set once the user has completed the one-time-code Telegram link flow
+    /// (TelegramLinkService.CreateLinkCodeAsync + the worker's /start &lt;code&gt; listener writes
+    /// this column directly). Was missing from this DTO entirely until the 2026-07-15 security
+    /// fix (TASK-368) — frontend "Telegram: Підключено" status previously only reflected a
+    /// client-side optimistic cache patch from the now-removed unverified link endpoint, never
+    /// real server state, and silently reverted to "not linked" on any cache invalidation/reload.
+    /// </summary>
+    string? TelegramChatId = null
 );
 
 // ── 2FA (TASK-330) ──────────────────────────────────────────────────────────

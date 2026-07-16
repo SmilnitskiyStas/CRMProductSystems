@@ -3,6 +3,7 @@ using ShelfGuard.Application.Features.Pos;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Exceptions;
 using ShelfGuard.Domain.Interfaces;
 using Xunit;
 
@@ -16,6 +17,10 @@ file sealed class FakePosRepo : IPosRepository
     public List<PosTransaction> Transactions { get; } = [];
     public List<StockEvent> Events { get; } = [];
     public int SaveCount { get; private set; }
+
+    /// <summary>TASK-356: simulates a concurrent-write conflict (another sale raced this
+    /// one on the same ProductStock row) on the Nth call to SaveChangesAsync.</summary>
+    public int? ThrowConcurrencyOnSaveCall { get; set; }
 
     public Task<PosShift?> GetOpenShiftAsync(Guid tenantId, CancellationToken ct = default) =>
         Task.FromResult(Shifts.FirstOrDefault(s => s.TenantId == tenantId && s.ClosedAt is null));
@@ -36,6 +41,11 @@ file sealed class FakePosRepo : IPosRepository
 
     public Task<List<PosTransaction>> GetTransactionsByShiftAsync(Guid shiftId, CancellationToken ct = default) =>
         Task.FromResult(Transactions.Where(t => t.ShiftId == shiftId).ToList());
+
+    public Task<decimal> GetCashSalesTotalForShiftAsync(Guid shiftId, CancellationToken ct = default) =>
+        Task.FromResult(Transactions
+            .Where(t => t.ShiftId == shiftId && t.PaymentType == "cash")
+            .Sum(t => t.TotalAmount));
 
     public Task AddTransactionAsync(PosTransaction tx, CancellationToken ct = default)
     {
@@ -63,6 +73,8 @@ file sealed class FakePosRepo : IPosRepository
     public Task SaveChangesAsync(CancellationToken ct = default)
     {
         SaveCount++;
+        if (ThrowConcurrencyOnSaveCall == SaveCount)
+            throw new ConcurrencyConflictException("simulated concurrent write conflict");
         return Task.CompletedTask;
     }
 }
@@ -92,8 +104,8 @@ file sealed class FakeStockRepo : IStockRepository
     public Task<List<ProductStock>> GetNeedsCheckAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetActionRequiredAsync(Guid? storeId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
-    public Task<Dictionary<Guid, ProductStock?>> GetDeficitStocksBulkAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default) =>
-        Task.FromResult(productIds.ToDictionary(id => id, _ => (ProductStock?)null));
+    public Task<Dictionary<Guid, List<ProductStock>>> GetDeficitStocksBulkAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default) =>
+        Task.FromResult(productIds.ToDictionary(id => id, _ => new List<ProductStock>()));
     public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid? storeId, string? status, Guid? zoneId, Guid? productId, int page, int pageSize, CancellationToken ct = default) =>
         Task.FromResult((new List<ProductStock>(), 0));
     public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) => Task.FromResult(new List<Location>());
@@ -155,6 +167,34 @@ file sealed class FakeFiscalFactory : IFiscalServiceFactory
     public FakeFiscalFactory(IFiscalService service) => _service = service;
     public Task<IFiscalService> GetForTenantAsync(Guid tenantId, CancellationToken ct = default) => Task.FromResult(_service);
     public IFiscalService Create(Guid tenantId, PrroConnectionConfig config) => _service;
+}
+
+/// <summary>Simulates a Checkbox provider that fiscalizes instantly and successfully —
+/// used to pin the TASK-356 inline (awaited) online-fiscalization behavior.</summary>
+file sealed class FakeSuccessfulFiscalService : IFiscalService
+{
+    public Task<FiscalHealthResult> PingAsync(CancellationToken ct = default) =>
+        Task.FromResult(new FiscalHealthResult(true, "fake", "FN-TEST", true, false, null));
+
+    public Task<FiscalCashierResult> CheckCashierAsync(CancellationToken ct = default) =>
+        Task.FromResult(new FiscalCashierResult(true, "Test Cashier", null));
+
+    public Task<FiscalShiftResult> OpenShiftAsync(CancellationToken ct = default) =>
+        Task.FromResult(new FiscalShiftResult("shift-1", FiscalShiftStatus.Opened, 1, DateTimeOffset.UtcNow, null));
+
+    public Task<FiscalShiftResult> CloseShiftAsync(CancellationToken ct = default) =>
+        Task.FromResult(new FiscalShiftResult("shift-1", FiscalShiftStatus.Closed, 1, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+    public Task<FiscalShiftResult> GetShiftStatusAsync(string providerShiftId, CancellationToken ct = default) =>
+        Task.FromResult(new FiscalShiftResult(providerShiftId, FiscalShiftStatus.Opened, 1, DateTimeOffset.UtcNow, null));
+
+    public Task<FiscalReceiptResult> CreateReceiptAsync(FiscalReceiptRequest request, CancellationToken ct = default) =>
+        Task.FromResult(new FiscalReceiptResult(
+            request.LocalReceiptId, FiscalReceiptStatus.Done, "FN-12345", DateTimeOffset.UtcNow, null, null));
+
+    public Task<FiscalReceiptResult> GetReceiptStatusAsync(string providerReceiptId, CancellationToken ct = default) =>
+        Task.FromResult(new FiscalReceiptResult(
+            providerReceiptId, FiscalReceiptStatus.Done, "FN-12345", DateTimeOffset.UtcNow, null, null));
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -278,6 +318,121 @@ public sealed class PosServiceTests
         Assert.Null(error);
         Assert.NotNull(shift);
         Assert.NotNull(existing.ClosedAt);
+    }
+
+    [Fact]
+    public async Task CloseShift_without_cash_count_leaves_reconciliation_null()
+    {
+        // Backward compat: omitting the body (or ActualClosingCash) closes exactly as
+        // before TASK-356 — no reconciliation performed.
+        var pos = new FakePosRepo();
+        var existing = new PosShift { TenantId = TenantId, StoreId = StoreId, OpeningCash = 500m };
+        pos.Shifts.Add(existing);
+        var svc = BuildService(pos: pos);
+
+        var (shift, error, _) = await svc.CloseShiftAsync(TenantId, request: null);
+
+        Assert.Null(error);
+        Assert.NotNull(shift);
+        Assert.Null(shift.ClosingCash);
+        Assert.Null(shift.ExpectedCashAmount);
+        Assert.Null(shift.CashDiscrepancy);
+    }
+
+    // ── Close Shift — cash reconciliation (TASK-356) ─────────────────────────
+
+    [Fact]
+    public async Task CloseShift_cash_count_matches_expected_zero_discrepancy()
+    {
+        var pos = new FakePosRepo();
+        var existing = new PosShift { TenantId = TenantId, StoreId = StoreId, OpeningCash = 500m };
+        pos.Shifts.Add(existing);
+        // Cash sale 300 + card sale 700 — card must NOT count toward expected cash.
+        pos.Transactions.Add(new PosTransaction { TenantId = TenantId, ShiftId = existing.Id, PaymentType = "cash", TotalAmount = 300m, ReceiptNumber = "R-1" });
+        pos.Transactions.Add(new PosTransaction { TenantId = TenantId, ShiftId = existing.Id, PaymentType = "card", TotalAmount = 700m, ReceiptNumber = "R-2" });
+        var svc = BuildService(pos: pos);
+
+        // Expected = OpeningCash(500) + cash sales(300) = 800
+        var (shift, error, _) = await svc.CloseShiftAsync(TenantId, new CloseShiftRequest(800m));
+
+        Assert.Null(error);
+        Assert.NotNull(shift);
+        Assert.Equal(800m, shift.ExpectedCashAmount);
+        Assert.Equal(800m, shift.ClosingCash);
+        Assert.Equal(0m, shift.CashDiscrepancy);
+    }
+
+    [Fact]
+    public async Task CloseShift_cash_count_shortage_returns_negative_discrepancy()
+    {
+        var pos = new FakePosRepo();
+        var existing = new PosShift { TenantId = TenantId, StoreId = StoreId, OpeningCash = 500m };
+        pos.Shifts.Add(existing);
+        pos.Transactions.Add(new PosTransaction { TenantId = TenantId, ShiftId = existing.Id, PaymentType = "cash", TotalAmount = 300m, ReceiptNumber = "R-1" });
+        var svc = BuildService(pos: pos);
+
+        // Expected = 500 + 300 = 800; cashier counted only 750 — 50 missing.
+        var (shift, error, _) = await svc.CloseShiftAsync(TenantId, new CloseShiftRequest(750m));
+
+        Assert.Null(error);
+        Assert.NotNull(shift);
+        Assert.Equal(800m, shift.ExpectedCashAmount);
+        Assert.Equal(750m, shift.ClosingCash);
+        Assert.Equal(-50m, shift.CashDiscrepancy);
+    }
+
+    [Fact]
+    public async Task CloseShift_cash_count_surplus_returns_positive_discrepancy()
+    {
+        var pos = new FakePosRepo();
+        var existing = new PosShift { TenantId = TenantId, StoreId = StoreId, OpeningCash = 500m };
+        pos.Shifts.Add(existing);
+        pos.Transactions.Add(new PosTransaction { TenantId = TenantId, ShiftId = existing.Id, PaymentType = "cash", TotalAmount = 300m, ReceiptNumber = "R-1" });
+        var svc = BuildService(pos: pos);
+
+        // Expected = 500 + 300 = 800; cashier counted 820 — 20 extra.
+        var (shift, error, _) = await svc.CloseShiftAsync(TenantId, new CloseShiftRequest(820m));
+
+        Assert.Null(error);
+        Assert.NotNull(shift);
+        Assert.Equal(800m, shift.ExpectedCashAmount);
+        Assert.Equal(20m, shift.CashDiscrepancy);
+    }
+
+    [Fact]
+    public async Task CloseShift_negative_cash_count_returns_400()
+    {
+        var pos = new FakePosRepo();
+        var existing = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(existing);
+        var svc = BuildService(pos: pos);
+
+        var (shift, error, statusCode) = await svc.CloseShiftAsync(TenantId, new CloseShiftRequest(-1m));
+
+        Assert.Null(shift);
+        Assert.Equal(400, statusCode);
+        Assert.NotNull(error);
+        // Shift must stay open — validation failed before anything was persisted.
+        Assert.Null(existing.ClosedAt);
+    }
+
+    [Fact]
+    public async Task CloseShift_already_closed_shift_returns_404_on_second_attempt()
+    {
+        var pos = new FakePosRepo();
+        var existing = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(existing);
+        var svc = BuildService(pos: pos);
+
+        var (firstShift, firstError, _) = await svc.CloseShiftAsync(TenantId, new CloseShiftRequest(0m));
+        Assert.Null(firstError);
+        Assert.NotNull(firstShift);
+
+        var (secondShift, secondError, statusCode) = await svc.CloseShiftAsync(TenantId, new CloseShiftRequest(0m));
+
+        Assert.Null(secondShift);
+        Assert.Equal(404, statusCode);
+        Assert.NotNull(secondError);
     }
 
     // ── Get Current Shift ──────────────────────────────────────────────────
@@ -546,6 +701,75 @@ public sealed class PosServiceTests
         // Status starts as pending_fiscalization (fiscal runs async in background)
         Assert.Equal("pending_fiscalization", sale.FiscalStatus);
         Assert.Null(sale.FiscalNumber);
+    }
+
+    /// <summary>
+    /// TASK-356: before this fix, online fiscalization ran on a detached, un-awaited
+    /// Task.Run — the response was always built and returned before that background task
+    /// could possibly complete, so a successful fiscal outcome could never be reflected in
+    /// the SaleDto (untestable with a synchronous unit test, by construction). Now that the
+    /// attempt is inline and awaited, a fast/successful provider response is visible
+    /// directly in the returned SaleDto — this is the regression guard for that fix.
+    /// </summary>
+    [Fact]
+    public async Task CreateSale_successful_online_fiscalization_is_reflected_in_response()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("FISCAL_OK");
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 5));
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, fiscal: new FakeSuccessfulFiscalService());
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("FISCAL_OK", 1)], "Cash", 10));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal("fiscalized", sale.FiscalStatus);
+        Assert.Equal("FN-12345", sale.FiscalNumber);
+    }
+
+    /// <summary>
+    /// TASK-356: ProductStock now carries an xmin optimistic-concurrency token so two
+    /// sales racing on the same batch can't silently oversell (see the real-Postgres
+    /// PosConcurrencySalesIntegrationTests for the end-to-end proof). This test pins the
+    /// service-layer half of that fix in isolation: PosService must translate a
+    /// ConcurrencyConflictException raised from the final SaveChangesAsync into a clean
+    /// 409 instead of letting it propagate as an unhandled exception (which would surface
+    /// as a raw 500 to the cashier with no actionable message).
+    /// </summary>
+    [Fact]
+    public async Task CreateSale_concurrency_conflict_on_commit_returns_409()
+    {
+        var pos = new FakePosRepo { ThrowConcurrencyOnSaveCall = 1 };
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("CONFLICT_TEST");
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 1));
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+
+        var (sale, error, statusCode) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("CONFLICT_TEST", 1)], "Cash", 10));
+
+        Assert.Null(sale);
+        Assert.Equal(409, statusCode);
+        Assert.NotNull(error);
+        // Only the one (conflicting) SaveChangesAsync call happened — the method returned
+        // immediately on the conflict instead of proceeding to attempt fiscalization.
+        Assert.Equal(1, pos.SaveCount);
     }
 
     [Fact]

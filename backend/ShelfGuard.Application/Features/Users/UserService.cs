@@ -319,24 +319,9 @@ public sealed class UserService : IUserService
         return null;
     }
 
-    public async Task<string?> LinkTelegramAsync(Guid userId, string chatId, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(chatId))
-            return "Chat ID is required.";
-
-        var user = await _users.GetByIdAsync(userId, ct);
-        if (user is null) return "User not found.";
-
-        user.LinkTelegram(chatId.Trim());
-        _users.Update(user);
-
-        if (user.TenantId.HasValue)
-            await LogAsync(user.TenantId.Value, userId, "user.telegram_linked",
-                entityType: "User", entityId: userId, ct: ct);
-
-        await _users.SaveChangesAsync(ct);
-        return null;
-    }
+    // LinkTelegramAsync removed (2026-07-15 security fix) — see AuthController.cs. The only
+    // remaining path that ever calls User.LinkTelegram(...) now is the worker's telegram-listener
+    // (raw SQL UPDATE after validating a one-time code), which doesn't go through this service.
 
     // ── Activity log ──────────────────────────────────────────────────────────
 

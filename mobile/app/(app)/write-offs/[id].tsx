@@ -13,14 +13,13 @@ import {
   WRITE_OFF_REASON_LABELS,
 } from '@/features/write-offs/types';
 import { useAuthStore } from '@/features/auth/store';
-
-const MANAGER_ROLES = ['StoreManager', 'Director', 'NetworkManager', 'Admin'];
+import { AT_LEAST_STORE_MANAGER, hasRole } from '@/lib/roles';
 
 export default function WriteOffDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const isManager = user ? MANAGER_ROLES.includes(user.role) : false;
+  const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER);
 
   const { data, isLoading, isError } = useWriteOff(id);
   const approve = useApproveWriteOff();
@@ -33,7 +32,16 @@ export default function WriteOffDetailScreen() {
         text: 'Затвердити',
         style: 'default',
         onPress: () => {
-          approve.mutate(id, { onSuccess: () => router.back() });
+          approve.mutate(id, {
+            onSuccess: () => router.back(),
+            onError: (err: unknown) => {
+              const axiosErr = err as { response?: { data?: { error?: string } } };
+              Alert.alert(
+                'Не вдалося затвердити',
+                axiosErr?.response?.data?.error ?? 'Перевірте залишки і спробуйте ще раз.'
+              );
+            },
+          });
         },
       },
     ]);
@@ -46,7 +54,12 @@ export default function WriteOffDetailScreen() {
         text: 'Відхилити',
         style: 'destructive',
         onPress: () => {
-          reject.mutate(id, { onSuccess: () => router.back() });
+          reject.mutate(id, {
+            onSuccess: () => router.back(),
+            onError: () => {
+              Alert.alert('Помилка', 'Не вдалося відхилити списання. Спробуйте ще раз.');
+            },
+          });
         },
       },
     ]);

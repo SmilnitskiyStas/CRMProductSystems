@@ -40,7 +40,10 @@ public interface IUserService
     // Self-service (any authenticated user)
     Task<(UserDto? User, string? Error)> UpdateMyProfileAsync(Guid userId, UpdateMyProfileRequest request, CancellationToken ct = default);
     Task<string?> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct = default);
-    Task<string?> LinkTelegramAsync(Guid userId, string chatId, CancellationToken ct = default);
+    // NOTE (2026-07-15): LinkTelegramAsync (raw client-supplied chat_id, no ownership proof)
+    // removed — see AuthController.cs for the security writeup. Telegram linking now goes
+    // exclusively through ITelegramLinkService.CreateLinkCodeAsync + the worker's /start <code>
+    // listener.
 
     // Activity log
     Task<(IReadOnlyList<ActivityLogDto> Logs, string? Error)> GetActivityAsync(

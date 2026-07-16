@@ -139,25 +139,15 @@ POST /api/products/{id}/suppliers  [AtLeastStoreManager]
 
 ---
 
-### Products (POC catalog — no auth required currently ⚠️)
+### Products (legacy redirect — resolved, KI-008)
 ```
-GET  /api/products          -> ProductDto[]
-GET  /api/products/{id}     -> ProductDto | 404
-POST /api/products          -> 201 ProductDto | 409 { error }
-PUT  /api/products/{id}     -> ProductDto | 404
-DEL  /api/products/{id}     -> 204 | 404
+GET|POST /api/products[/*]  -> 301 Permanent Redirect to /api/items[/*]
 ```
-
-#### ProductDto
-```json
-{
-  "id": "uuid", "sku": "string", "name": "string", "description": "string|null",
-  "category": "string", "unit": "string", "costPrice": 0, "salePrice": 0,
-  "stockQuantity": 0, "reorderLevel": 0, "isActive": true,
-  "createdAt": "ISO8601", "updatedAt": "ISO8601"
-}
-```
-> ⚠️ This is the POC products endpoint backed by the legacy `Products` table (no tenant_id). Will be superseded by `/api/catalog` once TASK-003b is implemented.
+`ProductsLegacyController` no longer serves data directly — every verb (`GET`, `POST`,
+`PUT`, `DELETE`, `by-barcode`, `/suppliers`) issues `RedirectPermanent` to the
+equivalent `/api/items` route, which is the real tenant-aware, authorized, paginated
+catalog described above. The old unauthenticated POC `Products` table this section used
+to describe is gone from the live routing surface.
 
 ---
 
@@ -251,3 +241,71 @@ Key DTOs (`Features/Marketplace/Dtos/CooperationDtos.cs`): full shapes in
 order numbers «MP-{yyyy}-{NNN}» — sequential per supplier. Termination reason is stored in
 `rejectionReason`. Вчасно integration: `PUT /api/integrations/vchasno` with config `{ "api_key" }`
 (masked on GET like ПРРО secrets).
+
+---
+
+### POS (v3.2 — TASK-068/069, cash reconciliation added TASK-356)
+
+`[Authorize(Policy = CanAccessPos)]` (cashier, storekeeper, store_manager, network_manager,
+enterprise_admin) unless noted. Offline-first (ADR-011): a sale's DB commit always succeeds
+even if the fiscal provider is unreachable; `fiscalStatus` in the response reflects the
+actual outcome. One open shift per **tenant** at a time today (not per store — see `known-issues.md`
+KI-015 and `.claude/logs/tasks/356_2026-07-15_pos-fiscalization-audit_backend-developer.md`
+§"Per-store shift plan" for why and what a per-store migration would take).
+```
+POST /api/pos/shifts/open           { storeId, openingCash? }             -> ShiftDto | 409 (already open)
+GET  /api/pos/shifts/current                                              -> ShiftDto | 404
+POST /api/pos/shifts/close          { actualClosingCash? }                -> ShiftDto | 404 (no open shift) | 400 (actualClosingCash < 0)
+POST /api/pos/sales                 CreateSaleRequest                     -> 201 SaleDto | 400 | 409 (shift closed) | 423 (item fully expired)
+GET  /api/pos/sales?shiftId=                                              -> SalesListDto
+GET  /api/pos/sales/pending-fiscalization   [AtLeastStoreManager, worker service account]  -> PendingFiscalizationDto[]
+POST /api/pos/sales/{id}/fiscalize          [AtLeastStoreManager, worker service account]  -> FiscalizeResultDto | 404
+```
+
+#### POST /api/pos/shifts/close — cash reconciliation (TASK-356)
+
+Body is **optional** — omit it entirely (or send `{}`/`actualClosingCash: null`) to close
+exactly as before: no reconciliation, `closingCash`/`expectedCashAmount`/`cashDiscrepancy`
+all come back `null`. This keeps existing clients (mobile app currently sends no body)
+working unchanged.
+
+Request:
+```json
+{ "actualClosingCash": 1234.56 }
+```
+`actualClosingCash` — cash counted by the cashier at close, in UAH. Must be `>= 0`; a
+negative value returns `400 { "error": "ActualClosingCash cannot be negative." }` and the
+shift is **not** closed (stays open, nothing persisted). Closing an already-closed shift
+(or when no shift is open) returns `404 { "error": "No open shift found." }`.
+
+Response (`ShiftDto`, extended in TASK-356 — new fields at the end, existing consumers
+unaffected):
+```json
+{
+  "shiftId": "uuid", "storeId": "uuid",
+  "status": "Closed",
+  "openedAt": "ISO8601", "closedAt": "ISO8601",
+  "providerShiftId": "string|null", "fiscalStatus": "closed|close_failed|local_only",
+  "totalSales": 1234.56, "shiftNumber": 1,
+  "openingCash": 500.00,
+  "closingCash": 1234.56,
+  "expectedCashAmount": 1200.00,
+  "cashDiscrepancy": 34.56
+}
+```
+- `expectedCashAmount` = `openingCash` (0 if null) + sum of this shift's **cash-only**
+  sales (`PosTransaction.PaymentType == "cash"`) — card payments never touch the physical
+  drawer, so they're excluded. Computed server-side
+  (`IPosRepository.GetCashSalesTotalForShiftAsync`), not sent by the client.
+- `cashDiscrepancy` = `closingCash - expectedCashAmount`. **Positive = surplus** (more
+  cash than expected), **negative = shortage** (less cash than expected), `0` = exact
+  match. `null` when the request didn't include `actualClosingCash`.
+- These four fields (`openingCash`/`closingCash`/`expectedCashAmount`/`cashDiscrepancy`)
+  are also present (mostly `null` until close) on the `ShiftDto` returned by
+  `shifts/open` and `shifts/current` — `openingCash` is populated as soon as the shift is
+  opened, the other three only after a reconciled close.
+
+Frontend TODO (not yet built as of TASK-356): a cash-count input on the "close shift" UI
+that posts `actualClosingCash`, and a way to surface `cashDiscrepancy` to the
+cashier/manager (e.g. a warning banner when non-zero) — `frontend/features/pos` currently
+has no UI for this at all.

@@ -6,10 +6,24 @@ const notificationQueue = new Queue("notifications", { connection: redisConnecti
 
 type ExpiryStatus = "safe" | "warning" | "critical" | "expired";
 
-function computeStatus(daysLeft: number): ExpiryStatus {
-  if (daysLeft < 0)  return "expired";
-  if (daysLeft <= 1) return "critical";
-  if (daysLeft <= 3) return "warning";
+// Mirrors backend/ShelfGuard.Application/Features/Stock/PerishabilityClass.cs — keep both in
+// sync. Previously this job hardcoded critical<=1d/warning<=3d regardless of item, which both
+// contradicted v1-spec §2.2 (7-14d warning / 1-6d critical) and diverged from StockStatus.Compute
+// (the backend's live per-read status calculation, used by every list/detail endpoint) — batches
+// with 4-14 days left were cron-invisible (never flagged "warning", so no notification ever fired)
+// even though the UI already showed them as warning/critical. Found in TASK-360 (Block 9 audit).
+const PERISHABILITY_THRESHOLDS: Record<string, { critical: number; warning: number }> = {
+  fresh:    { critical: 1,  warning: 3 },
+  chilled:  { critical: 2,  warning: 5 },
+  standard: { critical: 6,  warning: 14 },
+  durable:  { critical: 14, warning: 30 },
+};
+
+function computeStatus(daysLeft: number, perishabilityClass: string): ExpiryStatus {
+  if (daysLeft <= 0) return "expired";
+  const t = PERISHABILITY_THRESHOLDS[perishabilityClass] ?? PERISHABILITY_THRESHOLDS.standard;
+  if (daysLeft <= t.critical) return "critical";
+  if (daysLeft <= t.warning)  return "warning";
   return "safe";
 }
 
@@ -30,19 +44,22 @@ async function runExpiryCheck(): Promise<void> {
       status: string;
       notified_warning_at: string | null;
       notified_critical_at: string | null;
+      perishability_class: string;
     }>(`
-      SELECT "Id"                 AS id,
-             "TenantId"           AS tenant_id,
-             "ProductId"          AS product_id,
-             "StoreId"            AS store_id,
-             "BatchNumber"        AS batch_number,
-             "Quantity"           AS quantity,
-             "ExpiryDate"::text   AS expiry_date,
-             "Status"             AS status,
-             "NotifiedWarningAt"  AS notified_warning_at,
-             "NotifiedCriticalAt" AS notified_critical_at
-      FROM product_stock
-      WHERE "Quantity" > 0
+      SELECT ps."Id"                 AS id,
+             ps."TenantId"           AS tenant_id,
+             ps."ProductId"          AS product_id,
+             ps."LocationId"         AS store_id,
+             ps."BatchNumber"        AS batch_number,
+             ps."Quantity"           AS quantity,
+             ps."ExpiryDate"::text   AS expiry_date,
+             ps."Status"             AS status,
+             ps."NotifiedWarningAt"  AS notified_warning_at,
+             ps."NotifiedCriticalAt" AS notified_critical_at,
+             COALESCE(i."PerishabilityClass", 'standard') AS perishability_class
+      FROM product_stock ps
+      JOIN items i ON i."Id" = ps."ProductId"
+      WHERE ps."Quantity" > 0
     `);
 
     const today = new Date();
@@ -55,7 +72,7 @@ async function runExpiryCheck(): Promise<void> {
       const expiry = new Date(row.expiry_date + "T00:00:00Z");
       const msPerDay = 86_400_000;
       const daysLeft = Math.floor((expiry.getTime() - today.getTime()) / msPerDay);
-      const newStatus = computeStatus(daysLeft);
+      const newStatus = computeStatus(daysLeft, row.perishability_class);
 
       const statusChanged = newStatus !== row.status;
       const now = new Date().toISOString();

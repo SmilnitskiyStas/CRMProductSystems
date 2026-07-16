@@ -17,6 +17,11 @@ namespace ShelfGuard.Infrastructure.AI;
 /// </summary>
 public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
 {
+    // SDK default is 10 minutes (retried up to 3x by default => worst case ~30 min blocking
+    // an inline HTTP request from a manager clicking "Generate"). Bounded to something a
+    // synchronous POST /api/ai-orders/generate call can reasonably wait on — Block 7 audit.
+    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
+
     private readonly AppDbContext _db;
     private readonly string? _envApiKey;
     private readonly string _defaultModel;
@@ -61,7 +66,7 @@ public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
             throw new InvalidOperationException(
                 "Claude API key is not configured. Add it in Налаштування → Інтеграції → Claude AI.");
 
-        var client = new AnthropicClient { ApiKey = apiKey };
+        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
 
         var parameters = new MessageCreateParams
         {

@@ -26,6 +26,14 @@ public interface IPosRepository
     Task<List<PosTransaction>> GetTransactionsByShiftAsync(Guid shiftId, CancellationToken ct = default);
 
     /// <summary>
+    /// TASK-356: sum of TotalAmount for this shift's cash-only transactions (PaymentType
+    /// = "cash"). Used for cash-drawer reconciliation at shift close — card payments
+    /// never touch the physical drawer, so they must be excluded from the expected-cash
+    /// calculation. Returns 0 when the shift has no cash transactions.
+    /// </summary>
+    Task<decimal> GetCashSalesTotalForShiftAsync(Guid shiftId, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns transactions across all tenants that need fiscalization retries.
     /// Conditions: Status='pending_fiscalization', RetryCount &lt; maxRetries, CreatedAt &lt; cutoff.
     /// Worker-facing (bypasses tenant RLS): caller must set app.role='worker'.

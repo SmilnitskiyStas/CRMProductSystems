@@ -23,6 +23,10 @@ namespace ShelfGuard.Infrastructure.AI.BusinessAssistant;
 /// </summary>
 public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
 {
+    // See ClaudeOrderAdvisor — SDK default (10 min, retried) is too long for a synchronous
+    // POST /api/ai/assistant call. Block 7 audit.
+    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
+
     private readonly AppDbContext _db;
     private readonly string? _envApiKey;
     private readonly string _defaultModel;
@@ -151,7 +155,7 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
             $"{JsonSerializer.Serialize(suppliers, opts)}\n\n" +
             $"Надай корисну відповідь на запит менеджера з урахуванням наведеного контексту.";
 
-        var client = new AnthropicClient { ApiKey = apiKey };
+        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
 
         var parameters = new MessageCreateParams
         {

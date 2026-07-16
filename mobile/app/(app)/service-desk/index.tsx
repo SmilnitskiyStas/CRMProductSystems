@@ -14,15 +14,14 @@ import { useMyTickets, useTickets } from '@/features/service-desk/hooks/useServi
 import { TicketCard } from '@/features/service-desk/components/TicketCard';
 import { CreateTicketModal } from '@/features/service-desk/components/CreateTicketModal';
 import type { Ticket } from '@/features/service-desk/types';
-
-const MANAGER_ROLES = ['StoreManager', 'NetworkManager', 'EnterpriseAdmin', 'Provider', 'ProviderAdmin'];
+import { AT_LEAST_STORE_MANAGER_OR_PROVIDER, hasRole } from '@/lib/roles';
 
 type Tab = 'my' | 'all';
 
 export default function ServiceDeskScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const isManager = user ? MANAGER_ROLES.includes(user.role) : false;
+  const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER_OR_PROVIDER);
 
   const [activeTab, setActiveTab] = useState<Tab>('my');
   const [showCreate, setShowCreate] = useState(false);

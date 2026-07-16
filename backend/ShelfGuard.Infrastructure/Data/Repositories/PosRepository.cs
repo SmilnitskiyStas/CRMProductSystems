@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Exceptions;
 using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Infrastructure.Data.Repositories;
@@ -44,6 +45,11 @@ public sealed class PosRepository : IPosRepository
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(ct);
 
+    public Task<decimal> GetCashSalesTotalForShiftAsync(Guid shiftId, CancellationToken ct = default) =>
+        _db.PosTransactions
+            .Where(t => t.ShiftId == shiftId && t.PaymentType == "cash")
+            .SumAsync(t => t.TotalAmount, ct);
+
     public Task AddTransactionAsync(PosTransaction tx, CancellationToken ct = default) =>
         _db.PosTransactions.AddAsync(tx, ct).AsTask();
 
@@ -69,6 +75,20 @@ public sealed class PosRepository : IPosRepository
 
     // ── Unit-of-work ────────────────────────────────────────────────────────
 
-    public Task SaveChangesAsync(CancellationToken ct = default) =>
-        _db.SaveChangesAsync(ct);
+    public async Task SaveChangesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // ProductStock.Quantity carries an xmin concurrency token (TASK-356) — this
+            // fires when two writers raced on the same batch (e.g. two POS sales
+            // consuming the last unit at once). Translate to a Domain-level exception so
+            // Application services (which must not reference EF Core) can catch it.
+            throw new ConcurrencyConflictException(
+                "One or more rows were modified concurrently by another operation.", ex);
+        }
+    }
 }

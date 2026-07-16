@@ -25,14 +25,17 @@ async function runStockSnapshot(): Promise<void> {
     // these tables regardless, this just documents intent).
     await client.query("SET app.role = 'worker'");
 
+    // TASK-360 (Block 9 audit): product_stock's store-scoping column is "LocationId", not
+    // "StoreId" (v4 Store→Location rename) — this query threw "column StoreId does not
+    // exist" on every run, same bug fixed in expiry-check.job.ts's SELECT.
     const { rows } = await client.query<StatusCountRow>(`
-      SELECT "TenantId" AS tenant_id,
-             "StoreId"  AS store_id,
-             "Status"   AS status,
-             COUNT(*)   AS count
+      SELECT "TenantId"   AS tenant_id,
+             "LocationId" AS store_id,
+             "Status"     AS status,
+             COUNT(*)     AS count
       FROM product_stock
       WHERE "Quantity" > 0
-      GROUP BY "TenantId", "StoreId", "Status"
+      GROUP BY "TenantId", "LocationId", "Status"
     `);
 
     // UTC day boundary, matching expiry-check.job.ts's "today" convention.

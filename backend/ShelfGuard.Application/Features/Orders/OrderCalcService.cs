@@ -97,11 +97,17 @@ public sealed class OrderCalcService : IOrderCalcService
 }
 
 /// <summary>
-/// Pure order formula (v2-spec §3):
+/// Pure order formula (v2-spec §3, ladder per v1-spec §2.7):
 ///   Raw = Buffer + SafetyBuffer − StockOnHand − InTransit
 ///   Raw ≤ 0            → order 0 (covered)
 ///   0 < Raw ≤ MOQ      → order MOQ (supplier minimum)
-///   Raw > MOQ          → round to nearest USQ multiple (математично), never below MOQ
+///   Raw > MOQ          → round UP to the nearest step on the MOQ + k×USQ ladder
+///                         (MOQ, MOQ+USQ, MOQ+2×USQ, ... — v1-spec §2.7 example
+///                         "MOQ=12, USQ=6 → можна: 12, 18, 24, 30..."), never below MOQ.
+/// Confirmed with user 2026-07-15: steps are counted FROM MOQ, not from zero — replaces
+/// the earlier "nearest USQ multiple from zero, then clamp to MOQ" implementation, which
+/// diverged from the spec ladder whenever MOQ wasn't itself a USQ multiple (see task log
+/// .claude/logs/tasks/355_2026-07-15_orders-adu-buffer-audit_backend-developer.md).
 /// (ОЗ one-off and РТО reserved-for-customer terms arrive with MTO support — currently 0.)
 /// </summary>
 internal static class OrderFormula
@@ -127,8 +133,10 @@ internal static class OrderFormula
         if (raw <= moq)
             return new OrderQty(raw, moq, "moq_floor");
 
-        var rounded = Math.Round(raw / usq, MidpointRounding.AwayFromZero) * usq;
-        if (rounded < moq) rounded = moq;
+        // Ladder anchored at MOQ: MOQ, MOQ+USQ, MOQ+2×USQ, ... — round up to the first
+        // step that covers `raw`. raw > moq here, so steps is always >= 1.
+        var steps = Math.Ceiling((raw - moq) / usq);
+        var rounded = moq + steps * usq;
 
         return new OrderQty(raw, rounded, "usq_rounded");
     }

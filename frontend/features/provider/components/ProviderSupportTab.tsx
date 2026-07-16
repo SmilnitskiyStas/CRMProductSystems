@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, Plus, ChevronLeft, Building2, User, X } from "lucide-react";
-import { useProviderTickets, useCreateProviderTicket } from "@/features/service-desk/hooks/useProviderTickets";
+import { toast } from "sonner";
+import { MessageSquare, Plus, ChevronLeft, Building2, User, X, Send } from "lucide-react";
+import {
+  useProviderTickets,
+  useCreateProviderTicket,
+  useProviderTicket,
+  useAddProviderComment,
+} from "@/features/service-desk/hooks/useProviderTickets";
 import { useTenants } from "@/features/provider/hooks/useProvider";
 import {
   TICKET_STATUS_LABELS,
@@ -146,6 +152,16 @@ function TicketRow({
 
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function TicketDetailPanel({
   ticket,
   onBack,
@@ -153,6 +169,26 @@ function TicketDetailPanel({
   ticket: ProviderTicketListItemDto;
   onBack: () => void;
 }) {
+  const { data: detail } = useProviderTicket(ticket.id);
+  const addComment = useAddProviderComment();
+  const [commentBody, setCommentBody] = useState("");
+
+  const comments = detail?.comments ?? [];
+
+  function handleSend() {
+    if (!commentBody.trim()) return;
+    addComment.mutate(
+      { id: ticket.id, data: { body: commentBody.trim(), isInternal: false } },
+      {
+        onSuccess: () => {
+          toast.success("Відповідь надіслано");
+          setCommentBody("");
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  }
+
   return (
     <div
       style={{
@@ -244,6 +280,97 @@ function TicketDetailPanel({
             <div style={{ color: "#E8EDF5", fontSize: 13 }}>{value}</div>
           </div>
         ))}
+      </div>
+
+      {/* Comments */}
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 12,
+            color: "#CBD5E1",
+            fontSize: 14,
+            fontWeight: 600,
+          }}
+        >
+          <MessageSquare size={15} />
+          Коментарі ({comments.length})
+        </div>
+
+        {comments.length === 0 && (
+          <div style={{ color: "#4B5563", fontSize: 13, marginBottom: 12 }}>
+            Поки немає коментарів
+          </div>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {comments.map((c) => (
+            <div
+              key={c.id}
+              style={{
+                background: "#111827",
+                border: "1px solid #1F2937",
+                borderRadius: 8,
+                padding: "10px 14px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ color: "#CBD5E1", fontSize: 13, fontWeight: 600 }}>
+                  {c.authorName}
+                </span>
+                <span style={{ color: "#4B5563", fontSize: 11, marginLeft: "auto" }}>
+                  {formatDateTime(c.createdAt)}
+                </span>
+              </div>
+              <div style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                {c.body}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Reply box */}
+        <div
+          style={{
+            background: "#111827",
+            border: "1px solid #1F2937",
+            borderRadius: 8,
+            padding: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <textarea
+            value={commentBody}
+            onChange={(e) => setCommentBody(e.target.value)}
+            placeholder="Напишіть відповідь клієнту..."
+            rows={3}
+            style={{
+              background: "#0D1117",
+              border: "1px solid #1F2937",
+              borderRadius: 6,
+              color: "#E8EDF5",
+              fontSize: 13,
+              padding: "8px 10px",
+              outline: "none",
+              resize: "vertical",
+              width: "100%",
+              boxSizing: "border-box",
+              fontFamily: "inherit",
+            }}
+          />
+          <Btn
+            icon={<Send size={14} />}
+            onClick={handleSend}
+            disabled={!commentBody.trim() || addComment.isPending}
+            style={{ marginLeft: "auto" }}
+          >
+            {addComment.isPending ? "Надсилання..." : "Надіслати"}
+          </Btn>
+        </div>
       </div>
     </div>
   );

@@ -61,6 +61,13 @@ public sealed class WriteOffRepository : IWriteOffRepository
     public Task<ProductStock?> GetStockByIdAsync(Guid stockId, CancellationToken ct = default) =>
         _db.ProductStocks.FirstOrDefaultAsync(s => s.Id == stockId, ct);
 
+    public Task<List<ProductStock>> GetFefoOrderedAsync(Guid productId, Guid storeId, CancellationToken ct = default) =>
+        _db.ProductStocks
+            .Where(s => s.ProductId == productId && s.StoreId == storeId && s.Quantity > 0
+                     && s.Status != "sold_out" && s.Status != "archived")
+            .OrderBy(s => s.ExpiryDate)
+            .ToListAsync(ct);
+
     public async Task AddAsync(WriteOff writeOff, CancellationToken ct = default) =>
         await _db.WriteOffs.AddAsync(writeOff, ct);
 

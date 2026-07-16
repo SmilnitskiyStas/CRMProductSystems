@@ -23,8 +23,6 @@ namespace ShelfGuard.Infrastructure.Authorization;
 /// ADR-020 (TASK-346) — role-OR-capability policies. Each one OR's the SAME role array the
 /// controller already enforced (zero behavior change for existing roles) with one
 /// TenantRoleCapabilities key, via RoleOrCapabilityRequirement/Handler instead of RequireRole.
-/// UsersController's "users.manage" is the one exception with TWO policies for one capability
-/// (see the doc comment on EnterpriseAdminOrUsersManage below).
 ///
 /// Policy                          | Base roles (unchanged)     | Capability (OR)
 /// ---------------------------------|----------------------------|--------------------------
@@ -38,8 +36,15 @@ namespace ShelfGuard.Infrastructure.Authorization;
 /// ReceiptsViewOrCapability         | CanReceiveStockRoles       | receipts.view
 /// AiOrdersViewOrCapability         | AtLeastStoreManagerRoles   | ai_orders.view
 /// AiOrdersManageOrCapability       | AtLeastStoreManagerRoles   | ai_orders.manage
-/// EnterpriseAdminOrUsersManage     | AtLeastEnterpriseAdminRoles| users.manage
 /// StoreManagerOrUsersManage        | AtLeastStoreManagerRoles   | users.manage
+///
+/// TASK-352 (Block 1 audit, user decision): Invite/Update/Deactivate on UsersController were
+/// split across two floors (Invite/Deactivate = AtLeastEnterpriseAdmin, Update =
+/// AtLeastStoreManager) — narrower than v1-spec.md §3.2, which grants "staff management" to
+/// network_manager and store_manager too. User decided to widen Invite/Deactivate to match
+/// Update and the spec. The former `EnterpriseAdminOrUsersManage` policy (AtLeastEnterpriseAdmin
+/// + users.manage) is removed — all three actions now share `StoreManagerOrUsersManage`, so a
+/// second, narrower policy for the same capability no longer serves a purpose.
 /// </summary>
 public static class AppPolicies
 {
@@ -71,16 +76,11 @@ public static class AppPolicies
     public const string AiOrdersManageOrCapability      = "AiOrdersManageOrCapability";
 
     /// <summary>
-    /// UsersController's "users.manage" unlocks Invite/Update/Deactivate, but those three
-    /// actions have two DIFFERENT pre-existing role floors — Invite/Deactivate were
-    /// AtLeastEnterpriseAdmin, Update was AtLeastStoreManager. Both floors are preserved
-    /// exactly (zero regression for existing roles), so the one capability is OR'd onto two
-    /// separate policies instead of the usual 1:1 capability-to-policy mapping. Use this one
-    /// for Invite/Deactivate.
+    /// UsersController's "users.manage" capability unlocks Invite/Update/Deactivate. All three
+    /// actions share this one floor (AtLeastStoreManagerRoles) — TASK-352 widened
+    /// Invite/Deactivate from the previous, narrower AtLeastEnterpriseAdmin floor to match
+    /// Update and v1-spec.md §3.2 (network_manager/store_manager also manage staff).
     /// </summary>
-    public const string EnterpriseAdminOrUsersManage = "EnterpriseAdminOrUsersManage";
-
-    /// <summary>See <see cref="EnterpriseAdminOrUsersManage"/>. Use this one for Update.</summary>
     public const string StoreManagerOrUsersManage    = "StoreManagerOrUsersManage";
 
     // Role sets per policy — the single source of truth referenced by both registration and tests.
@@ -172,8 +172,6 @@ public static class AppPolicies
             new RoleOrCapabilityRequirement(AtLeastStoreManagerRoles, TenantRoleCapabilities.AiOrdersView)));
         options.AddPolicy(AiOrdersManageOrCapability, p => p.AddRequirements(
             new RoleOrCapabilityRequirement(AtLeastStoreManagerRoles, TenantRoleCapabilities.AiOrdersManage)));
-        options.AddPolicy(EnterpriseAdminOrUsersManage, p => p.AddRequirements(
-            new RoleOrCapabilityRequirement(AtLeastEnterpriseAdminRoles, TenantRoleCapabilities.UsersManage)));
         options.AddPolicy(StoreManagerOrUsersManage, p => p.AddRequirements(
             new RoleOrCapabilityRequirement(AtLeastStoreManagerRoles, TenantRoleCapabilities.UsersManage)));
     }

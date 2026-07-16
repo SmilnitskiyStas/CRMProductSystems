@@ -28,6 +28,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
     [EnableRateLimiting("auth-login")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -48,6 +49,7 @@ public sealed class AuthController : ControllerBase
 
     /// <summary>Second login step: TOTP code or recovery code (TASK-330).</summary>
     [HttpPost("2fa/verify")]
+    [AllowAnonymous]
     [EnableRateLimiting("auth-login")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -109,6 +111,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("refresh")]
+    [AllowAnonymous]
     [EnableRateLimiting("auth-refresh")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -208,20 +211,16 @@ public sealed class AuthController : ControllerBase
         return error is null ? NoContent() : BadRequest(new { error });
     }
 
-    /// <summary>Links a Telegram chat to the current user.</summary>
-    [HttpPost("telegram/link")]
-    [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> LinkTelegram(
-        [FromBody] LinkTelegramRequest request, CancellationToken ct)
-    {
-        var userId = ResolveUserId();
-        if (userId is null) return Unauthorized();
-
-        var error = await _users.LinkTelegramAsync(userId.Value, request.ChatId, ct);
-        return error is null ? NoContent() : BadRequest(new { error });
-    }
+    // NOTE (2026-07-15, security fix): a `POST telegram/link` endpoint used to live here,
+    // accepting a raw client-supplied Telegram chat_id and writing it straight to
+    // users.TelegramChatId with zero proof of ownership — any user could paste an arbitrary
+    // chat_id (their own, guessed, or leaked) and start receiving another account's
+    // notifications, or silently "subscribe" to a chat that never opted in. Removed entirely;
+    // account linking now goes exclusively through the verified one-time-code flow
+    // (POST /api/telegram/link-code → TelegramController, consumed by the worker's
+    // /start <code> listener in telegram-listener.ts), which proves the caller controls the
+    // Telegram chat before TelegramChatId is ever written. See ShelfGuard.Application.Features
+    // .Telegram.TelegramLinkService and .claude/logs/tasks/368_*.md for the full writeup.
 
     // ── helpers ────────────────────────────────────────────────────────────
 

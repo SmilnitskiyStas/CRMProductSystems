@@ -1,10 +1,11 @@
+using System.Text.RegularExpressions;
 using ShelfGuard.Application.Common;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Application.Features.Customers;
 
-public sealed class CustomerService : ICustomerService
+public sealed partial class CustomerService : ICustomerService
 {
     private readonly ICustomerRepository _repo;
 
@@ -34,6 +35,10 @@ public sealed class CustomerService : ICustomerService
     {
         if (string.IsNullOrWhiteSpace(dto.Name))
             return (null, "Customer name is required.");
+
+        var contactError = ValidateContactInfo(dto.Phone, dto.Email);
+        if (contactError is not null)
+            return (null, contactError);
 
         if (!string.IsNullOrWhiteSpace(dto.Phone))
         {
@@ -66,6 +71,10 @@ public sealed class CustomerService : ICustomerService
         if (string.IsNullOrWhiteSpace(dto.Name))
             return (null, "Customer name is required.");
 
+        var contactError = ValidateContactInfo(dto.Phone, dto.Email);
+        if (contactError is not null)
+            return (null, contactError);
+
         if (!string.IsNullOrWhiteSpace(dto.Phone))
         {
             var phoneExists = await _repo.ExistsByPhoneAsync(dto.Phone.Trim(), tenantId, id, ct);
@@ -92,6 +101,30 @@ public sealed class CustomerService : ICustomerService
         await _repo.DeleteAsync(id, tenantId, ct);
         return true;
     }
+
+    // ── validation ────────────────────────────────────────────────────────────
+    // Previously CreateAsync/UpdateAsync only checked Name non-empty + phone uniqueness — no
+    // format check on Phone/Email at all, so any string ("abc", "123") was silently accepted.
+    // Found in TASK-360 (Block 9 audit). Deliberately permissive on Phone (accepts spaces,
+    // dashes, parens, leading "+", 7-20 chars) since customers may be entered with various
+    // regional formats — this is a sanity check, not a strict E.164 validator.
+
+    private static string? ValidateContactInfo(string? phone, string? email)
+    {
+        if (!string.IsNullOrWhiteSpace(phone) && !PhoneRegex().IsMatch(phone.Trim()))
+            return $"Phone '{phone.Trim()}' is not a valid phone number.";
+
+        if (!string.IsNullOrWhiteSpace(email) && !EmailRegex().IsMatch(email.Trim()))
+            return $"Email '{email.Trim()}' is not a valid email address.";
+
+        return null;
+    }
+
+    [GeneratedRegex(@"^\+?[\d\s\-()]{7,20}$")]
+    private static partial Regex PhoneRegex();
+
+    [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
+    private static partial Regex EmailRegex();
 
     private static CustomerDto ToDto(Customer c) => new(
         c.Id,

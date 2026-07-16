@@ -426,6 +426,15 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.AddedAt).HasDefaultValueSql("NOW()");
             e.Property(s => s.LastCheckedAt).HasDefaultValueSql("NOW()");
             e.Property(s => s.StoreId).HasColumnName("LocationId");
+            // TASK-356: optimistic concurrency on the Postgres system column (no schema
+            // change needed — xmin already exists on every row). Without this, two
+            // concurrent writers decrementing the same batch's Quantity (e.g. two cashiers
+            // selling the last unit at the same moment via POS, or a POS sale racing a
+            // transfer/write-off) both succeed with a last-write-wins UPDATE — a silent
+            // lost update that can oversell stock. Now the loser's SaveChangesAsync throws
+            // DbUpdateConcurrencyException instead of corrupting Quantity; callers (POS:
+            // PosService.CreateSaleAsync) turn that into a clean "retry" error.
+            e.Property<uint>("xmin").IsRowVersion();
             // FEFO active stock — most critical query path
             e.HasIndex(s => new { s.TenantId, s.StoreId, s.ProductId, s.ExpiryDate })
              .HasDatabaseName("idx_stock_fefo_active")
@@ -519,6 +528,12 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(r => r.DestinationStoreId).HasColumnName("DestinationLocationId");
+            // TASK-354: TenantId had no index at all on this table (RLS filters every
+            // query by TenantId — same gap pattern as WriteOff had before its
+            // idx_write_offs_tenant_store_status index further below).
+            e.HasIndex(r => new { r.TenantId, r.DestinationStoreId, r.Status, r.CreatedAt })
+             .IsDescending(false, false, false, true)
+             .HasDatabaseName("idx_stock_receipts_tenant_store_status");
         });
 
         // ── StockReceiptItem ────────────────────────────────────────────────
@@ -546,6 +561,16 @@ public sealed class AppDbContext : DbContext
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(t => t.FromStoreId).HasColumnName("FromLocationId");
             e.Property(t => t.ToStoreId).HasColumnName("ToLocationId");
+            // TASK-354: same TenantId index gap as StockReceipt above. Two composite
+            // indexes (not one) because GetAllAsync/GetPagedAsync filter store_id via
+            // `FromStoreId == storeId || ToStoreId == storeId` — one index per side of
+            // the OR so Postgres can bitmap-OR them instead of falling back to a seq scan.
+            e.HasIndex(t => new { t.TenantId, t.FromStoreId, t.Status, t.CreatedAt })
+             .IsDescending(false, false, false, true)
+             .HasDatabaseName("idx_stock_transfers_tenant_from_status");
+            e.HasIndex(t => new { t.TenantId, t.ToStoreId, t.Status, t.CreatedAt })
+             .IsDescending(false, false, false, true)
+             .HasDatabaseName("idx_stock_transfers_tenant_to_status");
         });
 
         // ── StockTransferItem ───────────────────────────────────────────────
@@ -688,6 +713,21 @@ public sealed class AppDbContext : DbContext
             e.Property(a => a.IpAddress).HasMaxLength(50);
             e.Property(a => a.Meta).HasColumnType("text");
             e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            // Block 16 (pre-launch DB audit): table had ONLY the PK index — every RLS query
+            // (which always adds "TenantId" = ... via tenant_isolation) and every repository
+            // read (GetByTenantAsync/GetByUserAsync/GetFilteredAsync/GetAllTenantsAsync, all
+            // ORDER BY CreatedAt DESC) forced a seq scan + sort. Currently invisible at 133
+            // rows (dev), but this is a write-on-every-action audit trail with unbounded
+            // growth — will matter fast in production.
+            e.HasIndex(a => new { a.TenantId, a.CreatedAt })
+             .IsDescending(false, true)
+             .HasDatabaseName("idx_activity_logs_tenant_created");
+            e.HasIndex(a => new { a.TenantId, a.UserId, a.CreatedAt })
+             .IsDescending(false, false, true)
+             .HasDatabaseName("idx_activity_logs_tenant_user_created");
+            e.HasIndex(a => a.CreatedAt)
+             .IsDescending(true)
+             .HasDatabaseName("idx_activity_logs_created");
         });
 
         // ── DailySale (v2) ──────────────────────────────────────────────────
@@ -896,6 +936,12 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(s => s.StoreId).HasColumnName("LocationId");
             e.HasIndex(s => new { s.StoreId, s.SupplierId });
+            // Block 16 (pre-launch DB audit): GetAsync(storeId?, supplierId?) — both filters
+            // optional. When the tenant Settings page loads the schedule list with no filter
+            // (the common case), the query becomes RLS-"TenantId"-only with no other index to
+            // fall back on — full-table scan across every tenant's schedules.
+            e.HasIndex(s => s.TenantId)
+             .HasDatabaseName("idx_supply_schedules_tenant");
             e.HasOne(s => s.Store).WithMany()
              .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(s => s.Supplier).WithMany()
@@ -1623,6 +1669,13 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.ClosedAt).IsRequired(false);
             e.Property(x => x.Rating).IsRequired(false);
             e.Property(x => x.RatingComment).HasMaxLength(1000).IsRequired(false);
+            // Block 16 (pre-launch DB audit): ChatService.GetSessionsAsync (tenant chat inbox,
+            // "WHERE TenantId == tenantId ORDER BY UpdatedAt DESC") had only the PK index to
+            // work with — full-table scan across every tenant's chat sessions on every load of
+            // this page. Live chat is an actively growing feature; fix now before it compounds.
+            e.HasIndex(x => new { x.TenantId, x.UpdatedAt })
+             .IsDescending(false, true)
+             .HasDatabaseName("idx_chat_sessions_tenant_updated");
             e.HasMany(x => x.Messages)
              .WithOne(x => x.Session)
              .HasForeignKey(x => x.SessionId)

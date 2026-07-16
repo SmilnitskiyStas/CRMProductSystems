@@ -14,8 +14,7 @@ import { useAuthStore } from '@/features/auth/store';
 import { useCustomers } from '@/features/customers/hooks/useCustomers';
 import { CustomerCard } from '@/features/customers/components/CustomerCard';
 import { CreateCustomerModal } from '@/features/customers/components/CreateCustomerModal';
-
-const ALLOWED_ROLES = ['StoreManager', 'NetworkManager', 'Admin'];
+import { AT_LEAST_STORE_MANAGER, hasRole } from '@/lib/roles';
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -24,7 +23,7 @@ export default function CustomersScreen() {
   const user = useAuthStore((s) => s.user);
 
   // Redirect if insufficient role
-  if (user && !ALLOWED_ROLES.includes(user.role)) {
+  if (user && !hasRole(user.role, AT_LEAST_STORE_MANAGER)) {
     router.back();
     return null;
   }

@@ -35,8 +35,17 @@ async function runAiOrderGeneration(): Promise<void> {
   const client = await db.connect();
   let stores: { id: string; tenant_id: string; name: string }[];
   try {
+    // Block 11 audit: this job never set app.role='worker' — under the post-Block-2 fail-closed
+    // RLS policy (20260714180000_FixFailOpenTenantIsolationOnReset), the SELECT below returns
+    // zero rows without it (this cron spans every tenant, no per-request app.tenant_id exists).
+    // Same missing-SET bug as notification.job.ts/weather-fetch.job.ts, found in this same block.
+    await client.query("SET app.role = 'worker'");
+
+    // NOTE: "stores" was renamed to "locations" in migration 20260615183318_V4LocationsRename
+    // (v4 Store→Location rename). Querying "stores" here silently threw every run — the
+    // nightly cron never generated a single AI order suggestion in production.
     const res = await client.query<{ id: string; tenant_id: string; name: string }>(
-      'SELECT "Id" AS id, "TenantId" AS tenant_id, "Name" AS name FROM stores WHERE "IsActive"',
+      'SELECT "Id" AS id, "TenantId" AS tenant_id, "Name" AS name FROM locations WHERE "IsActive"',
     );
     stores = res.rows;
   } finally {
@@ -84,6 +93,10 @@ async function notifyManagers(
 ): Promise<void> {
   const client = await db.connect();
   try {
+    // Block 11 audit: same missing SET app.role='worker' bug as runAiOrderGeneration above —
+    // without it, users/notification_settings/notification_log all 0-row/no-op under RLS.
+    await client.query("SET app.role = 'worker'");
+
     const usersRes = await client.query<{ id: string; telegram_chat_id: string | null }>(
       `SELECT "Id" AS id, "TelegramChatId" AS telegram_chat_id
        FROM users

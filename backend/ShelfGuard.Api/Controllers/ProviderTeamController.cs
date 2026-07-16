@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Provider;
 using ShelfGuard.Application.Features.Provider.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
+using System.Security.Claims;
 
 namespace ShelfGuard.Api.Controllers;
 
@@ -13,6 +14,11 @@ public sealed class ProviderTeamController(
     IProviderTeamService teamService,
     IProviderStatsService statsService) : ControllerBase
 {
+    // TASK-363 (Block 12 audit): the caller's own role, read from the validated JWT — used by
+    // the service layer to gate owner-role escalation/deactivation. Never trust a role from
+    // the request body for this purpose.
+    private string ActingRole => User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
     [HttpGet("stats")]
     public async Task<IActionResult> GetStats(CancellationToken ct)
     {
@@ -31,7 +37,7 @@ public sealed class ProviderTeamController(
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Invite([FromBody] InviteProviderMemberRequest req, CancellationToken ct)
     {
-        var (member, error) = await teamService.InviteMemberAsync(req, ct);
+        var (member, error) = await teamService.InviteMemberAsync(req, ActingRole, ct);
         if (error is not null) return BadRequest(new { error });
         return Created($"/api/provider/team", member);
     }
@@ -40,7 +46,7 @@ public sealed class ProviderTeamController(
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Update(Guid memberId, [FromBody] UpdateProviderMemberRequest req, CancellationToken ct)
     {
-        var (member, error) = await teamService.UpdateMemberAsync(memberId, req, ct);
+        var (member, error) = await teamService.UpdateMemberAsync(memberId, req, ActingRole, ct);
         if (error is not null) return BadRequest(new { error });
         return Ok(member);
     }
@@ -49,7 +55,9 @@ public sealed class ProviderTeamController(
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Deactivate(Guid memberId, CancellationToken ct)
     {
-        var success = await teamService.DeactivateMemberAsync(memberId, ct);
+        var (success, error) = await teamService.DeactivateMemberAsync(memberId, ActingRole, ct);
+        if (!success && error is not null && error != "Member not found.")
+            return BadRequest(new { error });
         return success ? NoContent() : NotFound();
     }
 
@@ -57,7 +65,9 @@ public sealed class ProviderTeamController(
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Reactivate(Guid memberId, CancellationToken ct)
     {
-        var success = await teamService.ReactivateMemberAsync(memberId, ct);
+        var (success, error) = await teamService.ReactivateMemberAsync(memberId, ActingRole, ct);
+        if (!success && error is not null && error != "Member not found.")
+            return BadRequest(new { error });
         return success ? NoContent() : NotFound();
     }
 }

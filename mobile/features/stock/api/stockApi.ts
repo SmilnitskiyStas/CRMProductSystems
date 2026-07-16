@@ -6,7 +6,16 @@ export async function getStock(params?: {
   locationId?: string;
   zone_id?: string;
 }): Promise<StockBatch[]> {
-  const { data } = await apiClient.get<StockBatch[]>('/stock', { params });
+  // Backend query param is still `store_id` (StockController never got the v4
+  // Store→Location rename) — sending `locationId` was silently ignored,
+  // returning unfiltered stock across every location.
+  const { data } = await apiClient.get<StockBatch[]>('/stock', {
+    params: {
+      status: params?.status,
+      store_id: params?.locationId,
+      zone_id: params?.zone_id,
+    },
+  });
   return data;
 }
 

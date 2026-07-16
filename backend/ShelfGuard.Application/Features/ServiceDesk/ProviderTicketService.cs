@@ -71,6 +71,73 @@ public sealed class ProviderTicketService : IProviderTicketService
         return (ToListItemDto(row.Value.Ticket, row.Value.TenantName), null);
     }
 
+    public async Task<ProviderTicketDetailDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        var row = await _repo.GetByIdWithCommentsAsync(id, ct);
+        if (row is null) return null;
+
+        return ToDetailDto(row.Value.Ticket, row.Value.TenantName);
+    }
+
+    public async Task<(TicketCommentDto? Comment, string? Error)> AddCommentAsync(
+        Guid ticketId,
+        Guid providerUserId,
+        AddCommentDto dto,
+        CancellationToken ct = default)
+    {
+        var row = await _repo.GetByIdAsync(ticketId, ct);
+        if (row is null)
+            return (null, "Ticket not found.");
+
+        if (string.IsNullOrWhiteSpace(dto.Body))
+            return (null, "Comment body is required.");
+
+        var comment = new TicketComment
+        {
+            TenantId   = row.Value.Ticket.TenantId,
+            TicketId   = ticketId,
+            AuthorId   = providerUserId,
+            Body       = dto.Body.Trim(),
+            IsInternal = false,
+        };
+
+        var created = await _repo.AddCommentAsync(comment, ct);
+
+        return (new TicketCommentDto(
+            created.Id,
+            created.AuthorId,
+            created.Author?.FullName ?? string.Empty,
+            created.Body,
+            created.IsInternal,
+            created.CreatedAt), null);
+    }
+
+    private static ProviderTicketDetailDto ToDetailDto(
+        SupportTicket t, string tenantName) => new(
+            Id:                t.Id,
+            Number:            t.Number,
+            TenantId:          t.TenantId,
+            TenantName:        tenantName,
+            Title:             t.Title,
+            Description:       t.Description,
+            Category:          t.Category,
+            Priority:          t.Priority,
+            Status:            t.Status,
+            CreatedBy:         t.CreatedBy,
+            CreatedByName:     t.CreatedByUser?.FullName ?? string.Empty,
+            CreatedByProvider: t.CreatedByProvider,
+            CreatedAt:         t.CreatedAt,
+            Comments:          t.Comments
+                .OrderBy(c => c.CreatedAt)
+                .Select(c => new TicketCommentDto(
+                    c.Id,
+                    c.AuthorId,
+                    c.Author?.FullName ?? string.Empty,
+                    c.Body,
+                    c.IsInternal,
+                    c.CreatedAt))
+                .ToList());
+
     private static ProviderTicketListItemDto ToListItemDto(
         SupportTicket t, string tenantName) => new(
             Id:                t.Id,

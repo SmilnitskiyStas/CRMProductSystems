@@ -11,4 +11,12 @@ public interface IProviderTicketService
         Guid providerUserId,
         CreateProviderTicketDto dto,
         CancellationToken ct = default);
+
+    Task<ProviderTicketDetailDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
+
+    Task<(TicketCommentDto? Comment, string? Error)> AddCommentAsync(
+        Guid ticketId,
+        Guid providerUserId,
+        AddCommentDto dto,
+        CancellationToken ct = default);
 }

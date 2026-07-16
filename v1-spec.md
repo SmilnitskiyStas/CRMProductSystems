@@ -594,7 +594,7 @@ POST   /auth/login
 POST   /auth/refresh
 POST   /auth/logout
 GET    /auth/me
-POST   /auth/telegram/link     — прив'язати Telegram chat_id
+POST   /telegram/link-code     — генерує одноразовий код прив'язки (t.me/Bot?start=CODE, §8.1)
 ```
 
 ### Products

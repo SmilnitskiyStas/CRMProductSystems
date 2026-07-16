@@ -49,8 +49,6 @@ public sealed record ChangePasswordRequest(
     string NewPassword
 );
 
-public sealed record LinkTelegramRequest(string ChatId);
-
 /// <summary>
 /// Assigns (or clears, when TenantRoleId is null) a custom capability-template role to a user
 /// (ADR-020, TASK-346). AtLeastEnterpriseAdmin-only, no capability bypass — see

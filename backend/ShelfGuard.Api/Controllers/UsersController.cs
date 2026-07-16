@@ -23,6 +23,13 @@ namespace ShelfGuard.Api.Controllers;
 /// (acting user vs. target's current role, and vs. any newly-requested role) regardless of
 /// which policy path let the caller in, closing that gap for both the new capability path and
 /// a pre-existing store_manager self-escalation hole in Update.
+/// TASK-352 (Block 1 pre-launch audit, user decision): Invite/Deactivate previously sat behind
+/// a narrower <c>AtLeastEnterpriseAdmin</c> floor than Update's <c>AtLeastStoreManager</c> —
+/// tighter than v1-spec.md §3.2, which grants staff management to network_manager and
+/// store_manager too. All three actions now share <see cref="AppPolicies.StoreManagerOrUsersManage"/>;
+/// the RoleRank checks above are unaffected and still gate what a network_manager/store_manager
+/// can actually do to a specific target (cannot touch a same-or-higher-ranked user, cannot
+/// assign a role above their own).
 /// </summary>
 [ApiController]
 [Route("api/users")]
@@ -60,9 +67,9 @@ public sealed class UsersController : ControllerBase
         return Ok(user);
     }
 
-    /// <summary>Creates a new user (invite). Enterprise admin, or a "users.manage" TenantRole capability holder.</summary>
+    /// <summary>Creates a new user (invite). Store manager and above, or a "users.manage" TenantRole capability holder.</summary>
     [HttpPost("invite")]
-    [Authorize(Policy = AppPolicies.EnterpriseAdminOrUsersManage)]
+    [Authorize(Policy = AppPolicies.StoreManagerOrUsersManage)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -144,9 +151,9 @@ public sealed class UsersController : ControllerBase
         return Ok(user);
     }
 
-    /// <summary>Deactivates a user (soft delete). Enterprise admin, or a "users.manage" TenantRole capability holder.</summary>
+    /// <summary>Deactivates a user (soft delete). Store manager and above, or a "users.manage" TenantRole capability holder.</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = AppPolicies.EnterpriseAdminOrUsersManage)]
+    [Authorize(Policy = AppPolicies.StoreManagerOrUsersManage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

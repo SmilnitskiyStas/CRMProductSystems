@@ -50,6 +50,35 @@ public sealed class AdminServiceDeskController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, ticket);
     }
 
+    // ── GET /api/admin/service-desk/{id} ─────────────────────────────────────
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(ProviderTicketDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
+    {
+        var ticket = await _tickets.GetByIdAsync(id, ct);
+        return ticket is null ? NotFound() : Ok(ticket);
+    }
+
+    // ── POST /api/admin/service-desk/{id}/comments ───────────────────────────
+
+    [HttpPost("{id:guid}/comments")]
+    [ProducesResponseType(typeof(TicketCommentDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddComment(Guid id, AddCommentDto dto, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId is null) return Forbid();
+
+        var (comment, error) = await _tickets.AddCommentAsync(id, userId.Value, dto, ct);
+        if (error == "Ticket not found.") return NotFound();
+        if (error is not null) return BadRequest(new { error });
+
+        return StatusCode(StatusCodes.Status201Created, comment);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private Guid? GetUserId()

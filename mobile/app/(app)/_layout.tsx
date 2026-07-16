@@ -3,8 +3,7 @@ import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/features/auth/store';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
-
-const CASHIER_ROLES = ['Cashier', 'StoreManager', 'Director', 'Admin'];
+import { CAN_ACCESS_POS, hasRole } from '@/lib/roles';
 
 export default function AppLayout() {
   const token = useAuthStore((s) => s.accessToken);
@@ -12,7 +11,7 @@ export default function AppLayout() {
 
   if (!token) return <Redirect href="/(auth)/login" />;
 
-  const canAccessPos = user ? CASHIER_ROLES.includes(user.role) : false;
+  const canAccessPos = hasRole(user?.role, CAN_ACCESS_POS);
 
   return (
     <Tabs

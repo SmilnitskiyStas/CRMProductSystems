@@ -108,14 +108,30 @@ async function handleExpiryAlert(payload: ExpiryAlertPayload): Promise<void> {
 
   const client = await db.connect();
   try {
+    // Block 11 audit: this consumer never set app.role='worker', unlike expiry-check.job.ts
+    // (the producer that enqueues onto this same "notifications" queue) and every other
+    // worker/src/jobs/*.ts file. Under the post-Block-2 fail-closed RLS policy
+    // (20260714180000_FixFailOpenTenantIsolationOnReset), the queries below against
+    // items/locations/users/notification_settings return zero rows on any pooled connection
+    // that hasn't incidentally inherited app.role from another job reusing the same physical
+    // pg connection (node-pg does not reset session state on release) — correctness was
+    // depending on connection-pool luck, not a guarantee. Explicit SET fixes it properly.
+    await client.query("SET app.role = 'worker'");
+
     // Fetch product name and store name for readable messages
+    // NOTE (TASK-360 / Block 9 audit): "catalog_products" was renamed to "items" in
+    // 20260616042437_V4ItemsRename and "stores" was renamed to "locations" in
+    // 20260615183318_V4LocationsRename. Querying the old names threw "relation does not
+    // exist" on every call — every expiry warning/critical/expired Telegram/push/email
+    // notification has silently failed since those migrations (same bug class as TASK-358's
+    // ai-order.job.ts/weather-fetch.job.ts finding).
     const metaRes = await client.query<{ product_name: string; store_name: string }>(
       `SELECT
-         cp."Name" AS product_name,
-         s."Name"  AS store_name
-       FROM catalog_products cp
-       JOIN stores s ON s."Id" = $2
-       WHERE cp."Id" = $1`,
+         i."Name" AS product_name,
+         s."Name" AS store_name
+       FROM items i
+       JOIN locations s ON s."Id" = $2
+       WHERE i."Id" = $1`,
       [payload.productId, payload.storeId]
     );
     const productName = metaRes.rows[0]?.product_name ?? "Невідомий товар";
@@ -223,8 +239,13 @@ async function handleIotAlert(
 ): Promise<void> {
   const client = await db.connect();
   try {
+    // Block 11 audit: see the SET app.role='worker' note in handleExpiryAlert above — same
+    // missing-SET bug, same fix, this is the temp_alert/iot_offline delivery path (v3-spec §4).
+    await client.query("SET app.role = 'worker'");
+
+    // NOTE (TASK-360): "stores" renamed to "locations" — see comment in handleExpiryAlert above.
     const storeRes = await client.query<{ name: string }>(
-      `SELECT "Name" AS name FROM stores WHERE "Id" = $1`, [storeId]);
+      `SELECT "Name" AS name FROM locations WHERE "Id" = $1`, [storeId]);
     const storeName = storeRes.rows[0]?.name ?? "Невідомий магазин";
     const fullText = `${text}\n<b>Магазин:</b> ${storeName}`;
 

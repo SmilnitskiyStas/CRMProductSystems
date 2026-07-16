@@ -94,11 +94,16 @@ public sealed class StockService : IStockService
         var batches = await _repo.GetActionRequiredAsync(storeId, ct);
         var productionStores = await _repo.GetProductionStoresAsync(ct);
 
+        // Bulk-load deficit stocks for every distinct product in one query instead of
+        // one GetDeficitStocksAsync round-trip per batch (N+1 — batches.Count queries).
+        var productIds = batches.Select(b => b.ProductId).Distinct().ToList();
+        var deficitsByProduct = await _repo.GetDeficitStocksBulkAsync(productIds, ct);
+
         var suggestions = new List<SuggestionDto>();
 
         foreach (var batch in batches)
         {
-            var actions = await BuildActionsAsync(batch, productionStores, ct);
+            var actions = BuildActions(batch, productionStores, deficitsByProduct);
             suggestions.Add(ToSuggestionDto(batch, actions));
         }
 
@@ -255,14 +260,16 @@ public sealed class StockService : IStockService
 
     // ── suggestions ────────────────────────────────────────────────────────
 
-    private async Task<List<StockAction>> BuildActionsAsync(
-        ProductStock batch, List<Location> productionStores, CancellationToken ct)
+    private static List<StockAction> BuildActions(
+        ProductStock batch, List<Location> productionStores,
+        Dictionary<Guid, List<ProductStock>> deficitsByProduct)
     {
         var actions = new List<StockAction>();
 
-        // 1. Transfer to store with deficit
-        var deficitStores = await _repo.GetDeficitStocksAsync(batch.ProductId, batch.StoreId, ct);
-        var firstDeficit = deficitStores.FirstOrDefault();
+        // 1. Transfer to store with deficit (nearest-expiry deficit batch in a *different* store)
+        var firstDeficit = deficitsByProduct.TryGetValue(batch.ProductId, out var deficits)
+            ? deficits.FirstOrDefault(d => d.StoreId != batch.StoreId)
+            : null;
         if (firstDeficit?.Store is not null)
         {
             actions.Add(new StockAction(

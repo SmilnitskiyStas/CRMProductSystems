@@ -14,8 +14,7 @@ import { useAuthStore } from '@/features/auth/store';
 import { useTicket, useUpdateTicket } from '@/features/service-desk/hooks/useServiceDesk';
 import { AddCommentModal } from '@/features/service-desk/components/AddCommentModal';
 import type { TicketComment } from '@/features/service-desk/types';
-
-const MANAGER_ROLES = ['StoreManager', 'NetworkManager', 'EnterpriseAdmin', 'Provider', 'ProviderAdmin'];
+import { AT_LEAST_STORE_MANAGER_OR_PROVIDER, hasRole } from '@/lib/roles';
 
 const PRIORITY_STYLES: Record<string, string> = {
   low: 'bg-gray-100 text-gray-600',
@@ -99,7 +98,7 @@ export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const isManager = user ? MANAGER_ROLES.includes(user.role) : false;
+  const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER_OR_PROVIDER);
 
   const { data, isLoading, isError } = useTicket(id);
   const updateTicket = useUpdateTicket();

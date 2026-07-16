@@ -80,7 +80,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
         return MapAgreementResult(agreement, error);
     }
 
-    /// <summary>Re-renders the contract PDF (same number). Allowed while awaiting_signature or active.</summary>
+    /// <summary>Re-renders the contract PDF (same number). Only while awaiting_signature — never after signing.</summary>
     [HttpPost("cooperation-requests/{id:guid}/regenerate-contract")]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
