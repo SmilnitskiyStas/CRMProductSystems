@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { OrderLine } from "../types";
 
 /**
@@ -7,6 +8,7 @@ import type { OrderLine } from "../types";
  * showing current position (stock on hand + in transit) against the target.
  */
 export function BufferFunnel({ line }: { line: OrderLine }) {
+  const t = useTranslations("Dashboard.orders.bufferFunnel");
   const total = line.bufferTotal;
   if (total <= 0) return <span style={{ color: "#4B5563", fontSize: 12 }}>—</span>;
 
@@ -25,7 +27,7 @@ export function BufferFunnel({ line }: { line: OrderLine }) {
     : "#34D399";
 
   return (
-    <div title={`Позиція ${position} із ${total} (🔴 ${line.bufferRed} · 🟡 ${line.bufferYellow} · 🟢 ${line.bufferGreen})`}
+    <div title={t("tooltip", { position, total, red: line.bufferRed, yellow: line.bufferYellow, green: line.bufferGreen })}
       style={{ minWidth: 140 }}>
       <div style={{
         position: "relative", height: 10, borderRadius: 5, overflow: "hidden",

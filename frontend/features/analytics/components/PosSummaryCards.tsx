@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import type { PosAnalyticsSummaryDto } from "../types";
 
@@ -55,6 +56,10 @@ function KpiCard({
 }
 
 export function PosSummaryCards({ data, previous }: Props) {
+  const t = useTranslations("Dashboard.analytics.pos.summaryCards");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   return (
     <div
       style={{
@@ -64,30 +69,30 @@ export function PosSummaryCards({ data, previous }: Props) {
       }}
     >
       <KpiCard
-        label="Виручка"
-        value={`${data.totalRevenue.toLocaleString("uk-UA")} ₴`}
+        label={t("revenue")}
+        value={`${data.totalRevenue.toLocaleString(intlLocale)} ₴`}
         color="#4ADE80"
-        sub={`Готівка: ${data.cashRevenue.toLocaleString("uk-UA")} ₴ · Картка: ${data.cardRevenue.toLocaleString("uk-UA")} ₴`}
+        sub={t("revenueSub", { cash: data.cashRevenue.toLocaleString(intlLocale), card: data.cardRevenue.toLocaleString(intlLocale) })}
         current={data.totalRevenue}
         previous={previous?.totalRevenue}
         format="currency"
       />
       <KpiCard
-        label="Транзакції"
-        value={data.transactionCount.toLocaleString("uk-UA")}
+        label={t("transactions")}
+        value={data.transactionCount.toLocaleString(intlLocale)}
         color="#60A5FA"
         current={data.transactionCount}
         previous={previous?.transactionCount}
         format="number"
       />
       <KpiCard
-        label="Середній чек"
-        value={`${data.averageTicket.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₴`}
+        label={t("averageTicket")}
+        value={`${data.averageTicket.toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₴`}
         color="#FBBF24"
       />
       <KpiCard
-        label="Зміни"
-        value={data.shiftCount.toLocaleString("uk-UA")}
+        label={t("shifts")}
+        value={data.shiftCount.toLocaleString(intlLocale)}
         color="#A78BFA"
       />
     </div>

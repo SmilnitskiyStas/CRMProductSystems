@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { useTranslations, useLocale } from "next-intl";
 import type { PosRevenueTrendDto, PosRevenueTrendPoint } from "../types";
 
 interface ComparisonSeries {
@@ -32,11 +33,15 @@ function daysBetween(fromStr: string, dateStr: string): number {
   return Math.round((new Date(`${dateStr}T00:00:00Z`).getTime() - new Date(`${fromStr}T00:00:00Z`).getTime()) / MS_PER_DAY);
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+function formatDate(dateStr: string, intlLocale: string): string {
+  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString(intlLocale, { day: "numeric", month: "short" });
 }
 
 export function PosRevenueTrendChart({ data, from, comparison }: Props) {
+  const t = useTranslations("Dashboard.analytics.pos.revenueTrend");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   if (!data || data.points.length === 0) {
     return (
       <div
@@ -50,7 +55,7 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
           textAlign: "center",
         }}
       >
-        Немає даних за обраний період
+        {t("empty")}
       </div>
     );
   }
@@ -69,7 +74,7 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
 
   if (!hasComparison) {
     chartData = data.points.map((p) => ({
-      x: formatDate(p.date),
+      x: formatDate(p.date, intlLocale),
       date: p.date,
       revenue: p.revenue,
       transactions: p.transactions,
@@ -97,7 +102,7 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
     chartData = Array.from(byOffset.entries())
       .sort(([a], [b]) => a - b)
       .map(([offset, v]) => ({
-        x: `День ${offset + 1}`,
+        x: t("dayLabel", { n: offset + 1 }),
         date: v.date ?? "",
         revenue: v.revenue,
         transactions: v.transactions,
@@ -117,7 +122,7 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
       }}
     >
       <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
-        Динаміка виручки
+        {t("title")}
       </div>
       <ResponsiveContainer width="100%" height={260}>
         <AreaChart data={chartData} margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
@@ -138,7 +143,7 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
             tick={{ fill: "#4B5563", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}к`}
+            tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}${locale === "en" ? "k" : "к"}`}
             width={40}
           />
           <Tooltip
@@ -153,10 +158,10 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
               const v = Number(val);
               if (name === "comparisonRevenue") {
                 const d = (props.payload as { comparisonDate?: string }).comparisonDate;
-                return [`${v.toLocaleString("uk-UA")} ₴${d ? ` (${formatDate(d)})` : ""}`, "Попередній період"];
+                return [`${v.toLocaleString(intlLocale)} ₴${d ? ` (${formatDate(d, intlLocale)})` : ""}`, t("previousPeriod")];
               }
               const d = (props.payload as { date?: string }).date;
-              return [`${v.toLocaleString("uk-UA")} ₴${d ? ` (${formatDate(d)})` : ""}`, "Поточний період"];
+              return [`${v.toLocaleString(intlLocale)} ₴${d ? ` (${formatDate(d, intlLocale)})` : ""}`, t("currentPeriod")];
             }}
             cursor={{ stroke: "#374151", strokeWidth: 1 }}
           />
@@ -164,7 +169,7 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
           <Area
             type="monotone"
             dataKey="revenue"
-            name={hasComparison ? "Поточний період" : "revenue"}
+            name={hasComparison ? t("currentPeriod") : "revenue"}
             stroke="#3B82F6"
             strokeWidth={2}
             fill="url(#revenueGradient)"
@@ -176,7 +181,7 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
             <Line
               type="monotone"
               dataKey="comparisonRevenue"
-              name="Попередній період"
+              name={t("previousPeriod")}
               stroke="#A78BFA"
               strokeWidth={2}
               strokeDasharray="5 4"

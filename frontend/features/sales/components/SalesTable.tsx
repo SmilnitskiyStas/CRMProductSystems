@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { BarChart2, AlertTriangle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { DailySale } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 
@@ -29,19 +30,20 @@ const td: React.CSSProperties = {
   borderBottom: "1px solid #161B22",
 };
 
-const sourceLabels: Record<string, string> = {
-  manual: "вручну",
-  pos: "каса",
-  import: "імпорт",
-};
-
 export function SalesTable({ sales, onToggleAnomaly }: Props) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.sales.table");
+
+  const sourceLabels: Record<string, string> = {
+    manual: t("source.manual"),
+    pos: t("source.pos"),
+    import: t("source.import"),
+  };
 
   if (sales.length === 0) {
     return (
       <div style={{ color: "#4B5563", fontSize: 14, padding: "48px 0", textAlign: "center" }}>
-        Немає даних про продажі за обраний період. Внесіть вручну або імпортуйте CSV.
+        {t("empty")}
       </div>
     );
   }
@@ -50,14 +52,14 @@ export function SalesTable({ sales, onToggleAnomaly }: Props) {
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
       <thead>
         <tr>
-          <th style={th}>Дата</th>
-          <th style={th}>Товар</th>
-          <th style={th}>Штрихкод</th>
-          <th style={th}>Магазин</th>
-          <th style={{ ...th, textAlign: "right" }}>Продано</th>
-          <th style={{ ...th, textAlign: "right" }}>Залишок EOD</th>
-          <th style={th}>Джерело</th>
-          <th style={th}>Позначки</th>
+          <th style={th}>{t("headers.date")}</th>
+          <th style={th}>{t("headers.product")}</th>
+          <th style={th}>{t("headers.barcode")}</th>
+          <th style={th}>{t("headers.store")}</th>
+          <th style={{ ...th, textAlign: "right" }}>{t("headers.sold")}</th>
+          <th style={{ ...th, textAlign: "right" }}>{t("headers.eod")}</th>
+          <th style={th}>{t("headers.source")}</th>
+          <th style={th}>{t("headers.marks")}</th>
           <th style={th}></th>
         </tr>
       </thead>
@@ -82,26 +84,26 @@ export function SalesTable({ sales, onToggleAnomaly }: Props) {
                 <span style={{
                   background: "#7C2D12", color: "#FDBA74", fontSize: 11,
                   borderRadius: 6, padding: "2px 8px", marginRight: 6,
-                }}>акція</span>
+                }}>{t("promoTag")}</span>
               )}
               {s.isAnomaly && (
                 <span style={{
                   background: "#7F1D1D", color: "#FCA5A5", fontSize: 11,
                   borderRadius: 6, padding: "2px 8px",
-                }}>аномалія</span>
+                }}>{t("anomalyTag")}</span>
               )}
             </td>
             <td style={{ ...td, textAlign: "right" }}>
               <ActionMenu
                 items={[
                   {
-                    label: s.isAnomaly ? "Включити в ADU" : "Позначити аномалією",
+                    label: s.isAnomaly ? t("actionMenu.includeInAdu") : t("actionMenu.markAnomaly"),
                     icon: <AlertTriangle size={13} />,
                     onClick: () => onToggleAnomaly(s.id, !s.isAnomaly),
                   },
                   { separator: true },
                   {
-                    label: "Аналітика товару",
+                    label: t("actionMenu.productAnalytics"),
                     icon: <BarChart2 size={13} />,
                     onClick: () => router.push(`/inventory/${s.productId}?tab=analytics`),
                     disabled: !s.productId,

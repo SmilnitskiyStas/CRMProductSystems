@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import type { StoreDto as Store } from "@/features/stores/types";
@@ -19,6 +20,8 @@ interface Props {
 export function CsvImportDialog({
   stores, defaultStoreId, isPending, result, error, onClose, onImport,
 }: Props) {
+  const t = useTranslations("Dashboard.sales.csvImport");
+  const tCommon = useTranslations("Common");
   const [storeId, setStoreId] = useState(defaultStoreId);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -38,16 +41,15 @@ export function CsvImportDialog({
   };
 
   return (
-    <Modal title="Імпорт продажів з CSV" onClose={onClose}>
+    <Modal title={t("title")} onClose={onClose}>
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.6 }}>
-          Формат: <code style={{ color: "#9CA3AF" }}>barcode,date,quantity_sold[,quantity_end_of_day][,is_promo_day]</code>
-          <br />Дата — <code style={{ color: "#9CA3AF" }}>yyyy-MM-dd</code>. Товари знаходяться за штрихкодом.
-          Існуючі записи за (товар, дата) оновлюються.
+          {t("formatLabel")} <code style={{ color: "#9CA3AF" }}>barcode,date,quantity_sold[,quantity_end_of_day][,is_promo_day]</code>
+          <br />{t("dateFormatLabel")} <code style={{ color: "#9CA3AF" }}>yyyy-MM-dd</code>{t("formatDescription")}
         </div>
 
         <div>
-          <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 5 }}>Магазин</label>
+          <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 5 }}>{t("storeLabel")}</label>
           <select value={storeId} onChange={(e) => setStoreId(e.target.value)} style={selectStyle}>
             {stores.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
@@ -69,9 +71,9 @@ export function CsvImportDialog({
             background: "#111827", border: "1px solid #1F2937",
             borderRadius: 8, padding: 12, fontSize: 13,
           }}>
-            <div style={{ color: "#34D399" }}>Створено: {result.created} · Оновлено: {result.updated}</div>
+            <div style={{ color: "#34D399" }}>{t("resultSummary", { created: result.created, updated: result.updated })}</div>
             {result.skipped > 0 && (
-              <div style={{ color: "#FBBF24", marginTop: 4 }}>Пропущено: {result.skipped}</div>
+              <div style={{ color: "#FBBF24", marginTop: 4 }}>{t("resultSkipped", { count: result.skipped })}</div>
             )}
             {result.errors.length > 0 && (
               <ul style={{ color: "#F87171", margin: "8px 0 0", paddingLeft: 18, maxHeight: 160, overflowY: "auto" }}>
@@ -83,10 +85,10 @@ export function CsvImportDialog({
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <Btn variant="ghost" type="button" onClick={onClose}>
-            {result ? "Закрити" : "Скасувати"}
+            {result ? tCommon("close") : tCommon("cancel")}
           </Btn>
           <Btn type="button" onClick={submit} disabled={isPending}>
-            {isPending ? "Імпорт…" : "Імпортувати"}
+            {isPending ? t("importing") : t("import")}
           </Btn>
         </div>
       </div>

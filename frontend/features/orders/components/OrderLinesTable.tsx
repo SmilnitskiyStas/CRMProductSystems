@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { BarChart2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { BufferFunnel } from "./BufferFunnel";
 import type { OrderLine } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
@@ -36,11 +37,12 @@ const roundingLabels: Record<OrderLine["rounding"], string> = {
 
 export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.orders.table");
 
   if (lines.length === 0) {
     return (
       <div style={{ color: "#4B5563", fontSize: 14, padding: "48px 0", textAlign: "center" }}>
-        Немає товарів з розрахованим буфером. Спочатку внесіть продажі та натисніть «Сформувати замовлення».
+        {t("empty")}
       </div>
     );
   }
@@ -49,14 +51,14 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
       <thead>
         <tr>
-          <th style={th}>Товар</th>
-          <th style={th}>Буфер (воронка)</th>
-          <th style={{ ...th, textAlign: "right" }}>Залишок</th>
-          <th style={{ ...th, textAlign: "right" }}>В дорозі</th>
-          <th style={{ ...th, textAlign: "right" }}>ББ</th>
-          <th style={{ ...th, textAlign: "right" }}>Розрахунок</th>
-          <th style={{ ...th, textAlign: "right" }}>Замовити</th>
-          <th style={th}>Дії</th>
+          <th style={th}>{t("headers.product")}</th>
+          <th style={th}>{t("headers.buffer")}</th>
+          <th style={{ ...th, textAlign: "right" }}>{t("headers.stock")}</th>
+          <th style={{ ...th, textAlign: "right" }}>{t("headers.inTransit")}</th>
+          <th style={{ ...th, textAlign: "right" }}>{t("headers.safetyBuffer")}</th>
+          <th style={{ ...th, textAlign: "right" }}>{t("headers.calculation")}</th>
+          <th style={{ ...th, textAlign: "right" }}>{t("headers.order")}</th>
+          <th style={th}>{t("headers.actions")}</th>
         </tr>
       </thead>
       <tbody>
@@ -91,14 +93,14 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
                     )}
                   </span>
                 ) : (
-                  <span style={{ color: "#34D399", fontSize: 12 }}>покрито</span>
+                  <span style={{ color: "#34D399", fontSize: 12 }}>{t("covered")}</span>
                 )}
               </td>
               <td style={td}>
                 <ActionMenu
                   items={[
                     {
-                      label: "Аналітика товару",
+                      label: t("actionMenu.productAnalytics"),
                       icon: <BarChart2 size={13} />,
                       onClick: () => router.push(`/inventory/${l.productId}?tab=analytics`),
                     },

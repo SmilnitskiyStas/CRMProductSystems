@@ -1,20 +1,20 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { FiscalStatus } from "../types";
 
-const META: Record<FiscalStatus, { label: string; color: string; bg: string; border: string }> = {
+const META: Record<FiscalStatus, { color: string; bg: string; border: string }> = {
   pending_fiscalization: {
-    label: "Очікує",
     color: "#fbbf24",
     bg: "#fbbf2418",
     border: "#fbbf2440",
   },
   fiscalized: {
-    label: "Фіскалізовано",
     color: "#22c55e",
     bg: "#22c55e18",
     border: "#22c55e40",
   },
   fiscalization_failed: {
-    label: "Помилка",
     color: "#ef4444",
     bg: "#ef444418",
     border: "#ef444440",
@@ -22,6 +22,7 @@ const META: Record<FiscalStatus, { label: string; color: string; bg: string; bor
 };
 
 export function FiscalBadge({ status }: { status: FiscalStatus }) {
+  const t = useTranslations("Dashboard.pos.fiscalStatus");
   const m = META[status] ?? META.pending_fiscalization;
   return (
     <span
@@ -37,7 +38,7 @@ export function FiscalBadge({ status }: { status: FiscalStatus }) {
         whiteSpace: "nowrap",
       }}
     >
-      {m.label}
+      {t.has(status) ? t(status) : status}
     </span>
   );
 }

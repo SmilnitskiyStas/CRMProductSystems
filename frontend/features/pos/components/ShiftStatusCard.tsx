@@ -1,6 +1,7 @@
 "use client";
 
 import { CreditCard, Clock, Hash, TrendingUp } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import type { ShiftDto, ShiftStatus } from "../types";
 
@@ -10,22 +11,23 @@ interface Props {
   isClosing: boolean;
 }
 
-function shiftStatusMeta(status: ShiftStatus): { label: string; color: string } {
+function shiftStatusMeta(status: ShiftStatus, t: ReturnType<typeof useTranslations>): { label: string; color: string } {
+  const label = t.has(status) ? t(status) : status;
   switch (status) {
     case "Open":
     case "Opening":
-      return { label: status === "Open" ? "Відкрита" : "Відкривається…", color: "#22c55e" };
+      return { label, color: "#22c55e" };
     case "Closed":
     case "Closing":
-      return { label: status === "Closed" ? "Закрита" : "Закривається…", color: "#6B7280" };
+      return { label, color: "#6B7280" };
     case "OpenFailed":
     case "CloseFailed":
-      return { label: status === "OpenFailed" ? "Помилка відкриття" : "Помилка закриття", color: "#ef4444" };
+      return { label, color: "#ef4444" };
   }
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateTime(iso: string, intlLocale: string): string {
+  return new Date(iso).toLocaleString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -50,7 +52,11 @@ const FIELD_VALUE: React.CSSProperties = {
 };
 
 export function ShiftStatusCard({ shift, onClose, isClosing }: Props) {
-  const meta = shiftStatusMeta(shift.status);
+  const t = useTranslations("Dashboard.pos.shiftStatus");
+  const tCard = useTranslations("Dashboard.pos.shiftCard");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const meta = shiftStatusMeta(shift.status, t);
   const isOpen = shift.status === "Open";
 
   return (
@@ -71,7 +77,7 @@ export function ShiftStatusCard({ shift, onClose, isClosing }: Props) {
       <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
         {/* Status */}
         <div>
-          <div style={FIELD_LABEL}>Статус зміни</div>
+          <div style={FIELD_LABEL}>{tCard("statusLabel")}</div>
           <div
             style={{
               display: "inline-flex",
@@ -96,16 +102,16 @@ export function ShiftStatusCard({ shift, onClose, isClosing }: Props) {
         {/* Opened at */}
         <div>
           <div style={{ ...FIELD_LABEL, display: "flex", alignItems: "center", gap: 4 }}>
-            <Clock size={10} /> Відкрито
+            <Clock size={10} /> {tCard("openedLabel")}
           </div>
-          <div style={FIELD_VALUE}>{formatDateTime(shift.openedAt)}</div>
+          <div style={FIELD_VALUE}>{formatDateTime(shift.openedAt, intlLocale)}</div>
         </div>
 
         {/* Shift number */}
         {shift.shiftNumber != null && (
           <div>
             <div style={{ ...FIELD_LABEL, display: "flex", alignItems: "center", gap: 4 }}>
-              <Hash size={10} /> Зміна №
+              <Hash size={10} /> {tCard("shiftNumberLabel")}
             </div>
             <div style={FIELD_VALUE}>{shift.shiftNumber}</div>
           </div>
@@ -114,7 +120,7 @@ export function ShiftStatusCard({ shift, onClose, isClosing }: Props) {
         {/* Total sales */}
         <div>
           <div style={{ ...FIELD_LABEL, display: "flex", alignItems: "center", gap: 4 }}>
-            <TrendingUp size={10} /> Сума продажів
+            <TrendingUp size={10} /> {tCard("totalSalesLabel")}
           </div>
           <div style={{ ...FIELD_VALUE, color: "#34d399", fontSize: 16, fontWeight: 700 }}>
             {shift.totalSales.toFixed(2)} ₴
@@ -124,7 +130,7 @@ export function ShiftStatusCard({ shift, onClose, isClosing }: Props) {
         {/* Fiscal status */}
         <div>
           <div style={{ ...FIELD_LABEL, display: "flex", alignItems: "center", gap: 4 }}>
-            <CreditCard size={10} /> ПРРО
+            <CreditCard size={10} /> {tCard("prroLabel")}
           </div>
           <div style={{ ...FIELD_VALUE, color: "#9CA3AF", fontFamily: "monospace", fontSize: 12 }}>
             {shift.fiscalStatus || "—"}
@@ -140,7 +146,7 @@ export function ShiftStatusCard({ shift, onClose, isClosing }: Props) {
           disabled={isClosing}
           icon={<CreditCard size={14} />}
         >
-          {isClosing ? "Закривається…" : "Закрити зміну"}
+          {isClosing ? tCard("closing") : tCard("closeShift")}
         </Btn>
       )}
     </div>

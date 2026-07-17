@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import { useStores } from "@/features/stores/hooks/useStores";
@@ -35,6 +36,8 @@ const INPUT: React.CSSProperties = {
 };
 
 export function OpenShiftDialog({ isOpen, onClose, onConfirm, isLoading }: Props) {
+  const t = useTranslations("Dashboard.pos.openShiftDialog");
+  const tCommon = useTranslations("Common");
   const { data: stores, isLoading: storesLoading } = useStores();
   const [storeId, setStoreId] = useState("");
   const [openingCash, setOpeningCash] = useState("");
@@ -49,13 +52,13 @@ export function OpenShiftDialog({ isOpen, onClose, onConfirm, isLoading }: Props
   }
 
   return (
-    <Modal title="Відкрити зміну" onClose={onClose} width={420}>
+    <Modal title={t("title")} onClose={onClose} width={420}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {/* Store selector */}
         <div>
-          <label style={LABEL}>Магазин *</label>
+          <label style={LABEL}>{t("storeLabel")}</label>
           {storesLoading ? (
-            <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження магазинів…</div>
+            <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loadingStores")}</div>
           ) : (
             <select
               value={storeId}
@@ -63,7 +66,7 @@ export function OpenShiftDialog({ isOpen, onClose, onConfirm, isLoading }: Props
               required
               style={{ ...INPUT, appearance: "none", cursor: "pointer" }}
             >
-              <option value="">Оберіть магазин</option>
+              <option value="">{t("selectStore")}</option>
               {stores?.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -76,7 +79,7 @@ export function OpenShiftDialog({ isOpen, onClose, onConfirm, isLoading }: Props
 
         {/* Opening cash */}
         <div>
-          <label style={LABEL}>Готівка на початок зміни (необов'язково)</label>
+          <label style={LABEL}>{t("openingCashLabel")}</label>
           <input
             type="number"
             min={0}
@@ -91,10 +94,10 @@ export function OpenShiftDialog({ isOpen, onClose, onConfirm, isLoading }: Props
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 4 }}>
           <Btn variant="ghost" onClick={onClose} disabled={isLoading}>
-            Скасувати
+            {tCommon("cancel")}
           </Btn>
           <Btn type="submit" variant="success" disabled={!storeId || isLoading}>
-            {isLoading ? "Відкривається…" : "Відкрити зміну"}
+            {isLoading ? t("opening") : t("confirm")}
           </Btn>
         </div>
       </form>

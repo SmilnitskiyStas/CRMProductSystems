@@ -15,10 +15,22 @@
       "login": "Log in",
       "cta": "Request a demo",
       "nav": [
-        { "href": "#features", "label": "Features" },
-        { "href": "#how-it-works", "label": "How it works" },
-        { "href": "#pricing", "label": "Pricing" },
-        { "href": "#faq", "label": "FAQ" }
+        {
+          "href": "#features",
+          "label": "Features"
+        },
+        {
+          "href": "#how-it-works",
+          "label": "How it works"
+        },
+        {
+          "href": "#pricing",
+          "label": "Pricing"
+        },
+        {
+          "href": "#faq",
+          "label": "FAQ"
+        }
       ],
       "langSwitchLabel": "Language",
       "langUk": "UA",
@@ -1025,6 +1037,316 @@
         "placedTitle": "Zones on the plan"
       },
       "redirecting": "Redirecting…"
+    },
+    "sales": {
+      "page": {
+        "title": "Sales",
+        "subtitle": "Daily sales history — the data source for ADU and auto-ordering",
+        "importCsv": "Import CSV",
+        "addSale": "Add Sales",
+        "allStores": "All stores",
+        "recordsCount": "records: {count}",
+        "errorLoading": "Failed to load sales. Check your API connection.",
+        "toastSaved": "Sales saved",
+        "toastImported": "Imported: {count}",
+        "toastImportedWithSkips": "Imported with skips: {count}",
+        "toastExcludedFromAdu": "Excluded from ADU calculation",
+        "toastIncludedInAdu": "Included in ADU calculation again"
+      },
+      "csvImport": {
+        "title": "Import sales from CSV",
+        "formatLabel": "Format:",
+        "dateFormatLabel": "Date —",
+        "formatDescription": ". Products are matched by barcode. Existing records for (product, date) are updated.",
+        "storeLabel": "Store",
+        "resultSummary": "Created: {created} · Updated: {updated}",
+        "resultSkipped": "Skipped: {count}",
+        "importing": "Importing…",
+        "import": "Import"
+      },
+      "entryForm": {
+        "title": "Add daily sales",
+        "storeLabel": "Store",
+        "productLabel": "Product",
+        "selectProductPlaceholder": "— select a product —",
+        "dateLabel": "Date",
+        "quantitySoldLabel": "Quantity sold, pcs",
+        "quantityEndOfDayLabel": "End-of-day balance",
+        "promoLabel": "Promo day (excluded from ADU calculation)",
+        "saving": "Saving…",
+        "save": "Save",
+        "validation": {
+          "selectStore": "Select a store",
+          "selectProduct": "Select a product",
+          "enterDate": "Enter a date",
+          "negativeQuantity": "Cannot be negative"
+        }
+      },
+      "table": {
+        "empty": "No sales data for the selected period. Add manually or import a CSV.",
+        "headers": {
+          "date": "Date",
+          "product": "Product",
+          "barcode": "Barcode",
+          "store": "Store",
+          "sold": "Sold",
+          "eod": "EOD balance",
+          "source": "Source",
+          "marks": "Marks"
+        },
+        "source": {
+          "manual": "manual",
+          "pos": "POS",
+          "import": "import"
+        },
+        "promoTag": "promo",
+        "anomalyTag": "anomaly",
+        "actionMenu": {
+          "markAnomaly": "Mark as anomaly",
+          "includeInAdu": "Include in ADU",
+          "productAnalytics": "Product analytics"
+        }
+      }
+    },
+    "orders": {
+      "page": {
+        "title": "Purchase Orders",
+        "subtitle": "CDA calculation: ADU → buffer → order formula with MOQ/USQ rounding",
+        "generate": "Generate order",
+        "generating": "Calculating…",
+        "toastResult": "ADU: {adu} · Buffers: {buffers} · To order: {toOrder}",
+        "statAduCalculated": "ADU calculated",
+        "statBuffersUpdated": "Buffers updated",
+        "statPositionsToOrder": "Lines to order",
+        "emptyTitle": "Select a store and click “Generate order” —",
+        "emptySubtitle": "the system will refresh ADU, rebuild CDA buffers, and calculate order quantities."
+      },
+      "bufferFunnel": {
+        "tooltip": "Position {position} of {total} (🔴 {red} · 🟡 {yellow} · 🟢 {green})"
+      },
+      "table": {
+        "empty": "No products with a calculated buffer. First add sales, then click “Generate order”.",
+        "headers": {
+          "product": "Product",
+          "buffer": "Buffer (funnel)",
+          "stock": "Stock",
+          "inTransit": "In transit",
+          "safetyBuffer": "SB",
+          "calculation": "Calculation",
+          "order": "Order",
+          "actions": "Actions"
+        },
+        "covered": "covered",
+        "actionMenu": {
+          "productAnalytics": "Product analytics"
+        }
+      }
+    },
+    "pos": {
+      "page": {
+        "title": "POS",
+        "openShift": "Open shift",
+        "openNewShift": "Open new shift",
+        "noShiftTitle": "No active shift",
+        "noShiftSubtitle": "Open a shift to start working",
+        "currentShiftSales": "Current shift sales",
+        "closedShiftSales": "Closed shift sales",
+        "zReportTitle": "Shift Z-report",
+        "zReportOpened": "Opened",
+        "zReportClosed": "Closed",
+        "zReportTotal": "Total amount",
+        "zReportPrroStatus": "PRRO status",
+        "closeFailedDefault": "Failed to close the shift."
+      },
+      "shiftStatus": {
+        "Open": "Open",
+        "Opening": "Opening…",
+        "Closed": "Closed",
+        "Closing": "Closing…",
+        "OpenFailed": "Open failed",
+        "CloseFailed": "Close failed"
+      },
+      "shiftCard": {
+        "statusLabel": "Shift status",
+        "openedLabel": "Opened",
+        "shiftNumberLabel": "Shift #",
+        "totalSalesLabel": "Total sales",
+        "prroLabel": "PRRO",
+        "closeShift": "Close shift",
+        "closing": "Closing…"
+      },
+      "openShiftDialog": {
+        "title": "Open shift",
+        "storeLabel": "Store *",
+        "loadingStores": "Loading stores…",
+        "selectStore": "Select a store",
+        "openingCashLabel": "Opening cash (optional)",
+        "opening": "Opening…",
+        "confirm": "Open shift"
+      },
+      "closeShiftDialog": {
+        "title": "Close shift",
+        "description": "Sales will be unavailable until a new shift is opened. Count the cash in the register and enter the amount below to reconcile — or leave it blank to close without reconciliation.",
+        "actualCashLabel": "Actual cash amount in the register (optional)",
+        "negativeCashError": "The cash amount cannot be negative.",
+        "closing": "Closing…",
+        "confirm": "Close shift"
+      },
+      "cashReconciliation": {
+        "title": "Cash reconciliation",
+        "openingCash": "Opening cash",
+        "expectedAmount": "Expected amount",
+        "actualCash": "Actual in register",
+        "discrepancy": "Discrepancy",
+        "match": "Match",
+        "surplus": "Surplus +{amount} ₴",
+        "shortage": "Shortage {amount} ₴"
+      },
+      "fiscalStatus": {
+        "pending_fiscalization": "Pending",
+        "fiscalized": "Fiscalized",
+        "fiscalization_failed": "Failed"
+      },
+      "paymentType": {
+        "Cash": "Cash",
+        "Card": "Card"
+      },
+      "saleDetail": {
+        "receiptTitle": "Receipt #{number}",
+        "generalInfo": "General information",
+        "paymentMethod": "Payment method",
+        "receiptTotal": "Receipt total",
+        "paid": "Paid",
+        "change": "Change",
+        "fiscalNumber": "Fiscal number",
+        "fiscalization": "Fiscalization",
+        "itemsSection": "Items ({count})",
+        "headers": {
+          "product": "Product",
+          "qty": "Qty",
+          "price": "Price",
+          "discount": "Discount",
+          "total": "Total"
+        }
+      },
+      "salesTable": {
+        "empty": "No sales in this shift yet",
+        "headers": {
+          "receiptNo": "Receipt #",
+          "time": "Time",
+          "items": "Items",
+          "payment": "Payment",
+          "sum": "Total",
+          "fiscalization": "Fiscalization"
+        },
+        "totalLabel": "Total amount:"
+      }
+    },
+    "aiOrders": {
+      "page": {
+        "title": "AI Orders",
+        "subtitle": "Claude analyzes weather, events, and promotions — and adjusts the math-based order with explanations",
+        "allStores": "All stores",
+        "generate": "Generate now",
+        "generating": "Claude is analyzing…",
+        "emptyHistory": "No suggestions yet — click “Generate now” or wait for the daily generation at 05:00.",
+        "toastGenerated": "AI suggestion ready: {count} items",
+        "itemsAbbrev": "items"
+      },
+      "status": {
+        "pending": "Pending",
+        "partially_accepted": "Accepted with changes",
+        "accepted": "Accepted",
+        "rejected": "Rejected"
+      },
+      "review": {
+        "title": "AI suggestion — {store}",
+        "itemsSuffix": "items",
+        "tokensSuffix": "tokens",
+        "reject": "Reject",
+        "toastRejected": "Suggestion rejected",
+        "accept": "Confirm order ({count})",
+        "toastAccepted": "Order confirmed",
+        "toastQuantityUpdated": "Quantity updated",
+        "noChange": "no change",
+        "edited": "✏️ edited",
+        "formula": "math formula",
+        "confidence": {
+          "high": "high",
+          "medium": "medium",
+          "low": "low"
+        },
+        "headers": {
+          "product": "Product",
+          "base": "Base",
+          "aiSuggests": "AI suggests",
+          "yourChange": "Your change",
+          "reason": "Reason",
+          "actions": "Actions"
+        },
+        "actionMenu": {
+          "productAnalytics": "Product analytics"
+        }
+      }
+    },
+    "analytics": {
+      "pos": {
+        "page": {
+          "title": "POS Analytics",
+          "subtitle": "Revenue, transactions, top products, and cashier stats",
+          "storeLabel": "Store",
+          "allStores": "All stores",
+          "trendLabel": "Trend",
+          "trendDay": "Day",
+          "trendWeek": "Week",
+          "summarySection": "Summary",
+          "revenueTrendSection": "Revenue trend",
+          "paymentMethodsSection": "Payment methods",
+          "noData": "No data"
+        },
+        "summaryCards": {
+          "revenue": "Revenue",
+          "revenueSub": "Cash: {cash} ₴ · Card: {card} ₴",
+          "transactions": "Transactions",
+          "averageTicket": "Average ticket",
+          "shifts": "Shifts"
+        },
+        "topProducts": {
+          "title": "Top products",
+          "empty": "No data",
+          "headers": {
+            "name": "Name",
+            "barcode": "Barcode",
+            "revenue": "Revenue",
+            "quantity": "Quantity",
+            "receipts": "Receipts"
+          }
+        },
+        "cashiers": {
+          "title": "Cashiers",
+          "empty": "No data",
+          "headers": {
+            "cashier": "Cashier",
+            "revenue": "Revenue",
+            "receipts": "Receipts",
+            "averageTicket": "Average ticket",
+            "shifts": "Shifts"
+          }
+        },
+        "revenueTrend": {
+          "title": "Revenue trend",
+          "empty": "No data for the selected period",
+          "currentPeriod": "Current period",
+          "previousPeriod": "Previous period",
+          "dayLabel": "Day {n}"
+        },
+        "paymentPie": {
+          "title": "Payment breakdown",
+          "empty": "No payment data",
+          "cash": "Cash",
+          "card": "Card"
+        }
+      }
     }
   }
 }

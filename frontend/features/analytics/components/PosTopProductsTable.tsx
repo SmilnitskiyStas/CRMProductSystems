@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import type { PosTopProductsDto } from "../types";
 
 interface Props {
@@ -36,6 +37,10 @@ function thStyle(): React.CSSProperties {
 }
 
 export function PosTopProductsTable({ data }: Props) {
+  const t = useTranslations("Dashboard.analytics.pos.topProducts");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   if (!data || data.items.length === 0) {
     return (
       <div
@@ -49,7 +54,7 @@ export function PosTopProductsTable({ data }: Props) {
           textAlign: "center",
         }}
       >
-        Немає даних
+        {t("empty")}
       </div>
     );
   }
@@ -57,18 +62,18 @@ export function PosTopProductsTable({ data }: Props) {
   return (
     <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "hidden" }}>
       <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #1F2937" }}>
-        <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>Топ товари</div>
+        <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>{t("title")}</div>
       </div>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th style={{ ...thStyle(), width: 32, textAlign: "center" }}>#</th>
-              <th style={thStyle()}>Назва</th>
-              <th style={thStyle()}>Штрихкод</th>
-              <th style={{ ...thStyle(), textAlign: "right" }}>Виручка</th>
-              <th style={{ ...thStyle(), textAlign: "right" }}>Кількість</th>
-              <th style={{ ...thStyle(), textAlign: "right" }}>Чеків</th>
+              <th style={thStyle()}>{t("headers.name")}</th>
+              <th style={thStyle()}>{t("headers.barcode")}</th>
+              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.revenue")}</th>
+              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.quantity")}</th>
+              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.receipts")}</th>
             </tr>
           </thead>
           <tbody>
@@ -82,9 +87,9 @@ export function PosTopProductsTable({ data }: Props) {
                 <td style={{ ...tdMuted, textAlign: "center", color: "#374151" }}>{idx + 1}</td>
                 <td style={tdText}>{item.productName}</td>
                 <td style={tdMuted}>{item.barcode}</td>
-                <td style={tdRevenue}>{item.totalRevenue.toLocaleString("uk-UA")} ₴</td>
-                <td style={tdNum}>{item.totalQuantity.toLocaleString("uk-UA")}</td>
-                <td style={tdNum}>{item.transactionCount.toLocaleString("uk-UA")}</td>
+                <td style={tdRevenue}>{item.totalRevenue.toLocaleString(intlLocale)} ₴</td>
+                <td style={tdNum}>{item.totalQuantity.toLocaleString(intlLocale)}</td>
+                <td style={tdNum}>{item.transactionCount.toLocaleString(intlLocale)}</td>
               </tr>
             ))}
           </tbody>

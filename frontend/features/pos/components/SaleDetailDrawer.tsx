@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import { DetailDrawer, DrawerField, DrawerSection, DrawerGrid } from "@/components/ui/DetailDrawer";
 import { FiscalBadge } from "./FiscalBadge";
 import type { SaleDto } from "../types";
@@ -9,13 +10,8 @@ interface Props {
   onClose: () => void;
 }
 
-const PAYMENT_LABEL: Record<string, string> = {
-  Cash: "Готівка",
-  Card: "Картка",
-};
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateTime(iso: string, intlLocale: string): string {
+  return new Date(iso).toLocaleString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -45,38 +41,43 @@ const itemTh: React.CSSProperties = {
 };
 
 export function SaleDetailDrawer({ sale, onClose }: Props) {
+  const t = useTranslations("Dashboard.pos.saleDetail");
+  const tPayment = useTranslations("Dashboard.pos.paymentType");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   return (
     <DetailDrawer
       isOpen={sale != null}
       onClose={onClose}
-      title={sale ? `Чек #${sale.receiptNumber}` : ""}
-      subtitle={sale ? formatDateTime(sale.createdAt) : undefined}
+      title={sale ? t("receiptTitle", { number: sale.receiptNumber }) : ""}
+      subtitle={sale ? formatDateTime(sale.createdAt, intlLocale) : undefined}
       width={560}
     >
       {sale && (
         <>
-          <DrawerSection title="Загальна інформація">
+          <DrawerSection title={t("generalInfo")}>
             <DrawerGrid>
-              <DrawerField label="Спосіб оплати" value={PAYMENT_LABEL[sale.paymentType] ?? sale.paymentType} />
-              <DrawerField label="Сума чеку" value={`${sale.subtotal.toFixed(2)} ₴`} color="#34d399" />
-              <DrawerField label="Оплачено" value={`${sale.paymentAmount.toFixed(2)} ₴`} />
-              <DrawerField label="Решта" value={`${sale.change.toFixed(2)} ₴`} />
+              <DrawerField label={t("paymentMethod")} value={tPayment.has(sale.paymentType) ? tPayment(sale.paymentType) : sale.paymentType} />
+              <DrawerField label={t("receiptTotal")} value={`${sale.subtotal.toFixed(2)} ₴`} color="#34d399" />
+              <DrawerField label={t("paid")} value={`${sale.paymentAmount.toFixed(2)} ₴`} />
+              <DrawerField label={t("change")} value={`${sale.change.toFixed(2)} ₴`} />
               {sale.fiscalNumber && (
                 <DrawerField
-                  label="Фіскальний номер"
+                  label={t("fiscalNumber")}
                   value={
                     <span style={{ fontFamily: "monospace", fontSize: 11 }}>{sale.fiscalNumber}</span>
                   }
                 />
               )}
               <DrawerField
-                label="Фіскалізація"
+                label={t("fiscalization")}
                 value={<FiscalBadge status={sale.fiscalStatus} />}
               />
             </DrawerGrid>
           </DrawerSection>
 
-          <DrawerSection title={`Товари (${sale.items.length})`}>
+          <DrawerSection title={t("itemsSection", { count: sale.items.length })}>
             <div
               style={{
                 background: "#0D1117",
@@ -88,11 +89,11 @@ export function SaleDetailDrawer({ sale, onClose }: Props) {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={itemTh}>Товар</th>
-                    <th style={{ ...itemTh, textAlign: "right" }}>К-ть</th>
-                    <th style={{ ...itemTh, textAlign: "right" }}>Ціна</th>
-                    <th style={{ ...itemTh, textAlign: "right" }}>Знижка</th>
-                    <th style={{ ...itemTh, textAlign: "right" }}>Сума</th>
+                    <th style={itemTh}>{t("headers.product")}</th>
+                    <th style={{ ...itemTh, textAlign: "right" }}>{t("headers.qty")}</th>
+                    <th style={{ ...itemTh, textAlign: "right" }}>{t("headers.price")}</th>
+                    <th style={{ ...itemTh, textAlign: "right" }}>{t("headers.discount")}</th>
+                    <th style={{ ...itemTh, textAlign: "right" }}>{t("headers.total")}</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -1,24 +1,31 @@
 "use client";
 
+import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import type { Product } from "@/features/inventory/types";
 import type { StoreDto as Store } from "@/features/stores/types";
 import type { UpsertDailySalePayload } from "../types";
 
-const saleSchema = z.object({
-  storeId: z.string().min(1, "Оберіть магазин"),
-  productId: z.string().min(1, "Оберіть товар"),
-  date: z.string().min(1, "Вкажіть дату"),
-  quantitySold: z.coerce.number().min(0, "Не може бути від'ємною"),
-  quantityEndOfDay: z.coerce.number().min(0).optional().or(z.literal("")),
-  isPromoDay: z.boolean(),
-});
+// Zod .min(1, message) needs a translated message, so the schema is built once per
+// render inside the component (see `useMemo(() => buildSaleSchema(t), [t])` below) —
+// mirrors `buildProductSchema(t)` in features/inventory/components/ProductForm.tsx.
+function buildSaleSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    storeId: z.string().min(1, t("validation.selectStore")),
+    productId: z.string().min(1, t("validation.selectProduct")),
+    date: z.string().min(1, t("validation.enterDate")),
+    quantitySold: z.coerce.number().min(0, t("validation.negativeQuantity")),
+    quantityEndOfDay: z.coerce.number().min(0).optional().or(z.literal("")),
+    isPromoDay: z.boolean(),
+  });
+}
 
-type FormValues = z.infer<typeof saleSchema>;
+type FormValues = z.infer<ReturnType<typeof buildSaleSchema>>;
 
 interface Props {
   stores: Store[];
@@ -55,6 +62,10 @@ const errStyle: React.CSSProperties = { color: "#F87171", fontSize: 11, marginTo
 export function SaleEntryForm({
   stores, products, defaultStoreId, isPending, error, onClose, onSubmit,
 }: Props) {
+  const t = useTranslations("Dashboard.sales.entryForm");
+  const tCommon = useTranslations("Common");
+  const saleSchema = useMemo(() => buildSaleSchema(t), [t]);
+
   const {
     register,
     handleSubmit,
@@ -83,10 +94,10 @@ export function SaleEntryForm({
   }
 
   return (
-    <Modal title="Внести продажі за день" onClose={onClose}>
+    <Modal title={t("title")} onClose={onClose}>
       <form onSubmit={handleSubmit(submit)} style={{ display: "grid", gap: 14 }}>
         <div>
-          <label style={labelStyle}>Магазин</label>
+          <label style={labelStyle}>{t("storeLabel")}</label>
           <select {...register("storeId")} style={inputStyle}>
             {stores.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
@@ -96,9 +107,9 @@ export function SaleEntryForm({
         </div>
 
         <div>
-          <label style={labelStyle}>Товар</label>
+          <label style={labelStyle}>{t("productLabel")}</label>
           <select {...register("productId")} style={inputStyle}>
-            <option value="">— оберіть товар —</option>
+            <option value="">{t("selectProductPlaceholder")}</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -108,18 +119,18 @@ export function SaleEntryForm({
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           <div>
-            <label style={labelStyle}>Дата</label>
+            <label style={labelStyle}>{t("dateLabel")}</label>
             <input type="date" {...register("date")} style={inputStyle}
               max={new Date().toISOString().slice(0, 10)} />
             {errors.date && <div style={errStyle}>{errors.date.message}</div>}
           </div>
           <div>
-            <label style={labelStyle}>Продано, шт</label>
+            <label style={labelStyle}>{t("quantitySoldLabel")}</label>
             <input type="number" step="0.01" min={0} {...register("quantitySold")} style={inputStyle} />
             {errors.quantitySold && <div style={errStyle}>{errors.quantitySold.message}</div>}
           </div>
           <div>
-            <label style={labelStyle}>Залишок на кінець дня</label>
+            <label style={labelStyle}>{t("quantityEndOfDayLabel")}</label>
             <input type="number" step="0.01" min={0} placeholder="—"
               {...register("quantityEndOfDay")} style={inputStyle} />
           </div>
@@ -127,15 +138,15 @@ export function SaleEntryForm({
 
         <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#9CA3AF", fontSize: 13 }}>
           <input type="checkbox" {...register("isPromoDay")} />
-          Акційний день (виключається з розрахунку ADU)
+          {t("promoLabel")}
         </label>
 
         {error && <div style={{ ...errStyle, fontSize: 13 }}>{error}</div>}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
-          <Btn variant="ghost" type="button" onClick={onClose}>Скасувати</Btn>
+          <Btn variant="ghost" type="button" onClick={onClose}>{tCommon("cancel")}</Btn>
           <Btn type="submit" disabled={isPending}>
-            {isPending ? "Збереження…" : "Зберегти"}
+            {isPending ? t("saving") : t("save")}
           </Btn>
         </div>
       </form>

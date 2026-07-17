@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Calculator } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { OrderLinesTable } from "@/features/orders/components/OrderLinesTable";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
@@ -26,6 +27,7 @@ const statCard: React.CSSProperties = {
 };
 
 export default function OrdersPage() {
+  const t = useTranslations("Dashboard.orders.page");
   const { data: stores = [] } = useStores();
   const [storeId, setStoreId] = useState<string>("");
   const generate = useGenerateOrder();
@@ -38,7 +40,11 @@ export default function OrdersPage() {
     generate.mutate(effectiveStoreId, {
       onSuccess: (r) =>
         toast.success(
-          `ADU: ${r.adu.withEffectiveAdu} · Буферів: ${r.buffers.buffersCalculated} · До замовлення: ${r.order.linesToOrder}`,
+          t("toastResult", {
+            adu: r.adu.withEffectiveAdu,
+            buffers: r.buffers.buffersCalculated,
+            toOrder: r.order.linesToOrder,
+          }),
         ),
       onError: (err) => toast.error(err.message),
     });
@@ -50,10 +56,10 @@ export default function OrdersPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Замовлення
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            CDA-розрахунок: ADU → буфер → формула замовлення з округленням MOQ/USQ
+            {t("subtitle")}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -67,7 +73,7 @@ export default function OrdersPage() {
             onClick={handleGenerate}
             disabled={generate.isPending || !effectiveStoreId}
           >
-            {generate.isPending ? "Розрахунок…" : "Сформувати замовлення"}
+            {generate.isPending ? t("generating") : t("generate")}
           </Btn>
         </div>
       </div>
@@ -76,7 +82,7 @@ export default function OrdersPage() {
       {result && (
         <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
           <div style={statCard}>
-            <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>ADU розраховано</div>
+            <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>{t("statAduCalculated")}</div>
             <div style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700 }}>
               {result.adu.withEffectiveAdu}
               <span style={{ color: "#4B5563", fontSize: 12, fontWeight: 400 }}>
@@ -85,13 +91,13 @@ export default function OrdersPage() {
             </div>
           </div>
           <div style={statCard}>
-            <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>Буферів оновлено</div>
+            <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>{t("statBuffersUpdated")}</div>
             <div style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700 }}>
               {result.buffers.buffersCalculated}
             </div>
           </div>
           <div style={statCard}>
-            <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>Позицій до замовлення</div>
+            <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>{t("statPositionsToOrder")}</div>
             <div style={{ color: "#93C5FD", fontSize: 20, fontWeight: 700 }}>
               {result.order.linesToOrder}
               <span style={{ color: "#4B5563", fontSize: 12, fontWeight: 400 }}>
@@ -106,8 +112,8 @@ export default function OrdersPage() {
         <OrderLinesTable lines={result.order.lines} />
       ) : (
         <div style={{ color: "#4B5563", fontSize: 14, padding: "64px 0", textAlign: "center" }}>
-          Оберіть магазин і натисніть «Сформувати замовлення» —<br />
-          система оновить ADU, перебудує CDA-буфери та порахує кількості до замовлення.
+          {t("emptyTitle")}<br />
+          {t("emptySubtitle")}
         </div>
       )}
     </div>

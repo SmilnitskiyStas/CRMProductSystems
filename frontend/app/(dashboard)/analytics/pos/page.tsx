@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
@@ -100,6 +101,8 @@ const sectionTitle: React.CSSProperties = {
 // ── page ─────────────────────────────────────────────────────────────────────
 
 export default function PosAnalyticsPage() {
+  const t = useTranslations("Dashboard.analytics.pos.page");
+  const tCommon = useTranslations("Common");
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
 
@@ -160,15 +163,15 @@ export default function PosAnalyticsPage() {
   const effectiveTrendLoading = compareEnabled ? trendCompareLoading : trendLoading;
 
   if (access === null) return null;
-  if (!access) return <AccessDenied title="POS Аналітика" />;
+  if (!access) return <AccessDenied title={t("title")} />;
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 28, width: "100%" }}>
       {/* Header */}
       <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>POS Аналітика</h1>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          Виручка, транзакції, топ-товари та статистика по касирах
+          {t("subtitle")}
         </p>
       </div>
 
@@ -194,13 +197,13 @@ export default function PosAnalyticsPage() {
           onCompareRangeChange={setCompareRange}
         />
         <div>
-          <label style={labelStyle}>Магазин</label>
+          <label style={labelStyle}>{t("storeLabel")}</label>
           <select
             value={storeId}
             onChange={(e) => setStoreId(e.target.value)}
             style={selectStyle}
           >
-            <option value="">Всі магазини</option>
+            <option value="">{t("allStores")}</option>
             {stores?.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -209,19 +212,19 @@ export default function PosAnalyticsPage() {
           </select>
         </div>
         <div>
-          <label style={labelStyle}>Тренд</label>
+          <label style={labelStyle}>{t("trendLabel")}</label>
           <div style={{ display: "flex", gap: 4 }}>
             <button
               style={toggleBtn(groupBy === "day")}
               onClick={() => setGroupBy("day")}
             >
-              День
+              {t("trendDay")}
             </button>
             <button
               style={toggleBtn(groupBy === "week")}
               onClick={() => setGroupBy("week")}
             >
-              Тиждень
+              {t("trendWeek")}
             </button>
           </div>
         </div>
@@ -229,24 +232,24 @@ export default function PosAnalyticsPage() {
 
       {/* KPI summary cards */}
       <section>
-        <h2 style={sectionTitle}>Зведення</h2>
+        <h2 style={sectionTitle}>{t("summarySection")}</h2>
         {effectiveSummaryLoading ? (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
         ) : effectiveSummary ? (
           <PosSummaryCards
             data={effectiveSummary}
             previous={compareEnabled ? summaryCompare?.comparison : undefined}
           />
         ) : (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Немає даних</div>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noData")}</div>
         )}
       </section>
 
       {/* Revenue trend */}
       <section>
-        <h2 style={sectionTitle}>Динаміка виручки</h2>
+        <h2 style={sectionTitle}>{t("revenueTrendSection")}</h2>
         {effectiveTrendLoading ? (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
         ) : effectiveTrend ? (
           <PosRevenueTrendChart
             data={effectiveTrend}
@@ -268,7 +271,7 @@ export default function PosAnalyticsPage() {
               fontSize: 13,
             }}
           >
-            Немає даних
+            {t("noData")}
           </div>
         )}
       </section>
@@ -278,14 +281,14 @@ export default function PosAnalyticsPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div>
             {topLoading ? (
-              <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+              <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
             ) : topProducts ? (
               <PosTopProductsTable data={topProducts} />
             ) : null}
           </div>
           <div>
             {cashiersLoading ? (
-              <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+              <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
             ) : cashiers ? (
               <PosCashierStatsTable data={cashiers} />
             ) : null}
@@ -296,7 +299,7 @@ export default function PosAnalyticsPage() {
       {/* Payment pie */}
       {effectiveSummary && effectiveSummary.totalRevenue > 0 && (
         <section>
-          <h2 style={sectionTitle}>Методи оплати</h2>
+          <h2 style={sectionTitle}>{t("paymentMethodsSection")}</h2>
           <div style={{ maxWidth: 400 }}>
             <PosPaymentPieChart data={effectiveSummary} />
           </div>

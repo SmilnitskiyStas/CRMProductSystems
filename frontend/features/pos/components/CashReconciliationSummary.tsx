@@ -1,6 +1,7 @@
 "use client";
 
 import { Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { ShiftDto } from "../types";
 
 interface Props {
@@ -28,6 +29,7 @@ const FIELD_VALUE: React.CSSProperties = {
  * old way (closingCash === null) — keeps the Z-report unchanged for those.
  */
 export function CashReconciliationSummary({ shift }: Props) {
+  const t = useTranslations("Dashboard.pos.cashReconciliation");
   if (shift.closingCash == null) return null;
 
   const discrepancy = shift.cashDiscrepancy ?? 0;
@@ -37,10 +39,10 @@ export function CashReconciliationSummary({ shift }: Props) {
 
   const statusColor = isMatch ? "#22c55e" : isSurplus ? "#F59E0B" : "#ef4444";
   const statusLabel = isMatch
-    ? "Збіг"
+    ? t("match")
     : isSurplus
-    ? `Надлишок +${discrepancy.toFixed(2)} ₴`
-    : `Недостача ${discrepancy.toFixed(2)} ₴`;
+    ? t("surplus", { amount: discrepancy.toFixed(2) })
+    : t("shortage", { amount: discrepancy.toFixed(2) });
 
   return (
     <div
@@ -60,28 +62,28 @@ export function CashReconciliationSummary({ shift }: Props) {
       >
         <Wallet size={15} color="#9CA3AF" />
         <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 700 }}>
-          Звірка готівки
+          {t("title")}
         </span>
       </div>
 
       <div style={{ display: "flex", gap: 40, flexWrap: "wrap", alignItems: "flex-start" }}>
         <div>
-          <div style={FIELD_LABEL}>Початок зміни</div>
+          <div style={FIELD_LABEL}>{t("openingCash")}</div>
           <div style={FIELD_VALUE}>{(shift.openingCash ?? 0).toFixed(2)} ₴</div>
         </div>
 
         <div>
-          <div style={FIELD_LABEL}>Очікувана сума</div>
+          <div style={FIELD_LABEL}>{t("expectedAmount")}</div>
           <div style={FIELD_VALUE}>{(shift.expectedCashAmount ?? 0).toFixed(2)} ₴</div>
         </div>
 
         <div>
-          <div style={FIELD_LABEL}>Фактично в касі</div>
+          <div style={FIELD_LABEL}>{t("actualCash")}</div>
           <div style={FIELD_VALUE}>{shift.closingCash.toFixed(2)} ₴</div>
         </div>
 
         <div>
-          <div style={FIELD_LABEL}>Розбіжність</div>
+          <div style={FIELD_LABEL}>{t("discrepancy")}</div>
           <div
             style={{
               display: "inline-flex",

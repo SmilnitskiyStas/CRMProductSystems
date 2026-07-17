@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 
@@ -36,6 +37,8 @@ const INPUT: React.CSSProperties = {
 };
 
 export function CloseShiftDialog({ isOpen, onClose, onConfirm, isLoading, error }: Props) {
+  const t = useTranslations("Dashboard.pos.closeShiftDialog");
+  const tCommon = useTranslations("Common");
   const [actualClosingCash, setActualClosingCash] = useState("");
   const [clientError, setClientError] = useState<string | null>(null);
 
@@ -63,23 +66,22 @@ export function CloseShiftDialog({ isOpen, onClose, onConfirm, isLoading, error 
 
     const cash = parseFloat(actualClosingCash);
     if (Number.isNaN(cash) || cash < 0) {
-      setClientError("Сума готівки не може бути від'ємною.");
+      setClientError(t("negativeCashError"));
       return;
     }
     onConfirm(cash);
   }
 
   return (
-    <Modal title="Закрити зміну" onClose={onClose} width={420}>
+    <Modal title={t("title")} onClose={onClose} width={420}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         <div style={{ color: "#9CA3AF", fontSize: 12, lineHeight: 1.5 }}>
-          Продажі будуть неможливі до відкриття нової зміни. Порахуйте готівку в касі й
-          введіть суму нижче для звірки — або залиште поле порожнім, щоб закрити без звірки.
+          {t("description")}
         </div>
 
         {/* Actual closing cash */}
         <div>
-          <label style={LABEL}>Фактична сума готівки в касі (необов&apos;язково)</label>
+          <label style={LABEL}>{t("actualCashLabel")}</label>
           <input
             type="number"
             min={0}
@@ -99,10 +101,10 @@ export function CloseShiftDialog({ isOpen, onClose, onConfirm, isLoading, error 
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 4 }}>
           <Btn variant="ghost" onClick={onClose} disabled={isLoading}>
-            Скасувати
+            {tCommon("cancel")}
           </Btn>
           <Btn type="submit" variant="danger" disabled={isLoading}>
-            {isLoading ? "Закривається…" : "Закрити зміну"}
+            {isLoading ? t("closing") : t("confirm")}
           </Btn>
         </div>
       </form>

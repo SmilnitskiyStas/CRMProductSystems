@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { AiOrderReview } from "@/features/ai-orders/components/AiOrderReview";
 import { useAiOrder, useAiOrders, useGenerateAiOrder } from "@/features/ai-orders/hooks/useAiOrders";
@@ -15,6 +16,9 @@ const selectStyle: React.CSSProperties = {
 };
 
 export default function AiOrdersPage() {
+  const t = useTranslations("Dashboard.aiOrders.page");
+  const tCommon = useTranslations("Common");
+  const tStatus = useTranslations("Dashboard.aiOrders.status");
   const { data: stores = [] } = useStores();
   const [storeId, setStoreId] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -28,7 +32,7 @@ export default function AiOrdersPage() {
   const handleGenerate = () =>
     generate.mutate(effectiveStoreId, {
       onSuccess: (order) => {
-        toast.success(`AI пропозиція готова: ${order.items.length} позицій`);
+        toast.success(t("toastGenerated", { count: order.items.length }));
         setSelectedId(order.id);
       },
       onError: (e) => toast.error(e.message),
@@ -40,29 +44,29 @@ export default function AiOrdersPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            AI Замовлення
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Claude аналізує погоду, події та акції — і коригує математичне замовлення з поясненнями
+            {t("subtitle")}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <select value={storeId} onChange={(e) => { setStoreId(e.target.value); setSelectedId(null); }} style={selectStyle}>
-            <option value="">Всі магазини</option>
+            <option value="">{t("allStores")}</option>
             {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <Btn icon={<Sparkles size={15} />} disabled={generate.isPending || !effectiveStoreId} onClick={handleGenerate}>
-            {generate.isPending ? "Claude аналізує…" : "Згенерувати зараз"}
+            {generate.isPending ? t("generating") : t("generate")}
           </Btn>
         </div>
       </div>
 
       {/* History list */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-        {isLoading && <span style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</span>}
+        {isLoading && <span style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</span>}
         {!isLoading && list.length === 0 && (
           <span style={{ color: "#4B5563", fontSize: 13 }}>
-            Пропозицій ще немає — натисніть «Згенерувати зараз» або дочекайтесь щоденної генерації о 05:00.
+            {t("emptyHistory")}
           </span>
         )}
         {list.map((o) => {
@@ -82,8 +86,8 @@ export default function AiOrdersPage() {
                 {o.orderDate} · {o.storeName}
               </div>
               <div style={{ fontSize: 11, marginTop: 2 }}>
-                <span style={{ color: meta.color }}>{meta.label}</span>
-                <span style={{ color: "#4B5563" }}> · {o.itemsCount} поз.</span>
+                <span style={{ color: meta.color }}>{tStatus.has(o.status) ? tStatus(o.status) : o.status}</span>
+                <span style={{ color: "#4B5563" }}> · {o.itemsCount} {t("itemsAbbrev")}</span>
               </div>
             </button>
           );

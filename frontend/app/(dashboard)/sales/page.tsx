@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { SalesTable } from "@/features/sales/components/SalesTable";
 import { SaleEntryForm } from "@/features/sales/components/SaleEntryForm";
@@ -33,6 +34,8 @@ const selectStyle: React.CSSProperties = {
 };
 
 export default function SalesPage() {
+  const t = useTranslations("Dashboard.sales.page");
+  const tCommon = useTranslations("Common");
   const [storeId, setStoreId] = useState<string>("");
   const [from, setFrom] = useState(daysAgo(30));
   const [to, setTo] = useState(daysAgo(0));
@@ -56,7 +59,7 @@ export default function SalesPage() {
   const handleUpsert = (payload: UpsertDailySalePayload) => {
     upsert.mutate(payload, {
       onSuccess: () => {
-        toast.success("Продажі збережено");
+        toast.success(t("toastSaved"));
         setEntryOpen(false);
       },
       onError: (err) => toast.error(err.message),
@@ -69,8 +72,8 @@ export default function SalesPage() {
       {
         onSuccess: (r) =>
           r.errors.length === 0
-            ? toast.success(`Імпортовано: ${r.created + r.updated}`)
-            : toast.warning(`Імпортовано з пропусками: ${r.skipped}`),
+            ? toast.success(t("toastImported", { count: r.created + r.updated }))
+            : toast.warning(t("toastImportedWithSkips", { count: r.skipped })),
         onError: (err) => toast.error(err.message),
       },
     );
@@ -81,7 +84,7 @@ export default function SalesPage() {
       { id, isAnomaly },
       {
         onSuccess: () =>
-          toast.success(isAnomaly ? "Виключено з розрахунку ADU" : "Повернуто до розрахунку ADU"),
+          toast.success(isAnomaly ? t("toastExcludedFromAdu") : t("toastIncludedInAdu")),
         onError: (err) => toast.error(err.message),
       },
     );
@@ -90,7 +93,7 @@ export default function SalesPage() {
   if (isError) {
     return (
       <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
-        Помилка завантаження продажів. Перевірте підключення до API.
+        {t("errorLoading")}
       </div>
     );
   }
@@ -101,18 +104,18 @@ export default function SalesPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Продажі
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Історія щоденних продажів — джерело даних для ADU та автозамовлень
+            {t("subtitle")}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <Btn variant="ghost" icon={<Upload size={15} />} onClick={() => setImportOpen(true)}>
-            Імпорт CSV
+            {t("importCsv")}
           </Btn>
           <Btn icon={<Plus size={15} />} onClick={() => setEntryOpen(true)}>
-            Внести продажі
+            {t("addSale")}
           </Btn>
         </div>
       </div>
@@ -120,7 +123,7 @@ export default function SalesPage() {
       {/* Filters */}
       <div style={{ display: "flex", gap: 10, marginBottom: 18, alignItems: "center" }}>
         <select value={storeId} onChange={(e) => setStoreId(e.target.value)} style={selectStyle}>
-          <option value="">Всі магазини</option>
+          <option value="">{t("allStores")}</option>
           {stores.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
@@ -129,7 +132,7 @@ export default function SalesPage() {
         <span style={{ color: "#4B5563" }}>—</span>
         <input type="date" value={to} min={from} max={daysAgo(0)} onChange={(e) => setTo(e.target.value)} style={selectStyle} />
         <span style={{ color: "#4B5563", fontSize: 12, marginLeft: "auto" }}>
-          {isLoading ? "Завантаження…" : `записів: ${sales.length}`}
+          {isLoading ? tCommon("loading") : t("recordsCount", { count: sales.length })}
         </span>
       </div>
 

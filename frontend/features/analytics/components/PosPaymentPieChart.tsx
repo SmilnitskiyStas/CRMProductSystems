@@ -8,6 +8,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useTranslations, useLocale } from "next-intl";
 import type { PosAnalyticsSummaryDto } from "../types";
 
 interface Props {
@@ -20,6 +21,9 @@ const COLORS = {
 };
 
 export function PosPaymentPieChart({ data }: Props) {
+  const t = useTranslations("Dashboard.analytics.pos.paymentPie");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const total = data.cashRevenue + data.cardRevenue;
 
   if (total === 0) {
@@ -35,14 +39,14 @@ export function PosPaymentPieChart({ data }: Props) {
           textAlign: "center",
         }}
       >
-        Немає даних про оплати
+        {t("empty")}
       </div>
     );
   }
 
   const chartData = [
-    { name: "Готівка", value: data.cashRevenue },
-    { name: "Картка", value: data.cardRevenue },
+    { name: t("cash"), value: data.cashRevenue },
+    { name: t("card"), value: data.cardRevenue },
   ];
 
   const cashPct = total > 0 ? ((data.cashRevenue / total) * 100).toFixed(1) : "0";
@@ -58,7 +62,7 @@ export function PosPaymentPieChart({ data }: Props) {
       }}
     >
       <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-        Розбивка оплат
+        {t("title")}
       </div>
       <ResponsiveContainer width="100%" height={200}>
         <PieChart>
@@ -82,7 +86,7 @@ export function PosPaymentPieChart({ data }: Props) {
               color: "#E8EDF5",
               fontSize: 13,
             }}
-            formatter={(val) => [`${Number(val).toLocaleString("uk-UA")} ₴`, ""]}
+            formatter={(val) => [`${Number(val).toLocaleString(intlLocale)} ₴`, ""]}
           />
           <Legend
             iconType="circle"
@@ -98,13 +102,13 @@ export function PosPaymentPieChart({ data }: Props) {
           <div style={{ color: COLORS.cash, fontSize: 18, fontWeight: 700, fontFamily: "monospace" }}>
             {cashPct}%
           </div>
-          <div style={{ color: "#4B5563", fontSize: 11 }}>Готівка</div>
+          <div style={{ color: "#4B5563", fontSize: 11 }}>{t("cash")}</div>
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ color: COLORS.card, fontSize: 18, fontWeight: 700, fontFamily: "monospace" }}>
             {cardPct}%
           </div>
-          <div style={{ color: "#4B5563", fontSize: 11 }}>Картка</div>
+          <div style={{ color: "#4B5563", fontSize: 11 }}>{t("card")}</div>
         </div>
       </div>
     </div>

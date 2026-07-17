@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CreditCard, CheckCircle, Clock, Hash } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { ShiftStatusCard } from "@/features/pos/components/ShiftStatusCard";
 import { SalesTable } from "@/features/pos/components/SalesTable";
@@ -18,8 +19,8 @@ import {
 import { ApiError } from "@/lib/api";
 import type { SaleDto } from "@/features/pos/types";
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateTime(iso: string, intlLocale: string): string {
+  return new Date(iso).toLocaleString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -29,6 +30,10 @@ function formatDateTime(iso: string): string {
 }
 
 export default function PosPage() {
+  const t = useTranslations("Dashboard.pos.page");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: shift, isLoading: shiftLoading, error: shiftError } = useCurrentShift();
   const { data: salesData, isLoading: salesLoading } = useShiftSales(
     shift?.status === "Open" || shift?.status === "Closed" ? shift.shiftId : undefined,
@@ -63,7 +68,7 @@ export default function PosPage() {
       {
         onSuccess: () => setCloseDialogVisible(false),
         onError: (err) => {
-          setCloseError(err instanceof ApiError ? err.message : "Не вдалося закрити зміну.");
+          setCloseError(err instanceof ApiError ? err.message : t("closeFailedDefault"));
         },
       },
     );
@@ -73,7 +78,7 @@ export default function PosPage() {
   if (shiftLoading) {
     return (
       <div style={{ padding: 32, color: "#4B5563", fontSize: 13, textAlign: "center" }}>
-        Завантаження…
+        {tCommon("loading")}
       </div>
     );
   }
@@ -93,7 +98,7 @@ export default function PosPage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <CreditCard size={22} color="#3B82F6" />
-          <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>Каса</h1>
+          <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         </div>
         {noShift && (
           <Btn
@@ -101,7 +106,7 @@ export default function PosPage() {
             icon={<CreditCard size={14} />}
             onClick={() => setOpenDialogVisible(true)}
           >
-            Відкрити зміну
+            {t("openShift")}
           </Btn>
         )}
       </div>
@@ -137,10 +142,10 @@ export default function PosPage() {
           </div>
           <div>
             <div style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
-              Немає активної зміни
+              {t("noShiftTitle")}
             </div>
             <div style={{ color: "#4B5563", fontSize: 13 }}>
-              Відкрийте зміну, щоб почати роботу
+              {t("noShiftSubtitle")}
             </div>
           </div>
           <Btn
@@ -148,7 +153,7 @@ export default function PosPage() {
             icon={<CreditCard size={14} />}
             onClick={() => setOpenDialogVisible(true)}
           >
-            Відкрити зміну
+            {t("openShift")}
           </Btn>
         </div>
       )}
@@ -173,7 +178,7 @@ export default function PosPage() {
                 marginBottom: 12,
               }}
             >
-              Продажі поточної зміни
+              {t("currentShiftSales")}
             </div>
             <SalesTable
               sales={salesData?.items}
@@ -208,7 +213,7 @@ export default function PosPage() {
             >
               <CheckCircle size={18} color="#22c55e" />
               <span style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700 }}>
-                Z-звіт зміни
+                {t("zReportTitle")}
               </span>
               {shift.shiftNumber != null && (
                 <span
@@ -229,19 +234,19 @@ export default function PosPage() {
             <div style={{ display: "flex", gap: 40, flexWrap: "wrap" }}>
               <ZReportField
                 icon={<Clock size={13} color="#4B5563" />}
-                label="Відкрито"
-                value={formatDateTime(shift.openedAt)}
+                label={t("zReportOpened")}
+                value={formatDateTime(shift.openedAt, intlLocale)}
               />
               {shift.closedAt && (
                 <ZReportField
                   icon={<Clock size={13} color="#4B5563" />}
-                  label="Закрито"
-                  value={formatDateTime(shift.closedAt)}
+                  label={t("zReportClosed")}
+                  value={formatDateTime(shift.closedAt, intlLocale)}
                 />
               )}
               <ZReportField
                 icon={<Hash size={13} color="#4B5563" />}
-                label="Загальна сума"
+                label={t("zReportTotal")}
                 value={
                   <span style={{ color: "#34d399", fontSize: 18, fontWeight: 700 }}>
                     {shift.totalSales.toFixed(2)} ₴
@@ -250,7 +255,7 @@ export default function PosPage() {
               />
               <ZReportField
                 icon={<CreditCard size={13} color="#4B5563" />}
-                label="ПРРО статус"
+                label={t("zReportPrroStatus")}
                 value={
                   <span style={{ fontFamily: "monospace", fontSize: 12, color: "#9CA3AF" }}>
                     {shift.fiscalStatus || "—"}
@@ -274,7 +279,7 @@ export default function PosPage() {
                 marginBottom: 12,
               }}
             >
-              Продажі закритої зміни
+              {t("closedShiftSales")}
             </div>
             <SalesTable
               sales={salesData?.items}
@@ -290,7 +295,7 @@ export default function PosPage() {
               icon={<CreditCard size={14} />}
               onClick={() => setOpenDialogVisible(true)}
             >
-              Відкрити нову зміну
+              {t("openNewShift")}
             </Btn>
           </div>
         </>

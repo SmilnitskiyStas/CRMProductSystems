@@ -15,10 +15,22 @@
       "login": "Увійти",
       "cta": "Залишити заявку",
       "nav": [
-        { "href": "#features", "label": "Можливості" },
-        { "href": "#how-it-works", "label": "Як це працює" },
-        { "href": "#pricing", "label": "Тарифи" },
-        { "href": "#faq", "label": "FAQ" }
+        {
+          "href": "#features",
+          "label": "Можливості"
+        },
+        {
+          "href": "#how-it-works",
+          "label": "Як це працює"
+        },
+        {
+          "href": "#pricing",
+          "label": "Тарифи"
+        },
+        {
+          "href": "#faq",
+          "label": "FAQ"
+        }
       ],
       "langSwitchLabel": "Мова",
       "langUk": "UA",
@@ -1025,6 +1037,316 @@
         "placedTitle": "Зони на плані"
       },
       "redirecting": "Перенаправлення…"
+    },
+    "sales": {
+      "page": {
+        "title": "Продажі",
+        "subtitle": "Історія щоденних продажів — джерело даних для ADU та автозамовлень",
+        "importCsv": "Імпорт CSV",
+        "addSale": "Внести продажі",
+        "allStores": "Всі магазини",
+        "recordsCount": "записів: {count}",
+        "errorLoading": "Помилка завантаження продажів. Перевірте підключення до API.",
+        "toastSaved": "Продажі збережено",
+        "toastImported": "Імпортовано: {count}",
+        "toastImportedWithSkips": "Імпортовано з пропусками: {count}",
+        "toastExcludedFromAdu": "Виключено з розрахунку ADU",
+        "toastIncludedInAdu": "Повернуто до розрахунку ADU"
+      },
+      "csvImport": {
+        "title": "Імпорт продажів з CSV",
+        "formatLabel": "Формат:",
+        "dateFormatLabel": "Дата —",
+        "formatDescription": ". Товари знаходяться за штрихкодом. Існуючі записи за (товар, дата) оновлюються.",
+        "storeLabel": "Магазин",
+        "resultSummary": "Створено: {created} · Оновлено: {updated}",
+        "resultSkipped": "Пропущено: {count}",
+        "importing": "Імпорт…",
+        "import": "Імпортувати"
+      },
+      "entryForm": {
+        "title": "Внести продажі за день",
+        "storeLabel": "Магазин",
+        "productLabel": "Товар",
+        "selectProductPlaceholder": "— оберіть товар —",
+        "dateLabel": "Дата",
+        "quantitySoldLabel": "Продано, шт",
+        "quantityEndOfDayLabel": "Залишок на кінець дня",
+        "promoLabel": "Акційний день (виключається з розрахунку ADU)",
+        "saving": "Збереження…",
+        "save": "Зберегти",
+        "validation": {
+          "selectStore": "Оберіть магазин",
+          "selectProduct": "Оберіть товар",
+          "enterDate": "Вкажіть дату",
+          "negativeQuantity": "Не може бути від'ємною"
+        }
+      },
+      "table": {
+        "empty": "Немає даних про продажі за обраний період. Внесіть вручну або імпортуйте CSV.",
+        "headers": {
+          "date": "Дата",
+          "product": "Товар",
+          "barcode": "Штрихкод",
+          "store": "Магазин",
+          "sold": "Продано",
+          "eod": "Залишок EOD",
+          "source": "Джерело",
+          "marks": "Позначки"
+        },
+        "source": {
+          "manual": "вручну",
+          "pos": "каса",
+          "import": "імпорт"
+        },
+        "promoTag": "акція",
+        "anomalyTag": "аномалія",
+        "actionMenu": {
+          "markAnomaly": "Позначити аномалією",
+          "includeInAdu": "Включити в ADU",
+          "productAnalytics": "Аналітика товару"
+        }
+      }
+    },
+    "orders": {
+      "page": {
+        "title": "Замовлення",
+        "subtitle": "CDA-розрахунок: ADU → буфер → формула замовлення з округленням MOQ/USQ",
+        "generate": "Сформувати замовлення",
+        "generating": "Розрахунок…",
+        "toastResult": "ADU: {adu} · Буферів: {buffers} · До замовлення: {toOrder}",
+        "statAduCalculated": "ADU розраховано",
+        "statBuffersUpdated": "Буферів оновлено",
+        "statPositionsToOrder": "Позицій до замовлення",
+        "emptyTitle": "Оберіть магазин і натисніть «Сформувати замовлення» —",
+        "emptySubtitle": "система оновить ADU, перебудує CDA-буфери та порахує кількості до замовлення."
+      },
+      "bufferFunnel": {
+        "tooltip": "Позиція {position} із {total} (🔴 {red} · 🟡 {yellow} · 🟢 {green})"
+      },
+      "table": {
+        "empty": "Немає товарів з розрахованим буфером. Спочатку внесіть продажі та натисніть «Сформувати замовлення».",
+        "headers": {
+          "product": "Товар",
+          "buffer": "Буфер (воронка)",
+          "stock": "Залишок",
+          "inTransit": "В дорозі",
+          "safetyBuffer": "ББ",
+          "calculation": "Розрахунок",
+          "order": "Замовити",
+          "actions": "Дії"
+        },
+        "covered": "покрито",
+        "actionMenu": {
+          "productAnalytics": "Аналітика товару"
+        }
+      }
+    },
+    "pos": {
+      "page": {
+        "title": "Каса",
+        "openShift": "Відкрити зміну",
+        "openNewShift": "Відкрити нову зміну",
+        "noShiftTitle": "Немає активної зміни",
+        "noShiftSubtitle": "Відкрийте зміну, щоб почати роботу",
+        "currentShiftSales": "Продажі поточної зміни",
+        "closedShiftSales": "Продажі закритої зміни",
+        "zReportTitle": "Z-звіт зміни",
+        "zReportOpened": "Відкрито",
+        "zReportClosed": "Закрито",
+        "zReportTotal": "Загальна сума",
+        "zReportPrroStatus": "ПРРО статус",
+        "closeFailedDefault": "Не вдалося закрити зміну."
+      },
+      "shiftStatus": {
+        "Open": "Відкрита",
+        "Opening": "Відкривається…",
+        "Closed": "Закрита",
+        "Closing": "Закривається…",
+        "OpenFailed": "Помилка відкриття",
+        "CloseFailed": "Помилка закриття"
+      },
+      "shiftCard": {
+        "statusLabel": "Статус зміни",
+        "openedLabel": "Відкрито",
+        "shiftNumberLabel": "Зміна №",
+        "totalSalesLabel": "Сума продажів",
+        "prroLabel": "ПРРО",
+        "closeShift": "Закрити зміну",
+        "closing": "Закривається…"
+      },
+      "openShiftDialog": {
+        "title": "Відкрити зміну",
+        "storeLabel": "Магазин *",
+        "loadingStores": "Завантаження магазинів…",
+        "selectStore": "Оберіть магазин",
+        "openingCashLabel": "Готівка на початок зміни (необов'язково)",
+        "opening": "Відкривається…",
+        "confirm": "Відкрити зміну"
+      },
+      "closeShiftDialog": {
+        "title": "Закрити зміну",
+        "description": "Продажі будуть неможливі до відкриття нової зміни. Порахуйте готівку в касі й введіть суму нижче для звірки — або залиште поле порожнім, щоб закрити без звірки.",
+        "actualCashLabel": "Фактична сума готівки в касі (необов'язково)",
+        "negativeCashError": "Сума готівки не може бути від'ємною.",
+        "closing": "Закривається…",
+        "confirm": "Закрити зміну"
+      },
+      "cashReconciliation": {
+        "title": "Звірка готівки",
+        "openingCash": "Початок зміни",
+        "expectedAmount": "Очікувана сума",
+        "actualCash": "Фактично в касі",
+        "discrepancy": "Розбіжність",
+        "match": "Збіг",
+        "surplus": "Надлишок +{amount} ₴",
+        "shortage": "Недостача {amount} ₴"
+      },
+      "fiscalStatus": {
+        "pending_fiscalization": "Очікує",
+        "fiscalized": "Фіскалізовано",
+        "fiscalization_failed": "Помилка"
+      },
+      "paymentType": {
+        "Cash": "Готівка",
+        "Card": "Картка"
+      },
+      "saleDetail": {
+        "receiptTitle": "Чек #{number}",
+        "generalInfo": "Загальна інформація",
+        "paymentMethod": "Спосіб оплати",
+        "receiptTotal": "Сума чеку",
+        "paid": "Оплачено",
+        "change": "Решта",
+        "fiscalNumber": "Фіскальний номер",
+        "fiscalization": "Фіскалізація",
+        "itemsSection": "Товари ({count})",
+        "headers": {
+          "product": "Товар",
+          "qty": "К-ть",
+          "price": "Ціна",
+          "discount": "Знижка",
+          "total": "Сума"
+        }
+      },
+      "salesTable": {
+        "empty": "Продажів у цій зміні ще немає",
+        "headers": {
+          "receiptNo": "Чек №",
+          "time": "Час",
+          "items": "Товарів",
+          "payment": "Оплата",
+          "sum": "Сума",
+          "fiscalization": "Фіскалізація"
+        },
+        "totalLabel": "Загальна сума:"
+      }
+    },
+    "aiOrders": {
+      "page": {
+        "title": "AI Замовлення",
+        "subtitle": "Claude аналізує погоду, події та акції — і коригує математичне замовлення з поясненнями",
+        "allStores": "Всі магазини",
+        "generate": "Згенерувати зараз",
+        "generating": "Claude аналізує…",
+        "emptyHistory": "Пропозицій ще немає — натисніть «Згенерувати зараз» або дочекайтесь щоденної генерації о 05:00.",
+        "toastGenerated": "AI пропозиція готова: {count} позицій",
+        "itemsAbbrev": "поз."
+      },
+      "status": {
+        "pending": "Очікує",
+        "partially_accepted": "Прийнято зі змінами",
+        "accepted": "Прийнято",
+        "rejected": "Відхилено"
+      },
+      "review": {
+        "title": "AI пропозиція — {store}",
+        "itemsSuffix": "позицій",
+        "tokensSuffix": "токенів",
+        "reject": "Відхилити",
+        "toastRejected": "Пропозицію відхилено",
+        "accept": "Підтвердити замовлення ({count})",
+        "toastAccepted": "Замовлення підтверджено",
+        "toastQuantityUpdated": "Кількість оновлено",
+        "noChange": "без змін",
+        "edited": "✏️ змінено",
+        "formula": "математична формула",
+        "confidence": {
+          "high": "висока",
+          "medium": "середня",
+          "low": "низька"
+        },
+        "headers": {
+          "product": "Товар",
+          "base": "Базове",
+          "aiSuggests": "AI пропонує",
+          "yourChange": "Ваша зміна",
+          "reason": "Причина",
+          "actions": "Дії"
+        },
+        "actionMenu": {
+          "productAnalytics": "Аналітика товару"
+        }
+      }
+    },
+    "analytics": {
+      "pos": {
+        "page": {
+          "title": "POS Аналітика",
+          "subtitle": "Виручка, транзакції, топ-товари та статистика по касирах",
+          "storeLabel": "Магазин",
+          "allStores": "Всі магазини",
+          "trendLabel": "Тренд",
+          "trendDay": "День",
+          "trendWeek": "Тиждень",
+          "summarySection": "Зведення",
+          "revenueTrendSection": "Динаміка виручки",
+          "paymentMethodsSection": "Методи оплати",
+          "noData": "Немає даних"
+        },
+        "summaryCards": {
+          "revenue": "Виручка",
+          "revenueSub": "Готівка: {cash} ₴ · Картка: {card} ₴",
+          "transactions": "Транзакції",
+          "averageTicket": "Середній чек",
+          "shifts": "Зміни"
+        },
+        "topProducts": {
+          "title": "Топ товари",
+          "empty": "Немає даних",
+          "headers": {
+            "name": "Назва",
+            "barcode": "Штрихкод",
+            "revenue": "Виручка",
+            "quantity": "Кількість",
+            "receipts": "Чеків"
+          }
+        },
+        "cashiers": {
+          "title": "Касири",
+          "empty": "Немає даних",
+          "headers": {
+            "cashier": "Касир",
+            "revenue": "Виручка",
+            "receipts": "Чеків",
+            "averageTicket": "Середній чек",
+            "shifts": "Зміни"
+          }
+        },
+        "revenueTrend": {
+          "title": "Динаміка виручки",
+          "empty": "Немає даних за обраний період",
+          "currentPeriod": "Поточний період",
+          "previousPeriod": "Попередній період",
+          "dayLabel": "День {n}"
+        },
+        "paymentPie": {
+          "title": "Розбивка оплат",
+          "empty": "Немає даних про оплати",
+          "cash": "Готівка",
+          "card": "Картка"
+        }
+      }
     }
   }
 }

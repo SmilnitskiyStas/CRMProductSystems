@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import { FiscalBadge } from "./FiscalBadge";
 import type { SaleDto } from "../types";
 
@@ -30,20 +31,21 @@ const td: React.CSSProperties = {
   verticalAlign: "middle",
 };
 
-const PAYMENT_LABEL: Record<string, string> = {
-  Cash: "Готівка",
-  Card: "Картка",
-};
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+function formatTime(iso: string, intlLocale: string): string {
+  return new Date(iso).toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit" });
 }
 
 export function SalesTable({ sales, totalAmount, isLoading, onSelectSale }: Props) {
+  const t = useTranslations("Dashboard.pos.salesTable");
+  const tCommon = useTranslations("Common");
+  const tPayment = useTranslations("Dashboard.pos.paymentType");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   if (isLoading) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>
-        Завантаження…
+        {tCommon("loading")}
       </div>
     );
   }
@@ -51,7 +53,7 @@ export function SalesTable({ sales, totalAmount, isLoading, onSelectSale }: Prop
   if (!sales?.length) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 40 }}>
-        Продажів у цій зміні ще немає
+        {t("empty")}
       </div>
     );
   }
@@ -69,12 +71,12 @@ export function SalesTable({ sales, totalAmount, isLoading, onSelectSale }: Prop
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              <th style={th}>Чек №</th>
-              <th style={th}>Час</th>
-              <th style={th}>Товарів</th>
-              <th style={th}>Оплата</th>
-              <th style={{ ...th, textAlign: "right" }}>Сума</th>
-              <th style={th}>Фіскалізація</th>
+              <th style={th}>{t("headers.receiptNo")}</th>
+              <th style={th}>{t("headers.time")}</th>
+              <th style={th}>{t("headers.items")}</th>
+              <th style={th}>{t("headers.payment")}</th>
+              <th style={{ ...th, textAlign: "right" }}>{t("headers.sum")}</th>
+              <th style={th}>{t("headers.fiscalization")}</th>
             </tr>
           </thead>
           <tbody>
@@ -95,10 +97,10 @@ export function SalesTable({ sales, totalAmount, isLoading, onSelectSale }: Prop
                     #{sale.receiptNumber}
                   </span>
                 </td>
-                <td style={{ ...td, color: "#9CA3AF" }}>{formatTime(sale.createdAt)}</td>
+                <td style={{ ...td, color: "#9CA3AF" }}>{formatTime(sale.createdAt, intlLocale)}</td>
                 <td style={td}>{sale.items.length}</td>
                 <td style={{ ...td, color: "#9CA3AF" }}>
-                  {PAYMENT_LABEL[sale.paymentType] ?? sale.paymentType}
+                  {tPayment.has(sale.paymentType) ? tPayment(sale.paymentType) : sale.paymentType}
                 </td>
                 <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#34d399" }}>
                   {sale.subtotal.toFixed(2)} ₴
@@ -122,7 +124,7 @@ export function SalesTable({ sales, totalAmount, isLoading, onSelectSale }: Prop
           fontSize: 13,
         }}
       >
-        Загальна сума:{" "}
+        {t("totalLabel")}{" "}
         <span style={{ color: "#34d399", fontWeight: 700, marginLeft: 6 }}>
           {totalAmount.toFixed(2)} ₴
         </span>
