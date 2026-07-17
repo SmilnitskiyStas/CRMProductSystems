@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useProductionOrder,
   useUpdateProductionOrder,
@@ -30,6 +31,10 @@ interface InsufficientStockError {
 }
 
 export function ProductionOrderDetail({ id }: Props) {
+  const t = useTranslations("Dashboard.production.orderDetail");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const { data: order, isLoading, isError } = useProductionOrder(id);
   const startOrder = useUpdateProductionOrder(id);
@@ -44,14 +49,14 @@ export function ProductionOrderDetail({ id }: Props) {
   if (isLoading) {
     return (
       <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
-        Завантаження…
+        {tCommon("loading")}
       </div>
     );
   }
   if (isError || !order) {
     return (
       <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
-        Не вдалося завантажити ордер.
+        {t("loadError")}
       </div>
     );
   }
@@ -103,18 +108,18 @@ export function ProductionOrderDetail({ id }: Props) {
             });
           }
         } else {
-          setActionError(err instanceof Error ? err.message : "Помилка завершення");
+          setActionError(err instanceof Error ? err.message : t("errorCompleteFallback"));
         }
       },
     });
   }
 
   function handleCancel() {
-    if (!confirm("Скасувати цей виробничий ордер?")) return;
+    if (!confirm(t("cancelConfirm"))) return;
     clearFeedback();
     cancelOrder.mutate(undefined, {
       onError: (err) => {
-        setActionError(err instanceof Error ? err.message : "Помилка скасування");
+        setActionError(err instanceof Error ? err.message : t("errorCancelFallback"));
       },
     });
   }
@@ -146,7 +151,7 @@ export function ProductionOrderDetail({ id }: Props) {
           }}
         >
           <ArrowLeft size={14} />
-          Назад до ордерів
+          {t("backToOrders")}
         </button>
       </div>
 
@@ -186,13 +191,13 @@ export function ProductionOrderDetail({ id }: Props) {
               }}
             >
               <span>📍 {order.locationName}</span>
-              <span>📦 Плановий вихід: {order.plannedQty}</span>
-              <span>📅 {formatDateTime(order.createdAt)}</span>
+              <span>{"📦 "}{t("plannedOutputLabel")} {order.plannedQty}</span>
+              <span>{"📅 "}{formatDateTime(order.createdAt, intlLocale)}</span>
               {order.startedAt && (
-                <span>▶ Розпочато: {formatDateTime(order.startedAt)}</span>
+                <span>{"▶ "}{t("startedLabel")} {formatDateTime(order.startedAt, intlLocale)}</span>
               )}
               {order.completedAt && (
-                <span>✅ Завершено: {formatDateTime(order.completedAt)}</span>
+                <span>{"✅ "}{t("completedLabel")} {formatDateTime(order.completedAt, intlLocale)}</span>
               )}
             </div>
             {order.notes && (
@@ -221,7 +226,7 @@ export function ProductionOrderDetail({ id }: Props) {
                   disabled={anyPending}
                   style={btnStyle("#1E3A5F", "#60A5FA")}
                 >
-                  {startOrder.isPending ? "Запуск…" : "▶ Розпочати"}
+                  {startOrder.isPending ? t("starting") : t("start")}
                 </button>
               )}
 
@@ -231,7 +236,7 @@ export function ProductionOrderDetail({ id }: Props) {
                   disabled={anyPending}
                   style={btnStyle("#064E3B", "#34D399")}
                 >
-                  {completeOrder.isPending ? "Завершення…" : "✓ Завершити виробництво"}
+                  {completeOrder.isPending ? t("completing") : t("complete")}
                 </button>
               )}
 
@@ -241,7 +246,7 @@ export function ProductionOrderDetail({ id }: Props) {
                   disabled={anyPending}
                   style={btnStyle("#1F1010", "#F87171")}
                 >
-                  {cancelOrder.isPending ? "Скасування…" : "✕ Скасувати"}
+                  {cancelOrder.isPending ? t("cancelling") : t("cancel")}
                 </button>
               )}
             </div>
@@ -262,13 +267,13 @@ export function ProductionOrderDetail({ id }: Props) {
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 4 }}>
-              ✓ Виробництво завершено
+              {t("successHeading")}
             </div>
             <div>
-              Готово: {successInfo.outputQty} — «{successInfo.outputItemName}»
+              {t("successBody", { qty: successInfo.outputQty, name: successInfo.outputItemName })}
             </div>
             <div style={{ color: "#6EE7B7", fontSize: 12, marginTop: 4 }}>
-              Партія {successInfo.batchNumber} додана до залишків
+              {t("successBatch", { batch: successInfo.batchNumber })}
             </div>
           </div>
         )}
@@ -287,12 +292,15 @@ export function ProductionOrderDetail({ id }: Props) {
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 4 }}>
-              Недостатньо запасів
+              {t("insufficientHeading")}
             </div>
             {insufficientStock.required > 0 ? (
               <div>
-                {insufficientStock.itemName} — потрібно{" "}
-                {insufficientStock.required}, є {insufficientStock.available}
+                {t("insufficientDetail", {
+                  item: insufficientStock.itemName,
+                  required: insufficientStock.required,
+                  available: insufficientStock.available,
+                })}
               </div>
             ) : (
               <div>{insufficientStock.itemName}</div>
@@ -313,7 +321,7 @@ export function ProductionOrderDetail({ id }: Props) {
               fontSize: 13,
             }}
           >
-            <strong>Помилка:</strong> {actionError}
+            <strong>{t("actionErrorPrefix")}</strong> {actionError}
           </div>
         )}
 
@@ -334,15 +342,15 @@ export function ProductionOrderDetail({ id }: Props) {
               }}
             >
               <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: 0 }}>
-                Списані інгредієнти
+                {t("consumptionsTitle")}
               </h2>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Товар", "Кількість", "Партія", "Час списання"].map((h) => (
+                  {[t("consumptionsHeaderItem"), t("consumptionsHeaderQty"), t("consumptionsHeaderBatch"), t("consumptionsHeaderConsumedAt")].map((h, i) => (
                     <th
-                      key={h}
+                      key={i}
                       style={{
                         padding: "10px 16px",
                         textAlign: "left",
@@ -385,7 +393,7 @@ export function ProductionOrderDetail({ id }: Props) {
                     </td>
                     <td style={tdStyle}>
                       <span style={{ color: "#6B7280", fontSize: 12 }}>
-                        {formatDateTime(c.consumedAt)}
+                        {formatDateTime(c.consumedAt, intlLocale)}
                       </span>
                     </td>
                   </tr>
@@ -408,7 +416,7 @@ export function ProductionOrderDetail({ id }: Props) {
               fontSize: 13,
             }}
           >
-            Списання з'являться після завершення виробництва.
+            {t("consumptionsEmpty")}
           </div>
         )}
       </div>
@@ -418,8 +426,8 @@ export function ProductionOrderDetail({ id }: Props) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateTime(iso: string, intlLocale: string) {
+  return new Date(iso).toLocaleString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

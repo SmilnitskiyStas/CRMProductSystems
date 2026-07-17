@@ -1,22 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { useCustomer } from "../hooks/useCustomers";
 import type { Customer, CustomerTransaction } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
-const UAH = new Intl.NumberFormat("uk-UA", { style: "currency", currency: "UAH" });
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("uk-UA", {
+function formatDate(iso: string, intlLocale: string) {
+  return new Date(iso).toLocaleDateString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
 }
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateTime(iso: string, intlLocale: string) {
+  return new Date(iso).toLocaleString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -26,26 +25,24 @@ function formatDateTime(iso: string) {
 }
 
 function PaymentTypeBadge({ type }: { type: string }) {
-  const labels: Record<string, string> = {
-    cash: "Готівка",
-    card: "Картка",
-    online: "Онлайн",
-  };
+  const t = useTranslations("Dashboard.customers.paymentType");
   return (
     <span style={{ color: "#9CA3AF", fontSize: 12 }}>
-      {labels[type] ?? type}
+      {t.has(type) ? t(type) : type}
     </span>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const configs: Record<string, { bg: string; color: string; border: string; label: string }> = {
-    completed: { bg: "#0d2318", color: "#4ADE80", border: "#14532D", label: "Завершено" },
-    pending:   { bg: "#1c1a0a", color: "#FCD34D", border: "#78350F", label: "Очікує" },
-    cancelled: { bg: "#2d0a0a", color: "#F87171", border: "#7F1D1D", label: "Скасовано" },
-    refunded:  { bg: "#0a1628", color: "#60A5FA", border: "#1D4ED8", label: "Повернення" },
+  const t = useTranslations("Dashboard.customers.transactionStatus");
+  const configs: Record<string, { bg: string; color: string; border: string }> = {
+    completed: { bg: "#0d2318", color: "#4ADE80", border: "#14532D" },
+    pending:   { bg: "#1c1a0a", color: "#FCD34D", border: "#78350F" },
+    cancelled: { bg: "#2d0a0a", color: "#F87171", border: "#7F1D1D" },
+    refunded:  { bg: "#0a1628", color: "#60A5FA", border: "#1D4ED8" },
   };
-  const cfg = configs[status] ?? { bg: "#111827", color: "#6B7280", border: "#374151", label: status };
+  const cfg = configs[status] ?? { bg: "#111827", color: "#6B7280", border: "#374151" };
+  const label = t.has(status) ? t(status) : status;
   return (
     <span
       style={{
@@ -59,12 +56,15 @@ function StatusBadge({ status }: { status: string }) {
         whiteSpace: "nowrap",
       }}
     >
-      {cfg.label}
+      {label}
     </span>
   );
 }
 
 function TransactionRow({ tx }: { tx: CustomerTransaction }) {
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const uah = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "UAH" });
   return (
     <div
       style={{
@@ -75,8 +75,8 @@ function TransactionRow({ tx }: { tx: CustomerTransaction }) {
         alignItems: "center",
       }}
     >
-      <div style={{ color: "#6B7280", fontSize: 12 }}>{formatDateTime(tx.createdAt)}</div>
-      <div style={{ color: "#4ADE80", fontSize: 13, fontWeight: 500 }}>{UAH.format(tx.totalAmount)}</div>
+      <div style={{ color: "#6B7280", fontSize: 12 }}>{formatDateTime(tx.createdAt, intlLocale)}</div>
+      <div style={{ color: "#4ADE80", fontSize: 13, fontWeight: 500 }}>{uah.format(tx.totalAmount)}</div>
       <PaymentTypeBadge type={tx.paymentType} />
       <div><StatusBadge status={tx.status} /></div>
     </div>
@@ -92,6 +92,11 @@ interface Props {
 }
 
 export function CustomerDetail({ customer, onClose, onEdit }: Props) {
+  const t = useTranslations("Dashboard.customers.detail");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const uah = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "UAH" });
   const { data: detail, isLoading } = useCustomer(customer.id);
 
   // Close on Escape
@@ -148,7 +153,7 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
           </h2>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn size="sm" onClick={onEdit}>
-              Редагувати
+              {t("edit")}
             </Btn>
             <button
               onClick={onClose}
@@ -184,14 +189,14 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
               gap: "14px 20px",
             }}
           >
-            <InfoField label="Телефон"     value={customer.phone  ?? "—"} />
-            <InfoField label="Email"       value={customer.email  ?? "—"} />
-            <InfoField label="Замовлень"   value={String(customer.totalOrders)} />
-            <InfoField label="Витрачено"   value={UAH.format(customer.totalSpent)} valueColor="#4ADE80" />
-            <InfoField label="Зареєстрований" value={formatDate(customer.createdAt)} />
+            <InfoField label={t("phoneLabel")}     value={customer.phone  ?? "—"} />
+            <InfoField label={t("emailLabel")}       value={customer.email  ?? "—"} />
+            <InfoField label={t("ordersLabel")}   value={String(customer.totalOrders)} />
+            <InfoField label={t("spentLabel")}   value={uah.format(customer.totalSpent)} valueColor="#4ADE80" />
+            <InfoField label={t("registeredLabel")} value={formatDate(customer.createdAt, intlLocale)} />
             {customer.notes && (
               <div style={{ gridColumn: "1 / -1" }}>
-                <InfoField label="Нотатки" value={customer.notes} />
+                <InfoField label={t("notesLabel")} value={customer.notes} />
               </div>
             )}
           </div>
@@ -200,12 +205,12 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
           {customer.tags.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ color: "#6B7280", fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-                Теги
+                {t("tagsLabel")}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {customer.tags.map((t) => (
+                {customer.tags.map((tag) => (
                   <span
-                    key={t}
+                    key={tag}
                     style={{
                       background: "#0a1628",
                       border: "1px solid #1D4ED8",
@@ -215,7 +220,7 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
                       fontSize: 12,
                     }}
                   >
-                    {t}
+                    {tag}
                   </span>
                 ))}
               </div>
@@ -226,13 +231,13 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
         {/* Recent transactions */}
         <div style={{ margin: "18px 22px 22px" }}>
           <h3 style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 10px" }}>
-            Останні транзакції
+            {t("recentTransactionsTitle")}
           </h3>
 
           {isLoading ? (
-            <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>Завантаження…</div>
+            <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>{tCommon("loading")}</div>
           ) : !detail || detail.recentTransactions.length === 0 ? (
-            <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>Транзакцій ще немає</div>
+            <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>{t("noTransactions")}</div>
           ) : (
             <div
               style={{
@@ -252,8 +257,8 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
                   background: "#060D18",
                 }}
               >
-                {["Дата", "Сума", "Оплата", "Статус"].map((h) => (
-                  <div key={h} style={{ color: "#374151", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                {[t("txHeaderDate"), t("txHeaderAmount"), t("txHeaderPayment"), t("txHeaderStatus")].map((h, i) => (
+                  <div key={i} style={{ color: "#374151", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {h}
                   </div>
                 ))}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   useRecipe,
   useCreateRecipe,
@@ -24,6 +25,7 @@ interface IngredientRow {
 const EMPTY_INGREDIENT: IngredientRow = { itemId: "", qty: "", unit: "" };
 
 export function RecipeForm({ recipeId, onClose }: Props) {
+  const t = useTranslations("Dashboard.production.recipeForm");
   const isEdit = !!recipeId;
 
   // Load existing recipe when editing
@@ -83,18 +85,18 @@ export function RecipeForm({ recipeId, onClose }: Props) {
   }
 
   function validate(): string | null {
-    if (!name.trim()) return "Введіть назву рецепту";
-    if (!outputItemId) return "Оберіть вихідний товар";
+    if (!name.trim()) return t("errorNameRequired");
+    if (!outputItemId) return t("errorOutputItemRequired");
     const qty = parseFloat(outputQty);
-    if (isNaN(qty) || qty <= 0) return "Вихід має бути більше 0";
-    if (!unit.trim()) return "Введіть одиницю виміру";
-    if (ingredients.length === 0) return "Додайте хоча б один інгредієнт";
+    if (isNaN(qty) || qty <= 0) return t("errorOutputQtyPositive");
+    if (!unit.trim()) return t("errorUnitRequired");
+    if (ingredients.length === 0) return t("errorIngredientsRequired");
     for (const ing of ingredients) {
-      if (!ing.itemId) return "Оберіть товар для кожного інгредієнту";
+      if (!ing.itemId) return t("errorIngredientItemRequired");
       const ingQty = parseFloat(ing.qty);
       if (isNaN(ingQty) || ingQty <= 0)
-        return "Кількість інгредієнту має бути більше 0";
-      if (!ing.unit.trim()) return "Введіть одиницю виміру для кожного інгредієнту";
+        return t("errorIngredientQtyPositive");
+      if (!ing.unit.trim()) return t("errorIngredientUnitRequired");
     }
     return null;
   }
@@ -179,7 +181,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
           }}
         >
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати рецепт" : "Новий рецепт"}
+            {isEdit ? t("titleEdit") : t("titleNew")}
           </h2>
           <button
             onClick={onClose}
@@ -199,12 +201,12 @@ export function RecipeForm({ recipeId, onClose }: Props) {
         <form onSubmit={handleSubmit} style={{ padding: "20px 24px" }}>
           {/* Name */}
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Назва рецепту *</label>
+            <label style={labelStyle}>{t("nameLabel")}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Хліб пшеничний"
+              placeholder={t("namePlaceholder")}
               style={inputStyle}
             />
           </div>
@@ -214,14 +216,14 @@ export function RecipeForm({ recipeId, onClose }: Props) {
             style={{ display: "grid", gridTemplateColumns: "1fr 120px 100px", gap: 12, marginBottom: 16 }}
           >
             <div>
-              <label style={labelStyle}>Вихідний товар *</label>
+              <label style={labelStyle}>{t("outputItemLabel")}</label>
               <select
                 value={outputItemId}
                 onChange={(e) => setOutputItemId(e.target.value)}
                 style={inputStyle}
                 disabled={isEdit}
               >
-                <option value="">— Оберіть товар —</option>
+                <option value="">{t("selectItemPlaceholder")}</option>
                 {items.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
@@ -230,7 +232,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
               </select>
             </div>
             <div>
-              <label style={labelStyle}>Вихід *</label>
+              <label style={labelStyle}>{t("outputQtyLabel")}</label>
               <input
                 type="number"
                 value={outputQty}
@@ -243,12 +245,12 @@ export function RecipeForm({ recipeId, onClose }: Props) {
               />
             </div>
             <div>
-              <label style={labelStyle}>Одиниця *</label>
+              <label style={labelStyle}>{t("unitLabel")}</label>
               <input
                 type="text"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                placeholder="кг"
+                placeholder={t("unitPlaceholder")}
                 style={inputStyle}
                 disabled={isEdit}
               />
@@ -257,12 +259,12 @@ export function RecipeForm({ recipeId, onClose }: Props) {
 
           {/* Notes */}
           <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>Примітки</label>
+            <label style={labelStyle}>{t("notesLabel")}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="Необов'язково"
+              placeholder={t("notesPlaceholder")}
               style={{ ...inputStyle, resize: "vertical" }}
             />
           </div>
@@ -279,7 +281,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                 }}
               >
                 <label style={{ ...labelStyle, margin: 0 }}>
-                  Інгредієнти *
+                  {t("ingredientsLabel")}
                 </label>
                 <button
                   type="button"
@@ -298,7 +300,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                   }}
                 >
                   <Plus size={13} />
-                  Додати інгредієнт
+                  {t("addIngredient")}
                 </button>
               </div>
 
@@ -320,7 +322,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                       }
                       style={inputStyle}
                     >
-                      <option value="">— Товар —</option>
+                      <option value="">{t("ingredientItemPlaceholder")}</option>
                       {items.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name}
@@ -333,7 +335,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                       onChange={(e) =>
                         updateIngredient(idx, "qty", e.target.value)
                       }
-                      placeholder="Кількість"
+                      placeholder={t("ingredientQtyPlaceholder")}
                       min={0}
                       step="0.001"
                       style={inputStyle}
@@ -344,14 +346,14 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                       onChange={(e) =>
                         updateIngredient(idx, "unit", e.target.value)
                       }
-                      placeholder="кг"
+                      placeholder={t("ingredientUnitPlaceholder")}
                       style={inputStyle}
                     />
                     <button
                       type="button"
                       onClick={() => removeIngredient(idx)}
                       disabled={ingredients.length === 1}
-                      title="Видалити інгредієнт"
+                      title={t("removeIngredientTitle")}
                       style={{
                         background: "transparent",
                         border: "1px solid #1F2937",
@@ -406,7 +408,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                 cursor: "pointer",
               }}
             >
-              Скасувати
+              {t("cancel")}
             </button>
             <button
               type="submit"
@@ -422,7 +424,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                 cursor: isPending ? "not-allowed" : "pointer",
               }}
             >
-              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
+              {isPending ? t("saving") : isEdit ? t("save") : t("create")}
             </button>
           </div>
         </form>

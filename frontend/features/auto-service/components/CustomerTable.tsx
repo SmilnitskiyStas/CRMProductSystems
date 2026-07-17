@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useCustomers, useDeleteCustomer, useVehicles } from "../hooks/useAutoService";
 import { CustomerForm } from "./CustomerForm";
 import { VehicleForm } from "./VehicleForm";
@@ -10,6 +11,10 @@ import type { CustomerDto } from "../types";
 // ─── Vehicle sub-row ──────────────────────────────────────────────────────────
 
 function CustomerVehicleList({ customer }: { customer: CustomerDto }) {
+  const t = useTranslations("Dashboard.autoService.customerTable");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: vehicles, isLoading } = useVehicles(customer.id);
   const [showVehicleForm, setShowVehicleForm] = useState(false);
 
@@ -23,7 +28,7 @@ function CustomerVehicleList({ customer }: { customer: CustomerDto }) {
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, textTransform: "uppercase" }}>
-          Автомобілі
+          {t("vehiclesLabel")}
         </span>
         <button
           onClick={() => setShowVehicleForm(true)}
@@ -40,14 +45,14 @@ function CustomerVehicleList({ customer }: { customer: CustomerDto }) {
             cursor: "pointer",
           }}
         >
-          <Plus size={12} /> Авто
+          <Plus size={12} /> {t("addVehicle")}
         </button>
       </div>
 
       {isLoading ? (
-        <div style={{ color: "#4B5563", fontSize: 12 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 12 }}>{tCommon("loading")}</div>
       ) : !vehicles || vehicles.length === 0 ? (
-        <div style={{ color: "#374151", fontSize: 12 }}>Автомобілі відсутні</div>
+        <div style={{ color: "#374151", fontSize: 12 }}>{t("noVehicles")}</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {vehicles.map((v) => (
@@ -71,10 +76,10 @@ function CustomerVehicleList({ customer }: { customer: CustomerDto }) {
               <span style={{ color: "#60A5FA", fontSize: 12, fontWeight: 600 }}>
                 {v.licensePlate}
               </span>
-              {v.vin && <span style={{ color: "#4B5563", fontSize: 11 }}>VIN: {v.vin}</span>}
+              {v.vin && <span style={{ color: "#4B5563", fontSize: 11 }}>{t("vin")}: {v.vin}</span>}
               {v.mileage != null && (
                 <span style={{ color: "#4B5563", fontSize: 11 }}>
-                  {v.mileage.toLocaleString("uk-UA")} км
+                  {v.mileage.toLocaleString(intlLocale)} {t("mileageUnit")}
                 </span>
               )}
             </div>
@@ -92,6 +97,8 @@ function CustomerVehicleList({ customer }: { customer: CustomerDto }) {
 // ─── Main CustomerTable ───────────────────────────────────────────────────────
 
 export function CustomerTable() {
+  const t = useTranslations("Dashboard.autoService.customerTable");
+  const tCommon = useTranslations("Common");
   const { data: customers, isLoading, isError } = useCustomers();
   const deleteCustomer = useDeleteCustomer();
 
@@ -100,10 +107,10 @@ export function CustomerTable() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (isLoading) {
-    return <div style={{ padding: "32px", color: "#6B7280", fontSize: 13 }}>Завантаження…</div>;
+    return <div style={{ padding: "32px", color: "#6B7280", fontSize: 13 }}>{tCommon("loading")}</div>;
   }
   if (isError) {
-    return <div style={{ padding: "32px", color: "#F87171", fontSize: 13 }}>Не вдалося завантажити клієнтів.</div>;
+    return <div style={{ padding: "32px", color: "#F87171", fontSize: 13 }}>{t("loadError")}</div>;
   }
 
   return (
@@ -111,9 +118,9 @@ export function CustomerTable() {
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Клієнти</h1>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
           <p style={{ color: "#4B5563", fontSize: 14, marginTop: 4 }}>
-            База клієнтів автосервісу
+            {t("subtitle")}
           </p>
         </div>
         <button
@@ -132,7 +139,7 @@ export function CustomerTable() {
             cursor: "pointer",
           }}
         >
-          <Plus size={16} /> Клієнт
+          <Plus size={16} /> {t("addCustomer")}
         </button>
       </div>
 
@@ -147,8 +154,8 @@ export function CustomerTable() {
             borderBottom: "1px solid #1F2937",
           }}
         >
-          {["", "Клієнт", "Телефон", "Email", "Авто", ""].map((h) => (
-            <div key={h} style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+          {["", t("headerCustomer"), t("headerPhone"), t("headerEmail"), t("headerVehicles"), ""].map((h, i) => (
+            <div key={i} style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
               {h}
             </div>
           ))}
@@ -157,7 +164,7 @@ export function CustomerTable() {
         {/* Rows */}
         {!customers || customers.length === 0 ? (
           <div style={{ padding: "40px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            Клієнти відсутні. Додайте першого клієнта.
+            {t("empty")}
           </div>
         ) : (
           customers.map((customer) => {
@@ -206,18 +213,18 @@ export function CustomerTable() {
                     <button
                       onClick={() => setEditingCustomer(customer)}
                       style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
-                      title="Редагувати"
+                      title={t("editTitle")}
                     >
                       <Pencil size={13} />
                     </button>
                     <button
                       onClick={() => {
-                        if (confirm(`Видалити клієнта "${customer.name}"?`)) {
+                        if (confirm(t("deleteConfirm", { name: customer.name }))) {
                           deleteCustomer.mutate(customer.id);
                         }
                       }}
                       style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
-                      title="Видалити"
+                      title={t("deleteTitle")}
                     >
                       <Trash2 size={13} />
                     </button>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   useCreateProductionOrder,
   useRecipes,
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function ProductionOrderForm({ onClose }: Props) {
+  const t = useTranslations("Dashboard.production.orderForm");
   const { data: recipes = [] } = useRecipes(false);
   const { data: locations = [] } = useProductionLocations();
   const createOrder = useCreateProductionOrder();
@@ -24,10 +26,10 @@ export function ProductionOrderForm({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   function validate(): string | null {
-    if (!recipeId) return "Оберіть рецепт";
-    if (!locationId) return "Оберіть локацію";
+    if (!recipeId) return t("errorRecipeRequired");
+    if (!locationId) return t("errorLocationRequired");
     const qty = parseFloat(plannedQty);
-    if (isNaN(qty) || qty <= 0) return "Плановий вихід має бути більше 0";
+    if (isNaN(qty) || qty <= 0) return t("errorPlannedQtyPositive");
     return null;
   }
 
@@ -90,7 +92,7 @@ export function ProductionOrderForm({ onClose }: Props) {
           }}
         >
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            Новий виробничий ордер
+            {t("title")}
           </h2>
           <button
             onClick={onClose}
@@ -109,13 +111,13 @@ export function ProductionOrderForm({ onClose }: Props) {
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ padding: "20px 24px" }}>
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Рецепт *</label>
+            <label style={labelStyle}>{t("recipeLabel")}</label>
             <select
               value={recipeId}
               onChange={(e) => setRecipeId(e.target.value)}
               style={inputStyle}
             >
-              <option value="">— Оберіть рецепт —</option>
+              <option value="">{t("selectRecipePlaceholder")}</option>
               {recipes.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -125,13 +127,13 @@ export function ProductionOrderForm({ onClose }: Props) {
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Локація *</label>
+            <label style={labelStyle}>{t("locationLabel")}</label>
             <select
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
               style={inputStyle}
             >
-              <option value="">— Оберіть локацію —</option>
+              <option value="">{t("selectLocationPlaceholder")}</option>
               {locations.map((loc) => (
                 <option key={loc.id} value={loc.id}>
                   {loc.name}
@@ -141,7 +143,7 @@ export function ProductionOrderForm({ onClose }: Props) {
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Плановий вихід *</label>
+            <label style={labelStyle}>{t("plannedQtyLabel")}</label>
             <input
               type="number"
               value={plannedQty}
@@ -154,12 +156,12 @@ export function ProductionOrderForm({ onClose }: Props) {
           </div>
 
           <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>Примітки</label>
+            <label style={labelStyle}>{t("notesLabel")}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="Необов'язково"
+              placeholder={t("notesPlaceholder")}
               style={{ ...inputStyle, resize: "vertical" }}
             />
           </div>
@@ -194,7 +196,7 @@ export function ProductionOrderForm({ onClose }: Props) {
                 cursor: "pointer",
               }}
             >
-              Скасувати
+              {t("cancel")}
             </button>
             <button
               type="submit"
@@ -210,7 +212,7 @@ export function ProductionOrderForm({ onClose }: Props) {
                 cursor: createOrder.isPending ? "not-allowed" : "pointer",
               }}
             >
-              {createOrder.isPending ? "Створення…" : "Створити"}
+              {createOrder.isPending ? t("creating") : t("create")}
             </button>
           </div>
         </form>

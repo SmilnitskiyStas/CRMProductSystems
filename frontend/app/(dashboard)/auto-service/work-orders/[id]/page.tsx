@@ -3,6 +3,7 @@
 import { use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { WorkOrderDetail } from "@/features/auto-service/components/WorkOrderDetail";
 
@@ -13,6 +14,8 @@ interface Props {
 export default function WorkOrderDetailPage({ params }: Props) {
   const { id } = use(params);
   const router = useRouter();
+  const t = useTranslations("Dashboard.autoService.moduleGate");
+  const tPage = useTranslations("Dashboard.autoService.workOrdersPage");
   const { data: modulesData } = useModules();
   const isActive = !modulesData || modulesData.modules.includes("auto_service");
 
@@ -30,7 +33,7 @@ export default function WorkOrderDetailPage({ params }: Props) {
       >
         <div style={{ fontSize: 40 }}>🔒</div>
         <h2 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          Модуль Auto Service не активний
+          {t("title")}
         </h2>
       </div>
     );
@@ -55,7 +58,7 @@ export default function WorkOrderDetailPage({ params }: Props) {
           }}
         >
           <ArrowLeft size={14} />
-          Назад до дошки
+          {tPage("backToBoard")}
         </button>
       </div>
       <WorkOrderDetail id={id} />

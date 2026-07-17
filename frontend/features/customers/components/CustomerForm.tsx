@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { Customer, CreateCustomerPayload, UpdateCustomerPayload } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
@@ -24,16 +25,21 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
-function validate(name: string, email: string, phone: string): Record<string, string> {
+function validate(
+  name: string,
+  email: string,
+  phone: string,
+  t: ReturnType<typeof useTranslations>
+): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!name.trim()) {
-    errors.name = "Ім'я обов'язкове";
+    errors.name = t("errorNameRequired");
   }
   if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-    errors.email = "Невірний формат email";
+    errors.email = t("errorEmailInvalid");
   }
   if (phone.trim() && !/^[+\d\s\-()]{7,20}$/.test(phone.trim())) {
-    errors.phone = "Невірний формат телефону";
+    errors.phone = t("errorPhoneInvalid");
   }
   return errors;
 }
@@ -47,6 +53,7 @@ interface Props {
 }
 
 export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: Props) {
+  const t = useTranslations("Dashboard.customers.form");
   const isEdit = !!customer;
 
   const [name,   setName]   = useState(customer?.name   ?? "");
@@ -78,7 +85,7 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const errs = validate(name, email, phone);
+    const errs = validate(name, email, phone, t);
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -136,10 +143,10 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
         >
           <div>
             <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-              {isEdit ? "Редагувати клієнта" : "Новий клієнт"}
+              {isEdit ? t("titleEdit") : t("titleNew")}
             </h2>
             <p style={{ color: "#4B5563", fontSize: 12, margin: "3px 0 0" }}>
-              {isEdit ? "Оновіть інформацію про клієнта" : "Додайте нового клієнта до системи"}
+              {isEdit ? t("subtitleEdit") : t("subtitleNew")}
             </p>
           </div>
           <button
@@ -165,11 +172,11 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
         >
           {/* Name */}
           <div>
-            <label style={labelStyle}>Ім'я *</label>
+            <label style={labelStyle}>{t("nameLabel")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Іван Петренко"
+              placeholder={t("namePlaceholder")}
               style={{ ...inputStyle, borderColor: errors.name ? "#EF4444" : "#374151" }}
             />
             {errors.name && (
@@ -179,11 +186,11 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
 
           {/* Phone */}
           <div>
-            <label style={labelStyle}>Телефон</label>
+            <label style={labelStyle}>{t("phoneLabel")}</label>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+380 50 000 00 00"
+              placeholder={t("phonePlaceholder")}
               style={{ ...inputStyle, borderColor: errors.phone ? "#EF4444" : "#374151" }}
             />
             {errors.phone && (
@@ -193,12 +200,12 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
 
           {/* Email */}
           <div>
-            <label style={labelStyle}>Email</label>
+            <label style={labelStyle}>{t("emailLabel")}</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="ivan@example.com"
+              placeholder={t("emailPlaceholder")}
               style={{ ...inputStyle, borderColor: errors.email ? "#EF4444" : "#374151" }}
             />
             {errors.email && (
@@ -208,11 +215,11 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
 
           {/* Notes */}
           <div>
-            <label style={labelStyle}>Нотатки</label>
+            <label style={labelStyle}>{t("notesLabel")}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Довільні нотатки про клієнта…"
+              placeholder={t("notesPlaceholder")}
               rows={3}
               style={{
                 ...inputStyle,
@@ -224,17 +231,17 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
 
           {/* Tags */}
           <div>
-            <label style={labelStyle}>Теги</label>
+            <label style={labelStyle}>{t("tagsLabel")}</label>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
-                placeholder="Введіть тег і натисніть Enter"
+                placeholder={t("tagInputPlaceholder")}
                 style={{ ...inputStyle, flex: 1 }}
               />
               <Btn type="button" size="sm" onClick={addTag}>
-                + Додати
+                {t("addTag")}
               </Btn>
             </div>
             {tags.length > 0 && (
@@ -284,10 +291,10 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
             <Btn type="submit" disabled={isPending} style={{ flex: 1, justifyContent: "center" }}>
-              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
+              {isPending ? t("saving") : isEdit ? t("save") : t("create")}
             </Btn>
             <Btn type="button" variant="ghost" onClick={onClose}>
-              Скасувати
+              {t("cancel")}
             </Btn>
           </div>
         </form>

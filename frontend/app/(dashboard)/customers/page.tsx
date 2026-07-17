@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { CustomerTable } from "@/features/customers/components/CustomerTable";
 import { CustomerForm } from "@/features/customers/components/CustomerForm";
 import { CustomerDetail } from "@/features/customers/components/CustomerDetail";
@@ -18,6 +19,7 @@ import { Btn } from "@/components/ui/Btn";
 const PAGE_SIZE = 50;
 
 export default function CustomersPage() {
+  const t = useTranslations("Dashboard.customers.page");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -39,7 +41,7 @@ export default function CustomersPage() {
   function handleCreate(payload: CreateCustomerPayload | UpdateCustomerPayload) {
     createMutation.mutate(payload as CreateCustomerPayload, {
       onSuccess: () => {
-        toast.success("Клієнта створено");
+        toast.success(t("toastCreated"));
         setFormOpen(false);
       },
       onError: (err) => toast.error(err.message),
@@ -52,7 +54,7 @@ export default function CustomersPage() {
       { id: editing.id, data: payload as UpdateCustomerPayload },
       {
         onSuccess: () => {
-          toast.success("Клієнта оновлено");
+          toast.success(t("toastUpdated"));
           setEditing(null);
           // If the drawer was open for this customer, update its ref
           if (selected?.id === editing.id) setSelected(null);
@@ -63,10 +65,10 @@ export default function CustomersPage() {
   }
 
   function handleDelete(customer: Customer) {
-    if (!confirm(`Видалити клієнта "${customer.name}"?`)) return;
+    if (!confirm(t("deleteConfirm", { name: customer.name }))) return;
     deleteMutation.mutate(customer.id, {
       onSuccess: () => {
-        toast.success("Клієнта видалено");
+        toast.success(t("toastDeleted"));
         if (selected?.id === customer.id) setSelected(null);
       },
       onError: (err) => toast.error(err.message),
@@ -93,14 +95,14 @@ export default function CustomersPage() {
       >
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Клієнти
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            База клієнтів — контакти, теги, історія замовлень
+            {t("subtitle")}
           </p>
         </div>
         <Btn icon={<Plus size={15} />} onClick={() => { setEditing(null); setFormOpen(true); }}>
-          Додати клієнта
+          {t("addCustomer")}
         </Btn>
       </div>
 

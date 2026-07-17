@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import type { Customer } from "../types";
 
-const UAH = new Intl.NumberFormat("uk-UA", { style: "currency", currency: "UAH" });
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("uk-UA", {
+function formatDate(iso: string, intlLocale: string) {
+  return new Date(iso).toLocaleDateString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -41,6 +40,7 @@ function ActionMenu({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useTranslations("Dashboard.customers.table");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -101,7 +101,7 @@ function ActionMenu({
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#111827"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
-            Редагувати
+            {t("edit")}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(); }}
@@ -120,7 +120,7 @@ function ActionMenu({
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#2d0a0a"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
-            Видалити
+            {t("delete")}
           </button>
         </div>
       )}
@@ -131,7 +131,6 @@ function ActionMenu({
 // ── Grid config ────────────────────────────────────────────────────────────────
 
 const GRID = "minmax(160px,1fr) 130px 180px 160px 80px 140px 120px 60px";
-const HEADERS = ["Ім'я", "Телефон", "Email", "Теги", "Замовлень", "Витрачено", "Дата реєстрації", ""];
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
@@ -162,6 +161,21 @@ export function CustomerTable({
   onEdit,
   onDelete,
 }: Props) {
+  const t = useTranslations("Dashboard.customers.table");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const uah = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "UAH" });
+  const HEADERS = [
+    t("headerName"),
+    t("headerPhone"),
+    t("headerEmail"),
+    t("headerTags"),
+    t("headerOrders"),
+    t("headerSpent"),
+    t("headerCreatedAt"),
+    "",
+  ];
+
   // Debounced search
   const [localSearch, setLocalSearch] = useState(search);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,7 +196,7 @@ export function CustomerTable({
         <input
           value={localSearch}
           onChange={(e) => handleSearchInput(e.target.value)}
-          placeholder="Пошук за іменем, телефоном або email…"
+          placeholder={t("searchPlaceholder")}
           style={{
             width: "100%",
             maxWidth: 400,
@@ -218,9 +232,9 @@ export function CustomerTable({
             minWidth: 900,
           }}
         >
-          {HEADERS.map((h) => (
+          {HEADERS.map((h, i) => (
             <div
-              key={h}
+              key={i}
               style={{
                 color: "#4B5563",
                 fontSize: 11,
@@ -237,11 +251,11 @@ export function CustomerTable({
         {/* Rows */}
         {isLoading ? (
           <div style={{ padding: "40px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            Завантаження…
+            {t("loading")}
           </div>
         ) : customers.length === 0 ? (
           <div style={{ padding: "40px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            {search ? "Нічого не знайдено" : "Клієнтів ще немає"}
+            {search ? t("emptySearch") : t("emptyNone")}
           </div>
         ) : (
           customers.map((c) => (
@@ -279,7 +293,7 @@ export function CustomerTable({
               {/* Tags */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {c.tags.length > 0
-                  ? c.tags.slice(0, 3).map((t) => <TagBadge key={t} tag={t} />)
+                  ? c.tags.slice(0, 3).map((tag) => <TagBadge key={tag} tag={tag} />)
                   : <span style={{ color: "#374151", fontSize: 12 }}>—</span>
                 }
                 {c.tags.length > 3 && (
@@ -294,12 +308,12 @@ export function CustomerTable({
 
               {/* Total spent */}
               <div style={{ color: "#4ADE80", fontSize: 13, fontWeight: 500 }}>
-                {UAH.format(c.totalSpent)}
+                {uah.format(c.totalSpent)}
               </div>
 
               {/* Created at */}
               <div style={{ color: "#4B5563", fontSize: 12 }}>
-                {formatDate(c.createdAt)}
+                {formatDate(c.createdAt, intlLocale)}
               </div>
 
               {/* Actions */}
@@ -325,7 +339,7 @@ export function CustomerTable({
           }}
         >
           <span style={{ color: "#4B5563", fontSize: 12 }}>
-            Усього: {totalCount}
+            {t("totalLabel", { count: totalCount })}
           </span>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button
@@ -341,7 +355,7 @@ export function CustomerTable({
                 cursor: page <= 1 ? "default" : "pointer",
               }}
             >
-              ← Назад
+              {t("prev")}
             </button>
             <span style={{ color: "#6B7280", fontSize: 12 }}>
               {page} / {totalPages}
@@ -359,7 +373,7 @@ export function CustomerTable({
                 cursor: page >= totalPages ? "default" : "pointer",
               }}
             >
-              Вперед →
+              {t("next")}
             </button>
           </div>
         </div>
@@ -367,7 +381,7 @@ export function CustomerTable({
 
       {totalPages <= 1 && totalCount > 0 && (
         <div style={{ color: "#4B5563", fontSize: 12, marginTop: 10, textAlign: "right" }}>
-          Усього: {totalCount}
+          {t("totalLabel", { count: totalCount })}
         </div>
       )}
     </div>

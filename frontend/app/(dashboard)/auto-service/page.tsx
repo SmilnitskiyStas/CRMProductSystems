@@ -1,9 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { WorkOrderKanban } from "@/features/auto-service/components/WorkOrderKanban";
 
 export default function AutoServicePage() {
+  const t = useTranslations("Dashboard.autoService.moduleGate");
   const { data: modulesData } = useModules();
   const isActive = !modulesData || modulesData.modules.includes("auto_service");
 
@@ -21,10 +23,10 @@ export default function AutoServicePage() {
       >
         <div style={{ fontSize: 40 }}>🔒</div>
         <h2 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          Модуль Auto Service не активний
+          {t("title")}
         </h2>
         <p style={{ color: "#4B5563", fontSize: 14, maxWidth: 440 }}>
-          Зверніться до адміністратора платформи, щоб увімкнути модуль «Автосервіс».
+          {t("body")}
         </p>
       </div>
     );

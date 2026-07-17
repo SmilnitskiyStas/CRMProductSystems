@@ -3,22 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useProductionOrders } from "../hooks/useProduction";
 import { ProductionOrderForm } from "./ProductionOrderForm";
 import type { ProductionOrderStatus } from "../types";
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "Всі статуси" },
-  { value: "planned", label: "Заплановані" },
-  { value: "in_progress", label: "В роботі" },
-  { value: "done", label: "Завершені" },
-  { value: "cancelled", label: "Скасовані" },
-];
-
 export function ProductionOrderTable() {
+  const t = useTranslations("Dashboard.production.orderTable");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+
+  const STATUS_OPTIONS: { value: string; label: string }[] = [
+    { value: "", label: t("statusFilterAll") },
+    { value: "planned", label: t("statusFilterPlanned") },
+    { value: "in_progress", label: t("statusFilterInProgress") },
+    { value: "done", label: t("statusFilterDone") },
+    { value: "cancelled", label: t("statusFilterCancelled") },
+  ];
 
   const { data: orders = [], isLoading, isError } = useProductionOrders(
     statusFilter || undefined
@@ -27,14 +31,14 @@ export function ProductionOrderTable() {
   if (isLoading) {
     return (
       <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
-        Завантаження ордерів…
+        {t("loading")}
       </div>
     );
   }
   if (isError) {
     return (
       <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
-        Не вдалося завантажити ордери.
+        {t("loadError")}
       </div>
     );
   }
@@ -53,7 +57,7 @@ export function ProductionOrderTable() {
         }}
       >
         <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          Виробничі ордери
+          {t("title")}
         </h1>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {/* Status filter */}
@@ -94,7 +98,7 @@ export function ProductionOrderTable() {
             }}
           >
             <Plus size={15} />
-            Ордер
+            {t("addOrder")}
           </button>
         </div>
       </div>
@@ -117,16 +121,16 @@ export function ProductionOrderTable() {
               fontSize: 14,
             }}
           >
-            Ордерів поки немає. Створіть перший виробничий ордер.
+            {t("empty")}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["Рецепт", "Локація", "Плановий вихід", "Статус", "Створено", "Завершено"].map(
-                  (h) => (
+                {[t("headerRecipe"), t("headerLocation"), t("headerPlannedQty"), t("headerStatus"), t("headerCreatedAt"), t("headerCompletedAt")].map(
+                  (h, i) => (
                     <th
-                      key={h}
+                      key={i}
                       style={{
                         padding: "10px 16px",
                         textAlign: "left",
@@ -185,12 +189,12 @@ export function ProductionOrderTable() {
                   </td>
                   <td style={tdStyle}>
                     <span style={{ color: "#6B7280", fontSize: 12 }}>
-                      {formatDate(order.createdAt)}
+                      {formatDate(order.createdAt, intlLocale)}
                     </span>
                   </td>
                   <td style={tdStyle}>
                     <span style={{ color: "#6B7280", fontSize: 12 }}>
-                      {order.completedAt ? formatDate(order.completedAt) : "—"}
+                      {order.completedAt ? formatDate(order.completedAt, intlLocale) : "—"}
                     </span>
                   </td>
                 </tr>
@@ -208,13 +212,14 @@ export function ProductionOrderTable() {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 export function OrderStatusBadge({ status }: { status: ProductionOrderStatus }) {
-  const cfg: Record<ProductionOrderStatus, { bg: string; color: string; label: string }> = {
-    planned: { bg: "#1F2937", color: "#9CA3AF", label: "Заплановано" },
-    in_progress: { bg: "#1E3A5F", color: "#60A5FA", label: "В роботі" },
-    done: { bg: "#064E3B", color: "#34D399", label: "Готово" },
-    cancelled: { bg: "#1F1010", color: "#F87171", label: "Скасовано" },
+  const t = useTranslations("Dashboard.production.orderStatusBadge");
+  const cfg: Record<ProductionOrderStatus, { bg: string; color: string }> = {
+    planned: { bg: "#1F2937", color: "#9CA3AF" },
+    in_progress: { bg: "#1E3A5F", color: "#60A5FA" },
+    done: { bg: "#064E3B", color: "#34D399" },
+    cancelled: { bg: "#1F1010", color: "#F87171" },
   };
-  const { bg, color, label } = cfg[status] ?? cfg.planned;
+  const { bg, color } = cfg[status] ?? cfg.planned;
   return (
     <span
       style={{
@@ -227,13 +232,13 @@ export function OrderStatusBadge({ status }: { status: ProductionOrderStatus }) 
         color,
       }}
     >
-      {label}
+      {t(status)}
     </span>
   );
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("uk-UA", {
+function formatDate(iso: string, intlLocale: string) {
+  return new Date(iso).toLocaleDateString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

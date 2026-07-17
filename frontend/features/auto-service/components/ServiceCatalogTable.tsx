@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   useServiceCatalog,
   useCreateServiceItem,
@@ -25,6 +26,7 @@ interface FormProps {
 }
 
 function ServiceItemForm({ item, onClose }: FormProps) {
+  const t = useTranslations("Dashboard.autoService.serviceForm");
   const createItem = useCreateServiceItem();
   const updateItem = useUpdateServiceItem(item?.id ?? "");
 
@@ -43,7 +45,7 @@ function ServiceItemForm({ item, onClose }: FormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!name.trim()) { setError("Введіть назву"); return; }
+    if (!name.trim()) { setError(t("errorNameRequired")); return; }
 
     if (isEdit) {
       const body: UpdateServiceCatalogItemRequest = {
@@ -55,7 +57,7 @@ function ServiceItemForm({ item, onClose }: FormProps) {
       };
       updateItem.mutate(body, {
         onSuccess: () => onClose(),
-        onError: (err) => setError(err instanceof Error ? err.message : "Помилка"),
+        onError: (err) => setError(err instanceof Error ? err.message : t("errorGeneric")),
       });
     } else {
       const body: CreateServiceCatalogItemRequest = {
@@ -66,7 +68,7 @@ function ServiceItemForm({ item, onClose }: FormProps) {
       };
       createItem.mutate(body, {
         onSuccess: () => onClose(),
-        onError: (err) => setError(err instanceof Error ? err.message : "Помилка"),
+        onError: (err) => setError(err instanceof Error ? err.message : t("errorGeneric")),
       });
     }
   }
@@ -96,7 +98,7 @@ function ServiceItemForm({ item, onClose }: FormProps) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати послугу" : "Нова послуга"}
+            {isEdit ? t("titleEdit") : t("titleNew")}
           </h2>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: 4 }}>
             <X size={18} />
@@ -105,16 +107,16 @@ function ServiceItemForm({ item, onClose }: FormProps) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
-            <label style={labelStyle}>Назва *</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Заміна масла" style={inputStyle} />
+            <label style={labelStyle}>{t("nameLabel")}</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("namePlaceholder")} style={inputStyle} />
           </div>
           <div>
-            <label style={labelStyle}>Опис</label>
+            <label style={labelStyle}>{t("descriptionLabel")}</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <label style={labelStyle}>Ціна за замовч., грн</label>
+              <label style={labelStyle}>{t("priceLabel")}</label>
               <input
                 type="number"
                 min={0}
@@ -125,7 +127,7 @@ function ServiceItemForm({ item, onClose }: FormProps) {
               />
             </div>
             <div>
-              <label style={labelStyle}>Тривалість, хв</label>
+              <label style={labelStyle}>{t("durationLabel")}</label>
               <input
                 type="number"
                 min={1}
@@ -145,7 +147,7 @@ function ServiceItemForm({ item, onClose }: FormProps) {
                 onChange={(e) => setIsActive(e.target.checked)}
                 style={{ accentColor: "#3B82F6" }}
               />
-              <span style={{ color: "#9CA3AF", fontSize: 13 }}>Активна</span>
+              <span style={{ color: "#9CA3AF", fontSize: 13 }}>{t("activeLabel")}</span>
             </label>
           )}
 
@@ -156,9 +158,9 @@ function ServiceItemForm({ item, onClose }: FormProps) {
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button type="button" onClick={onClose} style={btnSecondaryStyle}>Скасувати</button>
+            <button type="button" onClick={onClose} style={btnSecondaryStyle}>{t("cancel")}</button>
             <button type="submit" disabled={isPending} style={btnPrimaryStyle}>
-              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Додати послугу"}
+              {isPending ? t("saving") : isEdit ? t("save") : t("add")}
             </button>
           </div>
         </form>
@@ -170,10 +172,11 @@ function ServiceItemForm({ item, onClose }: FormProps) {
 // ─── Deactivate button (separate component to use hook correctly) ─────────────
 
 function DeactivateButton({ item }: { item: ServiceCatalogItemDto }) {
+  const t = useTranslations("Dashboard.autoService.serviceCatalog");
   const queryClient = useQueryClient();
 
   async function handleDeactivate() {
-    if (!confirm(`Деактивувати послугу "${item.name}"?`)) return;
+    if (!confirm(t("deactivateConfirm", { name: item.name }))) return;
     await autoServiceApi.updateServiceItem(item.id, {
       name: item.name,
       description: item.description ?? undefined,
@@ -198,9 +201,9 @@ function DeactivateButton({ item }: { item: ServiceCatalogItemDto }) {
         fontSize: 11,
         cursor: "pointer",
       }}
-      title="Деактивувати"
+      title={t("deactivateTitle")}
     >
-      Вимкнути
+      {t("deactivateButton")}
     </button>
   );
 }
@@ -208,6 +211,8 @@ function DeactivateButton({ item }: { item: ServiceCatalogItemDto }) {
 // ─── Main ServiceCatalogTable ─────────────────────────────────────────────────
 
 export function ServiceCatalogTable() {
+  const t = useTranslations("Dashboard.autoService.serviceCatalog");
+  const tCommon = useTranslations("Common");
   const { data: items, isLoading, isError } = useServiceCatalog();
   const deleteItem = useDeleteServiceItem();
 
@@ -215,10 +220,10 @@ export function ServiceCatalogTable() {
   const [editingItem, setEditingItem] = useState<ServiceCatalogItemDto | null>(null);
 
   if (isLoading) {
-    return <div style={{ padding: "32px", color: "#6B7280", fontSize: 13 }}>Завантаження…</div>;
+    return <div style={{ padding: "32px", color: "#6B7280", fontSize: 13 }}>{tCommon("loading")}</div>;
   }
   if (isError) {
-    return <div style={{ padding: "32px", color: "#F87171", fontSize: 13 }}>Не вдалося завантажити каталог.</div>;
+    return <div style={{ padding: "32px", color: "#F87171", fontSize: 13 }}>{t("loadError")}</div>;
   }
 
   return (
@@ -226,9 +231,9 @@ export function ServiceCatalogTable() {
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Каталог послуг</h1>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
           <p style={{ color: "#4B5563", fontSize: 14, marginTop: 4 }}>
-            Послуги, що надаються автосервісом
+            {t("subtitle")}
           </p>
         </div>
         <button
@@ -247,7 +252,7 @@ export function ServiceCatalogTable() {
             cursor: "pointer",
           }}
         >
-          <Plus size={16} /> Послуга
+          <Plus size={16} /> {t("addService")}
         </button>
       </div>
 
@@ -262,8 +267,8 @@ export function ServiceCatalogTable() {
             borderBottom: "1px solid #1F2937",
           }}
         >
-          {["Назва", "Опис", "Ціна, грн", "Тривалість", "Статус", ""].map((h) => (
-            <div key={h} style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+          {[t("headerName"), t("headerDescription"), t("headerPrice"), t("headerDuration"), t("headerStatus"), ""].map((h, i) => (
+            <div key={i} style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
               {h}
             </div>
           ))}
@@ -272,7 +277,7 @@ export function ServiceCatalogTable() {
         {/* Rows */}
         {!items || items.length === 0 ? (
           <div style={{ padding: "40px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            Каталог порожній. Додайте першу послугу.
+            {t("empty")}
           </div>
         ) : (
           items.map((item) => (
@@ -289,7 +294,7 @@ export function ServiceCatalogTable() {
                 <div style={{ color: "#6B7280", fontSize: 12 }}>{item.description ?? "—"}</div>
                 <div style={{ color: "#E8EDF5", fontSize: 13 }}>{item.defaultPrice.toFixed(2)}</div>
                 <div style={{ color: "#9CA3AF", fontSize: 13 }}>
-                  {item.durationMinutes ? `${item.durationMinutes} хв` : "—"}
+                  {item.durationMinutes ? `${item.durationMinutes} ${t("durationUnit")}` : "—"}
                 </div>
                 <div>
                   <span
@@ -303,7 +308,7 @@ export function ServiceCatalogTable() {
                       color: item.isActive ? "#34D399" : "#6B7280",
                     }}
                   >
-                    {item.isActive ? "Активна" : "Неактивна"}
+                    {item.isActive ? t("statusActive") : t("statusInactive")}
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
@@ -311,18 +316,18 @@ export function ServiceCatalogTable() {
                   <button
                     onClick={() => setEditingItem(item)}
                     style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
-                    title="Редагувати"
+                    title={t("editTitle")}
                   >
                     <Pencil size={13} />
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm(`Видалити послугу "${item.name}"?`)) {
+                      if (confirm(t("deleteConfirm", { name: item.name }))) {
                         deleteItem.mutate(item.id);
                       }
                     }}
                     style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
-                    title="Видалити"
+                    title={t("deleteTitle")}
                   >
                     <Trash2 size={13} />
                   </button>

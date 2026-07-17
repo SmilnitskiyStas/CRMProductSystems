@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCreateWorkOrder, useVehicles } from "../hooks/useAutoService";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import type { CreateWorkOrderRequest } from "../types";
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function CreateWorkOrderModal({ onClose }: Props) {
+  const t = useTranslations("Dashboard.autoService.createModal");
   const { data: vehicles } = useVehicles();
   const { data: users } = useUsers();
   const createWorkOrder = useCreateWorkOrder();
@@ -28,7 +30,7 @@ export function CreateWorkOrderModal({ onClose }: Props) {
     e.preventDefault();
     setError(null);
     if (!vehicleId) {
-      setError("Виберіть автомобіль");
+      setError(t("errorSelectVehicle"));
       return;
     }
     const body: CreateWorkOrderRequest = {
@@ -38,7 +40,7 @@ export function CreateWorkOrderModal({ onClose }: Props) {
     };
     createWorkOrder.mutate(body, {
       onSuccess: () => onClose(),
-      onError: (err) => setError(err instanceof Error ? err.message : "Помилка"),
+      onError: (err) => setError(err instanceof Error ? err.message : t("errorGeneric")),
     });
   }
 
@@ -75,7 +77,7 @@ export function CreateWorkOrderModal({ onClose }: Props) {
           }}
         >
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            Новий наряд-замовлення
+            {t("title")}
           </h2>
           <button
             onClick={onClose}
@@ -95,14 +97,14 @@ export function CreateWorkOrderModal({ onClose }: Props) {
           {/* Vehicle */}
           <div>
             <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-              Автомобіль *
+              {t("vehicleLabel")}
             </label>
             <select
               value={vehicleId}
               onChange={(e) => setVehicleId(e.target.value)}
               style={selectStyle}
             >
-              <option value="">— Виберіть автомобіль —</option>
+              <option value="">{t("selectVehiclePlaceholder")}</option>
               {(vehicles ?? []).map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.brand} {v.model} · {v.licensePlate}
@@ -114,14 +116,14 @@ export function CreateWorkOrderModal({ onClose }: Props) {
           {/* Mechanic */}
           <div>
             <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-              Механік (необов&apos;язково)
+              {t("mechanicLabel")}
             </label>
             <select
               value={mechanicUserId}
               onChange={(e) => setMechanicUserId(e.target.value)}
               style={selectStyle}
             >
-              <option value="">— Не призначено —</option>
+              <option value="">{t("notAssigned")}</option>
               {mechanics.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.fullName}
@@ -133,13 +135,13 @@ export function CreateWorkOrderModal({ onClose }: Props) {
           {/* Notes */}
           <div>
             <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-              Примітки
+              {t("notesLabel")}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              placeholder="Додаткова інформація…"
+              placeholder={t("notesPlaceholder")}
               style={{
                 ...inputStyle,
                 resize: "vertical",
@@ -157,14 +159,14 @@ export function CreateWorkOrderModal({ onClose }: Props) {
           {/* Actions */}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
             <button type="button" onClick={onClose} style={btnSecondaryStyle}>
-              Скасувати
+              {t("cancel")}
             </button>
             <button
               type="submit"
               disabled={createWorkOrder.isPending}
               style={btnPrimaryStyle}
             >
-              {createWorkOrder.isPending ? "Створення…" : "Створити наряд"}
+              {createWorkOrder.isPending ? t("creating") : t("create")}
             </button>
           </div>
         </form>

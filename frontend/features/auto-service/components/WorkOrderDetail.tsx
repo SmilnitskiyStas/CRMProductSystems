@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useWorkOrder, useCompleteWorkOrder, useRemoveWorkOrderLine } from "../hooks/useAutoService";
-import { StatusBadge, STATUS_LABELS } from "./WorkOrderCard";
+import { StatusBadge } from "./WorkOrderCard";
 import { WorkOrderLineForm } from "./WorkOrderLineForm";
 import type { WorkOrderStatus } from "../types";
 
@@ -15,6 +16,10 @@ interface Props {
 }
 
 export function WorkOrderDetail({ id }: Props) {
+  const t = useTranslations("Dashboard.autoService.detail");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: order, isLoading, isError } = useWorkOrder(id);
   const completeWorkOrder = useCompleteWorkOrder(id);
   const removeLineQuery = useRemoveWorkOrderLine(id);
@@ -25,14 +30,14 @@ export function WorkOrderDetail({ id }: Props) {
   if (isLoading) {
     return (
       <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
-        Завантаження…
+        {tCommon("loading")}
       </div>
     );
   }
   if (isError || !order) {
     return (
       <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
-        Не вдалося завантажити наряд.
+        {t("loadError")}
       </div>
     );
   }
@@ -46,13 +51,13 @@ export function WorkOrderDetail({ id }: Props) {
     completeWorkOrder.mutate(undefined, {
       onSuccess: () => setCompletedMsg(true),
       onError: (err) => {
-        const msg = err instanceof Error ? err.message : "Помилка";
+        const msg = err instanceof Error ? err.message : t("errorGeneric");
         setCompleteError(msg);
       },
     });
   }
 
-  const createdDate = new Date(order.createdAt).toLocaleDateString("uk-UA", {
+  const createdDate = new Date(order.createdAt).toLocaleDateString(intlLocale, {
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -85,8 +90,8 @@ export function WorkOrderDetail({ id }: Props) {
             <span>📅 {createdDate}</span>
             {order.completedAt && (
               <span>
-                ✅ Завершено:{" "}
-                {new Date(order.completedAt).toLocaleDateString("uk-UA", {
+                {"✅ "}{t("completedAtPrefix")}{" "}
+                {new Date(order.completedAt).toLocaleDateString(intlLocale, {
                   day: "2-digit",
                   month: "long",
                   year: "numeric",
@@ -127,7 +132,7 @@ export function WorkOrderDetail({ id }: Props) {
               flexShrink: 0,
             }}
           >
-            {completeWorkOrder.isPending ? "Завершення…" : "✓ Завершити"}
+            {completeWorkOrder.isPending ? t("completing") : t("complete")}
           </button>
         )}
       </div>
@@ -135,15 +140,15 @@ export function WorkOrderDetail({ id }: Props) {
       {/* Complete feedback */}
       {completedMsg && (
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "#064E3B", borderRadius: 8, color: "#34D399", fontSize: 13 }}>
-          Наряд успішно завершено.
+          {t("completedMsg")}
         </div>
       )}
       {completeError && (
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "#1F1010", borderRadius: 8, color: "#F87171", fontSize: 13 }}>
-          <strong>Помилка завершення:</strong> {completeError}
+          <strong>{t("completeErrorPrefix")}</strong> {completeError}
           {completeError.includes("422") || completeError.toLowerCase().includes("stock") ? (
             <div style={{ marginTop: 6, color: "#FCA5A5" }}>
-              Недостатньо запчастин на складі. Перевірте залишки або замініть деталі.
+              {t("insufficientPartsHint")}
             </div>
           ) : null}
         </div>
@@ -169,7 +174,7 @@ export function WorkOrderDetail({ id }: Props) {
           }}
         >
           <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: 0 }}>
-            Рядки наряду
+            {t("linesTitle")}
           </h2>
           {canEdit && (
             <button
@@ -188,7 +193,7 @@ export function WorkOrderDetail({ id }: Props) {
               }}
             >
               <Plus size={14} />
-              Додати рядок
+              {t("addLine")}
             </button>
           )}
         </div>
@@ -196,15 +201,15 @@ export function WorkOrderDetail({ id }: Props) {
         {/* Lines */}
         {order.lines.length === 0 ? (
           <div style={{ padding: "32px 16px", textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            Рядки відсутні. Додайте послугу або запчастину.
+            {t("noLines")}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["Тип", "Назва", "Кількість", "Ціна", "Знижка", "Разом", ""].map((h) => (
+                {[t("headerType"), t("headerName"), t("headerQty"), t("headerPrice"), t("headerDiscount"), t("headerTotal"), ""].map((h, i) => (
                   <th
-                    key={h}
+                    key={i}
                     style={{
                       padding: "10px 14px",
                       textAlign: "left",
@@ -236,7 +241,7 @@ export function WorkOrderDetail({ id }: Props) {
                   </td>
                   <td style={tdStyle}>
                     <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                      {line.unitPrice.toFixed(2)} грн
+                      {line.unitPrice.toFixed(2)} {t("priceUnit")}
                     </span>
                   </td>
                   <td style={tdStyle}>
@@ -246,7 +251,7 @@ export function WorkOrderDetail({ id }: Props) {
                   </td>
                   <td style={tdStyle}>
                     <span style={{ color: "#E8EDF5", fontWeight: 700, fontSize: 13 }}>
-                      {line.totalPrice.toLocaleString("uk-UA", {
+                      {line.totalPrice.toLocaleString(intlLocale, {
                         style: "currency",
                         currency: "UAH",
                       })}
@@ -264,7 +269,7 @@ export function WorkOrderDetail({ id }: Props) {
                           cursor: "pointer",
                           padding: "4px 8px",
                         }}
-                        title="Видалити рядок"
+                        title={t("removeLineTitle")}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -287,9 +292,9 @@ export function WorkOrderDetail({ id }: Props) {
             alignItems: "center",
           }}
         >
-          <span style={{ color: "#9CA3AF", fontSize: 13 }}>Загальна сума:</span>
+          <span style={{ color: "#9CA3AF", fontSize: 13 }}>{t("totalLabel")}</span>
           <span style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700 }}>
-            {order.totalAmount.toLocaleString("uk-UA", {
+            {order.totalAmount.toLocaleString(intlLocale, {
               style: "currency",
               currency: "UAH",
             })}

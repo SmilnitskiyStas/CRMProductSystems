@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useAddWorkOrderLine } from "../hooks/useAutoService";
 import { useServiceCatalog } from "../hooks/useAutoService";
 import type { AddWorkOrderLineRequest, WorkOrderLineType } from "../types";
@@ -26,6 +27,9 @@ interface Props {
 }
 
 export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
+  const t = useTranslations("Dashboard.autoService.lineForm");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const addLine = useAddWorkOrderLine(workOrderId);
   const { data: catalog } = useServiceCatalog();
   const { data: spareParts } = useSparePartItems();
@@ -56,8 +60,8 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!name.trim()) { setError("Введіть назву"); return; }
-    if (qty <= 0) { setError("Кількість має бути більше 0"); return; }
+    if (!name.trim()) { setError(t("errorNameRequired")); return; }
+    if (qty <= 0) { setError(t("errorQtyPositive")); return; }
     const body: AddWorkOrderLineRequest = {
       type,
       name: name.trim(),
@@ -69,7 +73,7 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
     };
     addLine.mutate(body, {
       onSuccess: () => onClose(),
-      onError: (err) => setError(err instanceof Error ? err.message : "Помилка"),
+      onError: (err) => setError(err instanceof Error ? err.message : t("errorGeneric")),
     });
   }
 
@@ -99,7 +103,7 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            Додати рядок
+            {t("title")}
           </h2>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: 4 }}>
             <X size={18} />
@@ -109,25 +113,25 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Type selector */}
           <div>
-            <label style={labelStyle}>Тип</label>
+            <label style={labelStyle}>{t("typeLabel")}</label>
             <div style={{ display: "flex", gap: 8 }}>
-              {(["service", "part"] as WorkOrderLineType[]).map((t) => (
+              {(["service", "part"] as WorkOrderLineType[]).map((opt) => (
                 <button
-                  key={t}
+                  key={opt}
                   type="button"
-                  onClick={() => { setType(t); setName(""); setServiceCatalogId(""); setItemId(""); setUnitPrice(0); }}
+                  onClick={() => { setType(opt); setName(""); setServiceCatalogId(""); setItemId(""); setUnitPrice(0); }}
                   style={{
                     flex: 1,
                     padding: "8px 12px",
                     borderRadius: 8,
-                    border: `1px solid ${type === t ? "#3B82F6" : "#1F2937"}`,
-                    background: type === t ? "#1E3A5F" : "transparent",
-                    color: type === t ? "#60A5FA" : "#6B7280",
+                    border: `1px solid ${type === opt ? "#3B82F6" : "#1F2937"}`,
+                    background: type === opt ? "#1E3A5F" : "transparent",
+                    color: type === opt ? "#60A5FA" : "#6B7280",
                     fontSize: 13,
                     cursor: "pointer",
                   }}
                 >
-                  {t === "service" ? "🔧 Послуга" : "⚙️ Запчастина"}
+                  {opt === "service" ? t("serviceOption") : t("partOption")}
                 </button>
               ))}
             </div>
@@ -136,29 +140,29 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
           {/* Service / Part dropdown */}
           {type === "service" ? (
             <div>
-              <label style={labelStyle}>Послуга з каталогу</label>
+              <label style={labelStyle}>{t("serviceCatalogLabel")}</label>
               <select
                 value={serviceCatalogId}
                 onChange={(e) => handleServiceSelect(e.target.value)}
                 style={selectStyle}
               >
-                <option value="">— Виберіть або введіть нижче —</option>
+                <option value="">{t("selectOrTypeBelow")}</option>
                 {(catalog ?? []).filter((c) => c.isActive).map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} · {c.defaultPrice.toFixed(2)} грн
+                    {c.name} · {c.defaultPrice.toFixed(2)} {t("priceUnit")}
                   </option>
                 ))}
               </select>
             </div>
           ) : (
             <div>
-              <label style={labelStyle}>Запчастина</label>
+              <label style={labelStyle}>{t("partLabel")}</label>
               <select
                 value={itemId}
                 onChange={(e) => handlePartSelect(e.target.value)}
                 style={selectStyle}
               >
-                <option value="">— Виберіть або введіть нижче —</option>
+                <option value="">{t("selectOrTypeBelow")}</option>
                 {(spareParts ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -170,12 +174,12 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
 
           {/* Name (editable) */}
           <div>
-            <label style={labelStyle}>Назва *</label>
+            <label style={labelStyle}>{t("nameLabel")}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={type === "service" ? "Назва послуги" : "Назва запчастини"}
+              placeholder={type === "service" ? t("namePlaceholderService") : t("namePlaceholderPart")}
               style={inputStyle}
             />
           </div>
@@ -183,7 +187,7 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
           {/* Qty / Price / Discount */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             <div>
-              <label style={labelStyle}>Кількість</label>
+              <label style={labelStyle}>{t("qtyLabel")}</label>
               <input
                 type="number"
                 min={1}
@@ -194,7 +198,7 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
               />
             </div>
             <div>
-              <label style={labelStyle}>Ціна, грн</label>
+              <label style={labelStyle}>{t("priceLabel")}</label>
               <input
                 type="number"
                 min={0}
@@ -205,7 +209,7 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
               />
             </div>
             <div>
-              <label style={labelStyle}>Знижка, %</label>
+              <label style={labelStyle}>{t("discountLabel")}</label>
               <input
                 type="number"
                 min={0}
@@ -220,9 +224,9 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
 
           {/* Preview total */}
           <div style={{ color: "#9CA3AF", fontSize: 13, textAlign: "right" }}>
-            Разом:{" "}
+            {t("totalPreview")}{" "}
             <strong style={{ color: "#E8EDF5" }}>
-              {(qty * unitPrice * (1 - discount / 100)).toLocaleString("uk-UA", {
+              {(qty * unitPrice * (1 - discount / 100)).toLocaleString(intlLocale, {
                 style: "currency",
                 currency: "UAH",
               })}
@@ -237,10 +241,10 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
             <button type="button" onClick={onClose} style={btnSecondaryStyle}>
-              Скасувати
+              {t("cancel")}
             </button>
             <button type="submit" disabled={addLine.isPending} style={btnPrimaryStyle}>
-              {addLine.isPending ? "Збереження…" : "Додати рядок"}
+              {addLine.isPending ? t("saving") : t("add")}
             </button>
           </div>
         </form>

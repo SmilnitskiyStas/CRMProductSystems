@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useWorkOrders, useVehicles } from "../hooks/useAutoService";
-import { WorkOrderCard, STATUS_LABELS } from "./WorkOrderCard";
+import { WorkOrderCard } from "./WorkOrderCard";
 import { CreateWorkOrderModal } from "./CreateWorkOrderModal";
 import type { WorkOrderStatus } from "../types";
 
@@ -16,6 +17,8 @@ const COLUMNS: WorkOrderStatus[] = [
 ];
 
 export function WorkOrderKanban() {
+  const t = useTranslations("Dashboard.autoService.kanban");
+  const tStatus = useTranslations("Dashboard.autoService.workOrderStatus");
   const { data: orders, isLoading, isError } = useWorkOrders();
   const [showCreate, setShowCreate] = useState(false);
 
@@ -52,7 +55,7 @@ export function WorkOrderKanban() {
   if (isError) {
     return (
       <div style={{ color: "#F87171", fontSize: 13, padding: "32px 0", textAlign: "center" }}>
-        Не вдалося завантажити наряди.
+        {t("loadError")}
       </div>
     );
   }
@@ -70,10 +73,10 @@ export function WorkOrderKanban() {
       >
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Наряди-замовлення
+            {t("pageTitle")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 14, marginTop: 4 }}>
-            Kanban-дошка нарядів автосервісу
+            {t("pageSubtitle")}
           </p>
         </div>
         <button
@@ -93,7 +96,7 @@ export function WorkOrderKanban() {
           }}
         >
           <Plus size={16} />
-          Новий наряд
+          {t("newWorkOrder")}
         </button>
       </div>
 
@@ -144,7 +147,7 @@ export function WorkOrderKanban() {
                     letterSpacing: "0.05em",
                   }}
                 >
-                  {STATUS_LABELS[status]}
+                  {tStatus(status)}
                 </span>
                 <span
                   style={{
@@ -171,7 +174,7 @@ export function WorkOrderKanban() {
                       fontSize: 12,
                     }}
                   >
-                    Немає нарядів
+                    {t("noOrders")}
                   </div>
                 ) : (
                   columnOrders.map((order) => (

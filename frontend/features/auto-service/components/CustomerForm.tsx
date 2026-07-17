@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCreateCustomer, useUpdateCustomer } from "../hooks/useAutoService";
 import type { CustomerDto, CreateCustomerRequest, UpdateCustomerRequest } from "../types";
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function CustomerForm({ customer, onClose }: Props) {
+  const t = useTranslations("Dashboard.autoService.customerForm");
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer(customer?.id ?? "");
 
@@ -25,7 +27,7 @@ export function CustomerForm({ customer, onClose }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!name.trim()) { setError("Введіть ім'я клієнта"); return; }
+    if (!name.trim()) { setError(t("errorNameRequired")); return; }
 
     if (isEdit) {
       const body: UpdateCustomerRequest = {
@@ -36,7 +38,7 @@ export function CustomerForm({ customer, onClose }: Props) {
       };
       updateCustomer.mutate(body, {
         onSuccess: () => onClose(),
-        onError: (err) => setError(err instanceof Error ? err.message : "Помилка"),
+        onError: (err) => setError(err instanceof Error ? err.message : t("errorGeneric")),
       });
     } else {
       const body: CreateCustomerRequest = {
@@ -47,7 +49,7 @@ export function CustomerForm({ customer, onClose }: Props) {
       };
       createCustomer.mutate(body, {
         onSuccess: () => onClose(),
-        onError: (err) => setError(err instanceof Error ? err.message : "Помилка"),
+        onError: (err) => setError(err instanceof Error ? err.message : t("errorGeneric")),
       });
     }
   }
@@ -79,7 +81,7 @@ export function CustomerForm({ customer, onClose }: Props) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати клієнта" : "Новий клієнт"}
+            {isEdit ? t("titleEdit") : t("titleNew")}
           </h2>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: 4 }}>
             <X size={18} />
@@ -88,19 +90,19 @@ export function CustomerForm({ customer, onClose }: Props) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
-            <label style={labelStyle}>Ім&apos;я / Назва *</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Іван Петренко" style={inputStyle} />
+            <label style={labelStyle}>{t("nameLabel")}</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("namePlaceholder")} style={inputStyle} />
           </div>
           <div>
-            <label style={labelStyle}>Телефон</label>
+            <label style={labelStyle}>{t("phoneLabel")}</label>
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380XXXXXXXXX" style={inputStyle} />
           </div>
           <div>
-            <label style={labelStyle}>Email</label>
+            <label style={labelStyle}>{t("emailLabel")}</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" style={inputStyle} />
           </div>
           <div>
-            <label style={labelStyle}>Примітки</label>
+            <label style={labelStyle}>{t("notesLabel")}</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 64 }} />
           </div>
 
@@ -111,9 +113,9 @@ export function CustomerForm({ customer, onClose }: Props) {
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button type="button" onClick={onClose} style={btnSecondaryStyle}>Скасувати</button>
+            <button type="button" onClick={onClose} style={btnSecondaryStyle}>{t("cancel")}</button>
             <button type="submit" disabled={isPending} style={btnPrimaryStyle}>
-              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Додати клієнта"}
+              {isPending ? t("saving") : isEdit ? t("save") : t("add")}
             </button>
           </div>
         </form>

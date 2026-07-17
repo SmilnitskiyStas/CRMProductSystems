@@ -1,18 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import type { WorkOrderSummaryDto, WorkOrderStatus } from "../types";
 import { useUpdateWorkOrder } from "../hooks/useAutoService";
 
 // ─── Status Config ────────────────────────────────────────────────────────────
-
-export const STATUS_LABELS: Record<WorkOrderStatus, string> = {
-  new: "Нові",
-  in_progress: "В роботі",
-  waiting_parts: "Очікує запчастин",
-  done: "Готово",
-  invoiced: "Виставлено рахунок",
-};
+// Status labels live in Dashboard.autoService.workOrderStatus (each component
+// below resolves them locally via its own useTranslations call).
 
 const STATUS_COLORS: Record<WorkOrderStatus, { bg: string; color: string }> = {
   new: { bg: "#1F2937", color: "#9CA3AF" },
@@ -33,6 +28,7 @@ const STATUS_SEQUENCE: WorkOrderStatus[] = [
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
 export function StatusBadge({ status }: { status: WorkOrderStatus }) {
+  const t = useTranslations("Dashboard.autoService.workOrderStatus");
   const colors = STATUS_COLORS[status];
   return (
     <span
@@ -46,7 +42,7 @@ export function StatusBadge({ status }: { status: WorkOrderStatus }) {
         color: colors.color,
       }}
     >
-      {STATUS_LABELS[status]}
+      {t(status)}
     </span>
   );
 }
@@ -59,6 +55,10 @@ interface Props {
 
 export function WorkOrderCard({ order }: Props) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.autoService.card");
+  const tStatus = useTranslations("Dashboard.autoService.workOrderStatus");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const updateWorkOrder = useUpdateWorkOrder(order.id);
 
   const currentIndex = STATUS_SEQUENCE.indexOf(order.status);
@@ -73,7 +73,7 @@ export function WorkOrderCard({ order }: Props) {
     updateWorkOrder.mutate({ status: nextStatus });
   }
 
-  const createdDate = new Date(order.createdAt).toLocaleDateString("uk-UA", {
+  const createdDate = new Date(order.createdAt).toLocaleDateString(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -133,10 +133,10 @@ export function WorkOrderCard({ order }: Props) {
         }}
       >
         <div style={{ color: "#6B7280", fontSize: 11 }}>
-          {createdDate} · {order.lineCount} поз.
+          {createdDate} · {t("lineCountShort", { count: order.lineCount })}
         </div>
         <div style={{ color: "#E8EDF5", fontWeight: 700, fontSize: 13 }}>
-          {order.totalAmount.toLocaleString("uk-UA", {
+          {order.totalAmount.toLocaleString(intlLocale, {
             style: "currency",
             currency: "UAH",
             maximumFractionDigits: 0,
@@ -172,7 +172,7 @@ export function WorkOrderCard({ order }: Props) {
             (e.currentTarget as HTMLElement).style.color = "#6B7280";
           }}
         >
-          {updateWorkOrder.isPending ? "…" : `Перемістити → ${STATUS_LABELS[nextStatus]}`}
+          {updateWorkOrder.isPending ? "…" : t("moveTo", { status: tStatus(nextStatus) })}
         </button>
       )}
     </div>

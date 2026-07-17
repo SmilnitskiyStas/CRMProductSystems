@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Pencil, PowerOff } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useRecipes, useDeactivateRecipe } from "../hooks/useProduction";
 import { RecipeForm } from "./RecipeForm";
 import type { RecipeListItemDto } from "../types";
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function RecipeTable({ showInactive }: Props) {
+  const t = useTranslations("Dashboard.production.recipeTable");
   const { data: recipes = [], isLoading, isError } = useRecipes(showInactive);
   const deactivate = useDeactivateRecipe();
 
@@ -18,21 +20,21 @@ export function RecipeTable({ showInactive }: Props) {
   const [editRecipe, setEditRecipe] = useState<RecipeListItemDto | null>(null);
 
   function handleDeactivate(id: string) {
-    if (!confirm("Деактивувати рецепт?")) return;
+    if (!confirm(t("deactivateConfirm"))) return;
     deactivate.mutate(id);
   }
 
   if (isLoading) {
     return (
       <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
-        Завантаження рецептів…
+        {t("loading")}
       </div>
     );
   }
   if (isError) {
     return (
       <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
-        Не вдалося завантажити рецепти.
+        {t("loadError")}
       </div>
     );
   }
@@ -49,7 +51,7 @@ export function RecipeTable({ showInactive }: Props) {
         }}
       >
         <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          Рецепти
+          {t("title")}
         </h1>
         <button
           onClick={() => setCreateOpen(true)}
@@ -68,7 +70,7 @@ export function RecipeTable({ showInactive }: Props) {
           }}
         >
           <Plus size={15} />
-          Рецепт
+          {t("addRecipe")}
         </button>
       </div>
 
@@ -90,22 +92,22 @@ export function RecipeTable({ showInactive }: Props) {
               fontSize: 14,
             }}
           >
-            Рецептів поки немає. Створіть перший рецепт.
+            {t("empty")}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 {[
-                  "Назва",
-                  "Вихідний товар",
-                  "Вихід",
-                  "Інгредієнти",
-                  "Статус",
+                  t("headerName"),
+                  t("headerOutputItem"),
+                  t("headerOutput"),
+                  t("headerIngredients"),
+                  t("headerStatus"),
                   "",
-                ].map((h) => (
+                ].map((h, i) => (
                   <th
-                    key={h}
+                    key={i}
                     style={{
                       padding: "10px 16px",
                       textAlign: "left",
@@ -165,7 +167,7 @@ export function RecipeTable({ showInactive }: Props) {
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                       <ActionButton
                         onClick={() => setEditRecipe(recipe)}
-                        title="Редагувати"
+                        title={t("editTitle")}
                         color="#9CA3AF"
                       >
                         <Pencil size={14} />
@@ -173,7 +175,7 @@ export function RecipeTable({ showInactive }: Props) {
                       {recipe.isActive && (
                         <ActionButton
                           onClick={() => handleDeactivate(recipe.id)}
-                          title="Деактивувати"
+                          title={t("deactivateTitle")}
                           color="#F87171"
                         >
                           <PowerOff size={14} />
@@ -205,6 +207,7 @@ export function RecipeTable({ showInactive }: Props) {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ active }: { active: boolean }) {
+  const t = useTranslations("Dashboard.production.recipeTable");
   return (
     <span
       style={{
@@ -217,7 +220,7 @@ function StatusBadge({ active }: { active: boolean }) {
         color: active ? "#34D399" : "#6B7280",
       }}
     >
-      {active ? "Активний" : "Неактивний"}
+      {active ? t("statusActive") : t("statusInactive")}
     </span>
   );
 }
