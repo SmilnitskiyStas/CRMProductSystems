@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, ChevronRight as Arrow, Loader2, ExternalLink, Package } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
@@ -64,11 +65,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: () => void }) {
   const router = useRouter();
-  const STATUS_LABEL: Record<string, string> = {
-    expired: "Прострочено",
-    critical: "Критично",
-    warning: "Попередження",
-  };
+  const t = useTranslations("Dashboard.dashboard.quickActions.criticalModal");
+  const tStatus = useTranslations("Dashboard.dashboard.status");
   const STATUS_COLOR: Record<string, string> = {
     expired: "#EF4444",
     critical: "#F97316",
@@ -76,11 +74,11 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
   };
 
   return (
-    <Modal title="Критичні товари" onClose={onClose}>
+    <Modal title={t("title")} onClose={onClose}>
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         {items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#4ADE80", fontSize: 14 }}>
-            Критичних товарів немає — все в нормі ✓
+            {t("empty")}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -105,7 +103,7 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
                       {item.name}
                     </div>
                     <div style={{ color: "#6B7280", fontSize: 11 }}>
-                      {item.zone !== "—" ? item.zone : "Зона не вказана"} · {item.sku}
+                      {item.zone !== "—" ? item.zone : t("zoneNotSpecified")} · {item.sku}
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -115,7 +113,7 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
                         background: `${color}15`, color, border: `1px solid ${color}30`,
                       }}
                     >
-                      {STATUS_LABEL[item.status] ?? item.status}
+                      {tStatus(item.status)}
                     </span>
                     <span style={{ color, fontSize: 15, fontWeight: 700, fontFamily: "monospace", minWidth: 28, textAlign: "right" }}>
                       {item.quantity === 0 ? "OUT" : item.quantity}
@@ -129,7 +127,7 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
       </div>
       <div style={{ borderTop: "1px solid #1F2937", padding: "12px 20px", flexShrink: 0, display: "flex", gap: 8 }}>
         <Btn onClick={() => { router.push("/stock"); onClose(); }} style={{ flex: 1, justifyContent: "center" }}>
-          Відкрити Залишки
+          {t("openStock")}
           <ChevronRight size={14} />
         </Btn>
       </div>
@@ -146,6 +144,8 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
   onClose: () => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.dashboard.quickActions.writeOffDrawer");
+  const tStatus = useTranslations("Dashboard.dashboard.status");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [done, setDone] = useState(false);
   const createWriteOff = useCreateWriteOff();
@@ -174,7 +174,7 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
       await createWriteOff.mutateAsync({
         storeId,
         reason: "expired",
-        notes: "Автоматичне списання прострочених товарів з дашборду",
+        notes: t("notes"),
         items: chosenItems.map((i) => ({
           productStockId: i.id,
           productId: i.productId,
@@ -183,7 +183,7 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
       });
       setDone(true);
     } catch {
-      // помилка відображається через createWriteOff.isError
+      // error surfaced via createWriteOff.isError below
     }
   }
 
@@ -193,8 +193,8 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
     <DetailDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={done ? "Списання створено" : "Списати прострочені"}
-      subtitle={done ? "Чернетка очікує затвердження" : `${items.length} товарів для списання`}
+      title={done ? t("titleDone") : t("titleForm")}
+      subtitle={done ? t("subtitleDone") : t("subtitleForm", { count: items.length })}
       width={480}
     >
       {done ? (
@@ -208,23 +208,23 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
             <CheckCircle size={26} color="#4ADE80" />
           </div>
           <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
-            Чернетку успішно створено
+            {t("doneHeading")}
           </div>
           <div style={{ color: "#6B7280", fontSize: 13, marginBottom: 24 }}>
-            Перейдіть до сторінки Списання для затвердження документа.
+            {t("doneBody")}
           </div>
           <Btn onClick={() => { router.push("/write-offs"); onClose(); }}>
-            Перейти до Списань <ChevronRight size={14} />
+            {t("goToWriteOffs")} <ChevronRight size={14} />
           </Btn>
         </div>
       ) : items.length === 0 ? (
         <div style={{ textAlign: "center", padding: "32px 0", color: "#4ADE80", fontSize: 14 }}>
-          Прострочених товарів немає ✓
+          {t("empty")}
         </div>
       ) : (
         <>
           <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 16px", lineHeight: 1.6 }}>
-            Виберіть товари для включення до чернетки списання. Буде створено документ зі статусом «Чернетка».
+            {t("instructions")}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
             {items.map((item) => {
@@ -244,14 +244,14 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>{item.name}</div>
                     <div style={{ color: "#6B7280", fontSize: 11 }}>
-                      {item.zone !== "—" ? item.zone : ""} · к-сть: {item.quantity}
+                      {item.zone !== "—" ? item.zone : ""} · {t("quantityPrefix")}: {item.quantity}
                     </div>
                   </div>
                   <span style={{
                     fontSize: 10, padding: "2px 7px", borderRadius: 99, flexShrink: 0,
                     background: "#EF444415", color: "#EF4444", border: "1px solid #EF444430",
                   }}>
-                    Прострочено
+                    {tStatus("expired")}
                   </span>
                 </label>
               );
@@ -260,7 +260,7 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
 
           {createWriteOff.isError && (
             <div style={{ color: "#EF4444", fontSize: 12, marginBottom: 12 }}>
-              Помилка: {createWriteOff.error?.message ?? "Не вдалося створити списання"}
+              {t("errorPrefix")}: {createWriteOff.error?.message ?? t("errorFallback")}
             </div>
           )}
 
@@ -271,7 +271,7 @@ function WriteOffDrawer({ isOpen, items, storeId, onClose }: {
             disabled={selectedCount === 0 || createWriteOff.isPending}
             style={{ width: "100%", justifyContent: "center" }}
           >
-            {createWriteOff.isPending ? "Створення…" : `Створити чернетку (${selectedCount})`}
+            {createWriteOff.isPending ? t("creating") : t("submit", { count: selectedCount })}
           </Btn>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </>
@@ -286,6 +286,7 @@ type OrderState = "idle" | "loading" | "done" | "error";
 
 function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: string; onClose: () => void }) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.dashboard.quickActions.orderDrawer");
   const [state, setState] = useState<OrderState>("idle");
   const [result, setResult] = useState<{ linesToOrder: number; productsEvaluated: number; buffersCalculated: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -310,33 +311,33 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
       });
       setState("done");
     } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : "Невідома помилка");
+      setErrorMsg(e instanceof Error ? e.message : t("errorFallback"));
       setState("error");
     }
   }
 
-  const subtitle = state === "loading" ? "Виконується розрахунок…"
-    : state === "done" ? "Замовлення розраховано"
-    : "TOC / DDMRP методологія";
+  const subtitle = state === "loading" ? t("subtitleLoading")
+    : state === "done" ? t("subtitleDone")
+    : t("subtitleIdle");
 
   return (
     <DetailDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title="Сформувати замовлення"
+      title={t("title")}
       subtitle={subtitle}
       width={480}
     >
       {state === "idle" && (
         <>
           <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.7, margin: "0 0 20px" }}>
-            Система перерахує ADU, оновить буфери та розрахує оптимальне замовлення за методологією TOC/DDMRP.
+            {t("description")}
           </p>
-          <DrawerSection title="Кроки розрахунку">
+          <DrawerSection title={t("stepsTitle")}>
             {[
-              "Перерахунок середнього щоденного споживання (ADU)",
-              "Оновлення буферів (зелений / жовтий / червоний)",
-              "Розрахунок позицій замовлення",
+              t("steps.step1"),
+              t("steps.step2"),
+              t("steps.step3"),
             ].map((step, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <div style={{
@@ -351,7 +352,7 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
             ))}
           </DrawerSection>
           <Btn icon={<ShoppingCart size={14} />} onClick={handleGenerate} style={{ width: "100%", justifyContent: "center", marginTop: 8 }}>
-            Розрахувати замовлення
+            {t("generate")}
           </Btn>
         </>
       )}
@@ -360,7 +361,7 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
         <div style={{ textAlign: "center", padding: "48px 0" }}>
           <Loader2 size={36} color="#3B82F6"
             style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }} />
-          <div style={{ color: "#9CA3AF", fontSize: 13 }}>Виконується розрахунок…</div>
+          <div style={{ color: "#9CA3AF", fontSize: 13 }}>{t("subtitleLoading")}</div>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
@@ -376,13 +377,13 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
             <CheckCircle size={26} color="#3B82F6" />
           </div>
           <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, marginBottom: 20 }}>
-            Замовлення розраховано
+            {t("resultHeading")}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
             {[
-              { label: "Оцінено товарів", value: result.productsEvaluated },
-              { label: "Оновлено буферів", value: result.buffersCalculated },
-              { label: "Позицій до замовлення", value: result.linesToOrder, accent: "#3B82F6" },
+              { label: t("resultProductsEvaluated"), value: result.productsEvaluated },
+              { label: t("resultBuffersUpdated"), value: result.buffersCalculated },
+              { label: t("resultLinesToOrder"), value: result.linesToOrder, accent: "#3B82F6" },
             ].map(({ label, value, accent }) => (
               <div key={label} style={{
                 background: "#0D1117", border: "1px solid #1F2937",
@@ -396,17 +397,17 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
             ))}
           </div>
           <Btn onClick={() => { router.push("/orders"); onClose(); }}>
-            Переглянути замовлення <ChevronRight size={14} />
+            {t("viewOrder")} <ChevronRight size={14} />
           </Btn>
         </div>
       )}
 
       {state === "error" && (
         <div style={{ textAlign: "center", padding: "24px 0" }}>
-          <div style={{ color: "#EF4444", fontSize: 14, marginBottom: 8 }}>Помилка розрахунку</div>
+          <div style={{ color: "#EF4444", fontSize: 14, marginBottom: 8 }}>{t("errorHeading")}</div>
           <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 20 }}>{errorMsg}</div>
           <Btn variant="ghost" onClick={() => setState("idle")}>
-            Спробувати ще раз
+            {t("retry")}
           </Btn>
         </div>
       )}
@@ -416,12 +417,6 @@ function OrderDrawer({ isOpen, storeId, onClose }: { isOpen: boolean; storeId: s
 
 // ── 4. Item detail drawer ─────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<string, string> = {
-  expired: "Прострочено",
-  critical: "Критично",
-  warning: "Попередження",
-  safe: "Норма",
-};
 const STATUS_COLOR: Record<string, string> = {
   expired: "#EF4444",
   critical: "#F97316",
@@ -438,21 +433,25 @@ function ItemDetailDrawer({
   onWriteOff: (items: AttentionItem[]) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.dashboard.quickActions.itemDetail");
+  const tStatus = useTranslations("Dashboard.dashboard.status");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: batch, isLoading } = useStockById(item?.id ?? null);
   const verifyStock = useVerifyStock();
   const [verified, setVerified] = useState(false);
 
   const color = STATUS_COLOR[item?.status ?? ""] ?? "#6B7280";
-  const label = STATUS_LABEL[item?.status ?? ""] ?? (item?.status ?? "");
+  const label = item?.status ? tStatus(item.status) : "";
 
   const expiryStr = batch
-    ? new Date(batch.expiryDate as unknown as string).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" })
+    ? new Date(batch.expiryDate as unknown as string).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit", year: "numeric" })
     : "—";
   const addedStr = batch
-    ? new Date(batch.addedAt as unknown as string).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" })
+    ? new Date(batch.addedAt as unknown as string).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit", year: "numeric" })
     : "—";
   const daysLeftStr = batch
-    ? (batch.daysLeft <= 0 ? "Прострочено" : `${batch.daysLeft} дн.`)
+    ? (batch.daysLeft <= 0 ? tStatus("expired") : t("daysLeftValue", { days: batch.daysLeft }))
     : "—";
 
   async function handleVerify() {
@@ -488,46 +487,46 @@ function ItemDetailDrawer({
             </div>
           </div>
 
-          <DrawerSection title="Залишки">
+          <DrawerSection title={t("stockSection")}>
             <DrawerGrid>
               <DrawerField
-                label="Поточна кількість"
+                label={t("currentQuantity")}
                 value={item?.quantity === 0 ? "OUT" : String(item?.quantity ?? "—")}
                 color={item?.quantity === 0 ? "#EF4444" : undefined}
               />
               <DrawerField
-                label="Початкова кількість"
+                label={t("initialQuantity")}
                 value={String(batch?.quantityInitial ?? "—")}
               />
             </DrawerGrid>
           </DrawerSection>
 
-          <DrawerSection title="Термін придатності">
+          <DrawerSection title={t("expirySection")}>
             <DrawerGrid>
               <DrawerField
-                label="Термін до"
+                label={t("expiryDate")}
                 value={expiryStr}
                 color={color}
               />
               <DrawerField
-                label="Залишилось"
+                label={t("daysLeft")}
                 value={daysLeftStr}
                 color={color}
               />
             </DrawerGrid>
           </DrawerSection>
 
-          <DrawerSection title="Розташування та партія">
+          <DrawerSection title={t("locationSection")}>
             <DrawerGrid>
-              <DrawerField label="Зона" value={batch?.zoneName ?? item?.zone ?? "—"} />
+              <DrawerField label={t("zone")} value={batch?.zoneName ?? item?.zone ?? "—"} />
               <DrawerField
-                label="Полиця №"
+                label={t("shelfNumber")}
                 value={batch?.shelfNumber != null ? String(batch.shelfNumber) : "—"}
               />
-              <DrawerField label="Партія №" value={batch?.batchNumber ?? "—"} />
-              <DrawerField label="Штрихкод" value={batch?.productBarcode ?? item?.sku ?? "—"} />
+              <DrawerField label={t("batchNumber")} value={batch?.batchNumber ?? "—"} />
+              <DrawerField label={t("barcode")} value={batch?.productBarcode ?? item?.sku ?? "—"} />
             </DrawerGrid>
-            <DrawerField label="Дата надходження" value={addedStr} />
+            <DrawerField label={t("addedDate")} value={addedStr} />
           </DrawerSection>
 
           {verified && (
@@ -537,7 +536,7 @@ function ItemDetailDrawer({
               borderRadius: 8, padding: "10px 14px", marginBottom: 16,
             }}>
               <CheckCircle size={15} color="#4ADE80" />
-              <span style={{ color: "#4ADE80", fontSize: 13 }}>Верифіковано успішно</span>
+              <span style={{ color: "#4ADE80", fontSize: 13 }}>{t("verifiedSuccess")}</span>
             </div>
           )}
 
@@ -551,7 +550,7 @@ function ItemDetailDrawer({
                 disabled={verifyStock.isPending}
                 style={{ width: "100%", justifyContent: "center" }}
               >
-                {verifyStock.isPending ? "Верифікація…" : "Верифікувати партію"}
+                {verifyStock.isPending ? t("verifying") : t("verify")}
               </Btn>
             )}
 
@@ -562,7 +561,7 @@ function ItemDetailDrawer({
                 onClick={() => { if (item) onWriteOff([item]); onClose(); }}
                 style={{ width: "100%", justifyContent: "center" }}
               >
-                Створити списання
+                {t("createWriteOff")}
               </Btn>
             )}
 
@@ -571,7 +570,7 @@ function ItemDetailDrawer({
               onClick={() => { router.push(`/stock?status=${item?.status}`); onClose(); }}
               style={{ width: "100%", justifyContent: "center" }}
             >
-              Переглянути всі залишки
+              {t("viewAllStock")}
               <ExternalLink size={13} />
             </Btn>
           </div>
@@ -588,6 +587,8 @@ type ActiveModal = "critical" | "writeoff" | "order" | null;
 export function QuickActions({ items = [], isLoading }: Props) {
   const { data: user } = useMe();
   const { selectedStoreId } = useStoreContext();
+  const t = useTranslations("Dashboard.dashboard.quickActions");
+  const tCommon = useTranslations("Common");
   const [modal, setModal] = useState<ActiveModal>(null);
   const [writeOffItems, setWriteOffItems] = useState<AttentionItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<AttentionItem | null>(null);
@@ -613,20 +614,20 @@ export function QuickActions({ items = [], isLoading }: Props) {
         flexDirection: "column",
       }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1F2937" }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: 0 }}>Швидкі дії</h2>
+          <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: 0 }}>{t("title")}</h2>
         </div>
 
         <div style={{ padding: 16, flex: 1 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
             <ActionButton
-              label="Перевірити критичні"
+              label={t("checkCritical")}
               accent="#ef4444"
               badge={criticalItems.length > 0 ? criticalItems.length : undefined}
               icon={<AlertTriangle size={14} />}
               onClick={() => setModal("critical")}
             />
             <ActionButton
-              label="Списати прострочені"
+              label={t("writeOffExpired")}
               accent="#6B7280"
               badge={expiredItems.length > 0 ? expiredItems.length : undefined}
               icon={<Trash2 size={14} />}
@@ -634,7 +635,7 @@ export function QuickActions({ items = [], isLoading }: Props) {
               disabled={!storeId}
             />
             <ActionButton
-              label="Зробити замовлення"
+              label={t("createOrder")}
               accent="#3B82F6"
               icon={<ShoppingCart size={14} />}
               onClick={() => setModal("order")}
@@ -644,19 +645,19 @@ export function QuickActions({ items = [], isLoading }: Props) {
 
           <div style={{ borderTop: "1px solid #1F2937", paddingTop: 16 }}>
             <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
-              Критичні товари
+              {t("criticalItemsLabel")}
             </div>
 
             {isLoading ? (
               <div style={{ color: "#374151", fontSize: 13, textAlign: "center", padding: "16px 0" }}>
-                Завантаження…
+                {tCommon("loading")}
               </div>
             ) : topCritical.length === 0 ? (
               <div style={{
                 background: "#0d2818", border: "1px solid #166534", borderRadius: 8,
                 padding: "12px 14px", color: "#22c55e", fontSize: 13, textAlign: "center",
               }}>
-                Критичних товарів немає
+                {t("noCriticalItems")}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

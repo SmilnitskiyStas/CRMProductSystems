@@ -9,14 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-
-const REASON_LABELS: Record<string, string> = {
-  expired:         "Прострочено",
-  damaged:         "Пошкоджено",
-  theft:           "Крадіжка",
-  production_loss: "Виробничі втрати",
-  other:           "Інше",
-};
+import { useTranslations, useLocale } from "next-intl";
 
 interface ReasonStat {
   reason: string;
@@ -29,10 +22,14 @@ interface Props {
 }
 
 export function LossesByReasonChart({ data }: Props) {
+  const t = useTranslations("Dashboard.analytics.lossesByReasonChart");
+  const tReason = useTranslations("Dashboard.analytics.reason");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   if (!data || data.length === 0) return null;
 
   const chartData = data.map((r) => ({
-    name: REASON_LABELS[r.reason] ?? r.reason,
+    name: tReason.has(r.reason) ? tReason(r.reason) : r.reason,
     loss: r.totalLoss,
     count: r.count,
   }));
@@ -47,7 +44,7 @@ export function LossesByReasonChart({ data }: Props) {
       }}
     >
       <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
-        Збитки по причинах списання (₴)
+        {t("title")}
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 16, right: 24, top: 4, bottom: 4 }}>
@@ -56,7 +53,7 @@ export function LossesByReasonChart({ data }: Props) {
             tick={{ fill: "#4B5563", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => v.toLocaleString("uk-UA")}
+            tickFormatter={(v) => v.toLocaleString(intlLocale)}
           />
           <YAxis
             type="category"
@@ -75,8 +72,8 @@ export function LossesByReasonChart({ data }: Props) {
               fontSize: 13,
             }}
             formatter={(val, _name, props) => [
-              `${Number(val).toLocaleString("uk-UA")} ₴ (${(props.payload as { count: number }).count} док.)`,
-              "Збиток",
+              `${Number(val).toLocaleString(intlLocale)} ₴ (${(props.payload as { count: number }).count} ${t("tooltipDocsSuffix")})`,
+              t("tooltipLabel"),
             ]}
             cursor={{ fill: "rgba(255,255,255,0.03)" }}
           />

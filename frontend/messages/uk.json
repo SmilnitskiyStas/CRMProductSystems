@@ -1346,6 +1346,196 @@
           "cash": "Готівка",
           "card": "Картка"
         }
+      },
+      "status": {
+        "safe": "Норма",
+        "warning": "Попередження",
+        "critical": "Критично",
+        "expired": "Прострочено",
+        "needsVerification": "Перевірка"
+      },
+      "reason": {
+        "expired": "Прострочено",
+        "damaged": "Пошкоджено",
+        "theft": "Крадіжка",
+        "production_loss": "Виробничі втрати",
+        "other": "Інше"
+      },
+      "categoryStatusChart": {
+        "title": "Стан по категоріях"
+      },
+      "expiryDonut": {
+        "title": "Розподіл партій за статусом"
+      },
+      "lossesByReasonChart": {
+        "title": "Збитки по причинах списання (₴)",
+        "tooltipLabel": "Збиток",
+        "tooltipDocsSuffix": "док."
+      },
+      "lossesByStoreChart": {
+        "title": "Збитки по магазинах (₴)",
+        "tooltipLabel": "Збиток",
+        "tooltipWriteOffsSuffix": "списань"
+      },
+      "page": {
+        "title": "Аналітика",
+        "subtitle": "Зведена аналітика по термінах, списаннях та рухах товарів",
+        "expirySummary": {
+          "title": "Стан залишків",
+          "totalBatches": "Всього партій"
+        },
+        "writeOffs": {
+          "title": "Списання",
+          "totalDocuments": "Всього документів",
+          "headers": {
+            "documentsCount": "К-сть документів"
+          }
+        },
+        "byZone": {
+          "title": "По зонах"
+        },
+        "byCategory": {
+          "title": "По категоріях",
+          "headers": {
+            "batches": "Партій",
+            "quantity": "К-сть"
+          }
+        },
+        "lossesByStore": {
+          "title": "Збитки по магазинах",
+          "totalWriteOffs": "Всього списань",
+          "averagePerDocument": "Середнє на документ",
+          "headers": {
+            "documents": "Документів"
+          }
+        },
+        "metrics": {
+          "totalLoss": "Загальні збитки"
+        },
+        "headers": {
+          "store": "Магазин",
+          "zone": "Зона",
+          "category": "Категорія",
+          "reason": "Причина",
+          "total": "Всього",
+          "losses": "Збитки",
+          "warningShort": "Попередж."
+        }
+      }
+    },
+    "dashboard": {
+      "status": {
+        "safe": "Норма",
+        "warning": "Попередження",
+        "critical": "Критично",
+        "expired": "Прострочено"
+      },
+      "page": {
+        "title": "Дашборд",
+        "subtitle": "Огляд магазину — терміни придатності та залишки"
+      },
+      "statsCards": {
+        "unitLabel": "товарів"
+      },
+      "weeklyKpi": {
+        "title": "За тиждень",
+        "sales": "Продажі",
+        "revenue": "Виручка",
+        "writeOffLoss": "Списання",
+        "comparisonNote": "останні 7 днів vs попередні 7 днів"
+      },
+      "storeMap": {
+        "title": "Карта магазину",
+        "positionsSuffix": "позицій"
+      },
+      "attentionTable": {
+        "title": "Потребують уваги",
+        "filterAll": "Всі",
+        "empty": "Немає товарів з цим статусом",
+        "headers": {
+          "name": "Назва",
+          "sku": "SKU",
+          "category": "Категорія",
+          "zone": "Зона",
+          "quantity": "Кількість",
+          "reorderLevel": "Мін. залишок",
+          "status": "Статус",
+          "actions": "Дії"
+        },
+        "viewAll": "Переглянути всі ({count})"
+      },
+      "quickActions": {
+        "title": "Швидкі дії",
+        "checkCritical": "Перевірити критичні",
+        "writeOffExpired": "Списати прострочені",
+        "createOrder": "Зробити замовлення",
+        "criticalItemsLabel": "Критичні товари",
+        "noCriticalItems": "Критичних товарів немає",
+        "criticalModal": {
+          "title": "Критичні товари",
+          "empty": "Критичних товарів немає — все в нормі ✓",
+          "zoneNotSpecified": "Зона не вказана",
+          "openStock": "Відкрити Залишки"
+        },
+        "writeOffDrawer": {
+          "titleDone": "Списання створено",
+          "titleForm": "Списати прострочені",
+          "subtitleDone": "Чернетка очікує затвердження",
+          "subtitleForm": "{count} товарів для списання",
+          "notes": "Автоматичне списання прострочених товарів з дашборду",
+          "doneHeading": "Чернетку успішно створено",
+          "doneBody": "Перейдіть до сторінки Списання для затвердження документа.",
+          "goToWriteOffs": "Перейти до Списань",
+          "empty": "Прострочених товарів немає ✓",
+          "instructions": "Виберіть товари для включення до чернетки списання. Буде створено документ зі статусом «Чернетка».",
+          "quantityPrefix": "к-сть",
+          "errorPrefix": "Помилка",
+          "errorFallback": "Не вдалося створити списання",
+          "creating": "Створення…",
+          "submit": "Створити чернетку ({count})"
+        },
+        "orderDrawer": {
+          "title": "Сформувати замовлення",
+          "subtitleLoading": "Виконується розрахунок…",
+          "subtitleDone": "Замовлення розраховано",
+          "subtitleIdle": "TOC / DDMRP методологія",
+          "description": "Система перерахує ADU, оновить буфери та розрахує оптимальне замовлення за методологією TOC/DDMRP.",
+          "stepsTitle": "Кроки розрахунку",
+          "steps": {
+            "step1": "Перерахунок середнього щоденного споживання (ADU)",
+            "step2": "Оновлення буферів (зелений / жовтий / червоний)",
+            "step3": "Розрахунок позицій замовлення"
+          },
+          "generate": "Розрахувати замовлення",
+          "resultHeading": "Замовлення розраховано",
+          "resultProductsEvaluated": "Оцінено товарів",
+          "resultBuffersUpdated": "Оновлено буферів",
+          "resultLinesToOrder": "Позицій до замовлення",
+          "viewOrder": "Переглянути замовлення",
+          "errorHeading": "Помилка розрахунку",
+          "errorFallback": "Невідома помилка",
+          "retry": "Спробувати ще раз"
+        },
+        "itemDetail": {
+          "stockSection": "Залишки",
+          "currentQuantity": "Поточна кількість",
+          "initialQuantity": "Початкова кількість",
+          "expirySection": "Термін придатності",
+          "expiryDate": "Термін до",
+          "daysLeft": "Залишилось",
+          "daysLeftValue": "{days} дн.",
+          "locationSection": "Розташування та партія",
+          "zone": "Зона",
+          "shelfNumber": "Полиця №",
+          "batchNumber": "Партія №",
+          "barcode": "Штрихкод",
+          "addedDate": "Дата надходження",
+          "verifiedSuccess": "Верифіковано успішно",
+          "verify": "Верифікувати партію",
+          "verifying": "Верифікація…",
+          "createWriteOff": "Створити списання",
+          "viewAllStock": "Переглянути всі залишки"
+        }
       }
     }
   }

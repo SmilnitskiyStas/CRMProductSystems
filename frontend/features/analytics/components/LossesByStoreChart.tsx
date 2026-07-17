@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { useTranslations, useLocale } from "next-intl";
 
 interface StoreStat {
   storeId: string;
@@ -24,6 +25,9 @@ interface Props {
 const STORE_COLORS = ["#F87171", "#FB923C", "#FBBF24", "#A78BFA", "#60A5FA"];
 
 export function LossesByStoreChart({ data }: Props) {
+  const t = useTranslations("Dashboard.analytics.lossesByStoreChart");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   if (!data || data.length === 0) return null;
 
   const chartData = data
@@ -45,7 +49,7 @@ export function LossesByStoreChart({ data }: Props) {
       }}
     >
       <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
-        Збитки по магазинах (₴)
+        {t("title")}
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={chartData} margin={{ left: 8, right: 24, top: 4, bottom: 40 }}>
@@ -62,7 +66,7 @@ export function LossesByStoreChart({ data }: Props) {
             tick={{ fill: "#4B5563", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => v.toLocaleString("uk-UA")}
+            tickFormatter={(v) => v.toLocaleString(intlLocale)}
           />
           <Tooltip
             contentStyle={{
@@ -73,8 +77,8 @@ export function LossesByStoreChart({ data }: Props) {
               fontSize: 13,
             }}
             formatter={(val, _name, props) => [
-              `${Number(val).toLocaleString("uk-UA")} ₴ (${(props.payload as { count: number }).count} списань)`,
-              "Збиток",
+              `${Number(val).toLocaleString(intlLocale)} ₴ (${(props.payload as { count: number }).count} ${t("tooltipWriteOffsSuffix")})`,
+              t("tooltipLabel"),
             ]}
             cursor={{ fill: "rgba(255,255,255,0.03)" }}
           />

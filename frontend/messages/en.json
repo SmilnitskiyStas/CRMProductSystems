@@ -1346,6 +1346,196 @@
           "cash": "Cash",
           "card": "Card"
         }
+      },
+      "status": {
+        "safe": "Safe",
+        "warning": "Warning",
+        "critical": "Critical",
+        "expired": "Expired",
+        "needsVerification": "Verification"
+      },
+      "reason": {
+        "expired": "Expired",
+        "damaged": "Damaged",
+        "theft": "Theft",
+        "production_loss": "Production Loss",
+        "other": "Other"
+      },
+      "categoryStatusChart": {
+        "title": "Status by category"
+      },
+      "expiryDonut": {
+        "title": "Batch distribution by status"
+      },
+      "lossesByReasonChart": {
+        "title": "Losses by write-off reason (₴)",
+        "tooltipLabel": "Loss",
+        "tooltipDocsSuffix": "docs"
+      },
+      "lossesByStoreChart": {
+        "title": "Losses by store (₴)",
+        "tooltipLabel": "Loss",
+        "tooltipWriteOffsSuffix": "write-offs"
+      },
+      "page": {
+        "title": "Analytics",
+        "subtitle": "Aggregated analytics on expiry, write-offs, and stock movements",
+        "expirySummary": {
+          "title": "Stock status",
+          "totalBatches": "Total batches"
+        },
+        "writeOffs": {
+          "title": "Write-offs",
+          "totalDocuments": "Total documents",
+          "headers": {
+            "documentsCount": "Doc. count"
+          }
+        },
+        "byZone": {
+          "title": "By zone"
+        },
+        "byCategory": {
+          "title": "By category",
+          "headers": {
+            "batches": "Batches",
+            "quantity": "Qty"
+          }
+        },
+        "lossesByStore": {
+          "title": "Losses by store",
+          "totalWriteOffs": "Total write-offs",
+          "averagePerDocument": "Average per document",
+          "headers": {
+            "documents": "Documents"
+          }
+        },
+        "metrics": {
+          "totalLoss": "Total losses"
+        },
+        "headers": {
+          "store": "Store",
+          "zone": "Zone",
+          "category": "Category",
+          "reason": "Reason",
+          "total": "Total",
+          "losses": "Losses",
+          "warningShort": "Warning"
+        }
+      }
+    },
+    "dashboard": {
+      "status": {
+        "safe": "Safe",
+        "warning": "Warning",
+        "critical": "Critical",
+        "expired": "Expired"
+      },
+      "page": {
+        "title": "Dashboard",
+        "subtitle": "Store overview — expiry dates and stock levels"
+      },
+      "statsCards": {
+        "unitLabel": "items"
+      },
+      "weeklyKpi": {
+        "title": "This week",
+        "sales": "Sales",
+        "revenue": "Revenue",
+        "writeOffLoss": "Write-offs",
+        "comparisonNote": "last 7 days vs previous 7 days"
+      },
+      "storeMap": {
+        "title": "Store map",
+        "positionsSuffix": "items"
+      },
+      "attentionTable": {
+        "title": "Needs attention",
+        "filterAll": "All",
+        "empty": "No items with this status",
+        "headers": {
+          "name": "Name",
+          "sku": "SKU",
+          "category": "Category",
+          "zone": "Zone",
+          "quantity": "Quantity",
+          "reorderLevel": "Min. stock",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "viewAll": "View all ({count})"
+      },
+      "quickActions": {
+        "title": "Quick actions",
+        "checkCritical": "Check critical",
+        "writeOffExpired": "Write off expired",
+        "createOrder": "Create order",
+        "criticalItemsLabel": "Critical items",
+        "noCriticalItems": "No critical items",
+        "criticalModal": {
+          "title": "Critical items",
+          "empty": "No critical items — all good ✓",
+          "zoneNotSpecified": "Zone not specified",
+          "openStock": "Open stock"
+        },
+        "writeOffDrawer": {
+          "titleDone": "Write-off created",
+          "titleForm": "Write off expired items",
+          "subtitleDone": "Draft awaiting approval",
+          "subtitleForm": "{count} items to write off",
+          "notes": "Automatic write-off of expired items from the dashboard",
+          "doneHeading": "Draft created successfully",
+          "doneBody": "Go to the Write-offs page to approve the document.",
+          "goToWriteOffs": "Go to write-offs",
+          "empty": "No expired items ✓",
+          "instructions": "Select items to include in the write-off draft. A document with \"Draft\" status will be created.",
+          "quantityPrefix": "qty",
+          "errorPrefix": "Error",
+          "errorFallback": "Failed to create write-off",
+          "creating": "Creating…",
+          "submit": "Create draft ({count})"
+        },
+        "orderDrawer": {
+          "title": "Generate order",
+          "subtitleLoading": "Calculating…",
+          "subtitleDone": "Order calculated",
+          "subtitleIdle": "TOC / DDMRP methodology",
+          "description": "The system will recalculate ADU, update buffers, and calculate the optimal order using the TOC/DDMRP methodology.",
+          "stepsTitle": "Calculation steps",
+          "steps": {
+            "step1": "Recalculate average daily usage (ADU)",
+            "step2": "Update buffers (green / yellow / red)",
+            "step3": "Calculate order lines"
+          },
+          "generate": "Calculate order",
+          "resultHeading": "Order calculated",
+          "resultProductsEvaluated": "Products evaluated",
+          "resultBuffersUpdated": "Buffers updated",
+          "resultLinesToOrder": "Lines to order",
+          "viewOrder": "View order",
+          "errorHeading": "Calculation error",
+          "errorFallback": "Unknown error",
+          "retry": "Try again"
+        },
+        "itemDetail": {
+          "stockSection": "Stock",
+          "currentQuantity": "Current quantity",
+          "initialQuantity": "Initial quantity",
+          "expirySection": "Expiry date",
+          "expiryDate": "Expires on",
+          "daysLeft": "Remaining",
+          "daysLeftValue": "{days}d",
+          "locationSection": "Location and batch",
+          "zone": "Zone",
+          "shelfNumber": "Shelf No.",
+          "batchNumber": "Batch No.",
+          "barcode": "Barcode",
+          "addedDate": "Date received",
+          "verifiedSuccess": "Verified successfully",
+          "verify": "Verify batch",
+          "verifying": "Verifying…",
+          "createWriteOff": "Create write-off",
+          "viewAllStock": "View all stock"
+        }
       }
     }
   }

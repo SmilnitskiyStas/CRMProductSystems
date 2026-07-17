@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useExpirySummary,
   useWriteOffAnalytics,
@@ -147,14 +148,6 @@ const tableWrapper: React.CSSProperties = {
   overflow: "hidden",
 };
 
-const REASON_LABELS: Record<string, string> = {
-  expired: "Прострочено",
-  damaged: "Пошкоджено",
-  theft: "Крадіжка",
-  production_loss: "Виробничі втрати",
-  other: "Інше",
-};
-
 function rowHoverStyle(isHovered: boolean): React.CSSProperties {
   return {
     cursor: "pointer",
@@ -165,6 +158,12 @@ function rowHoverStyle(isHovered: boolean): React.CSSProperties {
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const t = useTranslations("Dashboard.analytics.page");
+  const tStatus = useTranslations("Dashboard.analytics.status");
+  const tReason = useTranslations("Dashboard.analytics.reason");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
 
@@ -214,14 +213,14 @@ export default function AnalyticsPage() {
   const [hoveredLossRow, setHoveredLossRow] = useState<string | null>(null);
 
   if (access === null) return null;
-  if (!access) return <AccessDenied title="Аналітика" />;
+  if (!access) return <AccessDenied title={t("title")} />;
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 28, width: "100%" }}>
       <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Аналітика</h1>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          Зведена аналітика по термінах, списаннях та рухах товарів
+          {t("subtitle")}
         </p>
       </div>
 
@@ -246,9 +245,9 @@ export default function AnalyticsPage() {
 
       {/* ── Expiry summary ────────────────────────────────────────── */}
       <section>
-        <h2 style={sectionTitle}>Стан залишків</h2>
+        <h2 style={sectionTitle}>{t("expirySummary.title")}</h2>
         {expiryLoading ? (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
         ) : expiry ? (
           <>
             <div
@@ -259,12 +258,12 @@ export default function AnalyticsPage() {
                 marginBottom: 16,
               }}
             >
-              <MetricCard label="Норма" value={expiry.safe} color="#4ADE80" onClick={() => router.push("/stock?status=safe")} />
-              <MetricCard label="Попередження" value={expiry.warning} color="#FBBF24" onClick={() => router.push("/stock?status=warning")} />
-              <MetricCard label="Критично" value={expiry.critical} color="#F87171" onClick={() => router.push("/stock?status=critical")} />
-              <MetricCard label="Прострочено" value={expiry.expired} color="#DC2626" onClick={() => router.push("/stock?status=expired")} />
-              <MetricCard label="Перевірка" value={expiry.needsVerification} color="#A78BFA" onClick={() => router.push("/stock?status=needs_verification")} />
-              <MetricCard label="Всього партій" value={expiry.total} onClick={() => router.push("/stock")} />
+              <MetricCard label={tStatus("safe")} value={expiry.safe} color="#4ADE80" onClick={() => router.push("/stock?status=safe")} />
+              <MetricCard label={tStatus("warning")} value={expiry.warning} color="#FBBF24" onClick={() => router.push("/stock?status=warning")} />
+              <MetricCard label={tStatus("critical")} value={expiry.critical} color="#F87171" onClick={() => router.push("/stock?status=critical")} />
+              <MetricCard label={tStatus("expired")} value={expiry.expired} color="#DC2626" onClick={() => router.push("/stock?status=expired")} />
+              <MetricCard label={tStatus("needsVerification")} value={expiry.needsVerification} color="#A78BFA" onClick={() => router.push("/stock?status=needs_verification")} />
+              <MetricCard label={t("expirySummary.totalBatches")} value={expiry.total} onClick={() => router.push("/stock")} />
             </div>
 
             <ExpiryDonut
@@ -280,11 +279,11 @@ export default function AnalyticsPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      <th style={thStyle("left")}>Магазин</th>
-                      <th style={thStyle("right")}>Норма</th>
-                      <th style={thStyle("right")}>Попередж.</th>
-                      <th style={thStyle("right")}>Критично</th>
-                      <th style={thStyle("right")}>Прострочено</th>
+                      <th style={thStyle("left")}>{t("headers.store")}</th>
+                      <th style={thStyle("right")}>{tStatus("safe")}</th>
+                      <th style={thStyle("right")}>{t("headers.warningShort")}</th>
+                      <th style={thStyle("right")}>{tStatus("critical")}</th>
+                      <th style={thStyle("right")}>{tStatus("expired")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -342,12 +341,12 @@ export default function AnalyticsPage() {
       {/* ── Write-off analytics ───────────────────────────────────── */}
       {writeoffsLoadingEffective ? (
         <section>
-          <h2 style={sectionTitle}>Списання</h2>
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+          <h2 style={sectionTitle}>{t("writeOffs.title")}</h2>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
         </section>
       ) : writeoffs && (
         <section>
-          <h2 style={sectionTitle}>Списання</h2>
+          <h2 style={sectionTitle}>{t("writeOffs.title")}</h2>
           <div
             style={{
               display: "grid",
@@ -357,7 +356,7 @@ export default function AnalyticsPage() {
             }}
           >
             <MetricCard
-              label="Всього документів"
+              label={t("writeOffs.totalDocuments")}
               value={writeoffs.totalDocuments}
               onClick={() => router.push("/write-offs")}
               trend={
@@ -367,8 +366,8 @@ export default function AnalyticsPage() {
               }
             />
             <MetricCard
-              label="Загальні збитки"
-              value={`${writeoffs.totalLoss.toLocaleString("uk-UA")} ₴`}
+              label={t("metrics.totalLoss")}
+              value={`${writeoffs.totalLoss.toLocaleString(intlLocale)} ₴`}
               color="#F87171"
               onClick={() => router.push("/write-offs")}
               trend={
@@ -391,9 +390,9 @@ export default function AnalyticsPage() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={thStyle("left")}>Причина</th>
-                    <th style={thStyle("right")}>К-сть документів</th>
-                    <th style={thStyle("right")}>Збитки</th>
+                    <th style={thStyle("left")}>{t("headers.reason")}</th>
+                    <th style={thStyle("right")}>{t("writeOffs.headers.documentsCount")}</th>
+                    <th style={thStyle("right")}>{t("headers.losses")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -405,10 +404,10 @@ export default function AnalyticsPage() {
                       onMouseLeave={() => setHoveredReasonRow(null)}
                       style={rowHoverStyle(hoveredReasonRow === r.reason)}
                     >
-                      <td style={tdText}>{REASON_LABELS[r.reason] ?? r.reason}</td>
+                      <td style={tdText}>{tReason.has(r.reason) ? tReason(r.reason) : r.reason}</td>
                       <td style={tdNum}>{r.count}</td>
                       <td style={{ ...tdNum, color: "#F87171" }}>
-                        {r.totalLoss.toLocaleString("uk-UA")} ₴
+                        {r.totalLoss.toLocaleString(intlLocale)} ₴
                       </td>
                     </tr>
                   ))}
@@ -422,18 +421,18 @@ export default function AnalyticsPage() {
       {/* ── By zone ───────────────────────────────────────────────── */}
       {zones && zones.length > 0 && (
         <section>
-          <h2 style={sectionTitle}>По зонах</h2>
+          <h2 style={sectionTitle}>{t("byZone.title")}</h2>
           <div style={tableWrapper}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={thStyle("left")}>Зона</th>
-                  <th style={thStyle("left")}>Магазин</th>
-                  <th style={thStyle("right")}>Норма</th>
-                  <th style={thStyle("right")}>Попередж.</th>
-                  <th style={thStyle("right")}>Критично</th>
-                  <th style={thStyle("right")}>Прострочено</th>
-                  <th style={thStyle("right")}>Всього</th>
+                  <th style={thStyle("left")}>{t("headers.zone")}</th>
+                  <th style={thStyle("left")}>{t("headers.store")}</th>
+                  <th style={thStyle("right")}>{tStatus("safe")}</th>
+                  <th style={thStyle("right")}>{t("headers.warningShort")}</th>
+                  <th style={thStyle("right")}>{tStatus("critical")}</th>
+                  <th style={thStyle("right")}>{tStatus("expired")}</th>
+                  <th style={thStyle("right")}>{t("headers.total")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -491,19 +490,19 @@ export default function AnalyticsPage() {
       {/* ── By category ───────────────────────────────────────────── */}
       {categories && categories.length > 0 && (
         <section>
-          <h2 style={sectionTitle}>По категоріях</h2>
+          <h2 style={sectionTitle}>{t("byCategory.title")}</h2>
           <CategoryStatusChart data={categories} />
           <div style={{ ...tableWrapper, marginTop: 16 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={thStyle("left")}>Категорія</th>
-                  <th style={thStyle("right")}>Норма</th>
-                  <th style={thStyle("right")}>Попередж.</th>
-                  <th style={thStyle("right")}>Критично</th>
-                  <th style={thStyle("right")}>Прострочено</th>
-                  <th style={thStyle("right")}>Партій</th>
-                  <th style={thStyle("right")}>К-сть</th>
+                  <th style={thStyle("left")}>{t("headers.category")}</th>
+                  <th style={thStyle("right")}>{tStatus("safe")}</th>
+                  <th style={thStyle("right")}>{t("headers.warningShort")}</th>
+                  <th style={thStyle("right")}>{tStatus("critical")}</th>
+                  <th style={thStyle("right")}>{tStatus("expired")}</th>
+                  <th style={thStyle("right")}>{t("byCategory.headers.batches")}</th>
+                  <th style={thStyle("right")}>{t("byCategory.headers.quantity")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -521,7 +520,7 @@ export default function AnalyticsPage() {
                     <td style={{ ...tdNum, color: "#F87171" }}>{c.critical}</td>
                     <td style={{ ...tdNum, color: "#DC2626" }}>{c.expired}</td>
                     <td style={tdNum}>{c.totalBatches}</td>
-                    <td style={tdNum}>{c.totalQuantity.toLocaleString("uk-UA")}</td>
+                    <td style={tdNum}>{c.totalQuantity.toLocaleString(intlLocale)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -533,12 +532,12 @@ export default function AnalyticsPage() {
       {/* ── Losses by store ───────────────────────────────────────── */}
       {lossesLoadingEffective ? (
         <section>
-          <h2 style={sectionTitle}>Збитки по магазинах</h2>
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+          <h2 style={sectionTitle}>{t("lossesByStore.title")}</h2>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
         </section>
       ) : losses && losses.byStore.length > 0 && (
         <section>
-          <h2 style={sectionTitle}>Збитки по магазинах</h2>
+          <h2 style={sectionTitle}>{t("lossesByStore.title")}</h2>
           <div
             style={{
               display: "grid",
@@ -548,8 +547,8 @@ export default function AnalyticsPage() {
             }}
           >
             <MetricCard
-              label="Загальні збитки"
-              value={`${losses.totalLoss.toLocaleString("uk-UA")} ₴`}
+              label={t("metrics.totalLoss")}
+              value={`${losses.totalLoss.toLocaleString(intlLocale)} ₴`}
               color="#F87171"
               onClick={() => router.push("/write-offs")}
               trend={
@@ -559,7 +558,7 @@ export default function AnalyticsPage() {
               }
             />
             <MetricCard
-              label="Всього списань"
+              label={t("lossesByStore.totalWriteOffs")}
               value={losses.totalWriteOffs}
               onClick={() => router.push("/write-offs")}
               trend={
@@ -569,8 +568,8 @@ export default function AnalyticsPage() {
               }
             />
             <MetricCard
-              label="Середнє на документ"
-              value={`${losses.averageLossPerWriteOff.toLocaleString("uk-UA")} ₴`}
+              label={t("lossesByStore.averagePerDocument")}
+              value={`${losses.averageLossPerWriteOff.toLocaleString(intlLocale)} ₴`}
             />
           </div>
           <LossesByStoreChart data={losses.byStore} />
@@ -578,9 +577,9 @@ export default function AnalyticsPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={thStyle("left")}>Магазин</th>
-                  <th style={thStyle("right")}>Документів</th>
-                  <th style={thStyle("right")}>Збитки</th>
+                  <th style={thStyle("left")}>{t("headers.store")}</th>
+                  <th style={thStyle("right")}>{t("lossesByStore.headers.documents")}</th>
+                  <th style={thStyle("right")}>{t("headers.losses")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -595,7 +594,7 @@ export default function AnalyticsPage() {
                     <td style={tdText}>{s.storeName}</td>
                     <td style={tdNum}>{s.writeOffCount}</td>
                     <td style={{ ...tdNum, color: "#F87171" }}>
-                      {s.totalLoss.toLocaleString("uk-UA")} ₴
+                      {s.totalLoss.toLocaleString(intlLocale)} ₴
                     </td>
                   </tr>
                 ))}

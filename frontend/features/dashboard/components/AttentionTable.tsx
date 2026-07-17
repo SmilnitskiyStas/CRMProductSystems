@@ -2,23 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { BarChart2 } from "lucide-react";
 import type { AttentionItem, ItemStatus } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 
-const STATUS_CONFIG: Record<ItemStatus, { label: string; color: string; bg: string }> = {
-  safe: { label: "Safe", color: "#22c55e", bg: "#0d2818" },
-  warning: { label: "Warning", color: "#f59e0b", bg: "#261c05" },
-  critical: { label: "Critical", color: "#ef4444", bg: "#2a0a0a" },
-  expired: { label: "Expired", color: "#9ca3af", bg: "#1a1a1a" },
+const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string }> = {
+  safe: { color: "#22c55e", bg: "#0d2818" },
+  warning: { color: "#f59e0b", bg: "#261c05" },
+  critical: { color: "#ef4444", bg: "#2a0a0a" },
+  expired: { color: "#9ca3af", bg: "#1a1a1a" },
 };
 
-const FILTERS: { label: string; value: ItemStatus | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "Expired", value: "expired" },
-  { label: "Critical", value: "critical" },
-  { label: "Warning", value: "warning" },
-];
+const FILTER_VALUES: (ItemStatus | "all")[] = ["all", "expired", "critical", "warning"];
 
 const VISIBLE_ROWS = 5;
 
@@ -29,11 +25,25 @@ interface Props {
 
 export function AttentionTable({ items = [], isLoading }: Props) {
   const router = useRouter();
+  const t = useTranslations("Dashboard.dashboard.attentionTable");
+  const tStatus = useTranslations("Dashboard.dashboard.status");
+  const tCommon = useTranslations("Common");
+  const tProductAnalytics = useTranslations("Dashboard.ui.productAnalyticsLink");
   const [filter, setFilter] = useState<ItemStatus | "all">("all");
 
   const filtered = filter === "all" ? items : items.filter((i) => i.status === filter);
   const visible = filtered.slice(0, VISIBLE_ROWS);
   const viewAllHref = filter === "all" ? "/stock" : `/stock?status=${filter}`;
+  const headers = [
+    t("headers.name"),
+    t("headers.sku"),
+    t("headers.category"),
+    t("headers.zone"),
+    t("headers.quantity"),
+    t("headers.reorderLevel"),
+    t("headers.status"),
+    t("headers.actions"),
+  ];
 
   return (
     <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, overflow: "hidden" }}>
@@ -50,17 +60,18 @@ export function AttentionTable({ items = [], isLoading }: Props) {
         }}
       >
         <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: 0 }}>
-          Потребують уваги
+          {t("title")}
         </h2>
         <div style={{ display: "flex", gap: 6 }}>
-          {FILTERS.map((f) => {
+          {FILTER_VALUES.map((value) => {
+            const label = value === "all" ? t("filterAll") : tStatus(value);
             const count =
-              f.value === "all" ? items.length : items.filter((i) => i.status === f.value).length;
-            const active = filter === f.value;
+              value === "all" ? items.length : items.filter((i) => i.status === value).length;
+            const active = filter === value;
             return (
               <button
-                key={f.value}
-                onClick={() => setFilter(f.value)}
+                key={value}
+                onClick={() => setFilter(value)}
                 style={{
                   padding: "4px 12px",
                   borderRadius: 6,
@@ -72,7 +83,7 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                   fontWeight: active ? 600 : 400,
                 }}
               >
-                {f.label}
+                {label}
                 {count > 0 && (
                   <span
                     style={{
@@ -96,18 +107,18 @@ export function AttentionTable({ items = [], isLoading }: Props) {
       {/* Table */}
       {isLoading ? (
         <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-          Завантаження…
+          {tCommon("loading")}
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-          Немає товарів з цим статусом
+          {t("empty")}
         </div>
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1F2937" }}>
-                {["Назва", "SKU", "Категорія", "Зона", "Кількість", "Мін. залишок", "Статус", "Дії"].map(
+                {headers.map(
                   (h) => (
                     <th
                       key={h}
@@ -191,14 +202,14 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                             display: "inline-block",
                           }}
                         />
-                        {cfg.label}
+                        {tStatus(item.status)}
                       </span>
                     </td>
                     <td style={{ padding: "8px 16px" }}>
                       <ActionMenu
                         items={[
                           {
-                            label: "Аналітика товару",
+                            label: tProductAnalytics("title"),
                             icon: <BarChart2 size={13} />,
                             onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
                           },
@@ -242,7 +253,7 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                   (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
                 }}
               >
-                Переглянути всі ({filtered.length})
+                {t("viewAll", { count: filtered.length })}
               </button>
             </div>
           )}

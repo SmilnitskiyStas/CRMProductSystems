@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import type { DashboardStats, ExpirySummaryCompareDto } from "../types";
 
@@ -14,13 +15,6 @@ interface StatCard {
   dot: string;
 }
 
-const CARDS: StatCard[] = [
-  { label: "Safe", key: "safe", color: "#22c55e", bg: "#0d2818", bgHover: "#112f1c", border: "#166534", dot: "#22c55e" },
-  { label: "Warning", key: "warning", color: "#f59e0b", bg: "#261c05", bgHover: "#2e2006", border: "#854d0e", dot: "#f59e0b" },
-  { label: "Critical", key: "critical", color: "#ef4444", bg: "#2a0a0a", bgHover: "#310c0c", border: "#991b1b", dot: "#ef4444" },
-  { label: "Expired", key: "expired", color: "#6b7280", bg: "#141414", bgHover: "#1a1a1a", border: "#374151", dot: "#6b7280" },
-];
-
 interface Props {
   stats: DashboardStats | undefined;
   isLoading: boolean;
@@ -29,6 +23,16 @@ interface Props {
 }
 
 export function StatsCards({ stats, isLoading, compare }: Props) {
+  const t = useTranslations("Dashboard.dashboard.status");
+  const tCard = useTranslations("Dashboard.dashboard.statsCards");
+
+  const CARDS: StatCard[] = [
+    { label: t("safe"), key: "safe", color: "#22c55e", bg: "#0d2818", bgHover: "#112f1c", border: "#166534", dot: "#22c55e" },
+    { label: t("warning"), key: "warning", color: "#f59e0b", bg: "#261c05", bgHover: "#2e2006", border: "#854d0e", dot: "#f59e0b" },
+    { label: t("critical"), key: "critical", color: "#ef4444", bg: "#2a0a0a", bgHover: "#310c0c", border: "#991b1b", dot: "#ef4444" },
+    { label: t("expired"), key: "expired", color: "#6b7280", bg: "#141414", bgHover: "#1a1a1a", border: "#374151", dot: "#6b7280" },
+  ];
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {CARDS.map((card) => {
@@ -73,7 +77,7 @@ export function StatsCards({ stats, isLoading, compare }: Props) {
               )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-              <span style={{ color: "#4B5563", fontSize: 12 }}>items</span>
+              <span style={{ color: "#4B5563", fontSize: 12 }}>{tCard("unitLabel")}</span>
               {!isLoading && <TrendIndicator current={current} previous={previous} size="sm" />}
             </div>
           </Link>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { ItemStatus, StoreZone } from "../types";
 
 const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string; border: string }> = {
@@ -22,6 +23,10 @@ interface Props {
 }
 
 export function StoreMap({ zones = [], isLoading }: Props) {
+  const t = useTranslations("Dashboard.dashboard.storeMap");
+  const tStatus = useTranslations("Dashboard.dashboard.status");
+  const tCommon = useTranslations("Common");
+
   return (
     <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, overflow: "hidden" }}>
       <div
@@ -33,7 +38,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
           justifyContent: "space-between",
         }}
       >
-        <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: 0 }}>Карта магазину</h2>
+        <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: 0 }}>{t("title")}</h2>
         <div style={{ display: "flex", gap: 12 }}>
           {(["safe", "warning", "critical"] as ItemStatus[]).map((s) => {
             const cfg = STATUS_CONFIG[s];
@@ -49,7 +54,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
                   }}
                 />
                 <span style={{ color: "#6B7280", fontSize: 11 }}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                  {tStatus(s)}
                 </span>
               </div>
             );
@@ -60,7 +65,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
       <div style={{ padding: 20 }}>
         {isLoading ? (
           <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
-            Завантаження…
+            {tCommon("loading")}
           </div>
         ) : (
           <div
@@ -77,7 +82,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
               return (
                 <div
                   key={zone.id}
-                  title={`Safe: ${zone.safe} · Warning: ${zone.warning} · Critical: ${zone.critical}`}
+                  title={`${tStatus("safe")}: ${zone.safe} · ${tStatus("warning")}: ${zone.warning} · ${tStatus("critical")}: ${zone.critical}`}
                   style={{
                     background: cfg.bg,
                     border: `1px solid ${cfg.border}`,
@@ -114,7 +119,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
                       }}
                     />
                     <span style={{ color: cfg.color, fontSize: 11, fontWeight: 600 }}>
-                      {zone.status.charAt(0).toUpperCase() + zone.status.slice(1)}
+                      {tStatus(zone.status)}
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
@@ -122,7 +127,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
                     <ZoneStat value={zone.warning} color="#f59e0b" label="W" />
                     <ZoneStat value={zone.critical} color="#ef4444" label="C" />
                   </div>
-                  <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>{total} позицій</div>
+                  <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>{total} {t("positionsSuffix")}</div>
                 </div>
               );
             })}

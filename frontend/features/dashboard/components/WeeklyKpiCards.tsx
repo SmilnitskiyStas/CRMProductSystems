@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import { TrendIndicator, type TrendFormat } from "@/components/ui/TrendIndicator";
 import type { PeriodMetric, WeeklyKpiDto } from "../types";
 
@@ -16,35 +17,39 @@ interface Card {
   render: (v: number) => string;
 }
 
-const CARDS: Card[] = [
-  {
-    key: "sales",
-    label: "Продажі",
-    color: "#60A5FA",
-    format: "number",
-    render: (v) => v.toLocaleString("uk-UA"),
-  },
-  {
-    key: "revenue",
-    label: "Виручка",
-    color: "#4ADE80",
-    format: "currency",
-    render: (v) => `${v.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴`,
-  },
-  {
-    key: "writeOffLoss",
-    label: "Списання",
-    color: "#F87171",
-    format: "currency",
-    render: (v) => `${v.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴`,
-  },
-];
-
 export function WeeklyKpiCards({ data, isLoading }: Props) {
+  const t = useTranslations("Dashboard.dashboard.weeklyKpi");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
+  const CARDS: Card[] = [
+    {
+      key: "sales",
+      label: t("sales"),
+      color: "#60A5FA",
+      format: "number",
+      render: (v) => v.toLocaleString(intlLocale),
+    },
+    {
+      key: "revenue",
+      label: t("revenue"),
+      color: "#4ADE80",
+      format: "currency",
+      render: (v) => `${v.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+    {
+      key: "writeOffLoss",
+      label: t("writeOffLoss"),
+      color: "#F87171",
+      format: "currency",
+      render: (v) => `${v.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+  ];
+
   return (
     <div>
       <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0, marginBottom: 12 }}>
-        За тиждень
+        {t("title")}
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {CARDS.map((card) => {
@@ -83,7 +88,7 @@ export function WeeklyKpiCards({ data, isLoading }: Props) {
               {!isLoading && metric && (
                 <TrendIndicator current={metric.current} previous={metric.previous} format={card.format} size="sm" />
               )}
-              <span style={{ color: "#4B5563", fontSize: 11 }}>останні 7 днів vs попередні 7 днів</span>
+              <span style={{ color: "#4B5563", fontSize: 11 }}>{t("comparisonNote")}</span>
             </div>
           );
         })}

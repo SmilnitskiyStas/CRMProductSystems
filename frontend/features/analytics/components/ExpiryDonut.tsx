@@ -8,6 +8,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useTranslations } from "next-intl";
 
 interface Props {
   safe: number;
@@ -17,16 +18,18 @@ interface Props {
   needsVerification: number;
 }
 
-const SLICES = [
-  { key: "safe",             label: "Норма",      color: "#4ADE80" },
-  { key: "warning",          label: "Попередження", color: "#FBBF24" },
-  { key: "critical",         label: "Критично",   color: "#F87171" },
-  { key: "expired",          label: "Прострочено", color: "#DC2626" },
-  { key: "needsVerification",label: "Перевірка",  color: "#A78BFA" },
-] as const;
-
 export function ExpiryDonut({ safe, warning, critical, expired, needsVerification }: Props) {
+  const t = useTranslations("Dashboard.analytics.expiryDonut");
+  const tStatus = useTranslations("Dashboard.analytics.status");
   const raw: Record<string, number> = { safe, warning, critical, expired, needsVerification };
+
+  const SLICES = [
+    { key: "safe",              label: tStatus("safe"),             color: "#4ADE80" },
+    { key: "warning",           label: tStatus("warning"),          color: "#FBBF24" },
+    { key: "critical",          label: tStatus("critical"),         color: "#F87171" },
+    { key: "expired",           label: tStatus("expired"),          color: "#DC2626" },
+    { key: "needsVerification", label: tStatus("needsVerification"), color: "#A78BFA" },
+  ] as const;
 
   const data = SLICES
     .map((s) => ({ name: s.label, value: raw[s.key], color: s.color }))
@@ -44,7 +47,7 @@ export function ExpiryDonut({ safe, warning, critical, expired, needsVerificatio
       }}
     >
       <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
-        Розподіл партій за статусом
+        {t("title")}
       </div>
       <ResponsiveContainer width="100%" height={260}>
         <PieChart>

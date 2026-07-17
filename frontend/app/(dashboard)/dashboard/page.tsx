@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { StatsCards } from "@/features/dashboard/components/StatsCards";
 import { AttentionTable } from "@/features/dashboard/components/AttentionTable";
 import { QuickActions } from "@/features/dashboard/components/QuickActions";
@@ -19,6 +20,7 @@ import { PROVIDER_TEAM, type AppRole } from "@/lib/roles";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const t = useTranslations("Dashboard.dashboard.page");
   const { data: me } = useMe();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: attentionItems, isLoading: attentionLoading } = useAttentionItems();
@@ -34,9 +36,9 @@ export default function DashboardPage() {
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Page title */}
       <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Дашборд</h1>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          Огляд магазину — терміни придатності та залишки
+          {t("subtitle")}
         </p>
       </div>
 
