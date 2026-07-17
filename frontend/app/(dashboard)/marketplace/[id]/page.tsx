@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, Eye, HeartHandshake, LifeBuoy, MessageCircle } from "lucide-react";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import {
   useSupplier,
   useSupplierReviewCount,
@@ -12,7 +13,6 @@ import {
 } from "@/features/marketplace/hooks/useMarketplace";
 import { useMyCooperation } from "@/features/marketplace/hooks/useCooperation";
 import { marketplaceApi } from "@/features/marketplace/api/marketplace-api";
-import { reviewWord } from "@/features/marketplace/utils";
 import { SupplierMetrics } from "@/features/marketplace/components/SupplierMetrics";
 import { SupplierItemsTab } from "@/features/marketplace/components/SupplierItemsTab";
 import { SupplierReviewsTab } from "@/features/marketplace/components/SupplierReviewsTab";
@@ -33,6 +33,8 @@ import type { SupplierItemDto } from "@/features/marketplace/types";
 type ActiveTab = "catalog" | "reviews";
 
 export default function SupplierProfilePage() {
+  const t = useTranslations("Dashboard.marketplace.supplierPage");
+  const tMarketplace = useTranslations("Dashboard.marketplace");
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<ActiveTab>("catalog");
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
@@ -72,7 +74,7 @@ export default function SupplierProfilePage() {
       }
       return [...prev, { item, qty }];
     });
-    toast.success("Додано до кошика");
+    toast.success(t("toastAddedToCart"));
   }
 
   function handleUpdateQty(supplierItemId: string, qty: number) {
@@ -123,13 +125,13 @@ export default function SupplierProfilePage() {
     return (
       <div style={{ padding: "28px 32px" }}>
         <div style={{ color: "#F87171", fontSize: 14 }}>
-          Постачальника не знайдено або виникла помилка завантаження.
+          {t("errorLoad")}
         </div>
         <Link
           href="/marketplace"
           style={{ color: "#3B82F6", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4, marginTop: 16 }}
         >
-          <ChevronLeft size={14} /> Назад до маркетплейсу
+          <ChevronLeft size={14} /> {t("backToMarketplace")}
         </Link>
       </div>
     );
@@ -164,7 +166,7 @@ export default function SupplierProfilePage() {
         }}
       >
         <ChevronLeft size={14} />
-        Маркетплейс
+        {t("backLink")}
       </Link>
 
       {/* Header card */}
@@ -197,7 +199,7 @@ export default function SupplierProfilePage() {
                 icon={<MessageCircle size={13} />}
                 onClick={() => setChatOpen(true)}
               >
-                Написати постачальнику
+                {t("messageSupplier")}
               </Btn>
               {!chatOpen && unreadChatCount > 0 && (
                 <span
@@ -230,7 +232,7 @@ export default function SupplierProfilePage() {
                 icon={<LifeBuoy size={13} />}
                 onClick={() => setSupportOpen(true)}
               >
-                Служба підтримки
+                {t("support")}
               </Btn>
             )}
             {isClientTenant &&
@@ -243,7 +245,7 @@ export default function SupplierProfilePage() {
                   icon={<HeartHandshake size={13} />}
                   onClick={() => setCooperationModalOpen(true)}
                 >
-                  Подати заявку на співпрацю
+                  {t("requestCooperation")}
                 </Btn>
               )}
             {isClientTenant &&
@@ -256,7 +258,7 @@ export default function SupplierProfilePage() {
                   icon={<Eye size={13} />}
                   onClick={handleViewContract}
                 >
-                  Переглянути договір
+                  {t("viewContract")}
                 </Btn>
               )}
           </div>
@@ -268,7 +270,7 @@ export default function SupplierProfilePage() {
             (agreement.status === "rejected" || agreement.status === "terminated") &&
             agreement.rejectionReason && (
               <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
-                Причина: {agreement.rejectionReason}
+                {t("reasonLabel", { reason: agreement.rejectionReason })}
               </div>
             )}
           <div style={{ color: "#6B7280", fontSize: 13, marginBottom: 10 }}>
@@ -279,11 +281,11 @@ export default function SupplierProfilePage() {
             <span style={{ color: "#9CA3AF", fontSize: 13 }}>
               {supplier.metrics?.rating != null
                 ? Number(supplier.metrics.rating).toFixed(1)
-                : "Без оцінки"}
+                : t("noRating")}
             </span>
             {reviewCount != null && (
               <span style={{ color: "#4B5563", fontSize: 13 }}>
-                · {reviewCount} {reviewWord(reviewCount)}
+                · {tMarketplace("reviewCount", { count: reviewCount })}
               </span>
             )}
           </div>
@@ -300,7 +302,7 @@ export default function SupplierProfilePage() {
             >
               {supplier.website && (
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ color: "#4B5563", fontSize: 12 }}>Сайт:</span>
+                  <span style={{ color: "#4B5563", fontSize: 12 }}>{t("websiteLabel")}</span>
                   <a
                     href={supplier.website}
                     target="_blank"
@@ -313,19 +315,19 @@ export default function SupplierProfilePage() {
               )}
               {supplier.workingHours && (
                 <div style={{ display: "flex", gap: 8 }}>
-                  <span style={{ color: "#4B5563", fontSize: 12 }}>Графік:</span>
+                  <span style={{ color: "#4B5563", fontSize: 12 }}>{t("scheduleLabel")}</span>
                   <span style={{ color: "#9CA3AF", fontSize: 13 }}>{supplier.workingHours}</span>
                 </div>
               )}
               {supplier.paymentTerms && (
                 <div style={{ display: "flex", gap: 8 }}>
-                  <span style={{ color: "#4B5563", fontSize: 12 }}>Оплата:</span>
+                  <span style={{ color: "#4B5563", fontSize: 12 }}>{t("paymentLabel")}</span>
                   <span style={{ color: "#9CA3AF", fontSize: 13 }}>{supplier.paymentTerms}</span>
                 </div>
               )}
               {(supplier.deliveryRegions ?? []).length > 0 && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ color: "#4B5563", fontSize: 12 }}>Доставка:</span>
+                  <span style={{ color: "#4B5563", fontSize: 12 }}>{t("deliveryLabel")}</span>
                   {(supplier.deliveryRegions ?? []).map((r) => (
                     <span
                       key={r}
@@ -370,7 +372,7 @@ export default function SupplierProfilePage() {
       {/* Metrics */}
       <div style={{ marginBottom: 28 }}>
         <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: "0 0 14px" }}>
-          Показники роботи
+          {t("metricsTitle")}
         </h2>
         <SupplierMetrics metrics={supplier.metrics} />
       </div>
@@ -387,10 +389,10 @@ export default function SupplierProfilePage() {
       >
         <div style={{ display: "flex" }}>
           <button style={tabStyle("catalog")} onClick={() => setActiveTab("catalog")}>
-            Каталог
+            {t("tabCatalog")}
           </button>
           <button style={tabStyle("reviews")} onClick={() => setActiveTab("reviews")}>
-            Відгуки
+            {t("tabReviews")}
           </button>
         </div>
         {isProviderTeam && activeTab === "catalog" && (
@@ -408,7 +410,7 @@ export default function SupplierProfilePage() {
               marginBottom: 1,
             }}
           >
-            + Додати товар
+            {t("addItemButton")}
           </button>
         )}
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { MarketplaceFilters } from "../types";
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export function SupplierFilters({ filters, onChange, categories }: Props) {
+  const t = useTranslations("Dashboard.marketplace.filters");
+  const tPlan = useTranslations("Dashboard.marketplace.planLabel");
   const inputStyle: React.CSSProperties = {
     padding: "8px 12px",
     background: "#111827",
@@ -24,7 +27,7 @@ export function SupplierFilters({ filters, onChange, categories }: Props) {
       {/* Region filter */}
       <input
         type="text"
-        placeholder="Фільтр по регіону…"
+        placeholder={t("regionPlaceholder")}
         value={filters.region}
         onChange={(e) => onChange({ ...filters, region: e.target.value })}
         style={{ ...inputStyle, width: 200 }}
@@ -36,7 +39,7 @@ export function SupplierFilters({ filters, onChange, categories }: Props) {
         onChange={(e) => onChange({ ...filters, category: e.target.value })}
         style={{ ...inputStyle, width: 200, cursor: "pointer" }}
       >
-        <option value="">Всі категорії</option>
+        <option value="">{t("allCategoriesOption")}</option>
         {categories.map((cat) => (
           <option key={cat} value={cat}>
             {cat}
@@ -48,11 +51,6 @@ export function SupplierFilters({ filters, onChange, categories }: Props) {
       <div style={{ display: "flex", gap: 4 }}>
         {(["all", "free", "premium"] as const).map((plan) => {
           const active = filters.plan === plan;
-          const labels: Record<string, string> = {
-            all: "Всі",
-            free: "Free",
-            premium: "Premium",
-          };
           return (
             <button
               key={plan}
@@ -69,7 +67,7 @@ export function SupplierFilters({ filters, onChange, categories }: Props) {
                 transition: "all 0.1s",
               }}
             >
-              {labels[plan]}
+              {tPlan(plan)}
             </button>
           );
         })}

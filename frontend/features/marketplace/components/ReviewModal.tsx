@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useCreateReview } from "../hooks/useMarketplace";
 import { StarRating } from "./StarRating";
 import { ApiError } from "@/lib/api";
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function ReviewModal({ supplierId, onClose }: Props) {
+  const t = useTranslations("Dashboard.marketplace.reviewModal");
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export function ReviewModal({ supplierId, onClose }: Props) {
 
   function handleSubmit() {
     if (rating === 0) {
-      setErrorMsg("Оберіть оцінку від 1 до 5 зірок.");
+      setErrorMsg(t("errorSelectRating"));
       return;
     }
     setErrorMsg(null);
@@ -32,19 +34,19 @@ export function ReviewModal({ supplierId, onClose }: Props) {
         onError: (err) => {
           if (err instanceof ApiError && err.status === 409) {
             // Duplicate — one review per tenant per supplier (TASK-285)
-            setErrorMsg("Ви вже залишили відгук для цього постачальника.");
+            setErrorMsg(t("errorAlreadyReviewed"));
           } else if (err instanceof ApiError && err.status === 400) {
             // v4.1 backend guards (TASK-285)
             if (err.message.includes("your own supplier")) {
-              setErrorMsg("Не можна залишати відгук на власний профіль постачальника.");
+              setErrorMsg(t("errorOwnProfile"));
             } else if (err.message.includes("Supplier tenants")) {
-              setErrorMsg("Постачальники не можуть залишати відгуки.");
+              setErrorMsg(t("errorSupplierCannotReview"));
             } else {
-              setErrorMsg(err.message || "Некоректні дані відгуку.");
+              setErrorMsg(err.message || t("errorInvalidDefault"));
             }
           } else {
             setErrorMsg(
-              err instanceof Error ? err.message : "Помилка при збереженні відгуку."
+              err instanceof Error ? err.message : t("errorSaveDefault")
             );
           }
         },
@@ -83,13 +85,13 @@ export function ReviewModal({ supplierId, onClose }: Props) {
         }}
       >
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-          Залишити відгук
+          {t("title")}
         </h2>
 
         {/* Star selector */}
         <div>
           <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 10 }}>
-            Ваша оцінка
+            {t("yourRatingLabel")}
           </div>
           <StarRating value={rating} size={28} interactive onChange={setRating} />
         </div>
@@ -97,13 +99,13 @@ export function ReviewModal({ supplierId, onClose }: Props) {
         {/* Comment */}
         <div>
           <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 8 }}>
-            Коментар (необов&apos;язково)
+            {t("commentLabel")}
           </div>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={4}
-            placeholder="Ваш досвід роботи з постачальником…"
+            placeholder={t("commentPlaceholder")}
             style={{
               width: "100%",
               background: "#0D1117",
@@ -150,7 +152,7 @@ export function ReviewModal({ supplierId, onClose }: Props) {
               cursor: "pointer",
             }}
           >
-            Скасувати
+            {t("cancel")}
           </button>
           <button
             onClick={handleSubmit}
@@ -167,7 +169,7 @@ export function ReviewModal({ supplierId, onClose }: Props) {
               transition: "background 0.1s",
             }}
           >
-            {isPending ? "Збереження…" : "Надіслати відгук"}
+            {isPending ? t("saving") : t("submit")}
           </button>
         </div>
       </div>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { useSupplierReviews, useSupplier } from "../hooks/useMarketplace";
 import { StarRating } from "./StarRating";
 import { ReviewModal } from "./ReviewModal";
-import { reviewWord } from "../utils";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES, hasRole } from "@/lib/roles";
 
@@ -15,6 +15,10 @@ interface Props {
 const PAGE_SIZE = 20;
 
 export function SupplierReviewsTab({ supplierId }: Props) {
+  const t = useTranslations("Dashboard.marketplace.reviewsTab");
+  const tMarketplace = useTranslations("Dashboard.marketplace");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
   const { data, isLoading, isError } = useSupplierReviews(supplierId, page, PAGE_SIZE);
@@ -46,7 +50,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
   if (isError) {
     return (
       <div style={{ color: "#F87171", fontSize: 13, padding: "16px 0" }}>
-        Не вдалося завантажити відгуки.
+        {t("errorLoad")}
       </div>
     );
   }
@@ -74,9 +78,9 @@ export function SupplierReviewsTab({ supplierId }: Props) {
           <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700 }}>
             {stats.averageRating != null ? stats.averageRating.toFixed(1) : "—"}
           </span>
-          <span style={{ color: "#34D399", fontSize: 12 }}>Позитивні: {stats.positive}</span>
-          <span style={{ color: "#9CA3AF", fontSize: 12 }}>Нейтральні: {stats.neutral}</span>
-          <span style={{ color: "#F87171", fontSize: 12 }}>Негативні: {stats.negative}</span>
+          <span style={{ color: "#34D399", fontSize: 12 }}>{t("positive", { count: stats.positive })}</span>
+          <span style={{ color: "#9CA3AF", fontSize: 12 }}>{t("neutral", { count: stats.neutral })}</span>
+          <span style={{ color: "#F87171", fontSize: 12 }}>{t("negative", { count: stats.negative })}</span>
         </div>
       )}
 
@@ -92,7 +96,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
         }}
       >
         <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-          {total} {reviewWord(total)}
+          {tMarketplace("reviewCount", { count: total })}
         </span>
         {canReview && (
           <button
@@ -108,7 +112,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
               cursor: "pointer",
             }}
           >
-            Залишити відгук
+            {t("leaveReview")}
           </button>
         )}
       </div>
@@ -123,7 +127,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
             fontSize: 14,
           }}
         >
-          Відгуків ще немає{canReview ? " — будьте першим!" : "."}
+          {t("emptyNone")}{canReview ? t("emptyNoneBeFirst") : "."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -149,7 +153,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
                   {review.reviewerName}
                 </span>
                 <span style={{ color: "#4B5563", fontSize: 12, marginLeft: "auto" }}>
-                  {new Date(review.createdAt).toLocaleDateString("uk-UA")}
+                  {new Date(review.createdAt).toLocaleDateString(intlLocale)}
                 </span>
               </div>
               {review.comment && (
@@ -176,11 +180,11 @@ export function SupplierReviewsTab({ supplierId }: Props) {
                     }}
                   >
                     <span style={{ color: "#60A5FA", fontSize: 12, fontWeight: 600 }}>
-                      Відповідь постачальника:
+                      {t("repliedLabel")}
                     </span>
                     {review.repliedAt && (
                       <span style={{ color: "#4B5563", fontSize: 11 }}>
-                        {new Date(review.repliedAt).toLocaleDateString("uk-UA")}
+                        {new Date(review.repliedAt).toLocaleDateString(intlLocale)}
                       </span>
                     )}
                   </div>
@@ -218,10 +222,10 @@ export function SupplierReviewsTab({ supplierId }: Props) {
               cursor: page === 1 ? "not-allowed" : "pointer",
             }}
           >
-            ← Попередня
+            {t("prev")}
           </button>
           <span style={{ color: "#4B5563", fontSize: 13 }}>
-            Сторінка {page} з {totalPages}
+            {t("pageOf", { page, total: totalPages })}
           </span>
           <button
             disabled={page >= totalPages}
@@ -236,7 +240,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
               cursor: page >= totalPages ? "not-allowed" : "pointer",
             }}
           >
-            Наступна →
+            {t("next")}
           </button>
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAddSupplierItem, useItemCategories } from "../hooks/useMarketplace";
 import { ItemCategoryFields, findMissingRequiredField } from "./ItemCategoryFields";
 import {
@@ -18,6 +19,9 @@ interface Props {
 }
 
 export function AddSupplierItemModal({ supplierId, onClose }: Props) {
+  const t = useTranslations("Dashboard.marketplace.addItemModal");
+  const tCategoryFields = useTranslations("Dashboard.marketplace.itemCategoryFields");
+  const tExtraFields = useTranslations("Dashboard.marketplace.itemExtraFields");
   const addItem = useAddSupplierItem(supplierId);
 
   const [customName, setCustomName] = useState("");
@@ -36,7 +40,7 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
     setError(null);
 
     if (!customName.trim()) {
-      setError("Назва товару є обов'язковою.");
+      setError(t("errorNameRequired"));
       return;
     }
 
@@ -44,23 +48,23 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
     const minQty = minQtyRaw ? parseInt(minQtyRaw, 10) : undefined;
 
     if (priceRaw && (isNaN(price!) || price! < 0)) {
-      setError("Некоректна ціна.");
+      setError(t("errorInvalidPrice"));
       return;
     }
     if (minQtyRaw && (isNaN(minQty!) || minQty! < 1)) {
-      setError("Некоректна мінімальна кількість.");
+      setError(t("errorInvalidMinQty"));
       return;
     }
 
     if (category) {
-      const missing = findMissingRequiredField(categories, category, attributes);
+      const missing = findMissingRequiredField(categories, category, attributes, tCategoryFields);
       if (missing) {
         setError(missing);
         return;
       }
     }
 
-    const parsedExtra = parseExtraFields(extra);
+    const parsedExtra = parseExtraFields(extra, tExtraFields);
     if (parsedExtra.error !== null) {
       setError(parsedExtra.error);
       return;
@@ -88,7 +92,7 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
     addItem.mutate(body, {
       onSuccess: () => onClose(),
       onError: (err: any) => {
-        setError(err?.message ?? "Помилка при додаванні товару.");
+        setError(err?.message ?? t("errorSaveDefault"));
       },
     });
   }
@@ -146,7 +150,7 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>
-            Додати товар до каталогу
+            {t("title")}
           </h2>
           <button
             onClick={onClose}
@@ -166,13 +170,13 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={labelStyle}>
-              Назва товару <span style={{ color: "#F87171" }}>*</span>
+              {t("nameLabel")} <span style={{ color: "#F87171" }}>*</span>
             </label>
             <input
               type="text"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
-              placeholder="Молоко 2.5%, 1л"
+              placeholder={t("namePlaceholder")}
               style={inputStyle}
               required
             />
@@ -187,7 +191,7 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <label style={labelStyle}>Ціна (грн)</label>
+              <label style={labelStyle}>{t("priceLabel")}</label>
               <input
                 type="number"
                 min="0"
@@ -199,7 +203,7 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
               />
             </div>
             <div>
-              <label style={labelStyle}>Мін. замовлення</label>
+              <label style={labelStyle}>{t("minQtyLabel")}</label>
               <input
                 type="number"
                 min="1"
@@ -213,12 +217,12 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
           </div>
 
           <div>
-            <label style={labelStyle}>Одиниця виміру</label>
+            <label style={labelStyle}>{t("unitLabel")}</label>
             <input
               type="text"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              placeholder="шт, кг, л, упак."
+              placeholder={t("unitPlaceholder")}
               style={inputStyle}
             />
           </div>
@@ -237,7 +241,7 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
               htmlFor="isAvailable"
               style={{ color: "#E8EDF5", fontSize: 13, cursor: "pointer" }}
             >
-              Товар в наявності
+              {t("availableLabel")}
             </label>
           </div>
 
@@ -247,10 +251,10 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
             <Btn type="button" variant="ghost" onClick={onClose}>
-              Скасувати
+              {t("cancel")}
             </Btn>
             <Btn type="submit" disabled={addItem.isPending}>
-              {addItem.isPending ? "Збереження…" : "Додати"}
+              {addItem.isPending ? t("saving") : t("add")}
             </Btn>
           </div>
         </form>

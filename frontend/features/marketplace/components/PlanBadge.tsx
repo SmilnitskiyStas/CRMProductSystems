@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { SupplierPlan } from "../types";
 
 interface Props {
@@ -5,6 +8,7 @@ interface Props {
 }
 
 export function PlanBadge({ plan }: Props) {
+  const t = useTranslations("Dashboard.marketplace.planLabel");
   const isPremium = plan === "premium";
   return (
     <span
@@ -23,7 +27,7 @@ export function PlanBadge({ plan }: Props) {
         textTransform: "uppercase",
       }}
     >
-      {isPremium ? "★ Premium" : "Free"}
+      {t(plan)}
     </span>
   );
 }

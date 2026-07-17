@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { SupplierMetricsDto } from "../types";
 import { StarRating } from "./StarRating";
 
@@ -30,6 +33,7 @@ function MetricItem({ label, value }: MetricItemProps) {
 }
 
 export function SupplierMetrics({ metrics }: Props) {
+  const t = useTranslations("Dashboard.marketplace.metrics");
   const fmt = (v: number | null | undefined, suffix = "") =>
     v != null ? `${v}${suffix}` : "—";
 
@@ -42,7 +46,7 @@ export function SupplierMetrics({ metrics }: Props) {
       }}
     >
       <MetricItem
-        label="Рейтинг"
+        label={t("rating")}
         value={
           metrics?.rating != null ? (
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -55,11 +59,11 @@ export function SupplierMetrics({ metrics }: Props) {
         }
       />
       <MetricItem
-        label="Середній термін доставки"
-        value={fmt(metrics?.avgDeliveryDays, " дн.")}
+        label={t("avgDeliveryDays")}
+        value={fmt(metrics?.avgDeliveryDays, t("daySuffix"))}
       />
       <MetricItem
-        label="Точність замовлень"
+        label={t("orderAccuracy")}
         value={
           metrics?.orderAccuracy != null
             ? `${(metrics.orderAccuracy * 100).toFixed(0)}%`
@@ -67,15 +71,15 @@ export function SupplierMetrics({ metrics }: Props) {
         }
       />
       <MetricItem
-        label="Якість товарів"
+        label={t("qualityScore")}
         value={fmt(metrics?.qualityScore)}
       />
       <MetricItem
-        label="Час відповіді"
-        value={fmt(metrics?.responseTimeHours, " год.")}
+        label={t("responseTime")}
+        value={fmt(metrics?.responseTimeHours, t("hourSuffix"))}
       />
       <MetricItem
-        label="Відмови"
+        label={t("cancellationRate")}
         value={
           metrics?.cancellationRate != null
             ? `${(metrics.cancellationRate * 100).toFixed(0)}%`

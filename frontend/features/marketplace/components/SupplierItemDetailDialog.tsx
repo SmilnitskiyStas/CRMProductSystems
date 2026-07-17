@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, ImageOff } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { DetailDrawer, DrawerField, DrawerSection, DrawerGrid } from "@/components/ui/DetailDrawer";
 import { useItemCategories } from "../hooks/useMarketplace";
 import type { SupplierItemDto } from "../types";
@@ -26,6 +27,7 @@ function formatValue(value: unknown): string {
 }
 
 export function SupplierItemDetailDialog({ item, onClose }: Props) {
+  const t = useTranslations("Dashboard.marketplace.itemDetailDialog");
   const { data: categories = [] } = useItemCategories();
   const [extraOpen, setExtraOpen] = useState(false);
 
@@ -44,19 +46,19 @@ export function SupplierItemDetailDialog({ item, onClose }: Props) {
 
   const dims =
     item.heightCm != null || item.depthCm != null || item.widthCm != null
-      ? `${item.heightCm ?? "—"} × ${item.depthCm ?? "—"} × ${item.widthCm ?? "—"} см`
+      ? `${item.heightCm ?? "—"} × ${item.depthCm ?? "—"} × ${item.widthCm ?? "—"}${t("dimensionsUnit")}`
       : "—";
 
   return (
     <DetailDrawer
       isOpen={!!item}
       onClose={onClose}
-      title={item.customName ?? item.itemName ?? "Товар"}
+      title={item.customName ?? item.itemName ?? t("fallbackItemName")}
       subtitle={categoryDef?.labelUa}
       width={640}
     >
       {/* Image gallery */}
-      <DrawerSection title="Зображення">
+      <DrawerSection title={t("imagesTitle")}>
         <div
           style={{
             width: "100%",
@@ -75,13 +77,13 @@ export function SupplierItemDetailDialog({ item, onClose }: Props) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={mainImage.url}
-              alt={item.customName ?? item.itemName ?? "Товар"}
+              alt={item.customName ?? item.itemName ?? t("fallbackItemName")}
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#4B5563" }}>
               <ImageOff size={28} />
-              <span style={{ fontSize: 12 }}>Немає зображення</span>
+              <span style={{ fontSize: 12 }}>{t("noImage")}</span>
             </div>
           )}
         </div>
@@ -109,9 +111,9 @@ export function SupplierItemDetailDialog({ item, onClose }: Props) {
       </DrawerSection>
 
       {/* Barcodes */}
-      <DrawerSection title="Штрихкоди">
+      <DrawerSection title={t("barcodesTitle")}>
         {item.barcodes.length === 0 ? (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Штрихкоди не вказані.</div>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noBarcodes")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {item.barcodes.map((code, idx) => (
@@ -135,7 +137,7 @@ export function SupplierItemDetailDialog({ item, onClose }: Props) {
                     color: idx === 0 ? "#4ADE80" : "#9CA3AF",
                   }}
                 >
-                  {idx === 0 ? "Основний" : "Альтернативний"}
+                  {idx === 0 ? t("primaryBarcode") : t("alternateBarcode")}
                 </span>
               </div>
             ))}
@@ -144,19 +146,19 @@ export function SupplierItemDetailDialog({ item, onClose }: Props) {
       </DrawerSection>
 
       {/* Characteristics */}
-      <DrawerSection title="Характеристики">
+      <DrawerSection title={t("characteristicsTitle")}>
         <DrawerGrid>
-          <DrawerField label="Бренд" value={item.brand ?? "—"} />
-          <DrawerField label="Виробник" value={item.manufacturer ?? "—"} />
-          <DrawerField label="Країна виробника" value={item.manufacturerCountry ?? "—"} />
-          <DrawerField label="Категорія" value={categoryDef?.labelUa ?? item.category ?? "—"} />
+          <DrawerField label={t("brandLabel")} value={item.brand ?? "—"} />
+          <DrawerField label={t("manufacturerLabel")} value={item.manufacturer ?? "—"} />
+          <DrawerField label={t("countryLabel")} value={item.manufacturerCountry ?? "—"} />
+          <DrawerField label={t("categoryLabel")} value={categoryDef?.labelUa ?? item.category ?? "—"} />
           <DrawerField
-            label="Мін./Макс. партія замовлення"
+            label={t("moqLabel")}
             value={`${item.minQty ?? "—"} / ${item.maxQty ?? "—"}`}
           />
-          <DrawerField label="Одиниця виміру" value={item.unit ?? "—"} />
-          <DrawerField label="Вага брутто" value={item.grossWeightKg != null ? `${item.grossWeightKg} кг` : "—"} />
-          <DrawerField label="Розміри (В×Г×Ш)" value={dims} />
+          <DrawerField label={t("unitLabel")} value={item.unit ?? "—"} />
+          <DrawerField label={t("grossWeightLabel")} value={item.grossWeightKg != null ? `${item.grossWeightKg}${t("grossWeightUnit")}` : "—"} />
+          <DrawerField label={t("dimensionsLabel")} value={dims} />
         </DrawerGrid>
 
         {categoryDef && categoryDef.fields.length > 0 && (
@@ -194,7 +196,7 @@ export function SupplierItemDetailDialog({ item, onClose }: Props) {
             }}
           >
             {extraOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            Додаткова інформація
+            {t("extraInfoToggle")}
           </button>
           {extraOpen && (
             <DrawerGrid>

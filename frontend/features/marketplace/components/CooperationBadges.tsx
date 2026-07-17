@@ -3,7 +3,17 @@
 // Status badges + Ukrainian label maps for cooperation agreements, marketplace
 // orders and support tickets (TASK-318). Used by both the client marketplace
 // pages and the supplier cabinet.
+//
+// i18n rollout Block 6 (TASK-384): the Badge components below now resolve
+// their label via `useTranslations("Dashboard.marketplace.{agreementStatus,
+// orderStatus,ticketStatus}")` instead of the exported *_STATUS_LABELS maps.
+// Those maps stay exported and Ukrainian-only (unchanged) because
+// `features/supplier-cabinet/*` (Block 7, not yet translated) imports them
+// directly for non-badge uses (e.g. `CabinetSupportTab.tsx`'s status-filter
+// `<option>` list) — removing/retranslating them would silently break that
+// still-untranslated surface.
 
+import { useTranslations } from "next-intl";
 import type {
   CooperationStatus,
   MarketplaceOrderStatus,
@@ -60,9 +70,10 @@ const AGREEMENT_STATUS_COLORS: Record<CooperationStatus, BadgeColors> = {
 };
 
 export function AgreementStatusBadge({ status }: { status: CooperationStatus }) {
+  const t = useTranslations("Dashboard.marketplace.agreementStatus");
   return (
     <Badge
-      label={AGREEMENT_STATUS_LABELS[status] ?? status}
+      label={t(status)}
       colors={AGREEMENT_STATUS_COLORS[status] ?? GRAY}
     />
   );
@@ -87,9 +98,10 @@ const ORDER_STATUS_COLORS: Record<MarketplaceOrderStatus, BadgeColors> = {
 };
 
 export function OrderStatusBadge({ status }: { status: MarketplaceOrderStatus }) {
+  const t = useTranslations("Dashboard.marketplace.orderStatus");
   return (
     <Badge
-      label={ORDER_STATUS_LABELS[status] ?? status}
+      label={t(status)}
       colors={ORDER_STATUS_COLORS[status] ?? GRAY}
     />
   );
@@ -112,9 +124,10 @@ const TICKET_STATUS_COLORS: Record<SupportTicketStatus, BadgeColors> = {
 };
 
 export function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
+  const t = useTranslations("Dashboard.marketplace.ticketStatus");
   return (
     <Badge
-      label={TICKET_STATUS_LABELS[status] ?? status}
+      label={t(status)}
       colors={TICKET_STATUS_COLORS[status] ?? GRAY}
     />
   );

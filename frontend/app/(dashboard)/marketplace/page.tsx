@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useSuppliers, useMarketplaceSearch } from "@/features/marketplace/hooks/useMarketplace";
 import { SupplierCard } from "@/features/marketplace/components/SupplierCard";
 import { SupplierFilters } from "@/features/marketplace/components/SupplierFilters";
@@ -15,6 +16,8 @@ const DEFAULT_FILTERS: MarketplaceFilters = {
 };
 
 export default function MarketplacePage() {
+  const t = useTranslations("Dashboard.marketplace.page");
+  const tGate = useTranslations("Dashboard.marketplace.moduleGate");
   const { data: modulesData } = useModules();
   const marketplaceActive =
     !modulesData || modulesData.modules.includes("marketplace");
@@ -67,10 +70,10 @@ export default function MarketplacePage() {
       >
         <div style={{ fontSize: 40 }}>🔒</div>
         <h2 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          Модуль Маркетплейс не активований
+          {tGate("title")}
         </h2>
         <p style={{ color: "#4B5563", fontSize: 14, maxWidth: 440 }}>
-          Зверніться до адміністратора платформи, щоб увімкнути модуль «Маркетплейс постачальників».
+          {tGate("body")}
         </p>
       </div>
     );
@@ -81,10 +84,10 @@ export default function MarketplacePage() {
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          Маркетплейс постачальників
+          {t("title")}
         </h1>
         <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          Знайдіть і порівняйте постачальників для вашого бізнесу
+          {t("subtitle")}
         </p>
       </div>
 
@@ -111,7 +114,7 @@ export default function MarketplacePage() {
           />
           <input
             type="text"
-            placeholder="Пошук постачальників за назвою товару…"
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -142,7 +145,7 @@ export default function MarketplacePage() {
             cursor: "pointer",
           }}
         >
-          {searchMutation.isPending ? "Пошук…" : "Знайти"}
+          {searchMutation.isPending ? t("searching") : t("searchButton")}
         </button>
         {isSearchMode && (
           <button
@@ -157,7 +160,7 @@ export default function MarketplacePage() {
               cursor: "pointer",
             }}
           >
-            Скинути
+            {t("reset")}
           </button>
         )}
       </div>
@@ -179,7 +182,7 @@ export default function MarketplacePage() {
       {/* Content */}
       {isSearchMode && searchMutation.isError && (
         <div style={{ color: "#F87171", fontSize: 13, marginBottom: 16 }}>
-          Помилка пошуку. Спробуйте ще раз.
+          {t("searchError")}
         </div>
       )}
 
@@ -216,19 +219,17 @@ export default function MarketplacePage() {
         >
           <div style={{ fontSize: 36 }}>🔍</div>
           <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600 }}>
-            {isSearchMode ? "Постачальників не знайдено" : "Список постачальників порожній"}
+            {isSearchMode ? t("emptySearchTitle") : t("emptyBrowseTitle")}
           </div>
           <div style={{ color: "#4B5563", fontSize: 13 }}>
-            {isSearchMode
-              ? "Спробуйте змінити запит або перевірте написання"
-              : "Спробуйте змінити фільтри або очистити пошук"}
+            {isSearchMode ? t("emptySearchBody") : t("emptyBrowseBody")}
           </div>
         </div>
       ) : (
         <>
           {isSearchMode && (
             <div style={{ color: "#4B5563", fontSize: 13, marginBottom: 16 }}>
-              Знайдено {displayItems.length} постачальник(ів) для «{searchQuery}»
+              {t("resultsFound", { count: displayItems.length, query: searchQuery })}
             </div>
           )}
           <div
@@ -267,10 +268,10 @@ export default function MarketplacePage() {
                   cursor: page === 1 ? "not-allowed" : "pointer",
                 }}
               >
-                ← Попередня
+                {t("prev")}
               </button>
               <span style={{ color: "#4B5563", fontSize: 13 }}>
-                Сторінка {page} з {Math.ceil(data.total / data.pageSize)}
+                {t("pageOf", { page, total: Math.ceil(data.total / data.pageSize) })}
               </span>
               <button
                 disabled={page >= Math.ceil(data.total / data.pageSize)}
@@ -291,7 +292,7 @@ export default function MarketplacePage() {
                       : "pointer",
                 }}
               >
-                Наступна →
+                {t("next")}
               </button>
             </div>
           )}
@@ -300,7 +301,7 @@ export default function MarketplacePage() {
 
       {isError && !isSearchMode && (
         <div style={{ color: "#F87171", fontSize: 13, textAlign: "center", marginTop: 24 }}>
-          Не вдалося завантажити список постачальників.
+          {t("errorLoad")}
         </div>
       )}
     </div>

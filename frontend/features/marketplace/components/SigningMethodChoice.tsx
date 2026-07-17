@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { FileSignature, Send } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useChooseSigningMethod } from "../hooks/useCooperation";
 import type { CooperationAgreementDto } from "../types";
@@ -17,6 +18,7 @@ interface Props {
 const hintStyle: React.CSSProperties = { color: "#FBBF24", fontSize: 12, marginBottom: 8 };
 
 export function SigningMethodChoice({ agreement }: Props) {
+  const t = useTranslations("Dashboard.marketplace.signingMethodChoice");
   const [emailFormOpen, setEmailFormOpen] = useState(false);
   const [email, setEmail] = useState("");
   const chooseSigningMethod = useChooseSigningMethod(agreement.id);
@@ -26,8 +28,7 @@ export function SigningMethodChoice({ agreement }: Props) {
   if (agreement.signingMethod === "physical") {
     return (
       <div style={hintStyle}>
-        Обрано: Фізичне підписання — надішліть підписаний договір на адресу
-        постачальника
+        {t("hintPhysicalChosen")}
         {agreement.supplierLegalAddress ? `: ${agreement.supplierLegalAddress}` : ""}.
       </div>
     );
@@ -36,23 +37,23 @@ export function SigningMethodChoice({ agreement }: Props) {
   if (agreement.signingMethod === "vchasno") {
     return (
       <div style={hintStyle}>
-        Обрано: Вчасно — документ надіслано на {agreement.signingEmail}.
+        {t("hintVchasnoChosen", { email: agreement.signingEmail ?? "" })}
       </div>
     );
   }
 
   function handlePhysical() {
     const address = agreement.supplierLegalAddress
-      ? `\n\nАдреса постачальника: ${agreement.supplierLegalAddress}`
+      ? t("confirmPhysicalAddressLine", { address: agreement.supplierLegalAddress })
       : "";
     const confirmed = window.confirm(
-      `Ви обираєте фізичне підписання. Роздрукуйте, підпишіть і надішліть договір поштою на адресу постачальника.${address}\n\nПідтвердити вибір?`
+      `${t("confirmPhysicalPrompt")}${address}${t("confirmPhysicalQuestion")}`
     );
     if (!confirmed) return;
     chooseSigningMethod.mutate(
       { method: "physical" },
       {
-        onSuccess: () => toast.success("Обрано фізичне підписання"),
+        onSuccess: () => toast.success(t("toastPhysicalChosen")),
         onError: (err) => toast.error(err.message),
       }
     );
@@ -61,14 +62,14 @@ export function SigningMethodChoice({ agreement }: Props) {
   function handleVchasnoSubmit() {
     const trimmed = email.trim();
     if (!trimmed || !trimmed.includes("@")) {
-      toast.error("Вкажіть коректний email");
+      toast.error(t("invalidEmail"));
       return;
     }
     chooseSigningMethod.mutate(
       { method: "vchasno", email: trimmed },
       {
         onSuccess: () => {
-          toast.success("Договір надіслано у Вчасно");
+          toast.success(t("toastVchasnoSent"));
           setEmailFormOpen(false);
         },
         onError: (err) => toast.error(err.message),
@@ -79,8 +80,7 @@ export function SigningMethodChoice({ agreement }: Props) {
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={hintStyle}>
-        Оберіть спосіб підписання договору — постачальник підтвердить
-        підписання, після чого відкриються замовлення.
+        {t("intro")}
       </div>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
         <Btn
@@ -89,7 +89,7 @@ export function SigningMethodChoice({ agreement }: Props) {
           disabled={chooseSigningMethod.isPending}
           onClick={handlePhysical}
         >
-          Підписати фізично
+          {t("signPhysical")}
         </Btn>
 
         {!emailFormOpen ? (
@@ -100,7 +100,7 @@ export function SigningMethodChoice({ agreement }: Props) {
             disabled={chooseSigningMethod.isPending}
             onClick={() => setEmailFormOpen(true)}
           >
-            Підписати через Вчасно
+            {t("signVchasno")}
           </Btn>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -108,7 +108,7 @@ export function SigningMethodChoice({ agreement }: Props) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="email для Вчасно"
+              placeholder={t("emailPlaceholder")}
               autoFocus
               style={{
                 background: "#1F2937",
@@ -126,7 +126,7 @@ export function SigningMethodChoice({ agreement }: Props) {
               disabled={chooseSigningMethod.isPending}
               onClick={handleVchasnoSubmit}
             >
-              {chooseSigningMethod.isPending ? "Надсилання..." : "Надіслати"}
+              {chooseSigningMethod.isPending ? t("sending") : t("send")}
             </Btn>
             <Btn
               size="sm"
@@ -137,7 +137,7 @@ export function SigningMethodChoice({ agreement }: Props) {
                 setEmail("");
               }}
             >
-              Скасувати
+              {t("cancel")}
             </Btn>
           </div>
         )}

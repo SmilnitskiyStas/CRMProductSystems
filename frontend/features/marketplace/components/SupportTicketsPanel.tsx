@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, LifeBuoy, Send, X } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import {
@@ -26,6 +27,9 @@ interface Props {
 type View = "list" | "create" | "thread";
 
 export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props) {
+  const t = useTranslations("Dashboard.marketplace.supportPanel");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const [view, setView] = useState<View>("list");
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -52,7 +56,7 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
       { subject: subject.trim(), message: message.trim() },
       {
         onSuccess: (created) => {
-          toast.success("Звернення створено");
+          toast.success(t("toastCreated"));
           setSubject("");
           setMessage("");
           setSelectedTicketId(created.id);
@@ -129,7 +133,7 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
           <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {view === "thread" && ticket
               ? ticket.subject
-              : `Служба підтримки — ${supplierName}`}
+              : t("headerFallback", { name: supplierName })}
           </span>
           {view === "thread" && ticket && <TicketStatusBadge status={ticket.status} />}
         </div>
@@ -146,19 +150,19 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
         <>
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {isLoading && (
-              <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження...</div>
+              <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
             )}
             {!isLoading && supplierTickets.length === 0 && (
               <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 13 }}>
-                Звернень до цього постачальника ще немає.
+                {t("emptyList")}
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {supplierTickets.map((t) => (
+              {supplierTickets.map((ticketItem) => (
                 <button
-                  key={t.id}
+                  key={ticketItem.id}
                   onClick={() => {
-                    setSelectedTicketId(t.id);
+                    setSelectedTicketId(ticketItem.id);
                     setView("thread");
                   }}
                   style={{
@@ -176,19 +180,21 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
                 >
                   <div style={{ minWidth: 0 }}>
                     <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {t.subject}
+                      {ticketItem.subject}
                     </div>
                     <div style={{ color: "#4B5563", fontSize: 11 }}>
-                      Оновлено {new Date(t.updatedAt).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {t("updatedLabel", {
+                        date: new Date(ticketItem.updatedAt).toLocaleString(intlLocale, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+                      })}
                     </div>
                   </div>
-                  <TicketStatusBadge status={t.status} />
+                  <TicketStatusBadge status={ticketItem.status} />
                 </button>
               ))}
             </div>
           </div>
           <div style={{ padding: "12px 16px", borderTop: "1px solid #1F2937", display: "flex", justifyContent: "flex-end" }}>
-            <Btn onClick={() => setView("create")}>Нове звернення</Btn>
+            <Btn onClick={() => setView("create")}>{t("newTicket")}</Btn>
           </div>
         </>
       )}
@@ -198,36 +204,36 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
         <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
-              Тема <span style={{ color: "#F87171" }}>*</span>
+              {t("subjectLabel")} <span style={{ color: "#F87171" }}>*</span>
             </label>
             <input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Коротко про проблему чи запит"
+              placeholder={t("subjectPlaceholder")}
               style={inputStyle}
             />
           </div>
           <div>
             <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
-              Повідомлення <span style={{ color: "#F87171" }}>*</span>
+              {t("messageLabel")} <span style={{ color: "#F87171" }}>*</span>
             </label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Опишіть питання детальніше..."
+              placeholder={t("messagePlaceholder")}
               rows={6}
               style={{ ...inputStyle, resize: "vertical" }}
             />
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
             <Btn variant="ghost" onClick={() => setView("list")}>
-              Назад
+              {t("back")}
             </Btn>
             <Btn
               disabled={!subject.trim() || !message.trim() || createTicket.isPending}
               onClick={handleCreate}
             >
-              {createTicket.isPending ? "Надсилання..." : "Створити звернення"}
+              {createTicket.isPending ? t("sending") : t("createTicket")}
             </Btn>
           </div>
         </div>
@@ -254,7 +260,7 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
                       {m.body}
                     </p>
                     <p style={{ color: "#4B5563", fontSize: 10, margin: "4px 0 0", textAlign: "right" }}>
-                      {new Date(m.createdAt).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      {new Date(m.createdAt).toLocaleString(intlLocale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                 </div>
@@ -272,7 +278,7 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
                   handleReply();
                 }
               }}
-              placeholder="Написати відповідь..."
+              placeholder={t("replyPlaceholder")}
               style={{ ...inputStyle, flex: 1, width: "auto" }}
             />
             <Btn

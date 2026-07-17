@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { SupplierListItemDto } from "../types";
 import { StarRating } from "./StarRating";
 import { PlanBadge } from "./PlanBadge";
 import { useSupplierReviewCount } from "../hooks/useMarketplace";
-import { reviewWord } from "../utils";
 
 interface Props {
   supplier: SupplierListItemDto;
 }
 
 export function SupplierCard({ supplier }: Props) {
+  const t = useTranslations("Dashboard.marketplace.card");
+  const tMarketplace = useTranslations("Dashboard.marketplace");
   const { data: reviewCount } = useSupplierReviewCount(supplier.id);
   const categories = supplier.categories ?? [];
 
@@ -68,12 +70,12 @@ export function SupplierCard({ supplier }: Props) {
           </span>
           {reviewCount != null && (
             <span style={{ color: "#4B5563", fontSize: 12 }}>
-              ({reviewCount} {reviewWord(reviewCount)})
+              ({tMarketplace("reviewCount", { count: reviewCount })})
             </span>
           )}
           {supplier.avgDeliveryDays != null && (
             <span style={{ color: "#4B5563", fontSize: 12, marginLeft: "auto" }}>
-              {supplier.avgDeliveryDays} дн. доставки
+              {t("deliveryDays", { days: supplier.avgDeliveryDays })}
             </span>
           )}
         </div>

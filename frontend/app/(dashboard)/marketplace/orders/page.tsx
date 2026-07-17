@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useMyCooperation,
   useMyMarketplaceOrders,
@@ -24,16 +25,16 @@ import type { CooperationAgreementDto, MarketplaceOrderDto } from "@/features/ma
 
 type ActiveTab = "orders" | "cooperation";
 
-function money(v: number): string {
-  return v.toLocaleString("uk-UA", {
+function money(v: number, locale: string): string {
+  return v.toLocaleString(locale, {
     style: "currency",
     currency: "UAH",
     minimumFractionDigits: 2,
   });
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -63,20 +64,22 @@ const cellStyle: React.CSSProperties = {
 // ─── Orders tab ────────────────────────────────────────────────────────────────
 
 function OrdersTab() {
+  const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: orders = [], isLoading } = useMyMarketplaceOrders();
   const cancelOrder = useCancelMarketplaceOrder();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<MarketplaceOrderDto | null>(null);
 
   if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження...</div>;
+    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>;
   }
 
   if (orders.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
-        Замовлень ще немає. Оформіть перше замовлення на сторінці постачальника
-        з активною співпрацею.
+        {t("empty")}
       </div>
     );
   }
@@ -87,11 +90,11 @@ function OrdersTab() {
         <thead>
           <tr>
             <th style={{ ...headerCellStyle, width: 30 }}></th>
-            <th style={headerCellStyle}>Номер</th>
-            <th style={headerCellStyle}>Постачальник</th>
-            <th style={headerCellStyle}>Дата</th>
-            <th style={headerCellStyle}>Статус</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>Сума</th>
+            <th style={headerCellStyle}>{t("headerNumber")}</th>
+            <th style={headerCellStyle}>{t("headerSupplier")}</th>
+            <th style={headerCellStyle}>{t("headerDate")}</th>
+            <th style={headerCellStyle}>{t("headerStatus")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerTotal")}</th>
             <th style={headerCellStyle}></th>
           </tr>
         </thead>
@@ -103,6 +106,7 @@ function OrdersTab() {
                 key={order.id}
                 order={order}
                 expanded={expanded}
+                intlLocale={intlLocale}
                 onToggle={() => setExpandedId(expanded ? null : order.id)}
                 onCancel={() => setCancelTarget(order)}
               />
@@ -113,9 +117,9 @@ function OrdersTab() {
 
       {cancelTarget && (
         <ReasonModal
-          title={`Скасувати замовлення ${cancelTarget.orderNumber}?`}
-          label="Причина скасування"
-          confirmLabel="Скасувати замовлення"
+          title={t("cancelModalTitle", { number: cancelTarget.orderNumber })}
+          label={t("cancelModalLabel")}
+          confirmLabel={t("cancelModalConfirm")}
           required
           pending={cancelOrder.isPending}
           onConfirm={(reason) =>
@@ -123,7 +127,7 @@ function OrdersTab() {
               { orderId: cancelTarget.id, reason },
               {
                 onSuccess: () => {
-                  toast.success("Замовлення скасовано");
+                  toast.success(t("toastCancelled"));
                   setCancelTarget(null);
                 },
                 onError: (err) => toast.error(err.message),
@@ -140,14 +144,17 @@ function OrdersTab() {
 function FragmentRow({
   order,
   expanded,
+  intlLocale,
   onToggle,
   onCancel,
 }: {
   order: MarketplaceOrderDto;
   expanded: boolean;
+  intlLocale: string;
   onToggle: () => void;
   onCancel: () => void;
 }) {
+  const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
   return (
     <>
       <tr onClick={onToggle} style={{ cursor: "pointer" }}>
@@ -157,13 +164,13 @@ function FragmentRow({
         <td style={{ ...cellStyle, fontWeight: 600 }}>{order.orderNumber}</td>
         <td style={cellStyle}>{order.supplierName}</td>
         <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-          {formatDate(order.createdAt)}
+          {formatDate(order.createdAt, intlLocale)}
         </td>
         <td style={cellStyle}>
           <OrderStatusBadge status={order.status} />
         </td>
         <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-          {money(order.totalAmount)}
+          {money(order.totalAmount, intlLocale)}
         </td>
         <td
           style={{ ...cellStyle, textAlign: "right" }}
@@ -171,7 +178,7 @@ function FragmentRow({
         >
           {order.status === "new" && (
             <Btn size="sm" variant="danger" onClick={onCancel}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
           )}
         </td>
@@ -182,21 +189,21 @@ function FragmentRow({
             <div style={{ background: "#0D1117", padding: "12px 24px 16px 44px" }}>
               {order.comment && (
                 <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
-                  Коментар: {order.comment}
+                  {t("commentLabel", { comment: order.comment })}
                 </div>
               )}
               {order.cancelReason && (
                 <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
-                  Причина скасування: {order.cancelReason}
+                  {t("cancelReasonLabel", { reason: order.cancelReason })}
                 </div>
               )}
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={headerCellStyle}>Товар</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>Ціна</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>К-сть</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>Сума</th>
+                    <th style={headerCellStyle}>{t("headerProduct")}</th>
+                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
+                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerQty")}</th>
+                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerLineTotal")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -209,13 +216,13 @@ function FragmentRow({
                         )}
                       </td>
                       <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                        {money(item.price)}
+                        {money(item.price, intlLocale)}
                       </td>
                       <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
                         {item.qty}
                       </td>
                       <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                        {money(item.lineTotal)}
+                        {money(item.lineTotal, intlLocale)}
                       </td>
                     </tr>
                   ))}
@@ -232,6 +239,9 @@ function FragmentRow({
 // ─── Cooperation tab ───────────────────────────────────────────────────────────
 
 function CooperationTab() {
+  const t = useTranslations("Dashboard.marketplace.ordersPage.cooperationTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: agreements = [], isLoading } = useMyCooperation();
 
   function handleViewContract(agreement: CooperationAgreementDto) {
@@ -241,14 +251,13 @@ function CooperationTab() {
   }
 
   if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження...</div>;
+    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>;
   }
 
   if (agreements.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
-        Угод про співпрацю ще немає. Подайте заявку на сторінці постачальника
-        в маркетплейсі.
+        {t("empty")}
       </div>
     );
   }
@@ -258,10 +267,10 @@ function CooperationTab() {
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={headerCellStyle}>Постачальник</th>
-            <th style={headerCellStyle}>Статус</th>
-            <th style={headerCellStyle}>№ договору</th>
-            <th style={headerCellStyle}>Дата заявки</th>
+            <th style={headerCellStyle}>{t("headerSupplier")}</th>
+            <th style={headerCellStyle}>{t("headerStatus")}</th>
+            <th style={headerCellStyle}>{t("headerContractNumber")}</th>
+            <th style={headerCellStyle}>{t("headerRequestDate")}</th>
             <th style={headerCellStyle}></th>
           </tr>
         </thead>
@@ -284,7 +293,7 @@ function CooperationTab() {
               </td>
               <td style={{ ...cellStyle, color: "#9CA3AF" }}>{a.contractNumber ?? "—"}</td>
               <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                {formatDate(a.requestedAt)}
+                {formatDate(a.requestedAt, intlLocale)}
               </td>
               <td style={{ ...cellStyle, textAlign: "right" }}>
                 {a.hasContractFile && (
@@ -294,7 +303,7 @@ function CooperationTab() {
                     icon={<Eye size={13} />}
                     onClick={() => handleViewContract(a)}
                   >
-                    Переглянути договір
+                    {t("viewContractButton")}
                   </Btn>
                 )}
               </td>
@@ -309,13 +318,14 @@ function CooperationTab() {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MarketplaceOrdersPage() {
+  const t = useTranslations("Dashboard.marketplace.ordersPage");
   const { data: me } = useMe();
   const [activeTab, setActiveTab] = useState<ActiveTab>("orders");
 
   if (me && !TENANT_ROLES.has(me.role as AppRole)) {
     return (
       <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        Сторінка доступна лише клієнтським компаніям.
+        {t("roleGate")}
       </div>
     );
   }
@@ -337,19 +347,19 @@ export default function MarketplaceOrdersPage() {
     <div style={{ padding: "28px 32px" }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          Мої замовлення
+          {t("title")}
         </h1>
         <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          Замовлення у постачальників маркетплейсу та угоди про співпрацю
+          {t("subtitle")}
         </p>
       </div>
 
       <div style={{ borderBottom: "1px solid #1F2937", marginBottom: 24, display: "flex" }}>
         <button style={tabStyle("orders")} onClick={() => setActiveTab("orders")}>
-          Замовлення
+          {t("tabOrders")}
         </button>
         <button style={tabStyle("cooperation")} onClick={() => setActiveTab("cooperation")}>
-          Співпраця
+          {t("tabCooperation")}
         </button>
       </div>
 

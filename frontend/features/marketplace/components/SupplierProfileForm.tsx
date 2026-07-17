@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, KeyboardEvent } from "react";
+import { useTranslations } from "next-intl";
 import { useMySupplierProfile, useUpdateMySupplierProfile } from "../hooks/useMarketplace";
 import type { SupplierProfileUpdateRequest, SupplierPlan } from "../types";
 
@@ -114,6 +115,8 @@ const EMPTY_FORM: SupplierProfileUpdateRequest = {
 };
 
 export function SupplierProfileForm() {
+  const t = useTranslations("Dashboard.marketplace.profileForm");
+  const tPlan = useTranslations("Dashboard.marketplace.planLabel");
   const { data, isLoading, isError } = useMySupplierProfile();
   const { mutate, isPending } = useUpdateMySupplierProfile();
 
@@ -157,7 +160,7 @@ export function SupplierProfileForm() {
       {
         onSuccess: () => setSaved(true),
         onError: (err) => {
-          setSaveError(err instanceof Error ? err.message : "Помилка збереження");
+          setSaveError(err instanceof Error ? err.message : t("saveErrorDefault"));
         },
       }
     );
@@ -166,7 +169,7 @@ export function SupplierProfileForm() {
   if (isLoading) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>
-        Завантаження профілю…
+        {t("loading")}
       </div>
     );
   }
@@ -174,7 +177,7 @@ export function SupplierProfileForm() {
   if (isError) {
     return (
       <div style={{ color: "#F87171", fontSize: 13, padding: "16px 0" }}>
-        Не вдалося завантажити профіль. Можливо, ваш обліковий запис не зареєстрований як постачальник.
+        {t("loadError")}
       </div>
     );
   }
@@ -183,38 +186,38 @@ export function SupplierProfileForm() {
     <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 600 }}>
       <div>
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-          Профіль маркетплейсу
+          {t("title")}
         </h2>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6 }}>
-          Інформація, яку бачать інші учасники маркетплейсу при пошуку постачальників.
+          {t("subtitle")}
         </p>
       </div>
 
       {/* Region */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>Регіон</label>
+        <label style={labelStyle}>{t("regionLabel")}</label>
         <input
           type="text"
           value={form.region}
           onChange={(e) => setForm({ ...form, region: e.target.value })}
-          placeholder="Наприклад: Київ, Харків…"
+          placeholder={t("regionPlaceholder")}
           style={inputStyle}
         />
       </div>
 
       {/* Categories */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>Категорії товарів (Enter або кома для додавання)</label>
+        <label style={labelStyle}>{t("categoriesLabel")}</label>
         <TagInput
           value={form.categories}
           onChange={(categories) => setForm({ ...form, categories })}
-          placeholder="Додайте категорії…"
+          placeholder={t("categoriesPlaceholder")}
         />
       </div>
 
       {/* Website */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>Вебсайт (тільки Premium)</label>
+        <label style={labelStyle}>{t("websiteLabel")}</label>
         <input
           type="url"
           value={form.website ?? ""}
@@ -227,22 +230,22 @@ export function SupplierProfileForm() {
 
       {/* Delivery regions */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>Регіони доставки (тільки Premium)</label>
+        <label style={labelStyle}>{t("deliveryRegionsLabel")}</label>
         <TagInput
           value={form.deliveryRegions}
           onChange={(deliveryRegions) => setForm({ ...form, deliveryRegions })}
-          placeholder="Додайте регіони…"
+          placeholder={t("deliveryRegionsPlaceholder")}
         />
       </div>
 
       {/* Working hours */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>Графік роботи (тільки Premium)</label>
+        <label style={labelStyle}>{t("workingHoursLabel")}</label>
         <input
           type="text"
           value={form.workingHours ?? ""}
           onChange={(e) => setForm({ ...form, workingHours: e.target.value })}
-          placeholder="Пн–Пт 9:00–18:00"
+          placeholder={t("workingHoursPlaceholder")}
           style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
           disabled={form.plan === "free"}
         />
@@ -250,12 +253,12 @@ export function SupplierProfileForm() {
 
       {/* Payment terms */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>Умови оплати (тільки Premium)</label>
+        <label style={labelStyle}>{t("paymentTermsLabel")}</label>
         <input
           type="text"
           value={form.paymentTerms ?? ""}
           onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })}
-          placeholder="Передоплата 50%, решта при доставці"
+          placeholder={t("paymentTermsPlaceholder")}
           style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
           disabled={form.plan === "free"}
         />
@@ -275,10 +278,10 @@ export function SupplierProfileForm() {
       >
         <div>
           <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
-            Відображатись у маркетплейсі
+            {t("visibleToggleTitle")}
           </div>
           <div style={{ color: "#4B5563", fontSize: 12, marginTop: 3 }}>
-            Ваш профіль буде видимий іншим тенантам при пошуку постачальників
+            {t("visibleToggleBody")}
           </div>
         </div>
         <button
@@ -315,7 +318,7 @@ export function SupplierProfileForm() {
 
       {/* Plan selector */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>Тарифний план</label>
+        <label style={labelStyle}>{t("planFieldLabel")}</label>
         <div style={{ display: "flex", gap: 10 }}>
           {(["free", "premium"] as SupplierPlan[]).map((plan) => {
             const active = form.plan === plan;
@@ -337,7 +340,7 @@ export function SupplierProfileForm() {
                   transition: "all 0.1s",
                 }}
               >
-                {plan === "premium" ? "★ Premium" : "Free"}
+                {tPlan(plan)}
               </button>
             );
           })}
@@ -356,7 +359,7 @@ export function SupplierProfileForm() {
             fontSize: 13,
           }}
         >
-          Профіль успішно збережено.
+          {t("saved")}
         </div>
       )}
       {saveError && (
@@ -392,7 +395,7 @@ export function SupplierProfileForm() {
           transition: "background 0.1s",
         }}
       >
-        {isPending ? "Збереження…" : "Зберегти профіль"}
+        {isPending ? t("saving") : t("save")}
       </button>
     </div>
   );

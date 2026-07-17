@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const INPUT_STYLE: React.CSSProperties = {
   width: "100%",
@@ -59,12 +60,16 @@ function StringListEditor({
   label,
   placeholder,
   primaryHint,
+  removeTitle,
+  addLabel,
   items,
   onChange,
 }: {
   label: string;
   placeholder: string;
   primaryHint: string;
+  removeTitle: string;
+  addLabel: string;
   items: string[];
   onChange: (items: string[]) => void;
 }) {
@@ -88,7 +93,7 @@ function StringListEditor({
             <button
               type="button"
               onClick={() => onChange(items.filter((_, i) => i !== idx))}
-              title="Видалити"
+              title={removeTitle}
               style={{
                 background: "transparent",
                 border: "none",
@@ -120,7 +125,7 @@ function StringListEditor({
             cursor: "pointer",
           }}
         >
-          <Plus size={13} /> Додати
+          <Plus size={13} /> {addLabel}
         </button>
       </div>
     </div>
@@ -134,6 +139,8 @@ function StringListEditor({
  * barcodes/imageUrls lists (first entry = primary/main).
  */
 export function SupplierItemExtraFields({ value, onChange }: Props) {
+  const t = useTranslations("Dashboard.marketplace.itemExtraFields");
+
   function setField<K extends keyof SupplierItemExtraFieldsState>(
     key: K,
     val: SupplierItemExtraFieldsState[K]
@@ -145,7 +152,7 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
-          <label style={LABEL_STYLE}>Бренд</label>
+          <label style={LABEL_STYLE}>{t("brandLabel")}</label>
           <input
             type="text"
             value={value.brand}
@@ -154,7 +161,7 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
           />
         </div>
         <div>
-          <label style={LABEL_STYLE}>Виробник</label>
+          <label style={LABEL_STYLE}>{t("manufacturerLabel")}</label>
           <input
             type="text"
             value={value.manufacturer}
@@ -166,18 +173,18 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
-          <label style={LABEL_STYLE}>Країна виробника (ISO2)</label>
+          <label style={LABEL_STYLE}>{t("countryLabel")}</label>
           <input
             type="text"
             value={value.manufacturerCountry}
             onChange={(e) => setField("manufacturerCountry", e.target.value.toUpperCase())}
-            placeholder="UA, HU, PL…"
+            placeholder={t("countryPlaceholder")}
             maxLength={2}
             style={INPUT_STYLE}
           />
         </div>
         <div>
-          <label style={LABEL_STYLE}>Макс. замовлення</label>
+          <label style={LABEL_STYLE}>{t("maxQtyLabel")}</label>
           <input
             type="number"
             min="1"
@@ -191,7 +198,7 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
         <div>
-          <label style={LABEL_STYLE}>Вага брутто (кг)</label>
+          <label style={LABEL_STYLE}>{t("grossWeightLabel")}</label>
           <input
             type="number"
             min="0"
@@ -202,7 +209,7 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
           />
         </div>
         <div>
-          <label style={LABEL_STYLE}>Висота (см)</label>
+          <label style={LABEL_STYLE}>{t("heightLabel")}</label>
           <input
             type="number"
             min="0"
@@ -213,7 +220,7 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
           />
         </div>
         <div>
-          <label style={LABEL_STYLE}>Глибина (см)</label>
+          <label style={LABEL_STYLE}>{t("depthLabel")}</label>
           <input
             type="number"
             min="0"
@@ -224,7 +231,7 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
           />
         </div>
         <div>
-          <label style={LABEL_STYLE}>Ширина (см)</label>
+          <label style={LABEL_STYLE}>{t("widthLabel")}</label>
           <input
             type="number"
             min="0"
@@ -237,17 +244,21 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
       </div>
 
       <StringListEditor
-        label="Штрихкоди"
-        placeholder="Альтернативний штрихкод"
-        primaryHint="Основний штрихкод"
+        label={t("barcodesLabel")}
+        placeholder={t("barcodesPlaceholder")}
+        primaryHint={t("barcodesPrimaryHint")}
+        removeTitle={t("removeTitle")}
+        addLabel={t("addButton")}
         items={value.barcodes}
         onChange={(barcodes) => setField("barcodes", barcodes)}
       />
 
       <StringListEditor
-        label="Зображення (URL)"
-        placeholder="URL зображення галереї"
-        primaryHint="URL головного зображення"
+        label={t("imagesLabel")}
+        placeholder={t("imagesPlaceholder")}
+        primaryHint={t("imagesPrimaryHint")}
+        removeTitle={t("removeTitle")}
+        addLabel={t("addButton")}
         items={value.imageUrls}
         onChange={(imageUrls) => setField("imageUrls", imageUrls)}
       />
@@ -255,10 +266,20 @@ export function SupplierItemExtraFields({ value, onChange }: Props) {
   );
 }
 
-/** Parses raw string state into the numeric/array request fields. Returns
- * `null` + error message if a numeric field is invalid. */
+/**
+ * Parses raw string state into the numeric/array request fields. Returns
+ * `null` + error message if a numeric field is invalid.
+ *
+ * `t` is optional so this stays backward-compatible with callers that predate
+ * i18n rollout Block 6 (e.g. `features/supplier-cabinet/components/CabinetItemModal.tsx`,
+ * Block 7, not yet translated): omitting it reproduces the exact original
+ * Ukrainian-only error messages. Pass
+ * `useTranslations("Dashboard.marketplace.itemExtraFields")` from a translated
+ * caller to get the bilingual message instead.
+ */
 export function parseExtraFields(
-  state: SupplierItemExtraFieldsState
+  state: SupplierItemExtraFieldsState,
+  t?: (key: string, values?: Record<string, string>) => string
 ): { error: string } | {
   error: null;
   brand?: string;
@@ -272,22 +293,32 @@ export function parseExtraFields(
   barcodes?: string[];
   imageUrls?: string[];
 } {
-  function parseNum(raw: string, label: string): { ok: true; value?: number } | { ok: false; error: string } {
+  function parseNum(
+    raw: string,
+    labelKey: "maxQtyLabel" | "grossWeightShortLabel" | "heightShortLabel" | "depthShortLabel" | "widthShortLabel",
+    fallbackLabel: string
+  ): { ok: true; value?: number } | { ok: false; error: string } {
     if (!raw.trim()) return { ok: true, value: undefined };
     const n = parseFloat(raw);
-    if (isNaN(n) || n < 0) return { ok: false, error: `Некоректне значення поля «${label}».` };
+    if (isNaN(n) || n < 0) {
+      const label = t ? t(labelKey) : fallbackLabel;
+      return {
+        ok: false,
+        error: t ? t("invalidFieldValue", { field: label }) : `Некоректне значення поля «${label}».`,
+      };
+    }
     return { ok: true, value: n };
   }
 
-  const maxQty = parseNum(state.maxQtyRaw, "Макс. замовлення");
+  const maxQty = parseNum(state.maxQtyRaw, "maxQtyLabel", "Макс. замовлення");
   if (!maxQty.ok) return { error: maxQty.error };
-  const grossWeightKg = parseNum(state.grossWeightKgRaw, "Вага брутто");
+  const grossWeightKg = parseNum(state.grossWeightKgRaw, "grossWeightShortLabel", "Вага брутто");
   if (!grossWeightKg.ok) return { error: grossWeightKg.error };
-  const heightCm = parseNum(state.heightCmRaw, "Висота");
+  const heightCm = parseNum(state.heightCmRaw, "heightShortLabel", "Висота");
   if (!heightCm.ok) return { error: heightCm.error };
-  const depthCm = parseNum(state.depthCmRaw, "Глибина");
+  const depthCm = parseNum(state.depthCmRaw, "depthShortLabel", "Глибина");
   if (!depthCm.ok) return { error: depthCm.error };
-  const widthCm = parseNum(state.widthCmRaw, "Ширина");
+  const widthCm = parseNum(state.widthCmRaw, "widthShortLabel", "Ширина");
   if (!widthCm.ok) return { error: widthCm.error };
 
   const barcodes = state.barcodes.map((b) => b.trim()).filter(Boolean);

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useItemCategories } from "../hooks/useMarketplace";
 import type { SupplierItemCategoryField } from "../types";
 
@@ -42,6 +43,7 @@ export function ItemCategoryFields({
   attributes,
   onAttributesChange,
 }: Props) {
+  const t = useTranslations("Dashboard.marketplace.itemCategoryFields");
   const { data: categories = [] } = useItemCategories();
   const selected = categories.find((c) => c.key === category);
 
@@ -66,7 +68,7 @@ export function ItemCategoryFields({
             onChange={(e) => setField(field.key, e.target.value)}
             style={INPUT_STYLE}
           >
-            <option value="">— оберіть —</option>
+            <option value="">{t("selectPlaceholder")}</option>
             {(field.options ?? []).map((opt) => (
               <option key={opt} value={opt}>
                 {opt}
@@ -111,7 +113,7 @@ export function ItemCategoryFields({
   return (
     <>
       <div>
-        <label style={LABEL_STYLE}>Категорія</label>
+        <label style={LABEL_STYLE}>{t("categoryLabel")}</label>
         <select
           value={category}
           onChange={(e) => {
@@ -120,7 +122,7 @@ export function ItemCategoryFields({
           }}
           style={INPUT_STYLE}
         >
-          <option value="">Без категорії</option>
+          <option value="">{t("noCategoryOption")}</option>
           {categories.map((c) => (
             <option key={c.key} value={c.key}>
               {c.labelUa}
@@ -138,17 +140,28 @@ export function ItemCategoryFields({
   );
 }
 
-/** Client-side mirror of the server's required-field check (UX only, not authoritative). */
+/**
+ * Client-side mirror of the server's required-field check (UX only, not authoritative).
+ *
+ * `t` is optional so this stays backward-compatible with callers that predate
+ * i18n rollout Block 6 (e.g. `features/supplier-cabinet/components/CabinetItemModal.tsx`,
+ * Block 7, not yet translated): omitting it reproduces the exact original
+ * Ukrainian-only message. Pass `useTranslations("Dashboard.marketplace.itemCategoryFields")`
+ * from a translated caller to get the bilingual message instead.
+ */
 export function findMissingRequiredField(
   categories: { key: string; labelUa: string; fields: SupplierItemCategoryField[] }[],
   category: string,
-  attributes: Record<string, string>
+  attributes: Record<string, string>,
+  t?: (key: string, values?: Record<string, string>) => string
 ): string | null {
   const def = categories.find((c) => c.key === category);
   if (!def) return null;
   for (const field of def.fields) {
     if (field.required && !attributes[field.key]?.trim()) {
-      return `Поле «${field.labelUa}» обов'язкове для категорії «${def.labelUa}».`;
+      return t
+        ? t("missingRequiredField", { field: field.labelUa, category: def.labelUa })
+        : `Поле «${field.labelUa}» обов'язкове для категорії «${def.labelUa}».`;
     }
   }
   return null;

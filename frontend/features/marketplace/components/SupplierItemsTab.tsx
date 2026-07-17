@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ImageOff, Barcode } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useSupplierItems } from "../hooks/useMarketplace";
 import { SupplierItemDetailDialog } from "./SupplierItemDetailDialog";
 import type { SupplierItemDto } from "../types";
@@ -13,12 +14,14 @@ interface Props {
   onAddToCart?: (item: SupplierItemDto, qty: number) => void;
 }
 
-/** Qty input + «Додати» — per-row local UI state (respects minQty/maxQty). */
+/** Qty input + add-to-cart button — per-row local UI state (respects minQty/maxQty). */
 function AddToCartCell({
   item,
+  addLabel,
   onAdd,
 }: {
   item: SupplierItemDto;
+  addLabel: string;
   onAdd: (item: SupplierItemDto, qty: number) => void;
 }) {
   const [qty, setQty] = useState(item.minQty ?? 1);
@@ -67,13 +70,16 @@ function AddToCartCell({
           whiteSpace: "nowrap",
         }}
       >
-        Додати
+        {addLabel}
       </button>
     </span>
   );
 }
 
 export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
+  const t = useTranslations("Dashboard.marketplace.itemsTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data, isLoading, isError } = useSupplierItems(supplierId);
   const [detailItem, setDetailItem] = useState<SupplierItemDto | null>(null);
 
@@ -98,7 +104,7 @@ export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
   if (isError) {
     return (
       <div style={{ color: "#F87171", fontSize: 13, padding: "16px 0" }}>
-        Не вдалося завантажити каталог постачальника.
+        {t("errorLoad")}
       </div>
     );
   }
@@ -113,7 +119,7 @@ export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
           fontSize: 14,
         }}
       >
-        Каталог порожній — постачальник ще не додав товари.
+        {t("emptyCatalog")}
       </div>
     );
   }
@@ -148,12 +154,12 @@ export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
         <thead>
           <tr>
             <th style={headerCellStyle}></th>
-            <th style={headerCellStyle}>Назва</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>Ціна</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>Мін./Макс.</th>
-            <th style={headerCellStyle}>Од. вим.</th>
-            <th style={{ ...headerCellStyle, textAlign: "center" }}>Штрихкоди</th>
-            <th style={{ ...headerCellStyle, textAlign: "center" }}>Наявність</th>
+            <th style={headerCellStyle}>{t("headerName")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerMoq")}</th>
+            <th style={headerCellStyle}>{t("headerUnit")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "center" }}>{t("headerBarcodes")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "center" }}>{t("headerAvailability")}</th>
             <th style={headerCellStyle}></th>
           </tr>
         </thead>
@@ -191,7 +197,7 @@ export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
                 <td style={cellStyle}>{item.customName ?? item.itemName ?? "—"}</td>
                 <td style={{ ...cellStyle, textAlign: "right" }}>
                   {item.price != null
-                    ? item.price.toLocaleString("uk-UA", {
+                    ? item.price.toLocaleString(intlLocale, {
                         style: "currency",
                         currency: "UAH",
                         minimumFractionDigits: 2,
@@ -221,13 +227,13 @@ export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
                       color: item.isAvailable ? "#4ADE80" : "#6B7280",
                     }}
                   >
-                    {item.isAvailable ? "В наявності" : "Відсутній"}
+                    {item.isAvailable ? t("available") : t("unavailable")}
                   </span>
                 </td>
                 <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
                   {onAddToCart && (
                     <span style={{ marginRight: 8 }}>
-                      <AddToCartCell item={item} onAdd={onAddToCart} />
+                      <AddToCartCell item={item} addLabel={t("addButton")} onAdd={onAddToCart} />
                     </span>
                   )}
                   <button
@@ -243,7 +249,7 @@ export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
                       cursor: "pointer",
                     }}
                   >
-                    Детальніше
+                    {t("detailsButton")}
                   </button>
                 </td>
               </tr>

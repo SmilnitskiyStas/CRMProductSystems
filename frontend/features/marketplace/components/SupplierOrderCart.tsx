@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useCreateMarketplaceOrder } from "../hooks/useCooperation";
 import type { SupplierItemDto } from "../types";
@@ -25,8 +26,8 @@ interface Props {
   onClear: () => void;
 }
 
-function money(v: number): string {
-  return v.toLocaleString("uk-UA", {
+function money(v: number, locale: string): string {
+  return v.toLocaleString(locale, {
     style: "currency",
     currency: "UAH",
     minimumFractionDigits: 2,
@@ -41,6 +42,9 @@ function clampQty(item: SupplierItemDto, qty: number): number {
 }
 
 export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onClear }: Props) {
+  const t = useTranslations("Dashboard.marketplace.orderCart");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [comment, setComment] = useState("");
@@ -58,9 +62,9 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
       },
       {
         onSuccess: (order) => {
-          toast.success(`Замовлення ${order.orderNumber} створено`, {
+          toast.success(t("toastCreated", { number: order.orderNumber }), {
             action: {
-              label: "Мої замовлення",
+              label: t("toastMyOrdersAction"),
               onClick: () => router.push("/marketplace/orders"),
             },
           });
@@ -96,16 +100,16 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
         <ShoppingCart size={18} color="#60A5FA" />
         <div>
           <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
-            Кошик: {cart.length} поз.
+            {t("cartSummary", { count: cart.length })}
           </div>
-          <div style={{ color: "#9CA3AF", fontSize: 12 }}>{money(total)}</div>
+          <div style={{ color: "#9CA3AF", fontSize: 12 }}>{money(total, intlLocale)}</div>
         </div>
         <Btn size="sm" onClick={() => setModalOpen(true)}>
-          Оформити
+          {t("checkout")}
         </Btn>
         <button
           onClick={onClear}
-          title="Очистити кошик"
+          title={t("clearCartTitle")}
           style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4, display: "flex" }}
         >
           <X size={16} />
@@ -151,7 +155,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               }}
             >
               <span style={{ color: "#E8EDF5", fontWeight: 700, fontSize: 15 }}>
-                Нове замовлення
+                {t("modalTitle")}
               </span>
               <button
                 onClick={() => setModalOpen(false)}
@@ -165,7 +169,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {["Товар", "Ціна", "К-сть", "Сума", ""].map((h, i) => (
+                    {[t("headerProduct"), t("headerPrice"), t("headerQty"), t("headerTotal"), ""].map((h, i) => (
                       <th
                         key={i}
                         style={{
@@ -194,7 +198,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                         )}
                       </td>
                       <td style={{ padding: "10px", color: "#9CA3AF", fontSize: 13, textAlign: "right", borderBottom: "1px solid #1A2235", whiteSpace: "nowrap" }}>
-                        {line.item.price != null ? money(line.item.price) : "—"}
+                        {line.item.price != null ? money(line.item.price, intlLocale) : "—"}
                       </td>
                       <td style={{ padding: "10px", textAlign: "right", borderBottom: "1px solid #1A2235" }}>
                         <input
@@ -222,12 +226,12 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                         />
                       </td>
                       <td style={{ padding: "10px", color: "#E8EDF5", fontSize: 13, textAlign: "right", borderBottom: "1px solid #1A2235", whiteSpace: "nowrap" }}>
-                        {line.item.price != null ? money(line.item.price * line.qty) : "—"}
+                        {line.item.price != null ? money(line.item.price * line.qty, intlLocale) : "—"}
                       </td>
                       <td style={{ padding: "10px", textAlign: "right", borderBottom: "1px solid #1A2235" }}>
                         <button
                           onClick={() => onRemove(line.item.id)}
-                          title="Прибрати з кошика"
+                          title={t("removeFromCartTitle")}
                           style={{ background: "none", border: "none", cursor: "pointer", color: "#F87171", padding: 2, display: "inline-flex" }}
                         >
                           <Trash2 size={15} />
@@ -240,12 +244,12 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
 
               <div style={{ marginTop: 16 }}>
                 <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
-                  Коментар до замовлення
+                  {t("commentLabel")}
                 </label>
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Побажання щодо доставки, документів тощо..."
+                  placeholder={t("commentPlaceholder")}
                   rows={3}
                   style={{
                     width: "100%",
@@ -274,14 +278,14 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               }}
             >
               <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700 }}>
-                Разом: {money(total)}
+                {t("totalLabel", { total: money(total, intlLocale) })}
               </span>
               <div style={{ display: "flex", gap: 10 }}>
                 <Btn variant="ghost" onClick={() => setModalOpen(false)}>
-                  Закрити
+                  {t("close")}
                 </Btn>
                 <Btn variant="success" disabled={createOrder.isPending} onClick={handleSubmit}>
-                  {createOrder.isPending ? "Створення..." : "Підтвердити замовлення"}
+                  {createOrder.isPending ? t("submitting") : t("confirmOrder")}
                 </Btn>
               </div>
             </div>
