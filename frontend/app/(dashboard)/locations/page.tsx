@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Plus, Map } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import {
   useLocations,
@@ -11,12 +12,14 @@ import {
   useUpdateLocation,
 } from "@/features/locations/hooks/useLocations";
 import { LocationFormDialog } from "@/features/locations/components/LocationFormDialog";
-import { LOCATION_TYPE_LABELS } from "@/features/locations/types";
 import type { LocationDto, LocationType } from "@/features/locations/types";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function LocationsPage() {
+  const t = useTranslations("Dashboard.locations.page");
+  const tTypes = useTranslations("Dashboard.locations.types");
+  const tCommon = useTranslations("Common");
   const { data: locations, isLoading } = useLocations();
   const [dialog, setDialog] = useState<"create" | LocationDto | null>(null);
 
@@ -41,19 +44,19 @@ export default function LocationsPage() {
         },
         {
           onSuccess: () => {
-            toast.success("Локацію створено");
+            toast.success(t("toastCreated"));
             setDialog(null);
           },
-          onError: (e) => toast.error(`Помилка: ${e.message}`),
+          onError: (e) => toast.error(t("toastError", { message: e.message })),
         }
       );
     } else if (dialog) {
       update.mutate(values, {
         onSuccess: () => {
-          toast.success("Локацію збережено");
+          toast.success(t("toastUpdated"));
           setDialog(null);
         },
-        onError: (e) => toast.error(`Помилка: ${e.message}`),
+        onError: (e) => toast.error(t("toastError", { message: e.message })),
       });
     }
   }
@@ -65,24 +68,24 @@ export default function LocationsPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Локації</h1>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Магазини, склади та інші об&apos;єкти мережі
+            {t("subtitle")}
           </p>
         </div>
         <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
-          Нова локація
+          {t("newLocation")}
         </Btn>
       </div>
 
       {/* Table */}
       {isLoading ? (
         <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-          Завантаження…
+          {tCommon("loading")}
         </div>
       ) : !locations?.length ? (
         <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-          Локацій немає. Натисніть «Нова локація», щоб додати першу.
+          {t("empty")}
         </div>
       ) : (
         <div
@@ -96,7 +99,14 @@ export default function LocationsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1F2937" }}>
-                {["Назва", "Тип", "Адреса", "Зони", "Статус", ""].map((h) => (
+                {[
+                  t("headers.name"),
+                  t("headers.type"),
+                  t("headers.address"),
+                  t("headers.zones"),
+                  t("headers.status"),
+                  "",
+                ].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -134,7 +144,7 @@ export default function LocationsPage() {
                         fontWeight: 600,
                       }}
                     >
-                      {LOCATION_TYPE_LABELS[loc.locationType] ?? loc.locationType}
+                      {tTypes(loc.locationType)}
                     </span>
                   </td>
                   <td style={{ ...tdStyle, color: "#6B7280", fontSize: 13 }}>
@@ -151,7 +161,7 @@ export default function LocationsPage() {
                         fontWeight: 600,
                       }}
                     >
-                      {loc.isActive ? "Активна" : "Неактивна"}
+                      {loc.isActive ? t("statusActive") : t("statusInactive")}
                     </span>
                   </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>
@@ -173,10 +183,10 @@ export default function LocationsPage() {
                         }}
                       >
                         <Map size={13} />
-                        План
+                        {t("planLink")}
                       </Link>
                       <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
-                        Редагувати
+                        {t("edit")}
                       </Btn>
                     </div>
                   </td>

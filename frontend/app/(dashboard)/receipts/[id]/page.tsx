@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Check, Package, Truck, Building2, Calendar, Hash, CheckCircle2 } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useReceiptDetail,
   useUpdateReceiptItems,
@@ -60,10 +61,10 @@ function formatDate(s: string | null | undefined): string {
   return s;
 }
 
-function displayDate(s: string | null | undefined): string {
+function displayDate(s: string | null | undefined, intlLocale: string): string {
   if (!s) return "—";
   try {
-    return new Date(s).toLocaleDateString("uk-UA");
+    return new Date(s).toLocaleDateString(intlLocale);
   } catch {
     return s;
   }
@@ -119,6 +120,11 @@ function StatCard({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ReceiptDetailPage() {
+  const t = useTranslations("Dashboard.receipts");
+  const tDetail = useTranslations("Dashboard.receipts.detail");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_RECEIVE_STOCK) : null;
 
@@ -143,19 +149,19 @@ export default function ReceiptDetailPage() {
   >({});
 
   if (access === null) return null;
-  if (!access) return <AccessDenied title="Прийомка" />;
+  if (!access) return <AccessDenied title={t("title")} />;
 
   if (isLoading) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-        Завантаження…
+        {tCommon("loading")}
       </div>
     );
   }
   if (!receipt) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#F87171", fontSize: 13 }}>
-        Прийомку не знайдено
+        {tDetail("notFound")}
       </div>
     );
   }
@@ -226,13 +232,13 @@ export default function ReceiptDetailPage() {
             flexShrink: 0,
           }}
         >
-          <ArrowLeft size={15} /> Назад
+          <ArrowLeft size={15} /> {tCommon("back")}
         </button>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h1 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-              Прийомка
+              {t("title")}
             </h1>
             <ReceiptStatusBadge status={receipt.status as ReceiptStatus} />
           </div>
@@ -240,7 +246,7 @@ export default function ReceiptDetailPage() {
             {receipt.destinationStoreName}
             {receipt.supplierName && ` · ${receipt.supplierName}`}
             {receipt.expectedAt &&
-              ` · Очікується: ${new Date(receipt.expectedAt).toLocaleDateString("uk-UA")}`}
+              ` · ${t("drawer.expected")}: ${new Date(receipt.expectedAt).toLocaleDateString(intlLocale)}`}
           </p>
         </div>
 
@@ -259,7 +265,7 @@ export default function ReceiptDetailPage() {
                 cursor: "pointer",
               }}
             >
-              Скасувати
+              {tCommon("cancel")}
             </button>
             <button
               onClick={handleReceive}
@@ -281,7 +287,7 @@ export default function ReceiptDetailPage() {
               }}
             >
               <Check size={14} />
-              Підтвердити прийомку
+              {tDetail("confirmReceive")}
             </button>
           </div>
         )}
@@ -291,25 +297,25 @@ export default function ReceiptDetailPage() {
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <StatCard
           icon={<Building2 size={16} />}
-          label="Магазин призначення"
+          label={t("drawer.destinationStore")}
           value={receipt.destinationStoreName}
         />
         <StatCard
           icon={<Truck size={16} />}
-          label="Постачальник"
+          label={t("drawer.supplier")}
           value={receipt.supplierName ?? "—"}
         />
         <StatCard
           icon={<Calendar size={16} />}
-          label="Очікується"
-          value={displayDate(receipt.expectedAt)}
-          sub={receipt.receivedAt ? `Отримано: ${displayDate(receipt.receivedAt)}` : undefined}
+          label={t("drawer.expected")}
+          value={displayDate(receipt.expectedAt, intlLocale)}
+          sub={receipt.receivedAt ? `${t("drawer.received")}: ${displayDate(receipt.receivedAt, intlLocale)}` : undefined}
         />
         <StatCard
           icon={<Package size={16} />}
-          label="Позицій"
-          value={`${receipt.items.length} поз.`}
-          sub={receipt.viaCentralStore ? "Через центральний склад" : undefined}
+          label={t("drawer.items")}
+          value={tDetail("itemsCount", { count: receipt.items.length })}
+          sub={receipt.viaCentralStore ? t("drawer.viaCentral") : undefined}
         />
       </div>
 
@@ -325,7 +331,7 @@ export default function ReceiptDetailPage() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ color: "#9CA3AF", fontSize: 13, fontWeight: 500 }}>
-              Прогрес опрацювання
+              {tDetail("progress")}
             </span>
             <span style={{ color: allProcessed ? "#4ADE80" : "#6B7280", fontSize: 13, fontWeight: 600 }}>
               {processedCount} / {receipt.items.length}
@@ -357,14 +363,14 @@ export default function ReceiptDetailPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
           <thead>
             <tr>
-              <th style={{ ...thStyle, textAlign: "left", minWidth: 220 }}>Товар</th>
-              <th style={thStyle}>Штрихкод</th>
-              <th style={thStyle}>Замовлено</th>
-              <th style={thStyle}>Отримано</th>
-              <th style={thStyle}>Термін придатності</th>
-              <th style={thStyle}>Партія</th>
-              <th style={thStyle}>Ціна</th>
-              <th style={{ ...thStyle, borderRight: "none" }}>Статус</th>
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 220 }}>{tDetail("headers.product")}</th>
+              <th style={thStyle}>{tDetail("headers.barcode")}</th>
+              <th style={thStyle}>{tDetail("headers.ordered")}</th>
+              <th style={thStyle}>{tDetail("headers.received")}</th>
+              <th style={thStyle}>{tDetail("headers.expiry")}</th>
+              <th style={thStyle}>{tDetail("headers.batch")}</th>
+              <th style={thStyle}>{tDetail("headers.price")}</th>
+              <th style={{ ...thStyle, borderRight: "none" }}>{tDetail("headers.status")}</th>
             </tr>
           </thead>
           <tbody>
@@ -481,7 +487,7 @@ export default function ReceiptDetailPage() {
                       />
                     ) : (
                       <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                        {displayDate(item.expiryDate)}
+                        {displayDate(item.expiryDate, intlLocale)}
                       </span>
                     )}
                   </td>
@@ -491,7 +497,7 @@ export default function ReceiptDetailPage() {
                     {isEditable && !item.isProcessed ? (
                       <input
                         type="text"
-                        placeholder="необов'язково"
+                        placeholder={tDetail("batchNumberPlaceholder")}
                         value={edit.batchNumber ?? (item.batchNumber ?? "")}
                         onChange={(e) =>
                           updateEdit(item.id, { batchNumber: e.target.value })
@@ -520,7 +526,7 @@ export default function ReceiptDetailPage() {
                     }}
                   >
                     {item.pricePurchase != null
-                      ? `${item.pricePurchase.toLocaleString("uk-UA")} ₴`
+                      ? `${item.pricePurchase.toLocaleString(intlLocale)} ₴`
                       : "—"}
                   </td>
 
@@ -550,7 +556,7 @@ export default function ReceiptDetailPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        <Check size={11} /> ОК
+                        <Check size={11} /> {tDetail("confirmItem")}
                       </button>
                     ) : (
                       <span
@@ -563,7 +569,7 @@ export default function ReceiptDetailPage() {
                           fontWeight: 600,
                         }}
                       >
-                        <CheckCircle2 size={14} /> Готово
+                        <CheckCircle2 size={14} /> {tDetail("done")}
                       </span>
                     )}
                   </td>
@@ -585,7 +591,7 @@ export default function ReceiptDetailPage() {
           }}
         >
           <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-            Нотатки
+            {t("drawer.notes")}
           </div>
           <div style={{ color: "#9CA3AF", fontSize: 13 }}>{receipt.notes}</div>
         </div>

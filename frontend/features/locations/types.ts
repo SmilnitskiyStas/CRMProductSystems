@@ -6,14 +6,18 @@ export type LocationType =
   | "production"
   | "restaurant";
 
-export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
-  retail_store: "Роздрібний магазин",
-  warehouse: "Склад",
-  auto_service: "Автосервіс",
-  office: "Офіс",
-  production: "Виробництво",
-  restaurant: "Ресторан",
-};
+// Display labels moved to i18n messages under `Dashboard.locations.types` (i18n Block 2b,
+// TASK-380) — this Record<LocationType, string> is intentionally gone. Components render
+// the label via `useTranslations("Dashboard.locations.types")` keyed by the type value
+// itself (e.g. `t("retail_store")`).
+export const LOCATION_TYPE_VALUES: LocationType[] = [
+  "retail_store",
+  "warehouse",
+  "auto_service",
+  "office",
+  "production",
+  "restaurant",
+];
 
 export interface LocationZoneDto {
   id: string;

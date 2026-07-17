@@ -6,17 +6,14 @@ import { useSearchParams } from "next/navigation";
 import {
   Eye, CheckCircle, XCircle, FileDown, BarChart2,
 } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useWriteOffs,
   useApproveWriteOff,
   useRejectWriteOff,
 } from "@/features/write-offs/hooks/useWriteOffs";
 import type { WriteOffDto, WriteOffStatus } from "@/features/write-offs/types";
-import {
-  WRITE_OFF_STATUS_COLOR,
-  WRITE_OFF_STATUS_LABEL,
-  WRITE_OFF_REASON_LABEL,
-} from "@/features/write-offs/types";
+import { WRITE_OFF_STATUS_COLOR } from "@/features/write-offs/types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import {
   DetailDrawer,
@@ -25,15 +22,10 @@ import {
   DrawerGrid,
 } from "@/components/ui/DetailDrawer";
 
-const STATUS_TABS = [
-  { value: "", label: "Всі" },
-  { value: "pending_approval", label: "На затвердженні" },
-  { value: "approved", label: "Затверджено" },
-  { value: "draft", label: "Чернетки" },
-  { value: "rejected", label: "Відхилено" },
-];
+const STATUS_TAB_VALUES = ["", "pending_approval", "approved", "draft", "rejected"] as const;
 
 function StatusBadge({ status }: { status: WriteOffStatus }) {
+  const t = useTranslations("Dashboard.writeOffs.status");
   const c = WRITE_OFF_STATUS_COLOR[status] ?? WRITE_OFF_STATUS_COLOR.draft;
   return (
     <span
@@ -47,7 +39,7 @@ function StatusBadge({ status }: { status: WriteOffStatus }) {
         fontWeight: 600,
       }}
     >
-      {WRITE_OFF_STATUS_LABEL[status] ?? status}
+      {t.has(status) ? t(status) : status}
     </span>
   );
 }
@@ -76,41 +68,46 @@ const thStyle: React.CSSProperties = {
 
 // ── Detail drawer content ────────────────────────────────────────────────────
 function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytics: (productId: string) => void }) {
+  const t = useTranslations("Dashboard.writeOffs.drawer");
+  const tReason = useTranslations("Dashboard.writeOffs.reason");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   return (
     <>
-      <DrawerSection title="Загальна інформація">
+      <DrawerSection title={t("section")}>
         <DrawerGrid>
-          <DrawerField label="Магазин" value={w.storeName} />
+          <DrawerField label={t("store")} value={w.storeName} />
           <DrawerField
-            label="Статус"
+            label={t("status")}
             value={<StatusBadge status={w.status as WriteOffStatus} />}
           />
           <DrawerField
-            label="Причина"
-            value={w.reason ? (WRITE_OFF_REASON_LABEL[w.reason] ?? w.reason) : "—"}
+            label={t("reason")}
+            value={w.reason && tReason.has(w.reason) ? tReason(w.reason) : (w.reason ?? "—")}
           />
           <DrawerField
-            label="Сума збитку"
+            label={t("lossAmount")}
             value={
               w.totalLossAmount != null
-                ? `${w.totalLossAmount.toLocaleString("uk-UA")} ₴`
+                ? `${w.totalLossAmount.toLocaleString(intlLocale)} ₴`
                 : "—"
             }
             color="#F87171"
           />
           <DrawerField
-            label="Дата створення"
-            value={new Date(w.createdAt).toLocaleDateString("uk-UA")}
+            label={t("createdAt")}
+            value={new Date(w.createdAt).toLocaleDateString(intlLocale)}
           />
           {w.approvedAt && (
             <DrawerField
-              label="Дата затвердження"
-              value={new Date(w.approvedAt).toLocaleDateString("uk-UA")}
+              label={t("approvedAt")}
+              value={new Date(w.approvedAt).toLocaleDateString(intlLocale)}
             />
           )}
         </DrawerGrid>
         <DrawerField
-          label="ID документу"
+          label={t("documentId")}
           value={
             <span style={{ fontFamily: "monospace", fontSize: 12, color: "#4B5563" }}>
               {w.id}
@@ -119,9 +116,9 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
         />
       </DrawerSection>
 
-      <DrawerSection title={`Позиції (${w.items.length})`}>
+      <DrawerSection title={t("itemsSection", { count: w.items.length })}>
         {w.items.length === 0 ? (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Немає позицій</div>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noItems")}</div>
         ) : (
           <div
             style={{
@@ -133,7 +130,13 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
-                  {["Товар", "Партія", "К-сть", "Збиток", "Дії"].map((h) => (
+                  {[
+                    t("itemHeaders.product"),
+                    t("itemHeaders.batch"),
+                    t("itemHeaders.qty"),
+                    t("itemHeaders.loss"),
+                    t("itemHeaders.actions"),
+                  ].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -203,14 +206,14 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
                       }}
                     >
                       {item.lossAmount != null
-                        ? `${item.lossAmount.toLocaleString("uk-UA")} ₴`
+                        ? `${item.lossAmount.toLocaleString(intlLocale)} ₴`
                         : "—"}
                     </td>
                     <td style={{ padding: "7px 10px", borderBottom: "1px solid #1F2937", textAlign: "center" }}>
                       <ActionMenu
                         items={[
                           {
-                            label: "Аналітика товару",
+                            label: t("analyticsAction"),
                             icon: <BarChart2 size={13} />,
                             onClick: () => onViewAnalytics(item.productId),
                           },
@@ -230,6 +233,12 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
 
 // ── Page inner (uses useSearchParams) ────────────────────────────────────────
 function WriteOffsPageContent() {
+  const t = useTranslations("Dashboard.writeOffs");
+  const tPage = useTranslations("Dashboard.writeOffs.page");
+  const tReason = useTranslations("Dashboard.writeOffs.reason");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -279,28 +288,31 @@ function WriteOffsPageContent() {
     lineHeight: 1,
   };
 
+  const statusTabLabel = (value: string) =>
+    value === "" ? tPage("statusTabs.all") : t(`status.${value}`);
+
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
       <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Списання</h1>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          Документи списання товарів — затвердження та звіти
+          {tPage("subtitle")}
         </p>
       </div>
 
       {/* Status tabs */}
       <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937" }}>
-        {STATUS_TABS.map((tab) => {
-          const active = tab.value === statusFilter;
+        {STATUS_TAB_VALUES.map((value) => {
+          const active = value === statusFilter;
           const pendingCount =
-            tab.value === "pending_approval"
+            value === "pending_approval"
               ? writeOffs.filter((w) => w.status === "pending_approval").length
               : 0;
           return (
             <button
-              key={tab.value}
-              onClick={() => setStatusFilter(tab.value)}
+              key={value}
+              onClick={() => setStatusFilter(value)}
               style={{
                 background: "transparent",
                 border: "none",
@@ -314,7 +326,7 @@ function WriteOffsPageContent() {
                 transition: "color 0.1s",
               }}
             >
-              {tab.label}
+              {statusTabLabel(value)}
               {pendingCount > 0 && (
                 <span
                   style={{
@@ -340,12 +352,14 @@ function WriteOffsPageContent() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {reasonFilter && (
             <span style={chipStyle}>
-              Причина: {WRITE_OFF_REASON_LABEL[reasonFilter] ?? reasonFilter}
+              {tPage("filterChips.reason", {
+                value: tReason.has(reasonFilter) ? tReason(reasonFilter) : reasonFilter,
+              })}
             </span>
           )}
           {storeIdFilter && (
             <span style={chipStyle}>
-              Магазин: {storeIdFilter}
+              {tPage("filterChips.store", { value: storeIdFilter })}
               <button
                 onClick={() => setStoreIdFilter("")}
                 style={chipBtnStyle}
@@ -368,23 +382,29 @@ function WriteOffsPageContent() {
       >
         {isLoading ? (
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            Завантаження…
+            {tCommon("loading")}
           </div>
         ) : filteredWriteOffs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            Немає списань
+            {tPage("empty")}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["Магазин", "Причина", "Позицій", "Сума збитку", "Дата", "Статус", "Дії"].map(
-                  (h) => (
-                    <th key={h} style={thStyle}>
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  tPage("headers.store"),
+                  tPage("headers.reason"),
+                  tPage("headers.items"),
+                  tPage("headers.lossAmount"),
+                  tPage("headers.date"),
+                  tPage("headers.status"),
+                  tPage("headers.actions"),
+                ].map((h) => (
+                  <th key={h} style={thStyle}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -402,15 +422,15 @@ function WriteOffsPageContent() {
                     {w.storeName}
                   </td>
                   <td style={tdStyle}>
-                    {w.reason ? (WRITE_OFF_REASON_LABEL[w.reason] ?? w.reason) : "—"}
+                    {w.reason ? (tReason.has(w.reason) ? tReason(w.reason) : w.reason) : "—"}
                   </td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>{w.items.length}</td>
                   <td style={{ ...tdStyle, fontFamily: "monospace", color: "#F87171" }}>
                     {w.totalLossAmount != null
-                      ? `${w.totalLossAmount.toLocaleString("uk-UA")} ₴`
+                      ? `${w.totalLossAmount.toLocaleString(intlLocale)} ₴`
                       : "—"}
                   </td>
-                  <td style={tdStyle}>{new Date(w.createdAt).toLocaleDateString("uk-UA")}</td>
+                  <td style={tdStyle}>{new Date(w.createdAt).toLocaleDateString(intlLocale)}</td>
                   <td style={tdStyle}>
                     <StatusBadge status={w.status as WriteOffStatus} />
                   </td>
@@ -418,7 +438,7 @@ function WriteOffsPageContent() {
                     <ActionMenu
                       items={[
                         {
-                          label: "Переглянути",
+                          label: tPage("actionMenu.view"),
                           icon: <Eye size={13} />,
                           onClick: () => setSelected(w),
                         },
@@ -426,14 +446,14 @@ function WriteOffsPageContent() {
                         ...(w.status === "pending_approval"
                           ? [
                               {
-                                label: "Затвердити",
+                                label: tPage("actionMenu.approve"),
                                 icon: <CheckCircle size={13} />,
                                 variant: "success" as const,
                                 disabled: approve.isPending,
                                 onClick: () => approve.mutate(w.id),
                               },
                               {
-                                label: "Відхилити",
+                                label: tPage("actionMenu.reject"),
                                 icon: <XCircle size={13} />,
                                 variant: "danger" as const,
                                 disabled: reject.isPending,
@@ -444,7 +464,7 @@ function WriteOffsPageContent() {
                         ...(w.status === "approved" && w.pdfUrl
                           ? [
                               {
-                                label: "Завантажити PDF",
+                                label: tPage("actionMenu.downloadPdf"),
                                 icon: <FileDown size={13} />,
                                 href: w.pdfUrl,
                               },
@@ -464,8 +484,8 @@ function WriteOffsPageContent() {
       <DetailDrawer
         isOpen={selected !== null}
         onClose={() => setSelected(null)}
-        title="Списання"
-        subtitle={selected ? `${selected.storeName} · ${new Date(selected.createdAt).toLocaleDateString("uk-UA")}` : ""}
+        title={t("title")}
+        subtitle={selected ? `${selected.storeName} · ${new Date(selected.createdAt).toLocaleDateString(intlLocale)}` : ""}
       >
         {selected && (
           <WriteOffDetail

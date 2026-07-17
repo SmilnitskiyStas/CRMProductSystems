@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   DndContext,
   PointerSensor,
@@ -18,12 +19,15 @@ import type {
   ZoneStatusCounts,
 } from "../types";
 
-export const STATUS_CONFIG: Record<ZoneStatus | "empty", { color: string; bg: string; border: string; label: string }> = {
-  safe:     { color: "#22c55e", bg: "#0d2818", border: "#166534", label: "Безпечно" },
-  warning:  { color: "#f59e0b", bg: "#261c05", border: "#854d0e", label: "Попередження" },
-  critical: { color: "#ef4444", bg: "#2a0a0a", border: "#991b1b", label: "Критично" },
-  expired:  { color: "#6b7280", bg: "#141414", border: "#374151", label: "Протерміновано" },
-  empty:    { color: "#4B5563", bg: "#10141d", border: "#1F2937", label: "Без товарів" },
+// Labels moved to i18n messages under `Dashboard.stores.zoneStatus` (i18n Block 2b,
+// TASK-380) — render via `useTranslations("Dashboard.stores.zoneStatus")` keyed by the
+// status value. Colors stay here since they're not language-dependent.
+export const STATUS_CONFIG: Record<ZoneStatus | "empty", { color: string; bg: string; border: string }> = {
+  safe:     { color: "#22c55e", bg: "#0d2818", border: "#166534" },
+  warning:  { color: "#f59e0b", bg: "#261c05", border: "#854d0e" },
+  critical: { color: "#ef4444", bg: "#2a0a0a", border: "#991b1b" },
+  expired:  { color: "#6b7280", bg: "#141414", border: "#374151" },
+  empty:    { color: "#4B5563", bg: "#10141d", border: "#1F2937" },
 };
 
 export const ZONE_TYPE_ICONS: Record<string, string> = {
@@ -62,6 +66,7 @@ export function FloorPlanCanvas({
   onMove,
   onResize,
 }: CanvasProps) {
+  const t = useTranslations("Dashboard.stores.floorPlan");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
   );
@@ -125,7 +130,7 @@ export function FloorPlanCanvas({
               fontSize: 13,
             }}
           >
-            План порожній — додайте зони з панелі праворуч
+            {t("emptyCanvas")}
           </div>
         )}
       </div>
@@ -144,6 +149,7 @@ interface ZoneBoxProps {
 }
 
 function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }: ZoneBoxProps) {
+  const t = useTranslations("Dashboard.stores.zoneStatus");
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: placement.zoneId,
   });
@@ -223,7 +229,7 @@ function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />
-        <span style={{ color: cfg.color, fontSize: 10, fontWeight: 600 }}>{cfg.label}</span>
+        <span style={{ color: cfg.color, fontSize: 10, fontWeight: 600 }}>{t(status)}</span>
       </div>
 
       {/* Hover tooltip: safe/warning/critical breakdown (spec §6.4) */}
@@ -244,11 +250,11 @@ function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }
             boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
           }}
         >
-          <TooltipRow label="Safe" value={counts?.safe ?? 0} color="#22c55e" />
-          <TooltipRow label="Warning" value={counts?.warning ?? 0} color="#f59e0b" />
-          <TooltipRow label="Critical" value={counts?.critical ?? 0} color="#ef4444" />
+          <TooltipRow label={t("safe")} value={counts?.safe ?? 0} color="#22c55e" />
+          <TooltipRow label={t("warning")} value={counts?.warning ?? 0} color="#f59e0b" />
+          <TooltipRow label={t("critical")} value={counts?.critical ?? 0} color="#ef4444" />
           {(counts?.expired ?? 0) > 0 && (
-            <TooltipRow label="Expired" value={counts!.expired} color="#6b7280" />
+            <TooltipRow label={t("expired")} value={counts!.expired} color="#6b7280" />
           )}
         </div>
       )}

@@ -1,17 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { LocationZoneDto } from "../types";
 import { useCreateZone } from "../hooks/useFloorPlan";
 
-const ZONE_TYPES = [
-  { value: "shelf", label: "Стелаж" },
-  { value: "fridge", label: "Холодильник" },
-  { value: "freezer", label: "Морозильна камера" },
-  { value: "display", label: "Вітрина" },
-  { value: "production", label: "Виробнича зона" },
-  { value: "warehouse", label: "Складська зона" },
-];
+const ZONE_TYPE_VALUES = ["shelf", "fridge", "freezer", "display", "production", "warehouse"] as const;
 
 const TEMP_TYPES = new Set(["fridge", "freezer"]);
 
@@ -22,6 +16,9 @@ interface Props {
 }
 
 export function ZoneDialog({ locationId, onCreated, onClose }: Props) {
+  const t = useTranslations("Dashboard.locations.zoneDialog");
+  const tZoneTypes = useTranslations("Dashboard.locations.zoneTypes");
+  const tCommon = useTranslations("Common");
   const createZone = useCreateZone(locationId);
   const [name, setName] = useState("");
   const [type, setType] = useState("shelf");
@@ -95,39 +92,39 @@ export function ZoneDialog({ locationId, onCreated, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: "0 0 20px 0" }}>
-          Нова зона
+          {t("title")}
         </h2>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label style={labelStyle}>Назва</label>
+            <label style={labelStyle}>{t("nameLabel")}</label>
             <input
               style={inputStyle}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="напр. Холодильник №1"
+              placeholder={t("namePlaceholder")}
               autoFocus
               required
             />
           </div>
 
           <div>
-            <label style={labelStyle}>Тип</label>
+            <label style={labelStyle}>{t("typeLabel")}</label>
             <select
               style={inputStyle}
               value={type}
               onChange={(e) => setType(e.target.value)}
             >
-              {ZONE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+              {ZONE_TYPE_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {tZoneTypes(value)}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label style={labelStyle}>Кількість полиць</label>
+            <label style={labelStyle}>{t("shelvesCountLabel")}</label>
             <input
               style={inputStyle}
               type="number"
@@ -140,23 +137,23 @@ export function ZoneDialog({ locationId, onCreated, onClose }: Props) {
           {showTemp && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Темп. мін (°C)</label>
+                <label style={labelStyle}>{t("tempMinLabel")}</label>
                 <input
                   style={inputStyle}
                   type="number"
                   value={tempMin}
                   onChange={(e) => setTempMin(e.target.value)}
-                  placeholder="напр. -18"
+                  placeholder={t("tempMinPlaceholder")}
                 />
               </div>
               <div>
-                <label style={labelStyle}>Темп. макс (°C)</label>
+                <label style={labelStyle}>{t("tempMaxLabel")}</label>
                 <input
                   style={inputStyle}
                   type="number"
                   value={tempMax}
                   onChange={(e) => setTempMax(e.target.value)}
-                  placeholder="напр. 4"
+                  placeholder={t("tempMaxPlaceholder")}
                 />
               </div>
             </div>
@@ -177,7 +174,7 @@ export function ZoneDialog({ locationId, onCreated, onClose }: Props) {
                 cursor: "pointer",
               }}
             >
-              Скасувати
+              {tCommon("cancel")}
             </button>
             <button
               type="submit"
@@ -194,7 +191,7 @@ export function ZoneDialog({ locationId, onCreated, onClose }: Props) {
                 cursor: createZone.isPending || !name.trim() ? "default" : "pointer",
               }}
             >
-              {createZone.isPending ? "Створення…" : "Створити зону"}
+              {createZone.isPending ? t("creating") : t("submit")}
             </button>
           </div>
         </form>

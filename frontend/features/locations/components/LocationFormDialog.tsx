@@ -1,32 +1,38 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
-import { LOCATION_TYPE_LABELS, type LocationDto, type LocationType } from "../types";
+import { LOCATION_TYPE_VALUES, type LocationDto, type LocationType } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
+// Zod .min(1, message) needs a translated message, so the schema is built once per
+// render inside the component (see `useMemo(() => buildSchema(t), [t])` below) —
+// mirrors `buildProductSchema(t)` in features/inventory/components/ProductForm.tsx
+// (i18n Block 2a).
+function buildSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name: z.string().min(1, t("validationRequired")).max(255),
+    address: z.string().max(500).optional(),
+    locationType: z.enum([
+      "retail_store",
+      "warehouse",
+      "auto_service",
+      "office",
+      "production",
+      "restaurant",
+    ] as const),
+    isActive: z.boolean(),
+    legalEntityId: z.string().optional(),
+  });
+}
 
-const schema = z.object({
-  name: z.string().min(1, "Назва обов'язкова").max(255),
-  address: z.string().max(500).optional(),
-  locationType: z.enum([
-    "retail_store",
-    "warehouse",
-    "auto_service",
-    "office",
-    "production",
-    "restaurant",
-  ] as const),
-  isActive: z.boolean(),
-  legalEntityId: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<ReturnType<typeof buildSchema>>;
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -59,15 +65,20 @@ const TYPES_FOR_BUSINESS: Record<string, LocationType[]> = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function LocationFormDialog({ location, isPending, onClose, onSubmit }: Props) {
+  const t = useTranslations("Dashboard.locations.form");
+  const tTypes = useTranslations("Dashboard.locations.types");
+  const tCommon = useTranslations("Common");
   const isEdit = location !== null;
 
   const { data: modules } = useModules();
   const businessType = modules?.businessType ?? "retail";
-  const allowedTypes = TYPES_FOR_BUSINESS[businessType] ?? (Object.keys(LOCATION_TYPE_LABELS) as LocationType[]);
-  const locationTypes = allowedTypes.map((k) => [k, LOCATION_TYPE_LABELS[k]] as [LocationType, string]);
+  const allowedTypes = TYPES_FOR_BUSINESS[businessType] ?? LOCATION_TYPE_VALUES;
+  const locationTypes = allowedTypes.map((k) => [k, tTypes(k)] as [LocationType, string]);
 
   const { data: legalEntities } = useLegalEntities();
   const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
+
+  const schema = useMemo(() => buildSchema(t), [t]);
 
   const {
     register,
@@ -145,7 +156,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       >
         {/* Title */}
         <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-          {isEdit ? "Редагувати локацію" : "Нова локація"}
+          {isEdit ? t("titleEdit") : t("titleCreate")}
         </h2>
 
         <form
@@ -153,16 +164,16 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
           style={{ display: "flex", flexDirection: "column", gap: 14 }}
         >
           {/* Name */}
-          <Field label="Назва" error={errors.name?.message}>
+          <Field label={t("nameLabel")} error={errors.name?.message}>
             <input
               {...register("name")}
-              placeholder="Наприклад: Магазин №1"
+              placeholder={t("namePlaceholder")}
               style={inputStyle}
             />
           </Field>
 
           {/* Location type */}
-          <Field label="Тип локації" error={errors.locationType?.message}>
+          <Field label={t("typeLabel")} error={errors.locationType?.message}>
             <select {...register("locationType")} style={inputStyle}>
               {locationTypes.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -173,18 +184,18 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
           </Field>
 
           {/* Address */}
-          <Field label="Адреса (необов'язково)" error={errors.address?.message}>
+          <Field label={t("addressLabel")} error={errors.address?.message}>
             <input
               {...register("address")}
-              placeholder="вул. Шевченка, 1, Київ"
+              placeholder={t("addressPlaceholder")}
               style={inputStyle}
             />
           </Field>
 
           {/* Legal entity */}
-          <Field label="Юридична особа (необов'язково)" error={errors.legalEntityId?.message}>
+          <Field label={t("legalEntityLabel")} error={errors.legalEntityId?.message}>
             <select {...register("legalEntityId")} style={inputStyle}>
-              <option value="">— Не вказано —</option>
+              <option value="">{t("legalEntityNone")}</option>
               {activeLegalEntities.map((entity) => (
                 <option key={entity.id} value={entity.id}>
                   {entity.legalName}
@@ -199,17 +210,17 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
               style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "#9CA3AF", fontSize: 13 }}
             >
               <input type="checkbox" {...register("isActive")} />
-              Активна
+              {t("activeLabel")}
             </label>
           )}
 
           {/* Buttons */}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
             <Btn variant="ghost" type="button" onClick={onClose}>
-              Скасувати
+              {tCommon("cancel")}
             </Btn>
             <Btn type="submit" disabled={isPending}>
-              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
+              {isPending ? t("saving") : isEdit ? t("save") : t("create")}
             </Btn>
           </div>
         </form>

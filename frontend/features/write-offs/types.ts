@@ -38,12 +38,11 @@ export interface CreateWriteOffRequest {
   }[];
 }
 
-export const WRITE_OFF_STATUS_LABEL: Record<WriteOffStatus, string> = {
-  draft: "Чернетка",
-  pending_approval: "На затвердженні",
-  approved: "Затверджено",
-  rejected: "Відхилено",
-};
+// Display labels moved to i18n messages under `Dashboard.writeOffs.status` /
+// `Dashboard.writeOffs.reason` (i18n Block 2b, TASK-380) — these Record<...,string> maps
+// are intentionally gone. Components render labels via
+// `useTranslations("Dashboard.writeOffs.status")` / `"Dashboard.writeOffs.reason"` keyed by
+// the status/reason value itself. Colors stay here since they're not language-dependent.
 
 export const WRITE_OFF_STATUS_COLOR: Record<WriteOffStatus, { bg: string; text: string }> = {
   draft: { bg: "#111827", text: "#6B7280" },
@@ -52,10 +51,10 @@ export const WRITE_OFF_STATUS_COLOR: Record<WriteOffStatus, { bg: string; text: 
   rejected: { bg: "#1F0A0A", text: "#F87171" },
 };
 
-export const WRITE_OFF_REASON_LABEL: Record<string, string> = {
-  expired: "Прострочено",
-  damaged: "Пошкоджено",
-  theft: "Крадіжка",
-  production_loss: "Виробничі втрати",
-  other: "Інше",
-};
+export const WRITE_OFF_REASON_VALUES = [
+  "expired",
+  "damaged",
+  "theft",
+  "production_loss",
+  "other",
+] as const;

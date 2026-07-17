@@ -13,6 +13,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { createSnapModifier } from "@dnd-kit/modifiers";
+import { useTranslations } from "next-intl";
 import { useLocation } from "@/features/locations/hooks/useLocations";
 import {
   parseShelfPlan,
@@ -21,6 +22,9 @@ import {
 import type { ShelfItemPlacement, ShelfPlanLayout } from "@/features/locations/types";
 
 export default function ShelvesPage() {
+  const t = useTranslations("Dashboard.locations.shelvesPage");
+  const tFloorPlan = useTranslations("Dashboard.locations.floorPlan");
+  const tCommon = useTranslations("Common");
   const params = useParams<{ id: string; zoneId: string }>();
   const router = useRouter();
   const locationId = params.id;
@@ -54,7 +58,7 @@ export default function ShelvesPage() {
       const n = prev.items.length + 1;
       const newItem: ShelfItemPlacement = {
         shelfId: crypto.randomUUID(),
-        label: `Секція ${n}`,
+        label: t("newSectionLabel", { n }),
         x: prev.grid * 2,
         y: prev.grid * 2 + (n - 1) * (80 + prev.grid),
         w: 200,
@@ -93,9 +97,9 @@ export default function ShelvesPage() {
       {
         onSuccess: () => {
           setDirty(false);
-          toast.success("Конструктор поличок збережено");
+          toast.success(t("toastSaved"));
         },
-        onError: (e) => toast.error(`Не вдалося зберегти: ${e.message}`),
+        onError: (e) => toast.error(t("toastError", { message: e.message })),
       }
     );
   }
@@ -103,7 +107,7 @@ export default function ShelvesPage() {
   if (isLoading || !plan) {
     return (
       <div style={{ padding: "28px 32px", color: "#4B5563", fontSize: 13, textAlign: "center" }}>
-        Завантаження…
+        {tCommon("loading")}
       </div>
     );
   }
@@ -129,11 +133,11 @@ export default function ShelvesPage() {
               }}
             >
               <ArrowLeft size={14} />
-              Назад до плану
+              {t("backToPlan")}
             </button>
           </div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Конструктор поличок
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
             {location?.name ?? "…"} / {zone?.name ?? "…"}
@@ -158,7 +162,7 @@ export default function ShelvesPage() {
           }}
         >
           <Save size={15} />
-          {updateZonePosition.isPending ? "Збереження…" : "Зберегти"}
+          {updateZonePosition.isPending ? t("saving") : t("save")}
         </button>
       </div>
 
@@ -175,7 +179,7 @@ export default function ShelvesPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, padding: 16 }}>
             <h3 style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, margin: "0 0 12px 0" }}>
-              Дії
+              {t("actionsTitle")}
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button
@@ -194,7 +198,7 @@ export default function ShelvesPage() {
                   cursor: "pointer",
                 }}
               >
-                <Plus size={14} /> Додати секцію
+                <Plus size={14} /> {t("addSection")}
               </button>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -210,7 +214,7 @@ export default function ShelvesPage() {
                     cursor: "pointer",
                   }}
                 >
-                  + Ширина
+                  {tFloorPlan("addWidth")}
                 </button>
                 <button
                   onClick={() => handleResizeCanvas(plan.canvasW, plan.canvasH + 200)}
@@ -225,7 +229,7 @@ export default function ShelvesPage() {
                     cursor: "pointer",
                   }}
                 >
-                  + Висота
+                  {tFloorPlan("addHeight")}
                 </button>
               </div>
             </div>
@@ -233,10 +237,10 @@ export default function ShelvesPage() {
 
           <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, padding: 16 }}>
             <h3 style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, margin: "0 0 12px 0" }}>
-              Секції ({plan.items.length})
+              {t("sectionsTitle", { count: plan.items.length })}
             </h3>
             {plan.items.length === 0 ? (
-              <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>Немає секцій</p>
+              <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>{t("noSections")}</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {plan.items.map((item) => (
@@ -289,6 +293,7 @@ interface ShelfCanvasProps {
 }
 
 function ShelfCanvas({ plan, onMove, onResize }: ShelfCanvasProps) {
+  const t = useTranslations("Dashboard.locations.shelvesPage");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
   );
@@ -348,7 +353,7 @@ function ShelfCanvas({ plan, onMove, onResize }: ShelfCanvasProps) {
                 fontSize: 13,
               }}
             >
-              Додайте секції з панелі праворуч
+              {t("canvasEmptyHint")}
             </div>
           )}
         </div>

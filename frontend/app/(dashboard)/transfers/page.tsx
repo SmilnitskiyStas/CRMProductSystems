@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Eye, CheckCircle, XCircle, BarChart2 } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useTransfers,
   useConfirmTransfer,
   useCancelTransfer,
 } from "@/features/transfers/hooks/useTransfers";
 import type { TransferDto, TransferStatus } from "@/features/transfers/types";
-import { TRANSFER_STATUS_COLOR, TRANSFER_STATUS_LABEL } from "@/features/transfers/types";
+import { TRANSFER_STATUS_COLOR } from "@/features/transfers/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
@@ -21,14 +22,10 @@ import {
   DrawerGrid,
 } from "@/components/ui/DetailDrawer";
 
-const STATUS_TABS = [
-  { value: "", label: "Всі" },
-  { value: "draft", label: "Чернетки" },
-  { value: "in_transit", label: "В дорозі" },
-  { value: "received", label: "Отримано" },
-];
+const STATUS_TAB_VALUES = ["", "draft", "in_transit", "received"] as const;
 
 function StatusBadge({ status }: { status: TransferStatus }) {
+  const t = useTranslations("Dashboard.transfers.status");
   const c = TRANSFER_STATUS_COLOR[status] ?? TRANSFER_STATUS_COLOR.draft;
   return (
     <span
@@ -42,7 +39,7 @@ function StatusBadge({ status }: { status: TransferStatus }) {
         fontWeight: 600,
       }}
     >
-      {TRANSFER_STATUS_LABEL[status] ?? status}
+      {t.has(status) ? t(status) : status}
     </span>
   );
 }
@@ -70,47 +67,57 @@ const thStyle: React.CSSProperties = {
 };
 
 // ── Detail drawer content ────────────────────────────────────────────────────
-function TransferDetail({ t, onViewAnalytics }: { t: TransferDto; onViewAnalytics: (productId: string) => void }) {
+function TransferDetail({ t: transfer, onViewAnalytics }: { t: TransferDto; onViewAnalytics: (productId: string) => void }) {
+  const t = useTranslations("Dashboard.transfers.drawer");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   return (
     <>
-      <DrawerSection title="Загальна інформація">
+      <DrawerSection title={t("section")}>
         <DrawerGrid>
-          <DrawerField label="Звідки" value={t.fromStoreName} />
-          <DrawerField label="Куди" value={t.toStoreName} />
+          <DrawerField label={t("from")} value={transfer.fromStoreName} />
+          <DrawerField label={t("to")} value={transfer.toStoreName} />
           <DrawerField
-            label="Статус"
-            value={<StatusBadge status={t.status as TransferStatus} />}
+            label={t("status")}
+            value={<StatusBadge status={transfer.status as TransferStatus} />}
           />
           <DrawerField
-            label="Тип переміщення"
-            value={t.transferType ?? "—"}
+            label={t("transferType")}
+            value={transfer.transferType ?? "—"}
           />
           <DrawerField
-            label="Дата створення"
-            value={new Date(t.createdAt).toLocaleDateString("uk-UA")}
+            label={t("createdAt")}
+            value={new Date(transfer.createdAt).toLocaleDateString(intlLocale)}
           />
-          <DrawerField label="Позицій" value={t.items.length} />
+          <DrawerField label={t("items")} value={transfer.items.length} />
         </DrawerGrid>
-        {t.notes && <DrawerField label="Нотатки" value={t.notes} />}
+        {transfer.notes && <DrawerField label={t("notes")} value={transfer.notes} />}
         <DrawerField
-          label="ID документу"
+          label={t("documentId")}
           value={
             <span style={{ fontFamily: "monospace", fontSize: 12, color: "#4B5563" }}>
-              {t.id}
+              {transfer.id}
             </span>
           }
         />
       </DrawerSection>
 
-      <DrawerSection title={`Позиції (${t.items.length})`}>
-        {t.items.length === 0 ? (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Немає позицій</div>
+      <DrawerSection title={t("itemsSection", { count: transfer.items.length })}>
+        {transfer.items.length === 0 ? (
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noItems")}</div>
         ) : (
           <div style={{ border: "1px solid #1F2937", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
-                  {["Товар", "Партія", "К-сть", "Термін", "Дії"].map((h) => (
+                  {[
+                    t("itemHeaders.product"),
+                    t("itemHeaders.batch"),
+                    t("itemHeaders.qty"),
+                    t("itemHeaders.expiry"),
+                    t("itemHeaders.actions"),
+                  ].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -132,7 +139,7 @@ function TransferDetail({ t, onViewAnalytics }: { t: TransferDto; onViewAnalytic
                 </tr>
               </thead>
               <tbody>
-                {t.items.map((item) => (
+                {transfer.items.map((item) => (
                   <tr key={item.id}>
                     <td
                       style={{
@@ -179,14 +186,14 @@ function TransferDetail({ t, onViewAnalytics }: { t: TransferDto; onViewAnalytic
                       }}
                     >
                       {item.expiryDate
-                        ? new Date(item.expiryDate).toLocaleDateString("uk-UA")
+                        ? new Date(item.expiryDate).toLocaleDateString(intlLocale)
                         : "—"}
                     </td>
                     <td style={{ padding: "7px 10px", borderBottom: "1px solid #1F2937", textAlign: "center" }}>
                       <ActionMenu
                         items={[
                           {
-                            label: "Аналітика товару",
+                            label: t("analyticsAction"),
                             icon: <BarChart2 size={13} />,
                             onClick: () => onViewAnalytics(item.productId),
                           },
@@ -206,6 +213,11 @@ function TransferDetail({ t, onViewAnalytics }: { t: TransferDto; onViewAnalytic
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function TransfersPage() {
+  const t = useTranslations("Dashboard.transfers");
+  const tPage = useTranslations("Dashboard.transfers.page");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_RECEIVE_STOCK) : null;
@@ -221,26 +233,29 @@ export default function TransfersPage() {
   const [selected, setSelected] = useState<TransferDto | null>(null);
 
   if (access === null) return null;
-  if (!access) return <AccessDenied title="Переміщення" />;
+  if (!access) return <AccessDenied title={t("title")} />;
+
+  const statusTabLabel = (value: string) =>
+    value === "" ? tPage("statusTabs.all") : t(`status.${value}`);
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
       <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Переміщення</h1>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          Переміщення товарів між магазинами та складами
+          {tPage("subtitle")}
         </p>
       </div>
 
       {/* Status tabs */}
       <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937" }}>
-        {STATUS_TABS.map((tab) => {
-          const active = tab.value === statusFilter;
+        {STATUS_TAB_VALUES.map((value) => {
+          const active = value === statusFilter;
           return (
             <button
-              key={tab.value}
-              onClick={() => setStatusFilter(tab.value)}
+              key={value}
+              onClick={() => setStatusFilter(value)}
               style={{
                 background: "transparent",
                 border: "none",
@@ -254,7 +269,7 @@ export default function TransfersPage() {
                 transition: "color 0.1s",
               }}
             >
-              {tab.label}
+              {statusTabLabel(value)}
             </button>
           );
         })}
@@ -271,70 +286,78 @@ export default function TransfersPage() {
       >
         {isLoading ? (
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            Завантаження…
+            {tCommon("loading")}
           </div>
         ) : transfers.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            Немає переміщень
+            {tPage("empty")}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["Звідки", "", "Куди", "Позицій", "Дата", "Статус", "Дії"].map((h) => (
-                  <th key={h} style={thStyle}>
+                {[
+                  tPage("headers.from"),
+                  "",
+                  tPage("headers.to"),
+                  tPage("headers.items"),
+                  tPage("headers.date"),
+                  tPage("headers.status"),
+                  tPage("headers.actions"),
+                ].map((h, i) => (
+                  <th key={i === 1 ? "arrow" : h} style={thStyle}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {transfers.map((t) => (
-                <tr key={t.id}>
+              {transfers.map((tr) => (
+                <tr key={tr.id}>
                   <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
-                    {t.fromStoreName}
+                    {tr.fromStoreName}
                   </td>
                   <td style={{ ...tdStyle, color: "#4B5563" }}>
                     <ArrowLeftRight size={14} />
                   </td>
                   <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
-                    {t.toStoreName}
+                    {tr.toStoreName}
                   </td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{t.items.length}</td>
+                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{tr.items.length}</td>
                   <td style={tdStyle}>
-                    {new Date(t.createdAt).toLocaleDateString("uk-UA")}
+                    {new Date(tr.createdAt).toLocaleDateString(intlLocale)}
                   </td>
                   <td style={tdStyle}>
-                    <StatusBadge status={t.status as TransferStatus} />
+                    <StatusBadge status={tr.status as TransferStatus} />
                   </td>
                   <td style={{ ...tdStyle, borderRight: "none" }}>
                     <ActionMenu
                       items={[
                         {
-                          label: "Переглянути",
+                          label: tPage("actionMenu.view"),
                           icon: <Eye size={13} />,
-                          onClick: () => setSelected(t),
+                          onClick: () => setSelected(tr),
                         },
                         { separator: true },
-                        ...(t.status === "in_transit"
+                        ...(tr.status === "in_transit"
                           ? [
                               {
-                                label: "Підтвердити отримання",
+                                label: tPage("actionMenu.confirm"),
                                 icon: <CheckCircle size={13} />,
                                 variant: "success" as const,
                                 disabled: confirm.isPending,
-                                onClick: () => confirm.mutate(t.id),
+                                onClick: () => confirm.mutate(tr.id),
                               },
                             ]
                           : []),
-                        ...(t.status === "draft" || t.status === "in_transit"
+                        ...(tr.status === "draft" || tr.status === "in_transit"
                           ? [
                               {
-                                label: "Скасувати",
+                                label: tCommon("cancel"),
                                 icon: <XCircle size={13} />,
                                 variant: "danger" as const,
                                 disabled: cancel.isPending,
-                                onClick: () => cancel.mutate(t.id),
+                                onClick: () => cancel.mutate(tr.id),
                               },
                             ]
                           : []),
@@ -352,10 +375,10 @@ export default function TransfersPage() {
       <DetailDrawer
         isOpen={selected !== null}
         onClose={() => setSelected(null)}
-        title="Переміщення"
+        title={t("title")}
         subtitle={
           selected
-            ? `${selected.fromStoreName} → ${selected.toStoreName} · ${new Date(selected.createdAt).toLocaleDateString("uk-UA")}`
+            ? `${selected.fromStoreName} → ${selected.toStoreName} · ${new Date(selected.createdAt).toLocaleDateString(intlLocale)}`
             : ""
         }
       >

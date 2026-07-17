@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Eye, ExternalLink } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { useReceipts } from "@/features/receipts/hooks/useReceipts";
 import { ReceiptStatusBadge } from "@/features/receipts/components/ReceiptStatusBadge";
 import type { ReceiptDto, ReceiptStatus } from "@/features/receipts/types";
@@ -16,17 +17,11 @@ import {
   DrawerGrid,
 } from "@/components/ui/DetailDrawer";
 
-const STATUS_TABS: { value: string; label: string }[] = [
-  { value: "", label: "Всі" },
-  { value: "draft", label: "Чернетки" },
-  { value: "in_transit", label: "В дорозі" },
-  { value: "received", label: "Прийнято" },
-  { value: "cancelled", label: "Скасовано" },
-];
+const STATUS_TAB_VALUES = ["", "draft", "in_transit", "received", "cancelled"] as const;
 
-function formatDate(s: string | null) {
+function formatDate(s: string | null, intlLocale: string) {
   if (!s) return "—";
-  return new Date(s).toLocaleDateString("uk-UA");
+  return new Date(s).toLocaleDateString(intlLocale);
 }
 
 const tdStyle: React.CSSProperties = {
@@ -53,25 +48,29 @@ const thStyle: React.CSSProperties = {
 
 // ── Detail drawer content ────────────────────────────────────────────────────
 function ReceiptDetail({ r }: { r: ReceiptDto }) {
+  const t = useTranslations("Dashboard.receipts.drawer");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   return (
     <>
-      <DrawerSection title="Загальна інформація">
+      <DrawerSection title={t("section")}>
         <DrawerGrid>
-          <DrawerField label="Постачальник" value={r.supplierName ?? "—"} />
-          <DrawerField label="Магазин призначення" value={r.destinationStoreName} />
+          <DrawerField label={t("supplier")} value={r.supplierName ?? "—"} />
+          <DrawerField label={t("destinationStore")} value={r.destinationStoreName} />
           <DrawerField
-            label="Статус"
+            label={t("status")}
             value={<ReceiptStatusBadge status={r.status as ReceiptStatus} />}
           />
-          <DrawerField label="Очікується" value={formatDate(r.expectedAt)} />
-          <DrawerField label="Отримано" value={formatDate(r.receivedAt)} />
-          <DrawerField label="Позицій" value={r.items.length} />
-          <DrawerField label="Через центральний склад" value={r.viaCentralStore ? "Так" : "Ні"} />
-          <DrawerField label="Дата створення" value={formatDate(r.createdAt)} />
+          <DrawerField label={t("expected")} value={formatDate(r.expectedAt, intlLocale)} />
+          <DrawerField label={t("received")} value={formatDate(r.receivedAt, intlLocale)} />
+          <DrawerField label={t("items")} value={r.items.length} />
+          <DrawerField label={t("viaCentral")} value={r.viaCentralStore ? t("yes") : t("no")} />
+          <DrawerField label={t("createdAt")} value={formatDate(r.createdAt, intlLocale)} />
         </DrawerGrid>
-        {r.notes && <DrawerField label="Нотатки" value={r.notes} />}
+        {r.notes && <DrawerField label={t("notes")} value={r.notes} />}
         <DrawerField
-          label="ID документу"
+          label={t("documentId")}
           value={
             <span style={{ fontFamily: "monospace", fontSize: 12, color: "#4B5563" }}>
               {r.id}
@@ -80,15 +79,21 @@ function ReceiptDetail({ r }: { r: ReceiptDto }) {
         />
       </DrawerSection>
 
-      <DrawerSection title={`Позиції (${r.items.length})`}>
+      <DrawerSection title={t("itemsSection", { count: r.items.length })}>
         {r.items.length === 0 ? (
-          <div style={{ color: "#4B5563", fontSize: 13 }}>Немає позицій</div>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noItems")}</div>
         ) : (
           <div style={{ border: "1px solid #1F2937", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
-                  {["Товар", "Партія", "Замовлено", "Отримано", "Термін"].map((h) => (
+                  {[
+                    t("itemHeaders.product"),
+                    t("itemHeaders.batch"),
+                    t("itemHeaders.ordered"),
+                    t("itemHeaders.received"),
+                    t("itemHeaders.expiry"),
+                  ].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -172,7 +177,7 @@ function ReceiptDetail({ r }: { r: ReceiptDto }) {
                         textAlign: "center",
                       }}
                     >
-                      {item.expiryDate ? formatDate(item.expiryDate) : "—"}
+                      {item.expiryDate ? formatDate(item.expiryDate, intlLocale) : "—"}
                     </td>
                   </tr>
                 ))}
@@ -190,6 +195,12 @@ export default function ReceiptsPage() {
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_RECEIVE_STOCK) : null;
 
+  const t = useTranslations("Dashboard.receipts");
+  const tPage = useTranslations("Dashboard.receipts.page");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   const [statusFilter, setStatusFilter] = useState("");
   const { data: receipts = [], isLoading } = useReceipts(
     statusFilter ? { status: statusFilter } : undefined,
@@ -199,26 +210,29 @@ export default function ReceiptsPage() {
   const [selected, setSelected] = useState<ReceiptDto | null>(null);
 
   if (access === null) return null;
-  if (!access) return <AccessDenied title="Прийомка" />;
+  if (!access) return <AccessDenied title={t("title")} />;
+
+  const statusTabLabel = (value: string) =>
+    value === "" ? tPage("statusTabs.all") : t(`status.${value}`);
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
       <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>Прийомка</h1>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          Документи прийомки товарів від постачальників
+          {tPage("subtitle")}
         </p>
       </div>
 
       {/* Status tabs */}
       <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937", paddingBottom: 0 }}>
-        {STATUS_TABS.map((tab) => {
-          const active = tab.value === statusFilter;
+        {STATUS_TAB_VALUES.map((value) => {
+          const active = value === statusFilter;
           return (
             <button
-              key={tab.value}
-              onClick={() => setStatusFilter(tab.value)}
+              key={value}
+              onClick={() => setStatusFilter(value)}
               style={{
                 background: "transparent",
                 border: "none",
@@ -232,7 +246,7 @@ export default function ReceiptsPage() {
                 transition: "color 0.1s",
               }}
             >
-              {tab.label}
+              {statusTabLabel(value)}
             </button>
           );
         })}
@@ -249,23 +263,29 @@ export default function ReceiptsPage() {
       >
         {isLoading ? (
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            Завантаження…
+            {tCommon("loading")}
           </div>
         ) : receipts.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            Немає прийомок
+            {tPage("empty")}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["#", "Магазин", "Постачальник", "Очікується", "Статус", "Позицій", "Дії"].map(
-                  (h) => (
-                    <th key={h} style={thStyle}>
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  tPage("headers.id"),
+                  tPage("headers.store"),
+                  tPage("headers.supplier"),
+                  tPage("headers.expected"),
+                  tPage("headers.status"),
+                  tPage("headers.items"),
+                  tPage("headers.actions"),
+                ].map((h) => (
+                  <th key={h} style={thStyle}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -285,7 +305,7 @@ export default function ReceiptsPage() {
                     {r.destinationStoreName}
                   </td>
                   <td style={tdStyle}>{r.supplierName ?? "—"}</td>
-                  <td style={tdStyle}>{formatDate(r.expectedAt)}</td>
+                  <td style={tdStyle}>{formatDate(r.expectedAt, intlLocale)}</td>
                   <td style={tdStyle}>
                     <ReceiptStatusBadge status={r.status as ReceiptStatus} />
                   </td>
@@ -294,12 +314,12 @@ export default function ReceiptsPage() {
                     <ActionMenu
                       items={[
                         {
-                          label: "Переглянути",
+                          label: tPage("actionMenu.view"),
                           icon: <Eye size={13} />,
                           onClick: () => setSelected(r),
                         },
                         {
-                          label: "Відкрити сторінку",
+                          label: tPage("actionMenu.openPage"),
                           icon: <ExternalLink size={13} />,
                           href: `/receipts/${r.id}`,
                         },
@@ -317,10 +337,10 @@ export default function ReceiptsPage() {
       <DetailDrawer
         isOpen={selected !== null}
         onClose={() => setSelected(null)}
-        title="Прийомка"
+        title={t("title")}
         subtitle={
           selected
-            ? `${selected.supplierName ?? "Без постачальника"} → ${selected.destinationStoreName}`
+            ? `${selected.supplierName ?? t("drawer.noSupplier")} → ${selected.destinationStoreName}`
             : ""
         }
       >

@@ -53,13 +53,10 @@ export interface UpdateItemPayload {
   discrepancyNotes?: string | null;
 }
 
-export const RECEIPT_STATUS_LABEL: Record<ReceiptStatus, string> = {
-  draft: "Чернетка",
-  ordered: "Замовлено",
-  in_transit: "В дорозі",
-  received: "Прийнято",
-  cancelled: "Скасовано",
-};
+// Display labels moved to i18n messages under `Dashboard.receipts.status` (i18n Block 2b,
+// TASK-380) — this Record<ReceiptStatus, string> is intentionally gone. Components render
+// the label via `useTranslations("Dashboard.receipts.status")` keyed by the status value
+// itself. Colors stay here since they're not language-dependent.
 
 export const RECEIPT_STATUS_COLOR: Record<ReceiptStatus, { bg: string; text: string }> = {
   draft: { bg: "#111827", text: "#6B7280" },

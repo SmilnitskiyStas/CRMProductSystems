@@ -704,6 +704,327 @@
       "batchesLabel": "Batches:",
       "countOfTotal": "{filtered} of {total}",
       "modalTitle": "New batch"
+    },
+    "receipts": {
+      "title": "Receiving",
+      "status": {
+        "draft": "Draft",
+        "ordered": "Ordered",
+        "in_transit": "In Transit",
+        "received": "Received",
+        "cancelled": "Cancelled"
+      },
+      "page": {
+        "subtitle": "Supplier delivery documents",
+        "statusTabs": {
+          "all": "All"
+        },
+        "empty": "No receipts",
+        "headers": {
+          "id": "#",
+          "store": "Store",
+          "supplier": "Supplier",
+          "expected": "Expected",
+          "status": "Status",
+          "items": "Items",
+          "actions": "Actions"
+        },
+        "actionMenu": {
+          "view": "View",
+          "openPage": "Open page"
+        }
+      },
+      "drawer": {
+        "section": "General information",
+        "supplier": "Supplier",
+        "destinationStore": "Destination store",
+        "status": "Status",
+        "expected": "Expected",
+        "received": "Received",
+        "items": "Items",
+        "viaCentral": "Via central warehouse",
+        "yes": "Yes",
+        "no": "No",
+        "createdAt": "Created",
+        "notes": "Notes",
+        "documentId": "Document ID",
+        "noSupplier": "No supplier",
+        "itemsSection": "Items ({count})",
+        "noItems": "No items",
+        "itemHeaders": {
+          "product": "Product",
+          "batch": "Batch",
+          "ordered": "Ordered",
+          "received": "Received",
+          "expiry": "Expiry"
+        }
+      },
+      "detail": {
+        "notFound": "Receipt not found",
+        "confirmReceive": "Confirm receipt",
+        "itemsCount": "{count} items",
+        "progress": "Processing progress",
+        "headers": {
+          "product": "Product",
+          "barcode": "Barcode",
+          "ordered": "Ordered",
+          "received": "Received",
+          "expiry": "Expiry date",
+          "batch": "Batch",
+          "price": "Price",
+          "status": "Status"
+        },
+        "batchNumberPlaceholder": "optional",
+        "confirmItem": "OK",
+        "done": "Done"
+      }
+    },
+    "transfers": {
+      "title": "Transfers",
+      "status": {
+        "draft": "Draft",
+        "in_transit": "In Transit",
+        "received": "Received",
+        "cancelled": "Cancelled"
+      },
+      "page": {
+        "subtitle": "Moving stock between stores and warehouses",
+        "statusTabs": {
+          "all": "All"
+        },
+        "empty": "No transfers",
+        "headers": {
+          "from": "From",
+          "to": "To",
+          "items": "Items",
+          "date": "Date",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "actionMenu": {
+          "view": "View",
+          "confirm": "Confirm receipt"
+        }
+      },
+      "drawer": {
+        "section": "General information",
+        "from": "From",
+        "to": "To",
+        "status": "Status",
+        "transferType": "Transfer type",
+        "createdAt": "Created",
+        "items": "Items",
+        "notes": "Notes",
+        "documentId": "Document ID",
+        "itemsSection": "Items ({count})",
+        "noItems": "No items",
+        "itemHeaders": {
+          "product": "Product",
+          "batch": "Batch",
+          "qty": "Qty",
+          "expiry": "Expiry",
+          "actions": "Actions"
+        },
+        "analyticsAction": "Product analytics"
+      }
+    },
+    "writeOffs": {
+      "title": "Write-offs",
+      "status": {
+        "draft": "Draft",
+        "pending_approval": "Pending Approval",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "reason": {
+        "expired": "Expired",
+        "damaged": "Damaged",
+        "theft": "Theft",
+        "production_loss": "Production Loss",
+        "other": "Other"
+      },
+      "page": {
+        "subtitle": "Write-off documents — approvals and reports",
+        "statusTabs": {
+          "all": "All"
+        },
+        "empty": "No write-offs",
+        "headers": {
+          "store": "Store",
+          "reason": "Reason",
+          "items": "Items",
+          "lossAmount": "Loss amount",
+          "date": "Date",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "actionMenu": {
+          "view": "View",
+          "approve": "Approve",
+          "reject": "Reject",
+          "downloadPdf": "Download PDF"
+        },
+        "filterChips": {
+          "reason": "Reason: {value}",
+          "store": "Store: {value}"
+        }
+      },
+      "drawer": {
+        "section": "General information",
+        "store": "Store",
+        "status": "Status",
+        "reason": "Reason",
+        "lossAmount": "Loss amount",
+        "createdAt": "Created",
+        "approvedAt": "Approved",
+        "documentId": "Document ID",
+        "itemsSection": "Items ({count})",
+        "noItems": "No items",
+        "itemHeaders": {
+          "product": "Product",
+          "batch": "Batch",
+          "qty": "Qty",
+          "loss": "Loss",
+          "actions": "Actions"
+        },
+        "analyticsAction": "Product analytics"
+      }
+    },
+    "locations": {
+      "page": {
+        "title": "Locations",
+        "subtitle": "Stores, warehouses, and other network sites",
+        "newLocation": "New location",
+        "empty": "No locations yet. Click “New location” to add the first one.",
+        "headers": {
+          "name": "Name",
+          "type": "Type",
+          "address": "Address",
+          "zones": "Zones",
+          "status": "Status"
+        },
+        "statusActive": "Active",
+        "statusInactive": "Inactive",
+        "planLink": "Plan",
+        "edit": "Edit",
+        "toastCreated": "Location created",
+        "toastUpdated": "Location saved",
+        "toastError": "Error: {message}"
+      },
+      "form": {
+        "titleCreate": "New location",
+        "titleEdit": "Edit location",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. Store #1",
+        "typeLabel": "Location type",
+        "addressLabel": "Address (optional)",
+        "addressPlaceholder": "123 Main St, City",
+        "legalEntityLabel": "Legal entity (optional)",
+        "legalEntityNone": "— Not specified —",
+        "activeLabel": "Active",
+        "saving": "Saving…",
+        "save": "Save",
+        "create": "Create",
+        "validationRequired": "Name is required"
+      },
+      "types": {
+        "retail_store": "Retail Store",
+        "warehouse": "Warehouse",
+        "auto_service": "Auto Service",
+        "office": "Office",
+        "production": "Production",
+        "restaurant": "Restaurant"
+      },
+      "zoneDialog": {
+        "title": "New zone",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. Fridge #1",
+        "typeLabel": "Type",
+        "shelvesCountLabel": "Number of shelves",
+        "tempMinLabel": "Min temp. (°C)",
+        "tempMinPlaceholder": "e.g. -18",
+        "tempMaxLabel": "Max temp. (°C)",
+        "tempMaxPlaceholder": "e.g. 4",
+        "creating": "Creating…",
+        "submit": "Create zone"
+      },
+      "zoneTypes": {
+        "shelf": "Shelving",
+        "fridge": "Fridge",
+        "freezer": "Freezer",
+        "display": "Display case",
+        "production": "Production zone",
+        "warehouse": "Storage zone"
+      },
+      "zoneStatus": {
+        "safe": "Safe",
+        "warning": "Warning",
+        "critical": "Critical",
+        "expired": "Expired",
+        "empty": "No stock"
+      },
+      "floorPlan": {
+        "emptyCanvas": "The plan is empty — add zones from the panel on the right",
+        "toolsTitle": "Tools",
+        "removeFromPlan": "Remove from plan",
+        "shelfBuilderLink": "Shelf builder →",
+        "toolsHint": "Drag zones on the grid. Bottom-right corner — resize. Click a zone — select.",
+        "addWidth": "+ Width",
+        "addHeight": "+ Height",
+        "unplacedTitle": "Unplaced zones ({count})",
+        "newZone": "New zone",
+        "allZonesPlaced": "All zones are on the plan",
+        "legendTitle": "Legend",
+        "legendHint": "Zone color = the worst status of items inside it.",
+        "placedTitle": "Zones on the plan"
+      },
+      "floorPlanPage": {
+        "title": "Location Builder",
+        "subtitleSuffix": "zone layout and item statuses",
+        "saveButton": "Save plan",
+        "saving": "Saving…",
+        "toastSaved": "Location plan saved",
+        "toastError": "Failed to save: {message}"
+      },
+      "shelvesPage": {
+        "backToPlan": "Back to plan",
+        "title": "Shelf Builder",
+        "saving": "Saving…",
+        "save": "Save",
+        "actionsTitle": "Actions",
+        "addSection": "Add section",
+        "sectionsTitle": "Sections ({count})",
+        "noSections": "No sections",
+        "canvasEmptyHint": "Add sections from the panel on the right",
+        "newSectionLabel": "Section {n}",
+        "toastSaved": "Shelf layout saved",
+        "toastError": "Failed to save: {message}"
+      },
+      "floorPlanIndex": {
+        "noLocations": "No locations",
+        "redirecting": "Redirecting…"
+      }
+    },
+    "stores": {
+      "zoneStatus": {
+        "safe": "Safe",
+        "warning": "Warning",
+        "critical": "Critical",
+        "expired": "Expired",
+        "empty": "No stock"
+      },
+      "floorPlan": {
+        "emptyCanvas": "The plan is empty — add zones from the panel on the right",
+        "toolsTitle": "Tools",
+        "removeFromPlan": "Remove from plan",
+        "toolsHint": "Drag zones on the grid. Bottom-right corner — resize. Click a zone — select.",
+        "unplacedTitle": "Unplaced zones ({count})",
+        "allZonesPlaced": "All zones are on the plan",
+        "legendTitle": "Legend",
+        "legendHint": "Zone color = the worst status of items inside it.",
+        "placedTitle": "Zones on the plan"
+      },
+      "redirecting": "Redirecting…"
     }
   }
 }

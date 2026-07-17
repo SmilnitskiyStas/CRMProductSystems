@@ -704,6 +704,327 @@
       "batchesLabel": "Партій:",
       "countOfTotal": "{filtered} з {total}",
       "modalTitle": "Нова партія"
+    },
+    "receipts": {
+      "title": "Прийомка",
+      "status": {
+        "draft": "Чернетка",
+        "ordered": "Замовлено",
+        "in_transit": "В дорозі",
+        "received": "Прийнято",
+        "cancelled": "Скасовано"
+      },
+      "page": {
+        "subtitle": "Документи прийомки товарів від постачальників",
+        "statusTabs": {
+          "all": "Всі"
+        },
+        "empty": "Немає прийомок",
+        "headers": {
+          "id": "#",
+          "store": "Магазин",
+          "supplier": "Постачальник",
+          "expected": "Очікується",
+          "status": "Статус",
+          "items": "Позицій",
+          "actions": "Дії"
+        },
+        "actionMenu": {
+          "view": "Переглянути",
+          "openPage": "Відкрити сторінку"
+        }
+      },
+      "drawer": {
+        "section": "Загальна інформація",
+        "supplier": "Постачальник",
+        "destinationStore": "Магазин призначення",
+        "status": "Статус",
+        "expected": "Очікується",
+        "received": "Отримано",
+        "items": "Позицій",
+        "viaCentral": "Через центральний склад",
+        "yes": "Так",
+        "no": "Ні",
+        "createdAt": "Дата створення",
+        "notes": "Нотатки",
+        "documentId": "ID документу",
+        "noSupplier": "Без постачальника",
+        "itemsSection": "Позиції ({count})",
+        "noItems": "Немає позицій",
+        "itemHeaders": {
+          "product": "Товар",
+          "batch": "Партія",
+          "ordered": "Замовлено",
+          "received": "Отримано",
+          "expiry": "Термін"
+        }
+      },
+      "detail": {
+        "notFound": "Прийомку не знайдено",
+        "confirmReceive": "Підтвердити прийомку",
+        "itemsCount": "{count} поз.",
+        "progress": "Прогрес опрацювання",
+        "headers": {
+          "product": "Товар",
+          "barcode": "Штрихкод",
+          "ordered": "Замовлено",
+          "received": "Отримано",
+          "expiry": "Термін придатності",
+          "batch": "Партія",
+          "price": "Ціна",
+          "status": "Статус"
+        },
+        "batchNumberPlaceholder": "необов'язково",
+        "confirmItem": "ОК",
+        "done": "Готово"
+      }
+    },
+    "transfers": {
+      "title": "Переміщення",
+      "status": {
+        "draft": "Чернетка",
+        "in_transit": "В дорозі",
+        "received": "Отримано",
+        "cancelled": "Скасовано"
+      },
+      "page": {
+        "subtitle": "Переміщення товарів між магазинами та складами",
+        "statusTabs": {
+          "all": "Всі"
+        },
+        "empty": "Немає переміщень",
+        "headers": {
+          "from": "Звідки",
+          "to": "Куди",
+          "items": "Позицій",
+          "date": "Дата",
+          "status": "Статус",
+          "actions": "Дії"
+        },
+        "actionMenu": {
+          "view": "Переглянути",
+          "confirm": "Підтвердити отримання"
+        }
+      },
+      "drawer": {
+        "section": "Загальна інформація",
+        "from": "Звідки",
+        "to": "Куди",
+        "status": "Статус",
+        "transferType": "Тип переміщення",
+        "createdAt": "Дата створення",
+        "items": "Позицій",
+        "notes": "Нотатки",
+        "documentId": "ID документу",
+        "itemsSection": "Позиції ({count})",
+        "noItems": "Немає позицій",
+        "itemHeaders": {
+          "product": "Товар",
+          "batch": "Партія",
+          "qty": "К-сть",
+          "expiry": "Термін",
+          "actions": "Дії"
+        },
+        "analyticsAction": "Аналітика товару"
+      }
+    },
+    "writeOffs": {
+      "title": "Списання",
+      "status": {
+        "draft": "Чернетка",
+        "pending_approval": "На затвердженні",
+        "approved": "Затверджено",
+        "rejected": "Відхилено"
+      },
+      "reason": {
+        "expired": "Прострочено",
+        "damaged": "Пошкоджено",
+        "theft": "Крадіжка",
+        "production_loss": "Виробничі втрати",
+        "other": "Інше"
+      },
+      "page": {
+        "subtitle": "Документи списання товарів — затвердження та звіти",
+        "statusTabs": {
+          "all": "Всі"
+        },
+        "empty": "Немає списань",
+        "headers": {
+          "store": "Магазин",
+          "reason": "Причина",
+          "items": "Позицій",
+          "lossAmount": "Сума збитку",
+          "date": "Дата",
+          "status": "Статус",
+          "actions": "Дії"
+        },
+        "actionMenu": {
+          "view": "Переглянути",
+          "approve": "Затвердити",
+          "reject": "Відхилити",
+          "downloadPdf": "Завантажити PDF"
+        },
+        "filterChips": {
+          "reason": "Причина: {value}",
+          "store": "Магазин: {value}"
+        }
+      },
+      "drawer": {
+        "section": "Загальна інформація",
+        "store": "Магазин",
+        "status": "Статус",
+        "reason": "Причина",
+        "lossAmount": "Сума збитку",
+        "createdAt": "Дата створення",
+        "approvedAt": "Дата затвердження",
+        "documentId": "ID документу",
+        "itemsSection": "Позиції ({count})",
+        "noItems": "Немає позицій",
+        "itemHeaders": {
+          "product": "Товар",
+          "batch": "Партія",
+          "qty": "К-сть",
+          "loss": "Збиток",
+          "actions": "Дії"
+        },
+        "analyticsAction": "Аналітика товару"
+      }
+    },
+    "locations": {
+      "page": {
+        "title": "Локації",
+        "subtitle": "Магазини, склади та інші об'єкти мережі",
+        "newLocation": "Нова локація",
+        "empty": "Локацій немає. Натисніть «Нова локація», щоб додати першу.",
+        "headers": {
+          "name": "Назва",
+          "type": "Тип",
+          "address": "Адреса",
+          "zones": "Зони",
+          "status": "Статус"
+        },
+        "statusActive": "Активна",
+        "statusInactive": "Неактивна",
+        "planLink": "План",
+        "edit": "Редагувати",
+        "toastCreated": "Локацію створено",
+        "toastUpdated": "Локацію збережено",
+        "toastError": "Помилка: {message}"
+      },
+      "form": {
+        "titleCreate": "Нова локація",
+        "titleEdit": "Редагувати локацію",
+        "nameLabel": "Назва",
+        "namePlaceholder": "Наприклад: Магазин №1",
+        "typeLabel": "Тип локації",
+        "addressLabel": "Адреса (необов'язково)",
+        "addressPlaceholder": "вул. Шевченка, 1, Київ",
+        "legalEntityLabel": "Юридична особа (необов'язково)",
+        "legalEntityNone": "— Не вказано —",
+        "activeLabel": "Активна",
+        "saving": "Збереження…",
+        "save": "Зберегти",
+        "create": "Створити",
+        "validationRequired": "Назва обов'язкова"
+      },
+      "types": {
+        "retail_store": "Роздрібний магазин",
+        "warehouse": "Склад",
+        "auto_service": "Автосервіс",
+        "office": "Офіс",
+        "production": "Виробництво",
+        "restaurant": "Ресторан"
+      },
+      "zoneDialog": {
+        "title": "Нова зона",
+        "nameLabel": "Назва",
+        "namePlaceholder": "напр. Холодильник №1",
+        "typeLabel": "Тип",
+        "shelvesCountLabel": "Кількість полиць",
+        "tempMinLabel": "Темп. мін (°C)",
+        "tempMinPlaceholder": "напр. -18",
+        "tempMaxLabel": "Темп. макс (°C)",
+        "tempMaxPlaceholder": "напр. 4",
+        "creating": "Створення…",
+        "submit": "Створити зону"
+      },
+      "zoneTypes": {
+        "shelf": "Стелаж",
+        "fridge": "Холодильник",
+        "freezer": "Морозильна камера",
+        "display": "Вітрина",
+        "production": "Виробнича зона",
+        "warehouse": "Складська зона"
+      },
+      "zoneStatus": {
+        "safe": "Безпечно",
+        "warning": "Попередження",
+        "critical": "Критично",
+        "expired": "Протерміновано",
+        "empty": "Без товарів"
+      },
+      "floorPlan": {
+        "emptyCanvas": "План порожній — додайте зони з панелі праворуч",
+        "toolsTitle": "Інструменти",
+        "removeFromPlan": "Прибрати з плану",
+        "shelfBuilderLink": "Конструктор поличок →",
+        "toolsHint": "Перетягуйте зони по сітці. Кут знизу праворуч — зміна розміру. Клік по зоні — вибір.",
+        "addWidth": "+ Ширина",
+        "addHeight": "+ Висота",
+        "unplacedTitle": "Не розміщені зони ({count})",
+        "newZone": "Нова зона",
+        "allZonesPlaced": "Усі зони на плані",
+        "legendTitle": "Легенда",
+        "legendHint": "Колір зони = найгірший статус товарів у ній.",
+        "placedTitle": "Зони на плані"
+      },
+      "floorPlanPage": {
+        "title": "Конструктор локації",
+        "subtitleSuffix": "розташування зон і статуси товарів",
+        "saveButton": "Зберегти план",
+        "saving": "Збереження…",
+        "toastSaved": "План локації збережено",
+        "toastError": "Не вдалося зберегти: {message}"
+      },
+      "shelvesPage": {
+        "backToPlan": "Назад до плану",
+        "title": "Конструктор поличок",
+        "saving": "Збереження…",
+        "save": "Зберегти",
+        "actionsTitle": "Дії",
+        "addSection": "Додати секцію",
+        "sectionsTitle": "Секції ({count})",
+        "noSections": "Немає секцій",
+        "canvasEmptyHint": "Додайте секції з панелі праворуч",
+        "newSectionLabel": "Секція {n}",
+        "toastSaved": "Конструктор поличок збережено",
+        "toastError": "Не вдалося зберегти: {message}"
+      },
+      "floorPlanIndex": {
+        "noLocations": "Немає локацій",
+        "redirecting": "Перенаправлення…"
+      }
+    },
+    "stores": {
+      "zoneStatus": {
+        "safe": "Безпечно",
+        "warning": "Попередження",
+        "critical": "Критично",
+        "expired": "Протерміновано",
+        "empty": "Без товарів"
+      },
+      "floorPlan": {
+        "emptyCanvas": "План порожній — додайте зони з панелі праворуч",
+        "toolsTitle": "Інструменти",
+        "removeFromPlan": "Прибрати з плану",
+        "toolsHint": "Перетягуйте зони по сітці. Кут знизу праворуч — зміна розміру. Клік по зоні — вибір.",
+        "unplacedTitle": "Не розміщені зони ({count})",
+        "allZonesPlaced": "Усі зони на плані",
+        "legendTitle": "Легенда",
+        "legendHint": "Колір зони = найгірший статус товарів у ній.",
+        "placedTitle": "Зони на плані"
+      },
+      "redirecting": "Перенаправлення…"
     }
   }
 }

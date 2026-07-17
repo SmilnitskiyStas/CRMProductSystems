@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { FloorPlanCanvas } from "@/features/locations/components/FloorPlanCanvas";
 import { FloorPlanSidePanel } from "@/features/locations/components/FloorPlanSidePanel";
 import { ZoneDialog } from "@/features/locations/components/ZoneDialog";
@@ -14,12 +15,14 @@ import {
   useZoneStatusCounts,
 } from "@/features/locations/hooks/useFloorPlan";
 import type { FloorPlanLayout, LocationZoneDto } from "@/features/locations/types";
-import { LOCATION_TYPE_LABELS } from "@/features/locations/types";
 
 const DEFAULT_W = 160;
 const DEFAULT_H = 100;
 
 export default function FloorPlanPage() {
+  const t = useTranslations("Dashboard.locations.floorPlanPage");
+  const tTypes = useTranslations("Dashboard.locations.types");
+  const tCommon = useTranslations("Common");
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const locationId = params.id;
@@ -96,15 +99,13 @@ export default function FloorPlanPage() {
     updateFloorPlan.mutate(layout, {
       onSuccess: () => {
         setDirty(false);
-        toast.success("План локації збережено");
+        toast.success(t("toastSaved"));
       },
-      onError: (e) => toast.error(`Не вдалося зберегти: ${e.message}`),
+      onError: (e) => toast.error(t("toastError", { message: e.message })),
     });
   }
 
-  const locationTypeLabel = location?.locationType
-    ? LOCATION_TYPE_LABELS[location.locationType] ?? location.locationType
-    : null;
+  const locationTypeLabel = location?.locationType ? tTypes(location.locationType) : null;
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -112,7 +113,7 @@ export default function FloorPlanPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Конструктор локації
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
             {location?.name ?? "…"}
@@ -133,7 +134,7 @@ export default function FloorPlanPage() {
                 {locationTypeLabel}
               </span>
             )}
-            {" "}— розташування зон і статуси товарів
+            {" "}— {t("subtitleSuffix")}
           </p>
         </div>
 
@@ -176,7 +177,7 @@ export default function FloorPlanPage() {
             }}
           >
             <Save size={15} />
-            {updateFloorPlan.isPending ? "Збереження…" : "Зберегти план"}
+            {updateFloorPlan.isPending ? t("saving") : t("saveButton")}
           </button>
         </div>
       </div>
@@ -184,7 +185,7 @@ export default function FloorPlanPage() {
       {/* Canvas + side panel */}
       {isLoading || !layout ? (
         <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-          Завантаження…
+          {tCommon("loading")}
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20, alignItems: "start" }}>

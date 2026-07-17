@@ -31,12 +31,10 @@ export interface CreateTransferRequest {
   items: { productStockId: string; quantity: number }[];
 }
 
-export const TRANSFER_STATUS_LABEL: Record<TransferStatus, string> = {
-  draft: "Чернетка",
-  in_transit: "В дорозі",
-  received: "Отримано",
-  cancelled: "Скасовано",
-};
+// Display labels moved to i18n messages under `Dashboard.transfers.status` (i18n Block 2b,
+// TASK-380) — this Record<TransferStatus, string> is intentionally gone. Components render
+// the label via `useTranslations("Dashboard.transfers.status")` keyed by the status value
+// itself. Colors stay here since they're not language-dependent.
 
 export const TRANSFER_STATUS_COLOR: Record<TransferStatus, { bg: string; text: string }> = {
   draft: { bg: "#111827", text: "#6B7280" },

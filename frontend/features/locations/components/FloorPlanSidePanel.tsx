@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { FloorPlanLayout, LocationZoneDto, ZoneStatusCounts } from "../types";
 import { STATUS_CONFIG, ZONE_TYPE_ICONS, worstStatus } from "./FloorPlanCanvas";
 
@@ -27,6 +28,8 @@ export function FloorPlanSidePanel({
   onOpenShelves,
   onResizeCanvas,
 }: Props) {
+  const t = useTranslations("Dashboard.locations.floorPlan");
+  const tZoneStatus = useTranslations("Dashboard.locations.zoneStatus");
   const placedIds = new Set(layout.zones.map((z) => z.zoneId));
   const unplaced = zones.filter((z) => z.isActive && !placedIds.has(z.id));
   const selected = selectedZoneId ? zones.find((z) => z.id === selectedZoneId) : null;
@@ -34,7 +37,7 @@ export function FloorPlanSidePanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Tools */}
-      <Panel title="Інструменти">
+      <Panel title={t("toolsTitle")}>
         {selected ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
@@ -55,7 +58,7 @@ export function FloorPlanSidePanel({
                 cursor: "pointer",
               }}
             >
-              <Trash2 size={14} /> Прибрати з плану
+              <Trash2 size={14} /> {t("removeFromPlan")}
             </button>
             <button
               onClick={() => onOpenShelves(selected.id)}
@@ -72,14 +75,13 @@ export function FloorPlanSidePanel({
                 cursor: "pointer",
               }}
             >
-              Конструктор поличок →
+              {t("shelfBuilderLink")}
             </button>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p style={{ color: "#6B7280", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-              Перетягуйте зони по сітці. Кут знизу праворуч — зміна розміру.
-              Клік по зоні — вибір.
+              {t("toolsHint")}
             </p>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -95,7 +97,7 @@ export function FloorPlanSidePanel({
                   cursor: "pointer",
                 }}
               >
-                + Ширина
+                {t("addWidth")}
               </button>
               <button
                 onClick={() => onResizeCanvas(layout.canvasW, layout.canvasH + 200)}
@@ -110,7 +112,7 @@ export function FloorPlanSidePanel({
                   cursor: "pointer",
                 }}
               >
-                + Висота
+                {t("addHeight")}
               </button>
             </div>
           </div>
@@ -118,7 +120,7 @@ export function FloorPlanSidePanel({
       </Panel>
 
       {/* Unplaced zones */}
-      <Panel title={`Не розміщені зони (${unplaced.length})`}>
+      <Panel title={t("unplacedTitle", { count: unplaced.length })}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <button
             onClick={onCreateZone}
@@ -137,10 +139,10 @@ export function FloorPlanSidePanel({
               cursor: "pointer",
             }}
           >
-            <Plus size={14} /> Нова зона
+            <Plus size={14} /> {t("newZone")}
           </button>
           {unplaced.length === 0 ? (
-            <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>Усі зони на плані</p>
+            <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>{t("allZonesPlaced")}</p>
           ) : (
             unplaced.map((zone) => (
               <button
@@ -172,7 +174,7 @@ export function FloorPlanSidePanel({
       </Panel>
 
       {/* Legend */}
-      <Panel title="Легенда">
+      <Panel title={t("legendTitle")}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {(["safe", "warning", "critical", "expired", "empty"] as const).map((s) => {
             const cfg = STATUS_CONFIG[s];
@@ -187,18 +189,18 @@ export function FloorPlanSidePanel({
                     border: `1px solid ${cfg.border}`,
                   }}
                 />
-                <span style={{ color: "#9CA3AF", fontSize: 12 }}>{cfg.label}</span>
+                <span style={{ color: "#9CA3AF", fontSize: 12 }}>{tZoneStatus(s)}</span>
               </div>
             );
           })}
         </div>
         <p style={{ color: "#4B5563", fontSize: 11, marginTop: 10, marginBottom: 0, lineHeight: 1.5 }}>
-          Колір зони = найгірший статус товарів у ній.
+          {t("legendHint")}
         </p>
       </Panel>
 
       {/* Placed zone statuses */}
-      <Panel title="Зони на плані">
+      <Panel title={t("placedTitle")}>
         {layout.zones.length === 0 ? (
           <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>—</p>
         ) : (

@@ -1,7 +1,11 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { ReceiptStatus } from "../types";
-import { RECEIPT_STATUS_COLOR, RECEIPT_STATUS_LABEL } from "../types";
+import { RECEIPT_STATUS_COLOR } from "../types";
 
 export function ReceiptStatusBadge({ status }: { status: ReceiptStatus }) {
+  const t = useTranslations("Dashboard.receipts.status");
   const colors = RECEIPT_STATUS_COLOR[status] ?? RECEIPT_STATUS_COLOR.draft;
   return (
     <span
@@ -15,7 +19,7 @@ export function ReceiptStatusBadge({ status }: { status: ReceiptStatus }) {
         fontWeight: 600,
       }}
     >
-      {RECEIPT_STATUS_LABEL[status] ?? status}
+      {t.has(status) ? t(status) : status}
     </span>
   );
 }
