@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { ProfileInfoForm } from "@/features/profile/components/ProfileInfoForm";
 import { ChangePasswordForm } from "@/features/profile/components/ChangePasswordForm";
 import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection";
@@ -26,33 +27,35 @@ const sectionSubtitleStyle: React.CSSProperties = {
 };
 
 export function ProfileTab() {
+  const t = useTranslations("Dashboard.settings.profileTab");
+
   return (
     <div>
       {/* Section 1 — Personal info */}
       <div style={sectionStyle}>
-        <h3 style={sectionTitleStyle}>Особисті дані</h3>
-        <p style={sectionSubtitleStyle}>Ім&apos;я та контактна інформація</p>
+        <h3 style={sectionTitleStyle}>{t("personalTitle")}</h3>
+        <p style={sectionSubtitleStyle}>{t("personalSubtitle")}</p>
         <ProfileInfoForm />
       </div>
 
       {/* Section 2 — Password */}
       <div style={sectionStyle}>
-        <h3 style={sectionTitleStyle}>Зміна пароля</h3>
-        <p style={sectionSubtitleStyle}>Мінімум 12 символів, літери та цифри</p>
+        <h3 style={sectionTitleStyle}>{t("passwordTitle")}</h3>
+        <p style={sectionSubtitleStyle}>{t("passwordSubtitle")}</p>
         <ChangePasswordForm />
       </div>
 
       {/* Section 3 — 2FA */}
       <div style={sectionStyle}>
-        <h3 style={sectionTitleStyle}>Двофакторна автентифікація</h3>
-        <p style={sectionSubtitleStyle}>Додатковий рівень захисту входу в акаунт</p>
+        <h3 style={sectionTitleStyle}>{t("twoFaTitle")}</h3>
+        <p style={sectionSubtitleStyle}>{t("twoFaSubtitle")}</p>
         <TwoFactorSection />
       </div>
 
       {/* Section 4 — Telegram */}
       <div style={sectionStyle}>
-        <h3 style={sectionTitleStyle}>Telegram</h3>
-        <p style={sectionSubtitleStyle}>Прив&apos;яжіть Telegram для особистих сповіщень</p>
+        <h3 style={sectionTitleStyle}>{t("telegramTitle")}</h3>
+        <p style={sectionSubtitleStyle}>{t("telegramSubtitle")}</p>
         <TelegramLinkSection />
       </div>
 

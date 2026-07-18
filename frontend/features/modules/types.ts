@@ -12,51 +12,24 @@ export interface ModulesSettings {
   modules: ModuleKey[];
 }
 
-export interface ModuleMeta {
-  key: ModuleKey;
-  label: string;
-  description: string;
-}
-
-/** Full module catalog (ADR-015) — used to render the toggle list with descriptions. */
-export const ALL_MODULES: ModuleMeta[] = [
-  {
-    key: "inventory",
-    label: "Інвентаризація",
-    description: "Каталог товарів, залишки, прийомка, переміщення, списання.",
-  },
-  {
-    key: "procurement",
-    label: "Постачання",
-    description: "Постачальники, замовлення постачання, AI-прогнозування закупівель.",
-  },
-  {
-    key: "pos",
-    label: "Каса (POS)",
-    description: "Робота з кассовим апаратом, продажі, фіскалізація чеків.",
-  },
-  {
-    key: "auto_service",
-    label: "Автосервіс",
-    description: "Клієнти, автомобілі, наряд-замовлення, облік запчастин.",
-  },
-  {
-    key: "production",
-    label: "Виробництво",
-    description: "Рецепти, виробничі замовлення, списання сировини.",
-  },
-  {
-    key: "marketplace",
-    label: "Маркетплейс постачальників",
-    description: "Пошук і порівняння постачальників, відгуки, рейтинги.",
-  },
+// Labels/descriptions live in i18n (Dashboard.modules.catalog.*, `useTranslations`) — see
+// ModulesTab.tsx. Kept here only as the canonical module key list/order (ADR-015).
+export const ALL_MODULE_KEYS: ModuleKey[] = [
+  "inventory",
+  "procurement",
+  "pos",
+  "auto_service",
+  "production",
+  "marketplace",
 ];
 
-export const BUSINESS_TYPE_LABELS: Record<string, string> = {
-  retail: "Роздрібна торгівля",
-  auto_service: "Автосервіс",
-  warehouse: "Склад",
-  restaurant: "Ресторан",
-  production: "Виробництво",
-  distribution: "Дистрибуція",
-};
+// Labels live in i18n (Dashboard.modules.businessTypes.*, `useTranslations`) — see
+// ModulesTab.tsx.
+export const BUSINESS_TYPE_KEYS: string[] = [
+  "retail",
+  "auto_service",
+  "warehouse",
+  "restaurant",
+  "production",
+  "distribution",
+];

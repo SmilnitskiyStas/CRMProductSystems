@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Settings, Bell, Link as LinkIcon, Blocks, Store } from "lucide-react";
 import { NotificationsTab } from "@/features/settings/components/NotificationsTab";
 import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab";
@@ -12,34 +13,35 @@ import { hasRole, PROVIDER_TEAM, SUPPLIER_ONLY } from "@/lib/roles";
 
 type Tab = "general" | "notifications" | "integrations" | "modules" | "marketplace-profile";
 
-const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "general",             label: "Загальні",              icon: <Settings size={15} /> },
-  { id: "notifications",       label: "Сповіщення",            icon: <Bell size={15} /> },
-  { id: "integrations",        label: "Інтеграції",            icon: <LinkIcon size={15} /> },
-  { id: "modules",             label: "Модулі",                icon: <Blocks size={15} /> },
-  { id: "marketplace-profile", label: "Профіль маркетплейсу",  icon: <Store size={15} /> },
-];
-
 export default function SettingsPage() {
+  const t = useTranslations("Dashboard.settings.page");
   const searchParams = useSearchParams();
   const { data: me } = useMe();
   const canViewModules = hasRole(me?.role, PROVIDER_TEAM);
   const isSupplier = hasRole(me?.role, SUPPLIER_ONLY);
 
-  const TABS = ALL_TABS.filter((t) => {
-    if (t.id === "modules") return canViewModules;
-    if (t.id === "marketplace-profile") return isSupplier;
+  const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "general",             label: t("tabGeneral"),             icon: <Settings size={15} /> },
+    { id: "notifications",       label: t("tabNotifications"),       icon: <Bell size={15} /> },
+    { id: "integrations",        label: t("tabIntegrations"),        icon: <LinkIcon size={15} /> },
+    { id: "modules",             label: t("tabModules"),             icon: <Blocks size={15} /> },
+    { id: "marketplace-profile", label: t("tabMarketplaceProfile"),  icon: <Store size={15} /> },
+  ];
+
+  const TABS = ALL_TABS.filter((tab) => {
+    if (tab.id === "modules") return canViewModules;
+    if (tab.id === "marketplace-profile") return isSupplier;
     return true;
   });
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
-    const t = searchParams.get("tab") as Tab | null;
-    return TABS.some((tb) => tb.id === t) ? (t as Tab) : "general";
+    const tabParam = searchParams.get("tab") as Tab | null;
+    return TABS.some((tb) => tb.id === tabParam) ? (tabParam as Tab) : "general";
   });
 
   useEffect(() => {
-    const t = searchParams.get("tab") as Tab | null;
-    if (t && TABS.some((tb) => tb.id === t)) setActiveTab(t);
+    const tabParam = searchParams.get("tab") as Tab | null;
+    if (tabParam && TABS.some((tb) => tb.id === tabParam)) setActiveTab(tabParam);
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -47,10 +49,10 @@ export default function SettingsPage() {
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          Налаштування
+          {t("title")}
         </h1>
         <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          Управління сповіщеннями та інтеграціями з зовнішніми сервісами
+          {t("subtitle")}
         </p>
       </div>
 
@@ -112,6 +114,8 @@ export default function SettingsPage() {
 }
 
 function GeneralTab() {
+  const t = useTranslations("Dashboard.settings.generalTab");
+
   const infoRowStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "flex-start",
@@ -123,14 +127,14 @@ function GeneralTab() {
   const items = [
     {
       icon: "🔔",
-      title: "Сповіщення",
-      desc: "Налаштуйте канали та події, про які потрібно отримувати повідомлення.",
+      title: t("notificationsTitle"),
+      desc: t("notificationsDesc"),
       tab: "notifications",
     },
     {
       icon: "🔗",
-      title: "Інтеграції",
-      desc: "Підключіть зовнішні сервіси: Telegram Bot, Email (Resend), Webhook до каси, IoT.",
+      title: t("integrationsTitle"),
+      desc: t("integrationsDesc"),
       tab: "integrations",
     },
   ];
@@ -138,8 +142,7 @@ function GeneralTab() {
   return (
     <div>
       <p style={{ color: "#4B5563", fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>
-        Системні налаштування застосовуються до всього магазину або мережі.
-        Особисті налаштування профілю доступні через меню користувача.
+        {t("description")}
       </p>
 
       <div>
@@ -181,7 +184,7 @@ function GeneralTab() {
                 (e.currentTarget as HTMLElement).style.color = "#6B7280";
               }}
             >
-              Відкрити →
+              {t("openButton")}
             </button>
           </div>
         ))}
@@ -203,10 +206,10 @@ function GeneralTab() {
         <span style={{ fontSize: 18 }}>👤</span>
         <div style={{ flex: 1 }}>
           <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
-            Особисті налаштування
+            {t("personalSettingsTitle")}
           </div>
           <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>
-            Ім&apos;я, пароль та Telegram — у розділі налаштувань вашого профілю
+            {t("personalSettingsDesc")}
           </div>
         </div>
         <a
@@ -224,7 +227,7 @@ function GeneralTab() {
             flexShrink: 0,
           }}
         >
-          Мій профіль →
+          {t("myProfileLink")}
         </a>
       </div>
     </div>

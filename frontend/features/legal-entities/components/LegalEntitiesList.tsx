@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import type { LegalEntityDto } from "../types";
 
@@ -12,10 +13,12 @@ interface Props {
 }
 
 export function LegalEntitiesList({ entities, isLoading, canManage, onEdit, onDeactivate }: Props) {
+  const t = useTranslations("Dashboard.legalEntities.list");
+
   if (isLoading) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-        Завантаження…
+        {t("loading")}
       </div>
     );
   }
@@ -23,12 +26,12 @@ export function LegalEntitiesList({ entities, isLoading, canManage, onEdit, onDe
   if (!entities.length) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-        Юридичних осіб немає. {canManage && "Натисніть «Нова юридична особа», щоб додати першу."}
+        {t("emptyPrefix")} {canManage && t("emptyHint")}
       </div>
     );
   }
 
-  const headers = ["Назва", "ЄДРПОУ", "Директор", "ПДВ", "Статус", ""];
+  const headers = [t("headerName"), t("headerEdrpou"), t("headerDirector"), t("headerVat"), t("headerStatus"), ""];
 
   return (
     <div
@@ -79,7 +82,7 @@ export function LegalEntitiesList({ entities, isLoading, canManage, onEdit, onDe
                     fontWeight: 600,
                   }}
                 >
-                  {entity.isVatPayer ? "Так" : "Ні"}
+                  {entity.isVatPayer ? t("vatYes") : t("vatNo")}
                 </span>
               </td>
               <td style={tdStyle}>
@@ -90,18 +93,18 @@ export function LegalEntitiesList({ entities, isLoading, canManage, onEdit, onDe
                     fontWeight: 600,
                   }}
                 >
-                  {entity.isActive ? "Активна" : "Неактивна"}
+                  {entity.isActive ? t("statusActive") : t("statusInactive")}
                 </span>
               </td>
               <td style={{ ...tdStyle, textAlign: "right" }}>
                 {canManage && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
                     <Btn variant="ghost" size="sm" onClick={() => onEdit(entity)}>
-                      Редагувати
+                      {t("editButton")}
                     </Btn>
                     {entity.isActive && (
                       <Btn variant="danger" size="sm" onClick={() => onDeactivate(entity)}>
-                        Деактивувати
+                        {t("deactivateButton")}
                       </Btn>
                     )}
                   </div>

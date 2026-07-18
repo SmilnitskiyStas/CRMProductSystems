@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useTenantRoles } from "../hooks/useTenantRoles";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
@@ -19,6 +20,7 @@ interface Props {
  * query is disabled for non-enterprise_admin viewers to avoid a guaranteed 403 per row.
  */
 export function TenantRoleBadge({ tenantRoleId }: Props) {
+  const t = useTranslations("Dashboard.tenantRoles.badge");
   const { data: me } = useMe();
   const canResolveName = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN);
   const { data: roles } = useTenantRoles(true, canResolveName && Boolean(tenantRoleId));
@@ -29,7 +31,7 @@ export function TenantRoleBadge({ tenantRoleId }: Props) {
 
   return (
     <span
-      title={!role.isActive ? "Шаблон архівовано" : undefined}
+      title={!role.isActive ? t("archivedTitle") : undefined}
       style={{
         display: "inline-block",
         background: "#062b29",
@@ -43,7 +45,7 @@ export function TenantRoleBadge({ tenantRoleId }: Props) {
       }}
     >
       {role.name}
-      {!role.isActive && " (архів)"}
+      {!role.isActive && t("archivedSuffix")}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { useIntegrations } from "@/features/integrations/hooks/useIntegrations";
 import { usePrroSettings } from "@/features/integrations/hooks/usePrroSettings";
 import { IntegrationCard } from "@/features/integrations/components/IntegrationCard";
@@ -13,6 +14,7 @@ import type { IntegrationService, ServiceMeta } from "@/features/integrations/ty
 const GENERIC_SERVICES = ALL_SERVICES.filter((s) => s !== "prro");
 
 export function IntegrationsTab() {
+  const t = useTranslations("Dashboard.settings.integrationsTab");
   const { data: summaries, isLoading: summariesLoading } = useIntegrations();
   const { data: prroSettings, isLoading: prroLoading } = usePrroSettings();
 
@@ -36,7 +38,7 @@ export function IntegrationsTab() {
   if (summariesLoading || prroLoading) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>
-        Завантаження інтеграцій…
+        {t("loading")}
       </div>
     );
   }
@@ -45,10 +47,10 @@ export function IntegrationsTab() {
     <div>
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-          Зовнішні інтеграції
+          {t("title")}
         </h2>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6 }}>
-          Підключіть зовнішні сервіси для сповіщень, аналітики та автоматизації.
+          {t("subtitle")}
         </p>
       </div>
 
@@ -92,9 +94,12 @@ interface PrroCardProps {
 }
 
 function PrroCard({ provider, summary, onConfigure }: PrroCardProps) {
+  const t = useTranslations("Dashboard.settings.integrationsTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const isConfigured = provider === "checkbox";
 
-  const providerLabel = isConfigured ? "Checkbox" : "Вимкнено";
+  const providerLabel = isConfigured ? t("providerCheckbox") : t("providerDisabled");
   const badgeBg = isConfigured ? "#052e16" : "#1c1917";
   const badgeColor = isConfigured ? "#4ADE80" : "#6B7280";
 
@@ -132,7 +137,7 @@ function PrroCard({ provider, summary, onConfigure }: PrroCardProps) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
           <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-            ПРРО Каса
+            {t("prroLabel")}
           </span>
           <span
             style={{
@@ -148,15 +153,15 @@ function PrroCard({ provider, summary, onConfigure }: PrroCardProps) {
           </span>
         </div>
         <p style={{ color: "#4B5563", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-          Інтеграція з програмним РРО для реєстрації продажів (v3). Провайдер:{" "}
+          {t("prroDescriptionPrefix")}{" "}
           <span style={{ color: isConfigured ? "#93C5FD" : "#6B7280" }}>
-            {isConfigured ? "Checkbox" : "не підключено"}
+            {isConfigured ? t("providerCheckbox") : t("providerNotConnected")}
           </span>
           .
         </p>
         {summary && isConfigured && (
           <p style={{ color: "#374151", fontSize: 11, margin: "4px 0 0" }}>
-            Оновлено: {new Date(summary.updatedAt).toLocaleDateString("uk-UA")}
+            {t("updatedAt", { date: new Date(summary.updatedAt).toLocaleDateString(intlLocale) })}
           </p>
         )}
       </div>
@@ -178,7 +183,7 @@ function PrroCard({ provider, summary, onConfigure }: PrroCardProps) {
           transition: "all 0.15s",
         }}
       >
-        {isConfigured ? "Налаштувати" : "Підключити"}
+        {isConfigured ? t("configureButton") : t("connectButton")}
       </button>
     </div>
   );

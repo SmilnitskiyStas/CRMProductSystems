@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { canManageLegalEntities } from "@/lib/roles";
@@ -17,6 +18,7 @@ import { LegalEntitiesList } from "@/features/legal-entities/components/LegalEnt
 import type { LegalEntityDto } from "@/features/legal-entities/types";
 
 export default function LegalEntitiesPage() {
+  const t = useTranslations("Dashboard.legalEntities.page");
   const { data: me } = useMe();
   const canManage = canManageLegalEntities(me?.role, me?.permissions);
 
@@ -55,28 +57,28 @@ export default function LegalEntitiesPage() {
         },
         {
           onSuccess: () => {
-            toast.success("Юридичну особу створено");
+            toast.success(t("createSuccess"));
             setDialog(null);
           },
-          onError: (e) => toast.error(`Помилка: ${e.message}`),
+          onError: (e) => toast.error(t("errorPrefix", { message: e.message })),
         }
       );
     } else if (dialog) {
       update.mutate(values, {
         onSuccess: () => {
-          toast.success("Юридичну особу збережено");
+          toast.success(t("updateSuccess"));
           setDialog(null);
         },
-        onError: (e) => toast.error(`Помилка: ${e.message}`),
+        onError: (e) => toast.error(t("errorPrefix", { message: e.message })),
       });
     }
   }
 
   function handleDeactivate(entity: LegalEntityDto) {
-    if (!confirm(`Деактивувати «${entity.legalName}»?`)) return;
+    if (!confirm(t("deactivateConfirm", { name: entity.legalName }))) return;
     deactivate.mutate(entity.id, {
-      onSuccess: () => toast.success("Юридичну особу деактивовано"),
-      onError: (e) => toast.error(`Помилка: ${e.message}`),
+      onSuccess: () => toast.success(t("deactivateSuccess")),
+      onError: (e) => toast.error(t("errorPrefix", { message: e.message })),
     });
   }
 
@@ -88,15 +90,15 @@ export default function LegalEntitiesPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Юридичні особи
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Юридичні особи мережі для договорів, локацій та персоналу
+            {t("subtitle")}
           </p>
         </div>
         {canManage && (
           <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
-            Нова юридична особа
+            {t("newButton")}
           </Btn>
         )}
       </div>

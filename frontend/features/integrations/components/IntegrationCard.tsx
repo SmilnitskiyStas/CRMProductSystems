@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import type { ServiceMeta, IntegrationSummary } from "../types";
 
 interface Props {
@@ -9,6 +10,10 @@ interface Props {
 }
 
 export function IntegrationCard({ meta, summary, onConfigure }: Props) {
+  const t = useTranslations("Dashboard.integrations.card");
+  const tServices = useTranslations("Dashboard.integrations.services");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const isConfigured = !!summary;
   const isEnabled = summary?.isEnabled ?? false;
 
@@ -46,7 +51,7 @@ export function IntegrationCard({ meta, summary, onConfigure }: Props) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-            {meta.label}
+            {tServices(`${meta.service}.label`)}
           </span>
           {isConfigured && (
             <span
@@ -59,16 +64,16 @@ export function IntegrationCard({ meta, summary, onConfigure }: Props) {
                 fontWeight: 600,
               }}
             >
-              {isEnabled ? "Активно" : "Вимкнено"}
+              {isEnabled ? t("active") : t("disabled")}
             </span>
           )}
         </div>
         <p style={{ color: "#4B5563", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-          {meta.description}
+          {tServices(`${meta.service}.description`)}
         </p>
         {summary && (
           <p style={{ color: "#374151", fontSize: 11, margin: "4px 0 0" }}>
-            Оновлено: {new Date(summary.updatedAt).toLocaleDateString("uk-UA")}
+            {t("updatedAt", { date: new Date(summary.updatedAt).toLocaleDateString(intlLocale) })}
           </p>
         )}
       </div>
@@ -98,7 +103,7 @@ export function IntegrationCard({ meta, summary, onConfigure }: Props) {
           (e.currentTarget as HTMLElement).style.color = isConfigured ? "#9CA3AF" : "#93C5FD";
         }}
       >
-        {isConfigured ? "Налаштувати" : "Підключити"}
+        {isConfigured ? t("configureButton") : t("connectButton")}
       </button>
     </div>
   );

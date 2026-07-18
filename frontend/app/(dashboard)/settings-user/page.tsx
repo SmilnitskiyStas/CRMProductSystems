@@ -1,6 +1,7 @@
 "use client";
 
 import { User, Lock, ShieldCheck, Send } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ProfileInfoForm } from "@/features/profile/components/ProfileInfoForm";
 import { ChangePasswordForm } from "@/features/profile/components/ChangePasswordForm";
 import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection";
@@ -10,34 +11,36 @@ import { ROLE_LABELS } from "@/features/profile/types";
 
 type Section = "profile" | "password" | "security" | "telegram";
 
-const SECTIONS: { id: Section; label: string; icon: React.ReactNode; subtitle: string }[] = [
-  {
-    id: "profile",
-    label: "Особисті дані",
-    icon: <User size={15} />,
-    subtitle: "Ваше ім'я та контактна інформація",
-  },
-  {
-    id: "password",
-    label: "Зміна пароля",
-    icon: <Lock size={15} />,
-    subtitle: "Оновіть пароль для безпеки акаунта",
-  },
-  {
-    id: "security",
-    label: "Двофакторна автентифікація",
-    icon: <ShieldCheck size={15} />,
-    subtitle: "Додатковий рівень захисту входу в акаунт",
-  },
-  {
-    id: "telegram",
-    label: "Telegram",
-    icon: <Send size={15} />,
-    subtitle: "Підключіть Telegram для особистих сповіщень",
-  },
-];
-
 export default function UserSettingsPage() {
+  const t = useTranslations("Dashboard.settings.userSettingsPage");
+
+  const SECTIONS: { id: Section; label: string; icon: React.ReactNode; subtitle: string }[] = [
+    {
+      id: "profile",
+      label: t("profileLabel"),
+      icon: <User size={15} />,
+      subtitle: t("profileSubtitle"),
+    },
+    {
+      id: "password",
+      label: t("passwordLabel"),
+      icon: <Lock size={15} />,
+      subtitle: t("passwordSubtitle"),
+    },
+    {
+      id: "security",
+      label: t("securityLabel"),
+      icon: <ShieldCheck size={15} />,
+      subtitle: t("securitySubtitle"),
+    },
+    {
+      id: "telegram",
+      label: t("telegramLabel"),
+      icon: <Send size={15} />,
+      subtitle: t("telegramSubtitle"),
+    },
+  ];
+
   return (
     <div style={{ padding: "28px 32px", maxWidth: 780 }}>
       {/* Header */}
@@ -54,6 +57,7 @@ export default function UserSettingsPage() {
 }
 
 function PageHeader() {
+  const t = useTranslations("Dashboard.settings.userSettingsPage");
   const { data: me } = useMe();
 
   const initials = me?.fullName
@@ -120,7 +124,7 @@ function PageHeader() {
       {/* Label */}
       <div style={{ textAlign: "right" }}>
         <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 500 }}>
-          ОСОБИСТІ НАЛАШТУВАННЯ
+          {t("personalLabel")}
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { ServiceMeta, IntegrationService } from "../types";
 import { useIntegration, useUpsertIntegration, useDeleteIntegration } from "../hooks/useIntegrations";
 
@@ -36,6 +37,8 @@ const hintStyle: React.CSSProperties = {
 };
 
 export function IntegrationConfigModal({ meta, onClose }: Props) {
+  const t = useTranslations("Dashboard.integrations.configModal");
+  const tServices = useTranslations("Dashboard.integrations.services");
   const { data: existing, isLoading } = useIntegration(meta.service, true);
   const upsert = useUpsertIntegration(meta.service);
   const remove = useDeleteIntegration(meta.service);
@@ -62,7 +65,7 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
     const errs: Record<string, string> = {};
     for (const field of meta.fields) {
       if (field.required && !values[field.key]?.trim()) {
-        errs[field.key] = "Обов'язкове поле";
+        errs[field.key] = t("requiredField");
       }
     }
     setErrors(errs);
@@ -85,7 +88,7 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
   }
 
   async function handleDelete() {
-    if (!confirm(`Видалити інтеграцію ${meta.label}? Credentials будуть видалені.`)) return;
+    if (!confirm(t("deleteConfirm", { label: tServices(`${meta.service}.label`) }))) return;
     await remove.mutateAsync();
     onClose();
   }
@@ -124,10 +127,10 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
           <span style={{ fontSize: 28 }}>{meta.icon}</span>
           <div>
             <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-              {meta.label}
+              {tServices(`${meta.service}.label`)}
             </h2>
             <p style={{ color: "#4B5563", fontSize: 12, margin: 0, marginTop: 3 }}>
-              {meta.description}
+              {tServices(`${meta.service}.description`)}
             </p>
           </div>
           <button
@@ -144,42 +147,47 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
 
         {isLoading ? (
           <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>
-            Завантаження…
+            {t("loading")}
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
             {/* Fields */}
             <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
-              {meta.fields.map((field) => (
-                <div key={field.key}>
-                  <label style={labelStyle}>
-                    {field.label}
-                    {field.required && (
-                      <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>
+              {meta.fields.map((field) => {
+                const fieldPrefix = `${meta.service}.fields.${field.key}`;
+                return (
+                  <div key={field.key}>
+                    <label style={labelStyle}>
+                      {tServices(`${fieldPrefix}.label`)}
+                      {field.required && (
+                        <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>
+                      )}
+                    </label>
+                    <input
+                      type={field.type}
+                      placeholder={tServices(`${fieldPrefix}.placeholder`)}
+                      value={values[field.key] ?? ""}
+                      onChange={(e) => {
+                        setValues((v) => ({ ...v, [field.key]: e.target.value }));
+                        if (errors[field.key]) {
+                          setErrors((er) => { const n = { ...er }; delete n[field.key]; return n; });
+                        }
+                      }}
+                      style={{
+                        ...inputStyle,
+                        borderColor: errors[field.key] ? "#EF4444" : "#374151",
+                      }}
+                      autoComplete={field.type === "password" ? "new-password" : undefined}
+                    />
+                    {tServices.has(`${fieldPrefix}.hint`) && (
+                      <p style={hintStyle}>{tServices(`${fieldPrefix}.hint`)}</p>
                     )}
-                  </label>
-                  <input
-                    type={field.type}
-                    placeholder={field.placeholder}
-                    value={values[field.key] ?? ""}
-                    onChange={(e) => {
-                      setValues((v) => ({ ...v, [field.key]: e.target.value }));
-                      if (errors[field.key]) {
-                        setErrors((er) => { const n = { ...er }; delete n[field.key]; return n; });
-                      }
-                    }}
-                    style={{
-                      ...inputStyle,
-                      borderColor: errors[field.key] ? "#EF4444" : "#374151",
-                    }}
-                    autoComplete={field.type === "password" ? "new-password" : undefined}
-                  />
-                  {field.hint && <p style={hintStyle}>{field.hint}</p>}
-                  {errors[field.key] && (
-                    <p style={{ ...hintStyle, color: "#EF4444" }}>{errors[field.key]}</p>
-                  )}
-                </div>
-              ))}
+                    {errors[field.key] && (
+                      <p style={{ ...hintStyle, color: "#EF4444" }}>{errors[field.key]}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Enable toggle */}
@@ -191,9 +199,9 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
               }}
             >
               <div>
-                <div style={{ color: "#D1D5DB", fontSize: 13, fontWeight: 500 }}>Активна інтеграція</div>
+                <div style={{ color: "#D1D5DB", fontSize: 13, fontWeight: 500 }}>{t("activeIntegrationLabel")}</div>
                 <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>
-                  Вимкнення зупиняє відправку, але зберігає credentials
+                  {t("activeIntegrationHint")}
                 </div>
               </div>
               <button
@@ -231,7 +239,7 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
                     fontSize: 13, cursor: "pointer", opacity: isBusy ? 0.5 : 1,
                   }}
                 >
-                  Видалити
+                  {t("deleteButton")}
                 </button>
               )}
               <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
@@ -245,7 +253,7 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
                     fontSize: 13, cursor: "pointer",
                   }}
                 >
-                  Скасувати
+                  {t("cancelButton")}
                 </button>
                 <button
                   type="submit"
@@ -258,7 +266,7 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
                     opacity: isBusy ? 0.7 : 1,
                   }}
                 >
-                  {isBusy ? "Збереження…" : "Зберегти"}
+                  {isBusy ? t("savingButton") : t("saveButton")}
                 </button>
               </div>
             </div>

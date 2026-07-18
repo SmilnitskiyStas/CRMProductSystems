@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus, Pencil, Archive, Shield } from "lucide-react";
 import {
   useTenantRoles,
@@ -19,6 +20,7 @@ import { Btn } from "@/components/ui/Btn";
  * enterprise_admin+, mirroring backend's AtLeastEnterpriseAdmin-only TenantRolesController.
  */
 export function TenantRolesTab() {
+  const t = useTranslations("Dashboard.tenantRoles.tab");
   const [showArchived, setShowArchived] = useState(false);
   const { data: roles, isLoading, isError } = useTenantRoles(showArchived);
   const { data: users } = useUsers();
@@ -38,11 +40,11 @@ export function TenantRolesTab() {
   }, [users]);
 
   async function handleArchive(role: TenantRoleDto) {
-    if (!confirm(`Архівувати шаблон "${role.name}"? Користувачі, яким він призначений, збережуть його до ручної зміни.`)) return;
+    if (!confirm(t("archiveConfirm", { name: role.name }))) return;
     try {
       await archiveRole.mutateAsync(role.id);
     } catch (e) {
-      alert((e as Error)?.message ?? "Помилка архівації шаблону");
+      alert((e as Error)?.message ?? t("archiveError"));
     }
   }
 
@@ -57,7 +59,7 @@ export function TenantRolesTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Shield size={18} color="#60A5FA" />
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Шаблони ролей
+            {t("title")}
           </h2>
           {roles && (
             <span style={{
@@ -76,26 +78,25 @@ export function TenantRolesTab() {
               onChange={(e) => setShowArchived(e.target.checked)}
               style={{ width: 13, height: 13, cursor: "pointer", accentColor: "#3B82F6" }}
             />
-            Показати архівовані
+            {t("showArchived")}
           </label>
           <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-            Новий шаблон
+            {t("newTemplate")}
           </Btn>
         </div>
       </div>
 
       <p style={{ color: "#4B5563", fontSize: 13, marginTop: -10, marginBottom: 18 }}>
-        Шаблон додає перелічені можливості користувачу поверх його ролі. Редагування шаблону
-        одразу застосовується до всіх, кому він призначений.
+        {t("description")}
       </p>
 
       {isLoading && (
-        <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
       )}
 
       {isError && (
         <div style={{ color: "#F87171", fontSize: 13 }}>
-          Не вдалося завантажити шаблони ролей.
+          {t("loadError")}
         </div>
       )}
 
@@ -114,7 +115,7 @@ export function TenantRolesTab() {
 
           {(!roles || roles.length === 0) && (
             <div style={{ color: "#4B5563", fontSize: 13 }}>
-              {showArchived ? "Шаблонів немає" : "Активних шаблонів ще немає"}
+              {showArchived ? t("emptyArchived") : t("emptyActive")}
             </div>
           )}
         </div>
@@ -137,6 +138,7 @@ interface CardProps {
 }
 
 function TenantRoleCard({ role, assignedCount, onEdit, onArchive, archivePending }: CardProps) {
+  const t = useTranslations("Dashboard.tenantRoles.card");
   const { data: groups } = useTenantRoleCapabilities();
   const labelFor = useMemo(() => {
     const map = new Map<string, string>();
@@ -166,25 +168,25 @@ function TenantRoleCard({ role, assignedCount, onEdit, onArchive, archivePending
               fontSize: 10, padding: "2px 7px", borderRadius: 4,
               background: "#1F2937", color: "#6B7280", border: "1px solid #374151",
             }}>
-              Архівовано
+              {t("archived")}
             </span>
           )}
           <span style={{
             fontSize: 11, padding: "2px 8px", borderRadius: 4,
             background: "#1E3A5F22", color: "#60A5FA", border: "1px solid #1D4ED855",
           }}>
-            {role.capabilities.length} {pluralizeCapability(role.capabilities.length)}
+            {t("capabilityCount", { count: role.capabilities.length })}
           </span>
           <span style={{
             fontSize: 11, padding: "2px 8px", borderRadius: 4,
             background: "#062b2922", color: "#2DD4BF", border: "1px solid #0F766E55",
           }}>
-            {assignedCount} {pluralizeUser(assignedCount)}
+            {t("userCount", { count: assignedCount })}
           </span>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
           {role.capabilities.length === 0 ? (
-            <span style={{ color: "#374151", fontSize: 12 }}>Немає можливостей</span>
+            <span style={{ color: "#374151", fontSize: 12 }}>{t("noCapabilities")}</span>
           ) : role.capabilities.map((key) => (
             <span
               key={key}
@@ -203,7 +205,7 @@ function TenantRoleCard({ role, assignedCount, onEdit, onArchive, archivePending
         <div style={{ display: "flex", gap: 4, flexShrink: 0, paddingTop: 2 }}>
           <button
             onClick={onEdit}
-            title="Редагувати"
+            title={t("editTitle")}
             style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", padding: 5 }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#60A5FA"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
@@ -213,7 +215,7 @@ function TenantRoleCard({ role, assignedCount, onEdit, onArchive, archivePending
           <button
             onClick={onArchive}
             disabled={archivePending}
-            title="Архівувати"
+            title={t("archiveTitle")}
             style={{ background: "none", border: "none", color: "#4B5563", cursor: archivePending ? "not-allowed" : "pointer", padding: 5 }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#F87171"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
@@ -226,21 +228,6 @@ function TenantRoleCard({ role, assignedCount, onEdit, onArchive, archivePending
   );
 }
 
-function pluralizeCapability(n: number): string {
-  // Ukrainian plural rules for "можливість/можливості/можливостей"
-  const mod10 = n % 10, mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "можливість";
-  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "можливості";
-  return "можливостей";
-}
-
-function pluralizeUser(n: number): string {
-  const mod10 = n % 10, mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "користувач";
-  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "користувачі";
-  return "користувачів";
-}
-
 /* ─────────────────────────── Create/edit modal ─────────────────────────── */
 
 interface FormModalProps {
@@ -249,6 +236,7 @@ interface FormModalProps {
 }
 
 function TenantRoleFormModal({ role, onClose }: FormModalProps) {
+  const t = useTranslations("Dashboard.tenantRoles.formModal");
   const { data: groups, isLoading: groupsLoading } = useTenantRoleCapabilities();
   const create = useCreateTenantRole();
   const update = useUpdateTenantRole();
@@ -278,7 +266,7 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
       else await create.mutateAsync(req);
       onClose();
     } catch (err) {
-      setError((err as Error)?.message ?? "Помилка збереження");
+      setError((err as Error)?.message ?? t("saveError"));
     }
   }
 
@@ -303,7 +291,7 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати шаблон" : "Новий шаблон ролі"}
+            {isEdit ? t("editTitle") : t("newTitle")}
           </h2>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
             ✕
@@ -314,16 +302,16 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
           <input
             required
             type="text"
-            placeholder="Назва шаблону (напр. HR)"
+            placeholder={t("namePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             style={inputStyle}
           />
 
           <div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 8 }}>Можливості</div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 8 }}>{t("capabilitiesLabel")}</div>
             {groupsLoading && (
-              <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+              <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {groups?.map((group) => (
@@ -376,7 +364,7 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
               cursor: isPending ? "not-allowed" : "pointer", marginTop: 4,
             }}
           >
-            {isPending ? "Збереження…" : (isEdit ? "Зберегти зміни" : "Створити шаблон")}
+            {isPending ? t("savingButton") : (isEdit ? t("saveChangesButton") : t("createButton"))}
           </button>
         </form>
       </div>

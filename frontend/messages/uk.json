@@ -3104,6 +3104,361 @@
         "standard": "Standard",
         "enterprise": "Enterprise"
       }
+    },
+    "settings": {
+      "page": {
+        "title": "Налаштування",
+        "subtitle": "Управління сповіщеннями та інтеграціями з зовнішніми сервісами",
+        "tabGeneral": "Загальні",
+        "tabNotifications": "Сповіщення",
+        "tabIntegrations": "Інтеграції",
+        "tabModules": "Модулі",
+        "tabMarketplaceProfile": "Профіль маркетплейсу"
+      },
+      "generalTab": {
+        "description": "Системні налаштування застосовуються до всього магазину або мережі. Особисті налаштування профілю доступні через меню користувача.",
+        "notificationsTitle": "Сповіщення",
+        "notificationsDesc": "Налаштуйте канали та події, про які потрібно отримувати повідомлення.",
+        "integrationsTitle": "Інтеграції",
+        "integrationsDesc": "Підключіть зовнішні сервіси: Telegram Bot, Email (Resend), Webhook до каси, IoT.",
+        "openButton": "Відкрити →",
+        "personalSettingsTitle": "Особисті налаштування",
+        "personalSettingsDesc": "Ім'я, пароль та Telegram — у розділі налаштувань вашого профілю",
+        "myProfileLink": "Мій профіль →"
+      },
+      "notificationsTab": {
+        "title": "Канали сповіщень",
+        "subtitle": "Увімкніть або вимкніть сповіщення для кожної події та каналу зв'язку."
+      },
+      "integrationsTab": {
+        "title": "Зовнішні інтеграції",
+        "subtitle": "Підключіть зовнішні сервіси для сповіщень, аналітики та автоматизації.",
+        "loading": "Завантаження інтеграцій…",
+        "prroLabel": "ПРРО Каса",
+        "prroDescriptionPrefix": "Інтеграція з програмним РРО для реєстрації продажів (v3). Провайдер:",
+        "providerCheckbox": "Checkbox",
+        "providerDisabled": "Вимкнено",
+        "providerNotConnected": "не підключено",
+        "updatedAt": "Оновлено: {date}",
+        "configureButton": "Налаштувати",
+        "connectButton": "Підключити"
+      },
+      "modulesTab": {
+        "loading": "Завантаження модулів…",
+        "loadError": "Не вдалося завантажити список модулів.",
+        "title": "Модулі",
+        "businessTypePrefix": "Тип бізнесу:",
+        "businessTypeSuffix": "набір модулів визначається при реєстрації та керується провайдером.",
+        "activeModuleAria": "Активний модуль",
+        "disabledModuleAria": "Вимкнений модуль",
+        "statusActive": "Активно",
+        "statusDisabled": "Вимкнено",
+        "footerNote": "Активація чи вимкнення модулів виконується провайдером платформи. Зверніться до підтримки, якщо потрібно змінити набір модулів вашого тенанта."
+      },
+      "profileTab": {
+        "personalTitle": "Особисті дані",
+        "personalSubtitle": "Ім'я та контактна інформація",
+        "passwordTitle": "Зміна пароля",
+        "passwordSubtitle": "Мінімум 12 символів, літери та цифри",
+        "twoFaTitle": "Двофакторна автентифікація",
+        "twoFaSubtitle": "Додатковий рівень захисту входу в акаунт",
+        "telegramTitle": "Telegram",
+        "telegramSubtitle": "Прив'яжіть Telegram для особистих сповіщень"
+      },
+      "userSettingsPage": {
+        "personalLabel": "ОСОБИСТІ НАЛАШТУВАННЯ",
+        "profileLabel": "Особисті дані",
+        "profileSubtitle": "Ваше ім'я та контактна інформація",
+        "passwordLabel": "Зміна пароля",
+        "passwordSubtitle": "Оновіть пароль для безпеки акаунта",
+        "securityLabel": "Двофакторна автентифікація",
+        "securitySubtitle": "Додатковий рівень захисту входу в акаунт",
+        "telegramLabel": "Telegram",
+        "telegramSubtitle": "Підключіть Telegram для особистих сповіщень"
+      }
+    },
+    "integrations": {
+      "services": {
+        "claude": {
+          "label": "Claude AI",
+          "description": "AI-агент автозамовлень: щоденні пропозиції з обґрунтуванням (v2).",
+          "fields": {
+            "api_key": {
+              "label": "API Key",
+              "placeholder": "sk-ant-api03-...",
+              "hint": "Створіть на console.anthropic.com → API Keys"
+            },
+            "model": {
+              "label": "Модель",
+              "placeholder": "claude-sonnet-4-6",
+              "hint": "За замовчуванням claude-sonnet-4-6"
+            }
+          }
+        },
+        "telegram": {
+          "label": "Telegram Bot",
+          "description": "Сповіщення про критичні терміни та тижневі звіти через Telegram.",
+          "fields": {
+            "bot_token": {
+              "label": "Bot Token",
+              "placeholder": "1234567890:AAF...",
+              "hint": "Отримайте у @BotFather"
+            },
+            "bot_username": {
+              "label": "Username бота",
+              "placeholder": "@ShelfGuardBot"
+            }
+          }
+        },
+        "resend": {
+          "label": "Email (Resend)",
+          "description": "Email-сповіщення та тижневі звіти для менеджерів.",
+          "fields": {
+            "api_key": {
+              "label": "API Key",
+              "placeholder": "re_..."
+            },
+            "from_email": {
+              "label": "Від кого",
+              "placeholder": "noreply@myshop.com"
+            },
+            "from_name": {
+              "label": "Ім'я відправника",
+              "placeholder": "ShelfGuard"
+            }
+          }
+        },
+        "webhook": {
+          "label": "Webhook",
+          "description": "HTTP POST-виклик до вашого сервісу при виникненні подій.",
+          "fields": {
+            "url": {
+              "label": "URL ендпоінту",
+              "placeholder": "https://my-app.com/webhook"
+            },
+            "secret": {
+              "label": "Secret",
+              "placeholder": "my-webhook-secret",
+              "hint": "Підписується заголовок X-ShelfGuard-Signature"
+            }
+          }
+        },
+        "prro": {
+          "label": "ПРРО Каса",
+          "description": "Інтеграція з програмним РРО для реєстрації продажів (v3).",
+          "fields": {}
+        },
+        "iot": {
+          "label": "IoT Сенсори",
+          "description": "Підключення датчиків температури та вологості (v3).",
+          "fields": {
+            "endpoint_url": {
+              "label": "Endpoint URL",
+              "placeholder": "https://iot.example.com"
+            },
+            "api_key": {
+              "label": "API Key",
+              "placeholder": "iot-device-key"
+            },
+            "device_ids": {
+              "label": "Device IDs",
+              "placeholder": "dev-001, dev-002",
+              "hint": "Через кому"
+            }
+          }
+        }
+      },
+      "card": {
+        "active": "Активно",
+        "disabled": "Вимкнено",
+        "updatedAt": "Оновлено: {date}",
+        "configureButton": "Налаштувати",
+        "connectButton": "Підключити"
+      },
+      "configModal": {
+        "loading": "Завантаження…",
+        "requiredField": "Обов'язкове поле",
+        "activeIntegrationLabel": "Активна інтеграція",
+        "activeIntegrationHint": "Вимкнення зупиняє відправку, але зберігає credentials",
+        "deleteConfirm": "Видалити інтеграцію {label}? Credentials будуть видалені.",
+        "deleteButton": "Видалити",
+        "cancelButton": "Скасувати",
+        "saveButton": "Зберегти",
+        "savingButton": "Збереження…"
+      },
+      "prroModal": {
+        "title": "ПРРО Каса",
+        "description": "Інтеграція з програмним РРО для реєстрації продажів (v3).",
+        "loading": "Завантаження…",
+        "providerLabel": "Провайдер",
+        "providerDisabled": "Вимкнено",
+        "providerCheckbox": "Checkbox",
+        "environmentLabel": "Середовище Checkbox",
+        "environmentTest": "Тестовий",
+        "environmentProd": "Виробничий",
+        "licenseKeyLabel": "License Key",
+        "licenseKeyPlaceholder": "залишити без змін",
+        "licenseKeyHint": "Ключ ліцензії каси з кабінету Checkbox. Вже збережений ключ відображається замаскованим.",
+        "requiredField": "Обов'язкове поле",
+        "cashierAuthLabel": "Авторизація касира",
+        "cashierAuthPin": "PIN-код",
+        "cashierAuthLoginPassword": "Логін / Пароль",
+        "cashierPinLabel": "PIN-код касира",
+        "cashierLoginLabel": "Логін касира",
+        "cashierPasswordLabel": "Пароль касира",
+        "testButton": "Перевірити з'єднання",
+        "testingButton": "Перевірка…",
+        "testRegisterLabel": "Каса",
+        "testBadge": "тест",
+        "cashierOk": "Касир авторизований",
+        "cashierFail": "Касир: помилка авторизації",
+        "cashierAuthError": "Помилка авторизації касира",
+        "serviceUnavailable": "Сервіс недоступний",
+        "cancelButton": "Скасувати",
+        "saveButton": "Зберегти",
+        "savingButton": "Збереження…",
+        "connectionTestError": "Помилка підключення"
+      }
+    },
+    "tenantRoles": {
+      "tab": {
+        "title": "Шаблони ролей",
+        "showArchived": "Показати архівовані",
+        "newTemplate": "Новий шаблон",
+        "description": "Шаблон додає перелічені можливості користувачу поверх його ролі. Редагування шаблону одразу застосовується до всіх, кому він призначений.",
+        "loading": "Завантаження…",
+        "loadError": "Не вдалося завантажити шаблони ролей.",
+        "emptyArchived": "Шаблонів немає",
+        "emptyActive": "Активних шаблонів ще немає",
+        "archiveConfirm": "Архівувати шаблон \"{name}\"? Користувачі, яким він призначений, збережуть його до ручної зміни.",
+        "archiveError": "Помилка архівації шаблону"
+      },
+      "card": {
+        "archived": "Архівовано",
+        "noCapabilities": "Немає можливостей",
+        "editTitle": "Редагувати",
+        "archiveTitle": "Архівувати",
+        "capabilityCount": "{count, plural, one {# можливість} few {# можливості} many {# можливостей} other {# можливостей}}",
+        "userCount": "{count, plural, one {# користувач} few {# користувачі} many {# користувачів} other {# користувачів}}"
+      },
+      "formModal": {
+        "editTitle": "Редагувати шаблон",
+        "newTitle": "Новий шаблон ролі",
+        "saveError": "Помилка збереження",
+        "namePlaceholder": "Назва шаблону (напр. HR)",
+        "capabilitiesLabel": "Можливості",
+        "loading": "Завантаження…",
+        "savingButton": "Збереження…",
+        "saveChangesButton": "Зберегти зміни",
+        "createButton": "Створити шаблон"
+      },
+      "selector": {
+        "label": "Шаблон ролі (додаткові права)",
+        "noneOption": "— Без шаблону —",
+        "savingButton": "Збереження…",
+        "savedButton": "✓ Збережено",
+        "assignButton": "Призначити",
+        "assignError": "Помилка призначення шаблону",
+        "emptyHint": "Активних шаблонів ще немає — створіть їх на вкладці «Шаблони ролей»."
+      },
+      "badge": {
+        "archivedTitle": "Шаблон архівовано",
+        "archivedSuffix": " (архів)"
+      }
+    },
+    "legalEntities": {
+      "page": {
+        "title": "Юридичні особи",
+        "subtitle": "Юридичні особи мережі для договорів, локацій та персоналу",
+        "newButton": "Нова юридична особа",
+        "createSuccess": "Юридичну особу створено",
+        "updateSuccess": "Юридичну особу збережено",
+        "deactivateSuccess": "Юридичну особу деактивовано",
+        "errorPrefix": "Помилка: {message}",
+        "deactivateConfirm": "Деактивувати «{name}»?"
+      },
+      "list": {
+        "loading": "Завантаження…",
+        "emptyPrefix": "Юридичних осіб немає.",
+        "emptyHint": "Натисніть «Нова юридична особа», щоб додати першу.",
+        "headerName": "Назва",
+        "headerEdrpou": "ЄДРПОУ",
+        "headerDirector": "Директор",
+        "headerVat": "ПДВ",
+        "headerStatus": "Статус",
+        "vatYes": "Так",
+        "vatNo": "Ні",
+        "statusActive": "Активна",
+        "statusInactive": "Неактивна",
+        "editButton": "Редагувати",
+        "deactivateButton": "Деактивувати"
+      },
+      "formDialog": {
+        "editTitle": "Редагувати юридичну особу",
+        "createTitle": "Нова юридична особа",
+        "legalNameLabel": "Юридична назва",
+        "legalNamePlaceholder": "ТОВ \"Приклад\"",
+        "edrpouLabel": "ЄДРПОУ (необов'язково)",
+        "edrpouPlaceholder": "12345678",
+        "legalAddressLabel": "Юридична адреса (необов'язково)",
+        "legalAddressPlaceholder": "вул. Шевченка, 1, Київ",
+        "directorNameLabel": "ПІБ директора (необов'язково)",
+        "directorNamePlaceholder": "Іваненко Іван Іванович",
+        "phoneLabel": "Телефон (необов'язково)",
+        "phonePlaceholder": "+380 99 123 45 67",
+        "emailLabel": "Email (необов'язково)",
+        "emailPlaceholder": "office@example.com",
+        "ibanLabel": "IBAN (необов'язково)",
+        "ibanPlaceholder": "UA00 0000 0000 0000 0000 0000 000",
+        "bankNameLabel": "Назва банку (необов'язково)",
+        "bankNamePlaceholder": "АТ «Банк»",
+        "vatPayerLabel": "Платник ПДВ",
+        "activeLabel": "Активна",
+        "cancelButton": "Скасувати",
+        "saveButton": "Зберегти",
+        "createButton": "Створити",
+        "savingButton": "Збереження…",
+        "validationLegalNameRequired": "Юридична назва обов'язкова",
+        "validationEdrpouLength": "ЄДРПОУ повинен містити 8 або 10 цифр",
+        "validationEdrpouDigitsOnly": "ЄДРПОУ повинен містити лише цифри",
+        "validationEmailInvalid": "Некоректний email"
+      }
+    },
+    "modules": {
+      "catalog": {
+        "inventory": {
+          "label": "Інвентаризація",
+          "description": "Каталог товарів, залишки, прийомка, переміщення, списання."
+        },
+        "procurement": {
+          "label": "Постачання",
+          "description": "Постачальники, замовлення постачання, AI-прогнозування закупівель."
+        },
+        "pos": {
+          "label": "Каса (POS)",
+          "description": "Робота з кассовим апаратом, продажі, фіскалізація чеків."
+        },
+        "auto_service": {
+          "label": "Автосервіс",
+          "description": "Клієнти, автомобілі, наряд-замовлення, облік запчастин."
+        },
+        "production": {
+          "label": "Виробництво",
+          "description": "Рецепти, виробничі замовлення, списання сировини."
+        },
+        "marketplace": {
+          "label": "Маркетплейс постачальників",
+          "description": "Пошук і порівняння постачальників, відгуки, рейтинги."
+        }
+      },
+      "businessTypes": {
+        "retail": "Роздрібна торгівля",
+        "auto_service": "Автосервіс",
+        "warehouse": "Склад",
+        "restaurant": "Ресторан",
+        "production": "Виробництво",
+        "distribution": "Дистрибуція"
+      }
     }
   }
 }

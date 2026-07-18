@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   CHECKBOX_BASE_URLS,
   detectCheckboxEnv,
@@ -58,6 +59,7 @@ interface Props {
 }
 
 export function PrroConfigModal({ onClose }: Props) {
+  const t = useTranslations("Dashboard.integrations.prroModal");
   const { data: settings, isLoading } = usePrroSettings(true);
   const update = useUpdatePrroSettings();
   const testConn = useTestPrroConnection();
@@ -101,12 +103,12 @@ export function PrroConfigModal({ onClose }: Props) {
     if (provider !== "checkbox") return true;
 
     const errs: Record<string, string> = {};
-    if (!licenseKey.trim()) errs.licenseKey = "Обов'язкове поле";
+    if (!licenseKey.trim()) errs.licenseKey = t("requiredField");
     if (cashierAuthMode === "pin") {
-      if (!cashierPin.trim()) errs.cashierPin = "Обов'язкове поле";
+      if (!cashierPin.trim()) errs.cashierPin = t("requiredField");
     } else {
-      if (!cashierLogin.trim()) errs.cashierLogin = "Обов'язкове поле";
-      if (!cashierPassword.trim()) errs.cashierPassword = "Обов'язкове поле";
+      if (!cashierLogin.trim()) errs.cashierLogin = t("requiredField");
+      if (!cashierPassword.trim()) errs.cashierPassword = t("requiredField");
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -172,7 +174,7 @@ export function PrroConfigModal({ onClose }: Props) {
       });
       setTestResult(result);
     } catch (err) {
-      setTestError(err instanceof Error ? err.message : "Помилка підключення");
+      setTestError(err instanceof Error ? err.message : t("connectionTestError"));
     }
   }
 
@@ -223,10 +225,10 @@ export function PrroConfigModal({ onClose }: Props) {
           <span style={{ fontSize: 28 }}>🖨️</span>
           <div>
             <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-              ПРРО Каса
+              {t("title")}
             </h2>
             <p style={{ color: "#4B5563", fontSize: 12, margin: 0, marginTop: 3 }}>
-              Інтеграція з програмним РРО для реєстрації продажів (v3).
+              {t("description")}
             </p>
           </div>
           <button
@@ -248,13 +250,13 @@ export function PrroConfigModal({ onClose }: Props) {
 
         {isLoading ? (
           <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>
-            Завантаження…
+            {t("loading")}
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
             {/* ── Provider select ─────────────────────────────────────────── */}
             <div>
-              <label style={labelStyle}>Провайдер</label>
+              <label style={labelStyle}>{t("providerLabel")}</label>
               <select
                 value={provider}
                 onChange={(e) => {
@@ -272,8 +274,8 @@ export function PrroConfigModal({ onClose }: Props) {
                   paddingRight: 36,
                 }}
               >
-                <option value="disabled">Вимкнено</option>
-                <option value="checkbox">Checkbox</option>
+                <option value="disabled">{t("providerDisabled")}</option>
+                <option value="checkbox">{t("providerCheckbox")}</option>
               </select>
             </div>
 
@@ -282,7 +284,7 @@ export function PrroConfigModal({ onClose }: Props) {
               <>
                 {/* Base URL (environment) */}
                 <div style={sectionStyle}>
-                  <label style={labelStyle}>Середовище Checkbox</label>
+                  <label style={labelStyle}>{t("environmentLabel")}</label>
                   <div style={{ display: "flex", gap: 12 }}>
                     {(["test", "prod"] as CheckboxEnv[]).map((env) => (
                       <label
@@ -304,7 +306,7 @@ export function PrroConfigModal({ onClose }: Props) {
                           onChange={() => setCheckboxEnv(env)}
                           style={{ accentColor: "#3B82F6" }}
                         />
-                        {env === "test" ? "Тестовий" : "Виробничий"}
+                        {env === "test" ? t("environmentTest") : t("environmentProd")}
                       </label>
                     ))}
                   </div>
@@ -318,12 +320,12 @@ export function PrroConfigModal({ onClose }: Props) {
                 {/* License key */}
                 <div style={{ marginTop: 16 }}>
                   <label style={labelStyle}>
-                    License Key{" "}
+                    {t("licenseKeyLabel")}{" "}
                     <span style={{ color: "#EF4444" }}>*</span>
                   </label>
                   <input
                     type="password"
-                    placeholder="залишити без змін"
+                    placeholder={t("licenseKeyPlaceholder")}
                     value={licenseKey}
                     onChange={(e) => {
                       setLicenseKey(e.target.value);
@@ -339,13 +341,13 @@ export function PrroConfigModal({ onClose }: Props) {
                     <p style={{ ...hintStyle, color: "#EF4444" }}>{errors.licenseKey}</p>
                   )}
                   <p style={hintStyle}>
-                    Ключ ліцензії каси з кабінету Checkbox. Вже збережений ключ відображається замаскованим.
+                    {t("licenseKeyHint")}
                   </p>
                 </div>
 
                 {/* Cashier auth mode toggle */}
                 <div style={sectionStyle}>
-                  <label style={labelStyle}>Авторизація касира</label>
+                  <label style={labelStyle}>{t("cashierAuthLabel")}</label>
                   <div style={{ display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: "1px solid #374151", width: "fit-content" }}>
                     {(["pin", "loginPassword"] as CashierAuthMode[]).map((mode) => (
                       <button
@@ -366,7 +368,7 @@ export function PrroConfigModal({ onClose }: Props) {
                           transition: "all 0.15s",
                         }}
                       >
-                        {mode === "pin" ? "PIN-код" : "Логін / Пароль"}
+                        {mode === "pin" ? t("cashierAuthPin") : t("cashierAuthLoginPassword")}
                       </button>
                     ))}
                   </div>
@@ -376,11 +378,11 @@ export function PrroConfigModal({ onClose }: Props) {
                 {cashierAuthMode === "pin" && (
                   <div style={{ marginTop: 16 }}>
                     <label style={labelStyle}>
-                      PIN-код касира <span style={{ color: "#EF4444" }}>*</span>
+                      {t("cashierPinLabel")} <span style={{ color: "#EF4444" }}>*</span>
                     </label>
                     <input
                       type="password"
-                      placeholder="залишити без змін"
+                      placeholder={t("licenseKeyPlaceholder")}
                       value={cashierPin}
                       onChange={(e) => {
                         setCashierPin(e.target.value);
@@ -403,11 +405,11 @@ export function PrroConfigModal({ onClose }: Props) {
                   <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
                       <label style={labelStyle}>
-                        Логін касира <span style={{ color: "#EF4444" }}>*</span>
+                        {t("cashierLoginLabel")} <span style={{ color: "#EF4444" }}>*</span>
                       </label>
                       <input
                         type="password"
-                        placeholder="залишити без змін"
+                        placeholder={t("licenseKeyPlaceholder")}
                         value={cashierLogin}
                         onChange={(e) => {
                           setCashierLogin(e.target.value);
@@ -425,11 +427,11 @@ export function PrroConfigModal({ onClose }: Props) {
                     </div>
                     <div>
                       <label style={labelStyle}>
-                        Пароль касира <span style={{ color: "#EF4444" }}>*</span>
+                        {t("cashierPasswordLabel")} <span style={{ color: "#EF4444" }}>*</span>
                       </label>
                       <input
                         type="password"
-                        placeholder="залишити без змін"
+                        placeholder={t("licenseKeyPlaceholder")}
                         value={cashierPassword}
                         onChange={(e) => {
                           setCashierPassword(e.target.value);
@@ -467,13 +469,13 @@ export function PrroConfigModal({ onClose }: Props) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {isTesting ? "Перевірка…" : "Перевірити з'єднання"}
+                      {isTesting ? t("testingButton") : t("testButton")}
                     </button>
 
                     {/* Success result */}
                     {testResult && testResult.ok && (
                       <div style={{ fontSize: 12, color: "#4ADE80" }}>
-                        <span style={{ fontWeight: 700 }}>✓</span> Каса{" "}
+                        <span style={{ fontWeight: 700 }}>✓</span> {t("testRegisterLabel")}{" "}
                         <span style={{ fontFamily: "monospace" }}>{testResult.fiscalNumber}</span>
                         {testResult.isTest && (
                           <span
@@ -486,13 +488,13 @@ export function PrroConfigModal({ onClose }: Props) {
                               fontSize: 10,
                             }}
                           >
-                            тест
+                            {t("testBadge")}
                           </span>
                         )}{" "}
                         {testResult.cashierOk ? (
-                          <>· <span style={{ color: "#4ADE80" }}>✓</span> Касир авторизований</>
+                          <>· <span style={{ color: "#4ADE80" }}>✓</span> {t("cashierOk")}</>
                         ) : (
-                          <>· <span style={{ color: "#FCA5A5" }}>✗</span> Касир: помилка авторизації</>
+                          <>· <span style={{ color: "#FCA5A5" }}>✗</span> {t("cashierFail")}</>
                         )}
                       </div>
                     )}
@@ -501,7 +503,7 @@ export function PrroConfigModal({ onClose }: Props) {
                     {testResult && !testResult.ok && testResult.fiscalNumber && (
                       <div style={{ fontSize: 12, color: "#F87171" }}>
                         <span style={{ color: "#4ADE80", fontWeight: 700 }}>✓</span>{" "}
-                        <span style={{ color: "#9CA3AF" }}>Каса</span>{" "}
+                        <span style={{ color: "#9CA3AF" }}>{t("testRegisterLabel")}</span>{" "}
                         <span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>{testResult.fiscalNumber}</span>
                         {testResult.isTest && (
                           <span
@@ -514,12 +516,12 @@ export function PrroConfigModal({ onClose }: Props) {
                               fontSize: 10,
                             }}
                           >
-                            тест
+                            {t("testBadge")}
                           </span>
                         )}
                         {" · "}
                         <span style={{ fontWeight: 700 }}>✗</span>{" "}
-                        {testResult.error ?? "Помилка авторизації касира"}
+                        {testResult.error ?? t("cashierAuthError")}
                       </div>
                     )}
 
@@ -527,7 +529,7 @@ export function PrroConfigModal({ onClose }: Props) {
                     {testResult && !testResult.ok && !testResult.fiscalNumber && (
                       <div style={{ fontSize: 12, color: "#F87171" }}>
                         <span style={{ fontWeight: 700 }}>✗</span>{" "}
-                        {testResult.error ?? "Сервіс недоступний"}
+                        {testResult.error ?? t("serviceUnavailable")}
                       </div>
                     )}
 
@@ -567,7 +569,7 @@ export function PrroConfigModal({ onClose }: Props) {
                   cursor: "pointer",
                 }}
               >
-                Скасувати
+                {t("cancelButton")}
               </button>
               <button
                 type="submit"
@@ -584,7 +586,7 @@ export function PrroConfigModal({ onClose }: Props) {
                   opacity: isBusy ? 0.7 : 1,
                 }}
               >
-                {isBusy ? "Збереження…" : "Зберегти"}
+                {isBusy ? t("savingButton") : t("saveButton")}
               </button>
             </div>
           </form>

@@ -1,39 +1,46 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import type { LegalEntityDto } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
+// Zod .min(1, message) / .refine(..., message) need translated messages, so the schema
+// is built once per render inside the component (see `useMemo(() => buildSchema(t), [t])`
+// below) — mirrors `buildSchema(t)` in features/locations/components/LocationFormDialog.tsx
+// (i18n Block 2).
 
-const schema = z.object({
-  legalName: z.string().min(1, "Юридична назва обов'язкова").max(255),
-  edrpou: z
-    .string()
-    .max(10)
-    .optional()
-    .refine((v) => !v || v.length === 8 || v.length === 10, {
-      message: "ЄДРПОУ повинен містити 8 або 10 цифр",
-    })
-    .refine((v) => !v || /^\d+$/.test(v), {
-      message: "ЄДРПОУ повинен містити лише цифри",
+function buildSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    legalName: z.string().min(1, t("validationLegalNameRequired")).max(255),
+    edrpou: z
+      .string()
+      .max(10)
+      .optional()
+      .refine((v) => !v || v.length === 8 || v.length === 10, {
+        message: t("validationEdrpouLength"),
+      })
+      .refine((v) => !v || /^\d+$/.test(v), {
+        message: t("validationEdrpouDigitsOnly"),
+      }),
+    legalAddress: z.string().max(500).optional(),
+    directorName: z.string().max(255).optional(),
+    phone: z.string().max(30).optional(),
+    email: z.string().max(255).optional().refine((v) => !v || z.string().email().safeParse(v).success, {
+      message: t("validationEmailInvalid"),
     }),
-  legalAddress: z.string().max(500).optional(),
-  directorName: z.string().max(255).optional(),
-  phone: z.string().max(30).optional(),
-  email: z.string().max(255).optional().refine((v) => !v || z.string().email().safeParse(v).success, {
-    message: "Некоректний email",
-  }),
-  iban: z.string().max(34).optional(),
-  bankName: z.string().max(255).optional(),
-  isVatPayer: z.boolean(),
-  isActive: z.boolean(),
-});
+    iban: z.string().max(34).optional(),
+    bankName: z.string().max(255).optional(),
+    isVatPayer: z.boolean(),
+    isActive: z.boolean(),
+  });
+}
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<ReturnType<typeof buildSchema>>;
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -72,7 +79,10 @@ const EMPTY_VALUES: FormValues = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: Props) {
+  const t = useTranslations("Dashboard.legalEntities.formDialog");
   const isEdit = entity !== null;
+
+  const schema = useMemo(() => buildSchema(t), [t]);
 
   const {
     register,
@@ -150,7 +160,7 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
       >
         {/* Title */}
         <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-          {isEdit ? "Редагувати юридичну особу" : "Нова юридична особа"}
+          {isEdit ? t("editTitle") : t("createTitle")}
         </h2>
 
         <form
@@ -158,37 +168,37 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
           style={{ display: "flex", flexDirection: "column", gap: 14 }}
         >
           {/* Legal name */}
-          <Field label="Юридична назва" error={errors.legalName?.message}>
+          <Field label={t("legalNameLabel")} error={errors.legalName?.message}>
             <input
               {...register("legalName")}
-              placeholder='ТОВ "Приклад"'
+              placeholder={t("legalNamePlaceholder")}
               style={inputStyle}
             />
           </Field>
 
           {/* EDRPOU */}
-          <Field label="ЄДРПОУ (необов'язково)" error={errors.edrpou?.message}>
+          <Field label={t("edrpouLabel")} error={errors.edrpou?.message}>
             <input
               {...register("edrpou")}
-              placeholder="12345678"
+              placeholder={t("edrpouPlaceholder")}
               style={inputStyle}
             />
           </Field>
 
           {/* Legal address */}
-          <Field label="Юридична адреса (необов'язково)" error={errors.legalAddress?.message}>
+          <Field label={t("legalAddressLabel")} error={errors.legalAddress?.message}>
             <input
               {...register("legalAddress")}
-              placeholder="вул. Шевченка, 1, Київ"
+              placeholder={t("legalAddressPlaceholder")}
               style={inputStyle}
             />
           </Field>
 
           {/* Director name */}
-          <Field label="ПІБ директора (необов'язково)" error={errors.directorName?.message}>
+          <Field label={t("directorNameLabel")} error={errors.directorName?.message}>
             <input
               {...register("directorName")}
-              placeholder="Іваненко Іван Іванович"
+              placeholder={t("directorNamePlaceholder")}
               style={inputStyle}
             />
           </Field>
@@ -196,19 +206,19 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
           {/* Phone + Email */}
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <Field label="Телефон (необов'язково)" error={errors.phone?.message}>
+              <Field label={t("phoneLabel")} error={errors.phone?.message}>
                 <input
                   {...register("phone")}
-                  placeholder="+380 99 123 45 67"
+                  placeholder={t("phonePlaceholder")}
                   style={inputStyle}
                 />
               </Field>
             </div>
             <div style={{ flex: 1 }}>
-              <Field label="Email (необов'язково)" error={errors.email?.message}>
+              <Field label={t("emailLabel")} error={errors.email?.message}>
                 <input
                   {...register("email")}
-                  placeholder="office@example.com"
+                  placeholder={t("emailPlaceholder")}
                   style={inputStyle}
                 />
               </Field>
@@ -218,19 +228,19 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
           {/* IBAN + Bank name */}
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <Field label="IBAN (необов'язково)" error={errors.iban?.message}>
+              <Field label={t("ibanLabel")} error={errors.iban?.message}>
                 <input
                   {...register("iban")}
-                  placeholder="UA00 0000 0000 0000 0000 0000 000"
+                  placeholder={t("ibanPlaceholder")}
                   style={inputStyle}
                 />
               </Field>
             </div>
             <div style={{ flex: 1 }}>
-              <Field label="Назва банку (необов'язково)" error={errors.bankName?.message}>
+              <Field label={t("bankNameLabel")} error={errors.bankName?.message}>
                 <input
                   {...register("bankName")}
-                  placeholder="АТ «Банк»"
+                  placeholder={t("bankNamePlaceholder")}
                   style={inputStyle}
                 />
               </Field>
@@ -242,7 +252,7 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
             style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "#9CA3AF", fontSize: 13 }}
           >
             <input type="checkbox" {...register("isVatPayer")} />
-            Платник ПДВ
+            {t("vatPayerLabel")}
           </label>
 
           {/* Active */}
@@ -251,17 +261,17 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
               style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "#9CA3AF", fontSize: 13 }}
             >
               <input type="checkbox" {...register("isActive")} />
-              Активна
+              {t("activeLabel")}
             </label>
           )}
 
           {/* Buttons */}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
             <Btn variant="ghost" type="button" onClick={onClose}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
             <Btn type="submit" disabled={isPending}>
-              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
+              {isPending ? t("savingButton") : isEdit ? t("saveButton") : t("createButton")}
             </Btn>
           </div>
         </form>

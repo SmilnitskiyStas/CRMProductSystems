@@ -3104,6 +3104,361 @@
         "standard": "Standard",
         "enterprise": "Enterprise"
       }
+    },
+    "settings": {
+      "page": {
+        "title": "Settings",
+        "subtitle": "Manage notifications and integrations with external services",
+        "tabGeneral": "General",
+        "tabNotifications": "Notifications",
+        "tabIntegrations": "Integrations",
+        "tabModules": "Modules",
+        "tabMarketplaceProfile": "Marketplace profile"
+      },
+      "generalTab": {
+        "description": "System settings apply to the whole store or network. Personal profile settings are available from the user menu.",
+        "notificationsTitle": "Notifications",
+        "notificationsDesc": "Set up the channels and events you want to be notified about.",
+        "integrationsTitle": "Integrations",
+        "integrationsDesc": "Connect external services: Telegram Bot, Email (Resend), POS webhook, IoT.",
+        "openButton": "Open →",
+        "personalSettingsTitle": "Personal settings",
+        "personalSettingsDesc": "Name, password, and Telegram — in your profile settings",
+        "myProfileLink": "My profile →"
+      },
+      "notificationsTab": {
+        "title": "Notification channels",
+        "subtitle": "Turn notifications on or off for each event and channel."
+      },
+      "integrationsTab": {
+        "title": "External integrations",
+        "subtitle": "Connect external services for notifications, analytics, and automation.",
+        "loading": "Loading integrations…",
+        "prroLabel": "PRRO Cash Register",
+        "prroDescriptionPrefix": "Integration with a software fiscal register for recording sales (v3). Provider:",
+        "providerCheckbox": "Checkbox",
+        "providerDisabled": "Disabled",
+        "providerNotConnected": "not connected",
+        "updatedAt": "Updated: {date}",
+        "configureButton": "Configure",
+        "connectButton": "Connect"
+      },
+      "modulesTab": {
+        "loading": "Loading modules…",
+        "loadError": "Failed to load the module list.",
+        "title": "Modules",
+        "businessTypePrefix": "Business type:",
+        "businessTypeSuffix": "the module set is determined at registration and managed by the provider.",
+        "activeModuleAria": "Active module",
+        "disabledModuleAria": "Disabled module",
+        "statusActive": "Active",
+        "statusDisabled": "Disabled",
+        "footerNote": "Modules are activated or deactivated by the platform provider. Contact support if you need to change your tenant's module set."
+      },
+      "profileTab": {
+        "personalTitle": "Personal information",
+        "personalSubtitle": "Your name and contact information",
+        "passwordTitle": "Change password",
+        "passwordSubtitle": "Minimum 12 characters, letters and digits",
+        "twoFaTitle": "Two-factor authentication",
+        "twoFaSubtitle": "Extra layer of protection for signing in",
+        "telegramTitle": "Telegram",
+        "telegramSubtitle": "Link Telegram for personal notifications"
+      },
+      "userSettingsPage": {
+        "personalLabel": "PERSONAL SETTINGS",
+        "profileLabel": "Personal information",
+        "profileSubtitle": "Your name and contact information",
+        "passwordLabel": "Change password",
+        "passwordSubtitle": "Update your password to secure your account",
+        "securityLabel": "Two-factor authentication",
+        "securitySubtitle": "Extra layer of protection for signing in",
+        "telegramLabel": "Telegram",
+        "telegramSubtitle": "Link Telegram for personal notifications"
+      }
+    },
+    "integrations": {
+      "services": {
+        "claude": {
+          "label": "Claude AI",
+          "description": "Auto-ordering AI agent: daily suggestions with reasoning (v2).",
+          "fields": {
+            "api_key": {
+              "label": "API Key",
+              "placeholder": "sk-ant-api03-...",
+              "hint": "Create one at console.anthropic.com → API Keys"
+            },
+            "model": {
+              "label": "Model",
+              "placeholder": "claude-sonnet-4-6",
+              "hint": "Defaults to claude-sonnet-4-6"
+            }
+          }
+        },
+        "telegram": {
+          "label": "Telegram Bot",
+          "description": "Notifications about critical expiry dates and weekly reports via Telegram.",
+          "fields": {
+            "bot_token": {
+              "label": "Bot Token",
+              "placeholder": "1234567890:AAF...",
+              "hint": "Get one from @BotFather"
+            },
+            "bot_username": {
+              "label": "Bot username",
+              "placeholder": "@ShelfGuardBot"
+            }
+          }
+        },
+        "resend": {
+          "label": "Email (Resend)",
+          "description": "Email notifications and weekly reports for managers.",
+          "fields": {
+            "api_key": {
+              "label": "API Key",
+              "placeholder": "re_..."
+            },
+            "from_email": {
+              "label": "From address",
+              "placeholder": "noreply@myshop.com"
+            },
+            "from_name": {
+              "label": "Sender name",
+              "placeholder": "ShelfGuard"
+            }
+          }
+        },
+        "webhook": {
+          "label": "Webhook",
+          "description": "HTTP POST call to your service when events occur.",
+          "fields": {
+            "url": {
+              "label": "Endpoint URL",
+              "placeholder": "https://my-app.com/webhook"
+            },
+            "secret": {
+              "label": "Secret",
+              "placeholder": "my-webhook-secret",
+              "hint": "Signs the X-ShelfGuard-Signature header"
+            }
+          }
+        },
+        "prro": {
+          "label": "PRRO Cash Register",
+          "description": "Integration with a software fiscal register for recording sales (v3).",
+          "fields": {}
+        },
+        "iot": {
+          "label": "IoT Sensors",
+          "description": "Connect temperature and humidity sensors (v3).",
+          "fields": {
+            "endpoint_url": {
+              "label": "Endpoint URL",
+              "placeholder": "https://iot.example.com"
+            },
+            "api_key": {
+              "label": "API Key",
+              "placeholder": "iot-device-key"
+            },
+            "device_ids": {
+              "label": "Device IDs",
+              "placeholder": "dev-001, dev-002",
+              "hint": "Comma-separated"
+            }
+          }
+        }
+      },
+      "card": {
+        "active": "Active",
+        "disabled": "Disabled",
+        "updatedAt": "Updated: {date}",
+        "configureButton": "Configure",
+        "connectButton": "Connect"
+      },
+      "configModal": {
+        "loading": "Loading…",
+        "requiredField": "Required field",
+        "activeIntegrationLabel": "Active integration",
+        "activeIntegrationHint": "Disabling stops sending but keeps the credentials",
+        "deleteConfirm": "Delete the {label} integration? Credentials will be removed.",
+        "deleteButton": "Delete",
+        "cancelButton": "Cancel",
+        "saveButton": "Save",
+        "savingButton": "Saving…"
+      },
+      "prroModal": {
+        "title": "PRRO Cash Register",
+        "description": "Integration with a software fiscal register for recording sales (v3).",
+        "loading": "Loading…",
+        "providerLabel": "Provider",
+        "providerDisabled": "Disabled",
+        "providerCheckbox": "Checkbox",
+        "environmentLabel": "Checkbox environment",
+        "environmentTest": "Test",
+        "environmentProd": "Production",
+        "licenseKeyLabel": "License Key",
+        "licenseKeyPlaceholder": "leave unchanged",
+        "licenseKeyHint": "The register's license key from your Checkbox account. An already-saved key is shown masked.",
+        "requiredField": "Required field",
+        "cashierAuthLabel": "Cashier authorization",
+        "cashierAuthPin": "PIN code",
+        "cashierAuthLoginPassword": "Login / Password",
+        "cashierPinLabel": "Cashier PIN code",
+        "cashierLoginLabel": "Cashier login",
+        "cashierPasswordLabel": "Cashier password",
+        "testButton": "Test connection",
+        "testingButton": "Testing…",
+        "testRegisterLabel": "Register",
+        "testBadge": "test",
+        "cashierOk": "Cashier authorized",
+        "cashierFail": "Cashier: authorization failed",
+        "cashierAuthError": "Cashier authorization failed",
+        "serviceUnavailable": "Service unavailable",
+        "cancelButton": "Cancel",
+        "saveButton": "Save",
+        "savingButton": "Saving…",
+        "connectionTestError": "Connection error"
+      }
+    },
+    "tenantRoles": {
+      "tab": {
+        "title": "Role templates",
+        "showArchived": "Show archived",
+        "newTemplate": "New template",
+        "description": "A template adds the listed capabilities to a user on top of their role. Editing a template immediately applies to everyone it is assigned to.",
+        "loading": "Loading…",
+        "loadError": "Failed to load role templates.",
+        "emptyArchived": "No templates",
+        "emptyActive": "No active templates yet",
+        "archiveConfirm": "Archive the template \"{name}\"? Users it is assigned to will keep it until manually changed.",
+        "archiveError": "Failed to archive template"
+      },
+      "card": {
+        "archived": "Archived",
+        "noCapabilities": "No capabilities",
+        "editTitle": "Edit",
+        "archiveTitle": "Archive",
+        "capabilityCount": "{count, plural, one {# capability} other {# capabilities}}",
+        "userCount": "{count, plural, one {# user} other {# users}}"
+      },
+      "formModal": {
+        "editTitle": "Edit template",
+        "newTitle": "New role template",
+        "saveError": "Failed to save",
+        "namePlaceholder": "Template name (e.g. HR)",
+        "capabilitiesLabel": "Capabilities",
+        "loading": "Loading…",
+        "savingButton": "Saving…",
+        "saveChangesButton": "Save changes",
+        "createButton": "Create template"
+      },
+      "selector": {
+        "label": "Role template (extra permissions)",
+        "noneOption": "— No template —",
+        "savingButton": "Saving…",
+        "savedButton": "✓ Saved",
+        "assignButton": "Assign",
+        "assignError": "Failed to assign template",
+        "emptyHint": "No active templates yet — create them on the \"Role templates\" tab."
+      },
+      "badge": {
+        "archivedTitle": "Template archived",
+        "archivedSuffix": " (archived)"
+      }
+    },
+    "legalEntities": {
+      "page": {
+        "title": "Legal entities",
+        "subtitle": "Legal entities of the network for contracts, locations, and staff",
+        "newButton": "New legal entity",
+        "createSuccess": "Legal entity created",
+        "updateSuccess": "Legal entity saved",
+        "deactivateSuccess": "Legal entity deactivated",
+        "errorPrefix": "Error: {message}",
+        "deactivateConfirm": "Deactivate \"{name}\"?"
+      },
+      "list": {
+        "loading": "Loading…",
+        "emptyPrefix": "No legal entities yet.",
+        "emptyHint": "Click \"New legal entity\" to add the first one.",
+        "headerName": "Name",
+        "headerEdrpou": "EDRPOU",
+        "headerDirector": "Director",
+        "headerVat": "VAT",
+        "headerStatus": "Status",
+        "vatYes": "Yes",
+        "vatNo": "No",
+        "statusActive": "Active",
+        "statusInactive": "Inactive",
+        "editButton": "Edit",
+        "deactivateButton": "Deactivate"
+      },
+      "formDialog": {
+        "editTitle": "Edit legal entity",
+        "createTitle": "New legal entity",
+        "legalNameLabel": "Legal name",
+        "legalNamePlaceholder": "Example LLC",
+        "edrpouLabel": "EDRPOU (optional)",
+        "edrpouPlaceholder": "12345678",
+        "legalAddressLabel": "Legal address (optional)",
+        "legalAddressPlaceholder": "1 Shevchenka St., Kyiv",
+        "directorNameLabel": "Director's full name (optional)",
+        "directorNamePlaceholder": "John Smith",
+        "phoneLabel": "Phone (optional)",
+        "phonePlaceholder": "+380 99 123 45 67",
+        "emailLabel": "Email (optional)",
+        "emailPlaceholder": "office@example.com",
+        "ibanLabel": "IBAN (optional)",
+        "ibanPlaceholder": "UA00 0000 0000 0000 0000 0000 000",
+        "bankNameLabel": "Bank name (optional)",
+        "bankNamePlaceholder": "Example Bank JSC",
+        "vatPayerLabel": "VAT payer",
+        "activeLabel": "Active",
+        "cancelButton": "Cancel",
+        "saveButton": "Save",
+        "createButton": "Create",
+        "savingButton": "Saving…",
+        "validationLegalNameRequired": "Legal name is required",
+        "validationEdrpouLength": "EDRPOU must contain 8 or 10 digits",
+        "validationEdrpouDigitsOnly": "EDRPOU must contain digits only",
+        "validationEmailInvalid": "Invalid email"
+      }
+    },
+    "modules": {
+      "catalog": {
+        "inventory": {
+          "label": "Inventory",
+          "description": "Item catalog, stock, receiving, transfers, write-offs."
+        },
+        "procurement": {
+          "label": "Procurement",
+          "description": "Suppliers, purchase orders, AI-based procurement forecasting."
+        },
+        "pos": {
+          "label": "POS",
+          "description": "Cash register operations, sales, receipt fiscalization."
+        },
+        "auto_service": {
+          "label": "Auto service",
+          "description": "Clients, vehicles, work orders, parts tracking."
+        },
+        "production": {
+          "label": "Production",
+          "description": "Recipes, production orders, raw material write-offs."
+        },
+        "marketplace": {
+          "label": "Supplier marketplace",
+          "description": "Search and compare suppliers, reviews, ratings."
+        }
+      },
+      "businessTypes": {
+        "retail": "Retail",
+        "auto_service": "Auto service",
+        "warehouse": "Warehouse",
+        "restaurant": "Restaurant",
+        "production": "Manufacturing",
+        "distribution": "Distribution"
+      }
     }
   }
 }

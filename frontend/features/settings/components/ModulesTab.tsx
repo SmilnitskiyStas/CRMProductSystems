@@ -1,15 +1,19 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
-import { ALL_MODULES, BUSINESS_TYPE_LABELS } from "@/features/modules/types";
+import { ALL_MODULE_KEYS } from "@/features/modules/types";
 
 export function ModulesTab() {
+  const t = useTranslations("Dashboard.settings.modulesTab");
+  const tCatalog = useTranslations("Dashboard.modules.catalog");
+  const tBusinessTypes = useTranslations("Dashboard.modules.businessTypes");
   const { data, isLoading, isError } = useModules();
 
   if (isLoading) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>
-        Завантаження модулів…
+        {t("loading")}
       </div>
     );
   }
@@ -17,32 +21,34 @@ export function ModulesTab() {
   if (isError || !data) {
     return (
       <div style={{ color: "#F87171", fontSize: 13, padding: "16px 0" }}>
-        Не вдалося завантажити список модулів.
+        {t("loadError")}
       </div>
     );
   }
 
   const activeSet = new Set(data.modules);
-  const businessTypeLabel = BUSINESS_TYPE_LABELS[data.businessType] ?? data.businessType;
+  const businessTypeLabel = tBusinessTypes.has(data.businessType)
+    ? tBusinessTypes(data.businessType)
+    : data.businessType;
 
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-          Модулі
+          {t("title")}
         </h2>
         <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6 }}>
-          Тип бізнесу: <strong style={{ color: "#9CA3AF" }}>{businessTypeLabel}</strong>
-          {" — "}набір модулів визначається при реєстрації та керується провайдером.
+          {t("businessTypePrefix")} <strong style={{ color: "#9CA3AF" }}>{businessTypeLabel}</strong>
+          {" — "}{t("businessTypeSuffix")}
         </p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {ALL_MODULES.map((mod) => {
-          const active = activeSet.has(mod.key);
+        {ALL_MODULE_KEYS.map((key) => {
+          const active = activeSet.has(key);
           return (
             <div
-              key={mod.key}
+              key={key}
               style={{
                 background: "#111827",
                 border: `1px solid ${active ? "#1e3a5f" : "#1F2937"}`,
@@ -56,7 +62,7 @@ export function ModulesTab() {
               {/* Toggle indicator (read-only — activation is provider-managed) */}
               <div
                 role="img"
-                aria-label={active ? "Активний модуль" : "Вимкнений модуль"}
+                aria-label={active ? t("activeModuleAria") : t("disabledModuleAria")}
                 style={{
                   width: 38,
                   height: 22,
@@ -83,7 +89,7 @@ export function ModulesTab() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                   <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-                    {mod.label}
+                    {tCatalog(`${key}.label`)}
                   </span>
                   <span
                     style={{
@@ -95,11 +101,11 @@ export function ModulesTab() {
                       fontWeight: 600,
                     }}
                   >
-                    {active ? "Активно" : "Вимкнено"}
+                    {active ? t("statusActive") : t("statusDisabled")}
                   </span>
                 </div>
                 <p style={{ color: "#4B5563", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-                  {mod.description}
+                  {tCatalog(`${key}.description`)}
                 </p>
               </div>
             </div>
@@ -108,8 +114,7 @@ export function ModulesTab() {
       </div>
 
       <p style={{ color: "#374151", fontSize: 12, marginTop: 20, lineHeight: 1.6 }}>
-        Активація чи вимкнення модулів виконується провайдером платформи.
-        Зверніться до підтримки, якщо потрібно змінити набір модулів вашого тенанта.
+        {t("footerNote")}
       </p>
     </div>
   );

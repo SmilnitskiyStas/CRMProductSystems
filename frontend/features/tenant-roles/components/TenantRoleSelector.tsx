@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useTenantRoles, useAssignTenantRole } from "../hooks/useTenantRoles";
 import { Btn } from "@/components/ui/Btn";
 import type { UserDto } from "@/features/users/types";
@@ -16,6 +17,7 @@ interface Props {
  * with no capability bypass (anti-escalation).
  */
 export function TenantRoleSelector({ user }: Props) {
+  const t = useTranslations("Dashboard.tenantRoles.selector");
   const { data: roles, isLoading } = useTenantRoles(); // active only — archived templates aren't assignable
   const assign = useAssignTenantRole();
 
@@ -32,7 +34,7 @@ export function TenantRoleSelector({ user }: Props) {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
-      setErr((e as Error)?.message ?? "Помилка призначення шаблону");
+      setErr((e as Error)?.message ?? t("assignError"));
     }
   }
 
@@ -52,7 +54,7 @@ export function TenantRoleSelector({ user }: Props) {
           textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8,
         }}
       >
-        Шаблон ролі (додаткові права)
+        {t("label")}
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -67,7 +69,7 @@ export function TenantRoleSelector({ user }: Props) {
             outline: "none", cursor: "pointer", appearance: "none",
           }}
         >
-          <option value="" style={{ background: "#111827" }}>— Без шаблону —</option>
+          <option value="" style={{ background: "#111827" }}>{t("noneOption")}</option>
           {roles?.map((r) => (
             <option key={r.id} value={r.id} style={{ background: "#111827" }}>
               {r.name}
@@ -75,13 +77,13 @@ export function TenantRoleSelector({ user }: Props) {
           ))}
         </select>
         <Btn size="sm" onClick={handleSave} disabled={!dirty || assign.isPending}>
-          {assign.isPending ? "Збереження…" : saved ? "✓ Збережено" : "Призначити"}
+          {assign.isPending ? t("savingButton") : saved ? t("savedButton") : t("assignButton")}
         </Btn>
       </div>
 
       {roles && roles.length === 0 && (
         <div style={{ color: "#374151", fontSize: 12, marginTop: 6 }}>
-          Активних шаблонів ще немає — створіть їх на вкладці «Шаблони ролей».
+          {t("emptyHint")}
         </div>
       )}
 
