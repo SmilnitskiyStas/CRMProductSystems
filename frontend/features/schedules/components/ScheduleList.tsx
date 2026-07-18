@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { WorkScheduleDto, ScheduleStatus, CreateSchedulePayload, UpdateSchedulePayload } from "../types";
@@ -13,13 +14,14 @@ import {
 } from "../hooks/useSchedules";
 import { Btn } from "@/components/ui/Btn";
 
-const STATUS_STYLE: Record<ScheduleStatus, { bg: string; color: string; border: string; label: string }> = {
-  draft:     { bg: "#111827", color: "#6B7280", border: "#374151", label: "Чернетка"     },
-  published: { bg: "#052e16", color: "#4ADE80", border: "#16A34A", label: "Опубліковано" },
-  archived:  { bg: "#1F2937", color: "#4B5563", border: "#374151", label: "Архів"        },
+const STATUS_STYLE: Record<ScheduleStatus, { bg: string; color: string; border: string; i18nKey: string }> = {
+  draft:     { bg: "#111827", color: "#6B7280", border: "#374151", i18nKey: "statusDraft"     },
+  published: { bg: "#052e16", color: "#4ADE80", border: "#16A34A", i18nKey: "statusPublished" },
+  archived:  { bg: "#1F2937", color: "#4B5563", border: "#374151", i18nKey: "statusArchived"  },
 };
 
 function StatusBadge({ status }: { status: ScheduleStatus }) {
+  const t = useTranslations("Dashboard.schedules.list");
   const s = STATUS_STYLE[status];
   return (
     <span
@@ -34,7 +36,7 @@ function StatusBadge({ status }: { status: ScheduleStatus }) {
         whiteSpace: "nowrap",
       }}
     >
-      {s.label}
+      {t(s.i18nKey)}
     </span>
   );
 }
@@ -54,6 +56,7 @@ interface Props {
 }
 
 export function ScheduleList({ selectedId, onSelect }: Props) {
+  const t = useTranslations("Dashboard.schedules.list");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing]       = useState<WorkScheduleDto | null>(null);
 
@@ -65,7 +68,7 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
   function handleCreate(data: CreateSchedulePayload) {
     createMutation.mutate(data, {
       onSuccess: (created) => {
-        toast.success("Графік створено");
+        toast.success(t("createdToast"));
         setCreateOpen(false);
         onSelect(created);
       },
@@ -78,7 +81,7 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
     updateMutation.mutate(
       { id: editing.id, data },
       {
-        onSuccess: () => { toast.success("Графік оновлено"); setEditing(null); },
+        onSuccess: () => { toast.success(t("updatedToast")); setEditing(null); },
         onError: (err) => toast.error(err.message),
       },
     );
@@ -86,9 +89,9 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
 
   function handleDelete(schedule: WorkScheduleDto, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm(`Видалити графік "${schedule.name}"?`)) return;
+    if (!confirm(t("deleteConfirm", { name: schedule.name }))) return;
     deleteMutation.mutate(schedule.id, {
-      onSuccess: () => toast.success("Графік видалено"),
+      onSuccess: () => toast.success(t("deletedToast")),
       onError:   (err) => toast.error(err.message),
     });
   }
@@ -105,18 +108,18 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
         }}
       >
         <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 700, margin: 0 }}>
-          Графіки ({schedules.length})
+          {t("title", { count: schedules.length })}
         </h2>
         <Btn size="sm" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
-          Новий графік
+          {t("newButton")}
         </Btn>
       </div>
 
       {/* List */}
       {isLoading ? (
-        <p style={{ color: "#4B5563", fontSize: 13, padding: "12px 0" }}>Завантаження…</p>
+        <p style={{ color: "#4B5563", fontSize: 13, padding: "12px 0" }}>{t("loading")}</p>
       ) : schedules.length === 0 ? (
-        <p style={{ color: "#4B5563", fontSize: 13, padding: "12px 0" }}>Немає графіків</p>
+        <p style={{ color: "#4B5563", fontSize: 13, padding: "12px 0" }}>{t("empty")}</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {schedules.map((schedule) => {
@@ -177,7 +180,7 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
                   <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditing(schedule); }}
-                      title="Редагувати"
+                      title={t("editTitle")}
                       style={{
                         background: "transparent",
                         border: "1px solid #374151",
@@ -191,7 +194,7 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
                     </button>
                     <button
                       onClick={(e) => handleDelete(schedule, e)}
-                      title="Видалити"
+                      title={t("deleteTitle")}
                       style={{
                         background: "transparent",
                         border: "1px solid #374151",
@@ -217,7 +220,7 @@ export function ScheduleList({ selectedId, onSelect }: Props) {
                 >
                   <StatusBadge status={schedule.status} />
                   <span style={{ color: "#4B5563", fontSize: 11 }}>
-                    {schedule.shiftCount} змін
+                    {t("shiftsCount", { count: schedule.shiftCount })}
                   </span>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { ScheduleShiftDto, AddShiftPayload, UpdateShiftPayload, ShiftStatus } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
@@ -25,12 +26,6 @@ const labelStyle: React.CSSProperties = {
 };
 
 const SHIFT_STATUSES: ShiftStatus[] = ["scheduled", "confirmed", "completed", "cancelled"];
-const STATUS_LABELS: Record<ShiftStatus, string> = {
-  scheduled: "Заплановано",
-  confirmed:  "Підтверджено",
-  completed:  "Виконано",
-  cancelled:  "Скасовано",
-};
 
 interface UserOption {
   id: string;
@@ -59,26 +54,31 @@ interface EditProps {
 
 type Props = CreateProps | EditProps;
 
-function validate(fields: {
-  userId?: string;
-  shiftDate: string;
-  startTime: string;
-  endTime: string;
-  breakMinutes: number;
-}): Record<string, string> {
+function validate(
+  t: (key: string) => string,
+  fields: {
+    userId?: string;
+    shiftDate: string;
+    startTime: string;
+    endTime: string;
+    breakMinutes: number;
+  },
+): Record<string, string> {
   const errors: Record<string, string> = {};
-  if ("userId" in fields && !fields.userId) errors.userId = "Оберіть працівника";
-  if (!fields.shiftDate) errors.shiftDate = "Оберіть дату";
-  if (!fields.startTime) errors.startTime = "Вкажіть початок";
-  if (!fields.endTime) errors.endTime = "Вкажіть кінець";
+  if ("userId" in fields && !fields.userId) errors.userId = t("workerRequiredError");
+  if (!fields.shiftDate) errors.shiftDate = t("dateRequiredError");
+  if (!fields.startTime) errors.startTime = t("startRequiredError");
+  if (!fields.endTime) errors.endTime = t("endRequiredError");
   if (fields.startTime && fields.endTime && fields.startTime >= fields.endTime) {
-    errors.endTime = "Кінець має бути після початку";
+    errors.endTime = t("endAfterStartError");
   }
-  if (fields.breakMinutes < 0) errors.breakMinutes = "Перерва не може бути від'ємною";
+  if (fields.breakMinutes < 0) errors.breakMinutes = t("breakNegativeError");
   return errors;
 }
 
 export function ShiftForm(props: Props) {
+  const t = useTranslations("Dashboard.schedules.shiftForm");
+  const tShiftStatus = useTranslations("Dashboard.schedules.shiftStatus");
   const isEdit = props.mode === "edit";
   const shift = isEdit ? props.shift : null;
 
@@ -94,7 +94,7 @@ export function ShiftForm(props: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const errs = validate({ userId: isEdit ? undefined : userId, shiftDate, startTime, endTime, breakMinutes });
+    const errs = validate(t, { userId: isEdit ? undefined : userId, shiftDate, startTime, endTime, breakMinutes });
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -165,7 +165,7 @@ export function ShiftForm(props: Props) {
           }}
         >
           <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати зміну" : "Нова зміна"}
+            {isEdit ? t("editTitle") : t("createTitle")}
           </h2>
           <button
             onClick={props.onClose}
@@ -191,13 +191,13 @@ export function ShiftForm(props: Props) {
           {/* Worker select — create mode only */}
           {!isEdit && (
             <div>
-              <label style={labelStyle}>Працівник *</label>
+              <label style={labelStyle}>{t("workerLabel")}</label>
               <select
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 style={{ ...inputStyle, borderColor: errors.userId ? "#EF4444" : "#374151" }}
               >
-                <option value="">— Оберіть працівника —</option>
+                <option value="">{t("workerPlaceholder")}</option>
                 {(props as CreateProps).users.map((u) => (
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
@@ -208,7 +208,7 @@ export function ShiftForm(props: Props) {
 
           {/* Date */}
           <div>
-            <label style={labelStyle}>Дата зміни *</label>
+            <label style={labelStyle}>{t("dateLabel")}</label>
             <input
               type="date"
               value={shiftDate}
@@ -221,7 +221,7 @@ export function ShiftForm(props: Props) {
           {/* Start / End */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <label style={labelStyle}>Початок *</label>
+              <label style={labelStyle}>{t("startLabel")}</label>
               <input
                 type="time"
                 value={startTime}
@@ -231,7 +231,7 @@ export function ShiftForm(props: Props) {
               {errors.startTime && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.startTime}</p>}
             </div>
             <div>
-              <label style={labelStyle}>Кінець *</label>
+              <label style={labelStyle}>{t("endLabel")}</label>
               <input
                 type="time"
                 value={endTime}
@@ -244,7 +244,7 @@ export function ShiftForm(props: Props) {
 
           {/* Break */}
           <div>
-            <label style={labelStyle}>Перерва (хвилини)</label>
+            <label style={labelStyle}>{t("breakLabel")}</label>
             <input
               type="number"
               min={0}
@@ -258,11 +258,11 @@ export function ShiftForm(props: Props) {
 
           {/* Role override */}
           <div>
-            <label style={labelStyle}>Посада (замінити)</label>
+            <label style={labelStyle}>{t("roleOverrideLabel")}</label>
             <input
               value={roleOverride}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="Необов'язково"
+              placeholder={t("roleOverridePlaceholder")}
               style={inputStyle}
             />
           </div>
@@ -270,14 +270,14 @@ export function ShiftForm(props: Props) {
           {/* Status — edit only */}
           {isEdit && (
             <div>
-              <label style={labelStyle}>Статус</label>
+              <label style={labelStyle}>{t("statusLabel")}</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ShiftStatus)}
                 style={inputStyle}
               >
                 {SHIFT_STATUSES.map((s) => (
-                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                  <option key={s} value={s}>{tShiftStatus(s)}</option>
                 ))}
               </select>
             </div>
@@ -285,11 +285,11 @@ export function ShiftForm(props: Props) {
 
           {/* Notes */}
           <div>
-            <label style={labelStyle}>Нотатки</label>
+            <label style={labelStyle}>{t("notesLabel")}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Довільні нотатки…"
+              placeholder={t("notesPlaceholder")}
               rows={2}
               style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
             />
@@ -301,10 +301,10 @@ export function ShiftForm(props: Props) {
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
             <Btn type="submit" disabled={props.isPending} style={{ flex: 1, justifyContent: "center" }}>
-              {props.isPending ? "Збереження…" : isEdit ? "Зберегти" : "Додати"}
+              {props.isPending ? t("savingButton") : isEdit ? t("saveButton") : t("addButton")}
             </Btn>
             <Btn type="button" variant="ghost" onClick={props.onClose}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
           </div>
         </form>

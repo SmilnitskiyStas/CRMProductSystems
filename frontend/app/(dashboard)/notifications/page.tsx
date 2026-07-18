@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Clock, Filter } from "lucide-react";
 import { NotificationHistoryList } from "@/features/notifications/components/NotificationHistoryList";
 import { NotificationFilterDrawer } from "@/features/notifications/components/NotificationFilterDrawer";
@@ -13,6 +14,7 @@ function countActiveFilters(f: NotificationHistoryFilters): number {
 }
 
 export default function NotificationsPage() {
+  const t = useTranslations("Dashboard.notifications.page");
   const [filters, setFilters] = useState<NotificationHistoryFilters>({
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -25,12 +27,12 @@ export default function NotificationsPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, gap: 16 }}>
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Сповіщення
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-            Історія надісланих сповіщень. Налаштування каналів —{" "}
+            {t("subtitlePrefix")}{" "}
             <a href="/settings?tab=notifications" style={{ color: "#3B82F6" }}>
-              на сторінці Налаштування
+              {t("settingsLinkText")}
             </a>
             .
           </p>
@@ -49,7 +51,7 @@ export default function NotificationsPage() {
           }}
         >
           <Filter size={14} />
-          Фільтри
+          {t("filtersButton")}
           {activeCount > 0 && (
             <span style={{
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -65,7 +67,7 @@ export default function NotificationsPage() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
         <Clock size={15} style={{ color: "#4B5563" }} />
-        <span style={{ color: "#4B5563", fontSize: 13 }}>Остання активність</span>
+        <span style={{ color: "#4B5563", fontSize: 13 }}>{t("recentActivityLabel")}</span>
       </div>
 
       <div

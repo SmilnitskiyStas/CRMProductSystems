@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import type { WorkScheduleDetailDto, ScheduleShiftDto, AddShiftPayload, UpdateShiftPayload } from "../types";
@@ -9,7 +10,10 @@ import { ShiftForm } from "./ShiftForm";
 import { useAddShift, useUpdateShift, useDeleteShift } from "../hooks/useSchedules";
 import { useUsers } from "@/features/users/hooks/useUsers";
 
-const DAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
+// Day-of-week ordering (Mon..Sun) — display labels come from i18n
+// (Dashboard.schedules.weekGrid.dayShort, `useTranslations`), same pattern as
+// features/provider/components/ScheduleTab.tsx's DAY_KEYS.
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
@@ -53,6 +57,7 @@ interface Props {
 }
 
 export function WeekGrid({ schedule, canManage }: Props) {
+  const t = useTranslations("Dashboard.schedules.weekGrid");
   const [addShiftCell, setAddShiftCell] = useState<{ userId?: string; date: string } | null>(null);
   const [editingShift, setEditingShift] = useState<ScheduleShiftDto | null>(null);
 
@@ -71,7 +76,7 @@ export function WeekGrid({ schedule, canManage }: Props) {
     addShiftMutation.mutate(
       { ...data, locationId: schedule.locationId },
       {
-        onSuccess: () => { toast.success("Зміну додано"); setAddShiftCell(null); },
+        onSuccess: () => { toast.success(t("addShiftToast")); setAddShiftCell(null); },
         onError:   (err) => toast.error(err.message),
       },
     );
@@ -82,16 +87,16 @@ export function WeekGrid({ schedule, canManage }: Props) {
     updateShiftMutation.mutate(
       { shiftId: editingShift.id, data },
       {
-        onSuccess: () => { toast.success("Зміну оновлено"); setEditingShift(null); },
+        onSuccess: () => { toast.success(t("updateShiftToast")); setEditingShift(null); },
         onError:   (err) => toast.error(err.message),
       },
     );
   }
 
   function handleDeleteShift(shift: ScheduleShiftDto) {
-    if (!confirm(`Видалити зміну ${shift.userName} ${shift.shiftDate}?`)) return;
+    if (!confirm(t("deleteShiftConfirm", { name: shift.userName, date: shift.shiftDate }))) return;
     deleteShiftMutation.mutate(shift.id, {
-      onSuccess: () => toast.success("Зміну видалено"),
+      onSuccess: () => toast.success(t("deleteShiftToast")),
       onError:   (err) => toast.error(err.message),
     });
   }
@@ -121,7 +126,7 @@ export function WeekGrid({ schedule, canManage }: Props) {
                 zIndex: 2,
               }}
             >
-              Працівник
+              {t("workerColumnHeader")}
             </th>
             {weekDates.map((date, i) => (
               <th
@@ -137,7 +142,7 @@ export function WeekGrid({ schedule, canManage }: Props) {
                   borderLeft: "1px solid #1F2937",
                 }}
               >
-                <span style={{ color: "#6B7280" }}>{DAY_LABELS[i]}</span>{" "}
+                <span style={{ color: "#6B7280" }}>{t(`dayShort.${DAY_KEYS[i]}`)}</span>{" "}
                 <span>{formatDay(date)}</span>
               </th>
             ))}
@@ -242,7 +247,7 @@ export function WeekGrid({ schedule, canManage }: Props) {
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
                 >
                   <Plus size={14} />
-                  Додати зміну
+                  {t("addShiftButton")}
                 </button>
               </td>
             </tr>
@@ -260,7 +265,7 @@ export function WeekGrid({ schedule, canManage }: Props) {
             fontSize: 13,
           }}
         >
-          Немає змін для цього тижня.{canManage ? " Натисніть «Додати зміну» щоб почати." : ""}
+          {t("emptyState")}{canManage ? ` ${t("emptyStateHint")}` : ""}
         </div>
       )}
 

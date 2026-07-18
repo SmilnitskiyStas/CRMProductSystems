@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { X, Search, RotateCcw } from "lucide-react";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import type { NotificationHistoryFilters, NotificationEventType } from "../types";
-import { EVENT_TYPE_LABELS } from "../types";
+import { EVENT_TYPE_I18N_KEY, getEventTypeLabel } from "../types";
 
 interface Props {
   open: boolean;
@@ -14,7 +15,7 @@ interface Props {
   onChange: (updater: (prev: NotificationHistoryFilters) => NotificationHistoryFilters) => void;
 }
 
-const EVENT_TYPE_ENTRIES = Object.entries(EVENT_TYPE_LABELS) as [NotificationEventType, string][];
+const EVENT_TYPES = Object.keys(EVENT_TYPE_I18N_KEY) as NotificationEventType[];
 
 const labelStyle: React.CSSProperties = {
   color: "#4B5563",
@@ -46,6 +47,8 @@ const selectStyle: React.CSSProperties = {
  * pattern as NotificationDetailDrawer.tsx (no shadcn Sheet primitive in this repo).
  */
 export function NotificationFilterDrawer({ open, onClose, filters, onChange }: Props) {
+  const t = useTranslations("Dashboard.notifications.filterDrawer");
+  const tEventTypes = useTranslations("Dashboard.notifications.eventTypes");
   // Local draft for the search box only — debounced before it reaches `filters`
   // so we don't refetch on every keystroke. Other fields apply immediately.
   const [searchDraft, setSearchDraft] = useState(filters.search ?? "");
@@ -122,7 +125,7 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
           flexShrink: 0,
         }}>
           <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-            Фільтри
+            {t("title")}
           </div>
           <button
             onClick={onClose}
@@ -140,14 +143,14 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
         <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18, flex: 1 }}>
           {/* Search */}
           <div>
-            <label style={labelStyle}>Пошук за ключовим словом</label>
+            <label style={labelStyle}>{t("searchLabel")}</label>
             <div style={{ position: "relative" }}>
               <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#4B5563" }} />
               <input
                 type="text"
                 value={searchDraft}
                 onChange={(e) => setSearchDraft(e.target.value)}
-                placeholder="Наприклад: молоко, договір…"
+                placeholder={t("searchPlaceholder")}
                 style={{ ...fieldStyle, paddingLeft: 34 }}
               />
             </div>
@@ -155,16 +158,16 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
 
           {/* Event type */}
           <div>
-            <label style={labelStyle}>Категорія</label>
+            <label style={labelStyle}>{t("categoryLabel")}</label>
             <select
               value={filters.eventType ?? ""}
               onChange={(e) => set("eventType", (e.target.value as NotificationEventType) || undefined)}
               style={selectStyle}
             >
-              <option value="" style={{ background: "#0D1117" }}>Усі категорії</option>
-              {EVENT_TYPE_ENTRIES.map(([value, label]) => (
+              <option value="" style={{ background: "#0D1117" }}>{t("allCategoriesOption")}</option>
+              {EVENT_TYPES.map((value) => (
                 <option key={value} value={value} style={{ background: "#0D1117" }}>
-                  {label}
+                  {getEventTypeLabel(tEventTypes, value)}
                 </option>
               ))}
             </select>
@@ -172,13 +175,13 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
 
           {/* Employee */}
           <div>
-            <label style={labelStyle}>Працівник</label>
+            <label style={labelStyle}>{t("employeeLabel")}</label>
             <select
               value={filters.userId ?? ""}
               onChange={(e) => set("userId", e.target.value || undefined)}
               style={selectStyle}
             >
-              <option value="" style={{ background: "#0D1117" }}>Усі працівники</option>
+              <option value="" style={{ background: "#0D1117" }}>{t("allEmployeesOption")}</option>
               {users?.map((u) => (
                 <option key={u.id} value={u.id} style={{ background: "#0D1117" }}>
                   {u.fullName}
@@ -189,13 +192,13 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
 
           {/* Store */}
           <div>
-            <label style={labelStyle}>Магазин</label>
+            <label style={labelStyle}>{t("storeLabel")}</label>
             <select
               value={filters.storeId ?? ""}
               onChange={(e) => set("storeId", e.target.value || undefined)}
               style={selectStyle}
             >
-              <option value="" style={{ background: "#0D1117" }}>Усі магазини</option>
+              <option value="" style={{ background: "#0D1117" }}>{t("allStoresOption")}</option>
               {locations?.map((l) => (
                 <option key={l.id} value={l.id} style={{ background: "#0D1117" }}>
                   {l.name}
@@ -206,10 +209,10 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
 
           {/* Date range */}
           <div>
-            <label style={labelStyle}>Період</label>
+            <label style={labelStyle}>{t("periodLabel")}</label>
             <div style={{ display: "flex", gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ ...labelStyle, fontSize: 11 }}>З дати</label>
+                <label style={{ ...labelStyle, fontSize: 11 }}>{t("fromDateLabel")}</label>
                 <input
                   type="date"
                   value={filters.dateFrom?.slice(0, 10) ?? ""}
@@ -219,7 +222,7 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ ...labelStyle, fontSize: 11 }}>По дату</label>
+                <label style={{ ...labelStyle, fontSize: 11 }}>{t("toDateLabel")}</label>
                 <input
                   type="date"
                   value={filters.dateTo?.slice(0, 10) ?? ""}
@@ -250,7 +253,7 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
             }}
           >
             <RotateCcw size={13} />
-            Скинути фільтри
+            {t("resetButton")}
           </button>
         </div>
       </div>

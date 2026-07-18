@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { WorkScheduleDto, CreateSchedulePayload, UpdateSchedulePayload, ScheduleStatus } from "../types";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { Btn } from "@/components/ui/Btn";
@@ -26,10 +27,10 @@ const labelStyle: React.CSSProperties = {
 };
 
 const SCHEDULE_STATUSES: ScheduleStatus[] = ["draft", "published", "archived"];
-const STATUS_LABELS: Record<ScheduleStatus, string> = {
-  draft:     "Чернетка",
-  published: "Опубліковано",
-  archived:  "В архіві",
+const STATUS_I18N_KEY: Record<ScheduleStatus, string> = {
+  draft: "statusDraft",
+  published: "statusPublished",
+  archived: "statusArchived",
 };
 
 /** Rounds a date string back to the nearest Monday (ISO YYYY-MM-DD). */
@@ -41,15 +42,18 @@ function toMonday(dateStr: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function validate(fields: {
-  name: string;
-  locationId: string;
-  weekStart: string;
-}): Record<string, string> {
+function validate(
+  t: (key: string) => string,
+  fields: {
+    name: string;
+    locationId: string;
+    weekStart: string;
+  },
+): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (!fields.name.trim()) errors.name = "Назва обов'язкова";
-  if (!fields.locationId) errors.locationId = "Оберіть локацію";
-  if (!fields.weekStart) errors.weekStart = "Оберіть тиждень";
+  if (!fields.name.trim()) errors.name = t("nameRequiredError");
+  if (!fields.locationId) errors.locationId = t("locationRequiredError");
+  if (!fields.weekStart) errors.weekStart = t("weekStartRequiredError");
   return errors;
 }
 
@@ -73,6 +77,7 @@ interface EditProps {
 type Props = CreateProps | EditProps;
 
 export function ScheduleForm(props: Props) {
+  const t = useTranslations("Dashboard.schedules.form");
   const isEdit = props.mode === "edit";
   const schedule = isEdit ? props.schedule : null;
 
@@ -86,7 +91,7 @@ export function ScheduleForm(props: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const errs = validate({ name, locationId: isEdit ? "ok" : locationId, weekStart: isEdit ? "ok" : weekStart });
+    const errs = validate(t, { name, locationId: isEdit ? "ok" : locationId, weekStart: isEdit ? "ok" : weekStart });
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -146,7 +151,7 @@ export function ScheduleForm(props: Props) {
           }}
         >
           <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати графік" : "Новий графік"}
+            {isEdit ? t("editTitle") : t("createTitle")}
           </h2>
           <button
             onClick={props.onClose}
@@ -171,11 +176,11 @@ export function ScheduleForm(props: Props) {
         >
           {/* Name */}
           <div>
-            <label style={labelStyle}>Назва *</label>
+            <label style={labelStyle}>{t("nameLabel")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Розклад на тиждень"
+              placeholder={t("namePlaceholder")}
               style={{ ...inputStyle, borderColor: errors.name ? "#EF4444" : "#374151" }}
             />
             {errors.name && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.name}</p>}
@@ -184,13 +189,13 @@ export function ScheduleForm(props: Props) {
           {/* Location — create only */}
           {!isEdit && (
             <div>
-              <label style={labelStyle}>Локація *</label>
+              <label style={labelStyle}>{t("locationLabel")}</label>
               <select
                 value={locationId}
                 onChange={(e) => setLocationId(e.target.value)}
                 style={{ ...inputStyle, borderColor: errors.locationId ? "#EF4444" : "#374151" }}
               >
-                <option value="">— Оберіть локацію —</option>
+                <option value="">{t("locationPlaceholder")}</option>
                 {(locations ?? []).map((loc) => (
                   <option key={loc.id} value={loc.id}>{loc.name}</option>
                 ))}
@@ -202,7 +207,7 @@ export function ScheduleForm(props: Props) {
           {/* Week start — create only */}
           {!isEdit && (
             <div>
-              <label style={labelStyle}>Початок тижня (буде снапнуто до понеділка) *</label>
+              <label style={labelStyle}>{t("weekStartLabel")}</label>
               <input
                 type="date"
                 value={weekStart}
@@ -211,7 +216,7 @@ export function ScheduleForm(props: Props) {
               />
               {weekStart && (
                 <p style={{ color: "#6B7280", fontSize: 11, marginTop: 4 }}>
-                  Понеділок: {toMonday(weekStart)}
+                  {t("mondaySnapHint", { date: toMonday(weekStart) })}
                 </p>
               )}
               {errors.weekStart && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.weekStart}</p>}
@@ -221,14 +226,14 @@ export function ScheduleForm(props: Props) {
           {/* Status — edit only */}
           {isEdit && (
             <div>
-              <label style={labelStyle}>Статус</label>
+              <label style={labelStyle}>{t("statusLabel")}</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ScheduleStatus)}
                 style={inputStyle}
               >
                 {SCHEDULE_STATUSES.map((s) => (
-                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                  <option key={s} value={s}>{t(STATUS_I18N_KEY[s])}</option>
                 ))}
               </select>
             </div>
@@ -240,10 +245,10 @@ export function ScheduleForm(props: Props) {
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
             <Btn type="submit" disabled={props.isPending} style={{ flex: 1, justifyContent: "center" }}>
-              {props.isPending ? "Збереження…" : isEdit ? "Зберегти" : "Створити"}
+              {props.isPending ? t("savingButton") : isEdit ? t("saveButton") : t("createButton")}
             </Btn>
             <Btn type="button" variant="ghost" onClick={props.onClose}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
           </div>
         </form>

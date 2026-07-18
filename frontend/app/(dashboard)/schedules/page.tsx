@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Calendar } from "lucide-react";
 import { ScheduleList } from "@/features/schedules/components/ScheduleList";
 import { WeekGrid } from "@/features/schedules/components/WeekGrid";
@@ -21,11 +22,12 @@ function WeekGridPanel({
   schedule: WorkScheduleDto;
   canManage: boolean;
 }) {
+  const t = useTranslations("Dashboard.schedules.page");
   const { data: detail, isLoading } = useSchedule(schedule.id);
 
   if (isLoading) {
     return (
-      <div style={{ padding: "24px", color: "#4B5563", fontSize: 13 }}>Завантаження змін…</div>
+      <div style={{ padding: "24px", color: "#4B5563", fontSize: 13 }}>{t("loadingShifts")}</div>
     );
   }
 
@@ -35,6 +37,7 @@ function WeekGridPanel({
 }
 
 export default function SchedulesPage() {
+  const t = useTranslations("Dashboard.schedules.page");
   const [activeTab, setActiveTab]         = useState<Tab>("schedules");
   const [selectedSchedule, setSelected]   = useState<WorkScheduleDto | null>(null);
 
@@ -50,11 +53,11 @@ export default function SchedulesPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <Calendar size={20} style={{ color: "#3B82F6" }} />
             <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-              Розклад команди
+              {t("teamTitle")}
             </h1>
           </div>
           <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>
-            Тижнева доступність агентів підтримки
+            {t("teamSubtitle")}
           </p>
         </div>
         <ScheduleTab />
@@ -89,11 +92,11 @@ export default function SchedulesPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <Calendar size={20} style={{ color: "#3B82F6" }} />
             <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-              Розклад змін
+              {t("title")}
             </h1>
           </div>
           <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>
-            Управління робочими графіками та змінами персоналу
+            {t("subtitle")}
           </p>
         </div>
 
@@ -110,11 +113,11 @@ export default function SchedulesPage() {
         >
           {canManage && (
             <button style={tabStyle("schedules")} onClick={() => setActiveTab("schedules")}>
-              Графіки
+              {t("schedulesTab")}
             </button>
           )}
           <button style={tabStyle("my-shifts")} onClick={() => setActiveTab("my-shifts")}>
-            Мій розклад
+            {t("myShiftsTab")}
           </button>
         </div>
       </div>
@@ -183,7 +186,7 @@ export default function SchedulesPage() {
                 }}
               >
                 <Calendar size={32} style={{ opacity: 0.3 }} />
-                Оберіть графік зі списку
+                {t("chooseScheduleHint")}
               </div>
             )}
           </div>

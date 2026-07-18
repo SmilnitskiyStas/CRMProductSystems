@@ -1,7 +1,8 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { ROLE_LABELS } from "../types";
+import { getRoleLabel } from "../types";
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -39,12 +40,14 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 export function UserProfileCard() {
+  const t = useTranslations("Dashboard.profile.card");
+  const tRoles = useTranslations("Dashboard.roles");
   const { data: me, isLoading } = useMe();
 
   if (isLoading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200 }}>
-        <div style={{ color: "#374151", fontSize: 13 }}>Завантаження…</div>
+        <div style={{ color: "#374151", fontSize: 13 }}>{t("loading")}</div>
       </div>
     );
   }
@@ -100,7 +103,7 @@ export function UserProfileCard() {
             }}
           >
             <span style={{ color: "#3B82F6", fontSize: 11, fontWeight: 600 }}>
-              {ROLE_LABELS[me?.role ?? ""] ?? me?.role ?? "—"}
+              {me?.role ? getRoleLabel(tRoles, me.role) : "—"}
             </span>
           </div>
         </div>
@@ -108,18 +111,18 @@ export function UserProfileCard() {
 
       {/* Info rows */}
       <div>
-        <InfoRow label="Email"   value={me?.email} />
-        <InfoRow label="Телефон" value={me?.phone} />
+        <InfoRow label={t("emailLabel")}   value={me?.email} />
+        <InfoRow label={t("phoneLabel")} value={me?.phone} />
         <InfoRow
-          label="Магазин"
-          value={me?.storeId ? `Магазин #${me.storeId.slice(0, 8)}` : null}
+          label={t("storeLabel")}
+          value={me?.storeId ? t("storeValue", { id: me.storeId.slice(0, 8) }) : null}
         />
         <InfoRow
-          label="Telegram"
-          value={me?.telegramChatId ? "Підключено ✓" : null}
+          label={t("telegramLabel")}
+          value={me?.telegramChatId ? t("telegramConnected") : null}
         />
         <div style={{ padding: "12px 0" }}>
-          <span style={labelStyle}>ID акаунта</span>
+          <span style={labelStyle}>{t("accountIdLabel")}</span>
           <span style={{ color: "#374151", fontSize: 11, fontFamily: "monospace" }}>
             {me?.id ?? "—"}
           </span>
@@ -137,12 +140,12 @@ export function UserProfileCard() {
         }}
       >
         <p style={{ color: "#4B5563", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-          Для зміни особистих даних, пароля або підключення Telegram перейдіть до{" "}
+          {t("footerHintPrefix")}{" "}
           <a
             href="/settings-user"
             style={{ color: "#3B82F6", textDecoration: "none" }}
           >
-            Налаштування профілю
+            {t("settingsLinkText")}
           </a>
         </p>
       </div>

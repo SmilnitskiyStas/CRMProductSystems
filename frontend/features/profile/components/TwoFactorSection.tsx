@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { ShieldCheck, ShieldOff, Copy, AlertTriangle } from "lucide-react";
@@ -46,16 +47,17 @@ const errorStyle: React.CSSProperties = {
   margin: "8px 0 0",
 };
 
-function copyText(text: string, message: string) {
+function copyText(text: string, message: string, failMessage: string) {
   navigator.clipboard
     .writeText(text)
     .then(() => toast.success(message))
-    .catch(() => toast.error("Не вдалося скопіювати"));
+    .catch(() => toast.error(failMessage));
 }
 
 type Step = "idle" | "setup" | "recovery";
 
 export function TwoFactorSection() {
+  const t = useTranslations("Dashboard.profile.twoFactor");
   const { data: me } = useMe();
   const setup = useTwoFactorSetup();
   const enable = useTwoFactorEnable();
@@ -99,7 +101,7 @@ export function TwoFactorSection() {
     e.preventDefault();
     if (enable.isPending) return;
     if (!/^\d{6}$/.test(enableCode.trim())) {
-      setEnableError("Введіть 6-значний код із застосунку");
+      setEnableError(t("invalidCodeError"));
       return;
     }
     setEnableError(null);
@@ -108,9 +110,9 @@ export function TwoFactorSection() {
         setRecoveryCodes(data.recoveryCodes);
         setSavedConfirmed(false);
         setStep("recovery");
-        toast.success("Двофакторну автентифікацію увімкнено");
+        toast.success(t("enabledToast"));
       },
-      onError: (err) => setEnableError(err.message === "Invalid code." ? "Невірний код" : err.message),
+      onError: (err) => setEnableError(err.message === "Invalid code." ? t("invalidCodeShortError") : err.message),
     });
   }
 
@@ -134,11 +136,11 @@ export function TwoFactorSection() {
     e.preventDefault();
     if (disable.isPending) return;
     if (!disablePassword.trim()) {
-      setDisableError("Введіть пароль");
+      setDisableError(t("passwordRequiredError"));
       return;
     }
     if (!disableCode.trim()) {
-      setDisableError("Введіть код із застосунку або код відновлення");
+      setDisableError(t("codeRequiredError"));
       return;
     }
     setDisableError(null);
@@ -147,12 +149,12 @@ export function TwoFactorSection() {
       {
         onSuccess: () => {
           setDisableOpen(false);
-          toast.success("Двофакторну автентифікацію вимкнено");
+          toast.success(t("disabledToast"));
         },
         onError: (err) => {
           const map: Record<string, string> = {
-            "Invalid password.": "Невірний пароль",
-            "Invalid code.": "Невірний код",
+            "Invalid password.": t("invalidPasswordError"),
+            "Invalid code.": t("invalidCodeShortError"),
           };
           setDisableError(map[err.message] ?? err.message);
         },
@@ -178,10 +180,9 @@ export function TwoFactorSection() {
         >
           <AlertTriangle size={16} color="#FBBF24" style={{ flexShrink: 0, marginTop: 1 }} />
           <p style={{ color: "#FBBF24", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-            <strong>Збережіть ці коди — вони показуються лише один раз.</strong>
+            <strong>{t("recoveryWarningTitle")}</strong>
             <br />
-            Кожен код відновлення можна використати один раз для входу, якщо ви втратите
-            доступ до застосунку-автентифікатора.
+            {t("recoveryWarningBody")}
           </p>
         </div>
 
@@ -217,9 +218,9 @@ export function TwoFactorSection() {
           <Btn
             variant="ghost"
             icon={<Copy size={13} />}
-            onClick={() => copyText(recoveryCodes.join("\n"), "Коди скопійовано")}
+            onClick={() => copyText(recoveryCodes.join("\n"), t("codesCopiedToast"), t("copyFailedToast"))}
           >
-            Скопіювати всі коди
+            {t("copyAllCodesButton")}
           </Btn>
         </div>
 
@@ -240,11 +241,11 @@ export function TwoFactorSection() {
             onChange={(e) => setSavedConfirmed(e.target.checked)}
             style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
           />
-          Я зберіг коди відновлення в надійному місці
+          {t("savedCheckboxLabel")}
         </label>
 
         <Btn variant="success" disabled={!savedConfirmed} onClick={finishRecovery}>
-          Я зберіг коди
+          {t("savedCodesButton")}
         </Btn>
       </div>
     );
@@ -255,10 +256,9 @@ export function TwoFactorSection() {
     return (
       <form onSubmit={submitEnable}>
         <p style={{ ...hintStyle, marginBottom: 16 }}>
-          1. Відскануйте QR-код застосунком-автентифікатором (Google Authenticator, Authy,
-          1Password тощо).
+          {t("setupStep1")}
           <br />
-          2. Введіть 6-значний код із застосунку, щоб підтвердити налаштування.
+          {t("setupStep2")}
         </p>
 
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
@@ -275,7 +275,7 @@ export function TwoFactorSection() {
           </div>
 
           <div style={{ flex: 1, minWidth: 220 }}>
-            <label style={labelStyle}>Не можете відсканувати? Введіть секрет вручну:</label>
+            <label style={labelStyle}>{t("manualSecretLabel")}</label>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
               <code
                 style={{
@@ -296,13 +296,13 @@ export function TwoFactorSection() {
                 variant="ghost"
                 size="sm"
                 icon={<Copy size={12} />}
-                onClick={() => copyText(setup.data!.secret, "Секрет скопійовано")}
+                onClick={() => copyText(setup.data!.secret, t("secretCopiedToast"), t("copyFailedToast"))}
               >
-                Копіювати
+                {t("copyButtonLabel")}
               </Btn>
             </div>
 
-            <label style={labelStyle}>Код підтвердження</label>
+            <label style={labelStyle}>{t("confirmCodeLabel")}</label>
             <input
               value={enableCode}
               onChange={(e) => {
@@ -328,10 +328,10 @@ export function TwoFactorSection() {
 
         <div style={{ display: "flex", gap: 10 }}>
           <Btn type="submit" disabled={enable.isPending}>
-            {enable.isPending ? "Перевірка…" : "Підтвердити та увімкнути"}
+            {enable.isPending ? t("verifyingButton") : t("confirmAndEnableButton")}
           </Btn>
           <Btn variant="ghost" onClick={cancelSetup}>
-            Скасувати
+            {t("cancelButton")}
           </Btn>
         </div>
       </form>
@@ -345,42 +345,40 @@ export function TwoFactorSection() {
         {enabled ? (
           <>
             <ShieldCheck size={16} color="#4ADE80" />
-            <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 600 }}>2FA увімкнено</span>
+            <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 600 }}>{t("idleEnabledLabel")}</span>
           </>
         ) : (
           <>
             <ShieldOff size={16} color="#6B7280" />
-            <span style={{ color: "#9CA3AF", fontSize: 13, fontWeight: 600 }}>2FA вимкнено</span>
+            <span style={{ color: "#9CA3AF", fontSize: 13, fontWeight: 600 }}>{t("idleDisabledLabel")}</span>
           </>
         )}
       </div>
 
       <p style={{ ...hintStyle, marginBottom: 16 }}>
-        Двофакторна автентифікація захищає акаунт: після пароля потрібно ввести код із
-        застосунку-автентифікатора.
+        {t("idleDescription")}
       </p>
 
       {enabled ? (
         <Btn variant="danger" onClick={openDisable}>
-          Вимкнути 2FA
+          {t("disableButton")}
         </Btn>
       ) : (
         <Btn onClick={startSetup} disabled={setup.isPending}>
-          {setup.isPending ? "Підготовка…" : "Увімкнути 2FA"}
+          {setup.isPending ? t("preparingButton") : t("enableButton")}
         </Btn>
       )}
 
       {disableOpen && (
-        <Modal title="Вимкнути двофакторну автентифікацію" onClose={() => setDisableOpen(false)} width={440}>
+        <Modal title={t("disableModalTitle")} onClose={() => setDisableOpen(false)} width={440}>
           <form onSubmit={submitDisable}>
             <p style={{ ...hintStyle, marginBottom: 16 }}>
-              Для підтвердження введіть пароль і код із застосунку-автентифікатора (або код
-              відновлення).
+              {t("disableModalDescription")}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 18 }}>
               <div>
-                <label style={labelStyle}>Пароль</label>
+                <label style={labelStyle}>{t("passwordLabel")}</label>
                 <input
                   type="password"
                   value={disablePassword}
@@ -390,13 +388,13 @@ export function TwoFactorSection() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Код 2FA або код відновлення</label>
+                <label style={labelStyle}>{t("disableCodeLabel")}</label>
                 <input
                   type="text"
                   value={disableCode}
                   onChange={(e) => { setDisableCode(e.target.value); setDisableError(null); }}
                   autoComplete="one-time-code"
-                  placeholder="123456 або XXXX-XXXX"
+                  placeholder={t("disableCodePlaceholder")}
                   style={inputStyle}
                 />
               </div>
@@ -406,10 +404,10 @@ export function TwoFactorSection() {
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <Btn variant="ghost" onClick={() => setDisableOpen(false)}>
-                Скасувати
+                {t("cancelButton")}
               </Btn>
               <Btn type="submit" variant="danger" disabled={disable.isPending}>
-                {disable.isPending ? "Вимкнення…" : "Вимкнути 2FA"}
+                {disable.isPending ? t("disablingButton") : t("disableButton")}
               </Btn>
             </div>
           </form>

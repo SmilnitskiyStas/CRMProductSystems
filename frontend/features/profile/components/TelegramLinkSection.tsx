@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Copy, ExternalLink, RefreshCw } from "lucide-react";
@@ -12,14 +13,17 @@ import type { TelegramLinkCodeResponse } from "../types";
 /** Re-checks /api/auth/me while a code is pending, so linking is detected without a reload. */
 const POLL_INTERVAL_MS = 3000;
 
-function copyText(text: string, message: string) {
+function copyText(text: string, message: string, failMessage: string) {
   navigator.clipboard
     .writeText(text)
     .then(() => toast.success(message))
-    .catch(() => toast.error("Не вдалося скопіювати"));
+    .catch(() => toast.error(failMessage));
 }
 
 export function TelegramLinkSection() {
+  const t = useTranslations("Dashboard.profile.telegram");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const qc = useQueryClient();
   const createCode = useCreateTelegramLinkCode();
@@ -50,15 +54,15 @@ export function TelegramLinkSection() {
     if (isLinked && pending) {
       setPending(null);
       setExpired(false);
-      toast.success("Telegram підключено");
+      toast.success(t("connectedToast"));
     }
-  }, [isLinked, pending]);
+  }, [isLinked, pending, t]);
 
   function handleGenerate() {
     setExpired(false);
     createCode.mutate(undefined, {
       onSuccess: (data) => setPending(data),
-      onError: () => toast.error("Не вдалося згенерувати код. Спробуйте пізніше."),
+      onError: () => toast.error(t("generateErrorToast")),
     });
   }
 
@@ -83,10 +87,10 @@ export function TelegramLinkSection() {
         </div>
         <div>
           <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
-            Telegram акаунт
+            {t("titleLabel")}
           </div>
           <div style={{ color: isLinked ? "#4ADE80" : "#6B7280", fontSize: 12, marginTop: 2 }}>
-            {isLinked ? "✓ Підключено" : "Не підключено"}
+            {isLinked ? t("connectedStatus") : t("notConnectedStatus")}
           </div>
         </div>
       </div>
@@ -102,7 +106,7 @@ export function TelegramLinkSection() {
             fontSize: 13,
           }}
         >
-          Telegram успішно прив&apos;язано. Ви отримуватимете сповіщення в боті.
+          {t("linkedBanner")}
         </div>
       ) : pending && !expired ? (
         <>
@@ -117,7 +121,7 @@ export function TelegramLinkSection() {
             }}
           >
             <div style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 13, marginBottom: 10 }}>
-              Код прив&apos;язки
+              {t("codeTitle")}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
               <code
@@ -140,26 +144,26 @@ export function TelegramLinkSection() {
                 variant="ghost"
                 size="sm"
                 icon={<Copy size={12} />}
-                onClick={() => copyText(pending.code, "Код скопійовано")}
+                onClick={() => copyText(pending.code, t("codeCopiedToast"), t("copyFailedToast"))}
               >
-                Копіювати
+                {t("copyButtonLabel")}
               </Btn>
             </div>
 
             <ol style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 12, color: "#9CA3AF", lineHeight: 1.7 }}>
-              <li>Натисніть «Відкрити в Telegram» — бот отримає код автоматично</li>
-              <li>Якщо посилання не відкрилось: знайдіть бота вручну і надішліть <code style={{ color: "#38BDF8" }}>/start {pending.code}</code></li>
-              <li>Натисніть Start у боті — акаунт прив&apos;яжеться сам, без дій тут</li>
+              <li>{t("step1")}</li>
+              <li>{t("step2Prefix")} <code style={{ color: "#38BDF8" }}>/start {pending.code}</code></li>
+              <li>{t("step3")}</li>
             </ol>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <a href={pending.deepLink} target="_blank" rel="noopener noreferrer">
                 <Btn type="button" icon={<ExternalLink size={13} />}>
-                  Відкрити в Telegram
+                  {t("openInTelegramButton")}
                 </Btn>
               </a>
               <Btn variant="ghost" icon={<RefreshCw size={13} />} onClick={handleCheckNow}>
-                Перевірити зараз
+                {t("checkNowButton")}
               </Btn>
             </div>
           </div>
@@ -177,8 +181,8 @@ export function TelegramLinkSection() {
                 animation: "sg-pulse 1.4s ease-in-out infinite",
               }}
             />
-            Очікуємо підтвердження в Telegram… Код дійсний до{" "}
-            {new Date(pending.expiresAt).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}
+            {t("waitingPrefix")}{" "}
+            {new Date(pending.expiresAt).toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit" })}
             <style>{`@keyframes sg-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }`}</style>
           </div>
         </>
@@ -198,12 +202,12 @@ export function TelegramLinkSection() {
             }}
           >
             <div style={{ color: "#E8EDF5", fontWeight: 600, marginBottom: 6 }}>
-              Як підключити Telegram:
+              {t("howToConnectTitle")}
             </div>
             <ol style={{ margin: 0, paddingLeft: 18 }}>
-              <li>Натисніть «Згенерувати код» нижче</li>
-              <li>Перейдіть за посиланням у Telegram та натисніть Start</li>
-              <li>Готово — акаунт прив&apos;яжеться автоматично, підтвердження не потрібне</li>
+              <li>{t("idleStep1")}</li>
+              <li>{t("idleStep2")}</li>
+              <li>{t("idleStep3")}</li>
             </ol>
           </div>
 
@@ -219,12 +223,12 @@ export function TelegramLinkSection() {
                 marginBottom: 14,
               }}
             >
-              Код прострочено (діяв 15 хвилин). Згенеруйте новий.
+              {t("expiredMessage")}
             </div>
           )}
 
           <Btn onClick={handleGenerate} disabled={createCode.isPending}>
-            {createCode.isPending ? "Генерація…" : "Згенерувати код"}
+            {createCode.isPending ? t("generatingButton") : t("generateButton")}
           </Btn>
         </>
       )}

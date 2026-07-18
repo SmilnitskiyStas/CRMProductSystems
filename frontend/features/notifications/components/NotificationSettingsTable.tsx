@@ -1,9 +1,10 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { NotificationChannel, NotificationEventType } from "../types";
 import {
-  EVENT_TYPE_LABELS,
-  CHANNEL_LABELS,
+  getEventTypeLabel,
+  getChannelLabel,
   CHANNEL_ICONS,
 } from "../types";
 import { useNotificationSettings, useToggleNotification } from "../hooks/useNotifications";
@@ -80,13 +81,16 @@ function Toggle({
 }
 
 export function NotificationSettingsTable() {
+  const t = useTranslations("Dashboard.notifications.settingsTable");
+  const tEventTypes = useTranslations("Dashboard.notifications.eventTypes");
+  const tChannels = useTranslations("Dashboard.notifications.channels");
   const { data: settings, isLoading } = useNotificationSettings();
   const toggle = useToggleNotification();
 
   if (isLoading) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 14 }}>
-        Завантаження…
+        {t("loading")}
       </div>
     );
   }
@@ -94,16 +98,16 @@ export function NotificationSettingsTable() {
   return (
     <div>
       <p style={{ color: "#6B7280", fontSize: 13, marginBottom: 20 }}>
-        Оберіть, які події та через які канали ви хочете отримувати сповіщення.
+        {t("description")}
       </p>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
           <thead>
             <tr>
-              <th style={{ ...thStyle, width: "45%" }}>Подія</th>
+              <th style={{ ...thStyle, width: "45%" }}>{t("eventColumnHeader")}</th>
               {ALL_CHANNELS.map((ch) => (
                 <th key={ch} style={{ ...thStyle, textAlign: "center" }}>
-                  {CHANNEL_ICONS[ch]} {CHANNEL_LABELS[ch]}
+                  {CHANNEL_ICONS[ch]} {getChannelLabel(tChannels, ch)}
                 </th>
               ))}
             </tr>
@@ -115,7 +119,7 @@ export function NotificationSettingsTable() {
                 <tr key={eventType}>
                   <td style={tdStyle}>
                     <span style={{ color: "#D1D5DB", fontSize: 13 }}>
-                      {EVENT_TYPE_LABELS[eventType]}
+                      {getEventTypeLabel(tEventTypes, eventType)}
                     </span>
                     <span
                       style={{
@@ -151,7 +155,7 @@ export function NotificationSettingsTable() {
         </table>
       </div>
       <p style={{ color: "#374151", fontSize: 12, marginTop: 16 }}>
-        Налаштування зберігаються автоматично при зміні перемикача.
+        {t("footerHint")}
       </p>
     </div>
   );

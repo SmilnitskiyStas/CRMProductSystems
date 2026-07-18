@@ -76,37 +76,55 @@ export interface ActivityLogDto {
   createdAt: string;
 }
 
-/** Human-readable action labels for the activity log */
-export const ACTION_LABELS: Record<string, string> = {
-  "user.invited":              "Запрошено нового користувача",
-  "user.updated":              "Оновлено дані",
-  "user.deactivated":          "Деактивовано",
-  "user.profile_updated":      "Оновлено профіль",
-  "user.password_changed":     "Змінено пароль",
-  "user.telegram_linked":      "Підключено Telegram",
-  "user.permissions_updated":  "Оновлено доступи",
-};
+/**
+ * Activity-log action labels moved to i18n (`Dashboard.users.activityLog.actions.*`,
+ * `useTranslations`) as of i18n Block 9 (TASK-388) — see {@link getActionLabel}. Mirrors
+ * the `actionLabel(t, action)` pattern already used by
+ * `features/provider/components/ProviderLogsPanel.tsx`'s own (separate) audit-log view.
+ */
+export const KNOWN_ACTIONS = [
+  "user.invited",
+  "user.updated",
+  "user.deactivated",
+  "user.profile_updated",
+  "user.password_changed",
+  "user.telegram_linked",
+  "user.permissions_updated",
+] as const;
+
+/**
+ * Translated activity-log action label. `t` must be scoped to `Dashboard.users.activityLog`
+ * (`useTranslations("Dashboard.users.activityLog")`). Falls back to the raw action string for
+ * anything outside {@link KNOWN_ACTIONS} (e.g. future action types added server-side first).
+ */
+export function getActionLabel(t: (key: string) => string, action: string): string {
+  return (KNOWN_ACTIONS as readonly string[]).includes(action) ? t(`actions.${action}`) : action;
+}
 
 // ── Page definitions for permissions editor ───────────────────────────────────
 
 export interface PageDef {
   slug: string;
-  label: string;
   /** Roles that have access by default (undefined = all tenant roles) */
   defaultRoles: string[];
 }
 
-/** All pages that can be permission-overridden, with their default role access */
+/**
+ * All pages that can be permission-overridden, with their default role access. Display
+ * labels live in i18n (`Dashboard.users.pageNames.*`, `t(page.slug)`) as of i18n Block 9
+ * (TASK-388) — every slug here is a plain identifier (no dots), so it doubles directly as
+ * the translation leaf key with no separate key-map needed.
+ */
 export const PAGES: PageDef[] = [
-  { slug: "dashboard",  label: "Дашборд",      defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
-  { slug: "inventory",  label: "Каталог",       defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
-  { slug: "stock",      label: "Залишки",       defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
-  { slug: "receipts",   label: "Прийомка",      defaultRoles: ["enterprise_admin","network_manager","store_manager","storekeeper"] },
-  { slug: "transfers",  label: "Переміщення",   defaultRoles: ["enterprise_admin","network_manager","store_manager","storekeeper"] },
-  { slug: "write-offs", label: "Списання",      defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
-  { slug: "analytics",  label: "Аналітика",     defaultRoles: ["enterprise_admin","network_manager","store_manager"] },
-  { slug: "users",      label: "Персонал",      defaultRoles: ["enterprise_admin","network_manager","store_manager"] },
-  { slug: "settings",   label: "Налаштування",  defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
+  { slug: "dashboard",  defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
+  { slug: "inventory",  defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
+  { slug: "stock",      defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
+  { slug: "receipts",   defaultRoles: ["enterprise_admin","network_manager","store_manager","storekeeper"] },
+  { slug: "transfers",  defaultRoles: ["enterprise_admin","network_manager","store_manager","storekeeper"] },
+  { slug: "write-offs", defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
+  { slug: "analytics",  defaultRoles: ["enterprise_admin","network_manager","store_manager"] },
+  { slug: "users",      defaultRoles: ["enterprise_admin","network_manager","store_manager"] },
+  { slug: "settings",   defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
 ];
 
 /** Role rank for hierarchy checks on the frontend (mirrors backend) */

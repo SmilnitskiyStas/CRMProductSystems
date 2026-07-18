@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Settings, User, LogOut } from "lucide-react";
 import { useMe, useLogout } from "@/features/auth/hooks/useAuth";
-import { ROLE_LABELS } from "@/features/profile/types";
+import { getRoleLabel } from "@/features/profile/types";
 import { UserProfileCard } from "@/features/profile/components/UserProfileCard";
 
 export function UserMenu() {
   const t = useTranslations("Dashboard.userMenu");
+  const tRoles = useTranslations("Dashboard.roles");
   const { data: user } = useMe();
   const logout = useLogout();
 
@@ -100,7 +101,7 @@ export function UserMenu() {
               {user?.fullName ?? "…"}
             </div>
             <div style={{ color: "#4B5563", fontSize: 11, lineHeight: 1.2 }}>
-              {ROLE_LABELS[user?.role ?? ""] ?? user?.role ?? ""}
+              {getRoleLabel(tRoles, user?.role)}
             </div>
           </div>
           {/* Chevron */}

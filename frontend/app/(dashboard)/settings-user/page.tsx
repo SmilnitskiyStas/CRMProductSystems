@@ -7,7 +7,7 @@ import { ChangePasswordForm } from "@/features/profile/components/ChangePassword
 import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection";
 import { TelegramLinkSection } from "@/features/profile/components/TelegramLinkSection";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { ROLE_LABELS } from "@/features/profile/types";
+import { getRoleLabel } from "@/features/profile/types";
 
 type Section = "profile" | "password" | "security" | "telegram";
 
@@ -58,6 +58,7 @@ export default function UserSettingsPage() {
 
 function PageHeader() {
   const t = useTranslations("Dashboard.settings.userSettingsPage");
+  const tRoles = useTranslations("Dashboard.roles");
   const { data: me } = useMe();
 
   const initials = me?.fullName
@@ -116,7 +117,7 @@ function PageHeader() {
               fontWeight: 600,
             }}
           >
-            {ROLE_LABELS[me?.role ?? ""] ?? me?.role ?? ""}
+            {getRoleLabel(tRoles, me?.role)}
           </span>
         </div>
       </div>

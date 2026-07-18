@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { useUsers } from "../hooks/useUsers";
 import { UserDetailPanel } from "./UserDetailPanel";
-import { ROLE_LABELS } from "@/features/profile/types";
-import { PAGES } from "../types";
+import { getRoleLabel, ROLE_KEYS } from "@/features/profile/types";
 import type { UserDto } from "../types";
 import { TenantRoleBadge } from "@/features/tenant-roles/components/TenantRoleBadge";
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string }) {
+  const tRoles = useTranslations("Dashboard.roles");
   const colors: Record<string, { bg: string; color: string; border: string }> = {
     enterprise_admin: { bg: "#1c1032", color: "#A78BFA", border: "#4C1D95" },
     network_manager:  { bg: "#0a1f2e", color: "#38BDF8", border: "#0C4A6E" },
@@ -33,7 +34,7 @@ function RoleBadge({ role }: { role: string }) {
         whiteSpace: "nowrap",
       }}
     >
-      {ROLE_LABELS[role] ?? role}
+      {getRoleLabel(tRoles, role)}
     </span>
   );
 }
@@ -55,9 +56,10 @@ function StatusDot({ isActive }: { isActive: boolean }) {
 
 /** Shows count of custom permission overrides for a user */
 function AccessBadge({ user }: { user: UserDto }) {
+  const t = useTranslations("Dashboard.users.list");
   const perms = user.permissions;
   if (!perms || Object.keys(perms).length === 0) {
-    return <span style={{ color: "#374151", fontSize: 12 }}>За роллю</span>;
+    return <span style={{ color: "#374151", fontSize: 12 }}>{t("byRole")}</span>;
   }
   const grants = Object.values(perms).filter(Boolean).length;
   const denies = Object.values(perms).filter((v) => !v).length;
@@ -89,16 +91,16 @@ function AccessBadge({ user }: { user: UserDto }) {
   );
 }
 
-function formatDate(iso?: string | null) {
+function formatDate(iso: string | null | undefined, locale: string) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("uk-UA", {
+  return new Date(iso).toLocaleDateString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
   });
 }
 
-function formatDatetime(iso?: string | null) {
+function formatDatetime(iso: string | null | undefined, locale: string) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("uk-UA", {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -108,20 +110,23 @@ function formatDatetime(iso?: string | null) {
 // Columns: User | Role | Phone | Access | Last active | Added | Invited by | Status
 const GRID = "minmax(200px,1fr) 150px 130px 100px 140px 120px 140px 110px";
 
-const HEADERS = [
-  "Користувач",
-  "Роль",
-  "Телефон",
-  "Доступи",
-  "Остання активність",
-  "Додано",
-  "Хто додав",
-  "Статус",
-];
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function UsersList() {
+  const t = useTranslations("Dashboard.users.list");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const HEADERS = [
+    t("headerUser"),
+    t("headerRole"),
+    t("headerPhone"),
+    t("headerAccess"),
+    t("headerLastActive"),
+    t("headerAdded"),
+    t("headerInvitedBy"),
+    t("headerStatus"),
+  ];
+  const tRoles = useTranslations("Dashboard.roles");
   const { data: users, isLoading, isError } = useUsers();
   // Holds only the id — the panel's `user` is derived live from `users` below, so an
   // already-open panel picks up cache patches (e.g. a TenantRole assignment) without
@@ -150,7 +155,7 @@ export function UsersList() {
   if (isLoading) {
     return (
       <div style={{ padding: "40px 0", textAlign: "center", color: "#374151", fontSize: 13 }}>
-        Завантаження…
+        {t("loading")}
       </div>
     );
   }
@@ -158,7 +163,7 @@ export function UsersList() {
   if (isError) {
     return (
       <div style={{ padding: "40px 0", textAlign: "center", color: "#F87171", fontSize: 13 }}>
-        Помилка завантаження користувачів
+        {t("loadError")}
       </div>
     );
   }
@@ -170,7 +175,7 @@ export function UsersList() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Пошук за іменем, email або телефоном…"
+          placeholder={t("searchPlaceholder")}
           style={{
             flex: 1,
             minWidth: 220,
@@ -197,9 +202,9 @@ export function UsersList() {
             cursor: "pointer",
           }}
         >
-          <option value="all" style={{ background: "#0D1117" }}>Всі ролі</option>
-          {Object.entries(ROLE_LABELS).map(([key, label]) => (
-            <option key={key} value={key} style={{ background: "#0D1117" }}>{label}</option>
+          <option value="all" style={{ background: "#0D1117" }}>{t("allRoles")}</option>
+          {ROLE_KEYS.map((key) => (
+            <option key={key} value={key} style={{ background: "#0D1117" }}>{getRoleLabel(tRoles, key)}</option>
           ))}
         </select>
         <select
@@ -216,9 +221,9 @@ export function UsersList() {
             cursor: "pointer",
           }}
         >
-          <option value="all"      style={{ background: "#0D1117" }}>Всі статуси</option>
-          <option value="active"   style={{ background: "#0D1117" }}>Активні</option>
-          <option value="inactive" style={{ background: "#0D1117" }}>Деактивовані</option>
+          <option value="all"      style={{ background: "#0D1117" }}>{t("allStatuses")}</option>
+          <option value="active"   style={{ background: "#0D1117" }}>{t("activeOption")}</option>
+          <option value="inactive" style={{ background: "#0D1117" }}>{t("inactiveOption")}</option>
         </select>
       </div>
 
@@ -262,8 +267,8 @@ export function UsersList() {
         {filtered.length === 0 ? (
           <div style={{ padding: "32px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
             {search || roleFilter !== "all" || statusFilter !== "all"
-              ? "Нічого не знайдено"
-              : "Користувачів ще немає"}
+              ? t("notFound")
+              : t("noUsersYet")}
           </div>
         ) : (
           filtered.map((user) => {
@@ -333,12 +338,12 @@ export function UsersList() {
 
                 {/* 5. Last active */}
                 <div style={{ color: "#4B5563", fontSize: 12 }}>
-                  {user.lastActiveAt ? formatDatetime(user.lastActiveAt) : "—"}
+                  {user.lastActiveAt ? formatDatetime(user.lastActiveAt, intlLocale) : "—"}
                 </div>
 
                 {/* 6. Added (createdAt) */}
                 <div style={{ color: "#4B5563", fontSize: 12 }}>
-                  {formatDate(user.createdAt)}
+                  {formatDate(user.createdAt, intlLocale)}
                 </div>
 
                 {/* 7. Invited by */}
@@ -350,7 +355,7 @@ export function UsersList() {
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <StatusDot isActive={user.isActive} />
                   <span style={{ color: user.isActive ? "#4ADE80" : "#6B7280", fontSize: 12 }}>
-                    {user.isActive ? "Активний" : "Деактив."}
+                    {user.isActive ? t("statusActive") : t("statusInactive")}
                   </span>
                 </div>
               </div>
@@ -362,7 +367,7 @@ export function UsersList() {
       {/* Footer count */}
       {filtered.length > 0 && (
         <div style={{ color: "#374151", fontSize: 12, marginTop: 10, textAlign: "right" }}>
-          {filtered.length} з {users?.length ?? 0} користувачів
+          {t("footerCount", { shown: filtered.length, total: users?.length ?? 0 })}
         </div>
       )}
 

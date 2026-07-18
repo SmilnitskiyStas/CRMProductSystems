@@ -1,33 +1,34 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNotificationHistory, useMarkAsRead, useMarkAllAsRead, useMarkAsUnread } from "../hooks/useNotifications";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { NotificationDetailDrawer } from "./NotificationDetailDrawer";
 import type { NotificationHistoryItem, NotificationHistoryFilters } from "../types";
-import { EVENT_TYPE_LABELS, CHANNEL_LABELS, CHANNEL_ICONS } from "../types";
+import { getEventTypeLabel, getChannelLabel, CHANNEL_ICONS } from "../types";
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("uk-UA", {
+  return d.toLocaleString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 }
 
-function formatPayloadPreview(eventType: string, payload: string | null): string {
-  if (!payload) return "—";
+function formatPayloadPreview(t: (key: string, values?: Record<string, string | number | Date>) => string, eventType: string, payload: string | null): string {
+  if (!payload) return t("empty");
   try {
     const data = JSON.parse(payload) as Record<string, unknown>;
     switch (eventType) {
       case "weekly_report": {
         const parts: string[] = [];
-        if (data.safe    != null) parts.push(`Норма: ${data.safe}`);
-        if (data.warning != null) parts.push(`Попередження: ${data.warning}`);
-        if (data.critical != null) parts.push(`Критично: ${data.critical}`);
-        if (data.expired  != null) parts.push(`Прострочено: ${data.expired}`);
-        return parts.length ? parts.join(" · ") : "Тижневий звіт";
+        if (data.safe    != null) parts.push(t("safe", { value: String(data.safe) }));
+        if (data.warning != null) parts.push(t("warning", { value: String(data.warning) }));
+        if (data.critical != null) parts.push(t("critical", { value: String(data.critical) }));
+        if (data.expired  != null) parts.push(t("expired", { value: String(data.expired) }));
+        return parts.length ? parts.join(" · ") : t("weeklyReportFallback");
       }
       case "stock.expiry_warning":
       case "stock.expiry_critical":
@@ -37,15 +38,15 @@ function formatPayloadPreview(eventType: string, payload: string | null): string
         const qty  = data.quantity ?? data.qty;
         if (name) {
           const info: string[] = [String(name)];
-          if (days != null) info.push(Number(days) <= 0 ? "прострочено" : `${days} дн.`);
-          if (qty  != null) info.push(`к-сть: ${qty}`);
+          if (days != null) info.push(Number(days) <= 0 ? t("expiredNow") : t("daysLeft", { days: Number(days) }));
+          if (qty  != null) info.push(t("quantity", { value: String(qty) }));
           return info.join(" · ");
         }
         break;
       }
       case "stock.needs_verification": {
         const name = data.productName ?? data.name ?? data.product;
-        if (name) return `${name} — потребує перевірки`;
+        if (name) return t("needsVerification", { name: String(name) });
         break;
       }
     }
@@ -56,17 +57,17 @@ function formatPayloadPreview(eventType: string, payload: string | null): string
       .slice(0, 4)
       .map(([k, v]) => `${k}: ${v}`)
       .join(", ");
-    return pairs || "—";
+    return pairs || t("empty");
   } catch {
     return payload.length > 80 ? payload.slice(0, 80) + "…" : payload;
   }
 }
 
-const STATUS_COLOR: Record<string, { bg: string; text: string; label: string }> = {
-  sent:    { bg: "#052e16", text: "#4ADE80", label: "Надіслано" },
-  failed:  { bg: "#450a0a", text: "#F87171", label: "Помилка"   },
-  skipped: { bg: "#1f2937", text: "#9CA3AF", label: "Пропущено" },
-  pending: { bg: "#1c1917", text: "#FACC15", label: "Очікує"    },
+const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
+  sent:    { bg: "#052e16", text: "#4ADE80" },
+  failed:  { bg: "#450a0a", text: "#F87171" },
+  skipped: { bg: "#1f2937", text: "#9CA3AF" },
+  pending: { bg: "#1c1917", text: "#FACC15" },
 };
 
 interface Props {
@@ -75,6 +76,13 @@ interface Props {
 }
 
 export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
+  const t = useTranslations("Dashboard.notifications.history");
+  const tPayload = useTranslations("Dashboard.notifications.history.payload");
+  const tEventTypes = useTranslations("Dashboard.notifications.eventTypes");
+  const tChannels = useTranslations("Dashboard.notifications.channels");
+  const tStatus = useTranslations("Dashboard.notifications.status");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: result, isLoading, isFetching } = useNotificationHistory(filters);
   const { data: locations } = useLocations();
   const markAsRead    = useMarkAsRead();
@@ -107,7 +115,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
   if (isLoading) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 14 }}>
-        Завантаження…
+        {t("loading")}
       </div>
     );
   }
@@ -115,7 +123,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
   if (!history.length) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 14 }}>
-        Сповіщень не знайдено
+        {t("empty")}
       </div>
     );
   }
@@ -145,7 +153,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
             }}
           >
             <CheckCheck size={13} />
-            Позначити всі як прочитані ({unreadCount})
+            {t("markAllReadButton", { count: unreadCount })}
           </button>
         </div>
       )}
@@ -154,9 +162,10 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {history.map((item) => {
           const statusMeta = STATUS_COLOR[item.status] ?? STATUS_COLOR.pending;
+          const statusLabel = tStatus(item.status in STATUS_COLOR ? item.status : "pending");
           const isUnread   = !item.isRead;
           const storeName  = item.storeId ? storeNameById.get(item.storeId) : undefined;
-          const description = item.title || formatPayloadPreview(item.eventType, item.payload);
+          const description = item.title || formatPayloadPreview(tPayload, item.eventType, item.payload);
 
           return (
             <div
@@ -206,10 +215,10 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
                     fontSize: 13,
                     fontWeight: isUnread ? 600 : 500,
                   }}>
-                    {EVENT_TYPE_LABELS[item.eventType]}
+                    {getEventTypeLabel(tEventTypes, item.eventType)}
                   </span>
                   <span style={{ color: "#4B5563", fontSize: 12 }}>
-                    via {CHANNEL_LABELS[item.channel]}
+                    {t("via")} {getChannelLabel(tChannels, item.channel)}
                   </span>
                   {storeName && (
                     <span style={{ color: "#4B5563", fontSize: 12 }}>
@@ -231,7 +240,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
                 background: statusMeta.bg, color: statusMeta.text,
                 fontSize: 11, fontWeight: 600, flexShrink: 0,
               }}>
-                {statusMeta.label}
+                {statusLabel}
               </div>
 
               {/* Date */}
@@ -239,7 +248,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
                 color: "#4B5563", fontSize: 11, flexShrink: 0,
                 minWidth: 110, textAlign: "right",
               }}>
-                {formatDate(item.createdAt)}
+                {formatDate(item.createdAt, intlLocale)}
               </div>
             </div>
           );
@@ -253,8 +262,8 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
           marginTop: 16, paddingTop: 16, borderTop: "1px solid #1F2937",
         }}>
           <span style={{ color: "#4B5563", fontSize: 12 }}>
-            Сторінка {page} з {totalPages} · усього {totalCount}
-            {isFetching && " · оновлення…"}
+            {t("paginationSummary", { page, totalPages, totalCount })}
+            {isFetching && ` · ${t("updating")}`}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
@@ -269,7 +278,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
               }}
             >
               <ChevronLeft size={14} />
-              Назад
+              {t("backButton")}
             </button>
             <button
               onClick={() => goToPage(page + 1)}
@@ -282,7 +291,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
                 cursor: page >= totalPages || isFetching ? "default" : "pointer",
               }}
             >
-              Далі
+              {t("nextButton")}
               <ChevronRight size={14} />
             </button>
           </div>

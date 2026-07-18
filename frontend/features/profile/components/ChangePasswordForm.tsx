@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useChangePassword } from "../hooks/useProfile";
 import { Btn } from "@/components/ui/Btn";
-
-const POLICY_HINT = "Мінімум 12 символів, літери та цифри";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -34,6 +33,7 @@ interface FieldError {
 }
 
 export function ChangePasswordForm() {
+  const t = useTranslations("Dashboard.profile.changePassword");
   const change = useChangePassword();
 
   const [current, setCurrent]   = useState("");
@@ -43,11 +43,11 @@ export function ChangePasswordForm() {
 
   function validate(): boolean {
     const e: FieldError = {};
-    if (!current.trim()) e.current = "Введіть поточний пароль";
-    if (next.length < 12) e.next = "Мінімум 12 символів";
+    if (!current.trim()) e.current = t("currentPasswordError");
+    if (next.length < 12) e.next = t("newPasswordMinError");
     else if (!/[a-zA-Zа-яА-ЯіІїЇєЄґҐ]/.test(next) || !/\d/.test(next))
-      e.next = "Пароль має містити літери та цифри";
-    if (next !== confirm)  e.confirm = "Паролі не співпадають";
+      e.next = t("newPasswordComplexityError");
+    if (next !== confirm)  e.confirm = t("confirmMismatchError");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -61,8 +61,8 @@ export function ChangePasswordForm() {
       setCurrent(""); setNext(""); setConfirm("");
       // Backend revokes all refresh sessions on password change — the current
       // access token stays valid ≤15 min, all other devices get logged out.
-      toast.success("Пароль оновлено", {
-        description: "Інші пристрої буде розлогінено.",
+      toast.success(t("successToastTitle"), {
+        description: t("successToastDescription"),
       });
     } catch {
       // API error is rendered below via change.error
@@ -95,18 +95,18 @@ export function ChangePasswordForm() {
   return (
     <form onSubmit={handleSubmit}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 8 }}>
-        {field("Поточний пароль", current, setCurrent, errors.current)}
-        {field("Новий пароль",    next,    setNext,    errors.next,    POLICY_HINT)}
-        {field("Підтвердження",   confirm, setConfirm, errors.confirm)}
+        {field(t("currentPasswordLabel"), current, setCurrent, errors.current)}
+        {field(t("newPasswordLabel"),    next,    setNext,    errors.next,    t("policyHint"))}
+        {field(t("confirmPasswordLabel"),   confirm, setConfirm, errors.confirm)}
       </div>
 
       <p style={{ color: "#4B5563", fontSize: 11, margin: "0 0 20px", lineHeight: 1.5 }}>
-        {POLICY_HINT}. Після зміни пароля всі інші пристрої буде розлогінено.
+        {t("footerHint")}
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <Btn type="submit" disabled={change.isPending}>
-          {change.isPending ? "Оновлення…" : "Змінити пароль"}
+          {change.isPending ? t("updatingButton") : t("submitButton")}
         </Btn>
         {change.isError && (
           <span style={{ color: "#F87171", fontSize: 13 }}>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations, useLocale } from "next-intl";
 import type { ShiftStatus } from "../types";
 import { useMyShifts } from "../hooks/useSchedules";
 
@@ -7,17 +8,10 @@ function formatTime(time: string): string {
   return time.slice(0, 5);
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, locale: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("uk-UA", { weekday: "short", day: "2-digit", month: "2-digit" });
+  return d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "2-digit" });
 }
-
-const STATUS_LABELS: Record<ShiftStatus, string> = {
-  scheduled: "Заплановано",
-  confirmed:  "Підтверджено",
-  completed:  "Виконано",
-  cancelled:  "Скасовано",
-};
 
 const STATUS_COLOR: Record<ShiftStatus, string> = {
   scheduled: "#60A5FA",
@@ -34,13 +28,17 @@ function isoDate(offsetDays: number): string {
 }
 
 export function MyShifts() {
+  const t = useTranslations("Dashboard.schedules.myShifts");
+  const tShiftStatus = useTranslations("Dashboard.schedules.shiftStatus");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const from = isoDate(0);
   const to   = isoDate(6);
 
   const { data: shifts = [], isLoading } = useMyShifts(from, to);
 
   if (isLoading) {
-    return <p style={{ color: "#4B5563", fontSize: 13, padding: "24px 0" }}>Завантаження…</p>;
+    return <p style={{ color: "#4B5563", fontSize: 13, padding: "24px 0" }}>{t("loading")}</p>;
   }
 
   if (shifts.length === 0) {
@@ -53,7 +51,7 @@ export function MyShifts() {
           fontSize: 13,
         }}
       >
-        Немає запланованих змін на поточний тиждень.
+        {t("empty")}
       </div>
     );
   }
@@ -61,7 +59,7 @@ export function MyShifts() {
   return (
     <div>
       <h3 style={{ color: "#9CA3AF", fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
-        Мій розклад — поточний тиждень
+        {t("title")}
       </h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {shifts.map((shift) => (
@@ -80,13 +78,13 @@ export function MyShifts() {
           >
             <div>
               <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
-                {formatDate(shift.shiftDate)}
+                {formatDate(shift.shiftDate, intlLocale)}
               </div>
               <div style={{ color: "#9CA3AF", fontSize: 12, marginTop: 2 }}>
                 {formatTime(shift.startTime)} – {formatTime(shift.endTime)}
                 {shift.breakMinutes > 0 && (
                   <span style={{ color: "#4B5563", marginLeft: 8 }}>
-                    перерва {shift.breakMinutes} хв
+                    {t("breakSuffix", { minutes: shift.breakMinutes })}
                   </span>
                 )}
               </div>
@@ -95,7 +93,7 @@ export function MyShifts() {
               )}
             </div>
             <span style={{ color: STATUS_COLOR[shift.status], fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
-              {STATUS_LABELS[shift.status]}
+              {tShiftStatus(shift.status)}
             </span>
           </div>
         ))}

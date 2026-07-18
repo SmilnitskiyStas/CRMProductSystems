@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useUpdatePermissions,
   useActivePermissionGrants,
@@ -36,11 +37,15 @@ function toLocalDatetimeInputValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function formatGrantDate(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+function formatGrantDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export function UserPermissionsEditor({ user, editorRole }: Props) {
+  const t = useTranslations("Dashboard.users.permissionsEditor");
+  const tPages = useTranslations("Dashboard.users.pageNames");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const updatePerms = useUpdatePermissions(user.id);
   const [overrides, setOverrides] = useState<Record<string, Override>>(
     () => getInitialOverrides(user),
@@ -84,33 +89,33 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
 
   async function handleGrantTemp(slug: string) {
     if (!tempExpiresAt) {
-      setTempErr("Вкажіть дату й час закінчення.");
+      setTempErr(t("dateRequiredError"));
       return;
     }
     const expires = new Date(tempExpiresAt);
     const maxAllowed = new Date(now.getTime() + MAX_GRANT_DURATION_DAYS * 86_400_000);
     if (expires.getTime() <= now.getTime()) {
-      setTempErr("Дата закінчення має бути в майбутньому.");
+      setTempErr(t("dateInFutureError"));
       return;
     }
     if (expires.getTime() > maxAllowed.getTime()) {
-      setTempErr(`Максимальний термін — ${MAX_GRANT_DURATION_DAYS} днів.`);
+      setTempErr(t("maxDurationError", { days: MAX_GRANT_DURATION_DAYS }));
       return;
     }
     try {
       await grantTemp.mutateAsync({ permissionKey: slug, expiresAt: expires.toISOString() });
       closeTempPicker();
     } catch (e) {
-      setTempErr((e as Error)?.message ?? "Помилка надання тимчасового доступу");
+      setTempErr((e as Error)?.message ?? t("grantErrorFallback"));
     }
   }
 
   async function handleRevokeTemp(grantId: string) {
-    if (!confirm("Достроково відкликати тимчасовий доступ?")) return;
+    if (!confirm(t("revokeConfirm"))) return;
     try {
       await revokeTemp.mutateAsync(grantId);
     } catch (e) {
-      setTempErr((e as Error)?.message ?? "Помилка відкликання доступу");
+      setTempErr((e as Error)?.message ?? t("revokeErrorFallback"));
     }
   }
 
@@ -132,19 +137,19 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
-      setErr((e as Error)?.message ?? "Помилка збереження");
+      setErr((e as Error)?.message ?? t("saveErrorFallback"));
     }
   }
 
   async function handleResetAll() {
-    if (!confirm("Скинути всі індивідуальні доступи? Буде застосовано стандартні доступи за роллю.")) return;
+    if (!confirm(t("resetConfirm"))) return;
     try {
       await updatePerms.mutateAsync({ overrides: {} });
       setOverrides(Object.fromEntries(PAGES.map((p) => [p.slug, "default"])));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
-      setErr((e as Error)?.message ?? "Помилка скидання");
+      setErr((e as Error)?.message ?? t("resetErrorFallback"));
     }
   }
 
@@ -155,12 +160,12 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
       {/* Header */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ color: "#9CA3AF", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-          Доступи до сторінок
+          {t("headerTitle")}
         </div>
         <div style={{ color: "#4B5563", fontSize: 12 }}>
           {canEdit
-            ? "Виберіть індивідуальний доступ. «За замовчуванням» — стандартний доступ за роллю."
-            : "Перегляд доступів. Для редагування потрібна вища роль."}
+            ? t("headerDescriptionEditable")
+            : t("headerDescriptionReadonly")}
         </div>
       </div>
 
@@ -189,7 +194,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                 {/* Page info */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flexWrap: "wrap" }}>
                   <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
-                    {page.label}
+                    {tPages(page.slug)}
                   </div>
                   <div
                     style={{
@@ -203,11 +208,11 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {roleDefault ? "Є за роллю" : "Нема за роллю"}
+                    {roleDefault ? t("roleDefaultYes") : t("roleDefaultNo")}
                   </div>
                   {tempGrant && (
                     <div
-                      title={`Надав: ${tempGrant.grantedByName ?? "—"}`}
+                      title={t("tempGrantedByTitle", { name: tempGrant.grantedByName ?? "—" })}
                       style={{
                         fontSize: 10,
                         padding: "1px 7px",
@@ -219,7 +224,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      ⏳ Тимчасово до {formatGrantDate(tempGrant.expiresAt)}
+                      {t("tempUntilBadge", { date: formatGrantDate(tempGrant.expiresAt, intlLocale) })}
                     </div>
                   )}
                 </div>
@@ -240,7 +245,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                         <button
                           key={val}
                           onClick={() => setOverride(page.slug, val)}
-                          title={val === "grant" ? "Надати доступ" : val === "deny" ? "Заборонити" : "За замовчуванням"}
+                          title={val === "grant" ? t("grantTitle") : val === "deny" ? t("denyTitle") : t("defaultTitle")}
                           style={{
                             width: 28, height: 28,
                             display: "flex", alignItems: "center", justifyContent: "center",
@@ -261,7 +266,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                     <button
                       onClick={() => (pickerOpen ? closeTempPicker() : openTempPicker(page.slug))}
                       disabled={Boolean(tempGrant)}
-                      title={tempGrant ? "Вже надано тимчасовий доступ" : "Надати тимчасовий доступ"}
+                      title={tempGrant ? t("tempPickerAlreadyGrantedTitle") : t("tempPickerOpenTitle")}
                       style={{
                         height: 28,
                         padding: "0 8px",
@@ -277,7 +282,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      ⏱ Тимчасово
+                      ⏱ {t("tempButtonLabel")}
                     </button>
                   </div>
                 ) : (
@@ -289,7 +294,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                          : override === "deny"  ? "#F87171"
                          : "#4B5563",
                   }}>
-                    {override === "grant" ? "Надано" : override === "deny" ? "Заборонено" : "За роллю"}
+                    {override === "grant" ? t("effectiveGranted") : override === "deny" ? t("effectiveDenied") : t("effectiveByRole")}
                   </div>
                 )}
               </div>
@@ -299,7 +304,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                 <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid #1F2937" }}>
                   <div>
                     <label style={{ display: "block", color: "#6B7280", fontSize: 10, marginBottom: 3 }}>
-                      Діє до (макс. {MAX_GRANT_DURATION_DAYS} днів)
+                      {t("tempExpiresLabel", { days: MAX_GRANT_DURATION_DAYS })}
                     </label>
                     <input
                       type="datetime-local"
@@ -319,10 +324,10 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                     />
                   </div>
                   <Btn size="sm" onClick={() => handleGrantTemp(page.slug)} disabled={grantTemp.isPending}>
-                    {grantTemp.isPending ? "Надання…" : "Надати"}
+                    {grantTemp.isPending ? t("tempGrantingButton") : t("tempGrantButton")}
                   </Btn>
                   <Btn size="sm" variant="ghost" onClick={closeTempPicker}>
-                    Скасувати
+                    {t("tempCancelButton")}
                   </Btn>
                   {tempErr && (
                     <div style={{ color: "#F87171", fontSize: 11, width: "100%" }}>{tempErr}</div>
@@ -338,11 +343,12 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
       {activeGrants.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ color: "#9CA3AF", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-            Активні тимчасові доступи
+            {t("activeGrantsTitle")}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {activeGrants.map((grant) => {
-              const pageLabel = PAGES.find((p) => p.slug === grant.permissionKey)?.label ?? grant.permissionKey;
+              const pageSlugKnown = PAGES.some((p) => p.slug === grant.permissionKey);
+              const pageLabel = pageSlugKnown ? tPages(grant.permissionKey) : grant.permissionKey;
               return (
                 <div
                   key={grant.id}
@@ -359,10 +365,10 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                 >
                   <div style={{ minWidth: 0 }}>
                     <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 500 }}>
-                      {pageLabel} — до {formatGrantDate(grant.expiresAt)}
+                      {t("activeGrantUntil", { label: pageLabel, date: formatGrantDate(grant.expiresAt, intlLocale) })}
                     </div>
                     <div style={{ color: "#6B7280", fontSize: 11, marginTop: 2 }}>
-                      Надав: {grant.grantedByName ?? "—"} · {formatGrantDate(grant.grantedAt)}
+                      {t("activeGrantGrantedBy", { name: grant.grantedByName ?? "—", date: formatGrantDate(grant.grantedAt, intlLocale) })}
                     </div>
                   </div>
                   {canEdit && (
@@ -381,7 +387,7 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                         cursor: "pointer",
                       }}
                     >
-                      Відкликати
+                      {t("revokeButton")}
                     </button>
                   )}
                 </div>
@@ -395,10 +401,10 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
       {canEdit && (
         <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           {[
-            { sym: "✓", label: "Надати", color: "#4ADE80" },
-            { sym: "—", label: "За замовчуванням", color: "#6B7280" },
-            { sym: "✕", label: "Заборонити", color: "#F87171" },
-            { sym: "⏱", label: "Тимчасово", color: "#FBBF24" },
+            { sym: "✓", label: t("legendGrant"), color: "#4ADE80" },
+            { sym: "—", label: t("legendDefault"), color: "#6B7280" },
+            { sym: "✕", label: t("legendDeny"), color: "#F87171" },
+            { sym: "⏱", label: t("legendTemp"), color: "#FBBF24" },
           ].map((l) => (
             <div key={l.sym} style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ color: l.color, fontSize: 11, fontWeight: 700 }}>{l.sym}</span>
@@ -417,12 +423,12 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
       {canEdit && (
         <div style={{ display: "flex", gap: 10 }}>
           <Btn onClick={handleSave} disabled={updatePerms.isPending} style={{ flex: 1, justifyContent: "center" }}>
-            {updatePerms.isPending ? "Збереження…" : saved ? "✓ Збережено" : "Зберегти зміни"}
+            {updatePerms.isPending ? t("savingButton") : saved ? t("savedButton") : t("saveButton")}
           </Btn>
 
           {hasAnyOverride && (
             <Btn variant="ghost" onClick={handleResetAll} disabled={updatePerms.isPending}>
-              Скинути всі
+              {t("resetAllButton")}
             </Btn>
           )}
         </div>

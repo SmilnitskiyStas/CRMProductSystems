@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useInviteUser } from "../hooks/useUsers";
-import { ROLE_LABELS } from "@/features/profile/types";
+import { getRoleLabel } from "@/features/profile/types";
 import { Btn } from "@/components/ui/Btn";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { useTenantRoles, useAssignTenantRole } from "@/features/tenant-roles/hooks/useTenantRoles";
@@ -45,6 +46,8 @@ interface Props {
 }
 
 export function InviteUserModal({ onClose }: Props) {
+  const t = useTranslations("Dashboard.users.inviteModal");
+  const tRoles = useTranslations("Dashboard.roles");
   const invite = useInviteUser();
   const { data: legalEntities } = useLegalEntities();
   const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
@@ -76,9 +79,9 @@ export function InviteUserModal({ onClose }: Props) {
 
   function validate() {
     const e: Record<string, string> = {};
-    if (!email.trim() || !email.includes("@")) e.email    = "Введіть коректний email";
-    if (!fullName.trim())                       e.fullName = "Введіть ім'я";
-    if (password.length < 8)                    e.password = "Мінімум 8 символів";
+    if (!email.trim() || !email.includes("@")) e.email    = t("emailInvalidError");
+    if (!fullName.trim())                       e.fullName = t("fullNameRequiredError");
+    if (password.length < 8)                    e.password = t("passwordMinError");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -112,11 +115,9 @@ export function InviteUserModal({ onClose }: Props) {
         // part manually via TenantRoleSelector on the user's profile.
         setCreatedUserId(newUser.id);
         // Strip a trailing period from the server message — it already ends this
-        // sentence, avoiding a "...archived TenantRole.. Призначте..." double-stop.
-        const reason = ((err as Error)?.message ?? "Помилка").replace(/\.+$/, "");
-        setPartialError(
-          `Користувача створено, але не вдалося призначити шаблон ролі: ${reason}. Призначте вручну в профілі користувача.`,
-        );
+        // sentence, avoiding a "...archived TenantRole.. Assign it..." double-stop.
+        const reason = ((err as Error)?.message ?? t("createErrorFallback")).replace(/\.+$/, "");
+        setPartialError(t("partialErrorMessage", { reason }));
         return;
       }
     }
@@ -164,10 +165,10 @@ export function InviteUserModal({ onClose }: Props) {
         >
           <div>
             <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-              Запросити користувача
+              {t("modalTitle")}
             </h2>
             <p style={{ color: "#4B5563", fontSize: 12, margin: "3px 0 0" }}>
-              Новий акаунт буде створено у вашому тенанті
+              {t("modalSubtitle")}
             </p>
           </div>
           <button
@@ -187,11 +188,11 @@ export function InviteUserModal({ onClose }: Props) {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Full name */}
             <div>
-              <label style={labelStyle}>Повне ім'я *</label>
+              <label style={labelStyle}>{t("fullNameLabel")}</label>
               <input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Іван Петренко"
+                placeholder={t("fullNamePlaceholder")}
                 disabled={Boolean(createdUserId)}
                 style={{ ...inputStyle, borderColor: errors.fullName ? "#EF4444" : "#374151" }}
               />
@@ -202,12 +203,12 @@ export function InviteUserModal({ onClose }: Props) {
 
             {/* Email */}
             <div>
-              <label style={labelStyle}>Email *</label>
+              <label style={labelStyle}>{t("emailLabel")}</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ivan@example.com"
+                placeholder={t("emailPlaceholder")}
                 disabled={Boolean(createdUserId)}
                 style={{ ...inputStyle, borderColor: errors.email ? "#EF4444" : "#374151" }}
               />
@@ -218,7 +219,7 @@ export function InviteUserModal({ onClose }: Props) {
 
             {/* Role */}
             <div>
-              <label style={labelStyle}>Роль *</label>
+              <label style={labelStyle}>{t("roleLabel")}</label>
               <select
                 value={role}
                 onChange={(e) => { setRole(e.target.value); setRoleTouched(true); }}
@@ -231,7 +232,7 @@ export function InviteUserModal({ onClose }: Props) {
               >
                 {INVITE_ROLES.map((r) => (
                   <option key={r} value={r} style={{ background: "#0D1117" }}>
-                    {ROLE_LABELS[r] ?? r}
+                    {getRoleLabel(tRoles, r)}
                   </option>
                 ))}
               </select>
@@ -241,7 +242,7 @@ export function InviteUserModal({ onClose }: Props) {
                 right after invite succeeds; independent from the base Role above. */}
             {canManageTenantRole && (
               <div>
-                <label style={labelStyle}>Шаблон ролі (необов'язково)</label>
+                <label style={labelStyle}>{t("tenantRoleLabel")}</label>
                 <select
                   value={tenantRoleId}
                   onChange={(e) => {
@@ -256,7 +257,7 @@ export function InviteUserModal({ onClose }: Props) {
                   disabled={tenantRolesLoading || Boolean(createdUserId)}
                   style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
                 >
-                  <option value="" style={{ background: "#0D1117" }}>— Без шаблону —</option>
+                  <option value="" style={{ background: "#0D1117" }}>{t("tenantRoleNoneOption")}</option>
                   {activeTenantRoles.map((tr) => (
                     <option key={tr.id} value={tr.id} style={{ background: "#0D1117" }}>
                       {tr.name}
@@ -264,12 +265,11 @@ export function InviteUserModal({ onClose }: Props) {
                   ))}
                 </select>
                 <p style={{ color: "#4B5563", fontSize: 11, marginTop: 4 }}>
-                  Додає розширені можливості поверх базової ролі — керується в розділі
-                  «Шаблони ролей».
+                  {t("tenantRoleHint")}
                 </p>
                 {!tenantRolesLoading && activeTenantRoles.length === 0 && (
                   <p style={{ color: "#374151", fontSize: 11, marginTop: 4 }}>
-                    Активних шаблонів ще немає.
+                    {t("tenantRoleNoneAvailable")}
                   </p>
                 )}
               </div>
@@ -277,14 +277,14 @@ export function InviteUserModal({ onClose }: Props) {
 
             {/* Legal entity */}
             <div>
-              <label style={labelStyle}>Юридична особа (необов'язково)</label>
+              <label style={labelStyle}>{t("legalEntityLabel")}</label>
               <select
                 value={legalEntityId}
                 onChange={(e) => setLegalEntityId(e.target.value)}
                 disabled={Boolean(createdUserId)}
                 style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
               >
-                <option value="" style={{ background: "#0D1117" }}>— Не вказано —</option>
+                <option value="" style={{ background: "#0D1117" }}>{t("legalEntityNoneOption")}</option>
                 {activeLegalEntities.map((entity) => (
                   <option key={entity.id} value={entity.id} style={{ background: "#0D1117" }}>
                     {entity.legalName}
@@ -295,12 +295,12 @@ export function InviteUserModal({ onClose }: Props) {
 
             {/* Temporary password */}
             <div>
-              <label style={labelStyle}>Тимчасовий пароль *</label>
+              <label style={labelStyle}>{t("passwordLabel")}</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Мінімум 8 символів"
+                placeholder={t("passwordPlaceholder")}
                 autoComplete="new-password"
                 disabled={Boolean(createdUserId)}
                 style={{ ...inputStyle, borderColor: errors.password ? "#EF4444" : "#374151" }}
@@ -319,16 +319,16 @@ export function InviteUserModal({ onClose }: Props) {
               style={{ flex: 1, justifyContent: "center" }}
             >
               {createdUserId
-                ? "Закрити"
+                ? t("closeButton")
                 : invite.isPending
-                ? "Створення…"
+                ? t("creatingButton")
                 : assignTenantRole.isPending
-                ? "Призначення шаблону…"
-                : "Запросити"}
+                ? t("assigningButton")
+                : t("submitButton")}
             </Btn>
             {!createdUserId && (
               <Btn type="button" variant="ghost" onClick={onClose}>
-                Скасувати
+                {t("cancelButton")}
               </Btn>
             )}
           </div>
@@ -351,7 +351,7 @@ export function InviteUserModal({ onClose }: Props) {
 
           {invite.isError && !createdUserId && (
             <p style={{ color: "#F87171", fontSize: 12, marginTop: 10 }}>
-              {(invite.error as Error)?.message ?? "Помилка створення"}
+              {(invite.error as Error)?.message ?? t("createErrorFallback")}
             </p>
           )}
         </form>

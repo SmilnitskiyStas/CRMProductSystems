@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useUpdateProfile } from "../hooks/useProfile";
-import { ROLE_LABELS } from "../types";
+import { getRoleLabel } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
 const inputStyle: React.CSSProperties = {
@@ -34,6 +35,8 @@ const readonlyInputStyle: React.CSSProperties = {
 };
 
 export function ProfileInfoForm() {
+  const t = useTranslations("Dashboard.profile.infoForm");
+  const tRoles = useTranslations("Dashboard.roles");
   const { data: me } = useMe();
   const update = useUpdateProfile();
 
@@ -50,7 +53,7 @@ export function ProfileInfoForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim()) { setNameError("Введіть ім'я"); return; }
+    if (!fullName.trim()) { setNameError(t("nameRequiredError")); return; }
     setNameError("");
 
     await update.mutateAsync({ fullName: fullName.trim(), phone: phone.trim() || undefined });
@@ -79,7 +82,7 @@ export function ProfileInfoForm() {
             {me?.fullName ?? "—"}
           </div>
           <div style={{ color: "#4B5563", fontSize: 12, marginTop: 3 }}>
-            {ROLE_LABELS[me?.role ?? ""] ?? me?.role ?? ""}
+            {getRoleLabel(tRoles, me?.role)}
           </div>
         </div>
       </div>
@@ -88,12 +91,12 @@ export function ProfileInfoForm() {
         {/* Full name */}
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>
-            Повне ім'я <span style={{ color: "#EF4444" }}>*</span>
+            {t("fullNameLabel")} <span style={{ color: "#EF4444" }}>*</span>
           </label>
           <input
             value={fullName}
             onChange={(e) => { setFullName(e.target.value); setNameError(""); }}
-            placeholder="Іван Петренко"
+            placeholder={t("fullNamePlaceholder")}
             style={{ ...inputStyle, borderColor: nameError ? "#EF4444" : "#374151" }}
           />
           {nameError && (
@@ -103,25 +106,25 @@ export function ProfileInfoForm() {
 
         {/* Email — readonly */}
         <div>
-          <label style={labelStyle}>Email</label>
+          <label style={labelStyle}>{t("emailLabel")}</label>
           <input
             value={me?.email ?? ""}
             readOnly
             style={readonlyInputStyle}
-            title="Email змінюється через підтримку"
+            title={t("emailReadonlyTitle")}
           />
           <p style={{ color: "#374151", fontSize: 11, marginTop: 4 }}>
-            Зверніться до адміна для зміни email
+            {t("emailHint")}
           </p>
         </div>
 
         {/* Phone */}
         <div>
-          <label style={labelStyle}>Телефон</label>
+          <label style={labelStyle}>{t("phoneLabel")}</label>
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="+380 99 123 45 67"
+            placeholder={t("phonePlaceholder")}
             style={inputStyle}
             type="tel"
           />
@@ -129,20 +132,20 @@ export function ProfileInfoForm() {
 
         {/* Role — readonly */}
         <div>
-          <label style={labelStyle}>Роль</label>
+          <label style={labelStyle}>{t("roleLabel")}</label>
           <input
-            value={ROLE_LABELS[me?.role ?? ""] ?? me?.role ?? ""}
+            value={getRoleLabel(tRoles, me?.role)}
             readOnly
             style={readonlyInputStyle}
-            title="Роль призначається адміністратором"
+            title={t("roleReadonlyTitle")}
           />
         </div>
 
         {/* Store — readonly */}
         <div>
-          <label style={labelStyle}>Магазин</label>
+          <label style={labelStyle}>{t("storeLabel")}</label>
           <input
-            value={me?.storeId ? `Магазин #${me.storeId.slice(0, 6)}` : "Не прив'язано"}
+            value={me?.storeId ? t("storeValue", { id: me.storeId.slice(0, 6) }) : t("storeNotLinked")}
             readOnly
             style={readonlyInputStyle}
           />
@@ -151,14 +154,14 @@ export function ProfileInfoForm() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <Btn type="submit" disabled={update.isPending}>
-          {update.isPending ? "Збереження…" : "Зберегти зміни"}
+          {update.isPending ? t("savingButton") : t("saveButton")}
         </Btn>
         {saved && (
-          <span style={{ color: "#4ADE80", fontSize: 13 }}>✓ Збережено</span>
+          <span style={{ color: "#4ADE80", fontSize: 13 }}>{t("savedMessage")}</span>
         )}
         {update.isError && (
           <span style={{ color: "#F87171", fontSize: 13 }}>
-            Помилка збереження (API не реалізовано)
+            {t("saveErrorMessage")}
           </span>
         )}
       </div>

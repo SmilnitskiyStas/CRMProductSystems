@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { X, CheckCircle, Clock, Send, AlertTriangle, RotateCcw } from "lucide-react";
 import type { NotificationHistoryItem } from "../types";
 import {
-  EVENT_TYPE_LABELS,
-  CHANNEL_LABELS,
+  getEventTypeLabel,
+  getChannelLabel,
   CHANNEL_ICONS,
-  EVENT_TYPE_SOURCE,
+  getEventTypeSource,
 } from "../types";
 
 interface Props {
@@ -16,8 +17,8 @@ interface Props {
   onMarkUnread?: (id: string) => void;
 }
 
-function formatDateFull(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateFull(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -32,14 +33,21 @@ function parsePayload(raw: string | null): Record<string, unknown> | null {
   try { return JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
 }
 
-const STATUS_META: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  sent:    { icon: <CheckCircle size={14} />, color: "#4ADE80", label: "Надіслано" },
-  failed:  { icon: <AlertTriangle size={14} />, color: "#F87171", label: "Помилка" },
-  skipped: { icon: <Clock size={14} />, color: "#9CA3AF", label: "Пропущено" },
-  pending: { icon: <Clock size={14} />, color: "#FACC15", label: "Очікує" },
+const STATUS_ICON: Record<string, { icon: React.ReactNode; color: string }> = {
+  sent:    { icon: <CheckCircle size={14} />, color: "#4ADE80" },
+  failed:  { icon: <AlertTriangle size={14} />, color: "#F87171" },
+  skipped: { icon: <Clock size={14} />, color: "#9CA3AF" },
+  pending: { icon: <Clock size={14} />, color: "#FACC15" },
 };
 
 export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props) {
+  const t = useTranslations("Dashboard.notifications.detailDrawer");
+  const tEventTypes = useTranslations("Dashboard.notifications.eventTypes");
+  const tChannels = useTranslations("Dashboard.notifications.channels");
+  const tStatus = useTranslations("Dashboard.notifications.status");
+  const tEventSource = useTranslations("Dashboard.notifications.eventSource");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   // Close on Escape
   useEffect(() => {
     if (!item) return;
@@ -50,8 +58,13 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
 
   if (!item) return null;
 
-  const source    = EVENT_TYPE_SOURCE[item.eventType] ?? { service: "Система ShelfGuard", actor: "Автоматично" };
-  const statusMeta = STATUS_META[item.status] ?? STATUS_META.pending;
+  const source = getEventTypeSource(tEventSource, item.eventType, {
+    service: t("defaultServiceFallback"),
+    actor: t("defaultActorFallback"),
+  });
+  const statusKey  = item.status in STATUS_ICON ? item.status : "pending";
+  const statusIcon = STATUS_ICON[statusKey];
+  const statusLabel = tStatus(statusKey);
   const parsed    = parsePayload(item.payload);
 
   return (
@@ -87,10 +100,10 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
             <span style={{ fontSize: 22 }}>{CHANNEL_ICONS[item.channel]}</span>
             <div>
               <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-                {EVENT_TYPE_LABELS[item.eventType]}
+                {getEventTypeLabel(tEventTypes, item.eventType)}
               </div>
               <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>
-                via {CHANNEL_LABELS[item.channel]}
+                {t("via")} {getChannelLabel(tChannels, item.channel)}
               </div>
             </div>
           </div>
@@ -122,13 +135,13 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
             }
             <span style={{ fontSize: 12, color: item.isRead ? "#4ADE80" : "#93C5FD", flex: 1 }}>
               {item.isRead
-                ? `Переглянуто ${item.readAt ? formatDateFull(item.readAt) : ""}`
-                : "Непрочитане"}
+                ? t("viewedPrefix", { date: item.readAt ? formatDateFull(item.readAt, intlLocale) : "" })
+                : t("unreadStatus")}
             </span>
             {item.isRead && onMarkUnread && (
               <button
                 onClick={() => onMarkUnread(item.id)}
-                title="Позначити як непрочитане"
+                title={t("markUnreadTitle")}
                 style={{
                   display: "flex", alignItems: "center", gap: 5,
                   background: "transparent", border: "1px solid #1F2937",
@@ -147,31 +160,31 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
                 }}
               >
                 <RotateCcw size={11} />
-                Непрочитане
+                {t("markUnreadLabel")}
               </button>
             )}
           </div>
 
           {/* From / Source */}
-          <Section title="Від кого">
-            <Row label="Сервіс" value={source.service} />
-            <Row label="Джерело" value={source.actor} icon={<Send size={12} />} />
+          <Section title={t("fromSectionTitle")}>
+            <Row label={t("serviceLabel")} value={source.service} />
+            <Row label={t("sourceLabel")} value={source.actor} icon={<Send size={12} />} />
           </Section>
 
           {/* Delivery */}
-          <Section title="Доставка">
-            <Row label="Канал" value={`${CHANNEL_ICONS[item.channel]} ${CHANNEL_LABELS[item.channel]}`} />
+          <Section title={t("deliverySectionTitle")}>
+            <Row label={t("channelLabel")} value={`${CHANNEL_ICONS[item.channel]} ${getChannelLabel(tChannels, item.channel)}`} />
             <Row
-              label="Статус"
-              value={statusMeta.label}
-              valueStyle={{ color: statusMeta.color, display: "flex", alignItems: "center", gap: 4 }}
-              icon={statusMeta.icon}
+              label={t("statusLabel")}
+              value={statusLabel}
+              valueStyle={{ color: statusIcon.color, display: "flex", alignItems: "center", gap: 4 }}
+              icon={statusIcon.icon}
             />
-            <Row label="Надіслано" value={formatDateFull(item.createdAt)} />
+            <Row label={t("sentAtLabel")} value={formatDateFull(item.createdAt, intlLocale)} />
           </Section>
 
           {/* Message / Payload */}
-          <Section title="Повідомлення">
+          <Section title={t("messageSectionTitle")}>
             {parsed ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {Object.entries(parsed).map(([k, v]) => (
@@ -183,14 +196,14 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
                 background: "#111827", borderRadius: 8, padding: "10px 12px",
                 color: "#D1D5DB", fontSize: 13, lineHeight: 1.5,
               }}>
-                {item.payload ?? "—"}
+                {item.payload ?? t("noPayload")}
               </div>
             )}
           </Section>
 
           {/* ID (for debugging / support) */}
           <div style={{ borderTop: "1px solid #1F2937", paddingTop: 16 }}>
-            <Row label="ID сповіщення" value={item.id} valueStyle={{ color: "#374151", fontSize: 11 }} />
+            <Row label={t("idLabel")} value={item.id} valueStyle={{ color: "#374151", fontSize: 11 }} />
           </div>
         </div>
       </div>

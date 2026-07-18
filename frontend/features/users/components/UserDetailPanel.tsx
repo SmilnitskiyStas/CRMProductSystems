@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { useUpdateUser, useDeactivateUser } from "../hooks/useUsers";
 import { UserActivityLog } from "./UserActivityLog";
 import { UserPermissionsEditor } from "./UserPermissionsEditor";
-import { ROLE_LABELS } from "@/features/profile/types";
+import { getRoleLabel } from "@/features/profile/types";
 import { ROLE_RANK } from "../types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
@@ -51,6 +52,10 @@ interface Props {
 }
 
 export function UserDetailPanel({ user, onClose }: Props) {
+  const t = useTranslations("Dashboard.users.detailPanel");
+  const tRoles = useTranslations("Dashboard.roles");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const update     = useUpdateUser(user.id);
   const deactivate = useDeactivateUser();
@@ -101,7 +106,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
   }
 
   async function handleDeactivate() {
-    if (!confirm(`Деактивувати ${user.fullName}? Вони не зможуть увійти в систему.`)) return;
+    if (!confirm(t("deactivateConfirm", { name: user.fullName }))) return;
     await deactivate.mutateAsync(user.id);
     onClose();
   }
@@ -181,7 +186,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
                   color: "#3B82F6", fontSize: 11, fontWeight: 600,
                 }}
               >
-                {ROLE_LABELS[user.role] ?? user.role}
+                {getRoleLabel(tRoles, user.role)}
               </span>
               <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
               {!user.isActive && (
@@ -192,7 +197,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
                     color: "#F87171", fontSize: 11,
                   }}
                 >
-                  Деактивовано
+                  {t("deactivatedBadge")}
                 </span>
               )}
             </div>
@@ -218,11 +223,11 @@ export function UserDetailPanel({ user, onClose }: Props) {
             flexShrink: 0,
           }}
         >
-          <button style={tabBtnStyle(tab === "info")}     onClick={() => setTab("info")}>Інформація</button>
+          <button style={tabBtnStyle(tab === "info")}     onClick={() => setTab("info")}>{t("tabInfo")}</button>
           {showAccessTab && (
-            <button style={tabBtnStyle(tab === "access")} onClick={() => setTab("access")}>Доступ</button>
+            <button style={tabBtnStyle(tab === "access")} onClick={() => setTab("access")}>{t("tabAccess")}</button>
           )}
-          <button style={tabBtnStyle(tab === "activity")} onClick={() => setTab("activity")}>Активність</button>
+          <button style={tabBtnStyle(tab === "activity")} onClick={() => setTab("activity")}>{t("tabActivity")}</button>
         </div>
 
         {/* Content */}
@@ -232,19 +237,19 @@ export function UserDetailPanel({ user, onClose }: Props) {
               {/* Read-only fields */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ padding: "10px 0", borderBottom: "1px solid #1A2235" }}>
-                  <span style={labelStyle}>Email</span>
+                  <span style={labelStyle}>{t("emailLabel")}</span>
                   <span style={{ color: "#E8EDF5", fontSize: 13 }}>{user.email}</span>
                 </div>
                 <div style={{ padding: "10px 0", borderBottom: "1px solid #1A2235" }}>
-                  <span style={labelStyle}>Telegram</span>
+                  <span style={labelStyle}>{t("telegramLabel")}</span>
                   <span style={{ color: user.hasTelegram ? "#4ADE80" : "#374151", fontSize: 13 }}>
-                    {user.hasTelegram ? "✓ Підключено" : "Не підключено"}
+                    {user.hasTelegram ? t("telegramConnected") : t("telegramNotConnected")}
                   </span>
                 </div>
                 <div style={{ padding: "10px 0" }}>
-                  <span style={labelStyle}>Зареєстровано</span>
+                  <span style={labelStyle}>{t("registeredLabel")}</span>
                   <span style={{ color: "#6B7280", fontSize: 13 }}>
-                    {new Date(user.createdAt).toLocaleDateString("uk-UA")}
+                    {new Date(user.createdAt).toLocaleDateString(intlLocale)}
                   </span>
                 </div>
               </div>
@@ -255,7 +260,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
                   <div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
                       <div>
-                        <label style={labelStyle}>Повне ім'я</label>
+                        <label style={labelStyle}>{t("fullNameLabel")}</label>
                         <input
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
@@ -263,17 +268,17 @@ export function UserDetailPanel({ user, onClose }: Props) {
                         />
                       </div>
                       <div>
-                        <label style={labelStyle}>Телефон</label>
+                        <label style={labelStyle}>{t("phoneLabel")}</label>
                         <input
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
-                          placeholder="+380 99 123 45 67"
+                          placeholder={t("phonePlaceholder")}
                           type="tel"
                           style={inputStyle}
                         />
                       </div>
                       <div>
-                        <label style={labelStyle}>Роль</label>
+                        <label style={labelStyle}>{t("roleLabel")}</label>
                         <select
                           value={role}
                           onChange={(e) => setRole(e.target.value)}
@@ -281,19 +286,19 @@ export function UserDetailPanel({ user, onClose }: Props) {
                         >
                           {EDITABLE_ROLES.map((r) => (
                             <option key={r} value={r} style={{ background: "#0D1117" }}>
-                              {ROLE_LABELS[r] ?? r}
+                              {getRoleLabel(tRoles, r)}
                             </option>
                           ))}
                         </select>
                       </div>
                       <div>
-                        <label style={labelStyle}>Юридична особа</label>
+                        <label style={labelStyle}>{t("legalEntityLabel")}</label>
                         <select
                           value={legalEntityId}
                           onChange={(e) => setLegalEntityId(e.target.value)}
                           style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
                         >
-                          <option value="" style={{ background: "#0D1117" }}>— Не вказано —</option>
+                          <option value="" style={{ background: "#0D1117" }}>{t("legalEntityNoneOption")}</option>
                           {activeLegalEntities.map((entity) => (
                             <option key={entity.id} value={entity.id} style={{ background: "#0D1117" }}>
                               {entity.legalName}
@@ -304,17 +309,17 @@ export function UserDetailPanel({ user, onClose }: Props) {
                     </div>
                     <div style={{ display: "flex", gap: 10 }}>
                       <Btn onClick={handleSave} disabled={update.isPending} style={{ flex: 1, justifyContent: "center" }}>
-                        {update.isPending ? "Збереження…" : "Зберегти"}
+                        {update.isPending ? t("savingButton") : t("saveButton")}
                       </Btn>
                       <Btn variant="ghost" onClick={() => setEditing(false)}>
-                        Скасувати
+                        {t("cancelButton")}
                       </Btn>
                     </div>
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {saved && (
-                      <div style={{ color: "#4ADE80", fontSize: 13 }}>✓ Збережено</div>
+                      <div style={{ color: "#4ADE80", fontSize: 13 }}>{t("savedMessage")}</div>
                     )}
                     <button
                       onClick={() => setEditing(true)}
@@ -324,7 +329,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
                         color: "#6B7280", fontSize: 13, cursor: "pointer",
                       }}
                     >
-                      Редагувати
+                      {t("editButton")}
                     </button>
                     {canDeactivate && (
                       <button
@@ -336,7 +341,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
                           color: "#F87171", fontSize: 13, cursor: "pointer",
                         }}
                       >
-                        {deactivate.isPending ? "Деактивація…" : "Деактивувати"}
+                        {deactivate.isPending ? t("deactivatingButton") : t("deactivateButton")}
                       </button>
                     )}
                   </div>

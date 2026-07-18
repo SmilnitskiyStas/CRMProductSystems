@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
+import { useTranslations } from "next-intl";
 import { UserPlus } from "lucide-react";
 import { UsersList } from "@/features/users/components/UsersList";
 import { InviteUserModal } from "@/features/users/components/InviteUserModal";
@@ -14,6 +15,7 @@ import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
 type PageTab = "staff" | "role-templates";
 
 export default function UsersPage() {
+  const t = useTranslations("Dashboard.users.page");
   const { data: me } = useMe();
   const { data: users } = useUsers();
 
@@ -54,28 +56,28 @@ export default function UsersPage() {
       >
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Персонал
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-            Управління користувачами та правами доступу
+            {t("subtitle")}
           </p>
         </div>
 
         {tab === "staff" && isAdmin && (
           <Btn icon={<UserPlus size={15} />} onClick={() => setInviteOpen(true)}>
-            Запросити
+            {t("inviteButton")}
           </Btn>
         )}
       </div>
 
-      {/* Tabs — "Шаблони ролей" is enterprise_admin+ only (ADR-020) */}
+      {/* Tabs — "Шаблони ролей" (role templates) is enterprise_admin+ only (ADR-020) */}
       {canManageRoleTemplates && (
         <div style={{ display: "flex", gap: 22, borderBottom: "1px solid #1F2937", marginBottom: 24 }}>
           <button style={tabBtnStyle(tab === "staff")} onClick={() => setTab("staff")}>
-            Користувачі
+            {t("staffTab")}
           </button>
           <button style={tabBtnStyle(tab === "role-templates")} onClick={() => setTab("role-templates")}>
-            Шаблони ролей
+            {t("roleTemplatesTab")}
           </button>
         </div>
       )}
@@ -87,9 +89,9 @@ export default function UsersPage() {
           {/* Stats row */}
           <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
             {[
-              { label: "Всього",    value: totalCount,    color: "#60A5FA" },
-              { label: "Активних",  value: activeCount,   color: "#4ADE80" },
-              { label: "Telegram",  value: telegramCount, color: "#38BDF8" },
+              { label: t("statTotal"),    value: totalCount,    color: "#60A5FA" },
+              { label: t("statActive"),   value: activeCount,   color: "#4ADE80" },
+              { label: t("statTelegram"), value: telegramCount, color: "#38BDF8" },
             ].map((stat) => (
               <div
                 key={stat.label}

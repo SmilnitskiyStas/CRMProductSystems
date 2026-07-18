@@ -60,44 +60,57 @@ export interface NotificationHistoryFilters {
   pageSize?: number;
 }
 
-export const EVENT_TYPE_SOURCE: Record<NotificationEventType, { service: string; actor: string }> = {
-  "stock.expiry_warning":    { service: "Модуль інвентаризації", actor: "Моніторинг терміну придатності" },
-  "stock.expiry_critical":   { service: "Модуль інвентаризації", actor: "Моніторинг терміну придатності" },
-  "stock.expired":           { service: "Модуль інвентаризації", actor: "Контроль якості" },
-  "stock.needs_verification":{ service: "Модуль інвентаризації", actor: "Контроль якості" },
-  "weekly_report":           { service: "Планувальник завдань",  actor: "Автоматичний звіт" },
-  "receipt.created":            { service: "Модуль надходжень", actor: "Підтвердження поставки" },
-  "order.replenishment_suggested": { service: "AI замовлення", actor: "Автоматичний прогноз" },
-  "supplier.message":           { service: "Маркетплейс", actor: "Чат з постачальником" },
-  "supplier_agreement.signed":  { service: "Маркетплейс", actor: "Угода про співпрацю" },
-  "iot.temp_alert":              { service: "IoT моніторинг", actor: "Датчик температури" },
-  "iot.offline":                 { service: "IoT моніторинг", actor: "Стан пристрою" },
-  "access.temporary_expiring_soon": { service: "Управління доступом", actor: "Тимчасові гранти (ADR-019)" },
-  "access.temporary_expired":       { service: "Управління доступом", actor: "Тимчасові гранти (ADR-019)" },
+/**
+ * Event-type display strings moved to i18n as of i18n Block 9 (TASK-388):
+ * `Dashboard.notifications.eventTypes.*` (labels), `Dashboard.notifications.eventSource.*`
+ * (service/actor), `Dashboard.notifications.channels.*` (channel labels). Event-type keys
+ * contain dots ("stock.expiry_warning"), which next-intl would otherwise parse as nested
+ * namespace path segments, so {@link EVENT_TYPE_I18N_KEY} maps each to a flat camelCase
+ * leaf key instead (same fix pattern as `ProviderLogsPanel.tsx`'s `actionLabel`). Channel
+ * keys ("telegram"/"push"/"email"/"webhook") have no dots and are used as leaf keys as-is.
+ */
+export const EVENT_TYPE_I18N_KEY: Record<NotificationEventType, string> = {
+  "stock.expiry_warning": "stockExpiryWarning",
+  "stock.expiry_critical": "stockExpiryCritical",
+  "stock.expired": "stockExpired",
+  "stock.needs_verification": "stockNeedsVerification",
+  "weekly_report": "weeklyReport",
+  "receipt.created": "receiptCreated",
+  "order.replenishment_suggested": "orderReplenishmentSuggested",
+  "supplier.message": "supplierMessage",
+  "supplier_agreement.signed": "supplierAgreementSigned",
+  "iot.temp_alert": "iotTempAlert",
+  "iot.offline": "iotOffline",
+  "access.temporary_expiring_soon": "accessTemporaryExpiringSoon",
+  "access.temporary_expired": "accessTemporaryExpired",
 };
 
-export const EVENT_TYPE_LABELS: Record<NotificationEventType, string> = {
-  "stock.expiry_warning": "Попередження про термін",
-  "stock.expiry_critical": "Критичний термін",
-  "stock.expired": "Прострочено",
-  "stock.needs_verification": "Потребує перевірки",
-  "weekly_report": "Тижневий звіт",
-  "receipt.created": "Надходження товару",
-  "order.replenishment_suggested": "AI-замовлення готове",
-  "supplier.message": "Повідомлення постачальника",
-  "supplier_agreement.signed": "Договір підписано",
-  "iot.temp_alert": "Температурний алерт",
-  "iot.offline": "Пристрій офлайн",
-  "access.temporary_expiring_soon": "Тимчасовий доступ незабаром закінчується",
-  "access.temporary_expired": "Тимчасовий доступ закінчився",
-};
+/** Translated event-type label. `t` must be scoped to `Dashboard.notifications.eventTypes`. */
+export function getEventTypeLabel(t: (key: string) => string, eventType: NotificationEventType): string {
+  const key = EVENT_TYPE_I18N_KEY[eventType];
+  return t(key ?? eventType);
+}
 
-export const CHANNEL_LABELS: Record<NotificationChannel, string> = {
-  telegram: "Telegram",
-  push: "Push",
-  email: "Email",
-  webhook: "Webhook",
-};
+/** Translated channel label. `t` must be scoped to `Dashboard.notifications.channels`. */
+export function getChannelLabel(t: (key: string) => string, channel: NotificationChannel): string {
+  return t(channel);
+}
+
+/**
+ * Translated {service, actor} pair describing where a notification came from. `t` must be
+ * scoped to `Dashboard.notifications.eventSource`. `fallback` covers event types outside
+ * {@link EVENT_TYPE_I18N_KEY} (defensive only — the `NotificationEventType` union is
+ * currently exhaustive here); callers pass their own translated fallback strings.
+ */
+export function getEventTypeSource(
+  t: (key: string) => string,
+  eventType: NotificationEventType,
+  fallback: { service: string; actor: string },
+): { service: string; actor: string } {
+  const key = EVENT_TYPE_I18N_KEY[eventType];
+  if (!key) return fallback;
+  return { service: t(`${key}.service`), actor: t(`${key}.actor`) };
+}
 
 export const CHANNEL_ICONS: Record<NotificationChannel, string> = {
   telegram: "✈️",
