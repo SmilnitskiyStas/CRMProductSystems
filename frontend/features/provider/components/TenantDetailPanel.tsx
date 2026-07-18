@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations, useLocale } from "next-intl";
 import { X, LogIn, Save, ScrollText } from "lucide-react";
 import {
-  PLAN_COLORS, PLAN_LABELS, MODULE_LABELS,
+  PLAN_COLORS,
   ALL_MODULES, ALL_PLANS,
 } from "../types";
 import type { TenantDetailDto } from "../types";
@@ -21,15 +22,20 @@ interface Props {
   onViewLogs: (tenantId: string) => void;
 }
 
-function formatDate(iso: string | null) {
+function formatDate(iso: string | null, locale: string) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("uk-UA", {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 }
 
 export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLogs }: Props) {
+  const t = useTranslations("Dashboard.provider.tenantDetailPanel");
+  const tPlans = useTranslations("Dashboard.provider.plans");
+  const tModules = useTranslations("Dashboard.provider.modules");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: tenant, isLoading } = useTenant(tenantId, true);
   const updatePlan    = useUpdatePlan(tenantId);
   const updateModules = useUpdateModules(tenantId);
@@ -95,7 +101,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
       await queryClient.refetchQueries({ queryKey: ME_KEY });
       onImpersonated();
     } catch (err) {
-      setImpersonateErr((err as Error)?.message ?? "Помилка imersonation");
+      setImpersonateErr((err as Error)?.message ?? t("errorImpersonateDefault"));
     } finally {
       setImpersonating(false);
     }
@@ -129,7 +135,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
         }}
       >
         <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>
-          Деталі клієнта
+          {t("title")}
         </div>
         <button
           onClick={onClose}
@@ -140,11 +146,11 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
       </div>
 
       {isLoading && (
-        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>{t("loading")}</div>
       )}
 
       {!isLoading && !tenant && (
-        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>Не знайдено</div>
+        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>{t("notFound")}</div>
       )}
 
       {showAddUser && (
@@ -173,7 +179,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                   color: tenant.isActive ? "#4ADE80" : "#F87171",
                 }}
               >
-                {tenant.isActive ? "Активний" : "Деактивований"}
+                {tenant.isActive ? t("statusActive") : t("statusDeactivated")}
               </span>
             </div>
             <div style={{ color: "#4B5563", fontSize: 12 }}>{tenant.slug}</div>
@@ -182,11 +188,11 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           {/* Info grid */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {[
-              { label: "Користувачів",     value: tenant.userCount },
-              { label: "Магазинів",        value: tenant.storeCount },
-              { label: "Протерм. партій",  value: tenant.expiredBatchCount, warn: tenant.expiredBatchCount > 0 },
-              { label: "Зареєстровано",    value: formatDate(tenant.createdAt) },
-              { label: "Остання активність", value: formatDate(tenant.lastActivityAt), span: true },
+              { label: t("statUsers"),          value: tenant.userCount },
+              { label: t("statStores"),         value: tenant.storeCount },
+              { label: t("statExpiredBatches"), value: tenant.expiredBatchCount, warn: tenant.expiredBatchCount > 0 },
+              { label: t("statRegistered"),     value: formatDate(tenant.createdAt, intlLocale) },
+              { label: t("statLastActivity"),   value: formatDate(tenant.lastActivityAt, intlLocale), span: true },
             ].map((row) => (
               <div
                 key={row.label}
@@ -209,13 +215,13 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           {/* Plan section */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>ПЛАН</div>
+              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("planSectionTitle")}</div>
               {!editingPlan && (
                 <button
                   onClick={() => startEditPlan(tenant)}
                   style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
                 >
-                  Змінити
+                  {t("changeButton")}
                 </button>
               )}
             </div>
@@ -241,17 +247,17 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                           color: active ? c.text : "#6B7280",
                         }}
                       >
-                        {PLAN_LABELS[p]}
+                        {tPlans(p)}
                       </button>
                     );
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                   <Btn size="sm" icon={<Save size={13} />} onClick={savePlan} disabled={updatePlan.isPending}>
-                    {updatePlan.isPending ? "Збереження…" : "Зберегти"}
+                    {updatePlan.isPending ? t("saving") : t("saveButton")}
                   </Btn>
                   <Btn size="sm" variant="ghost" onClick={() => setEditingPlan(false)}>
-                    Скасувати
+                    {t("cancelButton")}
                   </Btn>
                 </div>
               </div>
@@ -269,7 +275,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     color: PLAN_COLORS[tenant.plan]?.text,
                   }}
                 >
-                  {PLAN_LABELS[tenant.plan]}
+                  {tPlans(tenant.plan)}
                 </span>
               </div>
             )}
@@ -278,13 +284,13 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           {/* Modules section */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>МОДУЛІ</div>
+              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("modulesSectionTitle")}</div>
               {!editingModules && (
                 <button
                   onClick={() => startEditModules(tenant)}
                   style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
                 >
-                  Налаштувати
+                  {t("configureButton")}
                 </button>
               )}
             </div>
@@ -313,7 +319,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                           style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }}
                         />
                         <span style={{ color: active ? "#93C5FD" : "#6B7280", fontSize: 13 }}>
-                          {MODULE_LABELS[m]}
+                          {tModules(m)}
                         </span>
                       </label>
                     );
@@ -321,17 +327,17 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                   <Btn size="sm" icon={<Save size={13} />} onClick={saveModules} disabled={updateModules.isPending}>
-                    {updateModules.isPending ? "Збереження…" : "Зберегти"}
+                    {updateModules.isPending ? t("saving") : t("saveButton")}
                   </Btn>
                   <Btn size="sm" variant="ghost" onClick={() => setEditingModules(false)}>
-                    Скасувати
+                    {t("cancelButton")}
                   </Btn>
                 </div>
               </div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {tenant.modules.length === 0 ? (
-                  <span style={{ color: "#4B5563", fontSize: 13 }}>Модулі не підключено</span>
+                  <span style={{ color: "#4B5563", fontSize: 13 }}>{t("noModulesConnected")}</span>
                 ) : tenant.modules.map((m) => (
                   <span
                     key={m}
@@ -344,7 +350,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                       color: "#93C5FD",
                     }}
                   >
-                    {MODULE_LABELS[m] ?? m}
+                    {tModules.has(m) ? tModules(m) : m}
                   </span>
                 ))}
               </div>
@@ -354,19 +360,19 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           {/* Admins */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>АДМІНІСТРАТОРИ</div>
+              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("adminsSectionTitle")}</div>
               <button
                 onClick={() => setShowAddUser(true)}
                 style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
               >
-                Додати
+                {t("addButton")}
               </button>
             </div>
 
             {usersLoading ? (
-              <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+              <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
             ) : tenantUsers.length === 0 ? (
-              <div style={{ color: "#4B5563", fontSize: 13 }}>Адміністраторів не додано</div>
+              <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noAdminsAdded")}</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {tenantUsers.map((user) => (
@@ -413,38 +419,38 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           {/* Actions */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-              ДІЇ
+              {t("actionsSectionTitle")}
             </div>
             <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 12 }}>
-              Увійдіть від імені адміністратора цього клієнта на 60 хвилин. Сесія записується в журнал.
+              {t("impersonateHint")}
             </div>
             {impersonateErr && (
               <div style={{ color: "#F87171", fontSize: 12, marginBottom: 10 }}>{impersonateErr}</div>
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <Btn icon={<LogIn size={15} />} onClick={handleImpersonate} disabled={impersonating || !tenant.isActive}>
-                {impersonating ? "Підключення…" : "Увійти як клієнт"}
+                {impersonating ? t("connecting") : t("impersonateButton")}
               </Btn>
 
               <Btn variant="ghost" icon={<ScrollText size={15} />} onClick={() => onViewLogs(tenantId)}>
-                Логи
+                {t("logsButton")}
               </Btn>
             </div>
             {!tenant.isActive && (
               <div style={{ color: "#4B5563", fontSize: 11, marginTop: 6 }}>
-                Клієнт деактивований — вхід як клієнт недоступний
+                {t("deactivatedHint")}
               </div>
             )}
 
             <div style={{ borderTop: "1px solid #1F2937", marginTop: 16, paddingTop: 16 }}>
               {!tenant.isActive && (
                 <Btn variant="success" onClick={() => activate.mutate()} disabled={activate.isPending}>
-                  {activate.isPending ? "Зміна…" : "Активувати"}
+                  {activate.isPending ? t("changing") : t("activateButton")}
                 </Btn>
               )}
               {tenant.isActive && (
                 <Btn variant="danger" onClick={() => deactivate.mutate()} disabled={deactivate.isPending}>
-                  {deactivate.isPending ? "Зміна…" : "Деактивувати"}
+                  {deactivate.isPending ? t("changing") : t("deactivateButton")}
                 </Btn>
               )}
             </div>

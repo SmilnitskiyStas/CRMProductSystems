@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Shield, Building2, AlertTriangle, Activity, RefreshCw, Users, Plus, Truck } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
@@ -14,6 +15,7 @@ import { CreateTenantWizard } from "@/features/provider/components/CreateTenantW
 const PROVIDER_ROLES = ["provider", "provider_admin", "provider_agent"];
 
 export default function ProviderPage() {
+  const t = useTranslations("Dashboard.provider.page");
   const router = useRouter();
   const { data: me, isLoading: meLoading } = useMe();
 
@@ -36,19 +38,19 @@ export default function ProviderPage() {
   if (meLoading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("loading")}</div>
       </div>
     );
   }
 
   if (!me || !PROVIDER_ROLES.includes(me.role)) return null;
 
-  const clientTenants = (tenants ?? []).filter((t) => t.businessType !== "supplier");
-  const supplierTenants = (tenants ?? []).filter((t) => t.businessType === "supplier");
+  const clientTenants = (tenants ?? []).filter((tn) => tn.businessType !== "supplier");
+  const supplierTenants = (tenants ?? []).filter((tn) => tn.businessType === "supplier");
 
-  const bySearch = (t: { name: string; slug: string }) =>
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    t.slug.toLowerCase().includes(search.toLowerCase());
+  const bySearch = (tn: { name: string; slug: string }) =>
+    tn.name.toLowerCase().includes(search.toLowerCase()) ||
+    tn.slug.toLowerCase().includes(search.toLowerCase());
 
   const filtered =
     activeTab === "suppliers"
@@ -59,25 +61,25 @@ export default function ProviderPage() {
 
   const stats = [
     {
-      label: "Всього клієнтів",
+      label: t("statTotalClients"),
       value: health?.totalTenants   ?? (tenants?.length ?? 0),
       icon: <Building2 size={18} />,
       color: "#60A5FA",
     },
     {
-      label: "Активних",
-      value: health?.activeTenants  ?? (tenants?.filter((t) => t.isActive).length ?? 0),
+      label: t("statActive"),
+      value: health?.activeTenants  ?? (tenants?.filter((tn) => tn.isActive).length ?? 0),
       icon: <Shield size={18} />,
       color: "#4ADE80",
     },
     {
-      label: "Всього користувачів",
+      label: t("statTotalUsers"),
       value: health?.totalUsers     ?? "—",
       icon: <Users size={18} />,
       color: "#A78BFA",
     },
     {
-      label: "Протерм. партій",
+      label: t("statExpiredBatches"),
       value: health?.totalExpiredBatches ?? "—",
       icon: <AlertTriangle size={18} />,
       color: (health?.totalExpiredBatches ?? 0) > 0 ? "#F87171" : "#4ADE80",
@@ -122,20 +124,20 @@ export default function ProviderPage() {
                 <Shield size={17} color="#fff" />
               </div>
               <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-                Панель провайдера
+                {t("title")}
               </h1>
             </div>
             <p style={{ color: "#4B5563", fontSize: 14, margin: 0 }}>
-              Управління клієнтами платформи ShelfGuard
+              {t("subtitle")}
             </p>
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
             <Btn icon={<Plus size={15} />} onClick={() => setShowWizard(true)}>
-              Новий клієнт
+              {t("newClientButton")}
             </Btn>
             <Btn variant="ghost" icon={<RefreshCw size={14} />} onClick={() => refetchTenants()}>
-              Оновити
+              {t("refreshButton")}
             </Btn>
           </div>
         </div>
@@ -170,9 +172,9 @@ export default function ProviderPage() {
         <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
           {(
             [
-              { key: "clients",   label: `Клієнти (${clientTenants.length})`,     icon: <Building2 size={14} /> },
-              { key: "suppliers", label: `Постачальники (${supplierTenants.length})`, icon: <Truck size={14} /> },
-              { key: "logs",      label: "Логи",                                  icon: <Activity size={14} /> },
+              { key: "clients",   label: t("tabClients", { count: clientTenants.length }),     icon: <Building2 size={14} /> },
+              { key: "suppliers", label: t("tabSuppliers", { count: supplierTenants.length }), icon: <Truck size={14} /> },
+              { key: "logs",      label: t("tabLogs"),                                  icon: <Activity size={14} /> },
             ] as const
           ).map(({ key, label, icon }) => (
             <button
@@ -205,7 +207,7 @@ export default function ProviderPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Пошук за назвою або ідентифікатором…"
+                placeholder={t("searchPlaceholder")}
                 style={{
                   width: "100%",
                   maxWidth: 380,
@@ -223,14 +225,14 @@ export default function ProviderPage() {
 
             {/* Grid */}
             {tenantsLoading ? (
-              <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження клієнтів…</div>
+              <div style={{ color: "#4B5563", fontSize: 14 }}>{t("loadingClients")}</div>
             ) : filtered.length === 0 ? (
               <div style={{ color: "#4B5563", fontSize: 14 }}>
                 {search
-                  ? "Нічого не знайдено"
+                  ? t("noResults")
                   : activeTab === "suppliers"
-                    ? "Постачальників немає"
-                    : "Клієнтів немає"}
+                    ? t("noSuppliers")
+                    : t("noClients")}
               </div>
             ) : (
               <div

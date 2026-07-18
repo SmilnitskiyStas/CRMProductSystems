@@ -1,6 +1,7 @@
 "use client";
 
-import { PLAN_COLORS, PLAN_LABELS, MODULE_LABELS } from "../types";
+import { useTranslations } from "next-intl";
+import { PLAN_COLORS } from "../types";
 import type { TenantSummaryDto } from "../types";
 
 interface Props {
@@ -9,6 +10,9 @@ interface Props {
 }
 
 export function TenantCard({ tenant, onClick }: Props) {
+  const t = useTranslations("Dashboard.provider.tenantCard");
+  const tPlans = useTranslations("Dashboard.provider.plans");
+  const tModules = useTranslations("Dashboard.provider.modules");
   const plan = PLAN_COLORS[tenant.plan] ?? PLAN_COLORS.basic;
 
   return (
@@ -37,7 +41,7 @@ export function TenantCard({ tenant, onClick }: Props) {
           borderRadius: "50%",
           background: tenant.isActive ? "#4ADE80" : "#EF4444",
         }}
-        title={tenant.isActive ? "Активний" : "Деактивовано"}
+        title={tenant.isActive ? t("statusActive") : t("statusDeactivated")}
       />
 
       {/* Name + slug */}
@@ -64,16 +68,16 @@ export function TenantCard({ tenant, onClick }: Props) {
             color: plan.text,
           }}
         >
-          {PLAN_LABELS[tenant.plan]}
+          {tPlans(tenant.plan)}
         </span>
       </div>
 
       {/* Stats row */}
       <div style={{ display: "flex", gap: 16, marginBottom: 14 }}>
         {[
-          { label: "Користувачі", value: tenant.userCount },
-          { label: "Магазини", value: tenant.storeCount },
-          { label: "Протерм.", value: tenant.expiredBatchCount, warn: tenant.expiredBatchCount > 0 },
+          { label: t("statUsers"), value: tenant.userCount },
+          { label: t("statStores"), value: tenant.storeCount },
+          { label: t("statExpired"), value: tenant.expiredBatchCount, warn: tenant.expiredBatchCount > 0 },
         ].map((stat) => (
           <div key={stat.label}>
             <div style={{ color: stat.warn ? "#F87171" : "#E8EDF5", fontSize: 16, fontWeight: 700 }}>
@@ -99,7 +103,7 @@ export function TenantCard({ tenant, onClick }: Props) {
                 color: "#6B7280",
               }}
             >
-              {MODULE_LABELS[m] ?? m}
+              {tModules.has(m) ? tModules(m) : m}
             </span>
           ))}
           {tenant.modules.length > 4 && (

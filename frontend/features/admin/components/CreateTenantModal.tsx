@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { useCreateTenant } from "../hooks/useAdmin";
-import { ALL_BUSINESS_TYPES, ALL_PLANS, BUSINESS_TYPE_LABELS, PLAN_LABELS } from "../types";
+import { ALL_BUSINESS_TYPES, ALL_PLANS } from "../types";
 import type { CreateTenantRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
 import { slugify } from "@/lib/slug";
@@ -47,6 +48,9 @@ function Field({ label, children }: FieldProps) {
 }
 
 export function CreateTenantModal({ onClose }: Props) {
+  const t = useTranslations("Dashboard.admin.createTenantModal");
+  const tPlans = useTranslations("Dashboard.admin.plans");
+  const tBusinessTypes = useTranslations("Dashboard.admin.businessTypes");
   const createTenant = useCreateTenant();
 
   const [form, setForm] = useState<CreateTenantRequest>({
@@ -83,7 +87,7 @@ export function CreateTenantModal({ onClose }: Props) {
     setError("");
 
     if (!form.name.trim() || !form.slug.trim() || !form.adminEmail.trim() || !form.adminPassword.trim()) {
-      setError("Заповніть всі обов\'язкові поля");
+      setError(t("errorRequiredFields"));
       return;
     }
 
@@ -91,7 +95,7 @@ export function CreateTenantModal({ onClose }: Props) {
       await createTenant.mutateAsync(form);
       onClose();
     } catch (err) {
-      setError((err as Error)?.message ?? "Помилка створення тенанта");
+      setError((err as Error)?.message ?? t("errorCreateDefault"));
     }
   }
 
@@ -131,7 +135,7 @@ export function CreateTenantModal({ onClose }: Props) {
           }}
         >
           <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600 }}>
-            Новий тенант
+            {t("title")}
           </div>
           <button
             onClick={onClose}
@@ -144,83 +148,82 @@ export function CreateTenantModal({ onClose }: Props) {
         {/* Form */}
         <form onSubmit={handleSubmit}>
           <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-            <Field label="Назва *">
+            <Field label={t("nameLabel")}>
               <input
                 style={INPUT_STYLE}
                 value={form.name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Мережа Квіточка"
+                placeholder={t("namePlaceholder")}
               />
             </Field>
 
-            <Field label="Slug *">
+            <Field label={t("slugLabel")}>
               <input
                 style={INPUT_STYLE}
                 value={form.slug}
                 onChange={(e) => handleSlugChange(e.target.value)}
-                placeholder="merezha-kvitochka"
+                placeholder={t("slugPlaceholder")}
               />
             </Field>
 
-            <Field label="План">
+            <Field label={t("planLabel")}>
               <select
                 style={{ ...INPUT_STYLE, cursor: "pointer" }}
                 value={form.plan}
                 onChange={(e) => setField("plan", e.target.value)}
               >
                 {ALL_PLANS.map((p) => (
-                  <option key={p} value={p}>{PLAN_LABELS[p]}</option>
+                  <option key={p} value={p}>{tPlans(p)}</option>
                 ))}
               </select>
             </Field>
 
-            <Field label="Тип бізнесу">
+            <Field label={t("businessTypeLabel")}>
               <select
                 style={{ ...INPUT_STYLE, cursor: "pointer" }}
                 value={form.businessType}
                 onChange={(e) => setField("businessType", e.target.value)}
               >
                 {ALL_BUSINESS_TYPES.map((bt) => (
-                  <option key={bt} value={bt}>{BUSINESS_TYPE_LABELS[bt]}</option>
+                  <option key={bt} value={bt}>{tBusinessTypes(bt)}</option>
                 ))}
               </select>
               {form.businessType === "supplier" && (
                 <div style={{ color: "#6B7280", fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
-                  Буде створено постачальника маркетплейсу: перший користувач отримає роль
-                  supplier_admin і доступ лише до кабінету постачальника.
+                  {t("supplierHint")}
                 </div>
               )}
             </Field>
 
             <div style={{ borderTop: "1px solid #1F2937", paddingTop: 16 }}>
               <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 14 }}>
-                Адміністратор тенанта
+                {t("adminSectionTitle")}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <Field label="Email *">
+                <Field label={t("emailLabel")}>
                   <input
                     style={INPUT_STYLE}
                     type="email"
                     value={form.adminEmail}
                     onChange={(e) => setField("adminEmail", e.target.value)}
-                    placeholder="admin@company.com"
+                    placeholder={t("emailPlaceholder")}
                   />
                 </Field>
-                <Field label="Повне ім'я">
+                <Field label={t("fullNameLabel")}>
                   <input
                     style={INPUT_STYLE}
                     value={form.adminFullName}
                     onChange={(e) => setField("adminFullName", e.target.value)}
-                    placeholder="Іван Іваненко"
+                    placeholder={t("fullNamePlaceholder")}
                   />
                 </Field>
-                <Field label="Пароль *">
+                <Field label={t("passwordLabel")}>
                   <input
                     style={INPUT_STYLE}
                     type="password"
                     value={form.adminPassword}
                     onChange={(e) => setField("adminPassword", e.target.value)}
-                    placeholder="Мінімум 8 символів"
+                    placeholder={t("passwordPlaceholder")}
                   />
                 </Field>
               </div>
@@ -242,10 +245,10 @@ export function CreateTenantModal({ onClose }: Props) {
             }}
           >
             <Btn type="button" variant="ghost" onClick={onClose}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
             <Btn type="submit" disabled={createTenant.isPending}>
-              {createTenant.isPending ? "Створення…" : "Створити"}
+              {createTenant.isPending ? t("creating") : t("createButton")}
             </Btn>
           </div>
         </form>

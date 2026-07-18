@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Calendar, Plus, Trash2, X } from "lucide-react";
 import { useProviderSchedule, useCreateScheduleSlot, useDeleteScheduleSlot } from "../hooks/useProviderSchedule";
 import { useProviderTeam } from "../hooks/useProviderTeam";
 import type { ProviderScheduleSlotDto } from "../api/providerScheduleApi";
 import { Btn } from "@/components/ui/Btn";
 
-const DAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
-const DAY_FULL   = ["Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота", "Неділя"];
+// Day-of-week ordering (Mon..Sun) — display labels come from i18n
+// (Dashboard.provider.scheduleTab.dayShort/.dayFull, `useTranslations`).
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
 const ROLE_COLORS: Record<string, string> = {
   provider:       "#A78BFA",
@@ -21,6 +23,7 @@ interface AddSlotModalProps {
 }
 
 function AddSlotModal({ onClose }: AddSlotModalProps) {
+  const t = useTranslations("Dashboard.provider.scheduleTab");
   const { data: members } = useProviderTeam();
   const create = useCreateScheduleSlot();
   const [form, setForm] = useState({
@@ -34,8 +37,8 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.userId) { setError("Оберіть учасника"); return; }
-    if (form.daysOfWeek.length === 0) { setError("Оберіть хоча б один день"); return; }
+    if (!form.userId) { setError(t("errorSelectMember")); return; }
+    if (form.daysOfWeek.length === 0) { setError(t("errorSelectDay")); return; }
     setError(null);
     try {
       for (const day of form.daysOfWeek) {
@@ -50,7 +53,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
       onClose();
     } catch (err: unknown) {
       const e = err as { error?: string };
-      setError(e?.error ?? "Помилка створення");
+      setError(e?.error ?? t("errorCreateDefault"));
     }
   }
 
@@ -64,7 +67,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>Додати зміну</h2>
+          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>{t("addShiftButton")}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
             <X size={18} />
           </button>
@@ -76,16 +79,16 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
             onChange={(e) => setForm((f) => ({ ...f, userId: e.target.value }))}
             style={{ ...inputStyle, appearance: "none" }}
           >
-            <option value="">Оберіть учасника…</option>
+            <option value="">{t("selectMemberPlaceholder")}</option>
             {(members ?? []).filter((m) => m.isActive).map((m) => (
               <option key={m.id} value={m.id}>{m.fullName}</option>
             ))}
           </select>
 
           <div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>Дні тижня</div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{t("daysOfWeekLabel")}</div>
             <div style={{ display: "flex", gap: 6 }}>
-              {DAY_LABELS.map((label, i) => {
+              {DAY_KEYS.map((dayKey, i) => {
                 const selected = form.daysOfWeek.includes(i);
                 return (
                   <button
@@ -113,7 +116,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
                       transition: "background 0.15s, border-color 0.15s, color 0.15s",
                     }}
                   >
-                    {label}
+                    {t(`dayShort.${dayKey}`)}
                   </button>
                 );
               })}
@@ -122,7 +125,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 4 }}>Початок</div>
+              <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 4 }}>{t("startTimeLabel")}</div>
               <input
                 type="time"
                 value={form.startTime}
@@ -131,7 +134,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
               />
             </div>
             <div>
-              <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 4 }}>Кінець</div>
+              <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 4 }}>{t("endTimeLabel")}</div>
               <input
                 type="time"
                 value={form.endTime}
@@ -143,7 +146,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
 
           <input
             type="text"
-            placeholder="Нотатки (необов'язково)"
+            placeholder={t("notesPlaceholder")}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             style={inputStyle}
@@ -165,7 +168,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
               cursor: create.isPending ? "not-allowed" : "pointer", marginTop: 4,
             }}
           >
-            {create.isPending ? "Збереження…" : "Додати зміну"}
+            {create.isPending ? t("saving") : t("addShiftButton")}
           </button>
         </form>
       </div>
@@ -180,6 +183,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 function SlotPill({ slot, onDelete }: { slot: ProviderScheduleSlotDto; onDelete: () => void }) {
+  const t = useTranslations("Dashboard.provider.scheduleTab");
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -200,7 +204,7 @@ function SlotPill({ slot, onDelete }: { slot: ProviderScheduleSlotDto; onDelete:
         style={{ background: "transparent", border: "none", color: "#4B5563", cursor: "pointer", padding: 2, flexShrink: 0, transition: "color 0.15s" }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#F87171"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
-        title="Видалити"
+        title={t("deleteTitle")}
       >
         <Trash2 size={12} />
       </button>
@@ -209,6 +213,7 @@ function SlotPill({ slot, onDelete }: { slot: ProviderScheduleSlotDto; onDelete:
 }
 
 export function ScheduleTab() {
+  const t = useTranslations("Dashboard.provider.scheduleTab");
   const { data: slots, isLoading } = useProviderSchedule();
   const deleteSlot = useDeleteScheduleSlot();
   const [showAdd, setShowAdd] = useState(false);
@@ -223,24 +228,24 @@ export function ScheduleTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Calendar size={18} color="#60A5FA" />
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Розклад команди
+            {t("title")}
           </h2>
           {slots && (
             <span style={{ padding: "2px 8px", borderRadius: 10, background: "#1F2937", color: "#9CA3AF", fontSize: 11 }}>
-              {slots.length} змін
+              {t("shiftsCountLabel", { count: slots.length })}
             </span>
           )}
         </div>
         <Btn icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>
-          Додати зміну
+          {t("addShiftButton")}
         </Btn>
       </div>
 
       {isLoading ? (
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("loading")}</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10 }}>
-          {DAY_LABELS.map((day, i) => (
+          {DAY_KEYS.map((dayKey, i) => (
             <div key={i}>
               <div style={{
                 color: i >= 5 ? "#F87171" : "#9CA3AF",
@@ -249,7 +254,7 @@ export function ScheduleTab() {
                 padding: "6px 0",
                 borderBottom: "1px solid #1F2937",
               }}>
-                {day}
+                {t(`dayShort.${dayKey}`)}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {slotsByDay[i].length === 0 ? (
@@ -260,7 +265,7 @@ export function ScheduleTab() {
                       key={slot.id}
                       slot={slot}
                       onDelete={() => {
-                        if (confirm(`Видалити зміну ${slot.userFullName} (${DAY_FULL[i]})?`)) {
+                        if (confirm(t("confirmDeleteSlot", { name: slot.userFullName, day: t(`dayFull.${dayKey}`) }))) {
                           deleteSlot.mutate(slot.id);
                         }
                       }}

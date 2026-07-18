@@ -1,7 +1,8 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { TenantDto } from "../types";
-import { PLAN_LABELS, PLAN_COLORS } from "../types";
+import { PLAN_COLORS } from "../types";
 import { useActivateTenant, useDeactivateTenant } from "../hooks/useAdmin";
 import { Btn } from "@/components/ui/Btn";
 
@@ -18,6 +19,7 @@ function formatNumber(n: number): string {
 }
 
 function PlanBadge({ plan }: { plan: TenantDto["plan"] }) {
+  const tPlans = useTranslations("Dashboard.admin.plans");
   const c = PLAN_COLORS[plan];
   return (
     <span
@@ -32,12 +34,13 @@ function PlanBadge({ plan }: { plan: TenantDto["plan"] }) {
         color: c.text,
       }}
     >
-      {PLAN_LABELS[plan]}
+      {tPlans(plan)}
     </span>
   );
 }
 
 function StatusBadge({ isActive }: { isActive: boolean }) {
+  const t = useTranslations("Dashboard.admin.tenantTable");
   return (
     <span
       style={{
@@ -51,7 +54,7 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
         color: isActive ? "#4ADE80" : "#F87171",
       }}
     >
-      {isActive ? "Активний" : "Деактивовано"}
+      {isActive ? t("statusActive") : t("statusDeactivated")}
     </span>
   );
 }
@@ -75,15 +78,16 @@ const TD_STYLE: React.CSSProperties = {
 };
 
 export function TenantTable({ tenants, isLoading, onRowClick }: Props) {
+  const t = useTranslations("Dashboard.admin.tenantTable");
   const activate   = useActivateTenant();
   const deactivate = useDeactivateTenant();
 
   if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 14, padding: "24px 0" }}>Завантаження…</div>;
+    return <div style={{ color: "#4B5563", fontSize: 14, padding: "24px 0" }}>{t("loading")}</div>;
   }
 
   if (tenants.length === 0) {
-    return <div style={{ color: "#4B5563", fontSize: 14, padding: "24px 0" }}>Тенанти відсутні</div>;
+    return <div style={{ color: "#4B5563", fontSize: 14, padding: "24px 0" }}>{t("empty")}</div>;
   }
 
   function handleToggle(e: React.MouseEvent, tenant: TenantDto) {
@@ -107,20 +111,20 @@ export function TenantTable({ tenants, isLoading, onRowClick }: Props) {
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "#080D14" }}>
-            <th style={TH_STYLE}>Назва / Slug</th>
-            <th style={TH_STYLE}>План</th>
-            <th style={TH_STYLE}>Модулів</th>
-            <th style={TH_STYLE}>Кор. / Маг. / Прод.</th>
-            <th style={TH_STYLE}>Продажі 30д</th>
-            <th style={TH_STYLE}>Статус</th>
-            <th style={TH_STYLE}>Дії</th>
+            <th style={TH_STYLE}>{t("headerName")}</th>
+            <th style={TH_STYLE}>{t("headerPlan")}</th>
+            <th style={TH_STYLE}>{t("headerModules")}</th>
+            <th style={TH_STYLE}>{t("headerUsage")}</th>
+            <th style={TH_STYLE}>{t("headerSales")}</th>
+            <th style={TH_STYLE}>{t("headerStatus")}</th>
+            <th style={TH_STYLE}>{t("headerActions")}</th>
           </tr>
         </thead>
         <tbody>
-          {tenants.map((t) => (
+          {tenants.map((tenant) => (
             <tr
-              key={t.id}
-              onClick={() => onRowClick(t)}
+              key={tenant.id}
+              onClick={() => onRowClick(tenant)}
               style={{ cursor: "pointer" }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.background = "#0F1520";
@@ -130,36 +134,36 @@ export function TenantTable({ tenants, isLoading, onRowClick }: Props) {
               }}
             >
               <td style={TD_STYLE}>
-                <div style={{ fontWeight: 600 }}>{t.name}</div>
-                <div style={{ color: "#4B5563", fontSize: 11 }}>{t.slug}</div>
+                <div style={{ fontWeight: 600 }}>{tenant.name}</div>
+                <div style={{ color: "#4B5563", fontSize: 11 }}>{tenant.slug}</div>
               </td>
               <td style={TD_STYLE}>
-                <PlanBadge plan={t.plan} />
+                <PlanBadge plan={tenant.plan} />
               </td>
               <td style={{ ...TD_STYLE, color: "#9CA3AF" }}>
-                {t.modules.length}
+                {tenant.modules.length}
               </td>
               <td style={{ ...TD_STYLE, color: "#9CA3AF" }}>
-                {t.usage.usersCount} / {t.usage.storesCount} / {t.usage.productsCount}
+                {tenant.usage.usersCount} / {tenant.usage.storesCount} / {tenant.usage.productsCount}
               </td>
               <td style={{ ...TD_STYLE, color: "#E8EDF5", fontWeight: 600 }}>
-                {formatNumber(t.usage.salesLast30Days)}
+                {formatNumber(tenant.usage.salesLast30Days)}
               </td>
               <td style={TD_STYLE}>
-                <StatusBadge isActive={t.isActive} />
+                <StatusBadge isActive={tenant.isActive} />
               </td>
               <td style={TD_STYLE}>
                 <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                  <Btn size="sm" onClick={() => onRowClick(t)}>
-                    Деталі
+                  <Btn size="sm" onClick={() => onRowClick(tenant)}>
+                    {t("detailsButton")}
                   </Btn>
                   <Btn
                     size="sm"
-                    variant={t.isActive ? "danger" : "success"}
-                    onClick={() => { if (t.isActive) { deactivate.mutate(t.id); } else { activate.mutate(t.id); } }}
+                    variant={tenant.isActive ? "danger" : "success"}
+                    onClick={() => { if (tenant.isActive) { deactivate.mutate(tenant.id); } else { activate.mutate(tenant.id); } }}
                     disabled={activate.isPending || deactivate.isPending}
                   >
-                    {t.isActive ? "Деакт." : "Акт."}
+                    {tenant.isActive ? t("deactivateShort") : t("activateShort")}
                   </Btn>
                 </div>
               </td>

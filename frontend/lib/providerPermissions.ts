@@ -1,16 +1,17 @@
-export const PROVIDER_PERMISSIONS: Record<string, string> = {
-  team_management:     "Управління командою",
-  view_clients:        "Перегляд клієнтів",
-  manage_clients:      "Управління клієнтами",
-  service_desk:        "Service Desk та тікети",
-  live_chat:           "Живий чат",
-  admin_panel:         "Адмін-панель",
-  marketplace:         "Маркетплейс",
-  analytics:           "Аналітика",
-  schedule_management: "Управління розкладом",
-};
-
-export const ALL_PERMISSIONS = Object.keys(PROVIDER_PERMISSIONS);
+// Labels for these permission keys live in i18n (Dashboard.provider.permissions.*,
+// `useTranslations`) — see RolesSection.tsx / EditMemberModal.tsx /
+// InviteProviderMemberModal.tsx. Kept here only as the canonical key list.
+export const ALL_PERMISSIONS: string[] = [
+  "team_management",
+  "view_clients",
+  "manage_clients",
+  "service_desk",
+  "live_chat",
+  "admin_panel",
+  "marketplace",
+  "analytics",
+  "schedule_management",
+];
 
 export const SYSTEM_ROLE_PERMISSIONS: Record<string, string[]> = {
   provider:       ALL_PERMISSIONS,

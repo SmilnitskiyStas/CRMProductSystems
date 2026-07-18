@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { X, CheckCircle2 } from "lucide-react";
 import { useCreateTenantUser } from "../hooks/useProvider";
 import type { BusinessType, TenantUserDto } from "../types";
@@ -12,25 +13,6 @@ interface RoleOption {
   description: string;
 }
 
-// Role set depends on tenant business type (ADR-016):
-// supplier tenants get ONLY supplier_admin (cabinet-only access),
-// regular tenants keep the existing enterprise_admin role.
-const SUPPLIER_ROLES: RoleOption[] = [
-  {
-    value: "supplier_admin",
-    label: "Адміністратор постачальника",
-    description: "Доступ до кабінету постачальника: профіль, товари, відгуки",
-  },
-];
-
-const REGULAR_ROLES: RoleOption[] = [
-  {
-    value: "enterprise_admin",
-    label: "Адміністратор підприємства",
-    description: "Повний доступ до всіх модулів і налаштувань тенанта",
-  },
-];
-
 interface Props {
   tenantId: string;
   businessType?: BusinessType;
@@ -39,7 +21,25 @@ interface Props {
 }
 
 export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated }: Props) {
+  const t = useTranslations("Dashboard.provider.addTenantUserModal");
   const createUser = useCreateTenantUser(tenantId);
+
+  // Role set depends on tenant business type (ADR-016): supplier tenants get ONLY
+  // supplier_admin (cabinet-only access), regular tenants keep enterprise_admin.
+  const SUPPLIER_ROLES: RoleOption[] = [
+    {
+      value: "supplier_admin",
+      label: t("supplierAdminRoleLabel"),
+      description: t("supplierAdminRoleDescription"),
+    },
+  ];
+  const REGULAR_ROLES: RoleOption[] = [
+    {
+      value: "enterprise_admin",
+      label: t("enterpriseAdminRoleLabel"),
+      description: t("enterpriseAdminRoleDescription"),
+    },
+  ];
 
   const isSupplier = businessType === "supplier";
   const roles      = isSupplier ? SUPPLIER_ROLES : REGULAR_ROLES;
@@ -55,11 +55,11 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
 
   function validate() {
     const e: Record<string, string> = {};
-    if (!fullName.trim())                      e.fullName = "Введіть ПІБ";
-    if (!email.trim())                         e.email    = "Введіть email";
-    if (!password)                             e.password = "Введіть пароль";
-    else if (password.length < 6)             e.password = "Мінімум 6 символів";
-    if (password !== confirmPassword)          e.confirmPassword = "Паролі не збігаються";
+    if (!fullName.trim())                      e.fullName = t("errorFullNameRequired");
+    if (!email.trim())                         e.email    = t("errorEmailRequired");
+    if (!password)                             e.password = t("errorPasswordRequired");
+    else if (password.length < 6)             e.password = t("errorPasswordMinLength");
+    if (password !== confirmPassword)          e.confirmPassword = t("errorPasswordMismatch");
     return e;
   }
 
@@ -76,7 +76,7 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
       const user = await createUser.mutateAsync({ fullName: fullName.trim(), email: email.trim(), password, role });
       setCreatedUser(user);
     } catch (err) {
-      setServerError((err as Error)?.message ?? "Помилка при створенні користувача");
+      setServerError((err as Error)?.message ?? t("errorCreateDefault"));
     }
   }
 
@@ -115,7 +115,7 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           }}
         >
           <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>
-            Додати адміністратора
+            {t("title")}
           </div>
           <button
             onClick={onClose}
@@ -129,11 +129,11 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           <div style={{ padding: "24px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
             <CheckCircle2 size={40} color="#22C55E" />
             <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-              Адміністратора {createdUser.email} створено.
+              {t("createdMessage", { email: createdUser.email })}
             </div>
             {isSupplier && (
               <div style={{ color: "#6B7280", fontSize: 12 }}>
-                Постачальник входить через звичайну сторінку логіну
+                {t("supplierLoginHint")}
               </div>
             )}
             <Btn
@@ -141,7 +141,7 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
               onClick={() => { onCreated(createdUser); onClose(); }}
               style={{ marginTop: 8, justifyContent: "center", width: "100%" }}
             >
-              Закрити
+              {t("closeButton")}
             </Btn>
           </div>
         ) : (
@@ -155,13 +155,13 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           {/* ПІБ */}
           <div>
             <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
-              ПІБ
+              {t("fullNameLabel")}
             </label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Іванов Іван Іванович"
+              placeholder={t("fullNamePlaceholder")}
               style={{
                 width: "100%",
                 background: "#111827",
@@ -182,13 +182,13 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           {/* Email */}
           <div>
             <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
-              Email
+              {t("emailLabel")}
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@example.com"
+              placeholder={t("emailPlaceholder")}
               style={{
                 width: "100%",
                 background: "#111827",
@@ -209,7 +209,7 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           {/* Роль */}
           <div>
             <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
-              Роль
+              {t("roleLabel")}
             </label>
             {roles.length > 1 ? (
               <select
@@ -241,7 +241,7 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
                   boxSizing: "border-box",
                 }}
               >
-                <div style={{ color: "#E8EDF5", fontSize: 13 }}>Роль: {roles[0].label}</div>
+                <div style={{ color: "#E8EDF5", fontSize: 13 }}>{t("roleSingleLabel", { role: roles[0].label })}</div>
                 <div style={{ color: "#6B7280", fontSize: 11, marginTop: 2 }}>{roles[0].description}</div>
               </div>
             )}
@@ -250,13 +250,13 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           {/* Пароль */}
           <div>
             <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
-              Пароль
+              {t("passwordLabel")}
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Мінімум 6 символів"
+              placeholder={t("passwordPlaceholder")}
               style={{
                 width: "100%",
                 background: "#111827",
@@ -277,13 +277,13 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           {/* Підтвердження пароля */}
           <div>
             <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
-              Підтвердження пароля
+              {t("confirmPasswordLabel")}
             </label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Повторіть пароль"
+              placeholder={t("confirmPasswordPlaceholder")}
               style={{
                 width: "100%",
                 background: "#111827",
@@ -304,10 +304,10 @@ export function AddTenantUserModal({ tenantId, businessType, onClose, onCreated 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
             <Btn type="submit" disabled={createUser.isPending} style={{ flex: 1, justifyContent: "center" }}>
-              {createUser.isPending ? "Створення…" : "Додати адміністратора"}
+              {createUser.isPending ? t("creating") : t("submitButton")}
             </Btn>
             <Btn type="button" variant="ghost" onClick={onClose}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
           </div>
         </form>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Users, BarChart2 } from "lucide-react";
 import { Shield } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -15,6 +16,7 @@ import { RolesSection } from "@/features/provider/components/RolesSection";
 type Tab = "team" | "stats" | "roles";
 
 export default function ProviderTeamPage() {
+  const t = useTranslations("Dashboard.provider.teamPage");
   const router = useRouter();
   const { data: me, isLoading } = useMe();
   const [activeTab, setActiveTab] = useState<Tab>("team");
@@ -28,7 +30,7 @@ export default function ProviderTeamPage() {
   if (isLoading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("loading")}</div>
       </div>
     );
   }
@@ -52,24 +54,24 @@ export default function ProviderTeamPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <Users size={20} style={{ color: "#3B82F6" }} />
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Команда провайдера
+            {t("title")}
           </h1>
         </div>
         <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>
-          Управління учасниками команди та перегляд статистики
+          {t("subtitle")}
         </p>
       </div>
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
         <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>
-          <Users size={14} /> Команда
+          <Users size={14} /> {t("tabTeam")}
         </button>
         <button style={tabStyle("stats")} onClick={() => setActiveTab("stats")}>
-          <BarChart2 size={14} /> Статистика
+          <BarChart2 size={14} /> {t("tabStats")}
         </button>
         <button style={tabStyle("roles")} onClick={() => setActiveTab("roles")}>
-          <Shield size={14} /> Ролі
+          <Shield size={14} /> {t("tabRoles")}
         </button>
       </div>
 

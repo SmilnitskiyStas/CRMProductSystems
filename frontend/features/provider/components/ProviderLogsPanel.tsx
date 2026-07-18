@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { ChevronLeft, ChevronRight, Filter, RefreshCw } from "lucide-react";
 import { useProviderLogs } from "../hooks/useProvider";
 import { useTenants } from "../hooks/useProvider";
@@ -42,26 +43,15 @@ function getColor(action: string) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDate(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 }
 
-function actionLabel(action: string) {
-  const map: Record<string, string> = {
-    "user.login":               "Вхід",
-    "user.invited":             "Запрошено",
-    "user.updated":             "Оновлено",
-    "user.deactivated":         "Деактивовано",
-    "user.profile_updated":     "Профіль змінено",
-    "user.password_changed":    "Пароль змінено",
-    "user.telegram_linked":     "Telegram підключено",
-    "user.permissions_updated": "Права змінено",
-    "provider.impersonate":     "Imitation",
-  };
-  return map[action] ?? action;
+function actionLabel(t: ReturnType<typeof useTranslations>, action: string): string {
+  return (KNOWN_ACTIONS as readonly string[]).includes(action) ? t(`actions.${action}`) : action;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -128,6 +118,9 @@ function DateInput({ label, value, onChange }: { label: string; value: string; o
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: string }) {
+  const t = useTranslations("Dashboard.provider.logsPanel");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: tenants } = useTenants();
 
   const [tenantId, setTenantId] = useState(initialTenantId ?? "");
@@ -177,25 +170,25 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
       >
         <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#4B5563", marginBottom: 2 }}>
           <Filter size={13} />
-          <span style={{ fontSize: 12, fontWeight: 600 }}>Фільтри</span>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{t("filtersTitle")}</span>
         </div>
 
-        <FilterSelect label="Клієнт" value={tenantId} onChange={(v) => { setTenantId(v); setPage(1); }}>
-          <option value="">Всі клієнти</option>
-          {(tenants ?? []).map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
+        <FilterSelect label={t("tenantLabel")} value={tenantId} onChange={(v) => { setTenantId(v); setPage(1); }}>
+          <option value="">{t("allClientsOption")}</option>
+          {(tenants ?? []).map((tenantOpt) => (
+            <option key={tenantOpt.id} value={tenantOpt.id}>{tenantOpt.name}</option>
           ))}
         </FilterSelect>
 
-        <FilterSelect label="Дія" value={action} onChange={(v) => { setAction(v); setPage(1); }}>
-          <option value="">Всі дії</option>
+        <FilterSelect label={t("actionLabel")} value={action} onChange={(v) => { setAction(v); setPage(1); }}>
+          <option value="">{t("allActionsOption")}</option>
           {KNOWN_ACTIONS.map((a) => (
-            <option key={a} value={a}>{actionLabel(a)}</option>
+            <option key={a} value={a}>{actionLabel(t, a)}</option>
           ))}
         </FilterSelect>
 
-        <DateInput label="Від" value={dateFrom} onChange={(v) => { setDateFrom(v); setPage(1); }} />
-        <DateInput label="До"  value={dateTo}   onChange={(v) => { setDateTo(v);   setPage(1); }} />
+        <DateInput label={t("fromLabel")} value={dateFrom} onChange={(v) => { setDateFrom(v); setPage(1); }} />
+        <DateInput label={t("toLabel")}  value={dateTo}   onChange={(v) => { setDateTo(v);   setPage(1); }} />
 
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
           {hasFilter && (
@@ -207,7 +200,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
                 color: "#6B7280", cursor: "pointer",
               }}
             >
-              Скинути
+              {t("resetButton")}
             </button>
           )}
           <button
@@ -220,7 +213,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
             }}
           >
             <RefreshCw size={12} />
-            Оновити
+            {t("refreshButton")}
           </button>
         </div>
       </div>
@@ -228,19 +221,19 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
       {/* Stats row */}
       {data && (
         <div style={{ color: "#4B5563", fontSize: 12 }}>
-          Знайдено: <span style={{ color: "#E8EDF5", fontWeight: 600 }}>{data.total}</span> записів
+          {t("foundPrefix")} <span style={{ color: "#E8EDF5", fontWeight: 600 }}>{data.total}</span> {t("foundSuffix")}
           {totalPages > 1 && (
-            <span> · сторінка {page} з {totalPages}</span>
+            <span>{t("pageIndicator", { page, totalPages })}</span>
           )}
         </div>
       )}
 
       {/* Log rows */}
       {isLoading ? (
-        <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>
       ) : !data?.items.length ? (
         <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>
-          {hasFilter ? "Немає записів за вибраними фільтрами" : "Логів немає"}
+          {hasFilter ? t("emptyFiltered") : t("emptyAll")}
         </div>
       ) : (
         <div
@@ -253,7 +246,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
         >
           {data.items.map((log, i) => {
             const color = getColor(log.action);
-            const tenantName = tenants?.find((t) => t.id === log.tenantId)?.name;
+            const tenantName = tenants?.find((tn) => tn.id === log.tenantId)?.name;
             return (
               <div
                 key={log.id}
@@ -291,7 +284,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
                         letterSpacing: "0.02em",
                       }}
                     >
-                      {actionLabel(log.action)}
+                      {actionLabel(t, log.action)}
                     </span>
 
                     {/* Impersonated badge */}
@@ -305,7 +298,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
                           border: "1px solid #7C3AED44",
                         }}
                       >
-                        👁 Imitation
+                        👁 {t("impersonatedBadge")}
                       </span>
                     )}
 
@@ -334,7 +327,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
 
                 {/* Timestamp */}
                 <div style={{ color: "#374151", fontSize: 11, textAlign: "right", whiteSpace: "nowrap", marginTop: 3 }}>
-                  {formatDate(log.createdAt)}
+                  {formatDate(log.createdAt, intlLocale)}
                 </div>
               </div>
             );
@@ -358,7 +351,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
             }}
           >
             <ChevronLeft size={14} />
-            Назад
+            {t("prevButton")}
           </button>
 
           <span style={{ color: "#4B5563", fontSize: 12, padding: "0 8px" }}>
@@ -377,7 +370,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
               cursor: page === totalPages ? "default" : "pointer",
             }}
           >
-            Вперед
+            {t("nextButton")}
             <ChevronRight size={14} />
           </button>
         </div>

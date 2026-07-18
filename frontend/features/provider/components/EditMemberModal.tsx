@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { useUpdateMember } from "../hooks/useProviderTeam";
 import { useProviderRoles } from "../hooks/useProviderRoles";
 import type { ProviderTeamMemberDto } from "../api/providerTeamApi";
 import {
-  PROVIDER_PERMISSIONS,
   ALL_PERMISSIONS,
   SYSTEM_ROLE_PERMISSIONS,
   resolvePermissions,
@@ -18,6 +18,9 @@ interface Props {
 }
 
 export function EditMemberModal({ member, onClose }: Props) {
+  const t = useTranslations("Dashboard.provider.editMemberModal");
+  const tPermissions = useTranslations("Dashboard.provider.permissions");
+  const tRoleSelector = useTranslations("Dashboard.provider.roleSelector");
   const update = useUpdateMember();
   const { data: customRoles } = useProviderRoles();
   const isOwner = member.role === "provider";
@@ -93,7 +96,7 @@ export function EditMemberModal({ member, onClose }: Props) {
       onClose();
     } catch (err: unknown) {
       const e = err as { error?: string };
-      setError(e?.error ?? "Помилка оновлення");
+      setError(e?.error ?? t("errorUpdateDefault"));
     }
   }
 
@@ -117,7 +120,7 @@ export function EditMemberModal({ member, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>Редагувати учасника</h2>
+          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>{t("title")}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
             <X size={18} />
           </button>
@@ -127,7 +130,7 @@ export function EditMemberModal({ member, onClose }: Props) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <input
-            required type="text" placeholder="Повне ім'я" value={form.fullName}
+            required type="text" placeholder={t("fullNamePlaceholder")} value={form.fullName}
             onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
             style={inputStyle}
           />
@@ -135,7 +138,7 @@ export function EditMemberModal({ member, onClose }: Props) {
           {/* Role selector */}
           {!isOwner && (
             <div>
-              <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>Роль</div>
+              <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{t("roleLabel")}</div>
               <select
                 value={form.selectedRoleId}
                 onChange={(e) => {
@@ -144,12 +147,12 @@ export function EditMemberModal({ member, onClose }: Props) {
                 }}
                 style={{ ...inputStyle, appearance: "none" }}
               >
-                <optgroup label="Системні ролі">
-                  <option value="__admin">Адмін провайдера</option>
-                  <option value="__agent">Агент підтримки</option>
+                <optgroup label={tRoleSelector("systemRolesGroup")}>
+                  <option value="__admin">{tRoleSelector("baseRoleLabels.provider_admin")}</option>
+                  <option value="__agent">{tRoleSelector("baseRoleLabels.provider_agent")}</option>
                 </optgroup>
                 {customRoles && customRoles.filter((r) => !r.isSystem).length > 0 && (
-                  <optgroup label="Кастомні ролі">
+                  <optgroup label={tRoleSelector("customRolesGroup")}>
                     {customRoles.filter((r) => !r.isSystem).map((r) => (
                       <option key={r.id} value={r.id}>{r.displayName}</option>
                     ))}
@@ -159,16 +162,16 @@ export function EditMemberModal({ member, onClose }: Props) {
             </div>
           )}
           {isOwner && (
-            <div style={{ color: "#6B7280", fontSize: 12 }}>Роль власника не можна змінити</div>
+            <div style={{ color: "#6B7280", fontSize: 12 }}>{t("ownerRoleHint")}</div>
           )}
 
           {/* Permissions */}
           {!isOwner && (
             <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: "12px 14px" }}>
               <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 10 }}>
-                Права доступу
+                {t("permissionsLabel")}
                 <span style={{ color: "#374151", marginLeft: 6 }}>
-                  (зняте = заблоковано для цього юзера)
+                  {t("permissionsUncheckedHint")}
                 </span>
               </div>
               {ALL_PERMISSIONS.map((p) => {
@@ -183,16 +186,16 @@ export function EditMemberModal({ member, onClose }: Props) {
                       style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
                     />
                     <span style={{ color: checked ? "#E8EDF5" : "#4B5563", fontSize: 13, flex: 1 }}>
-                      {PROVIDER_PERMISSIONS[p]}
+                      {tPermissions(p)}
                     </span>
                     {state === "role" && (
-                      <span style={{ fontSize: 10, color: "#374151" }}>від ролі</span>
+                      <span style={{ fontSize: 10, color: "#374151" }}>{t("fromRoleLabel")}</span>
                     )}
                     {state === "override-add" && (
-                      <span style={{ fontSize: 10, color: "#4ADE80" }}>+особисто</span>
+                      <span style={{ fontSize: 10, color: "#4ADE80" }}>{t("overrideAddLabel")}</span>
                     )}
                     {state === "override-remove" && (
-                      <span style={{ fontSize: 10, color: "#F87171" }}>-заблоковано</span>
+                      <span style={{ fontSize: 10, color: "#F87171" }}>{t("overrideRemoveLabel")}</span>
                     )}
                   </label>
                 );
@@ -216,7 +219,7 @@ export function EditMemberModal({ member, onClose }: Props) {
               cursor: update.isPending ? "not-allowed" : "pointer", marginTop: 4,
             }}
           >
-            {update.isPending ? "Збереження…" : "Зберегти"}
+            {update.isPending ? t("saving") : t("saveButton")}
           </button>
         </form>
       </div>

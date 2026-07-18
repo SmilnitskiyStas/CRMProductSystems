@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { X, Save, Users, Building2, Package, TrendingUp } from "lucide-react";
 import { useTenant, useUpdatePlan, useUpdateModules, useActivateTenant, useDeactivateTenant } from "../hooks/useAdmin";
 import {
-  PLAN_COLORS, PLAN_LABELS, MODULE_LABELS,
+  PLAN_COLORS,
   ALL_MODULES, ALL_PLANS,
 } from "../types";
 import type { TenantDto } from "../types";
@@ -15,8 +16,8 @@ interface Props {
   onClose: () => void;
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDate(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
   });
 }
@@ -50,6 +51,11 @@ function UsageCard({ icon, label, value, color }: { icon: React.ReactNode; label
 }
 
 export function TenantDetailDrawer({ tenantId, onClose }: Props) {
+  const t = useTranslations("Dashboard.admin.tenantDetailDrawer");
+  const tPlans = useTranslations("Dashboard.admin.plans");
+  const tModules = useTranslations("Dashboard.admin.modules");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: tenant, isLoading } = useTenant(tenantId, true);
   const updatePlan    = useUpdatePlan(tenantId);
   const updateModules = useUpdateModules(tenantId);
@@ -124,7 +130,7 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
         }}
       >
         <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>
-          Деталі тенанта
+          {t("title")}
         </div>
         <button
           onClick={onClose}
@@ -135,11 +141,11 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
       </div>
 
       {isLoading && (
-        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>{t("loading")}</div>
       )}
 
       {!isLoading && !tenant && (
-        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>Не знайдено</div>
+        <div style={{ color: "#4B5563", fontSize: 13, padding: 24 }}>{t("notFound")}</div>
       )}
 
       {tenant && (
@@ -159,32 +165,32 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                   color: tenant.isActive ? "#4ADE80" : "#F87171",
                 }}
               >
-                {tenant.isActive ? "Активний" : "Деактивовано"}
+                {tenant.isActive ? t("statusActive") : t("statusDeactivated")}
               </span>
             </div>
             <div style={{ color: "#4B5563", fontSize: 12 }}>
-              {tenant.slug} · Зареєстровано {formatDate(tenant.createdAt)}
+              {tenant.slug} · {t("registeredPrefix")} {formatDate(tenant.createdAt, intlLocale)}
             </div>
           </div>
 
           {/* Usage stats */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <UsageCard icon={<Users size={16} />}      label="Користувачів"   value={tenant.usage.usersCount}    color="#60A5FA" />
-            <UsageCard icon={<Building2 size={16} />}  label="Магазинів"      value={tenant.usage.storesCount}   color="#A78BFA" />
-            <UsageCard icon={<Package size={16} />}    label="Товарів"        value={tenant.usage.productsCount} color="#34D399" />
-            <UsageCard icon={<TrendingUp size={16} />} label="Продажі 30д"    value={formatSales(tenant.usage.salesLast30Days)} color="#FBBF24" />
+            <UsageCard icon={<Users size={16} />}      label={t("statUsers")}   value={tenant.usage.usersCount}    color="#60A5FA" />
+            <UsageCard icon={<Building2 size={16} />}  label={t("statStores")}      value={tenant.usage.storesCount}   color="#A78BFA" />
+            <UsageCard icon={<Package size={16} />}    label={t("statProducts")}        value={tenant.usage.productsCount} color="#34D399" />
+            <UsageCard icon={<TrendingUp size={16} />} label={t("statSales")}    value={formatSales(tenant.usage.salesLast30Days)} color="#FBBF24" />
           </div>
 
           {/* Plan section */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>ПЛАН</div>
+              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("planSectionTitle")}</div>
               {!editingPlan && (
                 <button
                   onClick={() => startEditPlan(tenant)}
                   style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
                 >
-                  Змінити
+                  {t("changeButton")}
                 </button>
               )}
             </div>
@@ -210,17 +216,17 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                           color: active ? c.text : "#6B7280",
                         }}
                       >
-                        {PLAN_LABELS[p]}
+                        {tPlans(p)}
                       </button>
                     );
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                   <Btn size="sm" icon={<Save size={13} />} onClick={savePlan} disabled={updatePlan.isPending}>
-                    {updatePlan.isPending ? "Збереження…" : "Зберегти"}
+                    {updatePlan.isPending ? t("saving") : t("saveButton")}
                   </Btn>
                   <Btn size="sm" variant="ghost" onClick={() => setEditingPlan(false)}>
-                    Скасувати
+                    {t("cancelButton")}
                   </Btn>
                 </div>
               </div>
@@ -237,7 +243,7 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                   color: PLAN_COLORS[tenant.plan]?.text,
                 }}
               >
-                {PLAN_LABELS[tenant.plan]}
+                {tPlans(tenant.plan)}
               </span>
             )}
           </div>
@@ -245,13 +251,13 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
           {/* Modules section */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>МОДУЛІ</div>
+              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("modulesSectionTitle")}</div>
               {!editingModules && (
                 <button
                   onClick={() => startEditModules(tenant)}
                   style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
                 >
-                  Налаштувати
+                  {t("configureButton")}
                 </button>
               )}
             </div>
@@ -280,7 +286,7 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                           style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }}
                         />
                         <span style={{ color: active ? "#93C5FD" : "#6B7280", fontSize: 13 }}>
-                          {MODULE_LABELS[m]}
+                          {tModules(m)}
                         </span>
                       </label>
                     );
@@ -288,17 +294,17 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                   <Btn size="sm" icon={<Save size={13} />} onClick={saveModules} disabled={updateModules.isPending}>
-                    {updateModules.isPending ? "Збереження…" : "Зберегти"}
+                    {updateModules.isPending ? t("saving") : t("saveButton")}
                   </Btn>
                   <Btn size="sm" variant="ghost" onClick={() => setEditingModules(false)}>
-                    Скасувати
+                    {t("cancelButton")}
                   </Btn>
                 </div>
               </div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {tenant.modules.length === 0 ? (
-                  <span style={{ color: "#4B5563", fontSize: 13 }}>Модулі не підключено</span>
+                  <span style={{ color: "#4B5563", fontSize: 13 }}>{t("noModulesConnected")}</span>
                 ) : tenant.modules.map((m) => (
                   <span
                     key={m}
@@ -311,7 +317,7 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                       color: "#93C5FD",
                     }}
                   >
-                    {MODULE_LABELS[m] ?? m}
+                    {tModules.has(m) ? tModules(m) : m}
                   </span>
                 ))}
               </div>
@@ -321,7 +327,7 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
           {/* Activate / Deactivate */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-              УПРАВЛІННЯ ДОСТУПОМ
+              {t("accessSectionTitle")}
             </div>
             <Btn
               variant={tenant.isActive ? "danger" : "success"}
@@ -329,10 +335,10 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
               disabled={activate.isPending || deactivate.isPending}
             >
               {activate.isPending || deactivate.isPending
-                ? "Обробка…"
+                ? t("processing")
                 : tenant.isActive
-                ? "Деактивувати тенант"
-                : "Активувати тенант"}
+                ? t("deactivateButton")
+                : t("activateButton")}
             </Btn>
           </div>
         </div>

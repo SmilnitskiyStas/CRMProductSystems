@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { LogOut } from "lucide-react";
 import { setToken, clearToken } from "@/lib/api";
 import { providerApi } from "../api/provider";
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
+  const t = useTranslations("Dashboard.provider.impersonationBanner");
   const queryClient = useQueryClient();
 
   async function handleExit() {
@@ -67,13 +69,13 @@ export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
           }}
         />
         <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
-          Режим перегляду:
+          {t("modeLabel")}
         </span>
         <span style={{ color: "#93C5FD", fontSize: 13, fontWeight: 700 }}>
           {tenantName}
         </span>
         <span style={{ color: "#4B5563", fontSize: 12 }}>
-          (enterprise_admin · 60 хв)
+          {t("roleDurationLabel")}
         </span>
       </div>
 
@@ -94,7 +96,7 @@ export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
         }}
       >
         <LogOut size={13} />
-        Вийти з перегляду
+        {t("exitButton")}
       </button>
     </div>
   );

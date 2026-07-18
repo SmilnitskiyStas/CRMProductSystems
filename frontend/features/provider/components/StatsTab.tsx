@@ -1,13 +1,8 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { BarChart2, Clock, MessageSquare, Ticket, CheckCircle2 } from "lucide-react";
 import { useProviderStats } from "../hooks/useProviderStats";
-
-const ROLE_LABELS: Record<string, string> = {
-  provider:       "Власник",
-  provider_admin: "Адмін",
-  provider_agent: "Агент",
-};
 
 const ROLE_COLORS: Record<string, string> = {
   provider:       "#A78BFA",
@@ -28,6 +23,8 @@ function StatCell({ value, label, icon, color }: { value: string | number; label
 }
 
 export function StatsTab() {
+  const t = useTranslations("Dashboard.provider.statsTab");
+  const tRoleLabels = useTranslations("Dashboard.provider.roleLabels");
   const { data: stats, isLoading } = useProviderStats();
 
   return (
@@ -35,14 +32,14 @@ export function StatsTab() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
         <BarChart2 size={18} color="#60A5FA" />
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-          Статистика команди
+          {t("title")}
         </h2>
       </div>
 
       {isLoading ? (
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("loading")}</div>
       ) : !stats?.length ? (
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Немає даних</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("noData")}</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {/* Header */}
@@ -55,12 +52,12 @@ export function StatsTab() {
             fontSize: 11,
             fontWeight: 500,
           }}>
-            <span>Учасник</span>
-            <span style={{ textAlign: "center" }}>Призначено</span>
-            <span style={{ textAlign: "center" }}>Вирішено</span>
-            <span style={{ textAlign: "center" }}>Створено</span>
-            <span style={{ textAlign: "center" }}>Коментарів</span>
-            <span style={{ textAlign: "center" }}>Сер. час</span>
+            <span>{t("headerMember")}</span>
+            <span style={{ textAlign: "center" }}>{t("headerAssigned")}</span>
+            <span style={{ textAlign: "center" }}>{t("headerResolved")}</span>
+            <span style={{ textAlign: "center" }}>{t("headerCreated")}</span>
+            <span style={{ textAlign: "center" }}>{t("headerComments")}</span>
+            <span style={{ textAlign: "center" }}>{t("headerAvgTime")}</span>
           </div>
 
           {stats.map((m) => {
@@ -93,10 +90,10 @@ export function StatsTab() {
                       border: `1px solid ${ROLE_COLORS[m.role] ?? "#6B7280"}55`,
                       color: ROLE_COLORS[m.role] ?? "#6B7280",
                     }}>
-                      {ROLE_LABELS[m.role] ?? m.role}
+                      {tRoleLabels.has(m.role) ? tRoleLabels(m.role) : m.role}
                     </span>
                     {!m.isActive && (
-                      <span style={{ color: "#4B5563", fontSize: 10 }}>Неактивний</span>
+                      <span style={{ color: "#4B5563", fontSize: 10 }}>{t("inactiveLabel")}</span>
                     )}
                   </div>
                   {resolveRate !== null && (
@@ -112,31 +109,31 @@ export function StatsTab() {
 
                 <StatCell
                   value={m.ticketsAssigned}
-                  label="тікетів"
+                  label={t("labelTickets")}
                   icon={<Ticket size={9} />}
                   color="#60A5FA"
                 />
                 <StatCell
                   value={m.ticketsResolved}
-                  label="вирішено"
+                  label={t("labelResolved")}
                   icon={<CheckCircle2 size={9} />}
                   color="#4ADE80"
                 />
                 <StatCell
                   value={m.ticketsCreatedByProvider}
-                  label="створено"
+                  label={t("labelCreated")}
                   icon={<Ticket size={9} />}
                   color="#A78BFA"
                 />
                 <StatCell
                   value={m.commentsWritten}
-                  label="коментарів"
+                  label={t("labelComments")}
                   icon={<MessageSquare size={9} />}
                   color="#FBBF24"
                 />
                 <StatCell
-                  value={m.avgResolutionHours !== null ? `${m.avgResolutionHours}г` : "—"}
-                  label="середній час"
+                  value={m.avgResolutionHours !== null ? t("avgHoursValue", { hours: m.avgResolutionHours }) : "—"}
+                  label={t("labelAvgTime")}
                   icon={<Clock size={9} />}
                   color={m.avgResolutionHours !== null && m.avgResolutionHours < 24 ? "#4ADE80" : "#F87171"}
                 />

@@ -1,20 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { X, ChevronRight, ChevronLeft, Check, Building2 } from "lucide-react";
 import { useCreateTenant } from "../hooks/useProvider";
 import { slugify } from "@/lib/slug";
 import type { BusinessType, TenantModule, TenantPlan } from "../types";
 import {
   ALL_BUSINESS_TYPES,
-  BUSINESS_TYPE_LABELS,
   BUSINESS_TYPE_ICONS,
   BUSINESS_TYPE_PRESETS,
   ALL_MODULES,
-  MODULE_LABELS,
-  MODULE_DESCRIPTIONS,
   ALL_PLANS,
-  PLAN_LABELS,
   PLAN_COLORS,
 } from "../types";
 
@@ -24,6 +21,11 @@ interface Props {
 }
 
 export function CreateTenantWizard({ onClose, onCreated }: Props) {
+  const t = useTranslations("Dashboard.provider.createTenantWizard");
+  const tPlans = useTranslations("Dashboard.provider.plans");
+  const tBusinessTypes = useTranslations("Dashboard.provider.businessTypes");
+  const tModules = useTranslations("Dashboard.provider.modules");
+  const tModuleDescriptions = useTranslations("Dashboard.provider.moduleDescriptions");
   const createTenant = useCreateTenant();
 
   const [step,         setStep]         = useState<1 | 2 | 3>(1);
@@ -65,7 +67,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
       onCreated(result.id);
       onClose();
     } catch (e: unknown) {
-      const msg = (e as { data?: { error?: string } })?.data?.error ?? "Помилка створення";
+      const msg = (e as { data?: { error?: string } })?.data?.error ?? t("errorCreateDefault");
       setError(msg);
     }
   }
@@ -115,10 +117,18 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
             </div>
             <div>
               <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>
-                Новий клієнт
+                {t("title")}
               </div>
               <div style={{ color: "#4B5563", fontSize: 12, marginTop: 1 }}>
-                Крок {step} з 3 — {step === 1 ? "Дані компанії" : step === 2 ? "Тип бізнесу" : "Модулі"}
+                {t("stepLabel", {
+                  step,
+                  name:
+                    step === 1
+                      ? t("stepSubtitleCompany")
+                      : step === 2
+                        ? t("stepSubtitleBusinessType")
+                        : t("stepSubtitleModules"),
+                })}
               </div>
             </div>
           </div>
@@ -147,7 +157,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
               fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5,
             }}>
               {step > s ? <Check size={12} /> : null}
-              {s === 1 ? "Компанія" : s === 2 ? "Тип бізнесу" : "Модулі"}
+              {s === 1 ? t("stepIndicatorCompany") : s === 2 ? t("stepSubtitleBusinessType") : t("stepSubtitleModules")}
             </div>
           ))}
         </div>
@@ -158,22 +168,22 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           {/* ── Step 1: Company info ── */}
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <Field label="Назва компанії *">
+              <Field label={t("companyNameLabel")}>
                 <input
                   value={name}
                   onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="Наприклад: Мережа АТБ"
+                  placeholder={t("companyNamePlaceholder")}
                   style={inputStyle}
                 />
               </Field>
 
               {slug && (
                 <div style={{ fontSize: 11, color: "#4B5563", marginTop: -10 }}>
-                  Ідентифікатор: <span style={{ color: "#6B7280" }}>{slug}</span>
+                  {t("slugPrefix")} <span style={{ color: "#6B7280" }}>{slug}</span>
                 </div>
               )}
 
-              <Field label="Тарифний план">
+              <Field label={t("planFieldLabel")}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {ALL_PLANS.map((p) => {
                     const c = PLAN_COLORS[p];
@@ -190,7 +200,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
                           fontSize: 13, fontWeight: active ? 600 : 400,
                         }}
                       >
-                        {PLAN_LABELS[p]}
+                        {tPlans(p)}
                       </button>
                     );
                   })}
@@ -203,7 +213,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           {step === 2 && (
             <div>
               <p style={{ color: "#6B7280", fontSize: 13, marginBottom: 16 }}>
-                Оберіть тип бізнесу. Від нього залежить набір модулів за замовчуванням.
+                {t("businessTypeHint")}
               </p>
               <div style={{
                 display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10,
@@ -226,7 +236,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
                         {BUSINESS_TYPE_ICONS[bt]}
                       </div>
                       <div style={{ color: active ? "#93C5FD" : "#D1D5DB", fontSize: 13, fontWeight: 600 }}>
-                        {BUSINESS_TYPE_LABELS[bt]}
+                        {tBusinessTypes(bt)}
                       </div>
                     </button>
                   );
@@ -239,9 +249,9 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           {step === 3 && businessType && (
             <div>
               <p style={{ color: "#6B7280", fontSize: 13, marginBottom: 16 }}>
-                Попередньо вибрано рекомендований набір для{" "}
-                <span style={{ color: "#93C5FD" }}>{BUSINESS_TYPE_LABELS[businessType]}</span>.
-                Ви можете змінити набір.
+                {t("preselectedHintPrefix")}{" "}
+                <span style={{ color: "#93C5FD" }}>{tBusinessTypes(businessType)}</span>
+                {t("preselectedHintSuffix")}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {ALL_MODULES.map((m) => {
@@ -269,10 +279,10 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
                       </div>
                       <div>
                         <div style={{ color: checked ? "#93C5FD" : "#D1D5DB", fontSize: 13, fontWeight: 600 }}>
-                          {MODULE_LABELS[m]}
+                          {tModules(m)}
                         </div>
                         <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>
-                          {MODULE_DESCRIPTIONS[m]}
+                          {tModuleDescriptions(m)}
                         </div>
                       </div>
                     </button>
@@ -310,7 +320,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
             }}
           >
             <ChevronLeft size={14} />
-            {step === 1 ? "Скасувати" : "Назад"}
+            {step === 1 ? t("cancelButton") : t("backButton")}
           </button>
 
           {step < 3 ? (
@@ -326,7 +336,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
                 fontSize: 13, fontWeight: 600,
               }}
             >
-              Далі
+              {t("nextButton")}
               <ChevronRight size={14} />
             </button>
           ) : (
@@ -344,7 +354,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
               }}
             >
               <Check size={14} />
-              {createTenant.isPending ? "Створення…" : "Створити клієнта"}
+              {createTenant.isPending ? t("creating") : t("createButton")}
             </button>
           )}
         </div>

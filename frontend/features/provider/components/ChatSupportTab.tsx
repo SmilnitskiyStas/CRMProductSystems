@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   MessageCircle,
   Building2,
@@ -20,18 +21,18 @@ import type { ChatSessionDto } from "@/features/chat/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("uk-UA", {
+function formatTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
   const today = new Date();
-  if (d.toDateString() === today.toDateString()) return formatTime(iso);
-  return d.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
+  if (d.toDateString() === today.toDateString()) return formatTime(iso, locale);
+  return d.toLocaleDateString(locale, { day: "2-digit", month: "2-digit" });
 }
 
 // ── Session row ───────────────────────────────────────────────────────────────
@@ -45,6 +46,9 @@ function SessionRow({
   selected: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations("Dashboard.provider.chatSupportTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   return (
     <div
       onClick={onClick}
@@ -97,7 +101,7 @@ function SessionRow({
               padding: "1px 6px",
             }}
           >
-            {session.status === "open" ? "Активний" : "Закритий"}
+            {session.status === "open" ? t("statusOpen") : t("statusClosed")}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -117,7 +121,7 @@ function SessionRow({
           )}
           <span style={{ display: "flex", alignItems: "center", gap: 3, color: "#4B5563", fontSize: 11 }}>
             <Clock size={10} />
-            {formatDate(session.updatedAt)}
+            {formatDate(session.updatedAt, intlLocale)}
           </span>
         </div>
       </div>
@@ -156,6 +160,9 @@ function ChatPanel({
   currentUserId: string;
   onClose: () => void;
 }) {
+  const t = useTranslations("Dashboard.provider.chatSupportTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const { data: messages } = useProviderChatMessages(session.id);
@@ -227,7 +234,7 @@ function ChatPanel({
                 color: session.status === "open" ? "#4ADE80" : "#4B5563",
               }}
             >
-              {session.status === "open" ? "• Активний" : "• Закритий"}
+              • {session.status === "open" ? t("statusOpen") : t("statusClosed")}
             </span>
           </div>
           <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
@@ -235,7 +242,7 @@ function ChatPanel({
           </div>
           {session.assignedAgentName && (
             <div style={{ color: "#6B7280", fontSize: 11, marginTop: 2 }}>
-              Веде: <span style={{ color: "#93C5FD" }}>{session.assignedAgentName}</span>
+              {t("assignedAgentPrefix")} <span style={{ color: "#93C5FD" }}>{session.assignedAgentName}</span>
             </div>
           )}
         </div>
@@ -255,7 +262,7 @@ function ChatPanel({
                 cursor: "pointer",
               }}
             >
-              Закрити чат
+              {t("closeChatButton")}
             </button>
           )}
           <button
@@ -280,7 +287,7 @@ function ChatPanel({
       >
         {!messages?.length && (
           <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "20px 0" }}>
-            Повідомлень ще немає
+            {t("noMessagesYet")}
           </div>
         )}
         {(messages ?? []).map((msg) => {
@@ -331,7 +338,7 @@ function ChatPanel({
                 {msg.body}
               </div>
               <div style={{ color: "#374151", fontSize: 10, marginTop: 2, paddingLeft: 4, paddingRight: 4 }}>
-                {formatTime(msg.createdAt)}
+                {formatTime(msg.createdAt, intlLocale)}
               </div>
             </div>
           );
@@ -355,7 +362,7 @@ function ChatPanel({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Відповідь клієнту… (Enter — відправити)"
+            placeholder={t("replyPlaceholder")}
             rows={2}
             style={{
               flex: 1,
@@ -390,7 +397,7 @@ function ChatPanel({
             }}
           >
             <Send size={14} />
-            Надіслати
+            {t("sendButton")}
           </button>
         </div>
       )}
@@ -401,6 +408,7 @@ function ChatPanel({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ChatSupportTab() {
+  const t = useTranslations("Dashboard.provider.chatSupportTab");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"" | "open" | "closed">("");
 
@@ -442,7 +450,7 @@ export function ChatSupportTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <MessageCircle size={18} color="#60A5FA" />
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Живий чат
+            {t("title")}
           </h2>
           {sessions && (
             <span style={{ color: "#4B5563", fontSize: 12 }}>({sessions.length})</span>
@@ -458,7 +466,7 @@ export function ChatSupportTab() {
                 fontWeight: 700,
               }}
             >
-              {totalUnread} нових
+              {t("newMessagesCount", { count: totalUnread })}
             </span>
           )}
         </div>
@@ -467,9 +475,9 @@ export function ChatSupportTab() {
         <div style={{ display: "flex", gap: 6 }}>
           {(
             [
-              { value: "" as const, label: "Всі" },
-              { value: "open" as const, label: "Активні" },
-              { value: "closed" as const, label: "Закриті" },
+              { value: "" as const, label: t("filterAll") },
+              { value: "open" as const, label: t("filterOpen") },
+              { value: "closed" as const, label: t("filterClosed") },
             ] as const
           ).map(({ value, label }) => (
             <button
@@ -504,7 +512,7 @@ export function ChatSupportTab() {
         {/* Left: session list */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", minHeight: 0 }}>
           {isLoading ? (
-            <div style={{ color: "#4B5563", fontSize: 14, padding: "20px 0" }}>Завантаження…</div>
+            <div style={{ color: "#4B5563", fontSize: 14, padding: "20px 0" }}>{t("loading")}</div>
           ) : !filteredSessions.length ? (
             <div
               style={{
@@ -514,7 +522,7 @@ export function ChatSupportTab() {
                 textAlign: "center",
               }}
             >
-              Чатів немає
+              {t("noChats")}
             </div>
           ) : (
             filteredSessions.map((s) => (

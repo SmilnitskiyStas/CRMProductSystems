@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations, useLocale } from "next-intl";
 import { MessageSquare, Plus, ChevronLeft, Building2, User, X, Send } from "lucide-react";
 import {
   useProviderTickets,
@@ -24,9 +25,12 @@ import { PriorityBadge } from "@/features/service-desk/components/PriorityBadge"
 import { Btn } from "@/components/ui/Btn";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+// NOTE: TICKET_STATUS_LABELS / TICKET_PRIORITY_LABELS / TICKET_CATEGORY_LABELS and
+// the Badge components come from features/service-desk (i18n rollout Block 10, not
+// yet translated) — left as-is; only this file's own strings are translated here.
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("uk-UA", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -44,6 +48,9 @@ function TicketRow({
   selected: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations("Dashboard.provider.supportTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   return (
     <div
       onClick={onClick}
@@ -101,7 +108,7 @@ function TicketRow({
               color: "#A78BFA",
             }}
           >
-            Провайдер
+            {t("providerBadge")}
           </span>
         )}
         <span
@@ -138,7 +145,7 @@ function TicketRow({
           <User size={12} />
           {ticket.createdByName}
         </span>
-        <span style={{ color: "#4B5563", fontSize: 12 }}>{formatDate(ticket.createdAt)}</span>
+        <span style={{ color: "#4B5563", fontSize: 12 }}>{formatDate(ticket.createdAt, intlLocale)}</span>
         {ticket.commentCount > 0 && (
           <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#6B7280", fontSize: 12 }}>
             <MessageSquare size={12} />
@@ -152,8 +159,8 @@ function TicketRow({
 
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -169,6 +176,9 @@ function TicketDetailPanel({
   ticket: ProviderTicketListItemDto;
   onBack: () => void;
 }) {
+  const t = useTranslations("Dashboard.provider.supportTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: detail } = useProviderTicket(ticket.id);
   const addComment = useAddProviderComment();
   const [commentBody, setCommentBody] = useState("");
@@ -181,7 +191,7 @@ function TicketDetailPanel({
       { id: ticket.id, data: { body: commentBody.trim(), isInternal: false } },
       {
         onSuccess: () => {
-          toast.success("Відповідь надіслано");
+          toast.success(t("toastReplySent"));
           setCommentBody("");
         },
         onError: (err) => toast.error(err.message),
@@ -250,7 +260,7 @@ function TicketDetailPanel({
           whiteSpace: "pre-wrap",
         }}
       >
-        {ticket.description || <span style={{ color: "#374151" }}>Опис відсутній</span>}
+        {ticket.description || <span style={{ color: "#374151" }}>{t("noDescription")}</span>}
       </div>
 
       {/* Meta grid */}
@@ -266,14 +276,14 @@ function TicketDetailPanel({
         }}
       >
         {[
-          ["Категорія",  TICKET_CATEGORY_LABELS[ticket.category]],
-          ["Статус",     TICKET_STATUS_LABELS[ticket.status]],
-          ["Пріоритет",  TICKET_PRIORITY_LABELS[ticket.priority]],
-          ["Автор",      ticket.createdByName],
-          ["Компанія",   ticket.tenantName],
-          ["Створено",   formatDate(ticket.createdAt)],
-          ["Коментарів", String(ticket.commentCount)],
-          ["Ініціатор",  ticket.createdByProvider ? "Провайдер" : "Клієнт"],
+          [t("metaCategory"),  TICKET_CATEGORY_LABELS[ticket.category]],
+          [t("metaStatus"),    TICKET_STATUS_LABELS[ticket.status]],
+          [t("metaPriority"),  TICKET_PRIORITY_LABELS[ticket.priority]],
+          [t("metaAuthor"),    ticket.createdByName],
+          [t("metaCompany"),   ticket.tenantName],
+          [t("metaCreated"),   formatDate(ticket.createdAt, intlLocale)],
+          [t("metaComments"),  String(ticket.commentCount)],
+          [t("metaInitiator"), ticket.createdByProvider ? t("providerBadge") : t("clientLabel")],
         ].map(([label, value]) => (
           <div key={label}>
             <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 2 }}>{label}</div>
@@ -296,12 +306,12 @@ function TicketDetailPanel({
           }}
         >
           <MessageSquare size={15} />
-          Коментарі ({comments.length})
+          {t("commentsTitle", { count: comments.length })}
         </div>
 
         {comments.length === 0 && (
           <div style={{ color: "#4B5563", fontSize: 13, marginBottom: 12 }}>
-            Поки немає коментарів
+            {t("noComments")}
           </div>
         )}
 
@@ -321,7 +331,7 @@ function TicketDetailPanel({
                   {c.authorName}
                 </span>
                 <span style={{ color: "#4B5563", fontSize: 11, marginLeft: "auto" }}>
-                  {formatDateTime(c.createdAt)}
+                  {formatDateTime(c.createdAt, intlLocale)}
                 </span>
               </div>
               <div style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
@@ -346,7 +356,7 @@ function TicketDetailPanel({
           <textarea
             value={commentBody}
             onChange={(e) => setCommentBody(e.target.value)}
-            placeholder="Напишіть відповідь клієнту..."
+            placeholder={t("replyPlaceholder")}
             rows={3}
             style={{
               background: "#0D1117",
@@ -368,7 +378,7 @@ function TicketDetailPanel({
             disabled={!commentBody.trim() || addComment.isPending}
             style={{ marginLeft: "auto" }}
           >
-            {addComment.isPending ? "Надсилання..." : "Надіслати"}
+            {addComment.isPending ? t("sending") : t("sendButton")}
           </Btn>
         </div>
       </div>
@@ -379,6 +389,7 @@ function TicketDetailPanel({
 // ── Create ticket modal ───────────────────────────────────────────────────────
 
 function CreateTicketModal({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("Dashboard.provider.supportTab");
   const { data: tenants } = useTenants();
   const create = useCreateProviderTicket();
 
@@ -405,7 +416,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
       });
       onClose();
     } catch {
-      setError("Помилка при створенні тікета. Спробуйте ще раз.");
+      setError(t("errorCreateDefault"));
     }
   }
 
@@ -455,7 +466,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600 }}>
-            Новий тікет для клієнта
+            {t("createModalTitle")}
           </div>
           <button
             onClick={onClose}
@@ -468,17 +479,17 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
         {/* Client selector */}
         <div>
           <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-            Клієнт *
+            {t("clientFieldLabel")}
           </label>
           <select
             value={targetTenantId}
             onChange={(e) => setTargetTenantId(e.target.value)}
             style={selectStyle}
           >
-            <option value="">Оберіть клієнта…</option>
-            {activeTenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            <option value="">{t("selectClientPlaceholder")}</option>
+            {activeTenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name}
               </option>
             ))}
           </select>
@@ -487,12 +498,12 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
         {/* Title */}
         <div>
           <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-            Тема *
+            {t("titleFieldLabel")}
           </label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Коротко опишіть проблему"
+            placeholder={t("titlePlaceholder")}
             style={inputStyle}
           />
         </div>
@@ -500,12 +511,12 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
         {/* Description */}
         <div>
           <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-            Опис *
+            {t("descriptionFieldLabel")}
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Детальний опис завдання або проблеми"
+            placeholder={t("descriptionPlaceholder")}
             rows={4}
             style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
           />
@@ -515,7 +526,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
             <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-              Категорія
+              {t("metaCategory")}
             </label>
             <select
               value={category}
@@ -529,7 +540,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
-              Пріоритет
+              {t("metaPriority")}
             </label>
             <select
               value={priority}
@@ -561,10 +572,10 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
               cursor: "pointer",
             }}
           >
-            Скасувати
+            {t("cancelButton")}
           </button>
           <Btn onClick={handleSubmit} disabled={!canSubmit}>
-            {create.isPending ? "Збереження…" : "Створити тікет"}
+            {create.isPending ? t("saving") : t("createButton")}
           </Btn>
         </div>
       </div>
@@ -573,17 +584,21 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Main tab component ────────────────────────────────────────────────────────
-
-const STATUS_FILTER_OPTIONS: { value: TicketStatus | ""; label: string }[] = [
-  { value: "", label: "Всі" },
-  { value: "open", label: TICKET_STATUS_LABELS.open },
-  { value: "in_progress", label: TICKET_STATUS_LABELS.in_progress },
-  { value: "waiting", label: TICKET_STATUS_LABELS.waiting },
-  { value: "resolved", label: TICKET_STATUS_LABELS.resolved },
-  { value: "closed", label: TICKET_STATUS_LABELS.closed },
-];
+// STATUS_FILTER_OPTIONS moved inside the component so the "all" option can be
+// translated (its TICKET_STATUS_LABELS.* siblings come from the untranslated
+// service-desk feature, see the NOTE near formatDate above).
 
 export function ProviderSupportTab() {
+  const t = useTranslations("Dashboard.provider.supportTab");
+  const STATUS_FILTER_OPTIONS: { value: TicketStatus | ""; label: string }[] = [
+    { value: "", label: t("filterAllLabel") },
+    { value: "open", label: TICKET_STATUS_LABELS.open },
+    { value: "in_progress", label: TICKET_STATUS_LABELS.in_progress },
+    { value: "waiting", label: TICKET_STATUS_LABELS.waiting },
+    { value: "resolved", label: TICKET_STATUS_LABELS.resolved },
+    { value: "closed", label: TICKET_STATUS_LABELS.closed },
+  ];
+
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "">("");
   const [tenantFilter, setTenantFilter] = useState("");
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -630,7 +645,7 @@ export function ProviderSupportTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <MessageSquare size={18} color="#60A5FA" />
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Тікети підтримки
+            {t("title")}
           </h2>
           {tickets && (
             <span style={{ color: "#4B5563", fontSize: 12 }}>({tickets.length})</span>
@@ -638,7 +653,7 @@ export function ProviderSupportTab() {
         </div>
 
         <Btn icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
-          Новий тікет
+          {t("newTicketButton")}
         </Btn>
       </div>
 
@@ -680,16 +695,16 @@ export function ProviderSupportTab() {
             outline: "none",
           }}
         >
-          <option value="">Всі клієнти</option>
-          {(tenants ?? []).map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
+          <option value="">{t("allClientsOption")}</option>
+          {(tenants ?? []).map((tenant) => (
+            <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
           ))}
         </select>
       </div>
 
       {/* List */}
       {isLoading ? (
-        <div style={{ color: "#4B5563", fontSize: 14, padding: "20px 0" }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 14, padding: "20px 0" }}>{t("loading")}</div>
       ) : !tickets?.length ? (
         <div
           style={{
@@ -699,7 +714,7 @@ export function ProviderSupportTab() {
             textAlign: "center",
           }}
         >
-          Тікетів немає
+          {t("empty")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

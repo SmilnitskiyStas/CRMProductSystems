@@ -3,15 +3,18 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Shield, Building2, CheckCircle, LayoutGrid } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useTenants } from "@/features/admin/hooks/useAdmin";
 import { TenantTable } from "@/features/admin/components/TenantTable";
 import { TenantDetailDrawer } from "@/features/admin/components/TenantDetailDrawer";
 import type { TenantDto, TenantPlan } from "@/features/admin/types";
-import { PLAN_LABELS, PLAN_COLORS } from "@/features/admin/types";
+import { PLAN_COLORS } from "@/features/admin/types";
 
 export default function AdminPage() {
+  const t = useTranslations("Dashboard.admin.page");
+  const tPlans = useTranslations("Dashboard.admin.plans");
   const router = useRouter();
   const { data: me, isLoading: meLoading } = useMe();
   const { data: tenants, isLoading: tenantsLoading } = useTenants();
@@ -29,7 +32,7 @@ export default function AdminPage() {
   if (meLoading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("loading")}</div>
       </div>
     );
   }
@@ -37,40 +40,40 @@ export default function AdminPage() {
   if (me?.role !== "provider") {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{ color: "#F87171", fontSize: 14 }}>403 — Доступ заборонено</div>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{t("forbidden")}</div>
       </div>
     );
   }
 
   const allTenants = tenants ?? [];
-  const activeTenants = allTenants.filter((t) => t.isActive);
+  const activeTenants = allTenants.filter((tn) => tn.isActive);
 
-  const planCounts = allTenants.reduce<Record<string, number>>((acc, t) => {
-    acc[t.plan] = (acc[t.plan] ?? 0) + 1;
+  const planCounts = allTenants.reduce<Record<string, number>>((acc, tn) => {
+    acc[tn.plan] = (acc[tn.plan] ?? 0) + 1;
     return acc;
   }, {});
 
   const filtered = allTenants.filter(
-    (t) =>
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.slug.toLowerCase().includes(search.toLowerCase()),
+    (tn) =>
+      tn.name.toLowerCase().includes(search.toLowerCase()) ||
+      tn.slug.toLowerCase().includes(search.toLowerCase()),
   );
 
   const stats = [
     {
-      label: "Всього тенантів",
+      label: t("statTotalTenants"),
       value: allTenants.length,
       icon: <Building2 size={18} />,
       color: "#60A5FA",
     },
     {
-      label: "Активних",
+      label: t("statActive"),
       value: activeTenants.length,
       icon: <CheckCircle size={18} />,
       color: "#4ADE80",
     },
     {
-      label: "Планів",
+      label: t("statPlans"),
       value: Object.keys(planCounts).length,
       icon: <LayoutGrid size={18} />,
       color: "#A78BFA",
@@ -108,11 +111,11 @@ export default function AdminPage() {
                 <Shield size={17} color="#fff" />
               </div>
               <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-                Адмін панель
+                {t("title")}
               </h1>
             </div>
             <p style={{ color: "#4B5563", fontSize: 14, margin: 0 }}>
-              Управління тенантами платформи ShelfGuard
+              {t("subtitle")}
             </p>
           </div>
 
@@ -124,7 +127,7 @@ export default function AdminPage() {
               textDecoration: "none",
             }}
           >
-            → Провайдер
+            {t("providerLink")}
           </Link>
         </div>
 
@@ -167,7 +170,7 @@ export default function AdminPage() {
                 }}
               >
                 <div style={{ color: c.text, fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{count}</div>
-                <div style={{ color: c.text, fontSize: 12, marginTop: 4, opacity: 0.8 }}>{PLAN_LABELS[plan]}</div>
+                <div style={{ color: c.text, fontSize: 12, marginTop: 4, opacity: 0.8 }}>{tPlans(plan)}</div>
               </div>
             );
           })}
@@ -178,7 +181,7 @@ export default function AdminPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук за назвою або slug…"
+            placeholder={t("searchPlaceholder")}
             style={{
               width: "100%",
               maxWidth: 360,

@@ -95,18 +95,8 @@ export interface CreateTenantUserRequest {
 
 // ── Business types ───────────────────────────────────────────────────────────
 
-export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
-  retail:       "Роздрібна торгівля",
-  auto_service: "Автосервіс",
-  restaurant:   "Ресторан / HoReCa",
-  warehouse:    "Склад / Логістика",
-  production:   "Виробництво",
-  distribution: "Дистрибуція",
-  pharmacy:     "Аптека / Медтовари",
-  floristry:    "Флористика",
-  supplier:     "Постачальник",
-};
-
+// Labels live in i18n (Dashboard.provider.businessTypes.*, `useTranslations`) — see
+// CreateTenantWizard.tsx. Kept here only as icons/presets, not display text.
 export const BUSINESS_TYPE_ICONS: Record<BusinessType, string> = {
   retail:       "🛒",
   auto_service: "🔧",
@@ -139,25 +129,9 @@ export const BUSINESS_TYPE_PRESETS: Record<BusinessType, TenantModule[]> = {
 
 // ── Modules ──────────────────────────────────────────────────────────────────
 
-export const MODULE_LABELS: Record<TenantModule, string> = {
-  inventory:    "Інвентаризація",
-  procurement:  "Постачання",
-  pos:          "Каса (POS)",
-  auto_service: "Автосервіс",
-  production:   "Виробництво",
-  marketplace:  "Маркетплейс постачальників",
-  marketplace_supplier: "Кабінет постачальника",
-};
-
-export const MODULE_DESCRIPTIONS: Record<TenantModule, string> = {
-  inventory:    "Каталог товарів, залишки, прийомка, переміщення, списання",
-  procurement:  "Постачальники, замовлення постачання, AI-прогнозування закупівель",
-  pos:          "Робота з касовим апаратом, продажі, фіскалізація чеків",
-  auto_service: "Клієнти, автомобілі, наряд-замовлення, облік запчастин",
-  production:   "Рецепти, виробничі замовлення, списання сировини",
-  marketplace:  "Пошук і порівняння постачальників, відгуки, рейтинги",
-  marketplace_supplier: "Self-service постачальника: каталог, замовлення, чат з клієнтами",
-};
+// Labels/descriptions live in i18n (Dashboard.provider.modules.*,
+// Dashboard.provider.moduleDescriptions.*, `useTranslations`) — see TenantCard.tsx,
+// TenantDetailPanel.tsx, CreateTenantWizard.tsx.
 
 export const ALL_MODULES: TenantModule[] = [
   "inventory", "procurement", "pos", "auto_service", "production", "marketplace",
@@ -166,13 +140,8 @@ export const ALL_MODULES: TenantModule[] = [
 
 // ── Plans ────────────────────────────────────────────────────────────────────
 
-export const PLAN_LABELS: Record<TenantPlan, string> = {
-  basic:      "Basic",
-  standard:   "Standard",
-  enterprise: "Enterprise",
-  trial:      "Trial",
-};
-
+// Labels live in i18n (Dashboard.provider.plans.*, `useTranslations`) — see
+// TenantCard.tsx, TenantDetailPanel.tsx, CreateTenantWizard.tsx.
 export const PLAN_COLORS: Record<TenantPlan, { bg: string; border: string; text: string }> = {
   basic:      { bg: "#1F2937", border: "#374151", text: "#9CA3AF" },
   standard:   { bg: "#1D3461", border: "#3B82F6", text: "#93C5FD" },

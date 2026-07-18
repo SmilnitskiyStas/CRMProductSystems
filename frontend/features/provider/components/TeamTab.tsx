@@ -1,18 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { UserPlus, Trash2, Users, Pencil, RefreshCw } from "lucide-react";
 import { useProviderTeam, useDeactivateMember, useReactivateMember } from "../hooks/useProviderTeam";
 import { InviteProviderMemberModal } from "./InviteProviderMemberModal";
 import { EditMemberModal } from "./EditMemberModal";
 import type { ProviderTeamMemberDto } from "../api/providerTeamApi";
 import { Btn } from "@/components/ui/Btn";
-
-const ROLE_LABELS: Record<string, string> = {
-  provider:       "Власник",
-  provider_admin: "Адмін",
-  provider_agent: "Агент",
-};
 
 const ROLE_COLORS: Record<string, string> = {
   provider:       "#A78BFA",
@@ -21,6 +16,8 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export function TeamTab() {
+  const t = useTranslations("Dashboard.provider.teamTab");
+  const tRoleLabels = useTranslations("Dashboard.provider.roleLabels");
   const { data: members, isLoading } = useProviderTeam();
   const deactivate  = useDeactivateMember();
   const reactivate  = useReactivateMember();
@@ -40,7 +37,7 @@ export function TeamTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Users size={18} color="#60A5FA" />
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Команда провайдера
+            {t("title")}
           </h2>
           {members && (
             <span style={{
@@ -52,14 +49,14 @@ export function TeamTab() {
           )}
         </div>
         <Btn icon={<UserPlus size={14} />} onClick={() => setShowInvite(true)}>
-          Запросити
+          {t("inviteButton")}
         </Btn>
       </div>
 
       {isLoading ? (
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("loading")}</div>
       ) : !members?.length ? (
-        <div style={{ color: "#4B5563", fontSize: 14 }}>Команда порожня</div>
+        <div style={{ color: "#4B5563", fontSize: 14 }}>{t("empty")}</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {members.map((m) => (
@@ -88,14 +85,14 @@ export function TeamTab() {
                     color: ROLE_COLORS[m.role] ?? "#6B7280",
                   }}
                 >
-                  {ROLE_LABELS[m.role] ?? m.role}
+                  {tRoleLabels.has(m.role) ? tRoleLabels(m.role) : m.role}
                 </span>
 
                 {/* Edit button — always visible for active members */}
                 {m.isActive && (
                   <button
                     onClick={() => setEditMember(m)}
-                    title="Редагувати"
+                    title={t("editTitle")}
                     style={{
                       background: "transparent", border: "none",
                       color: "#4B5563", cursor: "pointer", padding: 4,
@@ -112,11 +109,11 @@ export function TeamTab() {
                 {m.isActive && m.role !== "provider" && (
                   <button
                     onClick={() => {
-                      if (confirm(`Деактивувати ${m.fullName}?`)) {
+                      if (confirm(t("confirmDeactivate", { name: m.fullName }))) {
                         deactivate.mutate(m.id);
                       }
                     }}
-                    title="Деактивувати"
+                    title={t("deactivateTitle")}
                     style={{
                       background: "transparent", border: "none",
                       color: "#4B5563", cursor: "pointer", padding: 4,
@@ -132,14 +129,14 @@ export function TeamTab() {
                 {/* Reactivate — for inactive members */}
                 {!m.isActive && (
                   <>
-                    <span style={{ color: "#4B5563", fontSize: 11 }}>Неактивний</span>
+                    <span style={{ color: "#4B5563", fontSize: 11 }}>{t("inactiveLabel")}</span>
                     <button
                       onClick={() => {
-                        if (confirm(`Реактивувати ${m.fullName}?`)) {
+                        if (confirm(t("confirmReactivate", { name: m.fullName }))) {
                           reactivate.mutate(m.id);
                         }
                       }}
-                      title="Реактивувати"
+                      title={t("reactivateTitle")}
                       style={{
                         background: "transparent", border: "1px solid #374151",
                         borderRadius: 6, color: "#6B7280", cursor: "pointer",
@@ -157,7 +154,7 @@ export function TeamTab() {
                       }}
                     >
                       <RefreshCw size={11} />
-                      Відновити
+                      {t("restoreButton")}
                     </button>
                   </>
                 )}

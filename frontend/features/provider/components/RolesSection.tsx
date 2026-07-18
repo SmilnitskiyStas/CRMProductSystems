@@ -1,16 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus, Pencil, Trash2, X, Shield } from "lucide-react";
 import { useProviderRoles, useCreateRole, useUpdateRole, useDeleteRole } from "../hooks/useProviderRoles";
-import { PROVIDER_PERMISSIONS, ALL_PERMISSIONS } from "@/lib/providerPermissions";
+import { ALL_PERMISSIONS } from "@/lib/providerPermissions";
 import type { ProviderRoleDto } from "../api/providerRolesApi";
 import { Btn } from "@/components/ui/Btn";
-
-const BASE_ROLE_LABELS: Record<string, string> = {
-  provider_admin: "Адмін провайдера",
-  provider_agent: "Агент підтримки",
-};
 
 interface Props {
   /** When true — renders as a full page panel instead of a collapsible widget */
@@ -18,6 +14,9 @@ interface Props {
 }
 
 export function RolesSection({ standalone = false }: Props) {
+  const t = useTranslations("Dashboard.provider.rolesSection");
+  const tPermissions = useTranslations("Dashboard.provider.permissions");
+  const tBaseRoleLabels = useTranslations("Dashboard.provider.roleSelector.baseRoleLabels");
   const { data: roles, isLoading } = useProviderRoles();
   const [editRole, setEditRole] = useState<ProviderRoleDto | null>(null);
   const [creating, setCreating] = useState(false);
@@ -26,7 +25,7 @@ export function RolesSection({ standalone = false }: Props) {
   const content = (
     <>
       {isLoading && (
-        <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
       )}
 
       {!isLoading && (
@@ -51,19 +50,19 @@ export function RolesSection({ standalone = false }: Props) {
                       fontSize: 10, padding: "2px 7px", borderRadius: 4,
                       background: "#1F2937", color: "#4B5563", border: "1px solid #374151",
                     }}>
-                      Системна
+                      {t("systemBadge")}
                     </span>
                   )}
                   <span style={{
                     fontSize: 11, padding: "2px 8px", borderRadius: 4,
                     background: "#1E3A5F22", color: "#60A5FA", border: "1px solid #1D4ED855",
                   }}>
-                    {BASE_ROLE_LABELS[role.baseRole] ?? role.baseRole}
+                    {tBaseRoleLabels.has(role.baseRole) ? tBaseRoleLabels(role.baseRole) : role.baseRole}
                   </span>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                   {role.permissions.length === 0 ? (
-                    <span style={{ color: "#374151", fontSize: 12 }}>Немає прав</span>
+                    <span style={{ color: "#374151", fontSize: 12 }}>{t("noPermissions")}</span>
                   ) : role.permissions.map((p) => (
                     <span
                       key={p}
@@ -73,7 +72,7 @@ export function RolesSection({ standalone = false }: Props) {
                         border: "1px solid #1D4ED8",
                       }}
                     >
-                      {PROVIDER_PERMISSIONS[p] ?? p}
+                      {tPermissions.has(p) ? tPermissions(p) : p}
                     </span>
                   ))}
                 </div>
@@ -82,7 +81,7 @@ export function RolesSection({ standalone = false }: Props) {
                 <div style={{ display: "flex", gap: 4, flexShrink: 0, paddingTop: 2 }}>
                   <button
                     onClick={() => setEditRole(role)}
-                    title="Редагувати"
+                    title={t("editTitle")}
                     style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", padding: 5 }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#60A5FA"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
@@ -91,11 +90,11 @@ export function RolesSection({ standalone = false }: Props) {
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm(`Видалити роль "${role.displayName}"?`)) {
+                      if (confirm(t("confirmDelete", { name: role.displayName }))) {
                         deleteRole.mutate(role.id);
                       }
                     }}
-                    title="Видалити"
+                    title={t("deleteTitle")}
                     style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", padding: 5 }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#F87171"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
@@ -108,7 +107,7 @@ export function RolesSection({ standalone = false }: Props) {
           ))}
 
           {(!roles || roles.length === 0) && !isLoading && (
-            <div style={{ color: "#4B5563", fontSize: 13 }}>Ролі відсутні</div>
+            <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noRoles")}</div>
           )}
         </div>
       )}
@@ -131,7 +130,7 @@ export function RolesSection({ standalone = false }: Props) {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Shield size={18} color="#60A5FA" />
             <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-              Ролі команди
+              {t("title")}
             </h2>
             {roles && (
               <span style={{
@@ -143,7 +142,7 @@ export function RolesSection({ standalone = false }: Props) {
             )}
           </div>
           <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-            Нова роль
+            {t("newRoleButton")}
           </Btn>
         </div>
         {content}
@@ -163,6 +162,9 @@ interface RoleFormModalProps {
 }
 
 function RoleFormModal({ role, onClose }: RoleFormModalProps) {
+  const t = useTranslations("Dashboard.provider.rolesSection");
+  const tPermissions = useTranslations("Dashboard.provider.permissions");
+  const tBaseRoleLabels = useTranslations("Dashboard.provider.roleSelector.baseRoleLabels");
   const create = useCreateRole();
   const update = useUpdateRole();
   const [displayName, setDisplayName] = useState(role?.displayName ?? "");
@@ -192,7 +194,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
       onClose();
     } catch (err: unknown) {
       const e = err as { error?: string };
-      setError(e?.error ?? "Помилка збереження");
+      setError(e?.error ?? t("errorSaveDefault"));
     }
   }
 
@@ -217,7 +219,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати роль" : "Нова роль"}
+            {isEdit ? t("modalTitleEdit") : t("modalTitleCreate")}
           </h2>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
             <X size={18} />
@@ -228,7 +230,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
           <input
             required
             type="text"
-            placeholder="Назва ролі"
+            placeholder={t("roleNamePlaceholder")}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             style={inputStyle}
@@ -236,20 +238,20 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
 
           <div>
             <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>
-              Базовий рівень доступу
+              {t("baseRoleLabel")}
             </div>
             <select
               value={baseRole}
               onChange={(e) => setBaseRole(e.target.value)}
               style={{ ...inputStyle, appearance: "none" }}
             >
-              <option value="provider_admin">Адмін провайдера</option>
-              <option value="provider_agent">Агент підтримки</option>
+              <option value="provider_admin">{tBaseRoleLabels("provider_admin")}</option>
+              <option value="provider_agent">{tBaseRoleLabels("provider_agent")}</option>
             </select>
           </div>
 
           <div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 8 }}>Права доступу</div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 8 }}>{t("permissionsLabel")}</div>
             <div
               style={{
                 background: "#0D1117", border: "1px solid #1F2937",
@@ -266,7 +268,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
                     style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
                   />
                   <span style={{ color: permissions.has(p) ? "#E8EDF5" : "#4B5563", fontSize: 13 }}>
-                    {PROVIDER_PERMISSIONS[p]}
+                    {tPermissions(p)}
                   </span>
                 </label>
               ))}
@@ -292,7 +294,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
               cursor: isPending ? "not-allowed" : "pointer", marginTop: 4,
             }}
           >
-            {isPending ? "Збереження…" : (isEdit ? "Зберегти зміни" : "Створити роль")}
+            {isPending ? t("saving") : (isEdit ? t("saveChangesButton") : t("createRoleButton"))}
           </button>
         </form>
       </div>
