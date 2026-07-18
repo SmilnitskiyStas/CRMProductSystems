@@ -1,18 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import type { SupplierTaskDto, SupplierTaskStatus } from "../types";
+import type { SupplierTaskDto } from "../types";
 import { Btn } from "@/components/ui/Btn";
-
-const STATUS_LABELS: Record<SupplierTaskStatus, string> = {
-  pending: "Очікує",
-  in_progress: "В роботі",
-  completed: "Завершено",
-  cancelled: "Скасовано",
-};
-
-const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
 /** Local YYYY-MM-DD, no timezone conversion (matches <input type="date"> values). */
 function toDateKey(d: Date): string {
@@ -56,6 +48,11 @@ interface Props {
 }
 
 export function TasksCalendar({ tasks, onAddTask }: Props) {
+  const t = useTranslations("Dashboard.supplierCabinet.tasksCalendar");
+  const tTaskStatus = useTranslations("Dashboard.supplierCabinet.taskStatus");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  const weekdayLabels = t.raw("weekdayLabels") as string[];
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -75,7 +72,7 @@ export function TasksCalendar({ tasks, onAddTask }: Props) {
   }, [tasks]);
 
   const todayKey = toDateKey(today);
-  const monthLabel = new Date(year, month, 1).toLocaleDateString("uk-UA", {
+  const monthLabel = new Date(year, month, 1).toLocaleDateString(intlLocale, {
     month: "long",
     year: "numeric",
   });
@@ -112,13 +109,13 @@ export function TasksCalendar({ tasks, onAddTask }: Props) {
           </button>
         </div>
         <button onClick={goToday} style={{ ...navBtnStyle, width: "auto", padding: "6px 12px", fontSize: 12 }}>
-          Сьогодні
+          {t("todayButton")}
         </button>
       </div>
 
       {/* Weekday labels */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 6 }}>
-        {WEEKDAY_LABELS.map((label) => (
+        {weekdayLabels.map((label) => (
           <div key={label} style={{ textAlign: "center", color: "#4B5563", fontSize: 11, fontWeight: 600 }}>
             {label}
           </div>
@@ -183,16 +180,16 @@ export function TasksCalendar({ tasks, onAddTask }: Props) {
         <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
-              {new Date(selectedDate).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" })}
+              {new Date(selectedDate).toLocaleDateString(intlLocale, { day: "numeric", month: "long", year: "numeric" })}
             </span>
             <Btn size="sm" icon={<Plus size={12} />} onClick={() => onAddTask(selectedDate)}>
-              Додати завдання
+              {t("addTaskButton")}
             </Btn>
           </div>
 
           {selectedTasks.length === 0 ? (
             <div style={{ color: "#4B5563", fontSize: 13, padding: "8px 0" }}>
-              Завдань на цей день немає.
+              {t("noTasksForDay")}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -208,14 +205,14 @@ export function TasksCalendar({ tasks, onAddTask }: Props) {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                     <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>{task.title}</span>
-                    <span style={{ color: "#6B7280", fontSize: 11 }}>{STATUS_LABELS[task.status]}</span>
+                    <span style={{ color: "#6B7280", fontSize: 11 }}>{tTaskStatus(task.status)}</span>
                   </div>
                   {task.description && (
                     <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 4 }}>{task.description}</div>
                   )}
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap", color: "#4B5563", fontSize: 11 }}>
-                    {task.clientTenantName && <span>Клієнт: {task.clientTenantName}</span>}
-                    {task.assignedToUserName && <span>Відповідальний: {task.assignedToUserName}</span>}
+                    {task.clientTenantName && <span>{t("clientLabel", { name: task.clientTenantName })}</span>}
+                    {task.assignedToUserName && <span>{t("assigneeLabel", { name: task.assignedToUserName })}</span>}
                   </div>
                 </div>
               ))}

@@ -5,6 +5,7 @@
 // delivered; скасування з причиною з new/confirmed).
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
@@ -34,16 +35,16 @@ const cellStyle: React.CSSProperties = {
   borderBottom: "1px solid #1A2235",
 };
 
-function money(v: number): string {
-  return v.toLocaleString("uk-UA", {
+function money(v: number, locale: string): string {
+  return v.toLocaleString(locale, {
     style: "currency",
     currency: "UAH",
     minimumFractionDigits: 2,
   });
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -53,6 +54,9 @@ function formatDate(iso: string): string {
 }
 
 export function CabinetOrdersTab() {
+  const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: orders = [], isLoading } = useCabinetOrders();
   const updateStatus = useUpdateCabinetOrderStatus();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -62,7 +66,7 @@ export function CabinetOrdersTab() {
     updateStatus.mutate(
       { id: order.id, body: { status } },
       {
-        onSuccess: () => toast.success(`Замовлення ${order.orderNumber} оновлено`),
+        onSuccess: () => toast.success(t("toastUpdated", { number: order.orderNumber })),
         onError: (err) => toast.error(err.message),
       }
     );
@@ -79,10 +83,10 @@ export function CabinetOrdersTab() {
               disabled={updateStatus.isPending}
               onClick={() => transition(order, "confirmed")}
             >
-              Підтвердити
+              {t("confirmButton")}
             </Btn>
             <Btn size="sm" variant="danger" onClick={() => setCancelTarget(order)}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
           </>
         );
@@ -94,10 +98,10 @@ export function CabinetOrdersTab() {
               disabled={updateStatus.isPending}
               onClick={() => transition(order, "shipped")}
             >
-              Відвантажено
+              {t("shipButton")}
             </Btn>
             <Btn size="sm" variant="danger" onClick={() => setCancelTarget(order)}>
-              Скасувати
+              {t("cancelButton")}
             </Btn>
           </>
         );
@@ -109,7 +113,7 @@ export function CabinetOrdersTab() {
             disabled={updateStatus.isPending}
             onClick={() => transition(order, "delivered")}
           >
-            Доставлено
+            {t("deliverButton")}
           </Btn>
         );
       default:
@@ -118,13 +122,13 @@ export function CabinetOrdersTab() {
   }
 
   if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження...</div>;
+    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>;
   }
 
   if (orders.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
-        Замовлень ще немає — вони зʼявляться після активації співпраці з клієнтами.
+        {t("empty")}
       </div>
     );
   }
@@ -135,12 +139,12 @@ export function CabinetOrdersTab() {
         <thead>
           <tr>
             <th style={{ ...headerCellStyle, width: 30 }}></th>
-            <th style={headerCellStyle}>Номер</th>
-            <th style={headerCellStyle}>Клієнт</th>
-            <th style={headerCellStyle}>Дата</th>
-            <th style={headerCellStyle}>Статус</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>Сума</th>
-            <th style={headerCellStyle}>Дії</th>
+            <th style={headerCellStyle}>{t("headerNumber")}</th>
+            <th style={headerCellStyle}>{t("headerClient")}</th>
+            <th style={headerCellStyle}>{t("headerDate")}</th>
+            <th style={headerCellStyle}>{t("headerStatus")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerTotal")}</th>
+            <th style={headerCellStyle}>{t("headerActions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -151,6 +155,7 @@ export function CabinetOrdersTab() {
                 key={order.id}
                 order={order}
                 expanded={expanded}
+                intlLocale={intlLocale}
                 onToggle={() => setExpandedId(expanded ? null : order.id)}
                 actions={actionsFor(order)}
               />
@@ -161,9 +166,9 @@ export function CabinetOrdersTab() {
 
       {cancelTarget && (
         <ReasonModal
-          title={`Скасувати замовлення ${cancelTarget.orderNumber}?`}
-          label="Причина скасування"
-          confirmLabel="Скасувати замовлення"
+          title={t("cancelModalTitle", { number: cancelTarget.orderNumber })}
+          label={t("cancelModalLabel")}
+          confirmLabel={t("cancelModalConfirm")}
           required
           pending={updateStatus.isPending}
           onConfirm={(reason) =>
@@ -171,7 +176,7 @@ export function CabinetOrdersTab() {
               { id: cancelTarget.id, body: { status: "cancelled", reason } },
               {
                 onSuccess: () => {
-                  toast.success("Замовлення скасовано");
+                  toast.success(t("toastCancelled"));
                   setCancelTarget(null);
                 },
                 onError: (err) => toast.error(err.message),
@@ -188,14 +193,17 @@ export function CabinetOrdersTab() {
 function OrderRow({
   order,
   expanded,
+  intlLocale,
   onToggle,
   actions,
 }: {
   order: MarketplaceOrderDto;
   expanded: boolean;
+  intlLocale: string;
   onToggle: () => void;
   actions: React.ReactNode;
 }) {
+  const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
   return (
     <>
       <tr onClick={onToggle} style={{ cursor: "pointer" }}>
@@ -205,13 +213,13 @@ function OrderRow({
         <td style={{ ...cellStyle, fontWeight: 600, whiteSpace: "nowrap" }}>{order.orderNumber}</td>
         <td style={cellStyle}>{order.clientName}</td>
         <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-          {formatDate(order.createdAt)}
+          {formatDate(order.createdAt, intlLocale)}
         </td>
         <td style={cellStyle}>
           <OrderStatusBadge status={order.status} />
         </td>
         <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-          {money(order.totalAmount)}
+          {money(order.totalAmount, intlLocale)}
         </td>
         <td style={cellStyle} onClick={(e) => e.stopPropagation()}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{actions}</div>
@@ -223,21 +231,21 @@ function OrderRow({
             <div style={{ background: "#0D1117", padding: "12px 24px 16px 44px" }}>
               {order.comment && (
                 <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
-                  Коментар клієнта: {order.comment}
+                  {t("commentLabel", { comment: order.comment })}
                 </div>
               )}
               {order.cancelReason && (
                 <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
-                  Причина скасування: {order.cancelReason}
+                  {t("cancelReasonLabel", { reason: order.cancelReason })}
                 </div>
               )}
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={headerCellStyle}>Товар</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>Ціна</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>К-сть</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>Сума</th>
+                    <th style={headerCellStyle}>{t("headerProduct")}</th>
+                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
+                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerQty")}</th>
+                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerLineTotal")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -250,13 +258,13 @@ function OrderRow({
                         )}
                       </td>
                       <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                        {money(item.price)}
+                        {money(item.price, intlLocale)}
                       </td>
                       <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
                         {item.qty}
                       </td>
                       <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                        {money(item.lineTotal)}
+                        {money(item.lineTotal, intlLocale)}
                       </td>
                     </tr>
                   ))}

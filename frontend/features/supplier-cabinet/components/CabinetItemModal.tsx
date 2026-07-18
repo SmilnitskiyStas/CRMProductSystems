@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { useAddCabinetItem, useUpdateCabinetItem } from "../hooks/useSupplierCabinet";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
@@ -39,6 +40,9 @@ const LABEL_STYLE: React.CSSProperties = {
 };
 
 export function CabinetItemModal({ item, onClose }: Props) {
+  const t = useTranslations("Dashboard.supplierCabinet.itemModal");
+  const tCategoryFields = useTranslations("Dashboard.marketplace.itemCategoryFields");
+  const tExtraFields = useTranslations("Dashboard.marketplace.itemExtraFields");
   const isEdit = !!item;
   const addItem = useAddCabinetItem();
   const updateItem = useUpdateCabinetItem();
@@ -62,7 +66,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
     setError(null);
 
     if (!customName.trim()) {
-      setError("Назва товару є обов'язковою.");
+      setError(t("errorNameRequired"));
       return;
     }
 
@@ -70,30 +74,30 @@ export function CabinetItemModal({ item, onClose }: Props) {
     const minQty = minQtyRaw ? parseInt(minQtyRaw, 10) : undefined;
 
     if (priceRaw && (isNaN(price!) || price! < 0)) {
-      setError("Некоректна ціна.");
+      setError(t("errorInvalidPrice"));
       return;
     }
     if (minQtyRaw && (isNaN(minQty!) || minQty! < 1)) {
-      setError("Некоректна мінімальна кількість.");
+      setError(t("errorInvalidMinQty"));
       return;
     }
 
     if (category) {
-      const missing = findMissingRequiredField(categories, category, attributes);
+      const missing = findMissingRequiredField(categories, category, attributes, tCategoryFields);
       if (missing) {
         setError(missing);
         return;
       }
     }
 
-    const parsedExtra = parseExtraFields(extra);
+    const parsedExtra = parseExtraFields(extra, tExtraFields);
     if (parsedExtra.error !== null) {
       setError(parsedExtra.error);
       return;
     }
 
     const onError = (err: unknown) =>
-      setError(err instanceof Error ? err.message : "Помилка збереження товару.");
+      setError(err instanceof Error ? err.message : t("errorSaveDefault"));
 
     const categoryFields = category
       ? { category, attributes: attributes as Record<string, unknown> }
@@ -178,7 +182,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати товар" : "Додати товар"}
+            {isEdit ? t("titleEdit") : t("titleAdd")}
           </h2>
           <button
             onClick={onClose}
@@ -197,13 +201,13 @@ export function CabinetItemModal({ item, onClose }: Props) {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={LABEL_STYLE}>
-              Назва товару <span style={{ color: "#F87171" }}>*</span>
+              {t("nameLabel")} <span style={{ color: "#F87171" }}>*</span>
             </label>
             <input
               type="text"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
-              placeholder="Молоко 2.5%, 1л"
+              placeholder={t("namePlaceholder")}
               style={INPUT_STYLE}
               required
             />
@@ -218,7 +222,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <label style={LABEL_STYLE}>Ціна (грн)</label>
+              <label style={LABEL_STYLE}>{t("priceLabel")}</label>
               <input
                 type="number"
                 min="0"
@@ -230,7 +234,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
               />
             </div>
             <div>
-              <label style={LABEL_STYLE}>Мін. замовлення</label>
+              <label style={LABEL_STYLE}>{t("minQtyLabel")}</label>
               <input
                 type="number"
                 min="1"
@@ -244,12 +248,12 @@ export function CabinetItemModal({ item, onClose }: Props) {
           </div>
 
           <div>
-            <label style={LABEL_STYLE}>Одиниця виміру</label>
+            <label style={LABEL_STYLE}>{t("unitLabel")}</label>
             <input
               type="text"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              placeholder="шт, кг, л, упак."
+              placeholder={t("unitPlaceholder")}
               style={INPUT_STYLE}
             />
           </div>
@@ -268,7 +272,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
               htmlFor="cabinetItemAvailable"
               style={{ color: "#E8EDF5", fontSize: 13, cursor: "pointer" }}
             >
-              Товар в наявності
+              {t("availableLabel")}
             </label>
           </div>
 
@@ -288,7 +292,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
                 cursor: "pointer",
               }}
             >
-              Скасувати
+              {t("cancel")}
             </button>
             <button
               type="submit"
@@ -305,7 +309,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
                 opacity: isPending ? 0.7 : 1,
               }}
             >
-              {isPending ? "Збереження…" : isEdit ? "Зберегти" : "Додати"}
+              {isPending ? t("saving") : isEdit ? t("save") : t("add")}
             </button>
           </div>
         </form>

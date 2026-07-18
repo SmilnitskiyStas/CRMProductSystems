@@ -4,11 +4,12 @@
 // клієнтів + тред з відповідями і зміною статусу.
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { TicketStatusBadge, TICKET_STATUS_LABELS } from "@/features/marketplace/components/CooperationBadges";
+import { TicketStatusBadge } from "@/features/marketplace/components/CooperationBadges";
 import type { SupportTicketStatus } from "@/features/marketplace/types";
 import {
   useAddCabinetTicketMessage,
@@ -19,8 +20,8 @@ import {
 
 const STATUS_OPTIONS: SupportTicketStatus[] = ["open", "in_progress", "resolved", "closed"];
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -30,6 +31,10 @@ function formatDate(iso: string): string {
 }
 
 export function CabinetSupportTab() {
+  const t = useTranslations("Dashboard.supplierCabinet.supportTab");
+  const tTicketStatus = useTranslations("Dashboard.marketplace.ticketStatus");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const { data: tickets = [], isLoading } = useCabinetSupportTickets();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,13 +59,13 @@ export function CabinetSupportTab() {
   }
 
   if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження...</div>;
+    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>;
   }
 
   if (tickets.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
-        Звернень від клієнтів ще немає.
+        {t("empty")}
       </div>
     );
   }
@@ -79,12 +84,12 @@ export function CabinetSupportTab() {
           maxHeight: 640,
         }}
       >
-        {tickets.map((t) => {
-          const selected = t.id === selectedId;
+        {tickets.map((ticketItem) => {
+          const selected = ticketItem.id === selectedId;
           return (
             <button
-              key={t.id}
-              onClick={() => setSelectedId(t.id)}
+              key={ticketItem.id}
+              onClick={() => setSelectedId(ticketItem.id)}
               style={{
                 textAlign: "left",
                 background: selected ? "#1D3461" : "#111827",
@@ -113,13 +118,13 @@ export function CabinetSupportTab() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {t.subject}
+                  {ticketItem.subject}
                 </span>
-                <TicketStatusBadge status={t.status} />
+                <TicketStatusBadge status={ticketItem.status} />
               </div>
-              <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 2 }}>{t.clientName}</div>
+              <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 2 }}>{ticketItem.clientName}</div>
               <div style={{ color: "#4B5563", fontSize: 11 }}>
-                Оновлено {formatDate(t.updatedAt)}
+                {t("updatedLabel", { date: formatDate(ticketItem.updatedAt, intlLocale) })}
               </div>
             </button>
           );
@@ -150,7 +155,7 @@ export function CabinetSupportTab() {
               fontSize: 13,
             }}
           >
-            Оберіть звернення зі списку
+            {t("selectPrompt")}
           </div>
         )}
 
@@ -185,7 +190,7 @@ export function CabinetSupportTab() {
                 value={ticket.status}
                 onChange={(e) =>
                   updateStatus.mutate(e.target.value as SupportTicketStatus, {
-                    onSuccess: () => toast.success("Статус оновлено"),
+                    onSuccess: () => toast.success(t("statusUpdated")),
                     onError: (err) => toast.error(err.message),
                   })
                 }
@@ -203,7 +208,7 @@ export function CabinetSupportTab() {
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
-                    {TICKET_STATUS_LABELS[s]}
+                    {tTicketStatus(s)}
                   </option>
                 ))}
               </select>
@@ -254,7 +259,7 @@ export function CabinetSupportTab() {
                           textAlign: "right",
                         }}
                       >
-                        {new Date(m.createdAt).toLocaleString("uk-UA", {
+                        {new Date(m.createdAt).toLocaleString(intlLocale, {
                           day: "2-digit",
                           month: "2-digit",
                           hour: "2-digit",
@@ -285,7 +290,7 @@ export function CabinetSupportTab() {
                     handleReply();
                   }
                 }}
-                placeholder="Написати відповідь..."
+                placeholder={t("replyPlaceholder")}
                 style={{
                   flex: 1,
                   background: "#1F2937",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { UserMinus, UserPlus } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { useCabinetStaff, useDeactivateCabinetStaff } from "../hooks/useSupplierCabinet";
@@ -23,10 +24,11 @@ function StatusDot({ isActive }: { isActive: boolean }) {
 }
 
 function StaffRow({ user }: { user: UserDto }) {
+  const t = useTranslations("Dashboard.supplierCabinet.staffPanel");
   const deactivate = useDeactivateCabinetStaff();
 
   async function handleDeactivate() {
-    if (!confirm(`Деактивувати ${user.fullName}? Вони не зможуть увійти в систему.`)) return;
+    if (!confirm(t("deactivateConfirm", { name: user.fullName }))) return;
     await deactivate.mutateAsync(user.id);
   }
 
@@ -74,7 +76,7 @@ function StaffRow({ user }: { user: UserDto }) {
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
         <StatusDot isActive={user.isActive} />
         <span style={{ color: user.isActive ? "#4ADE80" : "#6B7280", fontSize: 12 }}>
-          {user.isActive ? "Активний" : "Деактив."}
+          {user.isActive ? t("statusActive") : t("statusInactive")}
         </span>
       </div>
 
@@ -82,7 +84,7 @@ function StaffRow({ user }: { user: UserDto }) {
         <button
           onClick={handleDeactivate}
           disabled={deactivate.isPending}
-          title="Деактивувати"
+          title={t("deactivateTitle")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 28, height: 28,
@@ -103,6 +105,7 @@ function StaffRow({ user }: { user: UserDto }) {
 }
 
 export function CabinetStaffPanel() {
+  const t = useTranslations("Dashboard.supplierCabinet.staffPanel");
   const { data: staff, isLoading, isError } = useCabinetStaff();
   const [showInvite, setShowInvite] = useState(false);
 
@@ -120,13 +123,13 @@ export function CabinetStaffPanel() {
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>
-          Співробітники
+          {t("title")}
         </h2>
         <Btn
           onClick={() => setShowInvite(true)}
           icon={<UserPlus size={14} />}
         >
-          Запросити співробітника
+          {t("inviteButton")}
         </Btn>
       </div>
 
@@ -134,7 +137,7 @@ export function CabinetStaffPanel() {
         <div style={{ height: 120, background: "#0D1117", borderRadius: 10 }} />
       ) : isError ? (
         <div style={{ color: "#F87171", fontSize: 13 }}>
-          Не вдалося завантажити список співробітників.
+          {t("errorLoad")}
         </div>
       ) : !staff || staff.length === 0 ? (
         <div
@@ -148,7 +151,7 @@ export function CabinetStaffPanel() {
             borderRadius: 10,
           }}
         >
-          Співробітників ще немає.
+          {t("empty")}
         </div>
       ) : (
         <div

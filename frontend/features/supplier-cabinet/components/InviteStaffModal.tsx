@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useInviteCabinetStaff, useSupplierRoles } from "../hooks/useSupplierCabinet";
 
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function InviteStaffModal({ onClose }: Props) {
+  const t = useTranslations("Dashboard.supplierCabinet.inviteStaffModal");
   const invite = useInviteCabinetStaff();
   const { data: roles } = useSupplierRoles();
 
@@ -40,9 +42,9 @@ export function InviteStaffModal({ onClose }: Props) {
 
   function validate() {
     const e: Record<string, string> = {};
-    if (!email.trim() || !email.includes("@")) e.email = "Введіть коректний email";
-    if (!fullName.trim()) e.fullName = "Введіть ім'я";
-    if (password.length < 8) e.password = "Мінімум 8 символів";
+    if (!email.trim() || !email.includes("@")) e.email = t("validationEmail");
+    if (!fullName.trim()) e.fullName = t("validationFullName");
+    if (password.length < 8) e.password = t("validationPassword");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -100,10 +102,10 @@ export function InviteStaffModal({ onClose }: Props) {
         >
           <div>
             <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-              Запросити співробітника
+              {t("title")}
             </h2>
             <p style={{ color: "#4B5563", fontSize: 12, margin: "3px 0 0" }}>
-              Новий акаунт буде створено у вашому кабінеті постачальника
+              {t("subtitle")}
             </p>
           </div>
           <button
@@ -123,11 +125,11 @@ export function InviteStaffModal({ onClose }: Props) {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Full name */}
             <div>
-              <label style={labelStyle}>Повне ім&apos;я *</label>
+              <label style={labelStyle}>{t("fullNameLabel")}</label>
               <input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Іван Петренко"
+                placeholder={t("fullNamePlaceholder")}
                 style={{ ...inputStyle, borderColor: errors.fullName ? "#EF4444" : "#374151" }}
               />
               {errors.fullName && (
@@ -137,12 +139,12 @@ export function InviteStaffModal({ onClose }: Props) {
 
             {/* Email */}
             <div>
-              <label style={labelStyle}>Email *</label>
+              <label style={labelStyle}>{t("emailLabel")}</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ivan@example.com"
+                placeholder={t("emailPlaceholder")}
                 style={{ ...inputStyle, borderColor: errors.email ? "#EF4444" : "#374151" }}
               />
               {errors.email && (
@@ -152,12 +154,12 @@ export function InviteStaffModal({ onClose }: Props) {
 
             {/* Temporary password */}
             <div>
-              <label style={labelStyle}>Тимчасовий пароль *</label>
+              <label style={labelStyle}>{t("passwordLabel")}</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Мінімум 8 символів"
+                placeholder={t("passwordPlaceholder")}
                 autoComplete="new-password"
                 style={{ ...inputStyle, borderColor: errors.password ? "#EF4444" : "#374151" }}
               />
@@ -168,13 +170,13 @@ export function InviteStaffModal({ onClose }: Props) {
 
             {/* Role */}
             <div>
-              <label style={labelStyle}>Роль</label>
+              <label style={labelStyle}>{t("roleLabel")}</label>
               <select
                 value={supplierRoleId}
                 onChange={(e) => setSupplierRoleId(e.target.value)}
                 style={{ ...inputStyle, appearance: "none" }}
               >
-                <option value="">Повний доступ (без ролі)</option>
+                <option value="">{t("roleNoneOption")}</option>
                 {roles?.map((role) => (
                   <option key={role.id} value={role.id}>
                     {role.displayName}
@@ -187,16 +189,16 @@ export function InviteStaffModal({ onClose }: Props) {
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
             <Btn type="submit" disabled={invite.isPending} style={{ flex: 1, justifyContent: "center" }}>
-              {invite.isPending ? "Створення…" : "Запросити"}
+              {invite.isPending ? t("creating") : t("inviteButton")}
             </Btn>
             <Btn type="button" variant="ghost" onClick={onClose}>
-              Скасувати
+              {t("cancel")}
             </Btn>
           </div>
 
           {invite.isError && (
             <p style={{ color: "#F87171", fontSize: 12, marginTop: 10 }}>
-              {(invite.error as Error)?.message ?? "Помилка створення"}
+              {(invite.error as Error)?.message ?? t("errorDefault")}
             </p>
           )}
         </form>

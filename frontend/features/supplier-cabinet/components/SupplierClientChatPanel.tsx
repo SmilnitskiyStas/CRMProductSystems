@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { MessageCircle, Send, X } from "lucide-react";
 import {
   useSupplierChatMessages,
@@ -17,6 +18,9 @@ interface Props {
 
 /** Modal chat panel for the supplier side of the supplier↔client chat (TASK-314). */
 export function SupplierClientChatPanel({ clientTenantId, clientTenantName, onClose }: Props) {
+  const t = useTranslations("Dashboard.supplierCabinet.clientChatPanel");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const { data: messages = [] } = useSupplierChatMessages(clientTenantId);
   const sendMessage = useSendSupplierChatMessage(clientTenantId);
@@ -80,7 +84,7 @@ export function SupplierClientChatPanel({ clientTenantId, clientTenantName, onCl
         <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           {messages.length === 0 && (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#4B5563", fontSize: 13 }}>
-              Повідомлень ще немає. Напишіть перше.
+              {t("emptyMessages")}
             </div>
           )}
           {messages.map((m) => {
@@ -105,7 +109,7 @@ export function SupplierClientChatPanel({ clientTenantId, clientTenantName, onCl
                     {m.body}
                   </p>
                   <p style={{ color: "#4B5563", fontSize: 10, margin: "4px 0 0", textAlign: "right" }}>
-                    {new Date(m.createdAt).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(m.createdAt).toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
               </div>
@@ -125,7 +129,7 @@ export function SupplierClientChatPanel({ clientTenantId, clientTenantName, onCl
                 handleSend();
               }
             }}
-            placeholder="Написати повідомлення..."
+            placeholder={t("inputPlaceholder")}
             style={{
               flex: 1,
               background: "#1F2937",

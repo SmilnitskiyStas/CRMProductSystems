@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { StarRating } from "@/features/marketplace/components/StarRating";
 import {
   useCabinetReviews,
@@ -13,6 +14,7 @@ import type { CabinetReview } from "../types";
 const PAGE_SIZE = 20;
 
 function ReviewStatsWidget() {
+  const t = useTranslations("Dashboard.supplierCabinet.reviews");
   const { data: stats } = useCabinetReviewStats();
 
   if (!stats || stats.total === 0) return null;
@@ -41,10 +43,10 @@ function ReviewStatsWidget() {
         <span style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700 }}>
           {stats.averageRating != null ? stats.averageRating.toFixed(1) : "—"}
         </span>
-        <span style={{ color: "#6B7280", fontSize: 13 }}>Всього: {stats.total}</span>
-        <span style={{ color: "#34D399", fontSize: 13 }}>Позитивні: {stats.positive}</span>
-        <span style={{ color: "#9CA3AF", fontSize: 13 }}>Нейтральні: {stats.neutral}</span>
-        <span style={{ color: "#F87171", fontSize: 13 }}>Негативні: {stats.negative}</span>
+        <span style={{ color: "#6B7280", fontSize: 13 }}>{t("totalLabel", { count: stats.total })}</span>
+        <span style={{ color: "#34D399", fontSize: 13 }}>{t("positiveLabel", { count: stats.positive })}</span>
+        <span style={{ color: "#9CA3AF", fontSize: 13 }}>{t("neutralLabel", { count: stats.neutral })}</span>
+        <span style={{ color: "#F87171", fontSize: 13 }}>{t("negativeLabel", { count: stats.negative })}</span>
       </div>
       <div
         style={{
@@ -64,6 +66,9 @@ function ReviewStatsWidget() {
 }
 
 function ReviewReplyBlock({ review }: { review: CabinetReview }) {
+  const t = useTranslations("Dashboard.supplierCabinet.reviews");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(review.replyText ?? "");
   const replyMutation = useReplyToReview();
@@ -90,12 +95,12 @@ function ReviewReplyBlock({ review }: { review: CabinetReview }) {
           }}
         >
           <span style={{ color: "#60A5FA", fontSize: 12, fontWeight: 600 }}>
-            Відповідь постачальника:
+            {t("replyFromSupplier")}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {review.repliedAt && (
               <span style={{ color: "#4B5563", fontSize: 11 }}>
-                {new Date(review.repliedAt).toLocaleDateString("uk-UA")}
+                {new Date(review.repliedAt).toLocaleDateString(intlLocale)}
               </span>
             )}
             <button
@@ -112,7 +117,7 @@ function ReviewReplyBlock({ review }: { review: CabinetReview }) {
                 padding: 0,
               }}
             >
-              Редагувати
+              {t("edit")}
             </button>
           </div>
         </div>
@@ -138,7 +143,7 @@ function ReviewReplyBlock({ review }: { review: CabinetReview }) {
           cursor: "pointer",
         }}
       >
-        Відповісти
+        {t("reply")}
       </button>
     );
   }
@@ -148,7 +153,7 @@ function ReviewReplyBlock({ review }: { review: CabinetReview }) {
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Ваша відповідь на відгук..."
+        placeholder={t("replyPlaceholder")}
         rows={3}
         style={{
           background: "#0B111C",
@@ -181,7 +186,7 @@ function ReviewReplyBlock({ review }: { review: CabinetReview }) {
             cursor: !text.trim() || replyMutation.isPending ? "not-allowed" : "pointer",
           }}
         >
-          {replyMutation.isPending ? "Надсилання..." : "Надіслати"}
+          {replyMutation.isPending ? t("sending") : t("send")}
         </button>
         <button
           onClick={() => {
@@ -198,7 +203,7 @@ function ReviewReplyBlock({ review }: { review: CabinetReview }) {
             cursor: "pointer",
           }}
         >
-          Скасувати
+          {t("cancel")}
         </button>
       </div>
     </div>
@@ -206,6 +211,9 @@ function ReviewReplyBlock({ review }: { review: CabinetReview }) {
 }
 
 export function CabinetReviews() {
+  const t = useTranslations("Dashboard.supplierCabinet.reviews");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, error } = useCabinetReviews(page, PAGE_SIZE);
   const { data: metrics } = useCabinetMetrics();
@@ -223,7 +231,7 @@ export function CabinetReviews() {
   if (isError) {
     return (
       <div style={{ color: "#F87171", fontSize: 13 }}>
-        Не вдалося завантажити відгуки.{" "}
+        {t("errorLoad")}{" "}
         {error instanceof Error ? error.message : ""}
       </div>
     );
@@ -252,7 +260,7 @@ export function CabinetReviews() {
           {metrics?.rating != null ? metrics.rating.toFixed(1) : "—"}
         </span>
         <span style={{ color: "#6B7280", fontSize: 13 }}>
-          {data?.total ?? 0} відгук(ів)
+          {t("reviewCount", { count: data?.total ?? 0 })}
         </span>
       </div>
 
@@ -272,7 +280,7 @@ export function CabinetReviews() {
             borderRadius: 12,
           }}
         >
-          Відгуків ще немає.
+          {t("empty")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -296,7 +304,7 @@ export function CabinetReviews() {
                 </span>
                 <span style={{ color: "#9CA3AF", fontSize: 12 }}>{review.reviewerName}</span>
                 <span style={{ color: "#4B5563", fontSize: 12, marginLeft: "auto" }}>
-                  {new Date(review.createdAt).toLocaleDateString("uk-UA")}
+                  {new Date(review.createdAt).toLocaleDateString(intlLocale)}
                 </span>
               </div>
               {review.comment && (
@@ -334,10 +342,10 @@ export function CabinetReviews() {
               cursor: page === 1 ? "not-allowed" : "pointer",
             }}
           >
-            ← Попередня
+            {t("prevPage")}
           </button>
           <span style={{ color: "#4B5563", fontSize: 13 }}>
-            Сторінка {page} з {totalPages}
+            {t("pageOf", { page, total: totalPages })}
           </span>
           <button
             disabled={page >= totalPages}
@@ -352,7 +360,7 @@ export function CabinetReviews() {
               cursor: page >= totalPages ? "not-allowed" : "pointer",
             }}
           >
-            Наступна →
+            {t("nextPage")}
           </button>
         </div>
       )}

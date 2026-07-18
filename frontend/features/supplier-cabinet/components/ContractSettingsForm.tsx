@@ -4,6 +4,7 @@
 // зображень підпису і мокрої печатки (multipart, потрібні збережені реквізити).
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ImageOff, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
@@ -84,13 +85,14 @@ function ImageUploadField({
   disabledHint: string;
   kind: "signature" | "stamp";
 }) {
+  const t = useTranslations("Dashboard.supplierCabinet.contractSettingsForm");
   const upload = useUploadContractImage(kind);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleFile(file: File | undefined) {
     if (!file) return;
     upload.mutate(file, {
-      onSuccess: () => toast.success("Зображення завантажено"),
+      onSuccess: () => toast.success(t("toastImageUploaded")),
       onError: (err) => toast.error(err.message),
     });
     if (fileRef.current) fileRef.current.value = "";
@@ -140,10 +142,10 @@ function ImageUploadField({
             disabled={disabled || upload.isPending}
             onClick={() => fileRef.current?.click()}
           >
-            {upload.isPending ? "Завантаження..." : imageUrl ? "Замінити" : "Завантажити"}
+            {upload.isPending ? t("uploading") : imageUrl ? t("replaceButton") : t("uploadButton")}
           </Btn>
           <div style={{ color: "#4B5563", fontSize: 11, marginTop: 6 }}>
-            {disabled ? disabledHint : "PNG або JPG, до 2 МБ"}
+            {disabled ? disabledHint : t("uploadHint")}
           </div>
         </div>
       </div>
@@ -152,6 +154,7 @@ function ImageUploadField({
 }
 
 export function ContractSettingsForm() {
+  const t = useTranslations("Dashboard.supplierCabinet.contractSettingsForm");
   const { data: settings, isLoading, error } = useContractSettings();
   const upsert = useUpsertContractSettings();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -185,7 +188,7 @@ export function ContractSettingsForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.legalName.trim()) {
-      toast.error("Вкажіть юридичну назву компанії");
+      toast.error(t("errorLegalNameRequired"));
       return;
     }
     const body: UpsertContractSettingsRequest = {
@@ -202,19 +205,19 @@ export function ContractSettingsForm() {
       isVatPayer: form.isVatPayer,
     };
     upsert.mutate(body, {
-      onSuccess: () => toast.success("Реквізити збережено"),
+      onSuccess: () => toast.success(t("toastSaved")),
       onError: (err) => toast.error(err.message),
     });
   }
 
   if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження...</div>;
+    return <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>;
   }
 
   if (error && !notFilledYet) {
     return (
       <div style={{ color: "#F87171", fontSize: 13 }}>
-        Не вдалося завантажити реквізити: {(error as Error).message}
+        {t("errorLoadPrefix", { message: (error as Error).message })}
       </div>
     );
   }
@@ -231,117 +234,116 @@ export function ContractSettingsForm() {
         }}
       >
         <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 18px" }}>
-          Ці дані підставляються в договір про співпрацю. Для схвалення заявок
-          обовʼязкові: юридична назва, IBAN і назва послуги/товару.
+          {t("intro")}
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>
-              Юридична назва
+              {t("legalNameLabel")}
               <Req />
             </label>
             <input
               value={form.legalName}
               onChange={(e) => set("legalName", e.target.value)}
-              placeholder="ТОВ «Приклад»"
+              placeholder={t("legalNamePlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label style={labelStyle}>ЄДРПОУ</label>
+            <label style={labelStyle}>{t("edrpouLabel")}</label>
             <input
               value={form.edrpou}
               onChange={(e) => set("edrpou", e.target.value)}
-              placeholder="12345678"
+              placeholder={t("edrpouPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
             <label style={labelStyle}>
-              IBAN
+              {t("ibanLabel")}
               <Req />
             </label>
             <input
               value={form.iban}
               onChange={(e) => set("iban", e.target.value)}
-              placeholder="UA00 0000 0000 0000 0000 0000 0000 0"
+              placeholder={t("ibanPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label style={labelStyle}>Банк</label>
+            <label style={labelStyle}>{t("bankNameLabel")}</label>
             <input
               value={form.bankName}
               onChange={(e) => set("bankName", e.target.value)}
-              placeholder="АТ «Банк»"
+              placeholder={t("bankNamePlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label style={labelStyle}>Директор</label>
+            <label style={labelStyle}>{t("directorNameLabel")}</label>
             <input
               value={form.directorName}
               onChange={(e) => set("directorName", e.target.value)}
-              placeholder="Прізвище Імʼя По батькові"
+              placeholder={t("directorNamePlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Юридична адреса</label>
+            <label style={labelStyle}>{t("legalAddressLabel")}</label>
             <input
               value={form.legalAddress}
               onChange={(e) => set("legalAddress", e.target.value)}
-              placeholder="м. Київ, вул. ..."
+              placeholder={t("legalAddressPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label style={labelStyle}>Телефон</label>
+            <label style={labelStyle}>{t("phoneLabel")}</label>
             <input
               value={form.phone}
               onChange={(e) => set("phone", e.target.value)}
-              placeholder="+380..."
+              placeholder={t("phonePlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label style={labelStyle}>Email</label>
+            <label style={labelStyle}>{t("emailLabel")}</label>
             <input
               type="email"
               value={form.email}
               onChange={(e) => set("email", e.target.value)}
-              placeholder="office@company.ua"
+              placeholder={t("emailPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>
-              Назва послуги/товару
+              {t("serviceNameLabel")}
               <Req />
             </label>
             <input
               value={form.serviceName}
               onChange={(e) => set("serviceName", e.target.value)}
-              placeholder="Постачання продуктів харчування"
+              placeholder={t("serviceNamePlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Опис послуги</label>
+            <label style={labelStyle}>{t("serviceDescriptionLabel")}</label>
             <textarea
               value={form.serviceDescription}
               onChange={(e) => set("serviceDescription", e.target.value)}
-              placeholder="Деталі предмета договору..."
+              placeholder={t("serviceDescriptionPlaceholder")}
               rows={3}
               style={{ ...inputStyle, resize: "vertical" }}
             />
@@ -364,14 +366,14 @@ export function ContractSettingsForm() {
                 onChange={(e) => set("isVatPayer", e.target.checked)}
                 style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
               />
-              Платник ПДВ
+              {t("vatPayerLabel")}
             </label>
           </div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
           <Btn type="submit" disabled={upsert.isPending}>
-            {upsert.isPending ? "Збереження..." : "Зберегти реквізити"}
+            {upsert.isPending ? t("saving") : t("saveButton")}
           </Btn>
         </div>
       </div>
@@ -391,17 +393,17 @@ export function ContractSettingsForm() {
         }}
       >
         <ImageUploadField
-          label="Підпис директора"
+          label={t("signatureLabel")}
           imageUrl={settings?.signatureImageUrl ?? null}
           disabled={!settingsExist}
-          disabledHint="Спершу збережіть реквізити"
+          disabledHint={t("disabledHint")}
           kind="signature"
         />
         <ImageUploadField
-          label="Мокра печатка"
+          label={t("stampLabel")}
           imageUrl={settings?.stampImageUrl ?? null}
           disabled={!settingsExist}
-          disabledHint="Спершу збережіть реквізити"
+          disabledHint={t("disabledHint")}
           kind="stamp"
         />
       </div>

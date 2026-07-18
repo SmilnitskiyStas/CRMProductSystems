@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { Inbox, MessageCircle } from "lucide-react";
 import { useSupplierChatSessions } from "../hooks/useSupplierCabinet";
 import { SupplierClientChatPanel } from "./SupplierClientChatPanel";
@@ -9,6 +10,9 @@ import { SupplierClientChatPanel } from "./SupplierClientChatPanel";
  * (BUG-018 fix — previously only ClientsTab opened chats, so threads started by
  * clients who never left a review or got a task assigned were unreachable). */
 export function ChatInboxTab() {
+  const t = useTranslations("Dashboard.supplierCabinet.chatInboxTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: sessions, isLoading, isError } = useSupplierChatSessions();
   const [chatClient, setChatClient] = useState<{ tenantId: string; tenantName: string } | null>(null);
 
@@ -24,7 +28,7 @@ export function ChatInboxTab() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <Inbox size={18} color="#60A5FA" />
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-          Повідомлення
+          {t("title")}
         </h2>
         {sessions && (
           <span
@@ -41,8 +45,8 @@ export function ChatInboxTab() {
         )}
       </div>
 
-      {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>}
-      {isError && <div style={{ color: "#F87171", fontSize: 13 }}>Не вдалося завантажити повідомлення.</div>}
+      {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
+      {isError && <div style={{ color: "#F87171", fontSize: 13 }}>{t("errorLoad")}</div>}
 
       {!isLoading && !isError && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -77,13 +81,13 @@ export function ChatInboxTab() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {session.lastMessage ?? "Немає повідомлень"}
+                  {session.lastMessage ?? t("noMessages")}
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                 {session.lastMessageAt && (
                   <div style={{ color: "#4B5563", fontSize: 11 }}>
-                    {new Date(session.lastMessageAt).toLocaleString("uk-UA", {
+                    {new Date(session.lastMessageAt).toLocaleString(intlLocale, {
                       day: "2-digit",
                       month: "2-digit",
                       hour: "2-digit",
@@ -113,7 +117,7 @@ export function ChatInboxTab() {
 
           {(!sessions || sessions.length === 0) && (
             <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
-              Повідомлень від клієнтів ще немає.
+              {t("empty")}
             </div>
           )}
         </div>

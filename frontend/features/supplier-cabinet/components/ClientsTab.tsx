@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { Users, MessageCircle, Star } from "lucide-react";
 import { useSupplierClients } from "../hooks/useSupplierCabinet";
 import { SupplierClientChatPanel } from "./SupplierClientChatPanel";
 import { Btn } from "@/components/ui/Btn";
 
 export function ClientsTab() {
+  const t = useTranslations("Dashboard.supplierCabinet.clientsTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: clients, isLoading, isError } = useSupplierClients();
   const [chatClient, setChatClient] = useState<{ tenantId: string; tenantName: string } | null>(null);
 
@@ -22,7 +26,7 @@ export function ClientsTab() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <Users size={18} color="#60A5FA" />
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-          Клієнти
+          {t("title")}
         </h2>
         {clients && (
           <span
@@ -39,8 +43,8 @@ export function ClientsTab() {
         )}
       </div>
 
-      {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>}
-      {isError && <div style={{ color: "#F87171", fontSize: 13 }}>Не вдалося завантажити список клієнтів.</div>}
+      {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
+      {isError && <div style={{ color: "#F87171", fontSize: 13 }}>{t("errorLoad")}</div>}
 
       {!isLoading && !isError && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -67,8 +71,8 @@ export function ClientsTab() {
                     {client.avgRating != null ? client.avgRating.toFixed(1) : "—"}
                     {" "}({client.reviewCount})
                   </span>
-                  <span>Завдань: {client.taskCount}</span>
-                  <span>Остання взаємодія: {new Date(client.lastInteractionAt).toLocaleDateString("uk-UA")}</span>
+                  <span>{t("tasksCountLabel", { count: client.taskCount })}</span>
+                  <span>{t("lastInteractionLabel", { date: new Date(client.lastInteractionAt).toLocaleDateString(intlLocale) })}</span>
                 </div>
               </div>
 
@@ -77,14 +81,14 @@ export function ClientsTab() {
                 icon={<MessageCircle size={13} />}
                 onClick={() => setChatClient({ tenantId: client.tenantId, tenantName: client.tenantName })}
               >
-                Написати
+                {t("messageButton")}
               </Btn>
             </div>
           ))}
 
           {(!clients || clients.length === 0) && (
             <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
-              Клієнтів ще немає.
+              {t("empty")}
             </div>
           )}
         </div>

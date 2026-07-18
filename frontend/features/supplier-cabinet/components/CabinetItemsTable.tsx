@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { Pencil, Trash2, Plus, ImageOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { useCabinetItems, useDeleteCabinetItem } from "../hooks/useSupplierCabinet";
@@ -29,6 +30,9 @@ const CELL: React.CSSProperties = {
 };
 
 export function CabinetItemsTable() {
+  const t = useTranslations("Dashboard.supplierCabinet.itemsTable");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data, isLoading, isError, error } = useCabinetItems();
   const { data: categories = [] } = useItemCategories();
   const deleteItem = useDeleteCabinetItem();
@@ -51,7 +55,7 @@ export function CabinetItemsTable() {
   if (isError) {
     return (
       <div style={{ color: "#F87171", fontSize: 13 }}>
-        Не вдалося завантажити каталог.{" "}
+        {t("errorLoad")}{" "}
         {error instanceof Error ? error.message : ""}
       </div>
     );
@@ -62,7 +66,7 @@ export function CabinetItemsTable() {
     deleteItem.mutate(id, {
       onSettled: () => setConfirmDeleteId(null),
       onError: (err) =>
-        setDeleteError(err instanceof Error ? err.message : "Помилка видалення."),
+        setDeleteError(err instanceof Error ? err.message : t("deleteErrorDefault")),
     });
   }
 
@@ -70,7 +74,7 @@ export function CabinetItemsTable() {
     <div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
         <Btn onClick={() => setModal({ open: true })} icon={<Plus size={14} />}>
-          Додати товар
+          {t("addButton")}
         </Btn>
       </div>
 
@@ -90,7 +94,7 @@ export function CabinetItemsTable() {
             borderRadius: 12,
           }}
         >
-          Каталог порожній — додайте перший товар.
+          {t("emptyCatalog")}
         </div>
       ) : (
         <div
@@ -105,12 +109,12 @@ export function CabinetItemsTable() {
             <thead>
               <tr>
                 <th style={HEADER_CELL}></th>
-                <th style={HEADER_CELL}>Назва</th>
-                <th style={{ ...HEADER_CELL, textAlign: "right" }}>Ціна</th>
-                <th style={{ ...HEADER_CELL, textAlign: "right" }}>Мін. замовл.</th>
-                <th style={HEADER_CELL}>Од. вим.</th>
-                <th style={{ ...HEADER_CELL, textAlign: "center" }}>Наявність</th>
-                <th style={{ ...HEADER_CELL, textAlign: "right" }}>Дії</th>
+                <th style={HEADER_CELL}>{t("headerName")}</th>
+                <th style={{ ...HEADER_CELL, textAlign: "right" }}>{t("headerPrice")}</th>
+                <th style={{ ...HEADER_CELL, textAlign: "right" }}>{t("headerMinQty")}</th>
+                <th style={HEADER_CELL}>{t("headerUnit")}</th>
+                <th style={{ ...HEADER_CELL, textAlign: "center" }}>{t("headerAvailability")}</th>
+                <th style={{ ...HEADER_CELL, textAlign: "right" }}>{t("headerActions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,7 +170,7 @@ export function CabinetItemsTable() {
                   </td>
                   <td style={{ ...CELL, textAlign: "right" }}>
                     {item.price != null
-                      ? item.price.toLocaleString("uk-UA", {
+                      ? item.price.toLocaleString(intlLocale, {
                           style: "currency",
                           currency: "UAH",
                           minimumFractionDigits: 2,
@@ -187,12 +191,12 @@ export function CabinetItemsTable() {
                         color: item.isAvailable ? "#4ADE80" : "#6B7280",
                       }}
                     >
-                      {item.isAvailable ? "В наявності" : "Відсутній"}
+                      {item.isAvailable ? t("available") : t("unavailable")}
                     </span>
                   </td>
                   <td style={{ ...CELL, textAlign: "right", whiteSpace: "nowrap" }}>
                     <button
-                      title="Детальніше"
+                      title={t("detailsTitle")}
                       onClick={() => setDetailItem(item as unknown as SupplierItemDto)}
                       style={{
                         background: "transparent",
@@ -206,10 +210,10 @@ export function CabinetItemsTable() {
                         marginRight: 6,
                       }}
                     >
-                      Деталі
+                      {t("detailsButton")}
                     </button>
                     <button
-                      title="Редагувати"
+                      title={t("editTitle")}
                       onClick={() => setModal({ open: true, item })}
                       style={{
                         background: "transparent",
@@ -239,7 +243,7 @@ export function CabinetItemsTable() {
                             marginRight: 4,
                           }}
                         >
-                          {deleteItem.isPending ? "…" : "Так"}
+                          {deleteItem.isPending ? t("deletePending") : t("confirmYes")}
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(null)}
@@ -253,12 +257,12 @@ export function CabinetItemsTable() {
                             fontSize: 11,
                           }}
                         >
-                          Ні
+                          {t("confirmNo")}
                         </button>
                       </>
                     ) : (
                       <button
-                        title="Видалити"
+                        title={t("deleteTitle")}
                         onClick={() => setConfirmDeleteId(item.id)}
                         style={{
                           background: "transparent",

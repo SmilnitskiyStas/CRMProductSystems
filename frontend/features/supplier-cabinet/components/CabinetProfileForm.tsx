@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Eye, EyeOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
@@ -49,6 +50,7 @@ function parseList(raw: string): string[] {
 }
 
 export function CabinetProfileForm() {
+  const t = useTranslations("Dashboard.supplierCabinet.profileForm");
   const { data: profile, isLoading, isError, error } = useCabinetProfile();
   const { data: itemCategories = [] } = useItemCategories();
   const update = useUpdateCabinetProfile();
@@ -80,7 +82,7 @@ export function CabinetProfileForm() {
   if (isError || !profile) {
     return (
       <div style={{ color: "#F87171", fontSize: 13 }}>
-        Кабінет постачальника недоступний.{" "}
+        {t("errorLoad")}{" "}
         {error instanceof Error ? error.message : ""}
       </div>
     );
@@ -99,11 +101,11 @@ export function CabinetProfileForm() {
         paymentTerms: paymentTerms.trim() || undefined,
       },
       {
-        onSuccess: () => setMessage({ kind: "ok", text: "Профіль збережено." }),
+        onSuccess: () => setMessage({ kind: "ok", text: t("savedProfile") }),
         onError: (err) =>
           setMessage({
             kind: "err",
-            text: err instanceof Error ? err.message : "Помилка збереження профілю.",
+            text: err instanceof Error ? err.message : t("errorSaveDefault"),
           }),
       }
     );
@@ -116,13 +118,13 @@ export function CabinetProfileForm() {
         setMessage({
           kind: "ok",
           text: p.isPublic
-            ? "Профіль опубліковано — видимий у маркетплейсі."
-            : "Профіль приховано з маркетплейсу.",
+            ? t("publishedBody")
+            : t("hiddenBody"),
         }),
       onError: (err) =>
         setMessage({
           kind: "err",
-          text: err instanceof Error ? err.message : "Не вдалося змінити видимість.",
+          text: err instanceof Error ? err.message : t("errorPublishToggleDefault"),
         }),
     });
   }
@@ -162,7 +164,7 @@ export function CabinetProfileForm() {
               color: profile.isPublic ? "#4ADE80" : "#6B7280",
             }}
           >
-            {profile.isPublic ? "Опубліковано" : "Приховано"}
+            {profile.isPublic ? t("publishedBadge") : t("hiddenBadge")}
           </span>
         </div>
         <Btn
@@ -172,24 +174,24 @@ export function CabinetProfileForm() {
           icon={profile.isPublic ? <EyeOff size={14} /> : <Eye size={14} />}
         >
           {publish.isPending
-            ? "Збереження…"
+            ? t("savingButton")
             : profile.isPublic
-            ? "Приховати з маркетплейсу"
-            : "Опублікувати"}
+            ? t("hideButton")
+            : t("publishButton")}
         </Btn>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Регіон">
+          <Field label={t("regionLabel")}>
             <input
               style={INPUT_STYLE}
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              placeholder="Київська область"
+              placeholder={t("regionPlaceholder")}
             />
           </Field>
-          <Field label="Вебсайт">
+          <Field label={t("websiteLabel")}>
             <input
               style={INPUT_STYLE}
               value={website}
@@ -199,7 +201,7 @@ export function CabinetProfileForm() {
           </Field>
         </div>
 
-        <Field label="Категорії">
+        <Field label={t("categoriesLabel")}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 20px" }}>
             {itemCategories.map((cat) => (
               <label
@@ -234,30 +236,30 @@ export function CabinetProfileForm() {
           </div>
         </Field>
 
-        <Field label="Регіони доставки (через кому)">
+        <Field label={t("deliveryRegionsLabel")}>
           <input
             style={INPUT_STYLE}
             value={deliveryRegionsRaw}
             onChange={(e) => setDeliveryRegionsRaw(e.target.value)}
-            placeholder="Київ, Львів, Одеса"
+            placeholder={t("deliveryRegionsPlaceholder")}
           />
         </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Графік роботи">
+          <Field label={t("workingHoursLabel")}>
             <input
               style={INPUT_STYLE}
               value={workingHours}
               onChange={(e) => setWorkingHours(e.target.value)}
-              placeholder="Пн–Пт 9:00–18:00"
+              placeholder={t("workingHoursPlaceholder")}
             />
           </Field>
-          <Field label="Умови оплати">
+          <Field label={t("paymentTermsLabel")}>
             <input
               style={INPUT_STYLE}
               value={paymentTerms}
               onChange={(e) => setPaymentTerms(e.target.value)}
-              placeholder="Передоплата / відтермінування 14 днів"
+              placeholder={t("paymentTermsPlaceholder")}
             />
           </Field>
         </div>
@@ -279,7 +281,7 @@ export function CabinetProfileForm() {
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Btn type="submit" disabled={update.isPending}>
-            {update.isPending ? "Збереження…" : "Зберегти профіль"}
+            {update.isPending ? t("savingButton") : t("saveButton")}
           </Btn>
         </div>
       </form>

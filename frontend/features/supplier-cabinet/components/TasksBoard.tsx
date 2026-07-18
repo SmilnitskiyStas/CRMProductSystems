@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { Plus, X, ClipboardList, List, CalendarDays } from "lucide-react";
 import {
   useSupplierTasks,
@@ -13,13 +14,6 @@ import type { SupplierTaskDto, SupplierTaskStatus } from "../types";
 import { Btn } from "@/components/ui/Btn";
 import { TasksCalendar } from "./TasksCalendar";
 
-const STATUS_LABELS: Record<SupplierTaskStatus, string> = {
-  pending: "Очікує",
-  in_progress: "В роботі",
-  completed: "Завершено",
-  cancelled: "Скасовано",
-};
-
 const STATUS_COLORS: Record<SupplierTaskStatus, { bg: string; color: string; border: string }> = {
   pending:     { bg: "#1F2937",   color: "#9CA3AF", border: "#374151" },
   in_progress: { bg: "#1E3A5F22", color: "#60A5FA", border: "#1D4ED855" },
@@ -30,6 +24,7 @@ const STATUS_COLORS: Record<SupplierTaskStatus, { bg: string; color: string; bor
 const ALL_STATUSES: SupplierTaskStatus[] = ["pending", "in_progress", "completed", "cancelled"];
 
 function StatusBadge({ status }: { status: SupplierTaskStatus }) {
+  const t = useTranslations("Dashboard.supplierCabinet.taskStatus");
   const c = STATUS_COLORS[status];
   return (
     <span
@@ -39,7 +34,7 @@ function StatusBadge({ status }: { status: SupplierTaskStatus }) {
         whiteSpace: "nowrap",
       }}
     >
-      {STATUS_LABELS[status]}
+      {t(status)}
     </span>
   );
 }
@@ -47,6 +42,10 @@ function StatusBadge({ status }: { status: SupplierTaskStatus }) {
 type ViewMode = "list" | "calendar";
 
 export function TasksBoard() {
+  const t = useTranslations("Dashboard.supplierCabinet.tasksBoard");
+  const tTaskStatus = useTranslations("Dashboard.supplierCabinet.taskStatus");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [view, setView] = useState<ViewMode>("list");
   const [scope, setScope] = useState<"mine" | "all">("all");
   const [clientFilter, setClientFilter] = useState("");
@@ -83,7 +82,7 @@ export function TasksBoard() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ClipboardList size={18} color="#60A5FA" />
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Дошка завдань
+            {t("title")}
           </h2>
           {tasks && (
             <span style={{
@@ -105,7 +104,7 @@ export function TasksBoard() {
                 color: view === "list" ? "#93C5FD" : "#6B7280",
               }}
             >
-              <List size={13} /> Список
+              <List size={13} /> {t("listViewButton")}
             </button>
             <button
               onClick={() => setView("calendar")}
@@ -116,11 +115,11 @@ export function TasksBoard() {
                 color: view === "calendar" ? "#93C5FD" : "#6B7280",
               }}
             >
-              <CalendarDays size={13} /> Календар
+              <CalendarDays size={13} /> {t("calendarViewButton")}
             </button>
           </div>
           <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-            Нове завдання
+            {t("newTaskButton")}
           </Btn>
         </div>
       </div>
@@ -138,7 +137,7 @@ export function TasksBoard() {
                   color: scope === "mine" ? "#93C5FD" : "#6B7280",
                 }}
               >
-                Мої
+                {t("scopeMine")}
               </button>
               <button
                 onClick={() => setScope("all")}
@@ -148,14 +147,14 @@ export function TasksBoard() {
                   color: scope === "all" ? "#93C5FD" : "#6B7280",
                 }}
               >
-                Усі
+                {t("scopeAll")}
               </button>
             </div>
 
             <input
               value={clientFilter}
               onChange={(e) => setClientFilter(e.target.value)}
-              placeholder="Client tenant ID (фільтр)"
+              placeholder={t("clientFilterPlaceholder")}
               style={{ ...filterInputStyle, minWidth: 220 }}
             />
 
@@ -164,15 +163,15 @@ export function TasksBoard() {
               onChange={(e) => setStatusFilter(e.target.value as SupplierTaskStatus | "")}
               style={{ ...filterInputStyle, appearance: "none" }}
             >
-              <option value="">Усі статуси</option>
+              <option value="">{t("allStatusesOption")}</option>
               {ALL_STATUSES.map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                <option key={s} value={s}>{tTaskStatus(s)}</option>
               ))}
             </select>
           </div>
 
-          {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>}
-          {isError && <div style={{ color: "#F87171", fontSize: 13 }}>Не вдалося завантажити завдання.</div>}
+          {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
+          {isError && <div style={{ color: "#F87171", fontSize: 13 }}>{t("errorLoad")}</div>}
 
           {!isLoading && !isError && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -195,9 +194,9 @@ export function TasksBoard() {
                       <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{task.description}</div>
                     )}
                     <div style={{ display: "flex", gap: 14, flexWrap: "wrap", color: "#4B5563", fontSize: 11 }}>
-                      {task.clientTenantName && <span>Клієнт: {task.clientTenantName}</span>}
-                      {task.assignedToUserName && <span>Відповідальний: {task.assignedToUserName}</span>}
-                      {task.dueDate && <span>Дедлайн: {new Date(task.dueDate).toLocaleDateString("uk-UA")}</span>}
+                      {task.clientTenantName && <span>{t("clientLabel", { name: task.clientTenantName })}</span>}
+                      {task.assignedToUserName && <span>{t("assigneeLabel", { name: task.assignedToUserName })}</span>}
+                      {task.dueDate && <span>{t("dueDateLabel", { date: new Date(task.dueDate).toLocaleDateString(intlLocale) })}</span>}
                     </div>
                   </div>
 
@@ -210,7 +209,7 @@ export function TasksBoard() {
                     style={{ ...filterInputStyle, width: 140, flexShrink: 0 }}
                   >
                     {ALL_STATUSES.map((s) => (
-                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                      <option key={s} value={s}>{tTaskStatus(s)}</option>
                     ))}
                   </select>
                 </div>
@@ -218,7 +217,7 @@ export function TasksBoard() {
 
               {(!tasks || tasks.length === 0) && (
                 <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
-                  Завдань немає.
+                  {t("empty")}
                 </div>
               )}
             </div>
@@ -228,8 +227,8 @@ export function TasksBoard() {
 
       {view === "calendar" && (
         <>
-          {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>}
-          {isError && <div style={{ color: "#F87171", fontSize: 13 }}>Не вдалося завантажити завдання.</div>}
+          {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
+          {isError && <div style={{ color: "#F87171", fontSize: 13 }}>{t("errorLoad")}</div>}
           {!isLoading && !isError && (
             <TasksCalendar tasks={tasks ?? []} onAddTask={handleAddTaskForDay} />
           )}
@@ -252,6 +251,7 @@ interface TaskFormModalProps {
 }
 
 function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
+  const t = useTranslations("Dashboard.supplierCabinet.tasksBoard.modal");
   const create = useCreateSupplierTask();
   const update = useUpdateSupplierTask();
   const { data: staff } = useCabinetStaff();
@@ -284,7 +284,7 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
       onClose();
     } catch (err: unknown) {
       const e = err as { error?: string };
-      setError(e?.error ?? "Помилка збереження");
+      setError(e?.error ?? t("errorSaveDefault"));
     }
   }
 
@@ -309,7 +309,7 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати завдання" : "Нове завдання"}
+            {isEdit ? t("titleEdit") : t("titleCreate")}
           </h2>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
             <X size={18} />
@@ -320,14 +320,14 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
           <input
             required
             type="text"
-            placeholder="Назва завдання"
+            placeholder={t("titlePlaceholder")}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             style={inputStyle}
           />
 
           <textarea
-            placeholder="Опис (опційно)"
+            placeholder={t("descriptionPlaceholder")}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
@@ -335,10 +335,10 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
           />
 
           <div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>Клієнт (tenant ID, опційно)</div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{t("clientLabel")}</div>
             <input
               type="text"
-              placeholder="Client tenant ID"
+              placeholder={t("clientPlaceholder")}
               value={clientTenantId}
               onChange={(e) => setClientTenantId(e.target.value)}
               style={inputStyle}
@@ -346,13 +346,13 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
           </div>
 
           <div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>Відповідальний</div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{t("assigneeLabel")}</div>
             <select
               value={assignedToUserId}
               onChange={(e) => setAssignedToUserId(e.target.value)}
               style={{ ...inputStyle, appearance: "none" }}
             >
-              <option value="">Не призначено</option>
+              <option value="">{t("assigneeNoneOption")}</option>
               {staff?.map((u) => (
                 <option key={u.id} value={u.id}>{u.fullName}</option>
               ))}
@@ -360,7 +360,7 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
           </div>
 
           <div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>Дедлайн</div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>{t("dueDateLabel")}</div>
             <input
               type="date"
               value={dueDate}
@@ -388,7 +388,7 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
               cursor: isPending ? "not-allowed" : "pointer", marginTop: 4,
             }}
           >
-            {isPending ? "Збереження…" : (isEdit ? "Зберегти зміни" : "Створити завдання")}
+            {isPending ? t("saving") : (isEdit ? t("saveChanges") : t("createTask"))}
           </button>
         </form>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus, Pencil, Trash2, X, Shield } from "lucide-react";
 import {
   useSupplierRoles,
@@ -8,15 +9,12 @@ import {
   useUpdateSupplierRole,
   useDeleteSupplierRole,
 } from "../hooks/useSupplierCabinet";
-import { SUPPLIER_PERMISSIONS, ALL_SUPPLIER_PERMISSIONS } from "@/lib/supplierPermissions";
+import { ALL_SUPPLIER_PERMISSIONS } from "@/lib/supplierPermissions";
 import type { SupplierRoleDto } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
-const BASE_ROLE_LABELS: Record<string, string> = {
-  supplier_admin: "Адмін постачальника",
-};
-
 export function RolesTab() {
+  const t = useTranslations("Dashboard.supplierCabinet.rolesTab");
   const { data: roles, isLoading, isError } = useSupplierRoles();
   const [editRole, setEditRole] = useState<SupplierRoleDto | null>(null);
   const [creating, setCreating] = useState(false);
@@ -33,7 +31,7 @@ export function RolesTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Shield size={18} color="#60A5FA" />
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Ролі команди
+            {t("title")}
           </h2>
           {roles && (
             <span style={{
@@ -45,17 +43,17 @@ export function RolesTab() {
           )}
         </div>
         <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-          Нова роль
+          {t("newRoleButton")}
         </Btn>
       </div>
 
       {isLoading && (
-        <div style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</div>
+        <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
       )}
 
       {isError && (
         <div style={{ color: "#F87171", fontSize: 13 }}>
-          Не вдалося завантажити ролі.
+          {t("errorLoad")}
         </div>
       )}
 
@@ -81,19 +79,19 @@ export function RolesTab() {
                       fontSize: 10, padding: "2px 7px", borderRadius: 4,
                       background: "#1F2937", color: "#4B5563", border: "1px solid #374151",
                     }}>
-                      Системна
+                      {t("systemBadge")}
                     </span>
                   )}
                   <span style={{
                     fontSize: 11, padding: "2px 8px", borderRadius: 4,
                     background: "#1E3A5F22", color: "#60A5FA", border: "1px solid #1D4ED855",
                   }}>
-                    {BASE_ROLE_LABELS[role.baseRole] ?? role.baseRole}
+                    {role.baseRole === "supplier_admin" ? t("baseRoleLabels.supplier_admin") : role.baseRole}
                   </span>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                   {role.permissions.length === 0 ? (
-                    <span style={{ color: "#374151", fontSize: 12 }}>Немає прав</span>
+                    <span style={{ color: "#374151", fontSize: 12 }}>{t("noPermissions")}</span>
                   ) : role.permissions.map((p) => (
                     <span
                       key={p}
@@ -103,7 +101,7 @@ export function RolesTab() {
                         border: "1px solid #1D4ED8",
                       }}
                     >
-                      {SUPPLIER_PERMISSIONS[p] ?? p}
+                      {t(`permissionLabels.${p}`)}
                     </span>
                   ))}
                 </div>
@@ -112,7 +110,7 @@ export function RolesTab() {
                 <div style={{ display: "flex", gap: 4, flexShrink: 0, paddingTop: 2 }}>
                   <button
                     onClick={() => setEditRole(role)}
-                    title="Редагувати"
+                    title={t("editTitle")}
                     style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", padding: 5 }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#60A5FA"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
@@ -121,11 +119,11 @@ export function RolesTab() {
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm(`Видалити роль "${role.displayName}"?`)) {
+                      if (confirm(t("deleteConfirm", { name: role.displayName }))) {
                         deleteRole.mutate(role.id);
                       }
                     }}
-                    title="Видалити"
+                    title={t("deleteTitle")}
                     style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", padding: 5 }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#F87171"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
@@ -138,7 +136,7 @@ export function RolesTab() {
           ))}
 
           {(!roles || roles.length === 0) && (
-            <div style={{ color: "#4B5563", fontSize: 13 }}>Ролі відсутні</div>
+            <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noRoles")}</div>
           )}
         </div>
       )}
@@ -157,6 +155,8 @@ interface RoleFormModalProps {
 }
 
 function RoleFormModal({ role, onClose }: RoleFormModalProps) {
+  const t = useTranslations("Dashboard.supplierCabinet.rolesTab.modal");
+  const tPermissions = useTranslations("Dashboard.supplierCabinet.rolesTab");
   const create = useCreateSupplierRole();
   const update = useUpdateSupplierRole();
   const [displayName, setDisplayName] = useState(role?.displayName ?? "");
@@ -186,7 +186,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
       onClose();
     } catch (err: unknown) {
       const e = err as { error?: string };
-      setError(e?.error ?? "Помилка збереження");
+      setError(e?.error ?? t("errorSaveDefault"));
     }
   }
 
@@ -211,7 +211,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? "Редагувати роль" : "Нова роль"}
+            {isEdit ? t("titleEdit") : t("titleCreate")}
           </h2>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
             <X size={18} />
@@ -222,14 +222,14 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
           <input
             required
             type="text"
-            placeholder="Назва ролі"
+            placeholder={t("namePlaceholder")}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             style={inputStyle}
           />
 
           <div>
-            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 8 }}>Права доступу</div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 8 }}>{t("permissionsLabel")}</div>
             <div
               style={{
                 background: "#0D1117", border: "1px solid #1F2937",
@@ -246,7 +246,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
                     style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
                   />
                   <span style={{ color: permissions.has(p) ? "#E8EDF5" : "#4B5563", fontSize: 13 }}>
-                    {SUPPLIER_PERMISSIONS[p]}
+                    {tPermissions(`permissionLabels.${p}`)}
                   </span>
                 </label>
               ))}
@@ -272,7 +272,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
               cursor: isPending ? "not-allowed" : "pointer", marginTop: 4,
             }}
           >
-            {isPending ? "Збереження…" : (isEdit ? "Зберегти зміни" : "Створити роль")}
+            {isPending ? t("saving") : (isEdit ? t("saveChanges") : t("createRole"))}
           </button>
         </form>
       </div>

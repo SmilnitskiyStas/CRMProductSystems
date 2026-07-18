@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import { Eye, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
@@ -24,14 +25,6 @@ import {
 } from "../hooks/useCabinetCooperation";
 
 type FilterTab = "all" | CooperationStatus;
-
-const FILTER_TABS: { key: FilterTab; label: string }[] = [
-  { key: "all", label: "Всі" },
-  { key: "pending", label: "Нові" },
-  { key: "awaiting_signature", label: "Очікують підписання" },
-  { key: "active", label: "Активні" },
-  { key: "rejected", label: "Відхилені" },
-];
 
 const headerCellStyle: React.CSSProperties = {
   padding: "10px 14px",
@@ -52,8 +45,8 @@ const cellStyle: React.CSSProperties = {
   verticalAlign: "top",
 };
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -63,11 +56,22 @@ function formatDate(iso: string): string {
 }
 
 export function CooperationRequestsTab() {
+  const t = useTranslations("Dashboard.supplierCabinet.cooperationRequestsTab");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const [filter, setFilter] = useState<FilterTab>("all");
   const { data: requests = [], isLoading } = useCooperationRequests(
     filter === "all" ? undefined : filter
   );
+
+  const FILTER_TABS: { key: FilterTab; label: string }[] = [
+    { key: "all", label: t("filterAll") },
+    { key: "pending", label: t("filterPending") },
+    { key: "awaiting_signature", label: t("filterAwaitingSignature") },
+    { key: "active", label: t("filterActive") },
+    { key: "rejected", label: t("filterRejected") },
+  ];
 
   const approve = useApproveCooperationRequest();
   const reject = useRejectCooperationRequest();
@@ -81,13 +85,14 @@ export function CooperationRequestsTab() {
 
   function handleApprove(agreement: CooperationAgreementDto) {
     approve.mutate(agreement.id, {
-      onSuccess: () => toast.success("Заявку схвалено — договір згенеровано"),
+      onSuccess: () => toast.success(t("toastApproved")),
       onError: (err) => {
         // 400 «Спочатку заповніть реквізити договору…» → підказка з переходом
+        // (backend error text stays Ukrainian regardless of UI locale — not yet localized, see i18n-rollout-plan.md Block 11)
         if (err.message.toLowerCase().includes("реквізит")) {
           toast.error(err.message, {
             action: {
-              label: "Реквізити",
+              label: t("requisitesActionLabel"),
               onClick: () => router.push("/supplier/contract-settings"),
             },
             duration: 8000,
@@ -116,10 +121,10 @@ export function CooperationRequestsTab() {
               disabled={approve.isPending}
               onClick={() => handleApprove(agreement)}
             >
-              Схвалити
+              {t("approveButton")}
             </Btn>
             <Btn size="sm" variant="danger" onClick={() => setRejectTarget(agreement)}>
-              Відхилити
+              {t("rejectButton")}
             </Btn>
           </>
         );
@@ -132,7 +137,7 @@ export function CooperationRequestsTab() {
               icon={<Eye size={13} />}
               onClick={() => handleViewContract(agreement)}
             >
-              Договір
+              {t("viewContractButton")}
             </Btn>
             <Btn
               size="sm"
@@ -140,13 +145,13 @@ export function CooperationRequestsTab() {
               disabled={sendToVchasno.isPending}
               onClick={() =>
                 sendToVchasno.mutate(agreement.id, {
-                  onSuccess: () => toast.success("Договір надіслано у Вчасно"),
+                  onSuccess: () => toast.success(t("toastSentToVchasno")),
                   // 400 «Інтеграцію Вчасно не налаштовано.» — показуємо як є
                   onError: (err) => toast.error(err.message),
                 })
               }
             >
-              Надіслати у Вчасно
+              {t("sendToVchasnoButton")}
             </Btn>
             <Btn
               size="sm"
@@ -155,12 +160,12 @@ export function CooperationRequestsTab() {
               disabled={regenerate.isPending}
               onClick={() =>
                 regenerate.mutate(agreement.id, {
-                  onSuccess: () => toast.success("Договір перегенеровано"),
+                  onSuccess: () => toast.success(t("toastRegenerated")),
                   onError: (err) => toast.error(err.message),
                 })
               }
             >
-              Перегенерувати
+              {t("regenerateButton")}
             </Btn>
             <Btn
               size="sm"
@@ -168,12 +173,12 @@ export function CooperationRequestsTab() {
               disabled={markSigned.isPending}
               onClick={() =>
                 markSigned.mutate(agreement.id, {
-                  onSuccess: () => toast.success("Співпрацю активовано"),
+                  onSuccess: () => toast.success(t("toastActivated")),
                   onError: (err) => toast.error(err.message),
                 })
               }
             >
-              Позначити підписаним
+              {t("markSignedButton")}
             </Btn>
           </>
         );
@@ -186,10 +191,10 @@ export function CooperationRequestsTab() {
               icon={<Eye size={13} />}
               onClick={() => handleViewContract(agreement)}
             >
-              Договір
+              {t("viewContractButton")}
             </Btn>
             <Btn size="sm" variant="danger" onClick={() => setTerminateTarget(agreement)}>
-              Розірвати
+              {t("terminateButton")}
             </Btn>
           </>
         );
@@ -222,22 +227,22 @@ export function CooperationRequestsTab() {
           overflowX: "auto",
         }}
       >
-        {FILTER_TABS.map((t) => (
-          <button key={t.key} style={tabStyle(t.key)} onClick={() => setFilter(t.key)}>
-            {t.label}
+        {FILTER_TABS.map((tab) => (
+          <button key={tab.key} style={tabStyle(tab.key)} onClick={() => setFilter(tab.key)}>
+            {tab.label}
           </button>
         ))}
       </div>
 
       {isLoading && (
-        <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>Завантаження...</div>
+        <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>
       )}
 
       {!isLoading && requests.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
           {filter === "all"
-            ? "Заявок на співпрацю ще немає."
-            : "Немає заявок у цьому статусі."}
+            ? t("emptyAll")
+            : t("emptyFiltered")}
         </div>
       )}
 
@@ -246,11 +251,11 @@ export function CooperationRequestsTab() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={headerCellStyle}>Клієнт</th>
-                <th style={headerCellStyle}>Повідомлення</th>
-                <th style={headerCellStyle}>Дата заявки</th>
-                <th style={headerCellStyle}>Статус</th>
-                <th style={headerCellStyle}>Дії</th>
+                <th style={headerCellStyle}>{t("headerClient")}</th>
+                <th style={headerCellStyle}>{t("headerMessage")}</th>
+                <th style={headerCellStyle}>{t("headerRequestDate")}</th>
+                <th style={headerCellStyle}>{t("headerStatus")}</th>
+                <th style={headerCellStyle}>{t("headerActions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -261,15 +266,15 @@ export function CooperationRequestsTab() {
                     {a.contractNumber && (
                       <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 400, marginTop: 4 }}>
                         {a.contractNumber}
-                        {a.vchasnoDocumentId && " · Вчасно"}
+                        {a.vchasnoDocumentId && t("vchasnoSuffix")}
                       </div>
                     )}
                     {a.signingMethod && (
                       <div style={{ color: "#60A5FA", fontSize: 11, fontWeight: 400, marginTop: 4 }}>
-                        Клієнт обрав:{" "}
+                        {t("clientChoseLabel")}{" "}
                         {a.signingMethod === "vchasno"
-                          ? `Вчасно (${a.signingEmail})`
-                          : "Фізичне підписання"}
+                          ? t("vchasnoChoice", { email: a.signingEmail ?? "" })
+                          : t("physicalChoice")}
                       </div>
                     )}
                   </td>
@@ -277,12 +282,12 @@ export function CooperationRequestsTab() {
                     {a.requestMessage ?? "—"}
                     {a.rejectionReason && (
                       <div style={{ color: "#F87171", fontSize: 11, marginTop: 4 }}>
-                        Причина: {a.rejectionReason}
+                        {t("reasonPrefixLabel", { reason: a.rejectionReason })}
                       </div>
                     )}
                   </td>
                   <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                    {formatDate(a.requestedAt)}
+                    {formatDate(a.requestedAt, intlLocale)}
                   </td>
                   <td style={cellStyle}>
                     <AgreementStatusBadge status={a.status} />
@@ -301,9 +306,9 @@ export function CooperationRequestsTab() {
 
       {rejectTarget && (
         <ReasonModal
-          title={`Відхилити заявку від «${rejectTarget.clientName}»?`}
-          label="Причина відмови"
-          confirmLabel="Відхилити"
+          title={t("rejectModalTitle", { name: rejectTarget.clientName })}
+          label={t("rejectModalLabel")}
+          confirmLabel={t("rejectModalConfirm")}
           required
           pending={reject.isPending}
           onConfirm={(reason) =>
@@ -311,7 +316,7 @@ export function CooperationRequestsTab() {
               { id: rejectTarget.id, reason },
               {
                 onSuccess: () => {
-                  toast.success("Заявку відхилено");
+                  toast.success(t("toastRejected"));
                   setRejectTarget(null);
                 },
                 onError: (err) => toast.error(err.message),
@@ -324,16 +329,16 @@ export function CooperationRequestsTab() {
 
       {terminateTarget && (
         <ReasonModal
-          title={`Розірвати співпрацю з «${terminateTarget.clientName}»?`}
-          label="Причина розірвання"
-          confirmLabel="Розірвати"
+          title={t("terminateModalTitle", { name: terminateTarget.clientName })}
+          label={t("terminateModalLabel")}
+          confirmLabel={t("terminateModalConfirm")}
           pending={terminate.isPending}
           onConfirm={(reason) =>
             terminate.mutate(
               { id: terminateTarget.id, reason: reason || undefined },
               {
                 onSuccess: () => {
-                  toast.success("Співпрацю розірвано");
+                  toast.success(t("toastTerminated"));
                   setTerminateTarget(null);
                 },
                 onError: (err) => toast.error(err.message),
