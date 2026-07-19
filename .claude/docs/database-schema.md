@@ -371,6 +371,107 @@ context), so Postgres thinks every existing FK value is orphaned even when none 
 migrations locally via the `crm` superuser connection instead (`rolbypassrls=true` — exactly what
 that role is documented for in `appsettings.Development.json`).
 
+## TASK-393 Stage 3 — store-scoped RLS enforcement cutover (2026-07-19)
+
+`AddLocationStoreScopeRlsPolicies` migration. Adds a **RESTRICTIVE** `store_scope` policy (name
+literal, same convention as `tenant_isolation`/`provider_bypass`/`worker_bypass`) to the 9 tables
+that carry per-location operational data:
+
+| Table | Shape | Store/location column(s) |
+|---|---|---|
+| `product_stock` | one-sided | `"LocationId"` |
+| `daily_sales` | one-sided | `"LocationId"` |
+| `pos_shifts` | one-sided | `"LocationId"` |
+| `pos_transactions` | one-sided | `"LocationId"` |
+| `write_offs` | one-sided | `"LocationId"` |
+| `discounts` | one-sided | `"LocationId"` |
+| `stock_receipts` | one-sided | `"DestinationLocationId"` |
+| `stock_movements` | two-sided (both nullable) | `"FromLocationId"`, `"ToLocationId"` |
+| `stock_transfers` | two-sided (both NOT NULL) | `"FromLocationId"`, `"ToLocationId"` |
+
+```sql
+-- One-sided shape:
+CREATE POLICY store_scope ON {table} AS RESTRICTIVE
+  USING (
+    current_setting('app.role', true) IN ('provider', 'provider_admin', 'worker', 'enterprise_admin')
+    OR EXISTS (
+         SELECT 1 FROM user_locations ul
+         WHERE ul."UserId" = NULLIF(current_setting('app.user_id', true), '')::uuid
+           AND ul."LocationId" = {table}."{column}"
+       )
+  );
+
+-- Two-sided shape (OR across both columns — same pattern as supplier_chat_sessions'
+-- SupplierTenantId/ClientTenantId):
+CREATE POLICY store_scope ON {table} AS RESTRICTIVE
+  USING (
+    current_setting('app.role', true) IN ('provider', 'provider_admin', 'worker', 'enterprise_admin')
+    OR EXISTS (
+         SELECT 1 FROM user_locations ul
+         WHERE ul."UserId" = NULLIF(current_setting('app.user_id', true), '')::uuid
+           AND (ul."LocationId" = {table}."{FromColumn}" OR ul."LocationId" = {table}."{ToColumn}")
+       )
+  );
+```
+
+**Why RESTRICTIVE, not PERMISSIVE:** PERMISSIVE policies OR together, so a PERMISSIVE
+`store_scope` would be silently defeated by the existing permissive `tenant_isolation` policy
+(any tenant match alone would already satisfy the OR, regardless of location). RESTRICTIVE ANDs
+on top of the whole permissive set instead — the correct semantics for "narrow what
+`tenant_isolation`/`provider_bypass`/`worker_bypass` already allowed", not "grant an additional
+way in".
+
+**Bypass roles: `provider`, `provider_admin`, `worker`, `enterprise_admin`.** `provider`/
+`worker`/`enterprise_admin` come from the project-architect's design. `provider_admin` is an
+addition made during implementation, not literally in the original brief text — flagged
+explicitly because `20260714150000_ExpandProviderBypassToProviderAdmin` already gives
+`provider_admin` full parity with `provider` on all 9 of these tables via the pre-existing
+permissive `provider_bypass` policy; omitting it from `store_scope`'s bypass condition would have
+silently revoked that already-established access the moment this migration applied. Verified live
+(see below) that `provider_admin` still sees all rows with zero `user_locations` rows for the
+acting user. `provider_agent` is deliberately excluded — it never had bypass on these 9 tables to
+begin with (only `support_tickets`/`ticket_comments`/`chat_sessions`), so no regression risk.
+
+**Column-name/shape corrections vs. the original brief** (verified against the live EF model
+before writing SQL, per the task's own instruction to check rather than assume):
+- `stock_receipts` was assumed two-sided ("FromStoreId/ToStoreId or similar") — actually
+  **one-sided**, single column `DestinationLocationId` (a receipt's origin is a supplier, not
+  another store; there is no second side to OR against).
+- `stock_movements` was assumed one-sided — actually **two-sided**, `FromLocationId`/
+  `ToLocationId`, both **nullable** (e.g. a receipt-origin movement only populates `To`, a
+  write-off-origin movement only populates `From`). A plain equality against a NULL column is
+  simply unmatched under standard SQL NULL semantics — no extra CASE/guard needed. A movement row
+  where neither column is populated is only visible to bypass roles — deliberate fail-closed
+  default for that edge case, not a bug.
+
+**No child-table policies needed** (`stock_receipt_items`, `stock_transfer_items`,
+`write_off_items`, `pos_transaction_items`): Postgres re-applies a referenced table's RLS
+policies — RESTRICTIVE included — inside any EXISTS/subquery/join that reads it. Since these
+child tables' existing `tenant_isolation` policies are already `EXISTS`-into-the-parent, they
+inherit `store_scope`'s narrowing automatically, the same way `supplier_chat_messages` already
+inherits its tenant scoping transitively from `supplier_chat_sessions`.
+
+**Live-verified locally** (applied through the actual restricted `shelfguard_app_dev` role, not
+the `crm` superuser — same non-superuser path `Program.cs`'s `MigrateAsync()` uses in
+production): `enterprise_admin` with zero `user_locations` rows sees all locations' stock;
+a `store_manager` assigned to exactly one location sees only that location's rows (product_stock)
+and only transfers touching that location on either side (`stock_transfers`); a `store_manager`
+with zero `user_locations` rows sees zero rows (confirmed fail-closed, not fail-open); a
+correctly-assigned user querying under the wrong `app.tenant_id` still sees zero rows
+(`store_scope` ANDs on top of `tenant_isolation`, does not replace it); `provider`/
+`provider_admin`/`worker` all bypass regardless of `user_locations` state. Migration `Down()`
+(drops all 9 `store_scope` policies) round-tripped cleanly — rolled back and reapplied through
+the non-superuser role, policies gone then fully restored. Permanent regression coverage:
+`ShelfGuard.Tests.Infrastructure.StoreScopeRlsIntegrationTests` (9 tests, mirrors every scenario
+above).
+
+**⚠️ PRODUCTION ROLLOUT GATE — see `.claude/docs/store-scope-rollout-checklist.md` before ever
+applying this migration outside local dev.** Every network_manager/store_manager/merchandiser/
+storekeeper/cashier/staff user with zero `user_locations` rows goes to **zero visible rows** on
+all 9 tables the instant this migration runs — immediate, total functional outage for that user
+across stock/sales/POS/write-offs/etc, not a gradual degradation. Safe only after Stage 2's
+manual backfill (product owner assigning locations to every affected user) reaches 100% coverage.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data
