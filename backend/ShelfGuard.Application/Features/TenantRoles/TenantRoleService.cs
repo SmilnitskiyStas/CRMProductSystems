@@ -97,6 +97,11 @@ public sealed class TenantRoleService : ITenantRoleService
                 g.Capabilities.Select(c => new TenantRoleCapabilityDto(c.Key, c.LabelUa)).ToList()))
             .ToList();
 
+    public IReadOnlyList<TenantRoleTabDto> GetTabCatalog() =>
+        TenantRoleTabs.Catalog
+            .Select(t => new TenantRoleTabDto(t.Key, t.LabelUa))
+            .ToList();
+
     // ── helpers ───────────────────────────────────────────────────────────
 
     private static string? Validate(string name, List<string> capabilities, List<string> allowedTabs)

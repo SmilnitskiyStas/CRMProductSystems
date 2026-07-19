@@ -227,4 +227,19 @@ public sealed class TenantRoleServiceTests
             flatKeys.Distinct().OrderBy(k => k, StringComparer.Ordinal));
         Assert.Contains(groups, g => g.Capabilities.Any(c => c.Key == TenantUserPermissions.LegalEntitiesManage));
     }
+
+    // ── Tab catalog (TASK-391b) ───────────────────────────────────────────
+
+    [Fact]
+    public void GetTabCatalog_ReturnsEveryTabInAll_WithLabels()
+    {
+        var catalog = _sut.GetTabCatalog();
+
+        var keys = catalog.Select(t => t.Key).ToList();
+
+        Assert.Equal(TenantRoleTabs.All.OrderBy(k => k, StringComparer.Ordinal),
+            keys.Distinct().OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Contains(catalog, t => t.Key == TenantRoleTabs.Dashboard);
+        Assert.All(catalog, t => Assert.False(string.IsNullOrWhiteSpace(t.LabelUa)));
+    }
 }

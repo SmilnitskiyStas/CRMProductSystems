@@ -31,7 +31,7 @@ public sealed class AuthServiceTests
         _jwt.HashToken("raw_token").Returns("hashed_token");
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(),
-            Arg.Any<List<string>?>()).Returns("access_token");
+            Arg.Any<List<string>?>(), Arg.Any<List<string>?>()).Returns("access_token");
     }
 
     // ── Login ──────────────────────────────────────────────────────────────

@@ -137,10 +137,11 @@ public sealed class AuthService : IAuthService
 
         var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
         var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
+        var effectiveTabs = await BuildEffectiveTabsAsync(user, ct);
         var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName,
-            effectivePermissions, effectiveCapabilities);
+            effectivePermissions, effectiveCapabilities, effectiveTabs);
 
-        return (new LoginResponse(accessToken, newRaw, ToDto(user, effectivePermissions, effectiveCapabilities)), null);
+        return (new LoginResponse(accessToken, newRaw, ToDto(user, effectivePermissions, effectiveCapabilities, effectiveTabs)), null);
     }
 
     public async Task RevokeAsync(string rawRefreshToken, CancellationToken ct = default)
@@ -161,7 +162,8 @@ public sealed class AuthService : IAuthService
 
         var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
         var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
-        return ToDto(user, effectivePermissions, effectiveCapabilities);
+        var effectiveTabs = await BuildEffectiveTabsAsync(user, ct);
+        return ToDto(user, effectivePermissions, effectiveCapabilities, effectiveTabs);
     }
 
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
@@ -343,10 +345,11 @@ public sealed class AuthService : IAuthService
 
         var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
         var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
+        var effectiveTabs = await BuildEffectiveTabsAsync(user, ct);
         var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName,
-            effectivePermissions, effectiveCapabilities);
+            effectivePermissions, effectiveCapabilities, effectiveTabs);
 
-        return new LoginResponse(accessToken, rawToken, ToDto(user, effectivePermissions, effectiveCapabilities));
+        return new LoginResponse(accessToken, rawToken, ToDto(user, effectivePermissions, effectiveCapabilities, effectiveTabs));
     }
 
     /// <summary>
@@ -396,6 +399,28 @@ public sealed class AuthService : IAuthService
             return [];
 
         return role.Capabilities;
+    }
+
+    /// <summary>
+    /// TASK-391b: effective sidebar-tab visibility baked into the JWT "tabs" claim and
+    /// AuthUserDto.Tabs — same empty/archived short-circuit as
+    /// <see cref="BuildEffectiveCapabilitiesAsync"/>, reading <see cref="TenantRole.AllowedTabs"/>
+    /// instead of <see cref="TenantRole.Capabilities"/>. Kept as a fully independent method
+    /// (its own TenantRole fetch) rather than sharing one lookup with capabilities, mirroring the
+    /// deliberate Capabilities/AllowedTabs separation on
+    /// <see cref="ShelfGuard.Domain.Constants.TenantRoleTabs"/> — actions vs. UI visibility are
+    /// different axes with different consumers, so their resolution paths stay independent too.
+    /// </summary>
+    private async Task<List<string>> BuildEffectiveTabsAsync(User user, CancellationToken ct)
+    {
+        if (user.TenantRoleId is null || user.TenantId is null)
+            return [];
+
+        var role = await _tenantRoles.GetByIdAsync(user.TenantId.Value, user.TenantRoleId.Value, ct);
+        if (role is null || !role.IsActive)
+            return [];
+
+        return role.AllowedTabs;
     }
 
     /// <summary>Increments the shared failure counter, persists, and audits the attempt.</summary>
@@ -461,9 +486,10 @@ public sealed class AuthService : IAuthService
     private static AuthUserDto ToDto(
         User u,
         IReadOnlyDictionary<string, bool>? effectivePermissions = null,
-        IReadOnlyList<string>? effectiveCapabilities = null) =>
+        IReadOnlyList<string>? effectiveCapabilities = null,
+        IReadOnlyList<string>? effectiveTabs = null) =>
         new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId,
             effectivePermissions is null ? u.Permissions : new Dictionary<string, bool>(effectivePermissions),
             u.LegalEntityId, u.TotpEnabled, effectiveCapabilities, u.TelegramChatId,
-            u.PreferredLocale);
+            u.PreferredLocale, effectiveTabs);
 }

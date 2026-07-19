@@ -28,3 +28,8 @@ public sealed record UpdateTenantRoleRequest(
 public sealed record TenantRoleCapabilityDto(string Key, string LabelUa);
 
 public sealed record TenantRoleCapabilityGroupDto(string Specialty, IReadOnlyList<TenantRoleCapabilityDto> Capabilities);
+
+/// <summary>Mirrors <see cref="ShelfGuard.Domain.Constants.TenantRoleTabDefinition"/> — same
+/// Domain-constant to Application-DTO mapping pattern as <see cref="TenantRoleCapabilityDto"/>.
+/// Backs GET /api/tenant-roles/tabs (TASK-391b).</summary>
+public sealed record TenantRoleTabDto(string Key, string LabelUa);

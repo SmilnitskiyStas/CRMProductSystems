@@ -54,7 +54,15 @@ public record AuthUserDto(
     /// UI locale the user picked ("uk"/"en"); null = client falls back to the browser
     /// language (i18n rollout Block 1, TASK-375).
     /// </summary>
-    string? PreferredLocale = null
+    string? PreferredLocale = null,
+    /// <summary>
+    /// Effective TenantRole sidebar-tab visibility (TASK-391b) — empty when the user has no
+    /// TenantRoleId or the referenced template is archived. Mirrors the JWT "tabs" claim, same
+    /// "server is the real gate, client mirrors for its own UI logic" relationship as
+    /// <see cref="Capabilities"/> — but a separate axis (page/route visibility, not backend
+    /// actions). See ShelfGuard.Domain.Constants.TenantRoleTabs for the full rationale.
+    /// </summary>
+    IReadOnlyList<string>? Tabs = null
 );
 
 // ── 2FA (TASK-330) ──────────────────────────────────────────────────────────

@@ -6,8 +6,14 @@ public interface IJwtService
     /// Effective TenantRole capabilities (ADR-020, TASK-346) — serialized into a comma-joined
     /// "capabilities" claim, same shape as <paramref name="permissions"/>. Empty/null → claim omitted.
     /// </param>
+    /// <param name="tabs">
+    /// Effective TenantRole sidebar-tab visibility (TASK-391b) — serialized into a comma-joined
+    /// "tabs" claim, same shape as <paramref name="capabilities"/>. A separate axis (UI visibility,
+    /// not backend authorization — see ShelfGuard.Domain.Constants.TenantRoleTabs). Empty/null →
+    /// claim omitted.
+    /// </param>
     string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
-        Dictionary<string, bool>? permissions = null, List<string>? capabilities = null);
+        Dictionary<string, bool>? permissions = null, List<string>? capabilities = null, List<string>? tabs = null);
 
     /// <summary>
     /// Generates a short-lived (60 min) impersonation token so a provider user

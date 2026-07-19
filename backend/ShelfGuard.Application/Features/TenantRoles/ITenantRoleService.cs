@@ -30,4 +30,10 @@ public interface ITenantRoleService
     /// <summary>Backend source-of-truth capability catalog grouped by specialty
     /// (GET /api/tenant-roles/capabilities) — not tenant-scoped, same for every caller.</summary>
     IReadOnlyList<TenantRoleCapabilityGroupDto> GetCapabilityCatalog();
+
+    /// <summary>Backend source-of-truth sidebar-tab catalog (GET /api/tenant-roles/tabs,
+    /// TASK-391b) — not tenant-scoped, same for every caller. Sibling to
+    /// <see cref="GetCapabilityCatalog"/>; see <see cref="ShelfGuard.Domain.Constants.TenantRoleTabs"/>
+    /// for why tabs are a separate axis from capabilities.</summary>
+    IReadOnlyList<TenantRoleTabDto> GetTabCatalog();
 }

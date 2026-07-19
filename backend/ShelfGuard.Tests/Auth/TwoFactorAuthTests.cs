@@ -36,7 +36,7 @@ public sealed class TwoFactorAuthTests
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(),
-            Arg.Any<List<string>?>()).Returns("access_token");
+            Arg.Any<List<string>?>(), Arg.Any<List<string>?>()).Returns("access_token");
         // Deterministic fake hash — enough to prove hashes (not plaintext) are stored/compared.
         _jwt.HashToken(Arg.Any<string>()).Returns(ci => "sha256:" + ci.Arg<string>());
     }

@@ -10,11 +10,13 @@ using Xunit;
 namespace ShelfGuard.Tests.Auth;
 
 /// <summary>
-/// ADR-020 (TASK-346): AuthService.BuildEffectiveCapabilitiesAsync — merged into the JWT
-/// "capabilities" claim and AuthUserDto.Capabilities at every mint site (login, 2FA verify,
-/// refresh) and GetCurrentUserAsync, parallel to the existing effective-permissions merge.
+/// TASK-391b: AuthService.BuildEffectiveTabsAsync — merged into the JWT "tabs" claim and
+/// AuthUserDto.Tabs at every mint site (login, refresh) and GetCurrentUserAsync, parallel to
+/// the existing effective-capabilities merge (ADR-020/TASK-346, AuthServiceCapabilitiesTests).
+/// AllowedTabs and Capabilities are deliberately separate columns/claims/consumers (see
+/// ShelfGuard.Domain.Constants.TenantRoleTabs) — this file exercises the Tabs axis only.
 /// </summary>
-public sealed class AuthServiceCapabilitiesTests
+public sealed class AuthServiceTabsTests
 {
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
     private readonly IRefreshTokenRepository _tokens = Substitute.For<IRefreshTokenRepository>();
@@ -26,7 +28,7 @@ public sealed class AuthServiceCapabilitiesTests
     private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
     private readonly AuthService _sut;
 
-    public AuthServiceCapabilitiesTests()
+    public AuthServiceTabsTests()
     {
         _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants, _tenantRoles,
             NullLogger<AuthService>.Instance);
@@ -40,37 +42,37 @@ public sealed class AuthServiceCapabilitiesTests
     }
 
     [Fact]
-    public async Task LoginAsync_ActiveTenantRole_CapabilitiesReachBothTheJwtCallAndTheDto()
+    public async Task LoginAsync_ActiveTenantRole_TabsReachBothTheJwtCallAndTheDto()
     {
         var tenantId = Guid.NewGuid();
         var user = User.Create(tenantId, "hr@example.com", "HR User", "hash", AppRoles.Staff);
-        var role = TenantRole.Create(tenantId, "HR",
-            [TenantRoleCapabilities.UsersManage, TenantRoleCapabilities.SchedulesManage], null);
+        var role = TenantRole.Create(tenantId, "HR", [TenantRoleCapabilities.UsersManage], null,
+            [TenantRoleTabs.Workforce, TenantRoleTabs.Support]);
         user.SetTenantRole(role.Id);
 
         _users.GetByEmailAsync("hr@example.com", default).Returns(user);
         _hasher.Verify("password123", "hash").Returns(true);
         _tenantRoles.GetByIdAsync(tenantId, role.Id, Arg.Any<CancellationToken>()).Returns(role);
 
-        List<string>? capturedCapabilities = null;
+        List<string>? capturedTabs = null;
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid?>(), Arg.Any<Guid?>(),
-                Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(),
-                Arg.Do<List<string>?>(c => capturedCapabilities = c), Arg.Any<List<string>?>())
+                Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(), Arg.Any<List<string>?>(),
+                Arg.Do<List<string>?>(t => capturedTabs = t))
             .Returns("access_token");
 
         var outcome = await _sut.LoginAsync("hr@example.com", "password123");
 
         Assert.NotNull(outcome.Response);
         Assert.Equal(
-            new[] { TenantRoleCapabilities.UsersManage, TenantRoleCapabilities.SchedulesManage },
-            capturedCapabilities);
+            new[] { TenantRoleTabs.Workforce, TenantRoleTabs.Support },
+            capturedTabs);
         Assert.Equal(
-            new[] { TenantRoleCapabilities.UsersManage, TenantRoleCapabilities.SchedulesManage },
-            outcome.Response!.User.Capabilities);
+            new[] { TenantRoleTabs.Workforce, TenantRoleTabs.Support },
+            outcome.Response!.User.Tabs);
     }
 
     [Fact]
-    public async Task LoginAsync_NoTenantRoleAssigned_CapabilitiesEmpty_NoRepositoryLookup()
+    public async Task LoginAsync_NoTenantRoleAssigned_TabsEmpty_NoRepositoryLookup()
     {
         var user = User.Create(Guid.NewGuid(), "manager@example.com", "Manager", "hash", AppRoles.StoreManager);
         _users.GetByEmailAsync("manager@example.com", default).Returns(user);
@@ -79,16 +81,17 @@ public sealed class AuthServiceCapabilitiesTests
         var outcome = await _sut.LoginAsync("manager@example.com", "password123");
 
         Assert.NotNull(outcome.Response);
-        Assert.Empty(outcome.Response!.User.Capabilities!);
+        Assert.Empty(outcome.Response!.User.Tabs!);
         await _tenantRoles.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task LoginAsync_ArchivedTenantRole_CapabilitiesEmpty()
+    public async Task LoginAsync_ArchivedTenantRole_TabsEmpty()
     {
         var tenantId = Guid.NewGuid();
         var user = User.Create(tenantId, "archived@example.com", "User", "hash", AppRoles.Staff);
-        var role = TenantRole.Create(tenantId, "Archived", [TenantRoleCapabilities.OrdersManage], null);
+        var role = TenantRole.Create(tenantId, "Archived", [TenantRoleCapabilities.OrdersManage], null,
+            [TenantRoleTabs.Procurement]);
         role.Deactivate();
         user.SetTenantRole(role.Id);
 
@@ -99,11 +102,11 @@ public sealed class AuthServiceCapabilitiesTests
         var outcome = await _sut.LoginAsync("archived@example.com", "password123");
 
         Assert.NotNull(outcome.Response);
-        Assert.Empty(outcome.Response!.User.Capabilities!);
+        Assert.Empty(outcome.Response!.User.Tabs!);
     }
 
     [Fact]
-    public async Task LoginAsync_TenantRoleIdPointsAtMissingRow_CapabilitiesEmpty()
+    public async Task LoginAsync_TenantRoleIdPointsAtMissingRow_TabsEmpty()
     {
         var tenantId = Guid.NewGuid();
         var user = User.Create(tenantId, "dangling@example.com", "User", "hash", AppRoles.Staff);
@@ -114,15 +117,16 @@ public sealed class AuthServiceCapabilitiesTests
         var outcome = await _sut.LoginAsync("dangling@example.com", "password123");
 
         Assert.NotNull(outcome.Response);
-        Assert.Empty(outcome.Response!.User.Capabilities!);
+        Assert.Empty(outcome.Response!.User.Tabs!);
     }
 
     [Fact]
-    public async Task RefreshAsync_ActiveTenantRole_CapabilitiesInDto()
+    public async Task RefreshAsync_ActiveTenantRole_TabsInDto()
     {
         var tenantId = Guid.NewGuid();
         var user = User.Create(tenantId, "purchasing@example.com", "Purchasing", "hash", AppRoles.Staff);
-        var role = TenantRole.Create(tenantId, "Закупка", [TenantRoleCapabilities.SuppliersView], null);
+        var role = TenantRole.Create(tenantId, "Закупка", [TenantRoleCapabilities.SuppliersView], null,
+            [TenantRoleTabs.Procurement, TenantRoleTabs.Marketplace]);
         user.SetTenantRole(role.Id);
 
         var token = RefreshToken.Create(user.Id, "hashed_token", DateTime.UtcNow.AddDays(7));
@@ -134,16 +138,17 @@ public sealed class AuthServiceCapabilitiesTests
         var (response, error) = await _sut.RefreshAsync("raw_token");
 
         Assert.Null(error);
-        Assert.Equal(new[] { TenantRoleCapabilities.SuppliersView }, response!.User.Capabilities);
+        Assert.Equal(new[] { TenantRoleTabs.Procurement, TenantRoleTabs.Marketplace }, response!.User.Tabs);
     }
 
     [Fact]
-    public async Task GetCurrentUserAsync_ReflectsEffectiveCapabilities()
+    public async Task GetCurrentUserAsync_ReflectsEffectiveTabs()
     {
         var tenantId = Guid.NewGuid();
         var user = User.Create(tenantId, "accountant@example.com", "Accountant", "hash", AppRoles.Staff);
         var role = TenantRole.Create(tenantId, "Бухгалтер",
-            [TenantRoleCapabilities.AnalyticsView, TenantUserPermissions.LegalEntitiesManage], null);
+            [TenantRoleCapabilities.AnalyticsView, TenantUserPermissions.LegalEntitiesManage], null,
+            [TenantRoleTabs.Analytics]);
         user.SetTenantRole(role.Id);
 
         _users.GetByIdAsync(user.Id, default).Returns(user);
@@ -152,8 +157,31 @@ public sealed class AuthServiceCapabilitiesTests
         var dto = await _sut.GetCurrentUserAsync(user.Id);
 
         Assert.NotNull(dto);
+        Assert.Equal(new[] { TenantRoleTabs.Analytics }, dto!.Tabs);
+    }
+
+    [Fact]
+    public async Task LoginAsync_TabsAndCapabilitiesResolveIndependently_DifferentSubsetsOfTheSameRole()
+    {
+        // Guards against a future refactor accidentally merging the two resolution paths —
+        // Capabilities and AllowedTabs are unrelated lists on the same TenantRole row.
+        var tenantId = Guid.NewGuid();
+        var user = User.Create(tenantId, "both@example.com", "Both", "hash", AppRoles.Staff);
+        var role = TenantRole.Create(tenantId, "Mixed",
+            [TenantRoleCapabilities.UsersManage, TenantRoleCapabilities.OrdersManage], null,
+            [TenantRoleTabs.Dashboard]);
+        user.SetTenantRole(role.Id);
+
+        _users.GetByEmailAsync("both@example.com", default).Returns(user);
+        _hasher.Verify("password123", "hash").Returns(true);
+        _tenantRoles.GetByIdAsync(tenantId, role.Id, Arg.Any<CancellationToken>()).Returns(role);
+
+        var outcome = await _sut.LoginAsync("both@example.com", "password123");
+
+        Assert.NotNull(outcome.Response);
+        Assert.Equal(new[] { TenantRoleTabs.Dashboard }, outcome.Response!.User.Tabs);
         Assert.Equal(
-            new[] { TenantRoleCapabilities.AnalyticsView, TenantUserPermissions.LegalEntitiesManage },
-            dto!.Capabilities);
+            new[] { TenantRoleCapabilities.UsersManage, TenantRoleCapabilities.OrdersManage },
+            outcome.Response!.User.Capabilities);
     }
 }
