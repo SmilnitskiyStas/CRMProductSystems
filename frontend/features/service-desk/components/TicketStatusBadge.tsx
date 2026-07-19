@@ -1,5 +1,8 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { TicketStatus } from "../types";
-import { TICKET_STATUS_LABELS } from "../types";
+import { getTicketStatusLabel } from "../types";
 
 interface Props {
   status: TicketStatus;
@@ -14,6 +17,7 @@ const STATUS_STYLES: Record<TicketStatus, { background: string; color: string; b
 };
 
 export function TicketStatusBadge({ status }: Props) {
+  const t = useTranslations("Dashboard.serviceDesk.statuses");
   const s = STATUS_STYLES[status];
   return (
     <span
@@ -30,7 +34,7 @@ export function TicketStatusBadge({ status }: Props) {
         whiteSpace: "nowrap",
       }}
     >
-      {TICKET_STATUS_LABELS[status]}
+      {getTicketStatusLabel(t, status)}
     </span>
   );
 }

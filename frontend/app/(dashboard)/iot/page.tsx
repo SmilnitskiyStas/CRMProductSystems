@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useStore, useStores } from "@/features/stores/hooks/useStores";
 import { DevicesTable } from "@/features/iot/components/DevicesTable";
@@ -17,6 +18,7 @@ import {
 import type { IotDeviceDto } from "@/features/iot/types";
 
 export default function IotPage() {
+  const t = useTranslations("Dashboard.iot.page");
   const { data: stores } = useStores();
   const [storeId, setStoreId] = useState<string | null>(null);
   const activeStoreId = storeId ?? stores?.[0]?.id ?? null;
@@ -49,7 +51,7 @@ export default function IotPage() {
         },
         {
           onSuccess: () => {
-            toast.success("Пристрій оновлено");
+            toast.success(t("toastDeviceUpdated"));
             setDialog({ open: false, device: null });
           },
           onError: (e) => toast.error(e.message),
@@ -61,7 +63,7 @@ export default function IotPage() {
         { ...values, storeId: activeStoreId },
         {
           onSuccess: () => {
-            toast.success("Пристрій зареєстровано");
+            toast.success(t("toastDeviceRegistered"));
             setDialog({ open: false, device: null });
           },
           onError: (e) => toast.error(e.message),
@@ -72,7 +74,7 @@ export default function IotPage() {
 
   function handleDeactivate(device: IotDeviceDto) {
     deactivateDevice.mutate(device.id, {
-      onSuccess: () => toast.success(`«${device.name ?? device.deviceId}» деактивовано`),
+      onSuccess: () => toast.success(t("toastDeviceDeactivated", { name: device.name ?? device.deviceId })),
       onError: (e) => toast.error(e.message),
     });
   }
@@ -82,9 +84,9 @@ export default function IotPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>IoT пристрої</h1>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Датчики ваги, температури та камери — статус і показники
+            {t("subtitle")}
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -103,7 +105,7 @@ export default function IotPage() {
             </select>
           )}
           <Btn icon={<Plus size={15} />} onClick={() => setDialog({ open: true, device: null })}>
-            Додати пристрій
+            {t("addDeviceButton")}
           </Btn>
         </div>
       </div>
@@ -120,7 +122,7 @@ export default function IotPage() {
       {activeStoreId && devices && (
         <>
           <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: "8px 0 0 0" }}>
-            Температурний моніторинг
+            {t("temperatureMonitoringTitle")}
           </h2>
           <TemperaturePanel storeId={activeStoreId} devices={devices} />
         </>

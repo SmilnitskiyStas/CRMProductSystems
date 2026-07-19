@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { useAiAssistant } from "../hooks/useAiAssistant";
 import type { AiAssistantContextSummary } from "../types";
 
@@ -11,6 +12,7 @@ interface ChatMessage {
 }
 
 export function AiAssistantWidget() {
+  const t = useTranslations("Dashboard.aiAssistant.widget");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -41,7 +43,7 @@ export function AiAssistantWidget() {
             ...prev,
             {
               role: "assistant",
-              text: `Помилка: ${err.message ?? "AI сервіс недоступний"}`,
+              text: t("errorPrefix", { message: err.message ?? t("serviceUnavailable") }),
             },
           ]);
         },
@@ -82,10 +84,10 @@ export function AiAssistantWidget() {
         <span style={{ fontSize: 18 }}>🤖</span>
         <div>
           <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: 0 }}>
-            AI Бізнес-Асистент
+            {t("title")}
           </h2>
           <p style={{ color: "#4B5563", fontSize: 11, margin: 0 }}>
-            Запитуй про залишки, замовлення, продажі та постачальників
+            {t("subtitle")}
           </p>
         </div>
       </div>
@@ -103,11 +105,11 @@ export function AiAssistantWidget() {
       >
         {messages.length === 0 && (
           <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", marginTop: 24 }}>
-            Привіт! Запитай про стан магазину. Наприклад:
+            {t("greeting")}
             <br />
-            <em style={{ color: "#6B7280" }}>«Які товари закінчуються?»</em>
+            <em style={{ color: "#6B7280" }}>{t("example1")}</em>
             <br />
-            <em style={{ color: "#6B7280" }}>«Що продається найкраще цього тижня?»</em>
+            <em style={{ color: "#6B7280" }}>{t("example2")}</em>
           </div>
         )}
 
@@ -153,7 +155,7 @@ export function AiAssistantWidget() {
             }}
           >
             <PulsingDots />
-            <span>AI аналізує дані…</span>
+            <span>{t("thinking")}</span>
           </div>
         )}
 
@@ -174,7 +176,7 @@ export function AiAssistantWidget() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Запитай AI (Enter — надіслати)"
+          placeholder={t("inputPlaceholder")}
           rows={1}
           style={{
             flex: 1,
@@ -207,7 +209,7 @@ export function AiAssistantWidget() {
             transition: "background 0.15s",
           }}
         >
-          Надіслати
+          {t("sendButton")}
         </button>
       </div>
     </div>
@@ -215,15 +217,13 @@ export function AiAssistantWidget() {
 }
 
 function ContextBadges({ context }: { context: AiAssistantContextSummary }) {
+  const t = useTranslations("Dashboard.aiAssistant.widget");
   const badges = [
-    { label: `${context.criticalStockBatchesCount} критичних партій`, color: "#EF4444" },
-    { label: `${context.pendingOrdersCount} замовлень`, color: "#F59E0B" },
-    { label: `${context.salesDaysCount} рядків продажів`, color: "#3B82F6" },
-    { label: `${context.activeSuppliersCount} постачальників`, color: "#10B981" },
-  ].filter((b) => {
-    const num = parseInt(b.label);
-    return num > 0;
-  });
+    { count: context.criticalStockBatchesCount, label: t("badgeCriticalBatches", { count: context.criticalStockBatchesCount }), color: "#EF4444" },
+    { count: context.pendingOrdersCount, label: t("badgeOrders", { count: context.pendingOrdersCount }), color: "#F59E0B" },
+    { count: context.salesDaysCount, label: t("badgeSalesRows", { count: context.salesDaysCount }), color: "#3B82F6" },
+    { count: context.activeSuppliersCount, label: t("badgeSuppliers", { count: context.activeSuppliersCount }), color: "#10B981" },
+  ].filter((b) => b.count > 0);
 
   if (badges.length === 0) return null;
 

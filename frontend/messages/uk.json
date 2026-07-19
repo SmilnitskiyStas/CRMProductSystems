@@ -3951,6 +3951,271 @@
         "accessTemporaryExpiringSoon": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
         "accessTemporaryExpired": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" }
       }
+    },
+    "serviceDesk": {
+      "statuses": {
+        "open": "Відкритий",
+        "inProgress": "В роботі",
+        "waiting": "Очікування",
+        "resolved": "Вирішено",
+        "closed": "Закрито"
+      },
+      "priorities": {
+        "low": "Низький",
+        "medium": "Середній",
+        "high": "Високий",
+        "critical": "Критичний"
+      },
+      "categories": {
+        "general": "Загальне",
+        "technical": "Технічне",
+        "billing": "Оплата",
+        "featureRequest": "Запит функції",
+        "bug": "Помилка"
+      },
+      "ticketList": {
+        "searchPlaceholder": "Пошук тікетів...",
+        "allStatusesOption": "Всі статуси",
+        "allPrioritiesOption": "Всі пріоритети",
+        "countLabel": "{count, plural, one {# тікет} few {# тікети} many {# тікетів} other {# тікетів}}",
+        "loading": "Завантаження...",
+        "empty": "Тікети не знайдено",
+        "prevButton": "← Назад",
+        "nextButton": "Далі →"
+      },
+      "ticketDetail": {
+        "loading": "Завантаження...",
+        "descriptionLabel": "Опис",
+        "authorLabel": "Автор",
+        "locationLabel": "Локація",
+        "createdLabel": "Створено",
+        "resolvedLabel": "Вирішено",
+        "manageTitle": "Управління тікетом",
+        "statusLabel": "Статус",
+        "assigneeLabel": "Відповідальний",
+        "unassignedOption": "— Не призначено —",
+        "commentsTitle": "Коментарі ({count})",
+        "noComments": "Поки немає коментарів",
+        "internalBadge": "Внутрішня",
+        "internalNoteLabel": "Внутрішня нотатка",
+        "commentPlaceholder": "Напишіть коментар...",
+        "sendingButton": "Надсилання...",
+        "sendButton": "Надіслати",
+        "toastStatusUpdated": "Статус оновлено",
+        "toastAssigneeUpdated": "Відповідального призначено",
+        "toastCommentAdded": "Коментар додано"
+      },
+      "createForm": {
+        "title": "Новий тікет",
+        "subtitle": "Опишіть вашу проблему або запит",
+        "titleFieldLabel": "Заголовок",
+        "titlePlaceholder": "Коротко опишіть проблему",
+        "descriptionFieldLabel": "Опис",
+        "descriptionPlaceholder": "Детально опишіть проблему або запит...",
+        "categoryLabel": "Категорія",
+        "priorityLabel": "Пріоритет",
+        "locationLabel": "Локація (необов'язково)",
+        "noLocationOption": "— Не вказано —",
+        "cancelButton": "Скасувати",
+        "creatingButton": "Створення...",
+        "createButton": "Створити тікет",
+        "toastCreated": "Тікет створено"
+      },
+      "myTicketList": {
+        "loading": "Завантаження...",
+        "emptyMessage": "У вас немає тікетів. Натисніть \"+ Новий тікет\" щоб створити перший.",
+        "countLabel": "{count, plural, one {# тікет} few {# тікети} many {# тікетів} other {# тікетів}}"
+      },
+      "page": {
+        "providerTitle": "Service Desk",
+        "providerSubtitle": "Тікети та чати всіх клієнтів платформи",
+        "tenantTitle": "Service Desk",
+        "tenantSubtitle": "Заявки та запити підтримки",
+        "newTicketButton": "Новий тікет",
+        "tabTickets": "Тікети",
+        "tabChat": "Чат",
+        "tabAllTickets": "Всі тікети",
+        "tabMyTickets": "Мої тікети"
+      }
+    },
+    "chat": {
+      "ratingModal": {
+        "title": "Оцініть підтримку",
+        "closedNotice": "Чат завершено службою підтримки. Будь ласка, залиште оцінку.",
+        "poorLabel": "Погано",
+        "excellentLabel": "Відмінно",
+        "commentPlaceholder": "Коментар (необов'язково)...",
+        "savingButton": "Збереження...",
+        "submitButton": "Надіслати оцінку",
+        "skipButton": "Пропустити"
+      },
+      "clientPanel": {
+        "myChatsTitle": "Мої чати",
+        "newButton": "Новий",
+        "noChats": "Немає чатів",
+        "statusOpen": "Відкрито",
+        "statusClosed": "Закрито",
+        "rateHint": "⭐ Залиште оцінку",
+        "selectOrCreatePrompt": "Оберіть чат або створіть новий",
+        "supportAgentSuffix": "{name} — підтримка",
+        "waitingForOperator": "Очікування відповіді оператора...",
+        "closedSuffix": "· Чат закрито",
+        "ratingSuffix": "· Оцінка: {rating}/5",
+        "messageInputPlaceholder": "Написати повідомлення...",
+        "closedFooter": "Чат закрито службою підтримки",
+        "rateButton": "⭐ Оцінити",
+        "createDialogTitle": "Новий чат підтримки",
+        "subjectLabel": "Тема звернення",
+        "subjectPlaceholder": "Коротко опишіть проблему...",
+        "firstMessageLabel": "Повідомлення",
+        "firstMessagePlaceholder": "Деталі звернення...",
+        "creatingButton": "Створення...",
+        "startButton": "Почати чат",
+        "cancelButton": "Скасувати"
+      }
+    },
+    "aiAssistant": {
+      "widget": {
+        "title": "AI Бізнес-Асистент",
+        "subtitle": "Запитуй про залишки, замовлення, продажі та постачальників",
+        "greeting": "Привіт! Запитай про стан магазину. Наприклад:",
+        "example1": "«Які товари закінчуються?»",
+        "example2": "«Що продається найкраще цього тижня?»",
+        "thinking": "AI аналізує дані…",
+        "inputPlaceholder": "Запитай AI (Enter — надіслати)",
+        "sendButton": "Надіслати",
+        "errorPrefix": "Помилка: {message}",
+        "serviceUnavailable": "AI сервіс недоступний",
+        "badgeCriticalBatches": "{count, plural, one {# критична партія} few {# критичні партії} many {# критичних партій} other {# критичних партій}}",
+        "badgeOrders": "{count, plural, one {# замовлення} few {# замовлення} many {# замовлень} other {# замовлень}}",
+        "badgeSalesRows": "{count, plural, one {# рядок продажів} few {# рядки продажів} many {# рядків продажів} other {# рядків продажів}}",
+        "badgeSuppliers": "{count, plural, one {# постачальник} few {# постачальники} many {# постачальників} other {# постачальників}}"
+      }
+    },
+    "events": {
+      "types": {
+        "holiday": "Свято",
+        "promo": "Акція",
+        "localEvent": "Місцева подія",
+        "seasonStart": "Сезон",
+        "custom": "Інше"
+      },
+      "calendar": {
+        "weekdayLabels": ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"],
+        "eventTooltip": "{name} ({type}, коефіцієнтів: {count})",
+        "moreEvents": "+{count} ще"
+      },
+      "eventForm": {
+        "validationRequired": "Обов'язкове поле",
+        "validationDateRequired": "Вкажіть дату",
+        "editTitle": "Редагувати подію",
+        "createTitle": "Нова подія",
+        "nameLabel": "Назва",
+        "namePlaceholder": "Ярмарок біля магазину",
+        "typeLabel": "Тип",
+        "scopeLabel": "Масштаб",
+        "scopeNetworkOption": "Вся мережа",
+        "scopeStoreOption": "Один магазин",
+        "storeLabel": "Магазин",
+        "storePlaceholder": "— оберіть магазин —",
+        "startsAtLabel": "Початок",
+        "endsAtLabel": "Кінець",
+        "recurringLabel": "Щорічна подія (повторюється за місяцем і днем)",
+        "notesLabel": "Нотатки",
+        "notesPlaceholder": "необов'язково",
+        "deleteButton": "Видалити",
+        "cancelButton": "Скасувати",
+        "saveButton": "Зберегти",
+        "savingButton": "Збереження…",
+        "coefficientEditor": {
+          "title": "Коефіцієнти замовлення ({count})",
+          "unbound": "(не прив'язано)",
+          "scopeTypes": {
+            "category": "категорія",
+            "segment": "сегмент",
+            "product": "товар"
+          },
+          "addButton": "Додати",
+          "toastUpdated": "Коефіцієнт оновлено",
+          "toastAdded": "Коефіцієнт додано"
+        }
+      },
+      "page": {
+        "title": "Календар подій",
+        "subtitle": "Свята, акції та місцеві події з коефіцієнтами впливу на автозамовлення",
+        "seedButton": "Стандартні свята",
+        "toastSeeded": "Додано свят: {count}",
+        "toastAlreadySeeded": "Стандартні свята вже додані",
+        "addEventButton": "Додати подію",
+        "todayButton": "Сьогодні",
+        "loading": "Завантаження…",
+        "toastCreated": "Подію створено",
+        "toastUpdated": "Подію оновлено",
+        "toastDeleted": "Подію видалено"
+      }
+    },
+    "iot": {
+      "deviceTypes": {
+        "weightSensor": "Датчик ваги",
+        "tempSensor": "Датчик температури",
+        "camera": "CV камера",
+        "barcodeReader": "Сканер штрихкодів"
+      },
+      "deviceForm": {
+        "validationRequired": "Обов'язкове поле",
+        "validationInvalidJson": "Невалідний JSON",
+        "editTitle": "Редагувати пристрій",
+        "createTitle": "Додати IoT пристрій",
+        "deviceIdLabel": "Фізичний ID пристрою *",
+        "deviceIdPlaceholder": "shelf-A1-3",
+        "deviceTypeLabel": "Тип пристрою *",
+        "nameLabel": "Назва",
+        "namePlaceholder": "Холодильник молочний №1",
+        "zoneLabel": "Зона",
+        "noZoneOption": "— без зони —",
+        "mqttTopicLabel": "MQTT topic",
+        "mqttTopicPlaceholder": "shelfguard/…",
+        "configLabel": "Конфігурація (JSON)",
+        "configPlaceholder": "{\"profile\": \"fridge\"} або {\"product_id\": \"…\", \"unit_weight_grams\": 245}",
+        "cancelButton": "Скасувати",
+        "savingButton": "Збереження…",
+        "saveButton": "Зберегти",
+        "addButton": "Додати"
+      },
+      "devicesTable": {
+        "loading": "Завантаження…",
+        "empty": "Немає зареєстрованих пристроїв — додайте перший",
+        "columnDevice": "Пристрій",
+        "columnType": "Тип",
+        "columnZone": "Зона",
+        "columnStatus": "Статус",
+        "columnLastSeen": "Остання активність",
+        "columnBattery": "Батарея",
+        "columnFirmware": "Firmware",
+        "statusDeactivated": "Деактивовано",
+        "statusOnline": "Онлайн",
+        "statusOffline": "Офлайн",
+        "never": "ніколи",
+        "editButton": "Змінити",
+        "deactivateButton": "Вимкнути"
+      },
+      "temperaturePanel": {
+        "noSensors": "Немає активних датчиків температури",
+        "humiditySuffix": "вологість {value}%",
+        "alertLabel": "⚠ ПЕРЕВИЩЕННЯ",
+        "chartTitle": "Температура за 24 години",
+        "loading": "Завантаження…",
+        "noReadings": "Немає показників"
+      },
+      "page": {
+        "title": "IoT пристрої",
+        "subtitle": "Датчики ваги, температури та камери — статус і показники",
+        "addDeviceButton": "Додати пристрій",
+        "toastDeviceUpdated": "Пристрій оновлено",
+        "toastDeviceRegistered": "Пристрій зареєстровано",
+        "toastDeviceDeactivated": "«{name}» деактивовано",
+        "temperatureMonitoringTitle": "Температурний моніторинг"
+      }
     }
   }
 }

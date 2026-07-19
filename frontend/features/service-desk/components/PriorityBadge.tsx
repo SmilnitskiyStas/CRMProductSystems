@@ -1,5 +1,8 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { TicketPriority } from "../types";
-import { TICKET_PRIORITY_LABELS } from "../types";
+import { getTicketPriorityLabel } from "../types";
 
 interface Props {
   priority: TicketPriority;
@@ -13,6 +16,7 @@ const PRIORITY_STYLES: Record<TicketPriority, { background: string; color: strin
 };
 
 export function PriorityBadge({ priority }: Props) {
+  const t = useTranslations("Dashboard.serviceDesk.priorities");
   const s = PRIORITY_STYLES[priority];
   return (
     <span
@@ -29,7 +33,7 @@ export function PriorityBadge({ priority }: Props) {
         whiteSpace: "nowrap",
       }}
     >
-      {TICKET_PRIORITY_LABELS[priority]}
+      {getTicketPriorityLabel(t, priority)}
     </span>
   );
 }

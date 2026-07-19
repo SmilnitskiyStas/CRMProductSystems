@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Ticket, MessageCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
@@ -19,6 +20,7 @@ type TenantTab = "all" | "my" | "chat";
 type ProviderTab = "tickets" | "chat";
 
 export default function ServiceDeskPage() {
+  const t = useTranslations("Dashboard.serviceDesk.page");
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
   const isProvider = PROVIDER_TEAM.has(userRole);
@@ -53,11 +55,11 @@ export default function ServiceDeskPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Ticket size={22} style={{ color: "#3B82F6" }} />
             <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-              Service Desk
+              {t("providerTitle")}
             </h1>
           </div>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Тікети та чати всіх клієнтів платформи
+            {t("providerSubtitle")}
           </p>
         </div>
 
@@ -75,14 +77,14 @@ export default function ServiceDeskPage() {
             onClick={() => setProviderTab("tickets")}
           >
             <Ticket size={14} />
-            Тікети
+            {t("tabTickets")}
           </button>
           <button
             style={tabStyle(providerTab === "chat")}
             onClick={() => setProviderTab("chat")}
           >
             <MessageCircle size={14} />
-            Чат
+            {t("tabChat")}
           </button>
         </div>
 
@@ -107,16 +109,16 @@ export default function ServiceDeskPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Ticket size={22} style={{ color: "#3B82F6" }} />
             <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-              Service Desk
+              {t("tenantTitle")}
             </h1>
           </div>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Заявки та запити підтримки
+            {t("tenantSubtitle")}
           </p>
         </div>
 
         <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
-          Новий тікет
+          {t("newTicketButton")}
         </Btn>
       </div>
 
@@ -134,21 +136,21 @@ export default function ServiceDeskPage() {
             style={tabStyle(tenantTab === "all")}
             onClick={() => setTenantTab("all")}
           >
-            Всі тікети
+            {t("tabAllTickets")}
           </button>
         )}
         <button
           style={tabStyle(tenantTab === "my")}
           onClick={() => setTenantTab("my")}
         >
-          Мої тікети
+          {t("tabMyTickets")}
         </button>
         <button
           style={tabStyle(tenantTab === "chat")}
           onClick={() => setTenantTab("chat")}
         >
           <MessageCircle size={14} />
-          Чат
+          {t("tabChat")}
         </button>
       </div>
 

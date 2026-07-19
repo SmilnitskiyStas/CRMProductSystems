@@ -3951,6 +3951,271 @@
         "accessTemporaryExpiringSoon": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
         "accessTemporaryExpired": { "service": "Access management", "actor": "Temporary grants (ADR-019)" }
       }
+    },
+    "serviceDesk": {
+      "statuses": {
+        "open": "Open",
+        "inProgress": "In progress",
+        "waiting": "Waiting",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      },
+      "priorities": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "categories": {
+        "general": "General",
+        "technical": "Technical",
+        "billing": "Billing",
+        "featureRequest": "Feature request",
+        "bug": "Bug"
+      },
+      "ticketList": {
+        "searchPlaceholder": "Search tickets...",
+        "allStatusesOption": "All statuses",
+        "allPrioritiesOption": "All priorities",
+        "countLabel": "{count, plural, one {# ticket} other {# tickets}}",
+        "loading": "Loading...",
+        "empty": "No tickets found",
+        "prevButton": "← Back",
+        "nextButton": "Next →"
+      },
+      "ticketDetail": {
+        "loading": "Loading...",
+        "descriptionLabel": "Description",
+        "authorLabel": "Author",
+        "locationLabel": "Location",
+        "createdLabel": "Created",
+        "resolvedLabel": "Resolved",
+        "manageTitle": "Manage ticket",
+        "statusLabel": "Status",
+        "assigneeLabel": "Assignee",
+        "unassignedOption": "— Unassigned —",
+        "commentsTitle": "Comments ({count})",
+        "noComments": "No comments yet",
+        "internalBadge": "Internal",
+        "internalNoteLabel": "Internal note",
+        "commentPlaceholder": "Write a comment...",
+        "sendingButton": "Sending...",
+        "sendButton": "Send",
+        "toastStatusUpdated": "Status updated",
+        "toastAssigneeUpdated": "Assignee updated",
+        "toastCommentAdded": "Comment added"
+      },
+      "createForm": {
+        "title": "New ticket",
+        "subtitle": "Describe your issue or request",
+        "titleFieldLabel": "Title",
+        "titlePlaceholder": "Briefly describe the issue",
+        "descriptionFieldLabel": "Description",
+        "descriptionPlaceholder": "Describe the issue or request in detail...",
+        "categoryLabel": "Category",
+        "priorityLabel": "Priority",
+        "locationLabel": "Location (optional)",
+        "noLocationOption": "— Not specified —",
+        "cancelButton": "Cancel",
+        "creatingButton": "Creating...",
+        "createButton": "Create ticket",
+        "toastCreated": "Ticket created"
+      },
+      "myTicketList": {
+        "loading": "Loading...",
+        "emptyMessage": "You have no tickets. Click \"+ New ticket\" to create your first one.",
+        "countLabel": "{count, plural, one {# ticket} other {# tickets}}"
+      },
+      "page": {
+        "providerTitle": "Service Desk",
+        "providerSubtitle": "Tickets and chats for all platform clients",
+        "tenantTitle": "Service Desk",
+        "tenantSubtitle": "Support requests and inquiries",
+        "newTicketButton": "New ticket",
+        "tabTickets": "Tickets",
+        "tabChat": "Chat",
+        "tabAllTickets": "All tickets",
+        "tabMyTickets": "My tickets"
+      }
+    },
+    "chat": {
+      "ratingModal": {
+        "title": "Rate support",
+        "closedNotice": "The chat has been closed by support. Please leave a rating.",
+        "poorLabel": "Poor",
+        "excellentLabel": "Excellent",
+        "commentPlaceholder": "Comment (optional)...",
+        "savingButton": "Saving...",
+        "submitButton": "Submit rating",
+        "skipButton": "Skip"
+      },
+      "clientPanel": {
+        "myChatsTitle": "My chats",
+        "newButton": "New",
+        "noChats": "No chats",
+        "statusOpen": "Open",
+        "statusClosed": "Closed",
+        "rateHint": "⭐ Leave a rating",
+        "selectOrCreatePrompt": "Select a chat or create a new one",
+        "supportAgentSuffix": "{name} — support",
+        "waitingForOperator": "Waiting for operator reply...",
+        "closedSuffix": "· Chat closed",
+        "ratingSuffix": "· Rating: {rating}/5",
+        "messageInputPlaceholder": "Write a message...",
+        "closedFooter": "Chat closed by support",
+        "rateButton": "⭐ Rate",
+        "createDialogTitle": "New support chat",
+        "subjectLabel": "Subject",
+        "subjectPlaceholder": "Briefly describe the issue...",
+        "firstMessageLabel": "Message",
+        "firstMessagePlaceholder": "Details of your request...",
+        "creatingButton": "Creating...",
+        "startButton": "Start chat",
+        "cancelButton": "Cancel"
+      }
+    },
+    "aiAssistant": {
+      "widget": {
+        "title": "AI Business Assistant",
+        "subtitle": "Ask about stock, orders, sales, and suppliers",
+        "greeting": "Hi! Ask me about your store. For example:",
+        "example1": "“Which items are running low?”",
+        "example2": "“What's selling best this week?”",
+        "thinking": "AI is analyzing data…",
+        "inputPlaceholder": "Ask AI (Enter to send)",
+        "sendButton": "Send",
+        "errorPrefix": "Error: {message}",
+        "serviceUnavailable": "AI service unavailable",
+        "badgeCriticalBatches": "{count, plural, one {# critical batch} other {# critical batches}}",
+        "badgeOrders": "{count, plural, one {# order} other {# orders}}",
+        "badgeSalesRows": "{count, plural, one {# sales row} other {# sales rows}}",
+        "badgeSuppliers": "{count, plural, one {# supplier} other {# suppliers}}"
+      }
+    },
+    "events": {
+      "types": {
+        "holiday": "Holiday",
+        "promo": "Promotion",
+        "localEvent": "Local event",
+        "seasonStart": "Season start",
+        "custom": "Other"
+      },
+      "calendar": {
+        "weekdayLabels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "eventTooltip": "{name} ({type}, coefficients: {count})",
+        "moreEvents": "+{count} more"
+      },
+      "eventForm": {
+        "validationRequired": "Required field",
+        "validationDateRequired": "Please specify a date",
+        "editTitle": "Edit event",
+        "createTitle": "New event",
+        "nameLabel": "Name",
+        "namePlaceholder": "Fair near the store",
+        "typeLabel": "Type",
+        "scopeLabel": "Scope",
+        "scopeNetworkOption": "Entire network",
+        "scopeStoreOption": "Single store",
+        "storeLabel": "Store",
+        "storePlaceholder": "— select a store —",
+        "startsAtLabel": "Start",
+        "endsAtLabel": "End",
+        "recurringLabel": "Yearly event (repeats by month and day)",
+        "notesLabel": "Notes",
+        "notesPlaceholder": "optional",
+        "deleteButton": "Delete",
+        "cancelButton": "Cancel",
+        "saveButton": "Save",
+        "savingButton": "Saving…",
+        "coefficientEditor": {
+          "title": "Order coefficients ({count})",
+          "unbound": "(not linked)",
+          "scopeTypes": {
+            "category": "category",
+            "segment": "segment",
+            "product": "product"
+          },
+          "addButton": "Add",
+          "toastUpdated": "Coefficient updated",
+          "toastAdded": "Coefficient added"
+        }
+      },
+      "page": {
+        "title": "Event calendar",
+        "subtitle": "Holidays, promotions, and local events with demand coefficients for auto-ordering",
+        "seedButton": "Default holidays",
+        "toastSeeded": "Holidays added: {count}",
+        "toastAlreadySeeded": "Default holidays already added",
+        "addEventButton": "Add event",
+        "todayButton": "Today",
+        "loading": "Loading…",
+        "toastCreated": "Event created",
+        "toastUpdated": "Event updated",
+        "toastDeleted": "Event deleted"
+      }
+    },
+    "iot": {
+      "deviceTypes": {
+        "weightSensor": "Weight sensor",
+        "tempSensor": "Temperature sensor",
+        "camera": "CV camera",
+        "barcodeReader": "Barcode scanner"
+      },
+      "deviceForm": {
+        "validationRequired": "Required field",
+        "validationInvalidJson": "Invalid JSON",
+        "editTitle": "Edit device",
+        "createTitle": "Add IoT device",
+        "deviceIdLabel": "Physical device ID *",
+        "deviceIdPlaceholder": "shelf-A1-3",
+        "deviceTypeLabel": "Device type *",
+        "nameLabel": "Name",
+        "namePlaceholder": "Dairy fridge #1",
+        "zoneLabel": "Zone",
+        "noZoneOption": "— no zone —",
+        "mqttTopicLabel": "MQTT topic",
+        "mqttTopicPlaceholder": "shelfguard/…",
+        "configLabel": "Configuration (JSON)",
+        "configPlaceholder": "{\"profile\": \"fridge\"} or {\"product_id\": \"…\", \"unit_weight_grams\": 245}",
+        "cancelButton": "Cancel",
+        "savingButton": "Saving…",
+        "saveButton": "Save",
+        "addButton": "Add"
+      },
+      "devicesTable": {
+        "loading": "Loading…",
+        "empty": "No registered devices — add your first one",
+        "columnDevice": "Device",
+        "columnType": "Type",
+        "columnZone": "Zone",
+        "columnStatus": "Status",
+        "columnLastSeen": "Last seen",
+        "columnBattery": "Battery",
+        "columnFirmware": "Firmware",
+        "statusDeactivated": "Deactivated",
+        "statusOnline": "Online",
+        "statusOffline": "Offline",
+        "never": "never",
+        "editButton": "Edit",
+        "deactivateButton": "Disable"
+      },
+      "temperaturePanel": {
+        "noSensors": "No active temperature sensors",
+        "humiditySuffix": "humidity {value}%",
+        "alertLabel": "⚠ EXCEEDED",
+        "chartTitle": "Temperature over 24 hours",
+        "loading": "Loading…",
+        "noReadings": "No readings"
+      },
+      "page": {
+        "title": "IoT devices",
+        "subtitle": "Weight, temperature, and camera sensors — status and readings",
+        "addDeviceButton": "Add device",
+        "toastDeviceUpdated": "Device updated",
+        "toastDeviceRegistered": "Device registered",
+        "toastDeviceDeactivated": "“{name}” disabled",
+        "temperatureMonitoringTitle": "Temperature monitoring"
+      }
     }
   }
 }

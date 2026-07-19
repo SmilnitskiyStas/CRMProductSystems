@@ -12,9 +12,12 @@ import {
 } from "@/features/service-desk/hooks/useProviderTickets";
 import { useTenants } from "@/features/provider/hooks/useProvider";
 import {
-  TICKET_STATUS_LABELS,
-  TICKET_PRIORITY_LABELS,
-  TICKET_CATEGORY_LABELS,
+  TICKET_STATUSES,
+  TICKET_PRIORITIES,
+  TICKET_CATEGORIES,
+  getTicketStatusLabel,
+  getTicketPriorityLabel,
+  getTicketCategoryLabel,
   type TicketStatus,
   type TicketCategory,
   type TicketPriority,
@@ -25,9 +28,10 @@ import { PriorityBadge } from "@/features/service-desk/components/PriorityBadge"
 import { Btn } from "@/components/ui/Btn";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-// NOTE: TICKET_STATUS_LABELS / TICKET_PRIORITY_LABELS / TICKET_CATEGORY_LABELS and
-// the Badge components come from features/service-desk (i18n rollout Block 10, not
-// yet translated) — left as-is; only this file's own strings are translated here.
+// NOTE: getTicketStatusLabel / getTicketPriorityLabel / getTicketCategoryLabel and the
+// Badge components come from features/service-desk (translated in i18n rollout Block 10,
+// TASK-389) — each needs its own scoped `t` (Dashboard.serviceDesk.{statuses,priorities,
+// categories}), separate from this file's own `Dashboard.provider.supportTab` scope.
 
 function formatDate(iso: string, locale: string): string {
   return new Date(iso).toLocaleDateString(locale, {
@@ -49,6 +53,7 @@ function TicketRow({
   onClick: () => void;
 }) {
   const t = useTranslations("Dashboard.provider.supportTab");
+  const tCategories = useTranslations("Dashboard.serviceDesk.categories");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   return (
@@ -120,7 +125,7 @@ function TicketRow({
             fontSize: 11,
           }}
         >
-          {TICKET_CATEGORY_LABELS[ticket.category]}
+          {getTicketCategoryLabel(tCategories, ticket.category)}
         </span>
         <PriorityBadge priority={ticket.priority} />
         <TicketStatusBadge status={ticket.status} />
@@ -177,6 +182,9 @@ function TicketDetailPanel({
   onBack: () => void;
 }) {
   const t = useTranslations("Dashboard.provider.supportTab");
+  const tStatuses = useTranslations("Dashboard.serviceDesk.statuses");
+  const tPriorities = useTranslations("Dashboard.serviceDesk.priorities");
+  const tCategories = useTranslations("Dashboard.serviceDesk.categories");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: detail } = useProviderTicket(ticket.id);
@@ -276,9 +284,9 @@ function TicketDetailPanel({
         }}
       >
         {[
-          [t("metaCategory"),  TICKET_CATEGORY_LABELS[ticket.category]],
-          [t("metaStatus"),    TICKET_STATUS_LABELS[ticket.status]],
-          [t("metaPriority"),  TICKET_PRIORITY_LABELS[ticket.priority]],
+          [t("metaCategory"),  getTicketCategoryLabel(tCategories, ticket.category)],
+          [t("metaStatus"),    getTicketStatusLabel(tStatuses, ticket.status)],
+          [t("metaPriority"),  getTicketPriorityLabel(tPriorities, ticket.priority)],
           [t("metaAuthor"),    ticket.createdByName],
           [t("metaCompany"),   ticket.tenantName],
           [t("metaCreated"),   formatDate(ticket.createdAt, intlLocale)],
@@ -390,6 +398,8 @@ function TicketDetailPanel({
 
 function CreateTicketModal({ onClose }: { onClose: () => void }) {
   const t = useTranslations("Dashboard.provider.supportTab");
+  const tCategories = useTranslations("Dashboard.serviceDesk.categories");
+  const tPriorities = useTranslations("Dashboard.serviceDesk.priorities");
   const { data: tenants } = useTenants();
   const create = useCreateProviderTicket();
 
@@ -533,9 +543,9 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setCategory(e.target.value as TicketCategory)}
               style={selectStyle}
             >
-              {(Object.entries(TICKET_CATEGORY_LABELS) as [TicketCategory, string][]).map(
-                ([k, v]) => <option key={k} value={k}>{v}</option>,
-              )}
+              {TICKET_CATEGORIES.map((k) => (
+                <option key={k} value={k}>{getTicketCategoryLabel(tCategories, k)}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -547,9 +557,9 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setPriority(e.target.value as TicketPriority)}
               style={selectStyle}
             >
-              {(Object.entries(TICKET_PRIORITY_LABELS) as [TicketPriority, string][]).map(
-                ([k, v]) => <option key={k} value={k}>{v}</option>,
-              )}
+              {TICKET_PRIORITIES.map((k) => (
+                <option key={k} value={k}>{getTicketPriorityLabel(tPriorities, k)}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -585,18 +595,14 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
 
 // ── Main tab component ────────────────────────────────────────────────────────
 // STATUS_FILTER_OPTIONS moved inside the component so the "all" option can be
-// translated (its TICKET_STATUS_LABELS.* siblings come from the untranslated
-// service-desk feature, see the NOTE near formatDate above).
+// translated alongside the per-status labels (see the NOTE near formatDate above).
 
 export function ProviderSupportTab() {
   const t = useTranslations("Dashboard.provider.supportTab");
+  const tStatuses = useTranslations("Dashboard.serviceDesk.statuses");
   const STATUS_FILTER_OPTIONS: { value: TicketStatus | ""; label: string }[] = [
     { value: "", label: t("filterAllLabel") },
-    { value: "open", label: TICKET_STATUS_LABELS.open },
-    { value: "in_progress", label: TICKET_STATUS_LABELS.in_progress },
-    { value: "waiting", label: TICKET_STATUS_LABELS.waiting },
-    { value: "resolved", label: TICKET_STATUS_LABELS.resolved },
-    { value: "closed", label: TICKET_STATUS_LABELS.closed },
+    ...TICKET_STATUSES.map((s) => ({ value: s, label: getTicketStatusLabel(tStatuses, s) })),
   ];
 
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "">("");

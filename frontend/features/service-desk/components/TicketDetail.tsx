@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { X, MapPin, User, Calendar, MessageSquare, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations, useLocale } from "next-intl";
 import { useTicket, useUpdateTicket, useAddComment } from "../hooks/useTickets";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import type { TicketStatus, TicketCommentDto } from "../types";
 import {
-  TICKET_STATUS_LABELS,
-  TICKET_PRIORITY_LABELS,
-  TICKET_CATEGORY_LABELS,
+  TICKET_STATUSES,
+  getTicketStatusLabel,
+  getTicketCategoryLabel,
 } from "../types";
 import { TicketStatusBadge } from "./TicketStatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
@@ -22,8 +23,8 @@ interface Props {
   onClose: () => void;
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
+function formatDateTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -32,7 +33,8 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function CommentItem({ comment, isManager }: { comment: TicketCommentDto; isManager: boolean }) {
+function CommentItem({ comment, isManager, locale }: { comment: TicketCommentDto; isManager: boolean; locale: string }) {
+  const t = useTranslations("Dashboard.serviceDesk.ticketDetail");
   if (comment.isInternal && !isManager) return null;
 
   return (
@@ -64,11 +66,11 @@ function CommentItem({ comment, isManager }: { comment: TicketCommentDto; isMana
             }}
           >
             <Lock size={10} />
-            Внутрішня
+            {t("internalBadge")}
           </span>
         )}
         <span style={{ color: "#4B5563", fontSize: 11, marginLeft: "auto" }}>
-          {formatDateTime(comment.createdAt)}
+          {formatDateTime(comment.createdAt, locale)}
         </span>
       </div>
       <div style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
@@ -79,6 +81,11 @@ function CommentItem({ comment, isManager }: { comment: TicketCommentDto; isMana
 }
 
 export function TicketDetail({ ticketId, userRole, onClose }: Props) {
+  const t = useTranslations("Dashboard.serviceDesk.ticketDetail");
+  const tStatuses = useTranslations("Dashboard.serviceDesk.statuses");
+  const tCategories = useTranslations("Dashboard.serviceDesk.categories");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const isManager = AT_LEAST_STORE_MANAGER.has(userRole as AppRole);
 
   const { data: ticket, isLoading } = useTicket(ticketId);
@@ -94,7 +101,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
     updateMutation.mutate(
       { id: ticketId, data: { status: newStatus } },
       {
-        onSuccess: () => toast.success("Статус оновлено"),
+        onSuccess: () => toast.success(t("toastStatusUpdated")),
         onError: (err) => toast.error(err.message),
       }
     );
@@ -105,7 +112,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
     updateMutation.mutate(
       { id: ticketId, data: { assignedTo: assignedTo || undefined } },
       {
-        onSuccess: () => toast.success("Відповідального призначено"),
+        onSuccess: () => toast.success(t("toastAssigneeUpdated")),
         onError: (err) => toast.error(err.message),
       }
     );
@@ -117,7 +124,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
       { id: ticketId, data: { body: commentBody.trim(), isInternal } },
       {
         onSuccess: () => {
-          toast.success("Коментар додано");
+          toast.success(t("toastCommentAdded"));
           setCommentBody("");
           setIsInternal(false);
         },
@@ -216,7 +223,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
 
         {isLoading && (
           <div style={{ padding: 24, color: "#4B5563", fontSize: 13 }}>
-            Завантаження...
+            {t("loading")}
           </div>
         )}
 
@@ -233,7 +240,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                   fontSize: 12,
                 }}
               >
-                {TICKET_CATEGORY_LABELS[ticket.category]}
+                {getTicketCategoryLabel(tCategories, ticket.category)}
               </span>
               <PriorityBadge priority={ticket.priority} />
               <TicketStatusBadge status={ticket.status} />
@@ -241,7 +248,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
 
             {/* Description */}
             <div>
-              <span style={labelStyle}>Опис</span>
+              <span style={labelStyle}>{t("descriptionLabel")}</span>
               <div
                 style={{
                   color: "#9CA3AF",
@@ -269,7 +276,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
               <div>
                 <span style={labelStyle}>
                   <User size={10} style={{ display: "inline", marginRight: 4 }} />
-                  Автор
+                  {t("authorLabel")}
                 </span>
                 <div style={{ color: "#CBD5E1", fontSize: 13 }}>{ticket.createdByName}</div>
               </div>
@@ -278,7 +285,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                 <div>
                   <span style={labelStyle}>
                     <MapPin size={10} style={{ display: "inline", marginRight: 4 }} />
-                    Локація
+                    {t("locationLabel")}
                   </span>
                   <div style={{ color: "#CBD5E1", fontSize: 13 }}>{ticket.locationName}</div>
                 </div>
@@ -287,15 +294,15 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
               <div>
                 <span style={labelStyle}>
                   <Calendar size={10} style={{ display: "inline", marginRight: 4 }} />
-                  Створено
+                  {t("createdLabel")}
                 </span>
-                <div style={{ color: "#CBD5E1", fontSize: 13 }}>{formatDateTime(ticket.createdAt)}</div>
+                <div style={{ color: "#CBD5E1", fontSize: 13 }}>{formatDateTime(ticket.createdAt, intlLocale)}</div>
               </div>
 
               {ticket.resolvedAt && (
                 <div>
-                  <span style={labelStyle}>Вирішено</span>
-                  <div style={{ color: "#86EFAC", fontSize: 13 }}>{formatDateTime(ticket.resolvedAt)}</div>
+                  <span style={labelStyle}>{t("resolvedLabel")}</span>
+                  <div style={{ color: "#86EFAC", fontSize: 13 }}>{formatDateTime(ticket.resolvedAt, intlLocale)}</div>
                 </div>
               )}
             </div>
@@ -314,32 +321,32 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                 }}
               >
                 <div style={{ color: "#CBD5E1", fontSize: 13, fontWeight: 600 }}>
-                  Управління тікетом
+                  {t("manageTitle")}
                 </div>
 
                 <div>
-                  <span style={labelStyle}>Статус</span>
+                  <span style={labelStyle}>{t("statusLabel")}</span>
                   <select
                     value={ticket.status}
                     onChange={(e) => handleStatusChange(e.target.value as TicketStatus)}
                     style={selectStyle}
                     disabled={updateMutation.isPending}
                   >
-                    {(Object.keys(TICKET_STATUS_LABELS) as TicketStatus[]).map((s) => (
-                      <option key={s} value={s}>{TICKET_STATUS_LABELS[s]}</option>
+                    {TICKET_STATUSES.map((s) => (
+                      <option key={s} value={s}>{getTicketStatusLabel(tStatuses, s)}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <span style={labelStyle}>Відповідальний</span>
+                  <span style={labelStyle}>{t("assigneeLabel")}</span>
                   <select
                     value={ticket.assignedTo ?? ""}
                     onChange={(e) => handleAssignChange(e.target.value)}
                     style={selectStyle}
                     disabled={updateMutation.isPending}
                   >
-                    <option value="">— Не призначено —</option>
+                    <option value="">{t("unassignedOption")}</option>
                     {users?.filter((u) => u.isActive).map((u) => (
                       <option key={u.id} value={u.id}>{u.fullName}</option>
                     ))}
@@ -362,18 +369,18 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                 }}
               >
                 <MessageSquare size={15} />
-                Коментарі ({ticket.comments.length})
+                {t("commentsTitle", { count: ticket.comments.length })}
               </div>
 
               {ticket.comments.length === 0 && (
                 <div style={{ color: "#4B5563", fontSize: 13, marginBottom: 12 }}>
-                  Поки немає коментарів
+                  {t("noComments")}
                 </div>
               )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                 {ticket.comments.map((comment) => (
-                  <CommentItem key={comment.id} comment={comment} isManager={isManager} />
+                  <CommentItem key={comment.id} comment={comment} isManager={isManager} locale={intlLocale} />
                 ))}
               </div>
 
@@ -392,7 +399,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                 <textarea
                   value={commentBody}
                   onChange={(e) => setCommentBody(e.target.value)}
-                  placeholder="Напишіть коментар..."
+                  placeholder={t("commentPlaceholder")}
                   rows={3}
                   style={{
                     background: "#0D1117",
@@ -427,7 +434,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                         onChange={(e) => setIsInternal(e.target.checked)}
                         style={{ accentColor: "#F97316" }}
                       />
-                      Внутрішня нотатка
+                      {t("internalNoteLabel")}
                     </label>
                   )}
 
@@ -446,7 +453,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                       marginLeft: "auto",
                     }}
                   >
-                    {addCommentMutation.isPending ? "Надсилання..." : "Надіслати"}
+                    {addCommentMutation.isPending ? t("sendingButton") : t("sendButton")}
                   </button>
                 </div>
               </div>

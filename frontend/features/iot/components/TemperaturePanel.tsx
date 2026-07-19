@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   CartesianGrid,
   Line,
@@ -19,6 +20,9 @@ interface Props {
 }
 
 export function TemperaturePanel({ storeId, devices }: Props) {
+  const t = useTranslations("Dashboard.iot.temperaturePanel");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const tempSensors = devices.filter((d) => d.deviceType === "temp_sensor" && d.isActive);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const activeId = selectedId ?? tempSensors[0]?.id ?? null;
@@ -29,7 +33,7 @@ export function TemperaturePanel({ storeId, devices }: Props) {
   if (tempSensors.length === 0) {
     return (
       <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, padding: 24, color: "#4B5563", fontSize: 13, textAlign: "center" }}>
-        Немає активних датчиків температури
+        {t("noSensors")}
       </div>
     );
   }
@@ -38,7 +42,7 @@ export function TemperaturePanel({ storeId, devices }: Props) {
     .slice()
     .reverse()
     .map((r) => ({
-      time: new Date(r.recordedAt).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" }),
+      time: new Date(r.recordedAt).toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit" }),
       temp: r.temperature,
     }));
 
@@ -47,7 +51,7 @@ export function TemperaturePanel({ storeId, devices }: Props) {
       {/* Latest readings cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
         {tempSensors.map((d) => {
-          const reading = latest?.find((t) => t.deviceId === d.id);
+          const reading = latest?.find((r) => r.deviceId === d.id);
           const alert = reading?.isAlert ?? false;
           const selected = d.id === activeId;
           return (
@@ -70,9 +74,9 @@ export function TemperaturePanel({ storeId, devices }: Props) {
                 {reading ? `${reading.temperature}°C` : "—"}
               </div>
               {reading?.humidity != null && (
-                <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>вологість {reading.humidity}%</div>
+                <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{t("humiditySuffix", { value: reading.humidity })}</div>
               )}
-              {alert && <div style={{ color: "#ef4444", fontSize: 11, fontWeight: 600, marginTop: 4 }}>⚠ ПЕРЕВИЩЕННЯ</div>}
+              {alert && <div style={{ color: "#ef4444", fontSize: 11, fontWeight: 600, marginTop: 4 }}>{t("alertLabel")}</div>}
             </button>
           );
         })}
@@ -81,12 +85,12 @@ export function TemperaturePanel({ storeId, devices }: Props) {
       {/* 24h chart for the selected sensor */}
       <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, padding: 20 }}>
         <h3 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: "0 0 16px 0" }}>
-          Температура за 24 години
+          {t("chartTitle")}
         </h3>
         {readingsLoading ? (
-          <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>Завантаження…</div>
+          <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>{t("loading")}</div>
         ) : chartData.length === 0 ? (
-          <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>Немає показників</div>
+          <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>{t("noReadings")}</div>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 0, left: -16 }}>

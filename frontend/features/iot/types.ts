@@ -57,9 +57,28 @@ export interface LatestTemperatureDto {
   recordedAt: string;
 }
 
-export const DEVICE_TYPE_META: Record<DeviceType, { label: string; icon: string }> = {
-  weight_sensor: { label: "Датчик ваги", icon: "⚖️" },
-  temp_sensor: { label: "Датчик температури", icon: "🌡️" },
-  camera: { label: "CV камера", icon: "📷" },
-  barcode_reader: { label: "Сканер штрихкодів", icon: "📟" },
+/**
+ * Device-type labels moved to i18n as of i18n Block 10 (TASK-389): `Dashboard.iot.deviceTypes.*`.
+ * Icons stay a plain constant since they're not user-facing text; the key-order array and
+ * label helper mirror `getEventTypeLabel` (features/notifications/types.ts).
+ */
+export const DEVICE_TYPES: DeviceType[] = ["weight_sensor", "temp_sensor", "camera", "barcode_reader"];
+
+export const DEVICE_TYPE_ICONS: Record<DeviceType, string> = {
+  weight_sensor: "⚖️",
+  temp_sensor: "🌡️",
+  camera: "📷",
+  barcode_reader: "📟",
 };
+
+const DEVICE_TYPE_I18N_KEY: Record<DeviceType, string> = {
+  weight_sensor: "weightSensor",
+  temp_sensor: "tempSensor",
+  camera: "camera",
+  barcode_reader: "barcodeReader",
+};
+
+/** Translated device-type label. `t` must be scoped to `Dashboard.iot.deviceTypes`. */
+export function getDeviceTypeLabel(t: (key: string) => string, deviceType: DeviceType): string {
+  return t(DEVICE_TYPE_I18N_KEY[deviceType] ?? deviceType);
+}

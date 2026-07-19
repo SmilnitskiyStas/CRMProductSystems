@@ -1,6 +1,9 @@
+"use client";
+
 import { MessageSquare, User, MapPin } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import type { TicketDto } from "../types";
-import { TICKET_CATEGORY_LABELS } from "../types";
+import { getTicketCategoryLabel } from "../types";
 import { TicketStatusBadge } from "./TicketStatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
 
@@ -10,8 +13,8 @@ interface Props {
   onClick: (ticket: TicketDto) => void;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("uk-UA", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -19,6 +22,9 @@ function formatDate(iso: string): string {
 }
 
 export function TicketCard({ ticket, selected, onClick }: Props) {
+  const tCategories = useTranslations("Dashboard.serviceDesk.categories");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   return (
     <div
       onClick={() => onClick(ticket)}
@@ -57,7 +63,7 @@ export function TicketCard({ ticket, selected, onClick }: Props) {
             fontSize: 11,
           }}
         >
-          {TICKET_CATEGORY_LABELS[ticket.category]}
+          {getTicketCategoryLabel(tCategories, ticket.category)}
         </span>
         <PriorityBadge priority={ticket.priority} />
         <TicketStatusBadge status={ticket.status} />
@@ -104,7 +110,7 @@ export function TicketCard({ ticket, selected, onClick }: Props) {
         )}
 
         <span style={{ color: "#4B5563", fontSize: 12 }}>
-          {formatDate(ticket.createdAt)}
+          {formatDate(ticket.createdAt, intlLocale)}
         </span>
 
         {ticket.commentCount > 0 && (

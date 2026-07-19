@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { EventCalendar } from "@/features/events/components/EventCalendar";
 import { EventForm } from "@/features/events/components/EventForm";
@@ -10,14 +11,13 @@ import {
   useCreateEvent, useDeleteEvent, useEvents, useSeedDefaults, useUpdateEvent,
 } from "@/features/events/hooks/useEvents";
 import { useStores } from "@/features/stores/hooks/useStores";
-import { EVENT_TYPE_META, type DemandEvent, type UpsertEventPayload } from "@/features/events/types";
-
-const MONTHS = [
-  "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
-  "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень",
-];
+import { EVENT_TYPES, EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent, type UpsertEventPayload } from "@/features/events/types";
 
 export default function EventsPage() {
+  const t = useTranslations("Dashboard.events.page");
+  const tTypes = useTranslations("Dashboard.events.types");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -39,19 +39,19 @@ export default function EventsPage() {
 
   const handleCreate = (payload: UpsertEventPayload) =>
     createEvent.mutate(payload, {
-      onSuccess: () => { toast.success("Подію створено"); setCreating(null); },
+      onSuccess: () => { toast.success(t("toastCreated")); setCreating(null); },
       onError: (err) => toast.error(err.message),
     });
 
   const handleUpdate = (payload: UpsertEventPayload) =>
     updateEvent.mutate({ id: editing!.id, payload }, {
-      onSuccess: () => { toast.success("Подію оновлено"); setEditing(null); },
+      onSuccess: () => { toast.success(t("toastUpdated")); setEditing(null); },
       onError: (err) => toast.error(err.message),
     });
 
   const handleDelete = (id: string) =>
     deleteEvent.mutate(id, {
-      onSuccess: () => { toast.success("Подію видалено"); setEditing(null); },
+      onSuccess: () => { toast.success(t("toastDeleted")); setEditing(null); },
       onError: (err) => toast.error(err.message),
     });
 
@@ -61,10 +61,10 @@ export default function EventsPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
           <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Календар подій
+            {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            Свята, акції та місцеві події з коефіцієнтами впливу на автозамовлення
+            {t("subtitle")}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -73,15 +73,15 @@ export default function EventsPage() {
               seedDefaults.mutate(undefined, {
                 onSuccess: (r) =>
                   r.eventsCreated > 0
-                    ? toast.success(`Додано свят: ${r.eventsCreated}`)
-                    : toast.info("Стандартні свята вже додані"),
+                    ? toast.success(t("toastSeeded", { count: r.eventsCreated }))
+                    : toast.info(t("toastAlreadySeeded")),
                 onError: (err) => toast.error(err.message),
               })
             }>
-            Стандартні свята
+            {t("seedButton")}
           </Btn>
           <Btn icon={<CalendarPlus size={15} />} onClick={() => setCreating(from)}>
-            Додати подію
+            {t("addEventButton")}
           </Btn>
         </div>
       </div>
@@ -90,26 +90,29 @@ export default function EventsPage() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
         <Btn size="sm" variant="ghost" onClick={prev}><ChevronLeft size={14} /></Btn>
         <span style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, minWidth: 160, textAlign: "center" }}>
-          {MONTHS[month - 1]} {year}
+          {new Date(year, month - 1, 1).toLocaleDateString(intlLocale, { month: "long", year: "numeric" })}
         </span>
         <Btn size="sm" variant="ghost" onClick={next}><ChevronRight size={14} /></Btn>
         <Btn size="sm" variant="ghost"
           onClick={() => { setYear(now.getFullYear()); setMonth(now.getMonth() + 1); }}>
-          Сьогодні
+          {t("todayButton")}
         </Btn>
 
         <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
-          {Object.entries(EVENT_TYPE_META).map(([key, meta]) => (
-            <span key={key} style={{ display: "flex", alignItems: "center", gap: 5, color: "#6B7280", fontSize: 11 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: meta.bg, border: `1px solid ${meta.color}` }} />
-              {meta.label}
-            </span>
-          ))}
+          {EVENT_TYPES.map((key) => {
+            const style = EVENT_TYPE_STYLES[key];
+            return (
+              <span key={key} style={{ display: "flex", alignItems: "center", gap: 5, color: "#6B7280", fontSize: 11 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: style.bg, border: `1px solid ${style.color}` }} />
+                {getEventTypeLabel(tTypes, key)}
+              </span>
+            );
+          })}
         </div>
       </div>
 
       {isLoading ? (
-        <p style={{ color: "#4B5563", fontSize: 13 }}>Завантаження…</p>
+        <p style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</p>
       ) : (
         <EventCalendar
           year={year}

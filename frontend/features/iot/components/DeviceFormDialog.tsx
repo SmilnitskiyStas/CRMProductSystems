@@ -1,34 +1,42 @@
 "use client";
 
+import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import type { StoreZoneDto } from "@/features/stores/types";
-import { DEVICE_TYPE_META, type DeviceType, type IotDeviceDto } from "../types";
+import { DEVICE_TYPES, getDeviceTypeLabel, DEVICE_TYPE_ICONS, type DeviceType, type IotDeviceDto } from "../types";
 
-const deviceSchema = z.object({
-  deviceId: z.string().min(1, "Обов'язкове поле").max(100),
-  deviceType: z.enum(["weight_sensor", "camera", "temp_sensor", "barcode_reader"]),
-  name: z.string().max(255).optional(),
-  zoneId: z.string().optional(),
-  mqttTopic: z.string().max(255).optional(),
-  config: z
-    .string()
-    .optional()
-    .refine((v) => {
-      if (!v?.trim()) return true;
-      try {
-        JSON.parse(v);
-        return true;
-      } catch {
-        return false;
-      }
-    }, "Невалідний JSON"),
-});
+// Zod .min(1, message) / .refine(..., message) need translated messages, so the schema is
+// built once per render inside the component (see `useMemo(() => buildSchema(t), [t])`
+// below) — mirrors `buildSchema(t)` in features/legal-entities/components/LegalEntityFormDialog.tsx
+// (i18n Block 8b).
+function buildSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    deviceId: z.string().min(1, t("validationRequired")).max(100),
+    deviceType: z.enum(["weight_sensor", "camera", "temp_sensor", "barcode_reader"]),
+    name: z.string().max(255).optional(),
+    zoneId: z.string().optional(),
+    mqttTopic: z.string().max(255).optional(),
+    config: z
+      .string()
+      .optional()
+      .refine((v) => {
+        if (!v?.trim()) return true;
+        try {
+          JSON.parse(v);
+          return true;
+        } catch {
+          return false;
+        }
+      }, t("validationInvalidJson")),
+  });
+}
 
-type FormValues = z.infer<typeof deviceSchema>;
+type FormValues = z.infer<ReturnType<typeof buildSchema>>;
 
 interface Props {
   device: IotDeviceDto | null; // null = register new
@@ -58,10 +66,14 @@ const labelStyle: React.CSSProperties = {
 const errStyle: React.CSSProperties = { color: "#F87171", fontSize: 11, marginTop: 3 };
 
 export function DeviceFormDialog({ device, zones, isPending, onClose, onSubmit }: Props) {
+  const t = useTranslations("Dashboard.iot.deviceForm");
+  const tDeviceTypes = useTranslations("Dashboard.iot.deviceTypes");
   const isEditing = device !== null;
 
+  const schema = useMemo(() => buildSchema(t), [t]);
+
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(deviceSchema),
+    resolver: zodResolver(schema),
     defaultValues: device
       ? {
           deviceId: device.deviceId,
@@ -86,13 +98,13 @@ export function DeviceFormDialog({ device, zones, isPending, onClose, onSubmit }
   }
 
   return (
-    <Modal title={isEditing ? "Редагувати пристрій" : "Додати IoT пристрій"} onClose={onClose}>
+    <Modal title={isEditing ? t("editTitle") : t("createTitle")} onClose={onClose}>
       <form onSubmit={handleSubmit(submit)} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label style={labelStyle}>Фізичний ID пристрою *</label>
+          <label style={labelStyle}>{t("deviceIdLabel")}</label>
           <input
             {...register("deviceId")}
-            placeholder="shelf-A1-3"
+            placeholder={t("deviceIdPlaceholder")}
             disabled={isEditing}
             style={{ ...inputStyle, opacity: isEditing ? 0.6 : 1 }}
           />
@@ -100,25 +112,25 @@ export function DeviceFormDialog({ device, zones, isPending, onClose, onSubmit }
         </div>
 
         <div>
-          <label style={labelStyle}>Тип пристрою *</label>
+          <label style={labelStyle}>{t("deviceTypeLabel")}</label>
           <select {...register("deviceType")} style={inputStyle}>
-            {(Object.keys(DEVICE_TYPE_META) as DeviceType[]).map((t) => (
-              <option key={t} value={t}>
-                {DEVICE_TYPE_META[t].icon} {DEVICE_TYPE_META[t].label}
+            {DEVICE_TYPES.map((deviceType) => (
+              <option key={deviceType} value={deviceType}>
+                {DEVICE_TYPE_ICONS[deviceType]} {getDeviceTypeLabel(tDeviceTypes, deviceType)}
               </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label style={labelStyle}>Назва</label>
-          <input {...register("name")} placeholder="Холодильник молочний №1" style={inputStyle} />
+          <label style={labelStyle}>{t("nameLabel")}</label>
+          <input {...register("name")} placeholder={t("namePlaceholder")} style={inputStyle} />
         </div>
 
         <div>
-          <label style={labelStyle}>Зона</label>
+          <label style={labelStyle}>{t("zoneLabel")}</label>
           <select {...register("zoneId")} style={inputStyle}>
-            <option value="">— без зони —</option>
+            <option value="">{t("noZoneOption")}</option>
             {zones.filter((z) => z.isActive).map((z) => (
               <option key={z.id} value={z.id}>{z.name}</option>
             ))}
@@ -126,25 +138,25 @@ export function DeviceFormDialog({ device, zones, isPending, onClose, onSubmit }
         </div>
 
         <div>
-          <label style={labelStyle}>MQTT topic</label>
-          <input {...register("mqttTopic")} placeholder="shelfguard/…" style={inputStyle} />
+          <label style={labelStyle}>{t("mqttTopicLabel")}</label>
+          <input {...register("mqttTopic")} placeholder={t("mqttTopicPlaceholder")} style={inputStyle} />
         </div>
 
         <div>
-          <label style={labelStyle}>Конфігурація (JSON)</label>
+          <label style={labelStyle}>{t("configLabel")}</label>
           <textarea
             {...register("config")}
             rows={3}
-            placeholder={'{"profile": "fridge"} або {"product_id": "…", "unit_weight_grams": 245}'}
+            placeholder={t("configPlaceholder")}
             style={{ ...inputStyle, fontFamily: "monospace", resize: "vertical" }}
           />
           {errors.config && <div style={errStyle}>{errors.config.message}</div>}
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
-          <Btn variant="ghost" onClick={onClose}>Скасувати</Btn>
+          <Btn variant="ghost" onClick={onClose}>{t("cancelButton")}</Btn>
           <Btn type="submit" disabled={isPending}>
-            {isPending ? "Збереження…" : isEditing ? "Зберегти" : "Додати"}
+            {isPending ? t("savingButton") : isEditing ? t("saveButton") : t("addButton")}
           </Btn>
         </div>
       </form>

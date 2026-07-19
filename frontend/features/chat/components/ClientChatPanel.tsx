@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Plus, Send, X } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import {
   useMyChats,
   useChatMessages,
@@ -14,6 +15,9 @@ import { RatingModal } from "./RatingModal";
 import { Btn } from "@/components/ui/Btn";
 
 export function ClientChatPanel() {
+  const t = useTranslations("Dashboard.chat.clientPanel");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const { data: sessions = [] } = useMyChats();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -97,16 +101,16 @@ export function ClientChatPanel() {
           justifyContent: "space-between",
           alignItems: "center",
         }}>
-          <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 14 }}>Мої чати</span>
+          <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 14 }}>{t("myChatsTitle")}</span>
           <Btn size="sm" icon={<Plus size={12} />} onClick={() => setShowCreate(true)}>
-            Новий
+            {t("newButton")}
           </Btn>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto" }}>
           {sessions.length === 0 && (
             <div style={{ padding: 20, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-              Немає чатів
+              {t("noChats")}
             </div>
           )}
           {sessions.map((s) => (
@@ -145,7 +149,7 @@ export function ClientChatPanel() {
                   flexShrink: 0,
                   marginLeft: 6,
                 }}>
-                  {s.status === "open" ? "Відкрито" : "Закрито"}
+                  {s.status === "open" ? t("statusOpen") : t("statusClosed")}
                 </span>
               </div>
               {s.lastMessage && (
@@ -162,7 +166,7 @@ export function ClientChatPanel() {
               )}
               {s.status === "closed" && s.rating === null && (
                 <p style={{ color: "#FBBF24", fontSize: 11, margin: "4px 0 0" }}>
-                  ⭐ Залиште оцінку
+                  {t("rateHint")}
                 </p>
               )}
             </button>
@@ -175,7 +179,7 @@ export function ClientChatPanel() {
         {!selectedSession ? (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "#4B5563" }}>
             <MessageCircle size={40} />
-            <p style={{ margin: 0, fontSize: 14 }}>Оберіть чат або створіть новий</p>
+            <p style={{ margin: 0, fontSize: 14 }}>{t("selectOrCreatePrompt")}</p>
           </div>
         ) : (
           <>
@@ -195,17 +199,17 @@ export function ClientChatPanel() {
                   {selectedSession.assignedAgentName ? (
                     <span style={{ color: "#4ADE80", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80", display: "inline-block" }} />
-                      {selectedSession.assignedAgentName} — підтримка
+                      {t("supportAgentSuffix", { name: selectedSession.assignedAgentName })}
                     </span>
                   ) : (
                     <span style={{ color: "#6B7280", fontSize: 12 }}>
-                      Очікування відповіді оператора...
+                      {t("waitingForOperator")}
                     </span>
                   )}
                   {selectedSession.status === "closed" && (
                     <span style={{ color: "#6B7280", fontSize: 12 }}>
-                      · Чат закрито
-                      {selectedSession.rating !== null && ` · Оцінка: ${selectedSession.rating}/5`}
+                      {t("closedSuffix")}
+                      {selectedSession.rating !== null && ` ${t("ratingSuffix", { rating: selectedSession.rating })}`}
                     </span>
                   )}
                 </div>
@@ -254,7 +258,7 @@ export function ClientChatPanel() {
                       )}
                       <p style={{ color: "#E8EDF5", fontSize: 13, margin: 0 }}>{m.body}</p>
                       <p style={{ color: "#4B5563", fontSize: 10, margin: "4px 0 0", textAlign: "right" }}>
-                        {new Date(m.createdAt).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(m.createdAt).toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                   </div>
@@ -275,7 +279,7 @@ export function ClientChatPanel() {
                   value={newText}
                   onChange={(e) => setNewText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  placeholder="Написати повідомлення..."
+                  placeholder={t("messageInputPlaceholder")}
                   style={{
                     flex: 1,
                     background: "#1F2937",
@@ -304,7 +308,7 @@ export function ClientChatPanel() {
                 color: "#6B7280",
                 fontSize: 13,
               }}>
-                Чат закрито службою підтримки
+                {t("closedFooter")}
                 {selectedSession.rating === null && (
                   <button
                     onClick={() => setRatingSession(selectedSession)}
@@ -319,7 +323,7 @@ export function ClientChatPanel() {
                       cursor: "pointer",
                     }}
                   >
-                    ⭐ Оцінити
+                    {t("rateButton")}
                   </button>
                 )}
               </div>
@@ -349,7 +353,7 @@ export function ClientChatPanel() {
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-                Новий чат підтримки
+                {t("createDialogTitle")}
               </h2>
               <button
                 onClick={() => setShowCreate(false)}
@@ -360,12 +364,12 @@ export function ClientChatPanel() {
             </div>
 
             <label style={{ color: "#9CA3AF", fontSize: 12, display: "block", marginBottom: 6 }}>
-              Тема звернення
+              {t("subjectLabel")}
             </label>
             <input
               value={newSubject}
               onChange={(e) => setNewSubject(e.target.value)}
-              placeholder="Коротко опишіть проблему..."
+              placeholder={t("subjectPlaceholder")}
               style={{
                 width: "100%",
                 background: "#1F2937",
@@ -381,12 +385,12 @@ export function ClientChatPanel() {
             />
 
             <label style={{ color: "#9CA3AF", fontSize: 12, display: "block", marginBottom: 6 }}>
-              Повідомлення
+              {t("firstMessageLabel")}
             </label>
             <textarea
               value={newFirstMsg}
               onChange={(e) => setNewFirstMsg(e.target.value)}
-              placeholder="Деталі звернення..."
+              placeholder={t("firstMessagePlaceholder")}
               rows={4}
               style={{
                 width: "100%",
@@ -409,7 +413,7 @@ export function ClientChatPanel() {
                 disabled={!newSubject.trim() || !newFirstMsg.trim() || createChat.isPending}
                 style={{ flex: 1, justifyContent: "center" }}
               >
-                {createChat.isPending ? "Створення..." : "Почати чат"}
+                {createChat.isPending ? t("creatingButton") : t("startButton")}
               </Btn>
               <button
                 onClick={() => setShowCreate(false)}
@@ -423,7 +427,7 @@ export function ClientChatPanel() {
                   cursor: "pointer",
                 }}
               >
-                Скасувати
+                {t("cancelButton")}
               </button>
             </div>
           </div>

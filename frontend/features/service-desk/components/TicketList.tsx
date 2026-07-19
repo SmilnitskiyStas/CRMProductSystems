@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useTickets } from "../hooks/useTickets";
 import type { TicketDto, TicketStatus, TicketPriority } from "../types";
 import {
-  TICKET_STATUS_LABELS,
-  TICKET_PRIORITY_LABELS,
+  TICKET_STATUSES,
+  TICKET_PRIORITIES,
+  getTicketStatusLabel,
+  getTicketPriorityLabel,
 } from "../types";
 import { TicketCard } from "./TicketCard";
 
@@ -18,6 +21,9 @@ interface Props {
 }
 
 export function TicketList({ selectedId, onSelect }: Props) {
+  const t = useTranslations("Dashboard.serviceDesk.ticketList");
+  const tStatuses = useTranslations("Dashboard.serviceDesk.statuses");
+  const tPriorities = useTranslations("Dashboard.serviceDesk.priorities");
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<TicketStatus | "">("");
   const [priority, setPriority] = useState<TicketPriority | "">("");
@@ -65,7 +71,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Пошук тікетів..."
+            placeholder={t("searchPlaceholder")}
             style={{
               width: "100%",
               background: "#111827",
@@ -86,9 +92,9 @@ export function TicketList({ selectedId, onSelect }: Props) {
           onChange={(e) => { setStatus(e.target.value as TicketStatus | ""); setPage(1); }}
           style={selectStyle}
         >
-          <option value="">Всі статуси</option>
-          {(Object.keys(TICKET_STATUS_LABELS) as TicketStatus[]).map((s) => (
-            <option key={s} value={s}>{TICKET_STATUS_LABELS[s]}</option>
+          <option value="">{t("allStatusesOption")}</option>
+          {TICKET_STATUSES.map((s) => (
+            <option key={s} value={s}>{getTicketStatusLabel(tStatuses, s)}</option>
           ))}
         </select>
 
@@ -98,9 +104,9 @@ export function TicketList({ selectedId, onSelect }: Props) {
           onChange={(e) => { setPriority(e.target.value as TicketPriority | ""); setPage(1); }}
           style={selectStyle}
         >
-          <option value="">Всі пріоритети</option>
-          {(Object.keys(TICKET_PRIORITY_LABELS) as TicketPriority[]).map((p) => (
-            <option key={p} value={p}>{TICKET_PRIORITY_LABELS[p]}</option>
+          <option value="">{t("allPrioritiesOption")}</option>
+          {TICKET_PRIORITIES.map((p) => (
+            <option key={p} value={p}>{getTicketPriorityLabel(tPriorities, p)}</option>
           ))}
         </select>
       </div>
@@ -108,14 +114,14 @@ export function TicketList({ selectedId, onSelect }: Props) {
       {/* Count */}
       {!isLoading && (
         <div style={{ color: "#4B5563", fontSize: 12 }}>
-          {totalCount} тікет{totalCount === 1 ? "" : totalCount < 5 ? "и" : "ів"}
+          {t("countLabel", { count: totalCount })}
         </div>
       )}
 
       {/* List */}
       {isLoading ? (
         <div style={{ color: "#4B5563", fontSize: 13, padding: "20px 0" }}>
-          Завантаження...
+          {t("loading")}
         </div>
       ) : tickets.length === 0 ? (
         <div
@@ -126,7 +132,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
             textAlign: "center",
           }}
         >
-          Тікети не знайдено
+          {t("empty")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -157,7 +163,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
               cursor: page === 1 ? "not-allowed" : "pointer",
             }}
           >
-            ← Назад
+            {t("prevButton")}
           </button>
           <span style={{ color: "#4B5563", fontSize: 12 }}>
             {page} / {totalPages}
@@ -175,7 +181,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
               cursor: page === totalPages ? "not-allowed" : "pointer",
             }}
           >
-            Далі →
+            {t("nextButton")}
           </button>
         </div>
       )}

@@ -3,16 +3,25 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { useCreateTicket } from "../hooks/useTickets";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import type { TicketCategory, TicketPriority } from "../types";
-import { TICKET_CATEGORY_LABELS, TICKET_PRIORITY_LABELS } from "../types";
+import {
+  TICKET_CATEGORIES,
+  TICKET_PRIORITIES,
+  getTicketCategoryLabel,
+  getTicketPriorityLabel,
+} from "../types";
 
 interface Props {
   onClose: () => void;
 }
 
 export function CreateTicketForm({ onClose }: Props) {
+  const t = useTranslations("Dashboard.serviceDesk.createForm");
+  const tCategories = useTranslations("Dashboard.serviceDesk.categories");
+  const tPriorities = useTranslations("Dashboard.serviceDesk.priorities");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<TicketCategory>("general");
@@ -36,7 +45,7 @@ export function CreateTicketForm({ onClose }: Props) {
       },
       {
         onSuccess: () => {
-          toast.success("Тікет створено");
+          toast.success(t("toastCreated"));
           onClose();
         },
         onError: (err) => toast.error(err.message),
@@ -111,10 +120,10 @@ export function CreateTicketForm({ onClose }: Props) {
         >
           <div>
             <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700 }}>
-              Новий тікет
+              {t("title")}
             </div>
             <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>
-              Опишіть вашу проблему або запит
+              {t("subtitle")}
             </div>
           </div>
           <button
@@ -136,12 +145,12 @@ export function CreateTicketForm({ onClose }: Props) {
           {/* Title */}
           <div>
             <label style={labelStyle}>
-              Заголовок <span style={{ color: "#DC2626" }}>*</span>
+              {t("titleFieldLabel")} <span style={{ color: "#DC2626" }}>*</span>
             </label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Коротко опишіть проблему"
+              placeholder={t("titlePlaceholder")}
               required
               style={inputStyle}
             />
@@ -150,12 +159,12 @@ export function CreateTicketForm({ onClose }: Props) {
           {/* Description */}
           <div>
             <label style={labelStyle}>
-              Опис <span style={{ color: "#DC2626" }}>*</span>
+              {t("descriptionFieldLabel")} <span style={{ color: "#DC2626" }}>*</span>
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Детально опишіть проблему або запит..."
+              placeholder={t("descriptionPlaceholder")}
               required
               rows={4}
               style={{ ...inputStyle, resize: "vertical" }}
@@ -165,27 +174,27 @@ export function CreateTicketForm({ onClose }: Props) {
           {/* Category + Priority */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <label style={labelStyle}>Категорія</label>
+              <label style={labelStyle}>{t("categoryLabel")}</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as TicketCategory)}
                 style={selectStyle}
               >
-                {(Object.keys(TICKET_CATEGORY_LABELS) as TicketCategory[]).map((c) => (
-                  <option key={c} value={c}>{TICKET_CATEGORY_LABELS[c]}</option>
+                {TICKET_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{getTicketCategoryLabel(tCategories, c)}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label style={labelStyle}>Пріоритет</label>
+              <label style={labelStyle}>{t("priorityLabel")}</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TicketPriority)}
                 style={selectStyle}
               >
-                {(Object.keys(TICKET_PRIORITY_LABELS) as TicketPriority[]).map((p) => (
-                  <option key={p} value={p}>{TICKET_PRIORITY_LABELS[p]}</option>
+                {TICKET_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>{getTicketPriorityLabel(tPriorities, p)}</option>
                 ))}
               </select>
             </div>
@@ -193,13 +202,13 @@ export function CreateTicketForm({ onClose }: Props) {
 
           {/* Location */}
           <div>
-            <label style={labelStyle}>Локація (необов&apos;язково)</label>
+            <label style={labelStyle}>{t("locationLabel")}</label>
             <select
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
               style={selectStyle}
             >
-              <option value="">— Не вказано —</option>
+              <option value="">{t("noLocationOption")}</option>
               {locations?.filter((l) => l.isActive).map((loc) => (
                 <option key={loc.id} value={loc.id}>{loc.name}</option>
               ))}
@@ -221,7 +230,7 @@ export function CreateTicketForm({ onClose }: Props) {
                 cursor: "pointer",
               }}
             >
-              Скасувати
+              {t("cancelButton")}
             </button>
             <button
               type="submit"
@@ -237,7 +246,7 @@ export function CreateTicketForm({ onClose }: Props) {
                 cursor: title.trim() && description.trim() ? "pointer" : "not-allowed",
               }}
             >
-              {createMutation.isPending ? "Створення..." : "Створити тікет"}
+              {createMutation.isPending ? t("creatingButton") : t("createButton")}
             </button>
           </div>
         </form>

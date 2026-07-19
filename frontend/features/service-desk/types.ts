@@ -126,25 +126,53 @@ export interface ProviderTicketFilters {
   tenantId?: string;
 }
 
-export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
-  open: "Відкритий",
-  in_progress: "В роботі",
-  waiting: "Очікування",
-  resolved: "Вирішено",
-  closed: "Закрито",
+/**
+ * Status/priority/category labels moved to i18n as of i18n Block 10 (TASK-389):
+ * `Dashboard.serviceDesk.statuses.*` / `.priorities.*` / `.categories.*`. Key-order arrays
+ * kept here as the canonical iteration order for selects/filters (service-desk components
+ * *and* `features/provider/components/ProviderSupportTab.tsx`, which renders the same
+ * ticket data cross-tenant); label lookup goes through the getX Label helpers below,
+ * mirroring `getRoleLabel` (features/profile/types.ts) and `getEventTypeLabel`
+ * (features/notifications/types.ts).
+ */
+export const TICKET_STATUSES: TicketStatus[] = ["open", "in_progress", "waiting", "resolved", "closed"];
+export const TICKET_PRIORITIES: TicketPriority[] = ["low", "medium", "high", "critical"];
+export const TICKET_CATEGORIES: TicketCategory[] = ["general", "technical", "billing", "feature_request", "bug"];
+
+const TICKET_STATUS_I18N_KEY: Record<TicketStatus, string> = {
+  open: "open",
+  in_progress: "inProgress",
+  waiting: "waiting",
+  resolved: "resolved",
+  closed: "closed",
 };
 
-export const TICKET_PRIORITY_LABELS: Record<TicketPriority, string> = {
-  low: "Низький",
-  medium: "Середній",
-  high: "Високий",
-  critical: "Критичний",
+const TICKET_PRIORITY_I18N_KEY: Record<TicketPriority, string> = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
 };
 
-export const TICKET_CATEGORY_LABELS: Record<TicketCategory, string> = {
-  general: "Загальне",
-  technical: "Технічне",
-  billing: "Оплата",
-  feature_request: "Запит функції",
-  bug: "Помилка",
+const TICKET_CATEGORY_I18N_KEY: Record<TicketCategory, string> = {
+  general: "general",
+  technical: "technical",
+  billing: "billing",
+  feature_request: "featureRequest",
+  bug: "bug",
 };
+
+/** Translated ticket-status label. `t` must be scoped to `Dashboard.serviceDesk.statuses`. */
+export function getTicketStatusLabel(t: (key: string) => string, status: TicketStatus): string {
+  return t(TICKET_STATUS_I18N_KEY[status] ?? status);
+}
+
+/** Translated ticket-priority label. `t` must be scoped to `Dashboard.serviceDesk.priorities`. */
+export function getTicketPriorityLabel(t: (key: string) => string, priority: TicketPriority): string {
+  return t(TICKET_PRIORITY_I18N_KEY[priority] ?? priority);
+}
+
+/** Translated ticket-category label. `t` must be scoped to `Dashboard.serviceDesk.categories`. */
+export function getTicketCategoryLabel(t: (key: string) => string, category: TicketCategory): string {
+  return t(TICKET_CATEGORY_I18N_KEY[category] ?? category);
+}

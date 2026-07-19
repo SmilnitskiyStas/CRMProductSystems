@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useMyTickets } from "../hooks/useTickets";
 import type { TicketDto } from "../types";
 import { TicketCard } from "./TicketCard";
@@ -10,12 +11,13 @@ interface Props {
 }
 
 export function MyTicketList({ selectedId, onSelect }: Props) {
+  const t = useTranslations("Dashboard.serviceDesk.myTicketList");
   const { data: tickets, isLoading } = useMyTickets();
 
   if (isLoading) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, padding: "20px 0" }}>
-        Завантаження...
+        {t("loading")}
       </div>
     );
   }
@@ -30,7 +32,7 @@ export function MyTicketList({ selectedId, onSelect }: Props) {
           textAlign: "center",
         }}
       >
-        У вас немає тікетів. Натисніть &quot;+ Новий тікет&quot; щоб створити перший.
+        {t("emptyMessage")}
       </div>
     );
   }
@@ -38,7 +40,7 @@ export function MyTicketList({ selectedId, onSelect }: Props) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 4 }}>
-        {tickets.length} тікет{tickets.length === 1 ? "" : tickets.length < 5 ? "и" : "ів"}
+        {t("countLabel", { count: tickets.length })}
       </div>
       {tickets.map((ticket) => (
         <TicketCard

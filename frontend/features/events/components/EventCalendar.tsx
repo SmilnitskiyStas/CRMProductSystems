@@ -1,6 +1,7 @@
 "use client";
 
-import { EVENT_TYPE_META, type DemandEvent } from "../types";
+import { useTranslations } from "next-intl";
+import { EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent } from "../types";
 
 interface Props {
   year: number;
@@ -9,8 +10,6 @@ interface Props {
   onEventClick: (event: DemandEvent) => void;
   onDayClick: (isoDate: string) => void;
 }
-
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
 function iso(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -27,6 +26,9 @@ function isActiveOn(ev: DemandEvent, dateIso: string): boolean {
 }
 
 export function EventCalendar({ year, month, events, onEventClick, onDayClick }: Props) {
+  const t = useTranslations("Dashboard.events.calendar");
+  const tTypes = useTranslations("Dashboard.events.types");
+  const weekdayLabels = t.raw("weekdayLabels") as string[];
   const first = new Date(Date.UTC(year, month - 1, 1));
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const startOffset = (first.getUTCDay() + 6) % 7; // Monday-first
@@ -41,7 +43,7 @@ export function EventCalendar({ year, month, events, onEventClick, onDayClick }:
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 6 }}>
-        {WEEKDAYS.map((d) => (
+        {weekdayLabels.map((d) => (
           <div key={d} style={{
             color: "#6B7280", fontSize: 11, fontWeight: 600,
             textTransform: "uppercase", textAlign: "center", padding: 4,
@@ -80,14 +82,15 @@ export function EventCalendar({ year, month, events, onEventClick, onDayClick }:
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {dayEvents.slice(0, 3).map((ev) => {
-                  const meta = EVENT_TYPE_META[ev.eventType];
+                  const style = EVENT_TYPE_STYLES[ev.eventType];
+                  const label = getEventTypeLabel(tTypes, ev.eventType);
                   return (
                     <div
                       key={ev.id}
                       onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                      title={`${ev.name} (${meta.label}, коефіцієнтів: ${ev.coefficients.length})`}
+                      title={t("eventTooltip", { name: ev.name, type: label, count: ev.coefficients.length })}
                       style={{
-                        background: meta.bg, color: meta.color,
+                        background: style.bg, color: style.color,
                         fontSize: 10, borderRadius: 5, padding: "2px 6px",
                         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                       }}
@@ -97,7 +100,7 @@ export function EventCalendar({ year, month, events, onEventClick, onDayClick }:
                   );
                 })}
                 {dayEvents.length > 3 && (
-                  <div style={{ color: "#4B5563", fontSize: 10 }}>+{dayEvents.length - 3} ще</div>
+                  <div style={{ color: "#4B5563", fontSize: 10 }}>{t("moreEvents", { count: dayEvents.length - 3 })}</div>
                 )}
               </div>
             </div>

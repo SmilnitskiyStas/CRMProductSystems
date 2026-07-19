@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Star, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useSubmitRating } from "../hooks/useChat";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function RatingModal({ sessionId, subject, onDone }: Props) {
+  const t = useTranslations("Dashboard.chat.ratingModal");
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [comment, setComment] = useState("");
@@ -48,7 +50,7 @@ export function RatingModal({ sessionId, subject, onDone }: Props) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-              Оцініть підтримку
+              {t("title")}
             </h2>
             <p style={{ color: "#6B7280", fontSize: 13, marginTop: 4, marginBottom: 0 }}>
               {subject}
@@ -71,7 +73,7 @@ export function RatingModal({ sessionId, subject, onDone }: Props) {
           color: "#9CA3AF",
           fontSize: 13,
         }}>
-          Чат завершено службою підтримки. Будь ласка, залиште оцінку.
+          {t("closedNotice")}
         </div>
 
         {/* Stars */}
@@ -95,15 +97,15 @@ export function RatingModal({ sessionId, subject, onDone }: Props) {
 
         {/* Labels */}
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-          <span style={{ color: "#6B7280", fontSize: 11 }}>Погано</span>
-          <span style={{ color: "#6B7280", fontSize: 11 }}>Відмінно</span>
+          <span style={{ color: "#6B7280", fontSize: 11 }}>{t("poorLabel")}</span>
+          <span style={{ color: "#6B7280", fontSize: 11 }}>{t("excellentLabel")}</span>
         </div>
 
         {/* Comment */}
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Коментар (необов'язково)..."
+          placeholder={t("commentPlaceholder")}
           rows={3}
           style={{
             width: "100%",
@@ -137,7 +139,7 @@ export function RatingModal({ sessionId, subject, onDone }: Props) {
               cursor: rating === 0 ? "not-allowed" : "pointer",
             }}
           >
-            {submit.isPending ? "Збереження..." : "Надіслати оцінку"}
+            {submit.isPending ? t("savingButton") : t("submitButton")}
           </button>
           <button
             onClick={onDone}
@@ -151,7 +153,7 @@ export function RatingModal({ sessionId, subject, onDone }: Props) {
               cursor: "pointer",
             }}
           >
-            Пропустити
+            {t("skipButton")}
           </button>
         </div>
       </div>

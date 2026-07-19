@@ -1,8 +1,9 @@
 "use client";
 
 import { Pencil, Power } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
-import { DEVICE_TYPE_META, type IotDeviceDto } from "../types";
+import { DEVICE_TYPE_ICONS, getDeviceTypeLabel, type IotDeviceDto } from "../types";
 
 interface Props {
   devices: IotDeviceDto[] | undefined;
@@ -23,13 +24,18 @@ const td: React.CSSProperties = {
 };
 
 export function DevicesTable({ devices, isLoading, onEdit, onDeactivate }: Props) {
+  const t = useTranslations("Dashboard.iot.devicesTable");
+  const tDeviceTypes = useTranslations("Dashboard.iot.deviceTypes");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
   if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>Завантаження…</div>;
+    return <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>{t("loading")}</div>;
   }
   if (!devices?.length) {
     return (
       <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>
-        Немає зареєстрованих пристроїв — додайте перший
+        {t("empty")}
       </div>
     );
   }
@@ -39,38 +45,39 @@ export function DevicesTable({ devices, isLoading, onEdit, onDeactivate }: Props
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={th}>Пристрій</th>
-            <th style={th}>Тип</th>
-            <th style={th}>Зона</th>
-            <th style={th}>Статус</th>
-            <th style={th}>Остання активність</th>
-            <th style={th}>Батарея</th>
-            <th style={th}>Firmware</th>
+            <th style={th}>{t("columnDevice")}</th>
+            <th style={th}>{t("columnType")}</th>
+            <th style={th}>{t("columnZone")}</th>
+            <th style={th}>{t("columnStatus")}</th>
+            <th style={th}>{t("columnLastSeen")}</th>
+            <th style={th}>{t("columnBattery")}</th>
+            <th style={th}>{t("columnFirmware")}</th>
             <th style={th}></th>
           </tr>
         </thead>
         <tbody>
           {devices.map((d) => {
-            const meta = DEVICE_TYPE_META[d.deviceType] ?? { label: d.deviceType, icon: "🗂️" };
+            const icon = DEVICE_TYPE_ICONS[d.deviceType] ?? "🗂️";
+            const label = getDeviceTypeLabel(tDeviceTypes, d.deviceType);
             return (
               <tr key={d.id} style={{ opacity: d.isActive ? 1 : 0.45 }}>
                 <td style={td}>
                   <div style={{ fontWeight: 600 }}>{d.name ?? d.deviceId}</div>
                   <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{d.deviceId}</div>
                 </td>
-                <td style={td}>{meta.icon} {meta.label}</td>
+                <td style={td}>{icon} {label}</td>
                 <td style={td}>{d.zoneName ?? "—"}</td>
                 <td style={td}>
                   {!d.isActive ? (
-                    <StatusBadge color="#6B7280" label="Деактивовано" />
+                    <StatusBadge color="#6B7280" label={t("statusDeactivated")} />
                   ) : d.isOnline ? (
-                    <StatusBadge color="#22c55e" label="Онлайн" />
+                    <StatusBadge color="#22c55e" label={t("statusOnline")} />
                   ) : (
-                    <StatusBadge color="#ef4444" label="Офлайн" />
+                    <StatusBadge color="#ef4444" label={t("statusOffline")} />
                   )}
                 </td>
                 <td style={{ ...td, color: "#9CA3AF", fontSize: 12 }}>
-                  {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString("uk-UA") : "ніколи"}
+                  {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString(intlLocale) : t("never")}
                 </td>
                 <td style={td}>
                   {d.batteryLevel != null ? <Battery level={d.batteryLevel} /> : "—"}
@@ -81,11 +88,11 @@ export function DevicesTable({ devices, isLoading, onEdit, onDeactivate }: Props
                 <td style={{ ...td, whiteSpace: "nowrap" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     <Btn size="sm" variant="ghost" icon={<Pencil size={12} />} onClick={() => onEdit(d)}>
-                      Змінити
+                      {t("editButton")}
                     </Btn>
                     {d.isActive && (
                       <Btn size="sm" variant="danger" icon={<Power size={12} />} onClick={() => onDeactivate(d)}>
-                        Вимкнути
+                        {t("deactivateButton")}
                       </Btn>
                     )}
                   </div>
