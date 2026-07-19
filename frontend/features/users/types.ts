@@ -127,7 +127,12 @@ export const PAGES: PageDef[] = [
   { slug: "settings",   defaultRoles: ["enterprise_admin","network_manager","store_manager","merchandiser","storekeeper"] },
 ];
 
-/** Role rank for hierarchy checks on the frontend (mirrors backend) */
+/**
+ * Role rank for hierarchy checks on the frontend (mirrors backend UserService.RoleRank).
+ * "staff" (ADR-020) is rank 0, the lowest — added explicitly (TASK-392c) so rank-based
+ * derivations (e.g. the dynamic invite-role list) don't rely on the `?? 0` fallback to
+ * happen to produce the right number.
+ */
 export const ROLE_RANK: Record<string, number> = {
   enterprise_admin: 4,
   network_manager:  3,
@@ -135,7 +140,36 @@ export const ROLE_RANK: Record<string, number> = {
   storekeeper:      1,
   merchandiser:     1,
   cashier:          1,
+  staff:            0,
 };
+
+// ── Store-scoped location assignment (TASK-392c, Feature 2 Stage 1) ──────────
+
+/**
+ * Ranks that get exactly ONE store assignment, mirroring backend
+ * `UserService.SingleLocationRoles` exactly. `network_manager` instead gets a multi-location
+ * "territory" (see {@link UserLocationsDto}, `UserLocationsEditor`/`PUT /api/users/:id/locations`);
+ * `enterprise_admin` sees every location in the tenant unconditionally and is never assigned
+ * any row at all.
+ */
+export const SINGLE_LOCATION_ROLES = new Set<string>([
+  "store_manager", "merchandiser", "storekeeper", "cashier", "staff",
+]);
+
+export function isSingleLocationRole(role: string): boolean {
+  return SINGLE_LOCATION_ROLES.has(role);
+}
+
+/**
+ * GET /api/users/:id/locations response, and PUT /api/users/:id/locations request body
+ * (TASK-392c). Full-replace semantics — the user's assignment list becomes exactly this set.
+ * AtLeastEnterpriseAdmin-only on the backend, no capability bypass.
+ */
+export interface UserLocationsDto {
+  locationIds: string[];
+}
+
+export type UpdateUserLocationsRequest = UserLocationsDto;
 
 /** Returns the default access for a page based purely on role */
 export function roleHasPageAccess(role: string, slug: string): boolean {
