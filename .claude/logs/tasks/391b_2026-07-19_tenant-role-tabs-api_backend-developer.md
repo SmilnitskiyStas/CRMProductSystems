@@ -55,6 +55,16 @@
 - `dotnet build` — 0 помилок, 1 pre-existing warning (не мій код,
   `MarketplaceServiceTests.cs:534`, той самий що фіксував TASK-391).
 - `dotnet test` — **866/866 passed** (858 було в TASK-391 + 8 нових).
+- ⚠️ Одразу після коміту повторний `dotnet build` у спільній робочій директорії впав
+  (`CS7036`, `UserService` конструктор раптом вимагає `ILocationService`/`IUserLocationRepository`
+  у 5 test-файлах) — це НЕ моя зміна: паралельний TASK-392b-агент саме зараз має незакомічений,
+  ще недороблений constructor-рефактор `UserService.cs` у тій самій робочій директорії (некомітнуті
+  зміни в `UsersController.cs`, `ILocationService.cs`, `LocationService.cs`, `UserDtos.cs`,
+  `IUserService.cs`, `UserService.cs`, `DependencyInjection.cs`, `TenantConnectionInterceptor.cs`
+  + нові `IUserLocationRepository.cs`/`UserLocationRepository.cs`). Перевірив свій коміт
+  (`a8d6cd62`) ізольовано через тимчасовий `git worktree` (без чужих uncommitted файлів) —
+  build 0 помилок, test 866/866 passed, потім worktree видалив. Мій код чистий; хтось (той
+  агент або оркестратор) має перевірити стан `UserService.cs` окремо, коли TASK-392b завершиться.
 
 ## Точний shape для фронтенду (окрема задача, паралельно — не робив)
 
