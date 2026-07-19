@@ -150,6 +150,9 @@ public sealed class AppDbContext : DbContext
     // Tenant custom role templates (ADR-020, TASK-345)
     public DbSet<TenantRole> TenantRoles => Set<TenantRole>();
 
+    // Store-scoped user access grants — Stage 1 schema only, enforcement is Stage 3 (TASK-392)
+    public DbSet<UserLocation> UserLocations => Set<UserLocation>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -211,6 +214,18 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.LegalEntityId).IsRequired(false);
             e.HasOne<LegalEntity>().WithMany()
              .HasForeignKey(u => u.LegalEntityId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+
+            // Home location — UI/invite-time default only (TASK-392 Stage 1). The physical
+            // column has been "StoreId" since AddAuth (2026-06-03) but was never mapped in
+            // EF — no HasColumnName/FK/index — unlike the ~19 other pre-v4 entities
+            // (ProductStock, WriteOff, PosShift, ...) that got `.HasColumnName("LocationId")`
+            // in V4LocationsRename while keeping their C# property named StoreId. CLR name
+            // intentionally stays StoreId here too, for the same reason. Never read by
+            // access-control enforcement — that's Stage 3's RLS policies driven by
+            // UserLocation below; this is purely a default-location hint for invites/UI.
+            e.Property(u => u.StoreId).HasColumnName("LocationId").IsRequired(false);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(u => u.StoreId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
 
             // Account lockout (TASK-329)
             e.Property(u => u.FailedLoginAttempts).HasDefaultValue(0);
@@ -1967,6 +1982,15 @@ public sealed class AppDbContext : DbContext
             // jsonb Dictionary<string,object?> pattern used elsewhere (e.g. SupplierItem.
             // Attributes) — that mechanism is for non-list JSON shapes, not simple string lists.
             e.Property(r => r.Capabilities).HasColumnType("text[]").IsRequired();
+            // Same text[] treatment as Capabilities above (TASK-391) — deliberately NOT jsonb.
+            // Both are plain List<string>; Npgsql's native array support round-trips them with
+            // no HasConversion/EnableDynamicJson/ValueComparer plumbing, exactly like
+            // ProviderRole.Permissions/SupplierRole.Permissions. A jsonb column would need that
+            // extra machinery for no benefit here — AllowedTabs is a flat set of catalog keys,
+            // never a nested/structured value. DEFAULT '{}' (not just a C#-side default) is
+            // required so the additive migration can backfill this NOT NULL column on the
+            // tenant_roles rows that already exist in every deployed environment.
+            e.Property(r => r.AllowedTabs).HasColumnType("text[]").IsRequired().HasDefaultValueSql("'{}'");
             e.Property(r => r.IsActive).HasDefaultValue(true);
             e.Property(r => r.CreatedByUserId).IsRequired(false);
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
@@ -1979,6 +2003,41 @@ public sealed class AppDbContext : DbContext
              .HasFilter("\"IsActive\"");
             e.HasOne<User>().WithMany()
              .HasForeignKey(r => r.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── UserLocation (TASK-392 Stage 1) ───────────────────────────────────
+        // Store-scoped access grants: every restricted rank gets exactly one row per
+        // assigned location here (enterprise_admin bypasses via app.role — no rows).
+        // TenantId is a direct column (not derived via an EXISTS to User/Location) because
+        // Stage 3's RLS store_scope policies on other tables will EXISTS-subquery *into*
+        // this table on every scoped request, so it needs its own leading index rather than
+        // a join back through users. Enforcement itself is not wired here — see RLS below,
+        // which is just the standard tenant_isolation/provider_bypass/worker_bypass triad,
+        // not a store_scope policy.
+        builder.Entity<UserLocation>(e =>
+        {
+            e.ToTable("user_locations");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.LocationId).IsRequired();
+            e.Property(x => x.AssignedByUserId).IsRequired(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            // Prevents duplicate grants and doubles as the lookup RLS/service code will use
+            // ("does user X have a row for location Y").
+            e.HasIndex(x => new { x.TenantId, x.UserId, x.LocationId })
+             .IsUnique()
+             .HasDatabaseName("uq_user_locations_tenant_user_location");
+            // Reverse lookup: which users/managers cover location X.
+            e.HasIndex(x => new { x.TenantId, x.LocationId })
+             .HasDatabaseName("idx_user_locations_tenant_location");
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.AssignedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
     }
 }

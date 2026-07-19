@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ShelfGuard.Infrastructure.Data;
@@ -12,9 +13,11 @@ using ShelfGuard.Infrastructure.Data;
 namespace ShelfGuard.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260719120419_FixUserLocationColumnMapping")]
+    partial class FixUserLocationColumnMapping
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4034,12 +4037,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<List<string>>("AllowedTabs")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text[]")
-                        .HasDefaultValueSql("'{}'");
-
                     b.Property<List<string>>("Capabilities")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -4241,48 +4238,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("TenantRoleId");
 
                     b.ToTable("users", (string)null);
-                });
-
-            modelBuilder.Entity("ShelfGuard.Domain.Entities.UserLocation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("AssignedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid>("LocationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignedByUserId");
-
-                    b.HasIndex("LocationId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TenantId", "LocationId")
-                        .HasDatabaseName("idx_user_locations_tenant_location");
-
-                    b.HasIndex("TenantId", "UserId", "LocationId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_user_locations_tenant_user_location");
-
-                    b.ToTable("user_locations", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.UserPermissionGrant", b =>
@@ -5835,26 +5790,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("ShelfGuard.Domain.Entities.UserLocation", b =>
-                {
-                    b.HasOne("ShelfGuard.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("AssignedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ShelfGuard.Domain.Entities.Location", null)
-                        .WithMany()
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ShelfGuard.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.UserPermissionGrant", b =>

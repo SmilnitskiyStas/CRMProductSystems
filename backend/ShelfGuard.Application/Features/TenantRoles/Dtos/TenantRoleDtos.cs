@@ -4,6 +4,7 @@ public sealed record TenantRoleDto(
     Guid Id,
     string Name,
     IReadOnlyList<string> Capabilities,
+    IReadOnlyList<string> AllowedTabs,
     bool IsActive,
     DateTime CreatedAt,
     DateTime? UpdatedAt
@@ -11,12 +12,14 @@ public sealed record TenantRoleDto(
 
 public sealed record CreateTenantRoleRequest(
     string Name,
-    List<string> Capabilities
+    List<string> Capabilities,
+    List<string>? AllowedTabs = null
 );
 
 public sealed record UpdateTenantRoleRequest(
     string Name,
-    List<string> Capabilities
+    List<string> Capabilities,
+    List<string>? AllowedTabs = null
 );
 
 /// <summary>Mirrors <see cref="ShelfGuard.Domain.Constants.TenantRoleCapabilityDefinition"/> — see

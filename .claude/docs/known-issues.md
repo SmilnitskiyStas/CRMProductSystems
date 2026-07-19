@@ -508,6 +508,44 @@ to the highest-risk single-object endpoints (items/stock/locations/customers/rec
 real code change across many files, most thorough but not a quick fix. No code changed for this
 finding.
 
+### KI-029: A validating `ADD CONSTRAINT` FK migration on an already-populated column can crash the app on startup under RLS + a non-superuser connection
+Severity: high (would have caused a production deploy outage, not just a local inconvenience)
+Status: mitigated for its one current instance (2026-07-19, TASK-392); the general risk remains
+for any future migration that adds this shape of constraint.
+Description: Found while applying TASK-392's `FixUserLocationColumnMapping` migration
+(`users.LocationId → locations.Id`) locally. `dotnet ef database update` failed with
+`23503: violates foreign key constraint` even though the referenced rows were genuinely all
+valid (confirmed via a `LEFT JOIN` orphan check). Root cause: production applies migrations via
+`db.Database.MigrateAsync()` in `Program.cs:159-163`, on the app's own regular connection — the
+same connection KI-028's canary later confirms is a non-superuser, `NOBYPASSRLS` role (see
+KI-027/KI-028 above). Migrations run with no `app.tenant_id`/`app.role` session variable set (no
+request context exists yet), so any table with `FORCE ROW LEVEL SECURITY` — like `locations` —
+is invisible to that connection: `SELECT count(*) FROM locations` returns 0 under it, even though
+rows exist. When a migration validates a new FK against such a table (the default behavior of
+`migrationBuilder.AddForeignKey(...)` when the dependent column already has non-null data),
+Postgres's row-by-row FK check sees zero matching rows and rejects every existing value as
+orphaned — the migration throws, `MigrateAsync()` throws, and the container never finishes
+starting. Since `deploy.sh` stops the old containers before starting new ones, a migration that
+hits this would have produced real downtime (Bad Gateway) until the next successful deploy — not
+merely a local dev annoyance.
+Resolution (this instance): rewrote the FK as raw SQL with `NOT VALID` — a standard Postgres
+zero-downtime pattern (`ALTER TABLE users ADD CONSTRAINT ... NOT VALID`). This enforces the FK
+for all new/updated rows immediately but skips validating pre-existing rows at `ADD CONSTRAINT`
+time, so there is nothing for the RLS-blind connection to check and the failure mode disappears
+entirely. Re-verified by rolling back and reapplying all three TASK-392 migrations through the
+actual restricted `shelfguard_app_dev` role (not the `crm` superuser) — succeeded; confirmed
+`pg_constraint.convalidated = false` and that the constraint still rejects a bad FK value on a
+live `UPDATE`. A `VALIDATE CONSTRAINT` follow-up (to flip `convalidated` to `true` once someone
+confirms via a superuser/bypassrls connection that existing rows are clean) is left as a TODO
+comment in the migration file — non-blocking, can run manually whenever convenient.
+General risk (not fully closed): any future migration that adds a validating FK constraint
+(`migrationBuilder.AddForeignKey`, or plain `ADD CONSTRAINT` without `NOT VALID`) referencing an
+RLS-protected table, on a column that may already hold non-null data in any deployed environment,
+can hit this exact failure — regardless of whether the data is actually clean. Recommendation for
+future database-engineer work: default to `NOT VALID` + a follow-up `VALIDATE CONSTRAINT` TODO
+for any FK added to a pre-existing, potentially-populated column, rather than relying on knowing
+the column is "almost certainly empty everywhere."
+
 ## Resolved Issues
 
 ### KI-012: Existing tenants have stale legacy module keys, not v4 module keys ✅ resolved (2026-06-16)

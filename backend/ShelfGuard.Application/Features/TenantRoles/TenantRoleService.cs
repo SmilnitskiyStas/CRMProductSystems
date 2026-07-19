@@ -38,7 +38,8 @@ public sealed class TenantRoleService : ITenantRoleService
         Guid tenantId, Guid? createdByUserId, CreateTenantRoleRequest request, CancellationToken ct = default)
     {
         var capabilities = request.Capabilities ?? [];
-        var validationError = Validate(request.Name, capabilities);
+        var allowedTabs = request.AllowedTabs ?? [];
+        var validationError = Validate(request.Name, capabilities, allowedTabs);
         if (validationError is not null)
             return (null, validationError);
 
@@ -46,7 +47,8 @@ public sealed class TenantRoleService : ITenantRoleService
         if (await _repo.GetByNameAsync(tenantId, trimmedName, ct) is not null)
             return (null, $"Template '{trimmedName}' already exists.");
 
-        var role = TenantRole.Create(tenantId, trimmedName, capabilities.Distinct(), createdByUserId);
+        var role = TenantRole.Create(
+            tenantId, trimmedName, capabilities.Distinct(), createdByUserId, allowedTabs.Distinct());
         await _repo.AddAsync(role, ct);
         await _repo.SaveChangesAsync(ct);
 
@@ -61,7 +63,8 @@ public sealed class TenantRoleService : ITenantRoleService
             return (null, "Template not found.");
 
         var capabilities = request.Capabilities ?? [];
-        var validationError = Validate(request.Name, capabilities);
+        var allowedTabs = request.AllowedTabs ?? [];
+        var validationError = Validate(request.Name, capabilities, allowedTabs);
         if (validationError is not null)
             return (null, validationError);
 
@@ -69,7 +72,7 @@ public sealed class TenantRoleService : ITenantRoleService
         if (trimmedName != role.Name && await _repo.GetByNameAsync(tenantId, trimmedName, ct) is not null)
             return (null, $"Template '{trimmedName}' already exists.");
 
-        role.Update(trimmedName, capabilities.Distinct());
+        role.Update(trimmedName, capabilities.Distinct(), allowedTabs.Distinct());
         await _repo.UpdateAsync(role, ct);
         await _repo.SaveChangesAsync(ct);
 
@@ -96,18 +99,22 @@ public sealed class TenantRoleService : ITenantRoleService
 
     // ── helpers ───────────────────────────────────────────────────────────
 
-    private static string? Validate(string name, List<string> capabilities)
+    private static string? Validate(string name, List<string> capabilities, List<string> allowedTabs)
     {
         if (string.IsNullOrWhiteSpace(name))
             return "Name is required.";
 
-        var unknown = capabilities.Where(c => !TenantRoleCapabilities.All.Contains(c)).ToList();
-        if (unknown.Count > 0)
-            return $"Unknown capability(ies): {string.Join(", ", unknown)}.";
+        var unknownCapabilities = capabilities.Where(c => !TenantRoleCapabilities.All.Contains(c)).ToList();
+        if (unknownCapabilities.Count > 0)
+            return $"Unknown capability(ies): {string.Join(", ", unknownCapabilities)}.";
+
+        var unknownTabs = allowedTabs.Where(t => !TenantRoleTabs.All.Contains(t)).ToList();
+        if (unknownTabs.Count > 0)
+            return $"Unknown tab(s): {string.Join(", ", unknownTabs)}.";
 
         return null;
     }
 
     private static TenantRoleDto Map(TenantRole r) =>
-        new(r.Id, r.Name, r.Capabilities, r.IsActive, r.CreatedAt, r.UpdatedAt);
+        new(r.Id, r.Name, r.Capabilities, r.AllowedTabs, r.IsActive, r.CreatedAt, r.UpdatedAt);
 }

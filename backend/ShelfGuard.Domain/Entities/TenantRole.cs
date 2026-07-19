@@ -21,6 +21,15 @@ public sealed class TenantRole
     public Guid TenantId { get; private set; }
     public string Name { get; private set; } = string.Empty;
     public List<string> Capabilities { get; private set; } = [];
+
+    /// <summary>
+    /// Sidebar-tab visibility keys (TASK-391, Stage 1/Feature 1) — validated against
+    /// <see cref="Constants.TenantRoleTabs.All"/>. Deliberately a separate axis from
+    /// <see cref="Capabilities"/>: this controls which sidebar groups/routes are visible to the
+    /// assignee, not which backend actions they may perform. See <see cref="Constants.TenantRoleTabs"/>
+    /// for the full rationale and the fixed catalog.
+    /// </summary>
+    public List<string> AllowedTabs { get; private set; } = [];
     public bool IsActive { get; private set; } = true;
 
     /// <summary>User who created this template. Nullable/SetNull — deleting the creator must not orphan the template.</summary>
@@ -31,21 +40,24 @@ public sealed class TenantRole
     private TenantRole() { }
 
     public static TenantRole Create(
-        Guid tenantId, string name, IEnumerable<string> capabilities, Guid? createdByUserId) => new()
+        Guid tenantId, string name, IEnumerable<string> capabilities, Guid? createdByUserId,
+        IEnumerable<string>? allowedTabs = null) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenantId,
         Name = name,
         Capabilities = capabilities.ToList(),
+        AllowedTabs = (allowedTabs ?? []).ToList(),
         IsActive = true,
         CreatedByUserId = createdByUserId,
         CreatedAt = DateTime.UtcNow,
     };
 
-    public void Update(string name, IEnumerable<string> capabilities)
+    public void Update(string name, IEnumerable<string> capabilities, IEnumerable<string>? allowedTabs = null)
     {
         Name = name;
         Capabilities = capabilities.ToList();
+        AllowedTabs = (allowedTabs ?? []).ToList();
         UpdatedAt = DateTime.UtcNow;
     }
 

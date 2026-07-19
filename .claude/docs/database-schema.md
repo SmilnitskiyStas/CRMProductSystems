@@ -327,6 +327,50 @@ Every other FORCE RLS table with its own tenant column already had a leading ind
 earlier per-block audits: TASK-352/353/354 etc.) — see `Key Indexes` above and the migration
 history for the full list.
 
+## TASK-392 Stage 1 — store-scoped user↔location assignment schema (2026-07-19)
+
+New `user_locations` table (`FixUserLocationColumnMapping` + `AddUserLocations` migrations) —
+schema only, no enforcement wired yet. Design (confirmed with product owner, project-architect):
+
+- `enterprise_admin` sees every location in the tenant unconditionally via an `app.role` check —
+  **no rows** in `user_locations` for this rank.
+- Every other rank (network_manager, store_manager, merchandiser, storekeeper, cashier, staff) —
+  **including single-location roles** — gets **exactly one row per assigned location**. One
+  enforcement mechanism for all restricted ranks, not a shortcut through `User.StoreId` for the
+  common single-store case.
+- Columns: `Id`, `TenantId` (direct column, not EXISTS-derived — Stage 3's RLS will EXISTS-subquery
+  into this table from other tables, so it needs its own leading index), `UserId` (FK→users,
+  Cascade), `LocationId` (FK→locations, Cascade), `AssignedByUserId` (FK→users, SetNull, nullable
+  audit field), `CreatedAt`. No soft-delete — pure leaf assignment table, hard DELETE to revoke.
+- Indexes: unique `(TenantId, UserId, LocationId)` (dedupe + the "does user X have location Y"
+  lookup), secondary `(TenantId, LocationId)` (reverse "who covers location X" lookup).
+- RLS: standard tenant_isolation/provider_bypass/worker_bypass triad only — **not** a store_scope
+  RESTRICTIVE policy. Nothing queries this table for access control yet.
+
+Also fixed in the same pass: `User.StoreId` (existed unmapped since `AddAuth`, 2026-06-03 — no
+`HasColumnName`/FK/index, unlike the ~19 other pre-v4 entities renamed in `V4LocationsRename`) now
+correctly maps to the physical `LocationId` column with a `SetNull` FK to `locations`. C# property
+name intentionally stays `StoreId` (matches the established pattern on `ProductStock`/`WriteOff`/
+`PosShift`/etc). This is a UI/invite-time "default home location" hint only — never read by
+access-control enforcement.
+
+**Explicitly deferred:**
+- Stage 3 — RESTRICTIVE store_scope RLS policies on `product_stock`/`daily_sales`/`pos_shifts`/etc
+  that actually read `user_locations` to filter query results. Separate future database-engineer
+  task.
+- `app.user_id` session variable in `TenantConnectionInterceptor` (needed before any RLS policy can
+  EXISTS-subquery "does the current user have a row for this location") — backend-developer task.
+- `UserService`/API logic to write `user_locations` rows — backend-developer task.
+
+**Local-dev gotcha worth knowing for Stage 3:** applying a migration that adds a FK to an
+already-populated column referencing an RLS-protected table (e.g. `locations`) fails with a
+false-positive `23503` FK violation when run through the app's own non-superuser
+`shelfguard_app_dev` role — `FORCE ROW LEVEL SECURITY` hides every row from that role during the
+migration's FK validation step (no `app.tenant_id`/`app.role` session vars exist outside a request
+context), so Postgres thinks every existing FK value is orphaned even when none are. Apply
+migrations locally via the `crm` superuser connection instead (`rolbypassrls=true` — exactly what
+that role is documented for in `appsettings.Development.json`).
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data
