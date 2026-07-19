@@ -1,5 +1,6 @@
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.LegalEntities;
+using ShelfGuard.Application.Features.Locations;
 using ShelfGuard.Application.Features.Users.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
@@ -16,6 +17,8 @@ public sealed class UserService : IUserService
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IUserPermissionGrantRepository _permissionGrants;
     private readonly ITenantRoleRepository   _tenantRoles;
+    private readonly ILocationService        _locations;
+    private readonly IUserLocationRepository _userLocations;
 
     /// <summary>ADR-019: temporary grants may not extend more than this far into the future.</summary>
     private const int MaxGrantDurationDays = 90;
@@ -62,6 +65,20 @@ public sealed class UserService : IUserService
     private static bool IsExemptFromOutrankGate(string actingRole, string otherRole) =>
         actingRole == "supplier_admin" && otherRole == "supplier_admin";
 
+    /// <summary>
+    /// Ranks that get exactly one user_locations row (mirroring User.StoreId) written by
+    /// plain Invite/Update (TASK-392b, project-architect's store-scope design). Deliberately
+    /// excludes: enterprise_admin (unconditional bypass, never gets rows at all — "не пиши
+    /// нічого"); network_manager (multi-location, must go through SetLocationsAsync's
+    /// dedicated full-replace endpoint instead — "ОКРЕМИЙ метод/ендпоінт"); supplier_admin
+    /// (ADR-016 flat cabinet domain, entirely outside the tenant-staff store-scope model —
+    /// same reasoning as IsExemptFromOutrankGate/RoleRank omitting it).
+    /// </summary>
+    private static readonly HashSet<string> SingleLocationRoles =
+    [
+        "store_manager", "merchandiser", "storekeeper", "cashier", "staff",
+    ];
+
     private static readonly HashSet<string> ValidPages =
     [
         "dashboard", "inventory", "stock", "receipts",
@@ -78,7 +95,9 @@ public sealed class UserService : IUserService
         ILegalEntityService legalEntities,
         IRefreshTokenRepository refreshTokens,
         IUserPermissionGrantRepository permissionGrants,
-        ITenantRoleRepository tenantRoles)
+        ITenantRoleRepository tenantRoles,
+        ILocationService locations,
+        IUserLocationRepository userLocations)
     {
         _users             = users;
         _activityLogs      = activityLogs;
@@ -87,6 +106,8 @@ public sealed class UserService : IUserService
         _refreshTokens     = refreshTokens;
         _permissionGrants  = permissionGrants;
         _tenantRoles       = tenantRoles;
+        _locations         = locations;
+        _userLocations     = userLocations;
     }
 
     // ── List ─────────────────────────────────────────────────────────────────
@@ -145,6 +166,12 @@ public sealed class UserService : IUserService
             !await _legalEntities.BelongsToTenantAsync(tenantId, request.LegalEntityId.Value, ct))
             return (null, "Вказана юридична особа не належить цьому тенанту.");
 
+        // TASK-392b: closes the pre-existing gap where StoreId accepted any GUID with no
+        // tenant-ownership check at all — same pattern as LegalEntityId immediately above.
+        if (request.StoreId.HasValue &&
+            !await _locations.BelongsToTenantAsync(tenantId, request.StoreId.Value, ct))
+            return (null, "Вказана локація не належить цьому тенанту.");
+
         var hash = _hasher.Hash(request.Password);
         var user = User.Create(tenantId, request.Email, request.FullName, hash, request.Role,
             request.StoreId, invitedByName: string.IsNullOrWhiteSpace(inviterName) ? null : inviterName);
@@ -153,6 +180,12 @@ public sealed class UserService : IUserService
             user.SetLegalEntity(request.LegalEntityId);
 
         await _users.AddAsync(user, ct);
+
+        // TASK-392b: store_manager-and-below get exactly one user_locations row mirroring
+        // User.StoreId (network_manager/enterprise_admin/supplier_admin are untouched here —
+        // see SingleLocationRoles). Safe to reference user.Id already — User.Create assigns
+        // it synchronously, no DB round-trip needed before this write.
+        await SyncSingleLocationAsync(tenantId, user.Id, request.Role, request.StoreId, actingUserId, ct);
 
         await LogAsync(tenantId, user.Id, "user.invited",
             entityType: "User", entityId: user.Id,
@@ -178,6 +211,11 @@ public sealed class UserService : IUserService
         if (request.LegalEntityId.HasValue &&
             !await _legalEntities.BelongsToTenantAsync(tenantId, request.LegalEntityId.Value, ct))
             return (null, "Вказана юридична особа не належить цьому тенанту.");
+
+        // TASK-392b: same pre-existing gap fix as InviteAsync above.
+        if (request.StoreId.HasValue &&
+            !await _locations.BelongsToTenantAsync(tenantId, request.StoreId.Value, ct))
+            return (null, "Вказана локація не належить цьому тенанту.");
 
         var roleChanging = !string.Equals(request.Role, target.Role, StringComparison.Ordinal);
 
@@ -225,6 +263,12 @@ public sealed class UserService : IUserService
         target.SetLegalEntity(request.LegalEntityId);
 
         _users.Update(target);
+
+        // TASK-392b: keep the single user_locations row in sync with request.Role/StoreId —
+        // covers a plain store transfer, a role change into/out of SingleLocationRoles, and a
+        // store being cleared. Same transaction as the User row update (shared AppDbContext,
+        // one _users.SaveChangesAsync below).
+        await SyncSingleLocationAsync(tenantId, userId, request.Role, request.StoreId, actingUserId, ct);
 
         await LogAsync(tenantId, userId, "user.updated",
             entityType: "User", entityId: userId,
@@ -564,7 +608,67 @@ public sealed class UserService : IUserService
         return (true, null);
     }
 
+    // ── Store-scoped location assignment (TASK-392b, Feature 2 Stage 1) ────────
+
+    public async Task<(bool Success, string? Error)> SetLocationsAsync(
+        Guid tenantId, Guid targetUserId, List<Guid> locationIds, Guid actingUserId, CancellationToken ct = default)
+    {
+        var target = await _users.GetByIdAsync(targetUserId, ct);
+        if (target is null || target.TenantId != tenantId)
+            return (false, "User not found.");
+
+        var distinctIds = locationIds.Distinct().ToList();
+
+        // Same anti-probing posture as AssignTenantRoleAsync's TenantRole check: a
+        // foreign-tenant location id just fails validation here, never a 403/enumeration hint.
+        foreach (var locationId in distinctIds)
+        {
+            if (!await _locations.BelongsToTenantAsync(tenantId, locationId, ct))
+                return (false, "Вказана локація не належить цьому тенанту.");
+        }
+
+        await _userLocations.ReplaceForUserAsync(tenantId, targetUserId, distinctIds, actingUserId, ct);
+
+        await LogAsync(tenantId, actingUserId, "user.locations_updated",
+            entityType: "User", entityId: targetUserId,
+            meta: $"{{\"locationIds\":{System.Text.Json.JsonSerializer.Serialize(distinctIds)}}}",
+            ct: ct);
+
+        await _userLocations.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
+    public async Task<(List<Guid>? LocationIds, string? Error)> GetLocationsAsync(
+        Guid tenantId, Guid targetUserId, CancellationToken ct = default)
+    {
+        var target = await _users.GetByIdAsync(targetUserId, ct);
+        if (target is null || target.TenantId != tenantId)
+            return (null, "User not found.");
+
+        var ids = await _userLocations.GetLocationIdsForUserAsync(tenantId, targetUserId, ct);
+        return (ids.ToList(), null);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Keeps the single user_locations row for store_manager-and-below in sync with
+    /// (role, storeId) — called from InviteAsync/UpdateAsync only. No-op for any role
+    /// outside <see cref="SingleLocationRoles"/> (network_manager/enterprise_admin/
+    /// supplier_admin/anything else): existing rows for those ranks, if any, are left
+    /// untouched here — network_manager's list is only ever managed via
+    /// <see cref="SetLocationsAsync"/>, and enterprise_admin is never supposed to have rows
+    /// at all (its bypass is unconditional regardless of what this leaves behind).
+    /// </summary>
+    private async Task SyncSingleLocationAsync(
+        Guid tenantId, Guid userId, string role, Guid? storeId, Guid actingUserId, CancellationToken ct)
+    {
+        if (!SingleLocationRoles.Contains(role))
+            return;
+
+        var locationIds = storeId.HasValue ? new[] { storeId.Value } : Array.Empty<Guid>();
+        await _userLocations.ReplaceForUserAsync(tenantId, userId, locationIds, actingUserId, ct);
+    }
 
     private async Task LogAsync(
         Guid tenantId, Guid userId, string action,

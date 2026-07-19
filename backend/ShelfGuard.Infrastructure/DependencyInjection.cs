@@ -221,6 +221,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.ITenantRoleRepository,
             Data.Repositories.TenantRoleRepository>();
 
+        // TASK-392/392b - Store-scoped user<->location assignment (Stage 1 plumbing)
+        services.AddScoped<Domain.Interfaces.IUserLocationRepository,
+            Data.Repositories.UserLocationRepository>();
+
         return services;
     }
 }

@@ -26,4 +26,7 @@ public interface ILocationService
 
     Task<(bool Success, string? Error)> DeleteZoneAsync(
         Guid locationId, Guid zoneId, CancellationToken ct = default);
+
+    /// <summary>Checks whether a Location id belongs to the given tenant (used for cross-feature FK validation, e.g. UserService's StoreId/user_locations validation — TASK-392b).</summary>
+    Task<bool> BelongsToTenantAsync(Guid tenantId, Guid locationId, CancellationToken ct = default);
 }

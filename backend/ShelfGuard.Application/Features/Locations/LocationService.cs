@@ -171,6 +171,12 @@ public sealed class LocationService : ILocationService
         return (true, null);
     }
 
+    public async Task<bool> BelongsToTenantAsync(Guid tenantId, Guid locationId, CancellationToken ct = default)
+    {
+        var location = await _repo.GetByIdAsync(locationId, ct);
+        return location is not null && location.TenantId == tenantId;
+    }
+
     // ── mapping ────────────────────────────────────────────────────────────
 
     private static LocationDto ToDto(Location s) => new(

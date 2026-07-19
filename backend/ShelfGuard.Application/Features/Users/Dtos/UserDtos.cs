@@ -65,6 +65,16 @@ public sealed record ChangePasswordRequest(
 public sealed record AssignTenantRoleRequest(Guid? TenantRoleId);
 
 /// <summary>
+/// Full-replace of a user's store-scoped location assignments (TASK-392b, Feature 2 Stage 1).
+/// AtLeastEnterpriseAdmin-only, no capability bypass — see UsersController.UpdateLocations.
+/// Empty list clears all assignments for the user.
+/// </summary>
+public sealed record UpdateUserLocationsRequest(List<Guid> LocationIds);
+
+/// <summary>Current store-scoped location assignment list for a user (TASK-392b).</summary>
+public sealed record UserLocationsDto(List<Guid> LocationIds);
+
+/// <summary>
 /// Replaces all per-user page-access overrides for a target user.
 /// Send null value for a page to remove its override (revert to role default).
 /// </summary>

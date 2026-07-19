@@ -89,4 +89,26 @@ public interface IUserService
     /// </summary>
     Task<(bool Success, string? Error)> AssignTenantRoleAsync(
         Guid tenantId, Guid targetUserId, Guid? tenantRoleId, CancellationToken ct = default);
+
+    // Store-scoped location assignment (TASK-392b, Feature 2 Stage 1 — schema/plumbing only,
+    // enforcement RLS is Stage 3). Deliberately a SEPARATE method/endpoint from
+    // InviteAsync/UpdateAsync: those two only ever write exactly one user_locations row
+    // (mirroring User.StoreId) for ranks store_manager-and-below; network_manager's
+    // multi-location assignment always goes through this full-replace path instead.
+    /// <summary>
+    /// Full-replace of a user's store-scoped location assignments: the user's user_locations
+    /// rows become exactly <paramref name="locationIds"/> (existing rows outside that set are
+    /// deleted, missing ones inserted). Every id must belong to the same tenant as the target
+    /// user (validated via ILocationService.BelongsToTenantAsync, same anti-probing posture as
+    /// AssignTenantRoleAsync's TenantRole check — a foreign-tenant id is indistinguishable from
+    /// a bad request, never a 403/enumeration hint). Gated AtLeastEnterpriseAdmin-only with no
+    /// capability bypass at the controller — this decides which locations' real business data
+    /// a whole role will see once Stage 3 lands.
+    /// </summary>
+    Task<(bool Success, string? Error)> SetLocationsAsync(
+        Guid tenantId, Guid targetUserId, List<Guid> locationIds, Guid actingUserId, CancellationToken ct = default);
+
+    /// <summary>Current store-scoped location assignment list for a user.</summary>
+    Task<(List<Guid>? LocationIds, string? Error)> GetLocationsAsync(
+        Guid tenantId, Guid targetUserId, CancellationToken ct = default);
 }

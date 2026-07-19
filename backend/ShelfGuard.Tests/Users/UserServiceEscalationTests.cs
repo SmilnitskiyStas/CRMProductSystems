@@ -1,5 +1,6 @@
 using NSubstitute;
 using ShelfGuard.Application.Features.LegalEntities;
+using ShelfGuard.Application.Features.Locations;
 using ShelfGuard.Application.Features.Users;
 using ShelfGuard.Application.Features.Users.Dtos;
 using ShelfGuard.Application.Services;
@@ -29,13 +30,15 @@ public sealed class UserServiceEscalationTests
     private readonly IRefreshTokenRepository _refreshTokens = Substitute.For<IRefreshTokenRepository>();
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
+    private readonly ILocationService _locations = Substitute.For<ILocationService>();
+    private readonly IUserLocationRepository _userLocations = Substitute.For<IUserLocationRepository>();
     private readonly UserService _sut;
 
     private readonly Guid _tenantId = Guid.NewGuid();
 
     public UserServiceEscalationTests()
     {
-        _sut = new UserService(_users, _activityLogs, _hasher, _legalEntities, _refreshTokens, _permissionGrants, _tenantRoles);
+        _sut = new UserService(_users, _activityLogs, _hasher, _legalEntities, _refreshTokens, _permissionGrants, _tenantRoles, _locations, _userLocations);
         _hasher.Hash(Arg.Any<string>()).Returns("hashed");
     }
 

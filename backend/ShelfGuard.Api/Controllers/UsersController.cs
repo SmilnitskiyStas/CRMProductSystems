@@ -285,6 +285,52 @@ public sealed class UsersController : ControllerBase
             : NotFound(new { error });
     }
 
+    /// <summary>
+    /// Full-replace of a user's store-scoped location assignments (TASK-392b, Feature 2 Stage 1
+    /// plumbing — enforcement RLS is Stage 3, not wired yet). AtLeastEnterpriseAdmin-only,
+    /// STRICTLY no capability bypass — same anti-escalation posture as AssignTenantRole: this
+    /// determines which locations' real business data a whole role will see once Stage 3 lands,
+    /// so a "users.manage" capability holder must never be able to grant this to themselves or
+    /// others.
+    /// </summary>
+    [HttpPut("{id:guid}/locations")]
+    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [ProducesResponseType(typeof(UserLocationsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateLocations(
+        Guid id, [FromBody] UpdateUserLocationsRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var actingUserId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var (success, error) = await _users.SetLocationsAsync(
+            tenantId.Value, id, request.LocationIds, actingUserId, ct);
+
+        if (!success)
+            return error!.Contains("not found") ? NotFound(new { error }) : BadRequest(new { error });
+
+        var (locationIds, _) = await _users.GetLocationsAsync(tenantId.Value, id, ct);
+        return Ok(new UserLocationsDto(locationIds ?? []));
+    }
+
+    /// <summary>Returns the current store-scoped location assignment list for a user (TASK-392b).</summary>
+    [HttpGet("{id:guid}/locations")]
+    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [ProducesResponseType(typeof(UserLocationsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLocations(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (locationIds, error) = await _users.GetLocationsAsync(tenantId.Value, id, ct);
+        if (locationIds is null) return NotFound(new { error });
+        return Ok(new UserLocationsDto(locationIds));
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private Guid? ResolveTenantId()

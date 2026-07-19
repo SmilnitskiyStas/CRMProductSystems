@@ -86,4 +86,48 @@ public sealed class TenantConnectionInterceptorTests
         Assert.Contains($"SET app.role = '{role}'", sql);
         Assert.Contains($"SET app.tenant_id = '{NullUuid}'", sql);
     }
+
+    // ── app.user_id (TASK-392b) ─────────────────────────────────────────────
+
+    [Fact]
+    public void BuildSetSql_sets_user_id_when_valid_guid_provided()
+    {
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var sql = TenantConnectionInterceptor.BuildSetSql(tenantId.ToString(), "store_manager", userId.ToString());
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.tenant_id = '{tenantId:D}'", sql);
+        Assert.Contains("SET app.role = 'store_manager'", sql);
+        Assert.Contains($"SET app.user_id = '{userId:D}'", sql);
+    }
+
+    [Fact]
+    public void BuildSetSql_uses_null_uuid_when_user_id_omitted()
+    {
+        // Mirrors app.tenant_id's discipline — ALWAYS set, never left stale on a pooled
+        // connection, even when the third argument isn't supplied at all.
+        var sql = TenantConnectionInterceptor.BuildSetSql(Guid.NewGuid().ToString(), "store_manager");
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.user_id = '{NullUuid}'", sql);
+    }
+
+    [Fact]
+    public void BuildSetSql_uses_null_uuid_when_user_id_is_not_a_guid()
+    {
+        var sql = TenantConnectionInterceptor.BuildSetSql(null, null, "not-a-valid-uuid");
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.user_id = '{NullUuid}'", sql);
+    }
+
+    [Fact]
+    public void BuildSetSql_uses_null_uuid_when_user_id_claim_absent()
+    {
+        var sql = TenantConnectionInterceptor.BuildSetSql(null, null, null);
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.user_id = '{NullUuid}'", sql);
+    }
 }
