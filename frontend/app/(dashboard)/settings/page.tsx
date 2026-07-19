@@ -8,6 +8,7 @@ import { NotificationsTab } from "@/features/settings/components/NotificationsTa
 import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab";
 import { ModulesTab } from "@/features/settings/components/ModulesTab";
 import { MarketplaceProfileTab } from "@/features/settings/components/MarketplaceProfileTab";
+import { LanguageSwitcher } from "@/features/profile/components/LanguageSwitcher";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, PROVIDER_TEAM, SUPPLIER_ONLY } from "@/lib/roles";
 
@@ -188,6 +189,20 @@ function GeneralTab() {
             </button>
           </div>
         ))}
+      </div>
+
+      {/* Language switcher (i18n rollout, TASK-390 — moved here from the never-rendered
+          ProfileTab.tsx; this tenant-facing General tab is where it belongs). */}
+      <div
+        style={{
+          marginTop: 24,
+          padding: "16px",
+          background: "#0A1020",
+          border: "1px solid #1F2937",
+          borderRadius: 9,
+        }}
+      >
+        <LanguageSwitcher />
       </div>
 
       {/* User settings hint */}

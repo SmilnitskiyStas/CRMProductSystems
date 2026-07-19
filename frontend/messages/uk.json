@@ -3263,16 +3263,6 @@
         "statusDisabled": "Вимкнено",
         "footerNote": "Активація чи вимкнення модулів виконується провайдером платформи. Зверніться до підтримки, якщо потрібно змінити набір модулів вашого тенанта."
       },
-      "profileTab": {
-        "personalTitle": "Особисті дані",
-        "personalSubtitle": "Ім'я та контактна інформація",
-        "passwordTitle": "Зміна пароля",
-        "passwordSubtitle": "Мінімум 12 символів, літери та цифри",
-        "twoFaTitle": "Двофакторна автентифікація",
-        "twoFaSubtitle": "Додатковий рівень захисту входу в акаунт",
-        "telegramTitle": "Telegram",
-        "telegramSubtitle": "Прив'яжіть Telegram для особистих сповіщень"
-      },
       "userSettingsPage": {
         "personalLabel": "ОСОБИСТІ НАЛАШТУВАННЯ",
         "profileLabel": "Особисті дані",

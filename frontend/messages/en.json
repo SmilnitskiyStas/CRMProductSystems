@@ -3263,16 +3263,6 @@
         "statusDisabled": "Disabled",
         "footerNote": "Modules are activated or deactivated by the platform provider. Contact support if you need to change your tenant's module set."
       },
-      "profileTab": {
-        "personalTitle": "Personal information",
-        "personalSubtitle": "Your name and contact information",
-        "passwordTitle": "Change password",
-        "passwordSubtitle": "Minimum 12 characters, letters and digits",
-        "twoFaTitle": "Two-factor authentication",
-        "twoFaSubtitle": "Extra layer of protection for signing in",
-        "telegramTitle": "Telegram",
-        "telegramSubtitle": "Link Telegram for personal notifications"
-      },
       "userSettingsPage": {
         "personalLabel": "PERSONAL SETTINGS",
         "profileLabel": "Personal information",
