@@ -3619,6 +3619,8 @@
         "roleLabel": "Роль",
         "legalEntityLabel": "Юридична особа",
         "legalEntityNoneOption": "— Не вказано —",
+        "storeLabel": "Магазин",
+        "storeNoneOption": "— Не вказано —",
         "savingButton": "Збереження…",
         "saveButton": "Зберегти",
         "cancelButton": "Скасувати",
@@ -3702,15 +3704,22 @@
         "tenantRoleNoneAvailable": "Активних шаблонів ще немає.",
         "legalEntityLabel": "Юридична особа (необов'язково)",
         "legalEntityNoneOption": "— Не вказано —",
+        "storeLabel": "Магазин",
+        "storeNoneOption": "— Не вказано —",
+        "territoryLabel": "Території",
+        "territoryHint": "Магазини, які покриватиме цей мережевий менеджер. Можна призначити чи змінити пізніше в профілі користувача.",
+        "territoryEmptyHint": "Локацій ще немає.",
         "passwordLabel": "Тимчасовий пароль *",
         "passwordPlaceholder": "Мінімум 8 символів",
         "closeButton": "Закрити",
         "creatingButton": "Створення…",
+        "assigningLocationsButton": "Призначення території…",
         "assigningButton": "Призначення шаблону…",
         "submitButton": "Запросити",
         "cancelButton": "Скасувати",
         "createErrorFallback": "Помилка створення",
-        "partialErrorMessage": "Користувача створено, але не вдалося призначити шаблон ролі: {reason}. Призначте вручну в профілі користувача."
+        "partialErrorMessage": "Користувача створено, але не вдалося призначити шаблон ролі: {reason}. Призначте вручну в профілі користувача.",
+        "partialErrorMessageLocations": "Користувача створено, але не вдалося призначити територію: {reason}. Призначте вручну в профілі користувача."
       },
       "pageNames": {
         "dashboard": "Дашборд",
@@ -3722,6 +3731,16 @@
         "analytics": "Аналітика",
         "users": "Персонал",
         "settings": "Налаштування"
+      },
+      "locationsEditor": {
+        "label": "Території (магазини мережевого менеджера)",
+        "loading": "Завантаження…",
+        "emptyHint": "Локацій ще немає — додайте їх на вкладці «Локації».",
+        "savingButton": "Збереження…",
+        "savedButton": "✓ Збережено",
+        "saveButton": "Зберегти",
+        "saveErrorFallback": "Помилка збереження території",
+        "selectedCount": "{count, plural, one {# локація} few {# локації} many {# локацій} other {# локацій}} обрано"
       }
     },
     "schedules": {

@@ -3619,6 +3619,8 @@
         "roleLabel": "Role",
         "legalEntityLabel": "Legal entity",
         "legalEntityNoneOption": "— Not set —",
+        "storeLabel": "Store",
+        "storeNoneOption": "— Not set —",
         "savingButton": "Saving…",
         "saveButton": "Save",
         "cancelButton": "Cancel",
@@ -3702,15 +3704,22 @@
         "tenantRoleNoneAvailable": "No active templates yet.",
         "legalEntityLabel": "Legal entity (optional)",
         "legalEntityNoneOption": "— Not set —",
+        "storeLabel": "Store",
+        "storeNoneOption": "— Not set —",
+        "territoryLabel": "Territory",
+        "territoryHint": "Stores this network manager will cover. Can be assigned or changed later from the user's profile.",
+        "territoryEmptyHint": "No locations yet.",
         "passwordLabel": "Temporary password *",
         "passwordPlaceholder": "At least 8 characters",
         "closeButton": "Close",
         "creatingButton": "Creating…",
+        "assigningLocationsButton": "Assigning territory…",
         "assigningButton": "Assigning template…",
         "submitButton": "Invite",
         "cancelButton": "Cancel",
         "createErrorFallback": "Creation failed",
-        "partialErrorMessage": "The user was created, but the role template couldn't be assigned: {reason}. Assign it manually from the user's profile."
+        "partialErrorMessage": "The user was created, but the role template couldn't be assigned: {reason}. Assign it manually from the user's profile.",
+        "partialErrorMessageLocations": "The user was created, but the territory couldn't be assigned: {reason}. Assign it manually from the user's profile."
       },
       "pageNames": {
         "dashboard": "Dashboard",
@@ -3722,6 +3731,16 @@
         "analytics": "Analytics",
         "users": "Staff",
         "settings": "Settings"
+      },
+      "locationsEditor": {
+        "label": "Territory (network manager's stores)",
+        "loading": "Loading…",
+        "emptyHint": "No locations yet — add them on the \"Locations\" tab.",
+        "savingButton": "Saving…",
+        "savedButton": "✓ Saved",
+        "saveButton": "Save",
+        "saveErrorFallback": "Failed to save territory",
+        "selectedCount": "{count, plural, one {# location} other {# locations}} selected"
       }
     },
     "schedules": {

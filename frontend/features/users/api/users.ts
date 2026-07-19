@@ -7,6 +7,8 @@ import type {
   ActivityLogDto,
   PermissionGrantDto,
   GrantTemporaryPermissionRequest,
+  UserLocationsDto,
+  UpdateUserLocationsRequest,
 } from "../types";
 
 export const usersApi = {
@@ -63,5 +65,15 @@ export const usersApi = {
   /** POST /api/users/:id/tenant-role — assign (or clear, when null) a TenantRole template (ADR-020). */
   assignTenantRole(id: string, tenantRoleId: string | null): Promise<void> {
     return api.post<void>(`/api/users/${id}/tenant-role`, { tenantRoleId });
+  },
+
+  /** GET /api/users/:id/locations — store-scoped assignment list (TASK-392c, AtLeastEnterpriseAdmin-only). */
+  getLocations(id: string): Promise<UserLocationsDto> {
+    return api.get<UserLocationsDto>(`/api/users/${id}/locations`);
+  },
+
+  /** PUT /api/users/:id/locations — full-replace (TASK-392c, AtLeastEnterpriseAdmin-only). */
+  setLocations(id: string, data: UpdateUserLocationsRequest): Promise<UserLocationsDto> {
+    return api.put<UserLocationsDto>(`/api/users/${id}/locations`, data);
   },
 };

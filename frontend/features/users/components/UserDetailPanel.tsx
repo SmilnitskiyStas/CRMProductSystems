@@ -5,10 +5,12 @@ import { useTranslations, useLocale } from "next-intl";
 import { useUpdateUser, useDeactivateUser } from "../hooks/useUsers";
 import { UserActivityLog } from "./UserActivityLog";
 import { UserPermissionsEditor } from "./UserPermissionsEditor";
+import { UserLocationsEditor } from "./UserLocationsEditor";
 import { getRoleLabel } from "@/features/profile/types";
-import { ROLE_RANK } from "../types";
+import { ROLE_RANK, isSingleLocationRole } from "../types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
+import { useLocations } from "@/features/locations/hooks/useLocations";
 import type { UserDto, UpdateUserRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
@@ -61,6 +63,8 @@ export function UserDetailPanel({ user, onClose }: Props) {
   const deactivate = useDeactivateUser();
   const { data: legalEntities } = useLegalEntities();
   const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
+  const { data: locations } = useLocations();
+  const activeLocations = (locations ?? []).filter((l) => l.isActive);
 
   const [tab, setTab] = useState<PanelTab>("info");
 
@@ -70,12 +74,17 @@ export function UserDetailPanel({ user, onClose }: Props) {
   const [phone,    setPhone]    = useState(user.phone ?? "");
   const [role,     setRole]     = useState(user.role);
   const [legalEntityId, setLegalEntityId] = useState(user.legalEntityId ?? "");
+  // Store-scoped assignment (TASK-392c, Feature 2 Stage 1): single-store picker for
+  // store_manager-and-below targets. Only meaningful when the live `role` selection above
+  // is a single-location role — see isSingleLocationEdit/handleSave below.
+  const [storeId,  setStoreId]  = useState(user.storeId ?? "");
   const [saved,    setSaved]    = useState(false);
 
   const isSelf      = me?.id === user.id;
   const isAdmin     = me?.role === "enterprise_admin" || me?.role === "provider";
   const canEdit     = isAdmin && !isSelf;
   const canDeactivate = isAdmin && !isSelf && user.isActive;
+  const isSingleLocationEdit = isSingleLocationRole(role);
 
   // Permissions tab: visible if editor outranks target
   const editorRank  = ROLE_RANK[me?.role ?? ""] ?? 0;
@@ -86,7 +95,11 @@ export function UserDetailPanel({ user, onClose }: Props) {
   // rank check above — backend's POST /api/users/:id/tenant-role has no rank comparison
   // (AtLeastEnterpriseAdmin-only), so an admin can assign a template to a peer admin too.
   const canManageTenantRole = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN) && !isSelf;
-  const showAccessTab = canSeeAccessTab || canManageTenantRole;
+  // Territory management (TASK-392c): same AtLeastEnterpriseAdmin-only posture as
+  // TenantRole assignment, shown only for a network_manager target — PUT/GET
+  // /api/users/:id/locations has no capability bypass and no rank comparison either.
+  const canManageLocations = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN) && !isSelf && user.role === "network_manager";
+  const showAccessTab = canSeeAccessTab || canManageTenantRole || canManageLocations;
 
   const initials = user.fullName
     .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
@@ -96,7 +109,10 @@ export function UserDetailPanel({ user, onClose }: Props) {
       fullName: fullName.trim() || user.fullName,
       phone: phone.trim() || null,
       role,
-      storeId: user.storeId,
+      // Only the single-store picker below can change this; for any other role (no picker
+      // shown — network_manager/enterprise_admin/etc.) keep sending the user's existing
+      // value unchanged, same as before this task.
+      storeId: isSingleLocationEdit ? (storeId || null) : user.storeId,
       legalEntityId: legalEntityId || null,
     };
     await update.mutateAsync(data);
@@ -291,6 +307,23 @@ export function UserDetailPanel({ user, onClose }: Props) {
                           ))}
                         </select>
                       </div>
+                      {isSingleLocationEdit && (
+                        <div>
+                          <label style={labelStyle}>{t("storeLabel")}</label>
+                          <select
+                            value={storeId}
+                            onChange={(e) => setStoreId(e.target.value)}
+                            style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
+                          >
+                            <option value="" style={{ background: "#0D1117" }}>{t("storeNoneOption")}</option>
+                            {activeLocations.map((loc) => (
+                              <option key={loc.id} value={loc.id} style={{ background: "#0D1117" }}>
+                                {loc.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div>
                         <label style={labelStyle}>{t("legalEntityLabel")}</label>
                         <select
@@ -353,6 +386,7 @@ export function UserDetailPanel({ user, onClose }: Props) {
           {tab === "access" && (
             <div>
               {canManageTenantRole && <TenantRoleSelector user={user} />}
+              {canManageLocations && <UserLocationsEditor user={user} />}
               {canSeeAccessTab && <UserPermissionsEditor user={user} editorRole={me?.role ?? ""} />}
             </div>
           )}
