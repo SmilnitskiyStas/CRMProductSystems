@@ -10,7 +10,8 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { TenantRolesTab } from "@/features/tenant-roles/components/TenantRolesTab";
 import { Btn } from "@/components/ui/Btn";
-import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
+import { hasRole, AT_LEAST_ENTERPRISE_ADMIN, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
+import { useRequireTab } from "@/lib/useRequireTab";
 
 type PageTab = "staff" | "role-templates";
 
@@ -26,6 +27,11 @@ export default function UsersPage() {
   // TenantRole templates (ADR-020) are AtLeastEnterpriseAdmin-only on the backend — mirror
   // that gate here so the tab (and its data) never even renders for lower roles.
   const canManageRoleTemplates = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN);
+
+  // Sidebar tab visibility (TASK-391c): mirrors Sidebar.tsx's /users NavItem gate
+  // (roles: AT_LEAST_STORE_MANAGER) OR'd with the "workforce" tabs claim — a custom
+  // TenantRole granted the "workforce" tab reaches this page even without that role.
+  useRequireTab("workforce", hasRole(me?.role, AT_LEAST_STORE_MANAGER));
 
   const activeCount   = users?.filter((u) => u.isActive).length  ?? 0;
   const totalCount    = users?.length ?? 0;

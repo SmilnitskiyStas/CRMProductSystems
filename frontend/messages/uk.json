@@ -3445,6 +3445,7 @@
         "saveError": "Помилка збереження",
         "namePlaceholder": "Назва шаблону (напр. HR)",
         "capabilitiesLabel": "Можливості",
+        "tabsLabel": "Видимі розділи",
         "loading": "Завантаження…",
         "savingButton": "Збереження…",
         "saveChangesButton": "Зберегти зміни",

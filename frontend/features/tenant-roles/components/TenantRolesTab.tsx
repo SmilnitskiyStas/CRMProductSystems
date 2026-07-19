@@ -6,6 +6,7 @@ import { Plus, Pencil, Archive, Shield } from "lucide-react";
 import {
   useTenantRoles,
   useTenantRoleCapabilities,
+  useTenantRoleTabs,
   useCreateTenantRole,
   useUpdateTenantRole,
   useArchiveTenantRole,
@@ -238,11 +239,13 @@ interface FormModalProps {
 function TenantRoleFormModal({ role, onClose }: FormModalProps) {
   const t = useTranslations("Dashboard.tenantRoles.formModal");
   const { data: groups, isLoading: groupsLoading } = useTenantRoleCapabilities();
+  const { data: tabs, isLoading: tabsLoading } = useTenantRoleTabs();
   const create = useCreateTenantRole();
   const update = useUpdateTenantRole();
 
   const [name, setName] = useState(role?.name ?? "");
   const [capabilities, setCapabilities] = useState<Set<string>>(new Set(role?.capabilities ?? []));
+  const [allowedTabs, setAllowedTabs] = useState<Set<string>>(new Set(role?.allowedTabs ?? []));
   const [error, setError] = useState<string | null>(null);
 
   const isEdit = !!role;
@@ -257,10 +260,19 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
     });
   }
 
+  function toggleTab(key: string) {
+    setAllowedTabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const req = { name: name.trim(), capabilities: [...capabilities] };
+    const req = { name: name.trim(), capabilities: [...capabilities], allowedTabs: [...allowedTabs] };
     try {
       if (isEdit) await update.mutateAsync({ id: role.id, data: req });
       else await create.mutateAsync(req);
@@ -342,6 +354,35 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 8 }}>{t("tabsLabel")}</div>
+            {tabsLoading && (
+              <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
+            )}
+            <div
+              style={{
+                background: "#0D1117", border: "1px solid #1F2937",
+                borderRadius: 8, padding: "10px 14px",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {tabs?.map((tab) => (
+                  <label key={tab.key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={allowedTabs.has(tab.key)}
+                      onChange={() => toggleTab(tab.key)}
+                      style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
+                    />
+                    <span style={{ color: allowedTabs.has(tab.key) ? "#E8EDF5" : "#4B5563", fontSize: 13 }}>
+                      {tab.labelUa}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 

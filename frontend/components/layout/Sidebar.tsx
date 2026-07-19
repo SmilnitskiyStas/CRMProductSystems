@@ -666,6 +666,13 @@ export function Sidebar({ collapsed, onToggle }: Props) {
       ? new Set(ALL_SUPPLIER_PERMISSIONS.filter((p) => me.permissions?.[p]))
       : null;
 
+  // Sidebar tab visibility (TASK-391c, ADR-020 follow-up): TenantRole.AllowedTabs is a
+  // separate axis from Capabilities — which whole nav sections are visible, independent
+  // of per-item role checks. UI-only signal (no Tier 2 backend enforcement yet, see
+  // backend/ShelfGuard.Domain/Constants/TenantRoleTabs.cs) — null/empty (no TenantRoleId,
+  // most users today) is a no-op, existing role-based filtering below is unaffected.
+  const tabsSet = me?.tabs && me.tabs.length > 0 ? new Set(me.tabs) : null;
+
   // Standalone top item: Dashboard
   const dashboardItem: NavItem = {
     href: "/dashboard",
@@ -719,6 +726,12 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         if (item.href === "/settings/legal-entities") {
           return canManageLegalEntities(userRole, me?.permissions);
         }
+        // Sidebar tab visibility (TASK-391c): if the user's effective TenantRole grants
+        // this group's tab key, every item in the group is visible regardless of the
+        // item.roles check below — additive OR, same shape as effectivePermissions/
+        // supplierEffectivePermissions just below (Legal Entities keeps its own narrower
+        // gate above, untouched).
+        if (tabsSet?.has(group.key)) return true;
         // Role check (existing logic)
         if (item.roles && !item.roles.has(userRole)) return false;
         // Permission check: only applied for PROVIDER_TEAM users on permission-gated items

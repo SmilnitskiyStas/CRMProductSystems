@@ -13,6 +13,11 @@ export interface AuthUserDto {
   /** UI locale the user picked ("uk"/"en"); null/undefined = client falls back to the
    * `sg_locale` cookie or browser language (i18n rollout Block 1, TASK-375/376). */
   preferredLocale?: string | null;
+  /** Effective TenantRole sidebar-tab visibility (TASK-391b) — mirrors the JWT "tabs"
+   * claim; null/undefined/[] = no TenantRoleId or an empty AllowedTabs template. UI-only
+   * signal (no Tier 2 backend enforcement yet) — see Sidebar.tsx/useRequireTab.ts for how
+   * it's combined (OR) with the existing role/capability-based visibility checks. */
+  tabs?: string[] | null;
 }
 
 export interface LoginRequest {

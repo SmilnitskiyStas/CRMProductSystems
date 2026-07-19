@@ -12,6 +12,7 @@ import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM } from "@/lib/roles";
 import type { WorkScheduleDto } from "@/features/schedules/types";
 import type { AppRole } from "@/lib/roles";
 import { ScheduleTab } from "@/features/provider/components/ScheduleTab";
+import { useRequireTab } from "@/lib/useRequireTab";
 
 type Tab = "schedules" | "my-shifts";
 
@@ -44,6 +45,14 @@ export default function SchedulesPage() {
   const { data: me } = useMe();
   const userRole = (me?.role ?? "") as AppRole;
   const canManage = AT_LEAST_STORE_MANAGER.has(userRole);
+
+  // Sidebar tab visibility (TASK-391c): mirrors Sidebar.tsx's /schedules NavItem, which
+  // carries no `roles` restriction — every authenticated tenant user (incl. provider-team,
+  // who see their own branch below) already reaches this page today for their own shifts,
+  // gated separately (not by tab/role) inside the page itself. `alreadyAllowed=true` keeps
+  // that baseline intact; the "workforce" tabs claim adds nothing here but the hook is
+  // still wired for consistency with /users and /analytics.
+  useRequireTab("workforce", true);
 
   // Provider team → own weekly slot schedule (not tenant-based WorkSchedule)
   if (PROVIDER_TEAM.has(userRole)) {

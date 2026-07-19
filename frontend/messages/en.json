@@ -3445,6 +3445,7 @@
         "saveError": "Failed to save",
         "namePlaceholder": "Template name (e.g. HR)",
         "capabilitiesLabel": "Capabilities",
+        "tabsLabel": "Visible sections",
         "loading": "Loading…",
         "savingButton": "Saving…",
         "saveChangesButton": "Save changes",

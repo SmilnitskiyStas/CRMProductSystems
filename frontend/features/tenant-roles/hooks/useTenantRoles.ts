@@ -9,6 +9,7 @@ import type { CreateTenantRoleRequest, UpdateTenantRoleRequest } from "../types"
 
 const LIST_KEY = ["tenant-roles", "list"] as const;
 const CAPABILITIES_KEY = ["tenant-roles", "capabilities"] as const;
+const TABS_KEY = ["tenant-roles", "tabs"] as const;
 
 /**
  * Templates for the current tenant. Pass includeInactive to also list archived ones.
@@ -32,6 +33,15 @@ export function useTenantRoleCapabilities() {
   return useQuery({
     queryKey: CAPABILITIES_KEY,
     queryFn: tenantRolesApi.getCapabilities,
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** Backend-sourced sidebar-tab catalog (TASK-391b) — rarely changes, cached longer. */
+export function useTenantRoleTabs() {
+  return useQuery({
+    queryKey: TABS_KEY,
+    queryFn: tenantRolesApi.getTabs,
     staleTime: 10 * 60_000,
   });
 }

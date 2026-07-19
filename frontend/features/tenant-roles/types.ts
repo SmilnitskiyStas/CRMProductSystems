@@ -7,6 +7,10 @@ export interface TenantRoleDto {
   name: string;
   /** Capability keys, format "module.action" (e.g. "users.manage"). */
   capabilities: string[];
+  /** Sidebar tab keys (e.g. "workforce", "analytics") — TASK-391/391b, a separate axis
+   *  from `capabilities`: controls whether a whole nav section is visible, not what
+   *  actions the user can perform. UI-only signal, no Tier 2 backend enforcement yet. */
+  allowedTabs: string[];
   /** false once archived (DELETE /api/tenant-roles/:id) — never hard-deleted, users may still reference it. */
   isActive: boolean;
   createdAt: string;
@@ -16,11 +20,13 @@ export interface TenantRoleDto {
 export interface CreateTenantRoleRequest {
   name: string;
   capabilities: string[];
+  allowedTabs: string[];
 }
 
 export interface UpdateTenantRoleRequest {
   name: string;
   capabilities: string[];
+  allowedTabs: string[];
 }
 
 /** A single grantable capability — label is backend-sourced Ukrainian text, never hardcode it here. */
@@ -35,6 +41,14 @@ export interface TenantRoleCapabilityDto {
 export interface TenantRoleCapabilityGroup {
   specialty: string;
   capabilities: TenantRoleCapabilityDto[];
+}
+
+/** A single grantable sidebar tab — label is backend-sourced Ukrainian text, never
+ *  hardcode it here. Backs GET /api/tenant-roles/tabs (TASK-391b). Flat catalog (no
+ *  specialty grouping, unlike capabilities) — mirrors backend TenantRoleTabDto. */
+export interface TenantTabDto {
+  key: string;
+  labelUa: string;
 }
 
 /** Body for POST /api/users/:id/tenant-role — null clears the assignment. */

@@ -15,6 +15,7 @@ import {
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
+import { useRequireTab } from "@/lib/useRequireTab";
 import { ExpiryDonut } from "@/features/analytics/components/ExpiryDonut";
 import { LossesByReasonChart } from "@/features/analytics/components/LossesByReasonChart";
 import { LossesByStoreChart } from "@/features/analytics/components/LossesByStoreChart";
@@ -165,7 +166,16 @@ export default function AnalyticsPage() {
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
-  const access = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
+  const roleAccess = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
+
+  // Sidebar tab visibility (TASK-391c): mirrors Sidebar.tsx's /analytics NavItem gate
+  // (roles: CAN_VIEW_ANALYTICS) OR'd with the "analytics" tabs claim. Reuses the combined
+  // value below for both the route-guard redirect and the AccessDenied render, so a
+  // tabs-granted user never hits a dead sidebar link. While `me` is still loading,
+  // roleAccess is null — keep `access` null too so the existing loading/redirect
+  // behavior below is unaffected until useMe() resolves.
+  const effectiveAccess = useRequireTab("analytics", roleAccess === true);
+  const access = roleAccess === null ? null : effectiveAccess;
 
   const enabled = access === true;
 
