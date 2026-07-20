@@ -21,7 +21,17 @@ public sealed record UserDto(
     /// beyond whatever the base Role already grants.</summary>
     Guid? TenantRoleId = null,
     /// <summary>UI locale ("uk"/"en"); null = browser fallback (i18n Block 1, TASK-375).</summary>
-    string? PreferredLocale = null
+    string? PreferredLocale = null,
+    /// <summary>
+    /// TASK-395: true when this user's role is one of the six store-scoped roles the (not yet
+    /// deployed) Stage 3 RLS enforcement will gate — network_manager, store_manager,
+    /// merchandiser, storekeeper, cashier, staff — AND the user currently has zero rows in
+    /// user_locations. Lets the product owner spot the store-scope-rollout-checklist.md
+    /// coverage gap from the Users list UI instead of running the raw SQL report. Always false
+    /// for enterprise_admin/provider/provider_admin/worker/supplier_admin, and false for any
+    /// store-scoped-role user who already has at least one location assigned.
+    /// </summary>
+    bool NeedsLocationAssignment = false
 );
 
 public sealed record InviteUserRequest(

@@ -377,6 +377,134 @@ public sealed class UserServiceLocationsTests
         Assert.Equal(expected, ids);
     }
 
+    // ── NeedsLocationAssignment (TASK-395) ─────────────────────────────────────
+    // GetAllAsync must batch its user_locations existence check into a single query (never one
+    // per user); the single-user paths (GetById/Invite) each get one fresh query/read of the
+    // just-committed state instead.
+
+    [Fact]
+    public async Task GetByIdAsync_RestrictedRoleWithLocationRow_NeedsLocationAssignmentFalse()
+    {
+        var target = MakeUser("store_manager");
+        _users.GetByIdAsync(target.Id, Arg.Any<CancellationToken>()).Returns(target);
+        _userLocations.HasAnyLocationAsync(_tenantId, target.Id, Arg.Any<CancellationToken>()).Returns(true);
+
+        var (user, error) = await _sut.GetByIdAsync(_tenantId, target.Id);
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.False(user!.NeedsLocationAssignment);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_RestrictedRoleWithoutLocationRow_NeedsLocationAssignmentTrue()
+    {
+        var target = MakeUser("cashier");
+        _users.GetByIdAsync(target.Id, Arg.Any<CancellationToken>()).Returns(target);
+        _userLocations.HasAnyLocationAsync(_tenantId, target.Id, Arg.Any<CancellationToken>()).Returns(false);
+
+        var (user, error) = await _sut.GetByIdAsync(_tenantId, target.Id);
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.True(user!.NeedsLocationAssignment);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_EnterpriseAdminWithoutAnyLocationRows_NeedsLocationAssignmentFalse()
+    {
+        var target = MakeUser("enterprise_admin");
+        _users.GetByIdAsync(target.Id, Arg.Any<CancellationToken>()).Returns(target);
+        // Deliberately NOT configuring HasAnyLocationAsync: enterprise_admin's role alone
+        // settles the answer (unconditional bypass), so it must short-circuit before ever
+        // querying — asserted below via DidNotReceive.
+
+        var (user, error) = await _sut.GetByIdAsync(_tenantId, target.Id);
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.False(user!.NeedsLocationAssignment);
+        await _userLocations.DidNotReceive().HasAnyLocationAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InviteAsync_StoreManagerWithoutStore_NeedsLocationAssignmentTrue()
+    {
+        var actingUser = MakeUser("enterprise_admin");
+        _users.GetByIdAsync(actingUser.Id, Arg.Any<CancellationToken>()).Returns(actingUser);
+        _userLocations.HasAnyLocationAsync(_tenantId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+
+        var request = new InviteUserRequest(
+            Email: "no.store.gap@example.com", FullName: "No Store",
+            Role: "store_manager", Password: StrongPassword); // StoreId omitted -> null
+
+        var (user, error) = await _sut.InviteAsync(_tenantId, actingUser.Id, request, "Inviter", default);
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.True(user!.NeedsLocationAssignment);
+    }
+
+    [Fact]
+    public async Task InviteAsync_StoreManagerWithValidStore_NeedsLocationAssignmentFalse()
+    {
+        var actingUser = MakeUser("enterprise_admin");
+        var storeId = Guid.NewGuid();
+        _users.GetByIdAsync(actingUser.Id, Arg.Any<CancellationToken>()).Returns(actingUser);
+        _locations.BelongsToTenantAsync(_tenantId, storeId, Arg.Any<CancellationToken>()).Returns(true);
+        _userLocations.HasAnyLocationAsync(_tenantId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+
+        var request = new InviteUserRequest(
+            Email: "has.store.gap@example.com", FullName: "Has Store",
+            Role: "store_manager", Password: StrongPassword, StoreId: storeId);
+
+        var (user, error) = await _sut.InviteAsync(_tenantId, actingUser.Id, request, "Inviter", default);
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        Assert.False(user!.NeedsLocationAssignment);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_MixOfRolesAndCoverage_SetsNeedsLocationAssignmentPerUser_OneBatchQuery()
+    {
+        var withLocation = MakeUser("store_manager");
+        var withoutLocation = MakeUser("cashier");
+        var admin = MakeUser("enterprise_admin");
+        var users = new List<User> { withLocation, withoutLocation, admin };
+        _users.GetAllByTenantAsync(_tenantId, Arg.Any<CancellationToken>()).Returns(users);
+        _userLocations.GetUserIdsWithAnyLocationAsync(
+                _tenantId,
+                Arg.Is<IReadOnlyCollection<Guid>>(ids =>
+                    ids.Count == 2 && ids.Contains(withLocation.Id) && ids.Contains(withoutLocation.Id)),
+                Arg.Any<CancellationToken>())
+            .Returns(new List<Guid> { withLocation.Id });
+
+        var result = await _sut.GetAllAsync(_tenantId);
+
+        Assert.False(result.Single(u => u.Id == withLocation.Id).NeedsLocationAssignment);
+        Assert.True(result.Single(u => u.Id == withoutLocation.Id).NeedsLocationAssignment);
+        Assert.False(result.Single(u => u.Id == admin.Id).NeedsLocationAssignment);
+        await _userLocations.Received(1).GetUserIdsWithAnyLocationAsync(
+            Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetAllAsync_NoUsersInLocationScopedRoles_SkipsUserLocationsQueryEntirely()
+    {
+        var admin = MakeUser("enterprise_admin");
+        var supplier = MakeUser("supplier_admin");
+        _users.GetAllByTenantAsync(_tenantId, Arg.Any<CancellationToken>())
+            .Returns(new List<User> { admin, supplier });
+
+        var result = await _sut.GetAllAsync(_tenantId);
+
+        Assert.All(result, u => Assert.False(u.NeedsLocationAssignment));
+        await _userLocations.DidNotReceive().GetUserIdsWithAnyLocationAsync(
+            Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+    }
+
     private User MakeUser(string role, Guid? tenantId = null) =>
         User.Create(tenantId ?? _tenantId, $"{Guid.NewGuid()}@example.com", "Test User", "hash", role);
 }

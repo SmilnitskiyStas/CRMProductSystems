@@ -79,6 +79,21 @@ public sealed class UserService : IUserService
         "store_manager", "merchandiser", "storekeeper", "cashier", "staff",
     ];
 
+    /// <summary>
+    /// Roles UserDto.NeedsLocationAssignment (TASK-395) gates on — the same six roles the
+    /// store-scope-rollout-checklist.md coverage-gap SQL report keys off. A superset of
+    /// <see cref="SingleLocationRoles"/>: it additionally includes network_manager, whose
+    /// assignment goes through <see cref="SetLocationsAsync"/>'s full-replace endpoint rather
+    /// than the single-row Invite/Update sync, but which still needs at least one
+    /// user_locations row before Stage 3 RLS enforcement can safely go live for that user.
+    /// Never enterprise_admin/provider/provider_admin/worker/supplier_admin — unconditional
+    /// bypass regardless of what (if anything) is in user_locations for them.
+    /// </summary>
+    private static readonly HashSet<string> LocationScopedRoles =
+    [
+        "network_manager", "store_manager", "merchandiser", "storekeeper", "cashier", "staff",
+    ];
+
     private static readonly HashSet<string> ValidPages =
     [
         "dashboard", "inventory", "stock", "receipts",
@@ -115,7 +130,23 @@ public sealed class UserService : IUserService
     public async Task<IReadOnlyList<UserDto>> GetAllAsync(Guid tenantId, CancellationToken ct = default)
     {
         var users = await _users.GetAllByTenantAsync(tenantId, ct);
-        return users.Select(ToDto).ToList();
+
+        // TASK-395: one batched existence query for the whole list (scoped further to just the
+        // users whose role could possibly need it) instead of one query per user — this is the
+        // list endpoint, called far more often and with far more rows than the single-user
+        // paths below, so N+1 here would actually matter.
+        var candidateIds = users
+            .Where(u => LocationScopedRoles.Contains(u.Role))
+            .Select(u => u.Id)
+            .ToList();
+
+        var withLocation = candidateIds.Count == 0
+            ? new HashSet<Guid>()
+            : (await _userLocations.GetUserIdsWithAnyLocationAsync(tenantId, candidateIds, ct)).ToHashSet();
+
+        return users
+            .Select(u => ToDto(u, LocationScopedRoles.Contains(u.Role) && !withLocation.Contains(u.Id)))
+            .ToList();
     }
 
     // ── Get by id ─────────────────────────────────────────────────────────────
@@ -126,7 +157,9 @@ public sealed class UserService : IUserService
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null || user.TenantId != tenantId)
             return (null, "User not found.");
-        return (ToDto(user), null);
+
+        var needsLocation = await NeedsLocationAssignmentAsync(user.TenantId, user.Id, user.Role, ct);
+        return (ToDto(user, needsLocation), null);
     }
 
     // ── Invite (create) ───────────────────────────────────────────────────────
@@ -193,7 +226,12 @@ public sealed class UserService : IUserService
             ct: ct);
 
         await _users.SaveChangesAsync(ct);
-        return (ToDto(user), null);
+
+        // Query fresh, post-SaveChanges (TASK-395): SyncSingleLocationAsync just wrote the
+        // user_locations row(s) above but hasn't been committed until the SaveChangesAsync
+        // right before this line, so this must run after it, not before.
+        var needsLocation = await NeedsLocationAssignmentAsync(tenantId, user.Id, user.Role, ct);
+        return (ToDto(user, needsLocation), null);
     }
 
     // ── Update (by manager) ───────────────────────────────────────────────────
@@ -276,7 +314,10 @@ public sealed class UserService : IUserService
             ct: ct);
 
         await _users.SaveChangesAsync(ct);
-        return (ToDto(target), null);
+
+        // Post-SaveChanges, same reasoning as InviteAsync above (TASK-395).
+        var needsLocation = await NeedsLocationAssignmentAsync(tenantId, target.Id, target.Role, ct);
+        return (ToDto(target, needsLocation), null);
     }
 
     // ── Deactivate (soft delete) ──────────────────────────────────────────────
@@ -341,7 +382,9 @@ public sealed class UserService : IUserService
                 entityType: "User", entityId: userId, ct: ct);
 
         await _users.SaveChangesAsync(ct);
-        return (ToDto(user), null);
+
+        var needsLocation = await NeedsLocationAssignmentAsync(user.TenantId, user.Id, user.Role, ct);
+        return (ToDto(user, needsLocation), null);
     }
 
     public async Task<string?> ChangePasswordAsync(
@@ -435,7 +478,9 @@ public sealed class UserService : IUserService
             ct: ct);
 
         await _users.SaveChangesAsync(ct);
-        return (ToDto(target), null);
+
+        var needsLocation = await NeedsLocationAssignmentAsync(tenantId, target.Id, target.Role, ct);
+        return (ToDto(target, needsLocation), null);
     }
 
     // ── Temporary permission grants (ADR-019, TASK-342) ────────────────────────
@@ -670,6 +715,26 @@ public sealed class UserService : IUserService
         await _userLocations.ReplaceForUserAsync(tenantId, userId, locationIds, actingUserId, ct);
     }
 
+    /// <summary>
+    /// Computes UserDto.NeedsLocationAssignment (TASK-395) for one user. Short-circuits to
+    /// false without a query whenever the role alone already settles the answer — everything
+    /// outside <see cref="LocationScopedRoles"/>, or a null tenantId (no LocationScopedRoles
+    /// member should ever have one in practice, but this guards the self-service
+    /// UpdateMyProfileAsync call site regardless, since it has no separate tenantId parameter
+    /// to fall back on). Callers that just wrote a user_locations row in the same request
+    /// (Invite/Update via SyncSingleLocationAsync) MUST call this only after their own
+    /// SaveChangesAsync — this method queries the database fresh, so it cannot see
+    /// still-pending, not-yet-committed changes on the shared AppDbContext.
+    /// </summary>
+    private async Task<bool> NeedsLocationAssignmentAsync(
+        Guid? tenantId, Guid userId, string role, CancellationToken ct)
+    {
+        if (tenantId is null || !LocationScopedRoles.Contains(role))
+            return false;
+
+        return !await _userLocations.HasAnyLocationAsync(tenantId.Value, userId, ct);
+    }
+
     private async Task LogAsync(
         Guid tenantId, Guid userId, string action,
         string? entityType = null, Guid? entityId = null,
@@ -691,7 +756,10 @@ public sealed class UserService : IUserService
 
     // ── Mappers ───────────────────────────────────────────────────────────────
 
-    private static UserDto ToDto(User u) => new(
+    // needsLocationAssignment has no default on purpose (TASK-395): every call site must decide
+    // it explicitly via NeedsLocationAssignmentAsync (or GetAllAsync's batched equivalent)
+    // rather than silently getting "false" from a forgotten call site.
+    private static UserDto ToDto(User u, bool needsLocationAssignment) => new(
         u.Id, u.Email, u.FullName, u.Phone, u.Role,
         u.StoreId, u.IsActive,
         HasTelegram: u.TelegramChatId is not null,
@@ -700,7 +768,8 @@ public sealed class UserService : IUserService
         InvitedByName: u.InvitedByName,
         LegalEntityId: u.LegalEntityId,
         TenantRoleId: u.TenantRoleId,
-        PreferredLocale: u.PreferredLocale
+        PreferredLocale: u.PreferredLocale,
+        NeedsLocationAssignment: needsLocationAssignment
     );
 
     private static ActivityLogDto ToActivityDto(ActivityLog a) => new(

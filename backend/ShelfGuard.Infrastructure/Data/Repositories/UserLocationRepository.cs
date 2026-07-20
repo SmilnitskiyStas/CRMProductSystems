@@ -39,5 +39,25 @@ public sealed class UserLocationRepository : IUserLocationRepository
                 UserLocation.Create(tenantId, userId, locationId, assignedByUserId), ct);
     }
 
+    public async Task<bool> HasAnyLocationAsync(
+        Guid tenantId, Guid userId, CancellationToken ct = default) =>
+        await _db.UserLocations
+            .AsNoTracking()
+            .AnyAsync(x => x.TenantId == tenantId && x.UserId == userId, ct);
+
+    public async Task<IReadOnlyCollection<Guid>> GetUserIdsWithAnyLocationAsync(
+        Guid tenantId, IReadOnlyCollection<Guid> userIds, CancellationToken ct = default)
+    {
+        if (userIds.Count == 0) return Array.Empty<Guid>();
+
+        var ids = userIds.ToList();
+        return await _db.UserLocations
+            .AsNoTracking()
+            .Where(x => x.TenantId == tenantId && ids.Contains(x.UserId))
+            .Select(x => x.UserId)
+            .Distinct()
+            .ToListAsync(ct);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

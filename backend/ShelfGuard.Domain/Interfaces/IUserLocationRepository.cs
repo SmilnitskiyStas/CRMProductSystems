@@ -25,5 +25,22 @@ public interface IUserLocationRepository
         Guid tenantId, Guid userId, IReadOnlyCollection<Guid> locationIds,
         Guid? assignedByUserId, CancellationToken ct = default);
 
+    /// <summary>
+    /// True when the user has at least one user_locations row in this tenant (TASK-395,
+    /// UserDto.NeedsLocationAssignment). For single-user paths (GetById, Invite, Update) where
+    /// one extra existence query is cheap and correctness matters more than batching. For a
+    /// whole user list, use <see cref="GetUserIdsWithAnyLocationAsync"/> instead — a per-user
+    /// loop over this method would be exactly the N+1 that method exists to avoid.
+    /// </summary>
+    Task<bool> HasAnyLocationAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Batched existence check backing UserDto.NeedsLocationAssignment on the users LIST
+    /// endpoint (TASK-395): given a candidate set of user ids, returns the subset that has at
+    /// least one user_locations row, via a single query — avoids one query per user.
+    /// </summary>
+    Task<IReadOnlyCollection<Guid>> GetUserIdsWithAnyLocationAsync(
+        Guid tenantId, IReadOnlyCollection<Guid> userIds, CancellationToken ct = default);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }
