@@ -32,8 +32,10 @@ public interface ITenantRoleService
     IReadOnlyList<TenantRoleCapabilityGroupDto> GetCapabilityCatalog();
 
     /// <summary>Backend source-of-truth sidebar-tab catalog (GET /api/tenant-roles/tabs,
-    /// TASK-391b) — not tenant-scoped, same for every caller. Sibling to
-    /// <see cref="GetCapabilityCatalog"/>; see <see cref="ShelfGuard.Domain.Constants.TenantRoleTabs"/>
-    /// for why tabs are a separate axis from capabilities.</summary>
-    IReadOnlyList<TenantRoleTabDto> GetTabCatalog();
+    /// TASK-391b; hierarchy since TASK-398) — not tenant-scoped, same for every caller. Sibling
+    /// to <see cref="GetCapabilityCatalog"/>; see <see cref="ShelfGuard.Domain.Constants.TenantRoleTabs"/>
+    /// for why tabs are a separate axis from capabilities. Each returned group carries both its
+    /// own bulk-grantable key (<see cref="TenantRoleTabGroupDto.GroupKey"/>) and its nested
+    /// per-page keys (<see cref="TenantRoleTabGroupDto.Items"/>).</summary>
+    IReadOnlyList<TenantRoleTabGroupDto> GetTabCatalog();
 }

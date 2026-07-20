@@ -28,9 +28,10 @@ public sealed class TenantRolesController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<TenantRoleCapabilityGroupDto>), StatusCodes.Status200OK)]
     public IActionResult GetCapabilities() => Ok(_tenantRoles.GetCapabilityCatalog());
 
-    /// <summary>Backend source-of-truth sidebar-tab catalog (TASK-391b) — not tenant-scoped.</summary>
+    /// <summary>Backend source-of-truth sidebar-tab catalog — hierarchy of groups with nested
+    /// per-page items (TASK-398; flat list originally, TASK-391b) — not tenant-scoped.</summary>
     [HttpGet("tabs")]
-    [ProducesResponseType(typeof(IReadOnlyList<TenantRoleTabDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IReadOnlyList<TenantRoleTabGroupDto>), StatusCodes.Status200OK)]
     public IActionResult GetTabs() => Ok(_tenantRoles.GetTabCatalog());
 
     [HttpGet]

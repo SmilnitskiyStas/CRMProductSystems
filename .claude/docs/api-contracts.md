@@ -117,7 +117,7 @@ access than the template intends).
 
 ```
 GET    /api/tenant-roles/capabilities            -> TenantRoleCapabilityGroupDto[]  (catalog, not tenant-scoped, grouped by specialty)
-GET    /api/tenant-roles/tabs                    -> TenantRoleTabDto[]              (catalog, not tenant-scoped, flat list — ADR-021, TASK-391b)
+GET    /api/tenant-roles/tabs                    -> TenantRoleTabGroupDto[]         (catalog, not tenant-scoped, hierarchy — ADR-021, TASK-398; flat list originally, TASK-391b)
 GET    /api/tenant-roles?includeInactive=        -> TenantRoleDto[]
 GET    /api/tenant-roles/{id}                    -> TenantRoleDto | 404
 POST   /api/tenant-roles       CreateTenantRoleRequest  -> 201 TenantRoleDto | 400 { error }
@@ -141,17 +141,36 @@ POST   /api/users/{id}/tenant-role  AssignTenantRoleRequest { "tenantRoleId": "u
 ```json
 { "name": "string", "capabilities": ["string", "..."], "allowedTabs": ["string", "..."] }
 ```
-`allowedTabs` (TASK-391b) — optional on the wire (defaults to `[]` server-side), validated
-against the fixed 10-key `TenantRoleTabs.All` catalog (see ADR-021); an unknown key is rejected
-with `400`.
+`allowedTabs` — optional on the wire (defaults to `[]` server-side), validated against
+`TenantRoleTabs.All` (see ADR-021 + its TASK-398 addendum); an unknown key is rejected with `400`.
+`All` unions two key flavours, both currently valid on the same list with no wire-level
+distinction between them:
+- **Group-level** (10 keys, TASK-391b — `dashboard`, `operations`, `sales`, `procurement`,
+  `marketplace`, `auto_service`, `production`, `analytics`, `workforce`, `support`): grants a
+  whole `Sidebar.tsx` NavGroup at once.
+- **Item-level** (27 keys, TASK-398 — the literal `NavItem.href` per page, e.g. `"/inventory"`,
+  `"/receipts"`, `"/pos"`): grants a single page inside a group without unlocking the rest.
 
-#### TenantRoleCapabilityDto / TenantRoleTabDto
+#### TenantRoleCapabilityDto / TenantRoleTabDto / TenantRoleTabGroupDto
 ```json
 { "key": "string", "labelUa": "string" }
 ```
 `GET .../capabilities` groups these under `TenantRoleCapabilityGroupDto { "specialty": "string",
-"capabilities": TenantRoleCapabilityDto[] }`; `GET .../tabs` returns a flat `TenantRoleTabDto[]`
-(tabs aren't grouped by specialty).
+"capabilities": TenantRoleCapabilityDto[] }`.
+
+`GET .../tabs` (TASK-398 — supersedes TASK-391b's flat `TenantRoleTabDto[]`) returns a hierarchy:
+```json
+[
+  { "groupKey": null, "groupLabelUa": "Дашборд", "items": [ { "key": "dashboard", "labelUa": "Дашборд" } ] },
+  { "groupKey": "operations", "groupLabelUa": "Операції", "items": [
+    { "key": "/inventory", "labelUa": "Каталог" },
+    { "key": "/stock", "labelUa": "Залишки" }
+  ] }
+]
+```
+`groupKey` is null only for the standalone Dashboard section (Dashboard is a top-level NavItem in
+Sidebar.tsx, not a NavGroup). When non-null it is itself one of the 10 group-level keys above —
+independently valid in `allowedTabs` — in addition to each nested `items[].key` (item-level).
 
 ---
 

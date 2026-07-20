@@ -3,6 +3,23 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-398 — Backend: per-item sidebar tab catalog (item-level AllowedTabs granularity)
+**Status:** done (2026-07-20) · **Agent:** backend-developer · **Depends:** TASK-391/ADR-021, TASK-397
+Log: `.claude/logs/tasks/398_2026-07-20_per-item-tab-catalog_backend-developer.md`
+Product feedback on ADR-021's Feature 1: whole-group `AllowedTabs` grants (e.g. "operations" = 7
+pages at once) were too coarse. Added 27 item-level keys (literal `NavItem.href` per page,
+verified against `Sidebar.tsx`'s `buildNavGroups`) alongside the original 10 group-level keys in
+`TenantRoleTabs.All` — both flavours validate through the same `TenantRoleService.Validate` check,
+no branching needed. `GET /api/tenant-roles/tabs` now returns a hierarchy
+(`TenantRoleTabGroupDto[]` — group node with its own bulk-grant key + nested per-page items;
+standalone Dashboard section has `groupKey: null`) instead of TASK-391b's flat list. Flagged (not
+fixed, out of scope): `Sidebar.tsx` still only reads the group-level key — item-level grants do
+nothing client-side until a follow-up frontend task wires them in; `"/settings/legal-entities"` is
+in the catalog for completeness but its existing `canManageLegalEntities`-only carve-out should
+stay excluded from that future generic check. `dotnet build` 0 err (1 pre-existing unrelated
+warning), `dotnet test` 907/907 green. Docs updated: `.claude/docs/api-contracts.md`,
+ADR-021 addendum in `.claude/docs/decisions.md`. Local commit only, no push (product owner pushes).
+
 ## TASK-373 — Docs: Block 19 pre-launch audit (FINAL) — go/no-go readiness + stale-doc refresh
 **Status:** done (2026-07-16) · **Agent:** documentation-writer + project-manager (main session, direct) · **Depends:** TASK-350..372
 Log: `.claude/logs/tasks/373_2026-07-16_prelaunch-readiness-gono-go_documentation-writer.md`

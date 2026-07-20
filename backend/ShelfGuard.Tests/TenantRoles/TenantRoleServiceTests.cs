@@ -228,18 +228,99 @@ public sealed class TenantRoleServiceTests
         Assert.Contains(groups, g => g.Capabilities.Any(c => c.Key == TenantUserPermissions.LegalEntitiesManage));
     }
 
-    // ── Tab catalog (TASK-391b) ───────────────────────────────────────────
+    // ── Tab catalog (TASK-391b; hierarchy + item-level keys since TASK-398) ─
 
     [Fact]
-    public void GetTabCatalog_ReturnsEveryTabInAll_WithLabels()
+    public void GetTabCatalog_FlattenedGroupAndItemKeys_MatchAll_WithLabels()
     {
         var catalog = _sut.GetTabCatalog();
 
-        var keys = catalog.Select(t => t.Key).ToList();
+        var groupKeys = catalog.Where(g => g.GroupKey is not null).Select(g => g.GroupKey!);
+        var itemKeys = catalog.SelectMany(g => g.Items).Select(i => i.Key);
+        var flatKeys = groupKeys.Concat(itemKeys).Distinct().ToList();
 
         Assert.Equal(TenantRoleTabs.All.OrderBy(k => k, StringComparer.Ordinal),
-            keys.Distinct().OrderBy(k => k, StringComparer.Ordinal));
-        Assert.Contains(catalog, t => t.Key == TenantRoleTabs.Dashboard);
-        Assert.All(catalog, t => Assert.False(string.IsNullOrWhiteSpace(t.LabelUa)));
+            flatKeys.OrderBy(k => k, StringComparer.Ordinal));
+        Assert.All(catalog, g => Assert.False(string.IsNullOrWhiteSpace(g.GroupLabelUa)));
+        Assert.All(catalog.SelectMany(g => g.Items), i => Assert.False(string.IsNullOrWhiteSpace(i.LabelUa)));
+    }
+
+    [Fact]
+    public void GetTabCatalog_Dashboard_IsStandaloneSectionWithNoGroupKey()
+    {
+        var catalog = _sut.GetTabCatalog();
+
+        var dashboardSection = Assert.Single(catalog, g => g.GroupKey is null);
+        var dashboardItem = Assert.Single(dashboardSection.Items);
+        Assert.Equal(TenantRoleTabs.Dashboard, dashboardItem.Key);
+    }
+
+    [Fact]
+    public void GetTabCatalog_EveryRealGroup_HasGroupKeyFromGroupKeysAndAtLeastOneItem()
+    {
+        var catalog = _sut.GetTabCatalog();
+        var realGroups = catalog.Where(g => g.GroupKey is not null).ToList();
+
+        Assert.Equal(TenantRoleTabs.GroupKeys.Count, realGroups.Count);
+        Assert.All(realGroups, g => Assert.Contains(g.GroupKey!, TenantRoleTabs.GroupKeys));
+        Assert.All(realGroups, g => Assert.NotEmpty(g.Items));
+    }
+
+    [Fact]
+    public async Task CreateAsync_ItemLevelTabKey_IsAccepted()
+    {
+        _repo.GetByNameAsync(_tenantId, "Приймальник", Arg.Any<CancellationToken>()).Returns((TenantRole?)null);
+
+        var request = new CreateTenantRoleRequest("Приймальник", [], [TenantRoleTabs.ItemReceipts]);
+
+        var (role, error) = await _sut.CreateAsync(_tenantId, null, request);
+
+        Assert.Null(error);
+        Assert.Equal(new[] { TenantRoleTabs.ItemReceipts }, role!.AllowedTabs.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_MixOfGroupLevelAndItemLevelTabKeys_IsAccepted()
+    {
+        // A template may grant a whole legacy group (backward compat) alongside a standalone
+        // item from an otherwise-ungranted group, plus the standalone Dashboard key — all three
+        // flavours validate through the same TenantRoleTabs.All set (TASK-398).
+        _repo.GetByNameAsync(_tenantId, "Mixed Tabs", Arg.Any<CancellationToken>()).Returns((TenantRole?)null);
+
+        var request = new CreateTenantRoleRequest(
+            "Mixed Tabs", [], [TenantRoleTabs.Operations, TenantRoleTabs.ItemPos, TenantRoleTabs.Dashboard]);
+
+        var (role, error) = await _sut.CreateAsync(_tenantId, null, request);
+
+        Assert.Null(error);
+        Assert.Equal(
+            new[] { TenantRoleTabs.Operations, TenantRoleTabs.ItemPos, TenantRoleTabs.Dashboard },
+            role!.AllowedTabs.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_UnknownItemLevelTabKey_ReturnsValidationError_DoesNotSave()
+    {
+        var request = new CreateTenantRoleRequest("HR", [], ["/not-a-real-page"]);
+
+        var (role, error) = await _sut.CreateAsync(_tenantId, null, request);
+
+        Assert.Null(role);
+        Assert.NotNull(error);
+        await _repo.DidNotReceive().AddAsync(Arg.Any<TenantRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_ExcludedAdminHref_IsRejected()
+    {
+        // "/provider"/"/admin" (Admin NavGroup) are deliberately excluded forever, same rationale
+        // as the "admin" group key itself — a tenant role must never unlock the provider panel,
+        // whole-group or single-page.
+        var request = new CreateTenantRoleRequest("HR", [], ["/provider"]);
+
+        var (role, error) = await _sut.CreateAsync(_tenantId, null, request);
+
+        Assert.Null(role);
+        Assert.NotNull(error);
     }
 }

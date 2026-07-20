@@ -97,9 +97,12 @@ public sealed class TenantRoleService : ITenantRoleService
                 g.Capabilities.Select(c => new TenantRoleCapabilityDto(c.Key, c.LabelUa)).ToList()))
             .ToList();
 
-    public IReadOnlyList<TenantRoleTabDto> GetTabCatalog() =>
+    public IReadOnlyList<TenantRoleTabGroupDto> GetTabCatalog() =>
         TenantRoleTabs.Catalog
-            .Select(t => new TenantRoleTabDto(t.Key, t.LabelUa))
+            .Select(g => new TenantRoleTabGroupDto(
+                g.GroupKey,
+                g.GroupLabelUa,
+                g.Items.Select(i => new TenantRoleTabDto(i.Key, i.LabelUa)).ToList()))
             .ToList();
 
     // ── helpers ───────────────────────────────────────────────────────────
@@ -113,6 +116,9 @@ public sealed class TenantRoleService : ITenantRoleService
         if (unknownCapabilities.Count > 0)
             return $"Unknown capability(ies): {string.Join(", ", unknownCapabilities)}.";
 
+        // TenantRoleTabs.All (TASK-398) already unions the group-level (backward-compat) and
+        // item-level (per-page) keys, so this one Contains check accepts either flavour with no
+        // branching needed here — see the class-level doc comment on TenantRoleTabs for why.
         var unknownTabs = allowedTabs.Where(t => !TenantRoleTabs.All.Contains(t)).ToList();
         if (unknownTabs.Count > 0)
             return $"Unknown tab(s): {string.Join(", ", unknownTabs)}.";

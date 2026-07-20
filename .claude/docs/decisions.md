@@ -193,6 +193,25 @@ Consequences:
 Extends: ADR-020 (adds a second, independent per-TenantRole axis — `AllowedTabs` alongside
 `Capabilities` — reusing the same storage/JWT/DTO mechanism rather than inventing a new one).
 
+**Addendum (TASK-398, 2026-07-20) — item-level granularity:** product feedback confirmed the
+original 10 group-level keys are too coarse (granting `operations` unlocks all 7 pages in that
+group at once, no way to grant e.g. only Receipts). Added 27 item-level keys — the literal
+`NavItem.href` per page (`"/inventory"`, `"/receipts"`, ...) — unioned into the same
+`TenantRoleTabs.All`/`Validate` set as the original 10; no new column, no new JWT claim, no schema
+change. The 10 group-level keys are kept exactly as-is, forever, for backward compat with
+already-configured templates. `GET /api/tenant-roles/tabs` now returns a hierarchy
+(`TenantRoleTabGroupDto[]` — a group's own bulk-grant key plus its nested per-page items; the
+standalone Dashboard section has `groupKey: null`) instead of TASK-391b's flat list, so a future
+editor UI can offer both granularities. **Deliberately backend/catalog-only** — `Sidebar.tsx`
+still only ever checks the group-level key (`tabsSet.has(group.key)`, point 6 above); wiring
+item-level enforcement into the sidebar/route guards is a separate, not-yet-scheduled follow-up.
+Until then, granting only an item-level key does **nothing** client-side (Sidebar.tsx doesn't read
+these keys yet) — one step behind even the Tier 2 status the original 10 keys had at ship time.
+One included item is worth flagging for that follow-up: `"/settings/legal-entities"` is a real
+Workforce NavItem so it's in the catalog for completeness, but Sidebar.tsx's TASK-397 carve-out
+already excludes that one href from `tabsSet` entirely (visibility is `canManageLegalEntities`-only,
+by design) — the follow-up should keep excluding it rather than newly wire it up.
+
 ## ADR-020: TenantRole — named custom-role templates with real backend capability enforcement
 Date: 2026-07-13
 Status: accepted
