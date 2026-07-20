@@ -240,6 +240,63 @@ public sealed class UserServiceLocationsTests
             actingUser.Id, Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task UpdateAsync_StoreManagerAlreadyHasMultipleLocations_DoesNotCollapseToSingleRow()
+    {
+        // TASK-397: once an admin has used the dedicated multi-select endpoint (SetLocationsAsync,
+        // now available for every LocationScopedRoles member, not just network_manager) to give a
+        // store_manager-tier user 2+ locations, an unrelated plain-profile save (name/phone/role/
+        // legal entity) through this endpoint must not silently collapse that back down to one row
+        // via the legacy single-location auto-sync — SyncSingleLocationAsync's new guard checks the
+        // existing row count first and steps aside once it's already 2+.
+        var actingUser = MakeUser("enterprise_admin");
+        var target = MakeUser("store_manager");
+        var storeId = Guid.NewGuid();
+        _users.GetByIdAsync(target.Id, Arg.Any<CancellationToken>()).Returns(target);
+        _users.GetByIdAsync(actingUser.Id, Arg.Any<CancellationToken>()).Returns(actingUser);
+        _locations.BelongsToTenantAsync(_tenantId, storeId, Arg.Any<CancellationToken>()).Returns(true);
+        _userLocations.GetLocationIdsForUserAsync(_tenantId, target.Id, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid> { Guid.NewGuid(), Guid.NewGuid() });
+
+        var request = new UpdateUserRequest(
+            FullName: "Updated Name", Phone: null, Role: target.Role, StoreId: storeId);
+
+        var (user, error) = await _sut.UpdateAsync(_tenantId, actingUser.Id, target.Id, request, default);
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        await _userLocations.DidNotReceive().ReplaceForUserAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_StoreManagerWithExactlyOneExistingLocation_StillSyncsNormally()
+    {
+        // Guard boundary check: exactly ONE pre-existing row is still the legacy shape (not yet
+        // "graduated" to multi-location via SetLocationsAsync), so the plain Update endpoint must
+        // keep auto-syncing it as before — only 2+ rows should suppress the sync.
+        var actingUser = MakeUser("enterprise_admin");
+        var target = MakeUser("store_manager");
+        var newStoreId = Guid.NewGuid();
+        _users.GetByIdAsync(target.Id, Arg.Any<CancellationToken>()).Returns(target);
+        _users.GetByIdAsync(actingUser.Id, Arg.Any<CancellationToken>()).Returns(actingUser);
+        _locations.BelongsToTenantAsync(_tenantId, newStoreId, Arg.Any<CancellationToken>()).Returns(true);
+        _userLocations.GetLocationIdsForUserAsync(_tenantId, target.Id, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid> { Guid.NewGuid() });
+
+        var request = new UpdateUserRequest(
+            FullName: target.FullName, Phone: null, Role: target.Role, StoreId: newStoreId);
+
+        var (user, error) = await _sut.UpdateAsync(_tenantId, actingUser.Id, target.Id, request, default);
+
+        Assert.Null(error);
+        Assert.NotNull(user);
+        await _userLocations.Received(1).ReplaceForUserAsync(
+            _tenantId, target.Id,
+            Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(newStoreId)),
+            actingUser.Id, Arg.Any<CancellationToken>());
+    }
+
     // ── SetLocationsAsync (network_manager full-replace path) ──────────────────
 
     [Fact]

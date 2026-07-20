@@ -150,21 +150,29 @@ export const ROLE_RANK: Record<string, number> = {
   staff:            0,
 };
 
-// ── Store-scoped location assignment (TASK-392c, Feature 2 Stage 1) ──────────
+// ── Store-scoped location assignment (TASK-392c; unified in TASK-397) ────────
 
 /**
- * Ranks that get exactly ONE store assignment, mirroring backend
- * `UserService.SingleLocationRoles` exactly. `network_manager` instead gets a multi-location
- * "territory" (see {@link UserLocationsDto}, `UserLocationsEditor`/`PUT /api/users/:id/locations`);
- * `enterprise_admin` sees every location in the tenant unconditionally and is never assigned
- * any row at all.
+ * Every role that gets a store-scoped location assignment via the multi-select
+ * `UserLocationsEditor` (`GET`/`PUT /api/users/:id/locations`) — mirrors backend
+ * `UserService.LocationScopedRoles` exactly (the same six roles `UserDto.needsLocationAssignment`
+ * gates on, TASK-395/396). `enterprise_admin` sees every location in the tenant unconditionally
+ * and is never assigned any row at all; `provider`/`provider_admin`/`supplier_admin` aren't
+ * tenant-staff roles at all and are excluded too.
+ *
+ * Previously named `SINGLE_LOCATION_ROLES` and scoped to store_manager-and-below only, with
+ * `network_manager` handled as a separate "multi-location" special case (a hardcoded
+ * `role === "network_manager"` check in UserDetailPanel/InviteUserModal). TASK-397 removed that
+ * split: the backend's full-replace `PUT /api/users/:id/locations` never had a role restriction
+ * or a "one location only" limit for any target — that was purely a frontend UI decision — so
+ * every role below now gets the exact same multi-select UI, able to pick one or many stores.
  */
-export const SINGLE_LOCATION_ROLES = new Set<string>([
-  "store_manager", "merchandiser", "storekeeper", "cashier", "staff",
+export const LOCATION_SCOPED_ROLES = new Set<string>([
+  "network_manager", "store_manager", "merchandiser", "storekeeper", "cashier", "staff",
 ]);
 
-export function isSingleLocationRole(role: string): boolean {
-  return SINGLE_LOCATION_ROLES.has(role);
+export function isLocationScopedRole(role: string): boolean {
+  return LOCATION_SCOPED_ROLES.has(role);
 }
 
 /**

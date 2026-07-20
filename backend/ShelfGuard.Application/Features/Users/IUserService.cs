@@ -91,10 +91,16 @@ public interface IUserService
         Guid tenantId, Guid targetUserId, Guid? tenantRoleId, CancellationToken ct = default);
 
     // Store-scoped location assignment (TASK-392b, Feature 2 Stage 1 — schema/plumbing only,
-    // enforcement RLS is Stage 3). Deliberately a SEPARATE method/endpoint from
-    // InviteAsync/UpdateAsync: those two only ever write exactly one user_locations row
-    // (mirroring User.StoreId) for ranks store_manager-and-below; network_manager's
-    // multi-location assignment always goes through this full-replace path instead.
+    // enforcement RLS is Stage 3). Originally a SEPARATE method/endpoint from
+    // InviteAsync/UpdateAsync because those two only ever wrote exactly one user_locations row
+    // (mirroring User.StoreId) for ranks store_manager-and-below, with network_manager's
+    // multi-location assignment as the only caller of this full-replace path. TASK-397 removed
+    // that split at the UI layer: every LocationScopedRoles member (network_manager AND
+    // store_manager-and-below) now gets the same multi-select dropdown backed by THIS method
+    // directly. InviteAsync/UpdateAsync still exist and still auto-sync a single legacy row for
+    // store_manager-and-below, but only while a target is still in the "0 or 1 row" shape —
+    // once SetLocationsAsync has given someone 2+ rows, that auto-sync steps aside and this
+    // method alone owns their assignment (see UserService.SyncSingleLocationAsync's guard).
     /// <summary>
     /// Full-replace of a user's store-scoped location assignments: the user's user_locations
     /// rows become exactly <paramref name="locationIds"/> (existing rows outside that set are
@@ -103,7 +109,9 @@ public interface IUserService
     /// AssignTenantRoleAsync's TenantRole check — a foreign-tenant id is indistinguishable from
     /// a bad request, never a 403/enumeration hint). Gated AtLeastEnterpriseAdmin-only with no
     /// capability bypass at the controller — this decides which locations' real business data
-    /// a whole role will see once Stage 3 lands.
+    /// a whole role will see once Stage 3 lands. Callable for ANY target role — this method
+    /// itself has never had a role restriction; TASK-397 confirmed the "network_manager-only"
+    /// framing was purely a frontend UI decision.
     /// </summary>
     Task<(bool Success, string? Error)> SetLocationsAsync(
         Guid tenantId, Guid targetUserId, List<Guid> locationIds, Guid actingUserId, CancellationToken ct = default);

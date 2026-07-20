@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useInviteUser } from "../hooks/useUsers";
 import { useSetUserLocations } from "../hooks/useUserLocations";
 import { getRoleLabel, ROLE_KEYS } from "@/features/profile/types";
-import { ROLE_RANK, isSingleLocationRole } from "../types";
+import { ROLE_RANK, isLocationScopedRole } from "../types";
+import { LocationsMultiSelectDropdown } from "./LocationsMultiSelectDropdown";
 import { Btn } from "@/components/ui/Btn";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { useLocations } from "@/features/locations/hooks/useLocations";
@@ -86,12 +87,12 @@ export function InviteUserModal({ onClose }: Props) {
   const [password,     setPassword]     = useState("");
   const [legalEntityId, setLegalEntityId] = useState("");
   const [tenantRoleId, setTenantRoleId]  = useState("");
-  // Store-scoped assignment (TASK-392c, Feature 2 Stage 1): manualStoreId is the fallback
-  // single-store picker, only shown/used when the inviter has no home store of their own
-  // (me.storeId null) to silently auto-assign; territoryIds is the network_manager
-  // multi-select, applied via a separate PUT after the invite succeeds.
-  const [manualStoreId, setManualStoreId] = useState("");
+  // Store-scoped assignment (TASK-392c, Feature 2 Stage 1; unified across every restricted
+  // role in TASK-397 — no more silent auto-bind/fallback single picker). territoryIds backs
+  // the multi-select shown for ANY isLocationScopedRole pick, applied via a separate PUT right
+  // after the invite succeeds (same two-step pattern network_manager already used pre-397).
   const [territoryIds, setTerritoryIds]   = useState<string[]>([]);
+  const [territorySeeded, setTerritorySeeded] = useState(false);
   const [errors,       setErrors]       = useState<Record<string, string>>({});
 
   // Set once the invite call succeeds — flips the primary button into a "close" action so
@@ -99,9 +100,18 @@ export function InviteUserModal({ onClose }: Props) {
   const [createdUserId, setCreatedUserId] = useState<string | null>(null);
   const [partialError,  setPartialError]  = useState<string | null>(null);
 
-  const singleLocationRole = isSingleLocationRole(role);
-  const needsStorePicker = singleLocationRole && !me?.storeId;
-  const effectiveStoreId = singleLocationRole ? me?.storeId ?? (manualStoreId || null) : null;
+  // Pre-select the inviter's own store as a sensible starting default (TASK-397 — product
+  // owner explicitly wants no more silent/hidden assignment, but a helpful default is fine)
+  // once `me` resolves; the admin can freely add/remove from there. Seeded exactly once —
+  // same `initialized`-style guard as UserLocationsEditor — so it never clobbers an
+  // in-progress edit on an unrelated re-render, and independent of which role is currently
+  // picked (switching roles back and forth must not reset the admin's choices).
+  useEffect(() => {
+    if (!territorySeeded && me) {
+      setTerritoryIds(me.storeId ? [me.storeId] : []);
+      setTerritorySeeded(true);
+    }
+  }, [me, territorySeeded]);
 
   function toggleTerritory(id: string) {
     setTerritoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -133,15 +143,18 @@ export function InviteUserModal({ onClose }: Props) {
       fullName: fullName.trim(),
       role,
       password,
-      storeId: effectiveStoreId,
+      // storeId is never set on the initial create anymore (TASK-397) — every
+      // location-scoped role's assignment is applied via the dedicated multi-select PUT right
+      // below instead, same two-step flow network_manager already used pre-397.
+      storeId: null,
       legalEntityId: legalEntityId || null,
     });
 
-    // network_manager territory (TASK-392c): a second call, same "already created, never
-    // retry the invite" discipline as the TenantRole assignment below. Skipped entirely when
-    // the admin didn't pick any store — an empty PUT would be a no-op anyway (a fresh user
-    // has no user_locations rows yet).
-    if (role === "network_manager" && territoryIds.length > 0) {
+    // Store/location assignment (TASK-392c; unified across every restricted role in
+    // TASK-397): a second call, same "already created, never retry the invite" discipline as
+    // the TenantRole assignment below. Skipped entirely when the admin didn't pick any store —
+    // an empty PUT would be a no-op anyway (a fresh user has no user_locations rows yet).
+    if (isLocationScopedRole(role) && territoryIds.length > 0) {
       try {
         await setUserLocations.mutateAsync({ userId: newUser.id, locationIds: territoryIds });
       } catch (err) {
@@ -284,62 +297,25 @@ export function InviteUserModal({ onClose }: Props) {
               </select>
             </div>
 
-            {/* Store (single) — fallback picker, only when the inviter has no home store of
-                their own to silently auto-assign (TASK-392c). Roles above store_manager
-                (network_manager/enterprise_admin) never show this — see the two blocks below. */}
-            {needsStorePicker && (
-              <div>
-                <label style={labelStyle}>{t("storeLabel")}</label>
-                <select
-                  value={manualStoreId}
-                  onChange={(e) => setManualStoreId(e.target.value)}
-                  disabled={Boolean(createdUserId)}
-                  style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
-                >
-                  <option value="" style={{ background: "#0D1117" }}>{t("storeNoneOption")}</option>
-                  {activeLocations.map((loc) => (
-                    <option key={loc.id} value={loc.id} style={{ background: "#0D1117" }}>
-                      {loc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Territory (multi) — network_manager only (TASK-392c). Applied via a separate
-                PUT /api/users/:id/locations right after the invite succeeds (useSetUserLocations). */}
-            {role === "network_manager" && (
+            {/* Stores (multi) — every location-scoped role, not just network_manager
+                (TASK-397, previously TASK-392c's network_manager-only territory picker).
+                Applied via a separate PUT /api/users/:id/locations right after the invite
+                succeeds (useSetUserLocations) — no more silent auto-bind/single picker. */}
+            {isLocationScopedRole(role) && (
               <div>
                 <label style={labelStyle}>{t("territoryLabel")}</label>
                 {activeLocations.length === 0 ? (
                   <p style={{ color: "#4B5563", fontSize: 11 }}>{t("territoryEmptyHint")}</p>
                 ) : (
-                  <div
-                    style={{
-                      display: "flex", flexDirection: "column", gap: 6,
-                      maxHeight: 160, overflowY: "auto",
-                      background: "#0D1117", border: "1px solid #374151",
-                      borderRadius: 8, padding: 10,
-                    }}
-                  >
-                    {activeLocations.map((loc) => (
-                      <label
-                        key={loc.id}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          fontSize: 13, color: "#E8EDF5", cursor: "pointer",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={territoryIds.includes(loc.id)}
-                          onChange={() => toggleTerritory(loc.id)}
-                          disabled={Boolean(createdUserId)}
-                        />
-                        {loc.name}
-                      </label>
-                    ))}
-                  </div>
+                  <LocationsMultiSelectDropdown
+                    locations={activeLocations}
+                    selectedIds={territoryIds}
+                    onToggle={toggleTerritory}
+                    summaryLabel={t("territorySelectedCount", { count: territoryIds.length })}
+                    placeholderLabel={t("territoryPlaceholder")}
+                    doneLabel={t("territoryDoneButton")}
+                    disabled={Boolean(createdUserId)}
+                  />
                 )}
                 <p style={{ color: "#4B5563", fontSize: 11, marginTop: 4 }}>
                   {t("territoryHint")}

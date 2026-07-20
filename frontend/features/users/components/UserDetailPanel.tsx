@@ -7,10 +7,9 @@ import { UserActivityLog } from "./UserActivityLog";
 import { UserPermissionsEditor } from "./UserPermissionsEditor";
 import { UserLocationsEditor } from "./UserLocationsEditor";
 import { getRoleLabel } from "@/features/profile/types";
-import { ROLE_RANK, isSingleLocationRole } from "../types";
+import { ROLE_RANK, isLocationScopedRole } from "../types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
-import { useLocations } from "@/features/locations/hooks/useLocations";
 import type { UserDto, UpdateUserRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
@@ -63,8 +62,6 @@ export function UserDetailPanel({ user, onClose }: Props) {
   const deactivate = useDeactivateUser();
   const { data: legalEntities } = useLegalEntities();
   const activeLegalEntities = (legalEntities ?? []).filter((e) => e.isActive);
-  const { data: locations } = useLocations();
-  const activeLocations = (locations ?? []).filter((l) => l.isActive);
 
   const [tab, setTab] = useState<PanelTab>("info");
 
@@ -74,17 +71,12 @@ export function UserDetailPanel({ user, onClose }: Props) {
   const [phone,    setPhone]    = useState(user.phone ?? "");
   const [role,     setRole]     = useState(user.role);
   const [legalEntityId, setLegalEntityId] = useState(user.legalEntityId ?? "");
-  // Store-scoped assignment (TASK-392c, Feature 2 Stage 1): single-store picker for
-  // store_manager-and-below targets. Only meaningful when the live `role` selection above
-  // is a single-location role — see isSingleLocationEdit/handleSave below.
-  const [storeId,  setStoreId]  = useState(user.storeId ?? "");
   const [saved,    setSaved]    = useState(false);
 
   const isSelf      = me?.id === user.id;
   const isAdmin     = me?.role === "enterprise_admin" || me?.role === "provider";
   const canEdit     = isAdmin && !isSelf;
   const canDeactivate = isAdmin && !isSelf && user.isActive;
-  const isSingleLocationEdit = isSingleLocationRole(role);
 
   // Permissions tab: visible if editor outranks target
   const editorRank  = ROLE_RANK[me?.role ?? ""] ?? 0;
@@ -95,10 +87,12 @@ export function UserDetailPanel({ user, onClose }: Props) {
   // rank check above — backend's POST /api/users/:id/tenant-role has no rank comparison
   // (AtLeastEnterpriseAdmin-only), so an admin can assign a template to a peer admin too.
   const canManageTenantRole = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN) && !isSelf;
-  // Territory management (TASK-392c): same AtLeastEnterpriseAdmin-only posture as
-  // TenantRole assignment, shown only for a network_manager target — PUT/GET
-  // /api/users/:id/locations has no capability bypass and no rank comparison either.
-  const canManageLocations = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN) && !isSelf && user.role === "network_manager";
+  // Store/location assignment (TASK-392c; unified across every restricted role in TASK-397):
+  // same AtLeastEnterpriseAdmin-only posture as TenantRole assignment, shown for any
+  // location-scoped target — PUT/GET /api/users/:id/locations has no capability bypass, no
+  // rank comparison, and (confirmed TASK-397) no restriction on the target's role or on how
+  // many locations can be assigned; "network_manager-only" was purely a frontend UI decision.
+  const canManageLocations = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN) && !isSelf && isLocationScopedRole(user.role);
   const showAccessTab = canSeeAccessTab || canManageTenantRole || canManageLocations;
 
   const initials = user.fullName
@@ -109,10 +103,15 @@ export function UserDetailPanel({ user, onClose }: Props) {
       fullName: fullName.trim() || user.fullName,
       phone: phone.trim() || null,
       role,
-      // Only the single-store picker below can change this; for any other role (no picker
-      // shown — network_manager/enterprise_admin/etc.) keep sending the user's existing
-      // value unchanged, same as before this task.
-      storeId: isSingleLocationEdit ? (storeId || null) : user.storeId,
+      // storeId is no longer edited from this panel for ANY role (TASK-397) — every
+      // location-scoped role now manages its assignment exclusively via UserLocationsEditor's
+      // dedicated PUT /api/users/:id/locations (Access tab). Must still pass the user's
+      // existing value through unchanged rather than omitting it: UserService.UpdateAsync
+      // unconditionally calls target.SetStore(request.StoreId) and re-syncs the legacy
+      // single-location user_locations row from it on every save (see UserService.cs
+      // SyncSingleLocationAsync) — sending null here would wipe that row (though the
+      // multi-location case is separately guarded server-side once 2+ rows already exist).
+      storeId: user.storeId ?? null,
       legalEntityId: legalEntityId || null,
     };
     await update.mutateAsync(data);
@@ -307,23 +306,6 @@ export function UserDetailPanel({ user, onClose }: Props) {
                           ))}
                         </select>
                       </div>
-                      {isSingleLocationEdit && (
-                        <div>
-                          <label style={labelStyle}>{t("storeLabel")}</label>
-                          <select
-                            value={storeId}
-                            onChange={(e) => setStoreId(e.target.value)}
-                            style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
-                          >
-                            <option value="" style={{ background: "#0D1117" }}>{t("storeNoneOption")}</option>
-                            {activeLocations.map((loc) => (
-                              <option key={loc.id} value={loc.id} style={{ background: "#0D1117" }}>
-                                {loc.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
                       <div>
                         <label style={labelStyle}>{t("legalEntityLabel")}</label>
                         <select

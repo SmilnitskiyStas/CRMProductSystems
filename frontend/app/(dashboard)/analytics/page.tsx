@@ -168,12 +168,15 @@ export default function AnalyticsPage() {
   const { data: me } = useMe();
   const roleAccess = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
 
-  // Sidebar tab visibility (TASK-391c): mirrors Sidebar.tsx's /analytics NavItem gate
-  // (roles: CAN_VIEW_ANALYTICS) OR'd with the "analytics" tabs claim. Reuses the combined
-  // value below for both the route-guard redirect and the AccessDenied render, so a
-  // tabs-granted user never hits a dead sidebar link. While `me` is still loading,
-  // roleAccess is null — keep `access` null too so the existing loading/redirect
-  // behavior below is unaffected until useMe() resolves.
+  // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397): mirrors
+  // Sidebar.tsx's /analytics NavItem gate (roles: CAN_VIEW_ANALYTICS). A non-empty tabs claim
+  // is now authoritative in BOTH directions — grants access without the role, and also blocks
+  // access a CAN_VIEW_ANALYTICS-ranked user would otherwise have, when "analytics" isn't in
+  // it — same override semantic as Sidebar's tabsSet, no longer a plain OR. Reuses the
+  // combined value below for both the route-guard redirect and the AccessDenied render, so a
+  // tabs-granted (or tabs-blocked) user's sidebar link and page access always agree. While
+  // `me` is still loading, roleAccess is null — keep `access` null too so the existing
+  // loading/redirect behavior below is unaffected until useMe() resolves.
   const effectiveAccess = useRequireTab("analytics", roleAccess === true);
   const access = roleAccess === null ? null : effectiveAccess;
 

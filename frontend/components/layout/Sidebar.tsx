@@ -688,7 +688,20 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     icon: <Settings size={18} />,
   };
 
-  const showDashboard = !dashboardItem.roles || dashboardItem.roles.has(userRole);
+  // Sidebar tab visibility (TASK-391c; made authoritative/exclusive in TASK-397): previously
+  // this standalone item never consulted tabsSet at all, so (un)checking "Дашборд" in a
+  // TenantRole's "Видимі розділи" editor had zero effect on it either direction — a real,
+  // separate bug from the additive-OR one fixed below (this one was non-functional, not just
+  // additive). Now mirrors the exact same override semantic as the grouped items just below:
+  // a non-empty tabsSet is authoritative (grants OR revokes, replacing the role check
+  // entirely); tabsSet null (default — no TenantRole tabs configured) preserves the original
+  // role-only check unchanged.
+  // "dashboard" — matches backend TenantRoleTabs.Dashboard and the tab-key convention every
+  // NavGroup.key already follows (no shared frontend constant for these; group keys below are
+  // likewise plain string literals, e.g. "workforce", "operations").
+  const showDashboard = tabsSet
+    ? tabsSet.has("dashboard")
+    : !dashboardItem.roles || dashboardItem.roles.has(userRole);
 
   // supplier_admin (v4.1) sees only the supplier cabinet + Settings — none of the
   // regular NAV_GROUPS, and no module fetch (its menu is fixed).
@@ -723,15 +736,24 @@ export function Sidebar({ collapsed, onToggle }: Props) {
       visibleItems: group.items.filter((item) => {
         // Legal Entities (TASK-323): role check OR the `legal_entities.manage`
         // per-user override — same OR-logic as backend LegalEntityAuthorization.CanManage.
+        // Independent of tabsSet in both directions (deliberately not part of the
+        // TenantRole-tabs override below, TASK-397) — this narrow, security-sensitive gate
+        // keeps deciding this one item on its own regardless of what tabs are configured.
         if (item.href === "/settings/legal-entities") {
           return canManageLegalEntities(userRole, me?.permissions);
         }
-        // Sidebar tab visibility (TASK-391c): if the user's effective TenantRole grants
-        // this group's tab key, every item in the group is visible regardless of the
-        // item.roles check below — additive OR, same shape as effectivePermissions/
-        // supplierEffectivePermissions just below (Legal Entities keeps its own narrower
-        // gate above, untouched).
-        if (tabsSet?.has(group.key)) return true;
+        // Sidebar tab visibility (TASK-391c; made authoritative/exclusive in TASK-397): a
+        // non-empty tabsSet (the user's effective TenantRole has "Видимі розділи" configured)
+        // is now the DEFINITIVE, EXCLUSIVE set of visible groups — it completely REPLACES the
+        // item.roles/permission checks below for that user, rather than just OR-ing into them.
+        // Previously `tabsSet?.has(group.key)) return true` could only ADD visibility, never
+        // remove it, so unchecking a tab a base role already granted via item.roles had no
+        // effect — the actual bug this task fixes. tabsSet is null whenever the user has no
+        // TenantRole tabs configured at all (the default, and the common case for existing
+        // capability-only TenantRole users who never touched the tabs checkboxes) — that case
+        // falls through unchanged to the item.roles/permission checks below, preserving exact
+        // prior behavior for everyone not using this feature.
+        if (tabsSet) return tabsSet.has(group.key);
         // Role check (existing logic)
         if (item.roles && !item.roles.has(userRole)) return false;
         // Permission check: only applied for PROVIDER_TEAM users on permission-gated items

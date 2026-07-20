@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useUserLocations, useSetUserLocations } from "../hooks/useUserLocations";
+import { LocationsMultiSelectDropdown } from "./LocationsMultiSelectDropdown";
 import { Btn } from "@/components/ui/Btn";
 import type { UserDto } from "../types";
 
@@ -12,11 +13,11 @@ interface Props {
 }
 
 /**
- * Full-replace multi-location "territory" editor for a network_manager user (TASK-392c,
- * Feature 2 Stage 1). Caller must gate visibility to enterprise_admin+ viewing a
- * network_manager target — this component does not check roles itself, since
- * PUT/GET /api/users/:id/locations is AtLeastEnterpriseAdmin-only with no capability bypass
- * (anti-escalation), same posture as TenantRoleSelector.
+ * Full-replace multi-location store assignment editor (TASK-392c, Feature 2 Stage 1; unified
+ * across every restricted role in TASK-397 — previously network_manager-only). Caller must gate
+ * visibility to enterprise_admin+ viewing a `isLocationScopedRole` target — this component does
+ * not check roles itself, since PUT/GET /api/users/:id/locations is AtLeastEnterpriseAdmin-only
+ * with no capability bypass (anti-escalation), same posture as TenantRoleSelector.
  */
 export function UserLocationsEditor({ user }: Props) {
   const t = useTranslations("Dashboard.users.locationsEditor");
@@ -86,28 +87,15 @@ export function UserLocationsEditor({ user }: Props) {
       ) : activeLocations.length === 0 ? (
         <div style={{ color: "#374151", fontSize: 12 }}>{t("emptyHint")}</div>
       ) : (
-        <div
-          style={{
-            display: "flex", flexDirection: "column", gap: 6,
-            marginBottom: 10, maxHeight: 220, overflowY: "auto",
-          }}
-        >
-          {activeLocations.map((loc) => (
-            <label
-              key={loc.id}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                fontSize: 13, color: "#E8EDF5", cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(loc.id)}
-                onChange={() => toggle(loc.id)}
-              />
-              {loc.name}
-            </label>
-          ))}
+        <div style={{ marginBottom: 10 }}>
+          <LocationsMultiSelectDropdown
+            locations={activeLocations}
+            selectedIds={selected}
+            onToggle={toggle}
+            summaryLabel={t("selectedCount", { count: selected.length })}
+            placeholderLabel={t("selectPlaceholder")}
+            doneLabel={t("doneButton")}
+          />
         </div>
       )}
 

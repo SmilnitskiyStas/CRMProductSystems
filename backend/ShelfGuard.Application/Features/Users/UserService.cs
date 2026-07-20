@@ -66,13 +66,20 @@ public sealed class UserService : IUserService
         actingRole == "supplier_admin" && otherRole == "supplier_admin";
 
     /// <summary>
-    /// Ranks that get exactly one user_locations row (mirroring User.StoreId) written by
+    /// Ranks that get exactly one user_locations row (mirroring User.StoreId) auto-synced by
     /// plain Invite/Update (TASK-392b, project-architect's store-scope design). Deliberately
     /// excludes: enterprise_admin (unconditional bypass, never gets rows at all — "не пиши
-    /// нічого"); network_manager (multi-location, must go through SetLocationsAsync's
-    /// dedicated full-replace endpoint instead — "ОКРЕМИЙ метод/ендпоінт"); supplier_admin
-    /// (ADR-016 flat cabinet domain, entirely outside the tenant-staff store-scope model —
-    /// same reasoning as IsExemptFromOutrankGate/RoleRank omitting it).
+    /// нічого"); network_manager (multi-location even before TASK-397, always went through
+    /// SetLocationsAsync's dedicated full-replace endpoint instead — "ОКРЕМИЙ метод/ендпоінт");
+    /// supplier_admin (ADR-016 flat cabinet domain, entirely outside the tenant-staff
+    /// store-scope model — same reasoning as IsExemptFromOutrankGate/RoleRank omitting it).
+    ///
+    /// TASK-397: the frontend no longer gives these ranks a single-store picker at all — every
+    /// <see cref="LocationScopedRoles"/> member (this set plus network_manager) now gets the
+    /// SAME multi-select UI backed by SetLocationsAsync directly. This set/its auto-sync in
+    /// <see cref="SyncSingleLocationAsync"/> only still exists for the legacy "0 or 1 row"
+    /// shape (old clients, or a target never touched via the new multi-select) — see that
+    /// method's guard against collapsing an already-multi-location assignment.
     /// </summary>
     private static readonly HashSet<string> SingleLocationRoles =
     [
@@ -697,18 +704,34 @@ public sealed class UserService : IUserService
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Keeps the single user_locations row for store_manager-and-below in sync with
+    /// Keeps the single legacy user_locations row for store_manager-and-below in sync with
     /// (role, storeId) — called from InviteAsync/UpdateAsync only. No-op for any role
     /// outside <see cref="SingleLocationRoles"/> (network_manager/enterprise_admin/
     /// supplier_admin/anything else): existing rows for those ranks, if any, are left
     /// untouched here — network_manager's list is only ever managed via
     /// <see cref="SetLocationsAsync"/>, and enterprise_admin is never supposed to have rows
     /// at all (its bypass is unconditional regardless of what this leaves behind).
+    ///
+    /// TASK-397 guard: a SingleLocationRoles member can now ALSO be given 2+ locations
+    /// directly via SetLocationsAsync (frontend's UserLocationsEditor is no longer
+    /// network_manager-only — every LocationScopedRoles member gets the same multi-select
+    /// dropdown). Once that has happened, this method must not collapse the assignment back
+    /// down to one row (or wipe it) just because an unrelated profile field (name/phone/role/
+    /// legal entity) was saved through the plain Invite/Update endpoint — previously this ran
+    /// unconditionally on every such save, which would silently destroy a multi-location
+    /// assignment on the very next unrelated edit. Only auto-sync while the target is still in
+    /// the legacy "0 or 1 row" shape; once it has 2+, SetLocationsAsync alone owns it from then
+    /// on (the extra existence read is one cheap query on an already low-frequency admin path,
+    /// same cost class as the pre-existing NeedsLocationAssignmentAsync check on this route).
     /// </summary>
     private async Task SyncSingleLocationAsync(
         Guid tenantId, Guid userId, string role, Guid? storeId, Guid actingUserId, CancellationToken ct)
     {
         if (!SingleLocationRoles.Contains(role))
+            return;
+
+        var existingIds = await _userLocations.GetLocationIdsForUserAsync(tenantId, userId, ct);
+        if ((existingIds?.Count ?? 0) > 1)
             return;
 
         var locationIds = storeId.HasValue ? new[] { storeId.Value } : Array.Empty<Guid>();
