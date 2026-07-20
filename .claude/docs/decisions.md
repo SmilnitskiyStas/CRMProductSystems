@@ -1,7 +1,197 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-13
+**Updated:** 2026-07-20
+
+## ADR-022: Store-scoped user assignment & data visibility (`user_locations` + RLS)
+Date: 2026-07-19
+Status: accepted (Stage 1 live in production; Stage 3 written and tested but deliberately not
+deployed — see rollout checklist)
+
+Context: `User.StoreId` ("assigned home store") has existed since `AddAuth` (2026-06-03) but was
+a dead field — unmapped (no `HasColumnName`), no FK, no index, and no code path anywhere ever
+read it for access control (unlike the ~19 other pre-v4 entities carried through
+`V4LocationsRename`). Meanwhile every store-scoped business table (`product_stock`,
+`daily_sales`, `pos_shifts`, etc.) is only tenant-isolated by RLS — any user in a tenant sees
+every store's data tenant-wide regardless of role. Product owner asked for real store-scoped
+visibility: a `store_manager`/`cashier`/etc. should see only their assigned store(s)' stock/
+sales/POS/write-offs, not the whole tenant.
+
+Decision:
+1. **`enterprise_admin` — unconditional bypass.** No `user_locations` rows needed or ever
+   written for this rank. Every other rank (`network_manager`, `store_manager`, `merchandiser`,
+   `storekeeper`, `cashier`, `staff`) is scoped through a new many-to-many `user_locations`
+   table — **including single-location roles**, which get exactly one row rather than being
+   special-cased through `User.StoreId`. One enforcement mechanism for every restricted rank,
+   not a shortcut for the common single-store case.
+2. **New `user_locations` table**: `Id`, `TenantId` (direct column with its own leading index —
+   Stage 3's RLS policy will `EXISTS`-subquery into this table from 9 other tables, so it needs
+   to be efficiently scannable on its own), `UserId` (FK→users, Cascade), `LocationId`
+   (FK→locations, Cascade), `AssignedByUserId` (FK→users, SetNull, audit field), `CreatedAt`.
+   Unique `(TenantId, UserId, LocationId)` + secondary `(TenantId, LocationId)`. No soft-delete —
+   pure leaf assignment table, hard DELETE revokes. RLS at this stage is the standard
+   `tenant_isolation`/`provider_bypass`/`worker_bypass` triad only — **not** yet the RESTRICTIVE
+   store-scope policy (that is Stage 3, point 5 below); nothing reads this table for access
+   control until then.
+3. **`User.StoreId` fixed, not removed.** Now correctly `.HasColumnName("LocationId")` +
+   `SetNull` FK to `locations` (same nullable/optional shape as `ProviderRoleId`/`TenantRoleId`).
+   It stays a UI/invite-time "default home location" hint only — **never** read by access-control
+   enforcement. `user_locations` is the single source of truth for that; the two must not be
+   conflated.
+4. **API**: `PUT` / `GET /api/users/{id}/locations` (full-replace / current list) —
+   `AtLeastEnterpriseAdmin`-only, **no** capability-OR bypass, same anti-escalation posture as
+   `AssignTenantRole` (ADR-020) — this endpoint decides what real business data a whole role
+   will see once Stage 3 lands, so a `users.manage` capability holder must never be able to grant
+   it to themselves or others. `UserService.InviteAsync`/`UpdateAsync` write the single
+   `user_locations` row automatically for single-location roles (`store_manager, merchandiser,
+   storekeeper, cashier, staff`) from the existing `storeId` field; `network_manager`'s
+   (potentially multi-location) assignment is managed only through the dedicated endpoint. New
+   `ILocationService.BelongsToTenantAsync` closes a pre-existing gap where `storeId` accepted any
+   GUID with zero tenant-ownership check.
+5. **Three-stage rollout — deliberately not one migration:**
+   - **Stage 1 (deployed to production)** — additive schema + `user_locations` API + assignment
+     UI (invite modal, user detail panel, `UserLocationsEditor`). Zero behavior change: nothing
+     queries `user_locations` for access control yet.
+   - **Stage 2 (not code — a manual, per-tenant admin task)** — every existing
+     `network_manager`/`store_manager`/`merchandiser`/`storekeeper`/`cashier`/`staff` user must
+     get at least one `user_locations` row via the Stage 1 UI/API before Stage 3 can safely
+     apply. Tracked via a coverage-gap SQL report in
+     `.claude/docs/store-scope-rollout-checklist.md`.
+   - **Stage 3 (written, tested, held back)** — RESTRICTIVE `store_scope` RLS policy,
+     `EXISTS`-scoped through `user_locations`, on 9 tables: `product_stock`, `daily_sales`,
+     `pos_shifts`, `pos_transactions`, `write_offs`, `discounts`, `stock_receipts` (one-sided,
+     `DestinationLocationId` — a receipt comes from a supplier, not another store),
+     `stock_movements`/`stock_transfers` (two-sided OR-match, `From`/`ToLocationId`). Bypass
+     roles: `provider`, `provider_admin` (added beyond the original brief — it already has full
+     bypass parity with `provider` via the pre-existing `provider_bypass` policy on these same
+     tables; omitting it here would have silently regressed that already-audited access),
+     `worker`, `enterprise_admin`. Migration `AddLocationStoreScopeRlsPolicies` exists, is fully
+     tested (9 new xunit integration tests + manual live-verification scenarios against the real
+     non-superuser app role, rollback/reapply round-trip confirmed), and is committed **only** on
+     local branch `stage3-rls-enforcement-hold` — **not merged to `main`, not deployed anywhere.**
+6. **Fail-closed, product-owner-confirmed.** The instant Stage 3's policy applies, a user in a
+   scoped role with **zero** `user_locations` rows sees **zero** rows on all 9 tables — not a
+   bypass, not a tenant-wide fallback. This is why Stage 2's backfill must reach zero gap
+   *before* Stage 3 can ever be applied to a real environment; applying it early is an immediate,
+   total functional outage for every un-backfilled user (their whole job — stock, sales, POS,
+   write-offs — goes blank at once, tenant-wide, the moment the migration commits). Full gating
+   procedure, the coverage-gap query, and the emergency rollback command live in
+   `.claude/docs/store-scope-rollout-checklist.md` — not duplicated here.
+7. **Child tables need no new policy** (`stock_receipt_items`, `stock_transfer_items`,
+   `write_off_items`, `pos_transaction_items`) — Postgres re-applies a referenced table's
+   RESTRICTIVE RLS inside any subquery/join that reads it, so they inherit the new scoping
+   through their existing parent-`EXISTS` `tenant_isolation` policy for free, same mechanism
+   `supplier_chat_messages` already relies on (ADR-017 era).
+
+Consequences:
++ Single enforcement mechanism (`user_locations`) for every restricted rank — no special-cased
+  single-store shortcut to keep in sync with the multi-store path
++ `enterprise_admin`/`provider`/`provider_admin`/`worker` bypass paths are unconditional and
+  unchanged — zero risk of locking out administrative or platform-operational access
++ Explicit three-stage gate keeps the highest-risk step (Stage 3) reversible right up until the
+  moment it's applied, and cheaply reversible after (`Down()` drops all 9 policies in one shot)
++ Child tables inherit store-scoping for free through existing parent-`EXISTS` policies — no
+  additional migration surface
+- Real operational dependency on Stage 2 being done *thoroughly* — a single missed user in any
+  tenant sees a complete, immediate outage the moment Stage 3 ships; the rollout checklist's
+  coverage-gap report is the only safety net and must be re-run right before cutover, not just once
+- `User.StoreId` now has two "home location" concepts (the legacy hint field, and the real
+  `user_locations` rows) a future reader could conflate — mitigated by the code comment on
+  `User.StoreId` and this ADR stating explicitly it is UI-hint-only, never an access-control input
+- Stage 3 sits on a long-lived side branch (`stage3-rls-enforcement-hold`) rather than `main` —
+  normal branch-hygiene drift risk while it waits, accepted deliberately since merging code that
+  isn't safe to run yet would invite an accidental deploy
+
+Extends: ADR-020 (reuses its `AtLeastEnterpriseAdmin`-only, no-capability-bypass anti-escalation
+posture for the new location-assignment endpoints).
+
+## ADR-021: TenantRole — per-role sidebar tab visibility (`AllowedTabs`)
+Date: 2026-07-19
+Status: accepted (Tier 1 enforcement only — see point 5; Tier 2 explicitly deferred)
+
+Context: ADR-020's `TenantRoleCapabilities` gates backend *actions* (can this capability holder
+call this endpoint) — it says nothing about sidebar *visibility*. This left a real, confirmed
+gap: a user granted e.g. `analytics.view` via a TenantRole template, but whose base `Role` rank
+is below whatever `Sidebar.tsx` requires for the "Аналітика" NavGroup, passes every backend check
+ADR-020 wired for them yet has no navigable link to the data they can legitimately call the API
+for. The same shape recurs for `users.manage`/`schedules.manage` (workforce). Confirmed by
+reading `Sidebar.tsx`'s `buildNavGroups()`/NavItem `roles` arrays directly against ADR-020's 8
+gated controllers — the mismatch is real, not hypothetical.
+
+Decision:
+1. New `TenantRole.AllowedTabs: List<string>` column (`text[]`, default `[]`) — deliberately
+   **the same storage shape as `Capabilities`**, not the `jsonb` the initial task brief assumed:
+   the real `Capabilities` column (`AppDbContext.cs`) is a native Postgres `text[]`, matching
+   `ProviderRole.Permissions`/`SupplierRole.Permissions` exactly, with no `HasConversion`/
+   `EnableDynamicJson`. `AllowedTabs` follows that verified, three-entity-precedent pattern
+   rather than the brief's unchecked wording.
+2. **Fixed catalog of 10 tab keys** (`TenantRoleTabs`, `ShelfGuard.Domain.Constants`, mirrors
+   `TenantRoleCapabilities`'s shape): `dashboard, operations, sales, procurement, marketplace,
+   auto_service, production, analytics, workforce, support`. Verified 1:1 against `Sidebar.tsx`'s
+   real `NavGroup.key` values (9 groups) plus the standalone `dashboard` NavItem (not a
+   NavGroup, but a real, separate nav destination). Labels copied verbatim from
+   `frontend/messages/uk.json`, not re-authored.
+3. **Deliberately excluded, forever**: `admin` (provider-only NavGroup — a tenant-scoped
+   TenantRole must never unlock the provider panel), `supplier_cabinet` (supplier_admin-only,
+   governed by the separate `SupplierRole` mechanism), `settings` (always-visible
+   personal-preferences NavItem, not a business module — nothing there is meant to be hidden
+   per role).
+4. **Additive, same compositional principle as `Capabilities`** — `AllowedTabs` only ever
+   *widens* what a user sees beyond their base `Role`'s default nav; it never narrows or
+   replaces the existing role-based sidebar/route logic.
+5. **Enforcement is two-tier, and only Tier 1 exists today:**
+   - **Tier 1 (real, live today):** for the tabs that correspond to an ADR-020 capability
+     already wired to a real backend gate (`workforce` → `users.manage`/`schedules.manage`,
+     `analytics` → `analytics.view`), granting the matching capability *and* the tab together is
+     coherent end-to-end — the capability is what the backend actually checks; the tab is what
+     makes the frontend show the link and pass the new `useRequireTab` page guard. This is the
+     only case where `AllowedTabs` sits in front of something the backend genuinely enforces.
+   - **Tier 2 (explicitly deferred, not built this wave):** the remaining tab keys (`sales`,
+     `procurement`, `marketplace`, `auto_service`, `production`, `support`, plus `dashboard`/
+     `operations`) have no matching ADR-020 capability at all today. Granting one of these makes
+     the sidebar link appear (`Sidebar.tsx`'s tab check is generic across all 10 keys), but
+     nothing server-side or page-level consults it — the destination page/API falls back to
+     whatever role-only gate (or absence of one) already existed. This is a UX gap (a link that
+     may lead to a page/API that still says no — not a security hole, since `AllowedTabs` never
+     grants backend access on its own), to be closed only if/when new capabilities
+     (`sales.view`, `marketplace.view`, etc.) or a generic `TabOrRoleRequirement`/Handler are
+     built. Not scheduled — build only if a real specialty template needs it.
+6. **Frontend wiring**: `Sidebar.tsx` computes `tabsSet` from `me.tabs` (null when empty/absent)
+   and OR's it into the NavGroup visibility filter, positioned after the Legal Entities
+   special-case and before the generic `item.roles` check — it bypasses only the coarse role
+   check, never the narrower Legal Entities gate. New `useRequireTab(tabKey, alreadyAllowed)`
+   hook is a page-level route guard: `effectiveAccess = alreadyAllowed || me.tabs.includes(tabKey)`,
+   redirects to `/dashboard` otherwise. Wired to 3 pages so far: `/users` (tightens direct-URL
+   access below store_manager rank — the actual point of the feature, closing a page that
+   previously had no page-level gate at all), `/schedules` (wired but inert — that page has no
+   role restriction to begin with, every role already reaches it), `/analytics` (also fixed the
+   page's own pre-existing `access` variable to fold in the hook's result, so a tabs-granted user
+   doesn't hit a dead sidebar link followed by an `AccessDenied` page).
+7. **JWT/`AuthUserDto` plumbing mirrors ADR-020's Capabilities mechanism exactly**:
+   `AuthService.BuildEffectiveTabsAsync` (parallel to `BuildEffectiveCapabilitiesAsync`, same
+   null/archived-role handling, deliberately a *separate* `TenantRole` read — Tabs and
+   Capabilities are independent axes per point 5, so one being empty must never suppress the
+   other), comma-joined JWT `tabs` claim (absent when empty), new `AuthUserDto.Tabs`.
+   `GET /api/tenant-roles/tabs` (`AtLeastEnterpriseAdmin`, same gate as `/capabilities`) serves
+   the catalog for the role-editor UI.
+
+Consequences:
++ Closes a real, confirmed capability-vs-visibility mismatch for the 3 capabilities ADR-020
+  already enforces (`users.manage`, `schedules.manage`, `analytics.view`)
++ Zero behavior change for any user with no `TenantRoleId` — the `tabs` claim is simply absent,
+  and `useRequireTab`'s OR degrades to whatever gate already existed
++ Same storage/JWT/DTO mechanism as Capabilities — one pattern to learn; `TenantRoleTabs.cs`'s
+  own doc comment explains why the two lists are kept separate rather than merged into one
+- Tier 2 is a known, unclosed gap: granting a tab outside {workforce, analytics} today produces
+  a visible-but-not-fully-enforced nav destination — acceptable short-term (no security exposure,
+  since `AllowedTabs` never grants backend access by itself) but a real UX rough edge if a
+  template ever grants e.g. `sales` alone
+- Two independent per-TenantRole axes (`Capabilities`, `AllowedTabs`) to reason about when
+  designing a template, rather than one — mitigated by `TenantRoleTabs.cs`'s explicit rationale
+  comment and by both following the identical mechanical pattern
+
+Extends: ADR-020 (adds a second, independent per-TenantRole axis — `AllowedTabs` alongside
+`Capabilities` — reusing the same storage/JWT/DTO mechanism rather than inventing a new one).
 
 ## ADR-020: TenantRole — named custom-role templates with real backend capability enforcement
 Date: 2026-07-13

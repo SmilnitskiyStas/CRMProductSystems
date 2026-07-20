@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-06-04
+**Updated:** 2026-07-20
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -77,8 +77,23 @@ POST /api/auth/change-password [Authorize]
 
 #### AuthUserDto
 ```json
-{ "id": "uuid", "email": "string", "fullName": "string", "role": "string", "tenantId": "uuid|null", "storeId": "uuid|null", "twoFactorEnabled": false }
+{
+  "id": "uuid", "email": "string", "fullName": "string", "role": "string",
+  "tenantId": "uuid|null", "tenantName": "string|null", "storeId": "uuid|null",
+  "permissions": { "page-slug": true } ,
+  "legalEntityId": "uuid|null",
+  "twoFactorEnabled": false,
+  "capabilities": ["string", "..."] ,
+  "telegramChatId": "string|null",
+  "preferredLocale": "string|null",
+  "tabs": ["string", "..."]
+}
 ```
+`capabilities` (ADR-020) and `tabs` (ADR-021, TASK-391b) are independent axes resolved from the
+same `TenantRole` (via `TenantRoleId`) — both `null`/absent when the user has no `TenantRoleId`
+or its template is archived. Both are UI-mirrors of the equally-named JWT claims below; real
+enforcement is server-side (`RoleOrCapabilityHandler` for capabilities — nothing enforces `tabs`
+server-side yet, see ADR-021 Tier 1/Tier 2).
 
 #### JWT Claims
 ```
@@ -87,7 +102,144 @@ email        — user email
 role         — role string
 tenant_id    — tenantId (absent for provider users)
 store_id     — storeId (absent if not assigned)
+capabilities — comma-joined TenantRole capabilities (ADR-020; absent if empty)
+tabs         — comma-joined TenantRole AllowedTabs (ADR-021, TASK-391b; absent if empty)
 ```
+
+---
+
+## ✅ Tenant Roles (ADR-020, extended ADR-021 — `/api/tenant-roles`)
+
+Custom capability-template roles, additive on top of a user's base `Role`. Every action is
+`[Authorize(Policy = AtLeastEnterpriseAdmin)]`, **no** capability-bypass (anti-escalation — a
+`users.manage` capability holder must never be able to create/edit a template or grant more
+access than the template intends).
+
+```
+GET    /api/tenant-roles/capabilities            -> TenantRoleCapabilityGroupDto[]  (catalog, not tenant-scoped, grouped by specialty)
+GET    /api/tenant-roles/tabs                    -> TenantRoleTabDto[]              (catalog, not tenant-scoped, flat list — ADR-021, TASK-391b)
+GET    /api/tenant-roles?includeInactive=        -> TenantRoleDto[]
+GET    /api/tenant-roles/{id}                    -> TenantRoleDto | 404
+POST   /api/tenant-roles       CreateTenantRoleRequest  -> 201 TenantRoleDto | 400 { error }
+PUT    /api/tenant-roles/{id}  UpdateTenantRoleRequest  -> TenantRoleDto | 400 { error } | 404
+DELETE /api/tenant-roles/{id}                    -> 204 (archives — IsActive=false, never hard-deleted) | 404
+
+POST   /api/users/{id}/tenant-role  AssignTenantRoleRequest { "tenantRoleId": "uuid|null" }  -> 204 | 400 | 404
+```
+
+#### TenantRoleDto
+```json
+{
+  "id": "uuid", "name": "string",
+  "capabilities": ["users.manage", "..."],
+  "allowedTabs": ["workforce", "analytics", "..."],
+  "isActive": true, "createdAt": "ISO8601", "updatedAt": "ISO8601|null"
+}
+```
+
+#### CreateTenantRoleRequest / UpdateTenantRoleRequest
+```json
+{ "name": "string", "capabilities": ["string", "..."], "allowedTabs": ["string", "..."] }
+```
+`allowedTabs` (TASK-391b) — optional on the wire (defaults to `[]` server-side), validated
+against the fixed 10-key `TenantRoleTabs.All` catalog (see ADR-021); an unknown key is rejected
+with `400`.
+
+#### TenantRoleCapabilityDto / TenantRoleTabDto
+```json
+{ "key": "string", "labelUa": "string" }
+```
+`GET .../capabilities` groups these under `TenantRoleCapabilityGroupDto { "specialty": "string",
+"capabilities": TenantRoleCapabilityDto[] }`; `GET .../tabs` returns a flat `TenantRoleTabDto[]`
+(tabs aren't grouped by specialty).
+
+---
+
+## ✅ Users (`/api/users`)
+
+Policy varies per action: Invite/Update/Deactivate accept `AtLeastStoreManager`-or-above **or**
+a `users.manage` TenantRole capability (ADR-020); every other action below is role-rank-gated
+only, no capability bypass (anti-escalation — see `UsersController.cs` header comment for the
+full rationale, including the TASK-347 RoleRank re-check that applies regardless of which policy
+path let the caller in).
+
+```
+GET    /api/users                                -> UserDto[]
+GET    /api/users/{id}                           -> UserDto | 404
+POST   /api/users/invite        InviteUserRequest -> 201 UserDto | 400 { error }
+PUT    /api/users/{id}          UpdateUserRequest -> UserDto | 400 { error } | 404
+DELETE /api/users/{id}                           -> 204 (soft — IsActive=false) | 404
+
+PUT    /api/users/{id}/permissions        UpdatePermissionsRequest         -> UserDto | 400 | 404
+POST   /api/users/{id}/permission-grants  GrantTemporaryPermissionRequest  -> 201 PermissionGrantDto | 400 | 404
+GET    /api/users/{id}/permission-grants                                  -> PermissionGrantDto[] | 404
+DELETE /api/users/{id}/permission-grants/{grantId}                        -> 204 | 400 | 404
+GET    /api/users/{id}/activity?limit=50                                  -> ActivityLogDto[] | 404
+POST   /api/users/{id}/tenant-role        AssignTenantRoleRequest         -> 204 | 400 | 404  (see Tenant Roles above)
+
+PUT    /api/users/{id}/locations          UpdateUserLocationsRequest      -> 200 UserLocationsDto | 400 { error } | 404  (TASK-392b, ADR-022)
+GET    /api/users/{id}/locations                                         -> 200 UserLocationsDto | 404               (TASK-392b, ADR-022)
+```
+
+#### UserDto
+```json
+{
+  "id": "uuid", "email": "string", "fullName": "string", "phone": "string|null",
+  "role": "string", "storeId": "uuid|null", "isActive": true, "hasTelegram": false,
+  "createdAt": "ISO8601", "lastActiveAt": "ISO8601|null",
+  "permissions": { "page-slug": true },
+  "invitedByName": "string|null",
+  "legalEntityId": "uuid|null",
+  "tenantRoleId": "uuid|null",
+  "preferredLocale": "string|null"
+}
+```
+
+#### InviteUserRequest
+```json
+{ "email": "string", "fullName": "string", "role": "string", "password": "string",
+  "storeId": "uuid|null", "legalEntityId": "uuid|null" }
+```
+
+#### UpdateUserRequest
+```json
+{ "fullName": "string", "phone": "string|null", "role": "string",
+  "storeId": "uuid|null", "legalEntityId": "uuid|null" }
+```
+
+**`storeId` behavior (TASK-392b, ADR-022) — changed this session.** Previously accepted any GUID
+with zero validation and was never read anywhere else. Now:
+- **Validated**: must belong to the caller's own tenant (`ILocationService.BelongsToTenantAsync`)
+  — mismatch returns `400 { "error": "Вказана локація не належить цьому тенанту." }`.
+- **Actually consumed**: for single-location roles (`store_manager`, `merchandiser`,
+  `storekeeper`, `cashier`, `staff`) it drives a same-transaction write of exactly one
+  `user_locations` row (`UserService.SyncSingleLocationAsync`) — this is what will matter once
+  ADR-022 Stage 3 ships. For `network_manager` (potentially multi-location) it has no assignment
+  effect — use `PUT /api/users/{id}/locations` instead. For `enterprise_admin`/`supplier_admin`
+  it's accepted but carries no access-control meaning (unconditional bypass / outside the
+  store-scope model entirely).
+
+#### `PUT /api/users/{id}/locations` — full-replace (TASK-392b, ADR-022 Stage 1)
+```json
+// Request
+{ "locationIds": ["uuid", "uuid", "..."] }
+// Response 200 — UserLocationsDto
+{ "locationIds": ["uuid", "uuid", "..."] }
+```
+Full-replace semantics — `{"locationIds": []}` clears every assignment for the user. Every id
+must belong to the caller's tenant; the first one that doesn't returns `400 { error }` and
+**nothing is written** (fails closed, not partial). `AtLeastEnterpriseAdmin`-only, no capability
+bypass — same anti-escalation posture as `AssignTenantRole`. **As of Stage 1, nothing reads this
+table for access control yet** — ADR-022 Stage 3 (written, held on branch
+`stage3-rls-enforcement-hold`, not deployed — see `.claude/docs/store-scope-rollout-checklist.md`)
+is what will make these rows actually gate visibility on `product_stock`/`daily_sales`/
+`pos_shifts`/etc.
+
+#### `GET /api/users/{id}/locations`
+```json
+{ "locationIds": ["uuid", "..."] }
+```
+`404 { "error" }` if the target user doesn't exist or isn't in the caller's tenant.
 
 ---
 
@@ -167,7 +319,6 @@ to describe is gone from the live routing surface.
 | POST /api/write-offs | TASK-015 | Write-off document |
 | GET /api/analytics/expiry-summary | TASK-019 | Real dashboard stats (also: write-offs, movements, by-zone, by-category, losses) |
 | GET /api/notifications/settings | TASK-017 | Notification settings |
-| GET /api/users | future | User management |
 | POST /api/catalog | TASK-003b | Replace POC products API |
 
 ---

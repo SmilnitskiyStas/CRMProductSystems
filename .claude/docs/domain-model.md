@@ -1,7 +1,7 @@
 # Domain Model
 
 **Owner:** project-architect
-**Updated:** 2026-06-04
+**Updated:** 2026-07-20
 **Source:** v1-spec.md
 
 ## Core Entities
@@ -14,6 +14,31 @@ Fields: id, name, slug, plan, modules (JSONB), is_active, created_at
 Belongs to tenant (or NULL for provider role).
 Roles: provider / enterprise_admin / network_manager / store_manager / merchandiser / storekeeper / cashier
 Fields: id, tenant_id, email, role, store_id, telegram_chat_id, push_token, is_active
+> `store_id` is a UI "default home location" hint only (set at invite/edit time) — it is never
+> read for access control. Real store-scoped data visibility goes through the `UserLocation`
+> join entity below (ADR-022). Also carries an optional `tenant_role_id` (ADR-020) — see
+> `TenantRole` below.
+
+### TenantRole
+Named, reusable custom-role template, additive on top of a user's base `Role` (ADR-020).
+Assigned via `User.tenant_role_id` (nullable FK, `SET NULL` on delete — templates are archived
+via `is_active = false`, never hard-deleted while users may still reference them).
+Fields: id, tenant_id, name, capabilities (text[] — backend action keys, e.g. `users.manage`,
+resolved into a JWT `capabilities` claim), allowed_tabs (text[] — sidebar/route visibility keys,
+ADR-021, resolved into a JWT `tabs` claim; a separate axis from capabilities, never merged —
+see `TenantRoleTabs.cs`), is_active, created_by_user_id, created_at, updated_at
+
+### UserLocation
+Many-to-many assignment of a `User` to a `Store`/`Location` — the single enforcement mechanism
+for store-scoped data visibility (ADR-022). `enterprise_admin` needs no rows (unconditional
+bypass); every other rank gets one row per assigned location, including single-location roles
+(no shortcut through `User.store_id`).
+Fields: id, tenant_id, user_id, location_id, assigned_by_user_id, created_at
+Unique (tenant_id, user_id, location_id). No soft-delete — hard DELETE revokes the assignment.
+As of this doc's snapshot, no RLS policy reads this table yet — that is ADR-022 Stage 3
+(RESTRICTIVE `store_scope` policy on 9 tables, written and tested but held on branch
+`stage3-rls-enforcement-hold` pending a manual backfill gate, see
+`.claude/docs/store-scope-rollout-checklist.md`).
 
 ### Store
 Physical location. Types: shop / central_warehouse / production / distribution
