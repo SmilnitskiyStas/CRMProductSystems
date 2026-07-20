@@ -36,6 +36,10 @@ export default function UsersPage() {
   const activeCount   = users?.filter((u) => u.isActive).length  ?? 0;
   const totalCount    = users?.length ?? 0;
   const telegramCount = users?.filter((u) => u.hasTelegram).length ?? 0;
+  // TASK-396: derived client-side from the already-loaded list, no separate endpoint —
+  // surfaces the TASK-395 coverage-gap flag for a non-technical admin to act on before
+  // Stage 3 RLS enforcement goes live.
+  const needsLocationCount = users?.filter((u) => u.needsLocationAssignment).length ?? 0;
 
   const tabBtnStyle = (active: boolean): CSSProperties => ({
     padding: "8px 2px",
@@ -98,6 +102,7 @@ export default function UsersPage() {
               { label: t("statTotal"),    value: totalCount,    color: "#60A5FA" },
               { label: t("statActive"),   value: activeCount,   color: "#4ADE80" },
               { label: t("statTelegram"), value: telegramCount, color: "#38BDF8" },
+              { label: t("statNeedsLocation"), value: needsLocationCount, color: "#FBBF24" },
             ].map((stat) => (
               <div
                 key={stat.label}

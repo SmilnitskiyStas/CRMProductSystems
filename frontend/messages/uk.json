@@ -3578,7 +3578,8 @@
         "roleTemplatesTab": "Шаблони ролей",
         "statTotal": "Всього",
         "statActive": "Активних",
-        "statTelegram": "Telegram"
+        "statTelegram": "Telegram",
+        "statNeedsLocation": "Без магазину"
       },
       "list": {
         "loading": "Завантаження…",
@@ -3588,6 +3589,7 @@
         "allStatuses": "Всі статуси",
         "activeOption": "Активні",
         "inactiveOption": "Деактивовані",
+        "onlyMissingLocationLabel": "Показати тільки без магазину",
         "headerUser": "Користувач",
         "headerRole": "Роль",
         "headerPhone": "Телефон",
@@ -3597,6 +3599,7 @@
         "headerInvitedBy": "Хто додав",
         "headerStatus": "Статус",
         "byRole": "За роллю",
+        "needsLocationBadge": "Магазин не призначено",
         "notFound": "Нічого не знайдено",
         "noUsersYet": "Користувачів ще немає",
         "statusActive": "Активний",

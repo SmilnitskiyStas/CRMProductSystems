@@ -3578,7 +3578,8 @@
         "roleTemplatesTab": "Role templates",
         "statTotal": "Total",
         "statActive": "Active",
-        "statTelegram": "Telegram"
+        "statTelegram": "Telegram",
+        "statNeedsLocation": "Without a store"
       },
       "list": {
         "loading": "Loading…",
@@ -3588,6 +3589,7 @@
         "allStatuses": "All statuses",
         "activeOption": "Active",
         "inactiveOption": "Deactivated",
+        "onlyMissingLocationLabel": "Show only without a store",
         "headerUser": "User",
         "headerRole": "Role",
         "headerPhone": "Phone",
@@ -3597,6 +3599,7 @@
         "headerInvitedBy": "Invited by",
         "headerStatus": "Status",
         "byRole": "By role",
+        "needsLocationBadge": "No store assigned",
         "notFound": "Nothing found",
         "noUsersYet": "No users yet",
         "statusActive": "Active",

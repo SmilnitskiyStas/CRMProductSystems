@@ -17,6 +17,13 @@ export interface UserDto {
   legalEntityId?: string | null;
   /** Assigned custom capability-template role (ADR-020). Null = no template beyond the base Role. */
   tenantRoleId?: string | null;
+  /**
+   * True when this user's role is store-scoped (network_manager/store_manager/merchandiser/
+   * storekeeper/cashier/staff) and they have zero `user_locations` rows yet — a coverage gap
+   * that needs a manual backfill before Stage 3 RLS enforcement goes live (TASK-395/396).
+   * Always `false` for enterprise_admin/provider/etc. and for anyone already assigned.
+   */
+  needsLocationAssignment: boolean;
 }
 
 export interface UpdatePermissionsRequest {

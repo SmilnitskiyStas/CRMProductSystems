@@ -39,6 +39,31 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+/**
+ * Warning-toned pill flagging a store-scoped user with zero `user_locations` rows yet
+ * (TASK-396). Not an error — amber, not red — this is a reminder for a manual backfill
+ * ahead of Stage 3 RLS enforcement, not something currently broken.
+ */
+function NeedsLocationBadge() {
+  const t = useTranslations("Dashboard.users.list");
+  return (
+    <span
+      style={{
+        background: "#2D2208",
+        border: "1px solid #78350F",
+        borderRadius: 20,
+        padding: "2px 10px",
+        color: "#FBBF24",
+        fontSize: 11,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {t("needsLocationBadge")}
+    </span>
+  );
+}
+
 function StatusDot({ isActive }: { isActive: boolean }) {
   return (
     <span
@@ -135,6 +160,8 @@ export function UsersList() {
   const [search,      setSearch]      = useState("");
   const [roleFilter,  setRoleFilter]  = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  // TASK-396: client-side only — filters the already-loaded list, no separate API request.
+  const [onlyMissingLocation, setOnlyMissingLocation] = useState(false);
 
   const filtered = (users ?? []).filter((u) => {
     const matchSearch =
@@ -147,7 +174,8 @@ export function UsersList() {
       statusFilter === "all" ||
       (statusFilter === "active"   && u.isActive) ||
       (statusFilter === "inactive" && !u.isActive);
-    return matchSearch && matchRole && matchStatus;
+    const matchLocation = !onlyMissingLocation || u.needsLocationAssignment;
+    return matchSearch && matchRole && matchStatus && matchLocation;
   });
 
   const selected = selectedId ? (users ?? []).find((u) => u.id === selectedId) ?? null : null;
@@ -225,6 +253,28 @@ export function UsersList() {
           <option value="active"   style={{ background: "#0D1117" }}>{t("activeOption")}</option>
           <option value="inactive" style={{ background: "#0D1117" }}>{t("inactiveOption")}</option>
         </select>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "#0D1117",
+            border: "1px solid #1F2937",
+            borderRadius: 8,
+            padding: "8px 12px",
+            color: "#E8EDF5",
+            fontSize: 13,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={onlyMissingLocation}
+            onChange={(e) => setOnlyMissingLocation(e.target.checked)}
+          />
+          {t("onlyMissingLocationLabel")}
+        </label>
       </div>
 
       {/* Table */}
@@ -266,7 +316,7 @@ export function UsersList() {
         {/* Rows */}
         {filtered.length === 0 ? (
           <div style={{ padding: "32px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            {search || roleFilter !== "all" || statusFilter !== "all"
+            {search || roleFilter !== "all" || statusFilter !== "all" || onlyMissingLocation
               ? t("notFound")
               : t("noUsersYet")}
           </div>
@@ -326,6 +376,7 @@ export function UsersList() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
                   <RoleBadge role={user.role} />
                   <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
+                  {user.needsLocationAssignment && <NeedsLocationBadge />}
                 </div>
 
                 {/* 3. Phone */}
