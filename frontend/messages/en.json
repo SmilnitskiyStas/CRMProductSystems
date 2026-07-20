@@ -3446,6 +3446,7 @@
         "namePlaceholder": "Template name (e.g. HR)",
         "capabilitiesLabel": "Capabilities",
         "tabsLabel": "Visible sections",
+        "selectAllGroup": "Select all",
         "loading": "Loading…",
         "savingButton": "Saving…",
         "saveChangesButton": "Save changes",

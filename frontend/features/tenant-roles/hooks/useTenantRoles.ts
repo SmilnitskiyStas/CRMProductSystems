@@ -37,7 +37,8 @@ export function useTenantRoleCapabilities() {
   });
 }
 
-/** Backend-sourced sidebar-tab catalog (TASK-391b) — rarely changes, cached longer. */
+/** Backend-sourced sidebar-tab catalog — hierarchy of groups with nested per-page items
+ *  (TASK-398; flat list originally, TASK-391b) — rarely changes, cached longer. */
 export function useTenantRoleTabs() {
   return useQuery({
     queryKey: TABS_KEY,

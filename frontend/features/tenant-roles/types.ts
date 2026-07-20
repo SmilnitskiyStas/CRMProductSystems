@@ -44,11 +44,26 @@ export interface TenantRoleCapabilityGroup {
 }
 
 /** A single grantable sidebar tab — label is backend-sourced Ukrainian text, never
- *  hardcode it here. Backs GET /api/tenant-roles/tabs (TASK-391b). Flat catalog (no
- *  specialty grouping, unlike capabilities) — mirrors backend TenantRoleTabDto. */
+ *  hardcode it here. A leaf entry inside a `TenantTabGroupDto["items"]` — either a
+ *  group-level backward-compat key (e.g. "operations", when it equals the parent's own
+ *  `groupKey`) or an item-level per-page key (e.g. "/inventory", TASK-398/399). Mirrors
+ *  backend TenantRoleTabDto. */
 export interface TenantTabDto {
   key: string;
   labelUa: string;
+}
+
+/** A section of the hierarchical sidebar-tab catalog (TASK-398) — mirrors backend
+ *  TenantRoleTabGroupDto. Backs GET /api/tenant-roles/tabs (supersedes TASK-391b's flat
+ *  `TenantTabDto[]` shape). `groupKey` is null only for the standalone Dashboard section
+ *  (Dashboard is a single top-level NavItem in Sidebar.tsx, not a NavGroup); otherwise it
+ *  is itself an independently-grantable, coarse "whole group" key — same value as the
+ *  matching `NavGroup.key` in Sidebar.tsx — in addition to each finer-grained key in
+ *  `items`. Never hardcode `groupLabelUa`/labels here — always backend-sourced. */
+export interface TenantTabGroupDto {
+  groupKey: string | null;
+  groupLabelUa: string;
+  items: TenantTabDto[];
 }
 
 /** Body for POST /api/users/:id/tenant-role — null clears the assignment. */

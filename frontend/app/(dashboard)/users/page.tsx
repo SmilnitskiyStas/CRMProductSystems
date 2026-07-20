@@ -28,13 +28,14 @@ export default function UsersPage() {
   // that gate here so the tab (and its data) never even renders for lower roles.
   const canManageRoleTemplates = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN);
 
-  // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397): mirrors
-  // Sidebar.tsx's /users NavItem gate (roles: AT_LEAST_STORE_MANAGER). A non-empty tabs claim
-  // is now authoritative in BOTH directions — a TenantRole granted "workforce" reaches this
-  // page even without the role, AND a TenantRole with a non-empty tabs claim that EXCLUDES
-  // "workforce" is blocked even for an AT_LEAST_STORE_MANAGER user — same override semantic as
-  // Sidebar's tabsSet, no longer a plain OR.
-  useRequireTab("workforce", hasRole(me?.role, AT_LEAST_STORE_MANAGER));
+  // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397; per-item
+  // granularity as of TASK-399): mirrors Sidebar.tsx's /users NavItem gate (roles:
+  // AT_LEAST_STORE_MANAGER). A non-empty tabs claim is now authoritative in BOTH directions —
+  // a TenantRole granted either "/users" (item-level) or "workforce" (whole-group, backward
+  // compat) reaches this page even without the role, AND a TenantRole with a non-empty tabs
+  // claim that EXCLUDES both is blocked even for an AT_LEAST_STORE_MANAGER user — same override
+  // semantic as Sidebar's tabsSet, no longer a plain OR.
+  useRequireTab("/users", "workforce", hasRole(me?.role, AT_LEAST_STORE_MANAGER));
 
   const activeCount   = users?.filter((u) => u.isActive).length  ?? 0;
   const totalCount    = users?.length ?? 0;

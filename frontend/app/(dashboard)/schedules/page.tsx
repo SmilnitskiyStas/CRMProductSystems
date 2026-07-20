@@ -46,18 +46,20 @@ export default function SchedulesPage() {
   const userRole = (me?.role ?? "") as AppRole;
   const canManage = AT_LEAST_STORE_MANAGER.has(userRole);
 
-  // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397): mirrors
-  // Sidebar.tsx's /schedules NavItem, which carries no `roles` restriction — every
-  // authenticated tenant user (incl. provider-team, who see their own branch below) reaches
-  // this page today for their own shifts, gated separately (not by tab/role) inside the page
-  // itself. `alreadyAllowed=true` preserves that baseline UNLESS the caller's TenantRole has a
-  // non-empty "Видимі розділи" configured that excludes "workforce" — useRequireTab's override
-  // semantic now makes the tabs claim authoritative in that case, same as Sidebar hiding the
-  // whole "workforce" group (which /schedules' NavItem lives inside, alongside /users). In
-  // other words: an admin who unchecks "Персонал"/workforce for a TenantRole also blocks that
+  // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397; per-item
+  // granularity as of TASK-399): mirrors Sidebar.tsx's /schedules NavItem, which carries no
+  // `roles` restriction — every authenticated tenant user (incl. provider-team, who see their
+  // own branch below) reaches this page today for their own shifts, gated separately (not by
+  // tab/role) inside the page itself. `alreadyAllowed=true` preserves that baseline UNLESS the
+  // caller's TenantRole has a non-empty "Видимі розділи" configured that excludes BOTH
+  // "/schedules" (item-level) and "workforce" (whole-group, backward compat) — useRequireTab's
+  // override semantic now makes the tabs claim authoritative in that case, same as Sidebar
+  // hiding the /schedules NavItem (whether by excluding it individually or by hiding the whole
+  // "workforce" group it lives inside, alongside /users). In other words: an admin who unchecks
+  // "Розклад" (or the whole "Персонал"/workforce group) for a TenantRole also blocks that
   // role's own "Мій розклад" self-service view, not just the team-management links — a real,
   // deliberate consequence of TASK-397's fix (Sidebar and page guard must agree), not a bug.
-  useRequireTab("workforce", true);
+  useRequireTab("/schedules", "workforce", true);
 
   // Provider team → own weekly slot schedule (not tenant-based WorkSchedule)
   if (PROVIDER_TEAM.has(userRole)) {

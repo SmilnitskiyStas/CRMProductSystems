@@ -699,6 +699,10 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   // "dashboard" — matches backend TenantRoleTabs.Dashboard and the tab-key convention every
   // NavGroup.key already follows (no shared frontend constant for these; group keys below are
   // likewise plain string literals, e.g. "workforce", "operations").
+  // TASK-399 (per-item granularity for the grouped items below) doesn't change this check:
+  // Dashboard is a single top-level NavItem, not a NavGroup, so it never had a separate
+  // group-key/item-key pair to begin with — "dashboard" already serves both roles (see
+  // TenantRoleTabs.cs's class doc comment, "no second key" rationale).
   const showDashboard = tabsSet
     ? tabsSet.has("dashboard")
     : !dashboardItem.roles || dashboardItem.roles.has(userRole);
@@ -742,18 +746,30 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         if (item.href === "/settings/legal-entities") {
           return canManageLegalEntities(userRole, me?.permissions);
         }
-        // Sidebar tab visibility (TASK-391c; made authoritative/exclusive in TASK-397): a
-        // non-empty tabsSet (the user's effective TenantRole has "Видимі розділи" configured)
-        // is now the DEFINITIVE, EXCLUSIVE set of visible groups — it completely REPLACES the
-        // item.roles/permission checks below for that user, rather than just OR-ing into them.
-        // Previously `tabsSet?.has(group.key)) return true` could only ADD visibility, never
-        // remove it, so unchecking a tab a base role already granted via item.roles had no
-        // effect — the actual bug this task fixes. tabsSet is null whenever the user has no
-        // TenantRole tabs configured at all (the default, and the common case for existing
-        // capability-only TenantRole users who never touched the tabs checkboxes) — that case
-        // falls through unchanged to the item.roles/permission checks below, preserving exact
-        // prior behavior for everyone not using this feature.
-        if (tabsSet) return tabsSet.has(group.key);
+        // Sidebar tab visibility (TASK-391c; made authoritative/exclusive in TASK-397;
+        // per-item granularity in TASK-399): a non-empty tabsSet (the user's effective
+        // TenantRole has "Видимі розділи" configured) is the DEFINITIVE, EXCLUSIVE source of
+        // visibility for that user — it completely REPLACES the item.roles/permission checks
+        // below, rather than just OR-ing into them. Previously `tabsSet?.has(group.key))
+        // return true` could only ADD visibility, never remove it (the TASK-397 fix). tabsSet
+        // is null whenever the user has no TenantRole tabs configured at all (the default, and
+        // the common case for existing capability-only TenantRole users) — that case falls
+        // through unchanged to the item.roles/permission checks below, preserving exact prior
+        // behavior for everyone not using this feature.
+        //
+        // TASK-399: AllowedTabs can now carry item-level keys (`item.href`, e.g. "/receipts")
+        // alongside the original group-level keys (`group.key`, e.g. "operations") — see
+        // backend/ShelfGuard.Domain/Constants/TenantRoleTabs.cs's ItemKeys/GroupKeys. A group
+        // key still bulk-grants every item in the group (backward compat with every
+        // already-configured TenantRole row); an item key grants just that one page. Checking
+        // per item rather than per group is what actually makes the fine-grained grant visible
+        // — with the old `tabsSet.has(group.key)`-only check, granting a lone item key had zero
+        // effect (backend TASK-398 shipped the catalog/validation for this; this line is the
+        // frontend enforcement follow-up it explicitly deferred). If NEITHER key is present for
+        // any item in the group, `visibleItems` ends up empty and the whole group section
+        // doesn't render — handled by the existing `.filter(({ visibleItems }) => ...)` below,
+        // unchanged by this task.
+        if (tabsSet) return tabsSet.has(item.href) || tabsSet.has(group.key);
         // Role check (existing logic)
         if (item.roles && !item.roles.has(userRole)) return false;
         // Permission check: only applied for PROVIDER_TEAM users on permission-gated items

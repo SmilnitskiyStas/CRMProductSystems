@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Pencil, Archive, Shield } from "lucide-react";
+import { Plus, Pencil, Archive, Shield, ChevronDown, ChevronRight } from "lucide-react";
 import {
   useTenantRoles,
   useTenantRoleCapabilities,
@@ -12,7 +12,7 @@ import {
   useArchiveTenantRole,
 } from "../hooks/useTenantRoles";
 import { useUsers } from "@/features/users/hooks/useUsers";
-import type { TenantRoleDto } from "../types";
+import type { TenantRoleDto, TenantTabDto, TenantTabGroupDto } from "../types";
 import { Btn } from "@/components/ui/Btn";
 
 /**
@@ -260,11 +260,69 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
     });
   }
 
-  function toggleTab(key: string) {
+  /**
+   * Toggles a single item-level tab (TASK-399 — per-item granularity, was per-group-only).
+   * An item reads as "checked" either because its own key is in `allowedTabs` OR because the
+   * whole group is bulk-granted via `group.groupKey` (backward compat with pre-TASK-398
+   * "select all" templates — see TenantRoleTabs.cs). Toggling has to account for both:
+   *
+   * - Unchecking an item that's only checked via the group key must EXPAND that coarse grant
+   *   into individual item keys for every sibling except the one being unchecked — "select all"
+   *   = whole group visible; unchecking one item must leave the rest visible, not the whole group.
+   * - Checking an item that completes the group (every sibling now individually checked)
+   *   COLLAPSES back into the single coarse `groupKey` — keeps `allowedTabs` tidy and matches
+   *   how a "select all" template is actually stored (same shape a pre-TASK-398 template has).
+   * - `group.groupKey === null` (the standalone Dashboard pseudo-group) skips both group-key
+   *   branches entirely — Dashboard's single item is just added/removed directly, matching how
+   *   its bare "dashboard" key already served both roles before TASK-398.
+   */
+  function toggleTabItem(group: TenantTabGroupDto, item: TenantTabDto) {
     setAllowedTabs((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      const { groupKey } = group;
+      const viaGroup = groupKey != null && next.has(groupKey);
+      const currentlyChecked = next.has(item.key) || viaGroup;
+
+      if (currentlyChecked) {
+        if (viaGroup && groupKey != null) {
+          next.delete(groupKey);
+          for (const it of group.items) {
+            if (it.key !== item.key) next.add(it.key);
+          }
+        } else {
+          next.delete(item.key);
+        }
+      } else {
+        next.add(item.key);
+        if (groupKey != null && group.items.every((it) => next.has(it.key))) {
+          for (const it of group.items) next.delete(it.key);
+          next.add(groupKey);
+        }
+      }
+      return next;
+    });
+  }
+
+  /** "Select all" checkbox for a group header — grants/revokes every item in the group at
+   *  once. Collapses to the single coarse `groupKey` when checking (same rationale as
+   *  `toggleTabItem`'s collapse branch); clears both the group key and any partial item-level
+   *  entries when unchecking. */
+  function toggleTabGroupAll(group: TenantTabGroupDto) {
+    setAllowedTabs((prev) => {
+      const next = new Set(prev);
+      const { groupKey } = group;
+      const checkedCount = group.items.filter(
+        (item) => next.has(item.key) || (groupKey != null && next.has(groupKey)),
+      ).length;
+      const allChecked = checkedCount === group.items.length;
+
+      for (const it of group.items) next.delete(it.key);
+      if (groupKey != null) next.delete(groupKey);
+
+      if (!allChecked) {
+        if (groupKey != null) next.add(groupKey);
+        else for (const it of group.items) next.add(it.key);
+      }
       return next;
     });
   }
@@ -362,28 +420,14 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
             {tabsLoading && (
               <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
             )}
-            <div
-              style={{
-                background: "#0D1117", border: "1px solid #1F2937",
-                borderRadius: 8, padding: "10px 14px",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {tabs?.map((tab) => (
-                  <label key={tab.key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={allowedTabs.has(tab.key)}
-                      onChange={() => toggleTab(tab.key)}
-                      style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
-                    />
-                    <span style={{ color: allowedTabs.has(tab.key) ? "#E8EDF5" : "#4B5563", fontSize: 13 }}>
-                      {tab.labelUa}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            {tabs && (
+              <TabsTree
+                groups={tabs}
+                allowedTabs={allowedTabs}
+                onToggleItem={toggleTabItem}
+                onToggleGroupAll={toggleTabGroupAll}
+              />
+            )}
           </div>
 
           {error && (
@@ -409,6 +453,148 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── Visible-tabs tree (TASK-399) ─────────────────────────── */
+
+interface TabsTreeProps {
+  groups: TenantTabGroupDto[];
+  allowedTabs: Set<string>;
+  onToggleItem: (group: TenantTabGroupDto, item: TenantTabDto) => void;
+  onToggleGroupAll: (group: TenantTabGroupDto) => void;
+}
+
+/**
+ * Two-level tab tree replacing the old flat 10-checkbox list (TASK-398 made the backend
+ * catalog hierarchical; this wires the editor up to it). The standalone Dashboard section
+ * (`groupKey: null`, always exactly one item) renders as a single bare checkbox with no
+ * group header/"select all" affordance — mirrors Sidebar.tsx treating Dashboard as a
+ * top-level NavItem rather than a NavGroup. Every other section is a collapsible group
+ * (pattern mirrors Sidebar.tsx's own NavGroupSection) with a "select all" checkbox in its
+ * header plus one checkbox per page underneath.
+ */
+function TabsTree({ groups, allowedTabs, onToggleItem, onToggleGroupAll }: TabsTreeProps) {
+  const dashboardGroup = groups.find((g) => g.groupKey === null);
+  const otherGroups = groups.filter((g) => g.groupKey !== null);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {dashboardGroup && dashboardGroup.items.map((item) => (
+        <label
+          key={item.key}
+          style={{
+            display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+            background: "#0D1117", border: "1px solid #1F2937",
+            borderRadius: 8, padding: "10px 14px",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={allowedTabs.has(item.key)}
+            onChange={() => onToggleItem(dashboardGroup, item)}
+            style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
+          />
+          <span style={{ color: allowedTabs.has(item.key) ? "#E8EDF5" : "#4B5563", fontSize: 13, fontWeight: 600 }}>
+            {item.labelUa}
+          </span>
+        </label>
+      ))}
+
+      {otherGroups.map((group) => (
+        <TabGroupSection
+          key={group.groupKey}
+          group={group}
+          allowedTabs={allowedTabs}
+          onToggleItem={onToggleItem}
+          onToggleGroupAll={onToggleGroupAll}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface TabGroupSectionProps {
+  group: TenantTabGroupDto;
+  allowedTabs: Set<string>;
+  onToggleItem: (group: TenantTabGroupDto, item: TenantTabDto) => void;
+  onToggleGroupAll: (group: TenantTabGroupDto) => void;
+}
+
+/**
+ * One collapsible group section — header (expand toggle + group label + "select all") plus
+ * its per-page item checkboxes. An item reads as checked when its own key is granted OR the
+ * whole group is (backward-compat bulk grant, see `toggleTabItem`'s doc comment on the parent
+ * modal for the full checked/collapse semantics). Defaults to expanded — unlike Sidebar.tsx's
+ * nav (which auto-collapses inactive groups to save space), this is a config editor where an
+ * admin benefits from seeing everything they're about to grant.
+ */
+function TabGroupSection({ group, allowedTabs, onToggleItem, onToggleGroupAll }: TabGroupSectionProps) {
+  const t = useTranslations("Dashboard.tenantRoles.formModal");
+  const [expanded, setExpanded] = useState(true);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  const { groupKey } = group;
+  const checkedCount = group.items.filter(
+    (item) => allowedTabs.has(item.key) || (groupKey != null && allowedTabs.has(groupKey)),
+  ).length;
+  const allChecked = group.items.length > 0 && checkedCount === group.items.length;
+  const someChecked = checkedCount > 0 && !allChecked;
+
+  // Indeterminate is a DOM property, not an HTML attribute — must be set imperatively.
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someChecked;
+  }, [someChecked]);
+
+  return (
+    <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px" }}>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "none", border: "none", padding: 0, cursor: "pointer",
+            color: "#9CA3AF", fontSize: 11, fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.05em",
+          }}
+        >
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          {group.groupLabelUa}
+        </button>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "#6B7280", fontSize: 11 }}>
+          <input
+            ref={selectAllRef}
+            type="checkbox"
+            checked={allChecked}
+            onChange={() => onToggleGroupAll(group)}
+            style={{ width: 13, height: 13, cursor: "pointer", accentColor: "#3B82F6" }}
+          />
+          {t("selectAllGroup")}
+        </label>
+      </div>
+
+      {expanded && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "2px 14px 12px 34px" }}>
+          {group.items.map((item) => {
+            const checked = allowedTabs.has(item.key) || (groupKey != null && allowedTabs.has(groupKey));
+            return (
+              <label key={item.key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggleItem(group, item)}
+                  style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
+                />
+                <span style={{ color: checked ? "#E8EDF5" : "#4B5563", fontSize: 13 }}>
+                  {item.labelUa}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

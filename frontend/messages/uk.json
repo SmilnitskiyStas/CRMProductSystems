@@ -3446,6 +3446,7 @@
         "namePlaceholder": "Назва шаблону (напр. HR)",
         "capabilitiesLabel": "Можливості",
         "tabsLabel": "Видимі розділи",
+        "selectAllGroup": "Обрати всі",
         "loading": "Завантаження…",
         "savingButton": "Збереження…",
         "saveChangesButton": "Зберегти зміни",

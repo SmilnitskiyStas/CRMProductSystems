@@ -4,7 +4,7 @@ import type {
   CreateTenantRoleRequest,
   UpdateTenantRoleRequest,
   TenantRoleCapabilityGroup,
-  TenantTabDto,
+  TenantTabGroupDto,
 } from "../types";
 
 // CRUD for TenantRolesController (ADR-020) — all AtLeastEnterpriseAdmin-only on the backend.
@@ -27,9 +27,10 @@ export const tenantRolesApi = {
     return api.get<TenantRoleCapabilityGroup[]>("/api/tenant-roles/capabilities");
   },
 
-  /** GET /api/tenant-roles/tabs — backend-sourced sidebar-tab catalog (TASK-391b). */
-  getTabs(): Promise<TenantTabDto[]> {
-    return api.get<TenantTabDto[]>("/api/tenant-roles/tabs");
+  /** GET /api/tenant-roles/tabs — backend-sourced sidebar-tab catalog, hierarchy of
+   *  groups with nested per-page items (TASK-398; flat list originally, TASK-391b). */
+  getTabs(): Promise<TenantTabGroupDto[]> {
+    return api.get<TenantTabGroupDto[]>("/api/tenant-roles/tabs");
   },
 
   /** POST /api/tenant-roles */
