@@ -13,6 +13,8 @@ import {
 } from "@/features/locations/hooks/useLocations";
 import { LocationFormDialog } from "@/features/locations/components/LocationFormDialog";
 import type { LocationDto, LocationType } from "@/features/locations/types";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
@@ -22,6 +24,13 @@ export default function LocationsPage() {
   const tCommon = useTranslations("Common");
   const { data: locations, isLoading } = useLocations();
   const [dialog, setDialog] = useState<"create" | LocationDto | null>(null);
+  const { data: me } = useMe();
+  // Create/Update are AtLeastEnterpriseAdmin-only on the backend (ADR-020/ADR-022 —
+  // Location management is HQ-only "infrastructure", deliberately NOT given the
+  // capability-OR escape hatch other modules have). Mirror that gate here so lower
+  // roles never see a button that would 403. GET stays open to all CanViewStock roles —
+  // no whole-page gate, only the two mutating buttons below.
+  const canManageLocations = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN);
 
   const create = useCreateLocation();
   const updateId = dialog && dialog !== "create" ? dialog.id : "";
@@ -73,9 +82,11 @@ export default function LocationsPage() {
             {t("subtitle")}
           </p>
         </div>
-        <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
-          {t("newLocation")}
-        </Btn>
+        {canManageLocations && (
+          <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
+            {t("newLocation")}
+          </Btn>
+        )}
       </div>
 
       {/* Table */}
@@ -185,9 +196,11 @@ export default function LocationsPage() {
                         <Map size={13} />
                         {t("planLink")}
                       </Link>
-                      <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
-                        {t("edit")}
-                      </Btn>
+                      {canManageLocations && (
+                        <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
+                          {t("edit")}
+                        </Btn>
+                      )}
                     </div>
                   </td>
                 </tr>

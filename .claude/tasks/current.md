@@ -3,6 +3,20 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-400 — Frontend: hide Locations Create/Edit buttons for roles below AtLeastEnterpriseAdmin
+**Status:** done (2026-07-23) · **Agent:** frontend-developer · **Depends:** none (bug fix)
+Log: `.claude/logs/tasks/400_2026-07-23_locations-create-button-role-gate_frontend-developer.md`
+Product owner bug report: "Створити" on `/locations` for type "Склад" → 403 with no friendly
+error. Root cause (confirmed in main session, backend untouched — `LocationsController.Create`/
+`Update` are deliberately `AtLeastEnterpriseAdmin`-only per ADR-020/ADR-022, no capability-OR
+escape hatch by design): `locations/page.tsx` rendered "Create"/"Edit" unconditionally for every
+`CanViewStock` role. Fix: gated both buttons behind
+`hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN)` (same pattern as `users/page.tsx`'s
+`canManageRoleTemplates`) — hide, don't disable. "Plan" (floor-plan) link and the page's own
+`GET` list untouched (both correctly open to all `CanViewStock` roles). `npx tsc --noEmit` clean.
+Live-verified on local dev stack: store_manager (the exact reported scenario) now sees no
+Create/Edit; enterprise_admin still sees both. Not committed (task brief didn't ask for it).
+
 ## TASK-398 — Backend: per-item sidebar tab catalog (item-level AllowedTabs granularity)
 **Status:** done (2026-07-20) · **Agent:** backend-developer · **Depends:** TASK-391/ADR-021, TASK-397
 Log: `.claude/logs/tasks/398_2026-07-20_per-item-tab-catalog_backend-developer.md`
