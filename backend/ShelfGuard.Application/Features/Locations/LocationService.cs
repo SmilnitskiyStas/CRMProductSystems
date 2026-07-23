@@ -1,4 +1,5 @@
 using ShelfGuard.Application.Features.Locations.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -6,13 +7,57 @@ namespace ShelfGuard.Application.Features.Locations;
 
 public sealed class LocationService : ILocationService
 {
+    /// <summary>
+    /// Roles whose location list is narrowed to their user_locations assignments (TASK-401).
+    /// Mirrors the ADR-022 restricted ranks: everything below enterprise_admin. Provider-team
+    /// roles and enterprise_admin are deliberately absent — they always see the full tenant
+    /// list. Defined here from Domain's AppRoles (not Infrastructure's AppPolicies) to keep
+    /// the Application → Infrastructure dependency direction clean.
+    /// </summary>
+    private static readonly IReadOnlySet<string> StoreScopedRoles = new HashSet<string>
+    {
+        AppRoles.NetworkManager,
+        AppRoles.StoreManager,
+        AppRoles.Merchandiser,
+        AppRoles.Storekeeper,
+        AppRoles.Cashier,
+        AppRoles.Staff,
+    };
+
     private readonly ILocationRepository _repo;
+    private readonly IUserLocationRepository _userLocations;
 
-    public LocationService(ILocationRepository repo) => _repo = repo;
+    public LocationService(ILocationRepository repo, IUserLocationRepository userLocations)
+    {
+        _repo = repo;
+        _userLocations = userLocations;
+    }
 
-    public async Task<List<LocationDto>> GetAllAsync(CancellationToken ct = default)
+    public async Task<List<LocationDto>> GetAllAsync(
+        Guid? tenantId, Guid? userId, string? role, CancellationToken ct = default)
     {
         var locations = await _repo.GetAllAsync(ct);
+
+        if (role is not null && StoreScopedRoles.Contains(role)
+            && tenantId is not null && userId is not null)
+        {
+            var assignedIds = await _userLocations.GetLocationIdsForUserAsync(
+                tenantId.Value, userId.Value, ct);
+
+            // Fail-open by design (transitional, ADR-022 Stage 3 rollout): a scoped user with
+            // ZERO user_locations rows sees the full tenant list. Until the Stage 2 backfill
+            // completes, unassigned users exist and the frontend StoreSelector takes stores[0]
+            // and hides itself on an empty list — returning [] here would break their UI
+            // entirely. Actual data protection comes from the RESTRICTIVE store_scope RLS
+            // policies (Stage 3); this list filter is a cosmetic layer on top. Once backfill
+            // is verified complete, this branch can be tightened to fail-closed.
+            if (assignedIds.Count > 0)
+            {
+                var assigned = assignedIds.ToHashSet();
+                locations = locations.Where(l => assigned.Contains(l.Id)).ToList();
+            }
+        }
+
         return locations.Select(ToDto).ToList();
     }
 

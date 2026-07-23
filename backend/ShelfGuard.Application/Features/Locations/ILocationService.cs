@@ -4,7 +4,15 @@ namespace ShelfGuard.Application.Features.Locations;
 
 public interface ILocationService
 {
-    Task<List<LocationDto>> GetAllAsync(CancellationToken ct = default);
+    /// <summary>
+    /// Lists locations visible to the acting user (TASK-401, ADR-022 Stage 3 companion).
+    /// Admin-tier roles (provider team, enterprise_admin) see every tenant location; scoped
+    /// roles (network_manager and below) see only their user_locations assignments — unless
+    /// they have zero assignments, in which case the full list is returned (deliberate
+    /// fail-open, see implementation comment).
+    /// </summary>
+    Task<List<LocationDto>> GetAllAsync(
+        Guid? tenantId, Guid? userId, string? role, CancellationToken ct = default);
     Task<LocationDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<(LocationDto? Location, string? Error)> CreateAsync(

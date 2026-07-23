@@ -15,11 +15,12 @@ namespace ShelfGuard.Tests.Locations;
 public sealed class LocationServiceTests
 {
     private readonly ILocationRepository _repo = Substitute.For<ILocationRepository>();
+    private readonly IUserLocationRepository _userLocations = Substitute.For<IUserLocationRepository>();
     private readonly LocationService _sut;
 
     public LocationServiceTests()
     {
-        _sut = new LocationService(_repo);
+        _sut = new LocationService(_repo, _userLocations);
     }
 
     [Fact]

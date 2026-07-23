@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Locations;
@@ -21,7 +22,8 @@ public sealed class LocationsController : ControllerBase
     [ProducesResponseType(typeof(List<LocationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
-        var locations = await _locations.GetAllAsync(ct);
+        // TASK-401: scoped roles get the list narrowed to their user_locations assignments.
+        var locations = await _locations.GetAllAsync(GetTenantId(), GetUserId(), GetRole(), ct);
         return Ok(locations);
     }
 
@@ -149,4 +151,14 @@ public sealed class LocationsController : ControllerBase
         var claim = User.FindFirst("tenant_id")?.Value;
         return Guid.TryParse(claim, out var id) ? id : null;
     }
+
+    private Guid? GetUserId()
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                 ?? User.FindFirstValue("sub");
+        return Guid.TryParse(claim, out var id) ? id : null;
+    }
+
+    private string? GetRole() =>
+        User.FindFirstValue(ClaimTypes.Role) ?? User.FindFirstValue("role");
 }

@@ -3,6 +3,21 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-401 — Backend: store-scope filter on GET /api/locations (ADR-022 Stage 3 companion)
+**Status:** done (2026-07-23) · **Agent:** backend-developer · **Depends:** TASK-392 (user_locations Stage 1), ADR-022
+Log: `.claude/logs/tasks/401_2026-07-23_locations-list-store-scope-filter_backend-developer.md`
+Stage 3 RESTRICTIVE RLS scopes business DATA but `locations` isn't one of the 9 scoped tables, so
+a single-store user still saw every tenant store in StoreSelector. `LocationService.GetAllAsync`
+now takes (tenantId, userId, role) from JWT claims via the controller: admin tier
+(provider/provider_admin/enterprise_admin) sees all; scoped roles (network_manager..staff) with
+≥1 `user_locations` row see only assigned; **0 rows = fail-open (full list)** — deliberate
+transitional semantics until Stage 2 backfill completes (StoreSelector takes `stores[0]`, hides on
+empty; real protection is the RLS layer), documented in code. Reused TASK-392's
+`IUserLocationRepository` (no new repo); role set from Domain `AppRoles` (not Infrastructure
+`AppPolicies`). GetById/zones/floor-plan untouched; no frontend changes needed. `dotnet build`
+0 err, `dotnet test` 918/918 (11 new: 3 branches + missing-claim defensive). NOT committed —
+main session commits together with the Stage 3 merge.
+
 ## TASK-400 — Frontend: hide Locations Create/Edit buttons for roles below AtLeastEnterpriseAdmin
 **Status:** done (2026-07-23) · **Agent:** frontend-developer · **Depends:** none (bug fix)
 Log: `.claude/logs/tasks/400_2026-07-23_locations-create-button-role-gate_frontend-developer.md`
