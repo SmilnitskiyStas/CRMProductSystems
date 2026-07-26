@@ -15,6 +15,12 @@ export const AppRoles = {
   Cashier:         "cashier",
   /** v4.1 (ADR-016): admin of a supplier tenant — supplier cabinet only. */
   SupplierAdmin:   "supplier_admin",
+  /**
+   * TASK-405 (Loyalty Фаза 0): consumer loyalty-wallet end user (ConsumerAccount, never a
+   * staff User row). Deliberately NOT added to any Set below (TENANT_ROLES, CAN_*, etc.) —
+   * those enumerate tenant-staff roles and a consumer session has no tenant_id at all.
+   */
+  Consumer:        "consumer",
 } as const;
 
 export type AppRole = (typeof AppRoles)[keyof typeof AppRoles];
@@ -122,6 +128,23 @@ export function canManageLegalEntities(
 ): boolean {
   if (hasRole(role, AT_LEAST_ENTERPRISE_ADMIN)) return true;
   return permissions?.["legal_entities.manage"] === true;
+}
+
+/**
+ * True when the current user can export marketing-analytics (RFM) audiences with
+ * unmasked PII (full phone numbers) — mirrors backend MarketingAnalyticsAuthorization
+ * .CanExportPii: store_manager+ always, or any role with the
+ * `marketing_analytics.export_pii` TenantRole capability override (ADR-020). Same
+ * role-OR-permission shape as canManageLegalEntities above. Per task log 406, a caller who
+ * lacks this just silently gets a masked export (never a 403) — so the UI uses this to
+ * hide/disable the "show full phone" checkbox rather than let it quietly do nothing.
+ */
+export function canExportMarketingAnalyticsPii(
+  role: string | undefined,
+  permissions?: Record<string, boolean> | null,
+): boolean {
+  if (hasRole(role, AT_LEAST_STORE_MANAGER)) return true;
+  return permissions?.["marketing_analytics.export_pii"] === true;
 }
 
 /**

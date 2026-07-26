@@ -329,6 +329,10 @@
           "analytics": "Analytics",
           "posAnalytics": "POS Analytics"
         },
+        "marketingAnalytics": {
+          "label": "Marketing Analytics",
+          "dashboard": "RFM Dashboard"
+        },
         "workforce": {
           "label": "Staff",
           "users": "Staff",
@@ -1335,6 +1339,12 @@
           "price": "Price",
           "discount": "Discount",
           "total": "Total"
+        },
+        "loyalty": {
+          "title": "Loyalty",
+          "accrued": "Bonus accrued",
+          "redeemed": "Bonus redeemed",
+          "balance": "Balance after receipt"
         }
       },
       "salesTable": {
@@ -1347,7 +1357,8 @@
           "sum": "Total",
           "fiscalization": "Fiscalization"
         },
-        "totalLabel": "Total amount:"
+        "totalLabel": "Total amount:",
+        "loyaltyIndicator": "Loyalty bonus applied to this receipt"
       }
     },
     "aiOrders": {
@@ -1529,6 +1540,129 @@
           "losses": "Losses",
           "warningShort": "Warning"
         }
+      }
+    },
+    "marketingAnalytics": {
+      "page": {
+        "title": "Marketing Analytics (RFM)",
+        "subtitle": "Customer segmentation, top products, cross-sell, and AI-assisted recommendations",
+        "historicalDataBanner": "RFM and LTV only reflect sales linked to a customer (via the loyalty program). Historical POS sales made before that link existed are not included here.",
+        "moduleGate": {
+          "title": "Marketing Analytics module is not active",
+          "body": "Contact your platform administrator to enable the \"Marketing Analytics\" module."
+        },
+        "overviewSection": "Customer base overview",
+        "kpi": {
+          "periodCustomers": "Customers in period",
+          "periodRevenue": "Revenue in period",
+          "registeredBase": "Registered customers",
+          "everPurchased": "Ever purchased",
+          "everPurchasedShareSub": "{percent}% of the registered base"
+        },
+        "noData": "No data"
+      },
+      "filterBar": {
+        "periodLabel": "Period",
+        "preset": {
+          "3m": "3 months",
+          "6m": "6 months",
+          "12m": "12 months",
+          "all": "All time",
+          "custom": "Custom"
+        },
+        "fromLabel": "From",
+        "toLabel": "To",
+        "storesLabel": "Stores",
+        "allStores": "All stores",
+        "storesCount": "{count} stores",
+        "storesPopoverTitle": "Select stores",
+        "selectAllStores": "All stores",
+        "doneButton": "Done",
+        "refreshButton": "Refresh"
+      },
+      "segmentGrid": {
+        "revenueLabel": "Revenue",
+        "noPurchaseTitle": "No purchases",
+        "noPurchaseDescription": "Registered, but never converted to a sale — not part of the 11 RFM segments.",
+        "noPurchaseHint": "Not counted in the segments above",
+        "hint": "Click a segment card to see its top products, cross-sell, behavior, and recommendation."
+      },
+      "detail": {
+        "closeButton": "Close",
+        "loading": "Loading…",
+        "emptySegmentTitle": "No customers in this segment",
+        "emptySegmentBody": "No customers matched this segment for the selected period and stores. Try a wider period or a different store selection."
+      },
+      "topProducts": {
+        "title": "Top products",
+        "loading": "Loading…",
+        "empty": "No product data for this segment",
+        "buyersAndReceipts": "{buyers} buyers · {receipts} receipts",
+        "noBarcode": "No barcode",
+        "coverageLabel": "coverage"
+      },
+      "crossSell": {
+        "title": "Also bought",
+        "affinityTab": "Affinity",
+        "basketTab": "Same receipt",
+        "emptyNoProduct": "Select a product on the left",
+        "anchorPrefix": "For product:",
+        "loading": "Loading…",
+        "empty": "No data",
+        "affinityDetail": "{both} bought both · {anchorShare}% of this product's buyers vs {segmentShare}% of the segment",
+        "liftLabel": "lift",
+        "basketDetail": "{receipts} shared receipts",
+        "togetherShareLabel": "together"
+      },
+      "behavior": {
+        "title": "Behavior",
+        "loading": "Loading…",
+        "peakDay": "Peak day",
+        "peakHour": "Peak hour",
+        "byDayOfWeek": "By day of week",
+        "byHour": "By hour",
+        "shareOfReceipts": "Share of receipts",
+        "averageTicket": "Average ticket",
+        "receiptCount": "Receipts",
+        "receiptsPerCustomer": "Receipts per customer",
+        "lastVisit": "Last visit",
+        "averageRecencyDays": "Average recency",
+        "daysSuffix": "{n} days",
+        "ltvTitle": "Lifetime value",
+        "allTimeBadge": "All-time",
+        "averageLtv": "Average LTV",
+        "totalLtv": "Total LTV",
+        "days": {
+          "mon": "Mon",
+          "tue": "Tue",
+          "wed": "Wed",
+          "thu": "Thu",
+          "fri": "Fri",
+          "sat": "Sat",
+          "sun": "Sun"
+        }
+      },
+      "recommendation": {
+        "title": "Recommendation",
+        "triggerLabel": "Trigger — why now",
+        "actionLabel": "Action · channel · time",
+        "offerLabel": "Offer",
+        "cautionLabel": "Caution",
+        "productsLabel": "Products for the campaign",
+        "explainButton": "Explain in more detail",
+        "explainLoading": "Analyzing…",
+        "aiBadge": "AI explanation",
+        "explainUnavailable": "AI explanation unavailable — no Claude API key configured for this workspace.",
+        "explainError": "Couldn't generate an explanation. Try again later."
+      },
+      "export": {
+        "successToast": "Export ready — check your downloads",
+        "errorToast": "Export failed: {message}",
+        "downloading": "Downloading…",
+        "segmentButton": "Export to Excel",
+        "productBuyersButton": "Buyers to file",
+        "pairBuyersButton": "Both buyers → file",
+        "unmaskPiiLabel": "Show full phone number"
       }
     },
     "dashboard": {
@@ -3095,7 +3229,9 @@
         "auto_service": "Auto service",
         "production": "Production",
         "marketplace": "Supplier marketplace",
-        "marketplace_supplier": "Supplier cabinet"
+        "marketplace_supplier": "Supplier cabinet",
+        "loyalty": "Loyalty Program",
+        "marketing_analytics": "Marketing Analytics"
       },
       "moduleDescriptions": {
         "inventory": "Item catalog, stock, receiving, transfers, write-offs",
@@ -3104,7 +3240,9 @@
         "auto_service": "Clients, vehicles, work orders, parts tracking",
         "production": "Recipes, production orders, raw material write-offs",
         "marketplace": "Search and compare suppliers, reviews, ratings",
-        "marketplace_supplier": "Supplier self-service: catalog, orders, chat with clients"
+        "marketplace_supplier": "Supplier self-service: catalog, orders, chat with clients",
+        "loyalty": "Customer bonus program: QR membership card, point accrual and redemption at POS",
+        "marketing_analytics": "RFM customer segmentation, top products, cross-sell, AI-assisted recommendations"
       },
       "plans": {
         "basic": "Basic",
@@ -3204,7 +3342,9 @@
         "pos": "POS",
         "auto_service": "Auto service",
         "production": "Production",
-        "marketplace": "Supplier marketplace"
+        "marketplace": "Supplier marketplace",
+        "loyalty": "Loyalty Program",
+        "marketing_analytics": "Marketing Analytics"
       },
       "plans": {
         "trial": "Trial",
@@ -3549,6 +3689,10 @@
         "marketplace": {
           "label": "Supplier marketplace",
           "description": "Search and compare suppliers, reviews, ratings."
+        },
+        "marketing_analytics": {
+          "label": "Marketing Analytics",
+          "description": "RFM customer segmentation, top products, cross-sell, AI-assisted recommendations."
         }
       },
       "businessTypes": {

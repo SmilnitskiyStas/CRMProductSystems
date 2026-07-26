@@ -3,7 +3,7 @@
 import { useTranslations, useLocale } from "next-intl";
 import { DetailDrawer, DrawerField, DrawerSection, DrawerGrid } from "@/components/ui/DetailDrawer";
 import { FiscalBadge } from "./FiscalBadge";
-import type { SaleDto } from "../types";
+import { saleHasLoyaltyActivity, type SaleDto } from "../types";
 
 interface Props {
   sale: SaleDto | null;
@@ -76,6 +76,52 @@ export function SaleDetailDrawer({ sale, onClose }: Props) {
               />
             </DrawerGrid>
           </DrawerSection>
+
+          {/*
+            TASK-408 (read-only "Лояльність" block for manager view).
+
+            Gated on saleHasLoyaltyActivity (../types.ts) rather than a customerId check —
+            SaleDto has no CustomerId/CustomerName field at all today, on either endpoint
+            (confirmed: backend/ShelfGuard.Application/Features/Pos/Dtos/PosDtos.cs +
+            PosService.cs). PosTransaction.CustomerId IS persisted at sale creation
+            (PosService.cs:324), but it's never mapped back into SaleDto — so the customer's
+            name + a link to their card cannot be shown here without a backend DTO extension
+            (new task). Note also: frontend/features/customers/ has no deep-link route for a
+            single customer (CustomerDetail opens as a drawer via client-side useState in
+            app/(dashboard)/customers/page.tsx, no /customers/[id]) — a future CustomerId would
+            still only get you to the customers list, not straight to the record, unless that
+            is added too.
+
+            The bonus amounts below (loyaltyAccrued/Redeemed/Balance) ARE real SaleDto fields,
+            but only PosService.CreateSaleAsync (mobile checkout's immediate response) populates
+            them — GetSalesForShiftAsync (what this web view actually calls) never does, so this
+            section is always hidden today. It will start rendering with zero frontend changes
+            once that mapping gap is closed on the backend. Full writeup:
+            .claude/logs/tasks/408_2026-07-26_web-pos-loyalty-section_frontend-developer.md
+          */}
+          {saleHasLoyaltyActivity(sale) && (
+            <DrawerSection title={t("loyalty.title")}>
+              <DrawerGrid>
+                {sale.loyaltyAccrued != null && (
+                  <DrawerField
+                    label={t("loyalty.accrued")}
+                    value={`+${sale.loyaltyAccrued.toFixed(2)} ₴`}
+                    color="#34d399"
+                  />
+                )}
+                {sale.loyaltyRedeemed != null && (
+                  <DrawerField
+                    label={t("loyalty.redeemed")}
+                    value={`-${sale.loyaltyRedeemed.toFixed(2)} ₴`}
+                    color="#fbbf24"
+                  />
+                )}
+                {sale.loyaltyBalance != null && (
+                  <DrawerField label={t("loyalty.balance")} value={`${sale.loyaltyBalance.toFixed(2)} ₴`} />
+                )}
+              </DrawerGrid>
+            </DrawerSection>
+          )}
 
           <DrawerSection title={t("itemsSection", { count: sale.items.length })}>
             <div

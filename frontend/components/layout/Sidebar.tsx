@@ -40,6 +40,7 @@ import {
   FileText,
   MessageCircle,
   Landmark,
+  Megaphone,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -188,6 +189,15 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     items: [
       { href: "/analytics",     label: t("analytics.analytics"),    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
       { href: "/analytics/pos", label: t("analytics.posAnalytics"), icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
+    ],
+  },
+  {
+    key: "marketing_analytics",
+    label: t("marketingAnalytics.label"),
+    icon: <Megaphone size={18} />,
+    moduleKey: "marketing_analytics",
+    items: [
+      { href: "/marketing-analytics", label: t("marketingAnalytics.dashboard"), icon: <Megaphone size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
     ],
   },
   {

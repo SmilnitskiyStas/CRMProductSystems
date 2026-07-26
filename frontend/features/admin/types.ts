@@ -46,7 +46,9 @@ export const PLAN_COLORS: Record<TenantPlan, { bg: string; border: string; text:
 
 // Labels live in i18n (Dashboard.admin.modules.*, `useTranslations`) — see
 // TenantDetailDrawer.tsx.
-export const ALL_MODULES = ["inventory", "procurement", "pos", "auto_service", "production", "marketplace"] as const;
+// TASK-413: added "loyalty"/"marketing_analytics" (backend Tenant.UpdateModules already
+// accepted both since TASK-405/406) so the admin panel can actually enable them for a tenant.
+export const ALL_MODULES = ["inventory", "procurement", "pos", "auto_service", "production", "marketplace", "loyalty", "marketing_analytics"] as const;
 export const ALL_PLANS: TenantPlan[] = ["trial", "basic", "standard", "enterprise"];
 
 // Mirrors backend Tenant.UpdateBusinessType valid values (ADR-014/016).

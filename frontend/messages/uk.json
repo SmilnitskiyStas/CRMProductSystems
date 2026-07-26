@@ -329,6 +329,10 @@
           "analytics": "Аналітика",
           "posAnalytics": "POS Аналітика"
         },
+        "marketingAnalytics": {
+          "label": "Маркетингова аналітика",
+          "dashboard": "RFM-дашборд"
+        },
         "workforce": {
           "label": "Персонал",
           "users": "Персонал",
@@ -1335,6 +1339,12 @@
           "price": "Ціна",
           "discount": "Знижка",
           "total": "Сума"
+        },
+        "loyalty": {
+          "title": "Лояльність",
+          "accrued": "Нараховано бонусів",
+          "redeemed": "Списано бонусів",
+          "balance": "Баланс після чека"
         }
       },
       "salesTable": {
@@ -1347,7 +1357,8 @@
           "sum": "Сума",
           "fiscalization": "Фіскалізація"
         },
-        "totalLabel": "Загальна сума:"
+        "totalLabel": "Загальна сума:",
+        "loyaltyIndicator": "До цього чека застосовано бонус лояльності"
       }
     },
     "aiOrders": {
@@ -1529,6 +1540,129 @@
           "losses": "Збитки",
           "warningShort": "Попередж."
         }
+      }
+    },
+    "marketingAnalytics": {
+      "page": {
+        "title": "Маркетингова аналітика (RFM)",
+        "subtitle": "Сегментація клієнтів, топ-товари, крос-сел і AI-рекомендації",
+        "historicalDataBanner": "RFM та LTV враховують лише продажі, прив'язані до клієнта (через програму лояльності). Історичні продажі на касі до впровадження цього зв'язку в аналітику не потрапляють.",
+        "moduleGate": {
+          "title": "Модуль «Маркетингова аналітика» не активовано",
+          "body": "Зверніться до адміністратора платформи, щоб увімкнути модуль «Маркетингова аналітика»."
+        },
+        "overviewSection": "Огляд клієнтської бази",
+        "kpi": {
+          "periodCustomers": "Покупці за період",
+          "periodRevenue": "Оборот за період",
+          "registeredBase": "Зареєстровані клієнти",
+          "everPurchased": "Купували будь-коли",
+          "everPurchasedShareSub": "{percent}% зареєстрованої бази"
+        },
+        "noData": "Немає даних"
+      },
+      "filterBar": {
+        "periodLabel": "Період",
+        "preset": {
+          "3m": "3 міс",
+          "6m": "6 міс",
+          "12m": "12 міс",
+          "all": "Весь час",
+          "custom": "Свій період"
+        },
+        "fromLabel": "Від",
+        "toLabel": "До",
+        "storesLabel": "Заклади",
+        "allStores": "Усі заклади",
+        "storesCount": "{count} закладів",
+        "storesPopoverTitle": "Оберіть заклади",
+        "selectAllStores": "Усі заклади",
+        "doneButton": "Готово",
+        "refreshButton": "Оновити"
+      },
+      "segmentGrid": {
+        "revenueLabel": "Оборот",
+        "noPurchaseTitle": "Без покупок",
+        "noPurchaseDescription": "Зареєстровані, але жодного разу не конвертовані в продаж — поза 11 RFM-сегментами.",
+        "noPurchaseHint": "Не входить у сегменти вище",
+        "hint": "Натисніть на картку сегмента, щоб побачити топ-товари, крос-сел, поведінку й рекомендацію."
+      },
+      "detail": {
+        "closeButton": "Закрити",
+        "loading": "Завантаження…",
+        "emptySegmentTitle": "У цьому сегменті немає клієнтів",
+        "emptySegmentBody": "За обраний період і заклади жоден клієнт не потрапив у цей сегмент. Спробуйте ширший період або інший вибір закладів."
+      },
+      "topProducts": {
+        "title": "Топ товарів",
+        "loading": "Завантаження…",
+        "empty": "Немає даних про товари для цього сегмента",
+        "buyersAndReceipts": "{buyers} покупців · {receipts} чеків",
+        "noBarcode": "Штрихкод не вказано",
+        "coverageLabel": "охоплення"
+      },
+      "crossSell": {
+        "title": "Купують також",
+        "affinityTab": "Афінність",
+        "basketTab": "Разом у чеку",
+        "emptyNoProduct": "Оберіть товар зліва",
+        "anchorPrefix": "Для товару:",
+        "loading": "Завантаження…",
+        "empty": "Немає даних",
+        "affinityDetail": "{both} купували обидва · {anchorShare}% покупців цього товару проти {segmentShare}% сегмента",
+        "liftLabel": "lift",
+        "basketDetail": "{receipts} спільних чеків",
+        "togetherShareLabel": "разом"
+      },
+      "behavior": {
+        "title": "Поведінка",
+        "loading": "Завантаження…",
+        "peakDay": "Піковий день",
+        "peakHour": "Пікова година",
+        "byDayOfWeek": "За днями тижня",
+        "byHour": "За годинами",
+        "shareOfReceipts": "Частка чеків",
+        "averageTicket": "Середній чек",
+        "receiptCount": "Чеків",
+        "receiptsPerCustomer": "Чеків на клієнта",
+        "lastVisit": "Останній візит",
+        "averageRecencyDays": "Середня давність",
+        "daysSuffix": "{n} днів",
+        "ltvTitle": "LTV (довічна цінність)",
+        "allTimeBadge": "Весь час",
+        "averageLtv": "Середній LTV",
+        "totalLtv": "Сумарний LTV",
+        "days": {
+          "mon": "Пн",
+          "tue": "Вт",
+          "wed": "Ср",
+          "thu": "Чт",
+          "fri": "Пт",
+          "sat": "Сб",
+          "sun": "Нд"
+        }
+      },
+      "recommendation": {
+        "title": "Рекомендація",
+        "triggerLabel": "Тригер — чому зараз",
+        "actionLabel": "Дія · канал · час",
+        "offerLabel": "Оффер",
+        "cautionLabel": "Застереження",
+        "productsLabel": "Товари для акції",
+        "explainButton": "Пояснити детальніше",
+        "explainLoading": "Аналізуємо…",
+        "aiBadge": "AI-пояснення",
+        "explainUnavailable": "AI-пояснення недоступне — для цього робочого простору не налаштовано ключ Claude API.",
+        "explainError": "Не вдалося згенерувати пояснення. Спробуйте пізніше."
+      },
+      "export": {
+        "successToast": "Файл готовий — перевірте завантаження",
+        "errorToast": "Помилка експорту: {message}",
+        "downloading": "Завантаження…",
+        "segmentButton": "Вивантажити Excel",
+        "productBuyersButton": "Покупці у файл",
+        "pairBuyersButton": "Покупці обох → файл",
+        "unmaskPiiLabel": "Показати повний номер телефону"
       }
     },
     "dashboard": {
@@ -3095,7 +3229,9 @@
         "auto_service": "Автосервіс",
         "production": "Виробництво",
         "marketplace": "Маркетплейс постачальників",
-        "marketplace_supplier": "Кабінет постачальника"
+        "marketplace_supplier": "Кабінет постачальника",
+        "loyalty": "Програма лояльності",
+        "marketing_analytics": "Маркетингова аналітика"
       },
       "moduleDescriptions": {
         "inventory": "Каталог товарів, залишки, прийомка, переміщення, списання",
@@ -3104,7 +3240,9 @@
         "auto_service": "Клієнти, автомобілі, наряд-замовлення, облік запчастин",
         "production": "Рецепти, виробничі замовлення, списання сировини",
         "marketplace": "Пошук і порівняння постачальників, відгуки, рейтинги",
-        "marketplace_supplier": "Self-service постачальника: каталог, замовлення, чат з клієнтами"
+        "marketplace_supplier": "Self-service постачальника: каталог, замовлення, чат з клієнтами",
+        "loyalty": "Бонусна програма для клієнтів: QR-картка учасника, нарахування і списання балів на касі",
+        "marketing_analytics": "RFM-сегментація клієнтів, топ-товари, крос-сел, AI-рекомендації"
       },
       "plans": {
         "basic": "Basic",
@@ -3204,7 +3342,9 @@
         "pos": "Каса (POS)",
         "auto_service": "Автосервіс",
         "production": "Виробництво",
-        "marketplace": "Маркетплейс постачальників"
+        "marketplace": "Маркетплейс постачальників",
+        "loyalty": "Програма лояльності",
+        "marketing_analytics": "Маркетингова аналітика"
       },
       "plans": {
         "trial": "Trial",
@@ -3549,6 +3689,10 @@
         "marketplace": {
           "label": "Маркетплейс постачальників",
           "description": "Пошук і порівняння постачальників, відгуки, рейтинги."
+        },
+        "marketing_analytics": {
+          "label": "Маркетингова аналітика",
+          "description": "RFM-сегментація клієнтів, топ-товари, крос-сел, AI-рекомендації."
         }
       },
       "businessTypes": {

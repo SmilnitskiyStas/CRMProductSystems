@@ -1,8 +1,9 @@
 "use client";
 
 import { useTranslations, useLocale } from "next-intl";
+import { Gift } from "lucide-react";
 import { FiscalBadge } from "./FiscalBadge";
-import type { SaleDto } from "../types";
+import { saleHasLoyaltyActivity, type SaleDto } from "../types";
 
 interface Props {
   sales: SaleDto[] | undefined;
@@ -93,8 +94,23 @@ export function SalesTable({ sales, totalAmount, isLoading, onSelectSale }: Prop
                 }}
               >
                 <td style={td}>
-                  <span style={{ fontFamily: "monospace", fontSize: 12, color: "#93C5FD" }}>
-                    #{sale.receiptNumber}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "#93C5FD" }}>
+                      #{sale.receiptNumber}
+                    </span>
+                    {/*
+                      TASK-408: proxy indicator for "has loyalty activity", not "has a linked
+                      customer" — SaleDto has no CustomerId field at all (see types.ts doc on
+                      saleHasLoyaltyActivity / SaleDetailDrawer.tsx for the full backend-gap
+                      writeup). Always hidden today: GetSalesForShiftAsync (the query behind
+                      this table's data) never populates loyaltyAccrued/Redeemed/Balance —
+                      only the mobile checkout's immediate creation response does.
+                    */}
+                    {saleHasLoyaltyActivity(sale) && (
+                      <span title={t("loyaltyIndicator")} style={{ display: "inline-flex" }}>
+                        <Gift size={12} color="#34d399" aria-label={t("loyaltyIndicator")} />
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td style={{ ...td, color: "#9CA3AF" }}>{formatTime(sale.createdAt, intlLocale)}</td>
