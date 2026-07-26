@@ -15,6 +15,7 @@ import { useAuthStore } from '@/features/auth/store';
 import { logout } from '@/features/auth/api/authApi';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
+import { useJoinAsStaff, useMyMembership } from '@/features/loyalty/hooks/useLoyalty';
 
 const ROLE_LABELS: Record<string, string> = {
   enterprise_admin: 'Адміністратор підприємства',
@@ -177,6 +178,9 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Loyalty program (plan §"Кейс 2" — staff joining their own employer's program) */}
+        <LoyaltySection />
+
         {/* Settings */}
         <View className="mx-4 mt-4">
           <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
@@ -204,6 +208,64 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * TASK-405/407: staff joining their own employer's loyalty program (GET /api/loyalty/
+ * my-membership, POST /api/loyalty/join-as-staff — LoyaltyController). Both are class-level
+ * [RequireModule("loyalty")], so a tenant without the module enabled 403s here — hidden
+ * entirely in that case rather than showing an error for a feature the tenant doesn't have,
+ * matching how the rest of the app treats module-gated UI.
+ */
+function LoyaltySection() {
+  const { data: membership, isLoading, isError, error } = useMyMembership();
+  const joinMutation = useJoinAsStaff();
+
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  if (isError && status === 403) return null;
+
+  return (
+    <View className="mx-4 mt-4">
+      <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+        Бонусна програма
+      </Text>
+      <View className="bg-white rounded-2xl p-4">
+        {isLoading ? (
+          <ActivityIndicator color="#16a34a" />
+        ) : membership ? (
+          <View>
+            <Text className="text-sm text-gray-500">Ваш баланс бонусів</Text>
+            <Text className="text-2xl font-bold text-primary-600 mt-1">
+              {membership.balance.toFixed(2)} ₴
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => joinMutation.mutate()}
+            disabled={joinMutation.isPending}
+            className="flex-row items-center justify-between"
+          >
+            <View className="flex-1 mr-3">
+              <Text className="text-base text-gray-900 font-medium">
+                Приєднатися до бонусної програми
+              </Text>
+              <Text className="text-xs text-gray-400 mt-0.5">
+                Отримуйте бонуси як клієнт свого магазину
+              </Text>
+            </View>
+            {joinMutation.isPending ? (
+              <ActivityIndicator color="#16a34a" />
+            ) : (
+              <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+            )}
+          </TouchableOpacity>
+        )}
+        {joinMutation.isError && (
+          <Text className="text-red-500 text-xs mt-2">Не вдалося приєднатися. Спробуйте ще раз.</Text>
+        )}
+      </View>
+    </View>
   );
 }
 

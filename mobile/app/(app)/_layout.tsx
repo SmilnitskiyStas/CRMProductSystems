@@ -8,8 +8,13 @@ import { CAN_ACCESS_POS, hasRole } from '@/lib/roles';
 export default function AppLayout() {
   const token = useAuthStore((s) => s.accessToken);
   const user = useAuthStore((s) => s.user);
+  const sessionKind = useAuthStore((s) => s.sessionKind);
 
-  if (!token) return <Redirect href="/(auth)/login" />;
+  if (!token) return <Redirect href="/(auth)/select-role" />;
+  // TASK-405/407: a consumer session (loyalty wallet, AppRoles.Consumer) never belongs in
+  // the staff tabs — send it to its own group instead of falling through to a `user`-less
+  // staff UI. Mirrored by the opposite guard in (consumer)/_layout.tsx.
+  if (sessionKind === 'consumer') return <Redirect href="/(consumer)/wallet" />;
 
   const canAccessPos = hasRole(user?.role, CAN_ACCESS_POS);
 

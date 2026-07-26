@@ -21,6 +21,12 @@ export const AppRoles = {
   Storekeeper: 'storekeeper',
   Cashier: 'cashier',
   SupplierAdmin: 'supplier_admin',
+  /**
+   * TASK-405 (Loyalty Фаза 0): consumer loyalty-wallet end user (ConsumerAccount, never a
+   * staff User row) — issued only in a consumer-session JWT (no tenant_id claim alongside
+   * it). Deliberately not added to any role array below — those gate tenant-staff screens.
+   */
+  Consumer: 'consumer',
 } as const;
 
 export type AppRole = (typeof AppRoles)[keyof typeof AppRoles];

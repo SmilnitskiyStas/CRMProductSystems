@@ -10,6 +10,7 @@ export default function PosLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="scanner" />
+      <Stack.Screen name="loyalty" />
       <Stack.Screen name="payment" />
       <Stack.Screen name="receipt" />
     </Stack>

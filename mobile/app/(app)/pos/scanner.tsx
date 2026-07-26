@@ -120,9 +120,10 @@ export default function PosScannerScreen() {
       Alert.alert('Кошик порожній', 'Відскануйте хоча б один товар.');
       return;
     }
-    // Encode cart as JSON param
+    // Encode cart as JSON param. Routes through the loyalty step first (TASK-405/407) —
+    // that screen forwards to /pos/payment itself (with or without loyalty fields attached).
     router.push({
-      pathname: '/(app)/pos/payment',
+      pathname: '/(app)/pos/loyalty',
       params: {
         shiftId,
         cartJson: JSON.stringify(cart),

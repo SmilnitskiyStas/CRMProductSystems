@@ -139,6 +139,40 @@ export default function PosReceiptScreen() {
             </>
           )}
         </View>
+
+        {/* Loyalty summary (TASK-405/407) — undefined when the sale carried no membership */}
+        {(result.loyaltyAccrued != null || result.loyaltyRedeemed != null) && (
+          <View className="bg-white mx-4 mt-4 rounded-2xl p-4 border border-gray-100 gap-2">
+            <Text className="text-sm font-semibold text-gray-600 mb-1">Бонусна програма</Text>
+            {result.loyaltyRedeemed != null && result.loyaltyRedeemed > 0 && (
+              <View className="flex-row justify-between">
+                <Text className="text-sm text-gray-500">Списано</Text>
+                <Text className="text-sm font-semibold text-red-500">
+                  -{formatPrice(result.loyaltyRedeemed)} ₴
+                </Text>
+              </View>
+            )}
+            {result.loyaltyAccrued != null && result.loyaltyAccrued > 0 && (
+              <View className="flex-row justify-between">
+                <Text className="text-sm text-gray-500">Нараховано</Text>
+                <Text className="text-sm font-semibold text-green-600">
+                  +{formatPrice(result.loyaltyAccrued)} ₴
+                </Text>
+              </View>
+            )}
+            {result.loyaltyBalance != null && (
+              <>
+                <View className="h-px bg-gray-100" />
+                <View className="flex-row justify-between">
+                  <Text className="text-base font-bold text-gray-900">Баланс клієнта</Text>
+                  <Text className="text-base font-bold text-primary-600">
+                    {formatPrice(result.loyaltyBalance)} ₴
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* Bottom buttons */}

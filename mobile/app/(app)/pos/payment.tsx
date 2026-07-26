@@ -28,7 +28,15 @@ function formatPrice(amount: number): string {
 
 export default function PosPaymentScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ shiftId?: string; cartJson?: string }>();
+  const params = useLocalSearchParams<{
+    shiftId?: string;
+    cartJson?: string;
+    customerId?: string;
+    membershipId?: string;
+    redeemAmount?: string;
+    customerName?: string;
+    maskedPhone?: string;
+  }>();
 
   const shiftId = params.shiftId ?? '';
   const cart: CartItem[] = useMemo(() => {
@@ -44,15 +52,23 @@ export default function PosPaymentScreen() {
 
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
+  // TASK-405/407 (Loyalty): redeemAmount reduces what the customer actually owes — the
+  // backend computes the sale's real total the same way (PosService.CreateSaleAsync
+  // subtracts redemption from TotalAmount before tax/change), so cash-sufficiency and
+  // change must be checked against this net figure, not the raw item subtotal, or the
+  // cashier would be misled into asking for more cash than the customer owes.
+  const redeemAmount = params.redeemAmount ? parseFloat(params.redeemAmount) || 0 : 0;
+  const netTotal = Math.max(0, subtotal - redeemAmount);
+
   const cashAmount = parseFloat(cashReceived) || 0;
-  const change = paymentType === 'Cash' ? Math.max(0, cashAmount - subtotal) : 0;
+  const change = paymentType === 'Cash' ? Math.max(0, cashAmount - netTotal) : 0;
   const cashInsufficient =
-    paymentType === 'Cash' && cashReceived !== '' && cashAmount < subtotal;
+    paymentType === 'Cash' && cashReceived !== '' && cashAmount < netTotal;
 
   const saleMutation = useSale();
 
   const handleConfirm = () => {
-    if (paymentType === 'Cash' && cashAmount < subtotal) {
+    if (paymentType === 'Cash' && cashAmount < netTotal) {
       Alert.alert('Недостатньо коштів', 'Введена сума менша за суму продажу.');
       return;
     }
@@ -61,7 +77,10 @@ export default function PosPaymentScreen() {
       shiftId,
       items: cart.map(({ barcode, quantity }) => ({ barcode, quantity })),
       paymentType,
-      paymentAmount: paymentType === 'Cash' ? cashAmount : subtotal,
+      paymentAmount: paymentType === 'Cash' ? cashAmount : netTotal,
+      ...(params.customerId ? { customerId: params.customerId } : {}),
+      ...(params.membershipId ? { loyaltyMembershipId: params.membershipId } : {}),
+      ...(redeemAmount > 0 ? { redeemAmount } : {}),
     };
 
     saleMutation.mutate(body, {
@@ -138,11 +157,37 @@ export default function PosPaymentScreen() {
               </View>
             )}
           />
+          {redeemAmount > 0 && (
+            <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-t border-gray-100">
+              <Text className="text-sm text-gray-500">Списано бонусів</Text>
+              <Text className="text-sm font-semibold text-red-500">-{formatPrice(redeemAmount)} ₴</Text>
+            </View>
+          )}
           <View className="flex-row justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-100">
-            <Text className="text-base font-bold text-gray-900">Разом</Text>
-            <Text className="text-base font-bold text-gray-900">{formatPrice(subtotal)} ₴</Text>
+            <Text className="text-base font-bold text-gray-900">
+              {redeemAmount > 0 ? 'До сплати' : 'Разом'}
+            </Text>
+            <Text className="text-base font-bold text-gray-900">{formatPrice(netTotal)} ₴</Text>
           </View>
         </View>
+
+        {/* Loyalty customer info (TASK-405/407) */}
+        {(params.customerName || params.membershipId) && (
+          <View className="bg-green-50 mx-4 mt-3 rounded-2xl px-4 py-3 flex-row items-center">
+            <Ionicons name="person-circle-outline" size={22} color="#15803d" />
+            <View className="ml-2 flex-1">
+              <Text className="text-green-800 font-semibold text-sm">
+                {params.customerName ?? 'Клієнт'}
+              </Text>
+              {params.maskedPhone && (
+                <Text className="text-green-700 text-xs mt-0.5">{params.maskedPhone}</Text>
+              )}
+            </View>
+            {params.membershipId && (
+              <Ionicons name="qr-code-outline" size={18} color="#15803d" />
+            )}
+          </View>
+        )}
 
         {/* Payment type toggle */}
         <View className="mx-4 mt-4">
@@ -233,7 +278,7 @@ export default function PosPaymentScreen() {
                   saleMutation.isPending || cashInsufficient ? 'text-gray-400' : 'text-white'
                 }`}
               >
-                Провести продаж — {formatPrice(subtotal)} ₴
+                Провести продаж — {formatPrice(netTotal)} ₴
               </Text>
             )}
           </TouchableOpacity>
