@@ -41,6 +41,10 @@ public sealed class PosRepository : IPosRepository
     public Task<List<PosTransaction>> GetTransactionsByShiftAsync(Guid shiftId, CancellationToken ct = default) =>
         _db.PosTransactions
             .Include(t => t.Items).ThenInclude(i => i.Product)
+            // TASK-410: needed so PosService.GetSalesForShiftAsync can map CustomerName onto
+            // SaleDto without a separate per-row customer lookup (Customer is a simple FK,
+            // same Include shape already used for Items/Product on this same query).
+            .Include(t => t.Customer)
             .Where(t => t.ShiftId == shiftId)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(ct);

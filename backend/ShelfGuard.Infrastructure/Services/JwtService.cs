@@ -14,6 +14,7 @@ public sealed class JwtService : IJwtService
     private readonly string _issuer;
     private readonly string _audience;
     private readonly int _accessTokenMinutes;
+    private readonly int _consumerAccessTokenDays;
 
     public JwtService(IConfiguration config)
     {
@@ -21,6 +22,9 @@ public sealed class JwtService : IJwtService
         _issuer   = config["Jwt:Issuer"]   ?? "shelfguard";
         _audience = config["Jwt:Audience"] ?? "shelfguard";
         _accessTokenMinutes = int.Parse(config["Jwt:AccessTokenMinutes"] ?? "15");
+        // TASK-405: ConsumerAccount has no refresh-token flow (see interface doc) — a
+        // longer-lived access token is the deliberate tradeoff instead.
+        _consumerAccessTokenDays = int.Parse(config["Jwt:ConsumerAccessTokenDays"] ?? "30");
     }
 
     public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
@@ -90,6 +94,35 @@ public sealed class JwtService : IJwtService
             audience:           _audience,
             claims:             claims,
             expires:            DateTime.UtcNow.AddMinutes(60),  // short-lived impersonation window
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <inheritdoc/>
+    public string GenerateConsumerAccessToken(Guid consumerAccountId, string? fullName = null)
+    {
+        var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, consumerAccountId.ToString()),
+            new(ClaimTypes.Role,             "consumer"),
+            // Deliberately NOT "tenant_id" — see interface doc. Read by
+            // TenantConnectionInterceptor to SET app.consumer_account_id.
+            new("consumer_account_id",       consumerAccountId.ToString()),
+            new(JwtRegisteredClaimNames.Jti,  Guid.NewGuid().ToString()),
+        };
+
+        if (!string.IsNullOrWhiteSpace(fullName))
+            claims.Add(new Claim("full_name", fullName));
+
+        var token = new JwtSecurityToken(
+            issuer:             _issuer,
+            audience:           _audience,   // same audience as staff tokens — see interface doc
+            claims:             claims,
+            expires:            DateTime.UtcNow.AddDays(_consumerAccessTokenDays),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

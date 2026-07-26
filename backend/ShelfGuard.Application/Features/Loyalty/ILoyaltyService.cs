@@ -1,0 +1,69 @@
+using ShelfGuard.Application.Common;
+using ShelfGuard.Application.Features.Loyalty.Dtos;
+
+namespace ShelfGuard.Application.Features.Loyalty;
+
+/// <summary>
+/// Loyalty program business logic (Фаза 0, TASK-405): consumer wallet (join/code/history),
+/// staff POS resolve + manual adjustment, staff's own "join my employer's program" (plan
+/// §"Кейс 2"), and per-tenant program settings. POS accrual/redemption at sale time lives in
+/// PosService (composed into the same commit as the sale) — NOT here.
+/// </summary>
+public interface ILoyaltyService
+{
+    // ── Consumer-facing (wallet) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Joins (or idempotently returns the existing membership for) a tenant's loyalty
+    /// program. Auto-finds/creates the tenant's own Customer record by phone.
+    /// Status codes: 404 tenant not found, 403 tenant doesn't have the "loyalty" module.
+    /// </summary>
+    Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> JoinAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<LoyaltyMembershipSummaryDto>> GetMembershipsForConsumerAsync(
+        Guid consumerAccountId, CancellationToken ct = default);
+
+    /// <summary>404 when the consumer has no membership at this tenant.</summary>
+    Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetCurrentCodeAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>404 when the consumer has no membership at this tenant.</summary>
+    Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
+        Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default);
+
+    // ── Staff-facing (POS / cabinet) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves a scanned/typed loyalty code at the register. Anti-replay + per-membership
+    /// rate-limit/lockout (see implementation). Status codes: 400 malformed/invalid code or
+    /// blocked membership, 429 locked out after repeated failures, 409 code already redeemed
+    /// (replay/race).
+    /// </summary>
+    Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveCodeAsync(
+        Guid tenantId, Guid staffUserId, string scannedValue, CancellationToken ct = default);
+
+    /// <summary>store_manager+. Status codes: 404 membership not found, 400 would go negative.</summary>
+    Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> ManualAdjustAsync(
+        Guid tenantId, Guid staffUserId, ManualLoyaltyAdjustRequest request, CancellationToken ct = default);
+
+    /// <summary>Plan §"Кейс 2": null when the caller has no membership in their own tenant.</summary>
+    Task<LoyaltyMembershipSummaryDto?> GetMyMembershipAsync(
+        Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Idempotent: returns the existing membership (backfilling LinkedUserId if unset)
+    /// rather than erroring when the staff member (or their auto-matched ConsumerAccount)
+    /// already has one. 400 when the caller's User.Phone is unset.
+    /// </summary>
+    Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> JoinAsStaffAsync(
+        Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    // ── Settings (enterprise_admin) ───────────────────────────────────────────
+
+    /// <summary>Returns proposed defaults (3%/50%/0/30s, enabled) when the tenant has never saved a row.</summary>
+    Task<LoyaltyProgramSettingsDto> GetSettingsAsync(Guid tenantId, CancellationToken ct = default);
+
+    Task<(LoyaltyProgramSettingsDto? Settings, string? Error)> UpsertSettingsAsync(
+        Guid tenantId, UpsertLoyaltyProgramSettingsRequest request, CancellationToken ct = default);
+}

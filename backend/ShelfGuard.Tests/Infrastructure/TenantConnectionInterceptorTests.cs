@@ -78,6 +78,7 @@ public sealed class TenantConnectionInterceptorTests
     [InlineData("storekeeper")]
     [InlineData("cashier")]
     [InlineData("staff")]
+    [InlineData("consumer")]
     public void BuildSetSql_accepts_all_valid_roles(string role)
     {
         var sql = TenantConnectionInterceptor.BuildSetSql(null, role);
@@ -129,5 +130,48 @@ public sealed class TenantConnectionInterceptorTests
 
         Assert.NotNull(sql);
         Assert.Contains($"SET app.user_id = '{NullUuid}'", sql);
+    }
+
+    // ── app.consumer_account_id (TASK-404, Loyalty Фаза 0) ──────────────────
+
+    [Fact]
+    public void BuildSetSql_sets_consumer_account_id_when_valid_guid_provided()
+    {
+        var consumerAccountId = Guid.NewGuid();
+        var sql = TenantConnectionInterceptor.BuildSetSql(
+            null, "consumer", null, consumerAccountId.ToString());
+
+        Assert.NotNull(sql);
+        Assert.Contains("SET app.role = 'consumer'", sql);
+        Assert.Contains($"SET app.consumer_account_id = '{consumerAccountId:D}'", sql);
+    }
+
+    [Fact]
+    public void BuildSetSql_uses_null_uuid_when_consumer_account_id_omitted()
+    {
+        // Mirrors app.tenant_id/app.user_id's discipline — ALWAYS set, never left stale
+        // on a pooled connection, even when the fourth argument isn't supplied at all.
+        var sql = TenantConnectionInterceptor.BuildSetSql(Guid.NewGuid().ToString(), "store_manager");
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.consumer_account_id = '{NullUuid}'", sql);
+    }
+
+    [Fact]
+    public void BuildSetSql_uses_null_uuid_when_consumer_account_id_is_not_a_guid()
+    {
+        var sql = TenantConnectionInterceptor.BuildSetSql(null, null, null, "not-a-valid-uuid");
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.consumer_account_id = '{NullUuid}'", sql);
+    }
+
+    [Fact]
+    public void BuildSetSql_uses_null_uuid_when_consumer_account_id_claim_absent()
+    {
+        var sql = TenantConnectionInterceptor.BuildSetSql(null, null, null, null);
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.consumer_account_id = '{NullUuid}'", sql);
     }
 }

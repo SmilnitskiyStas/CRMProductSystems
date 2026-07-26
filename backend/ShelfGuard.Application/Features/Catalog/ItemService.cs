@@ -66,7 +66,7 @@ public sealed class ItemService : IItemService
             return (null, $"Invalid management type '{request.ManagementType}'. Valid values: MTS, MTO, NA, NM.");
 
         if (!string.IsNullOrWhiteSpace(request.ItemType) && !IsValidItemType(request.ItemType))
-            return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit.");
+            return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit, packaging.");
 
         if (!string.IsNullOrWhiteSpace(request.PerishabilityClass) && !PerishabilityClass.IsValid(request.PerishabilityClass))
             return (null, $"Invalid perishability class '{request.PerishabilityClass}'. Valid values: fresh, chilled, standard, durable.");
@@ -119,7 +119,7 @@ public sealed class ItemService : IItemService
             return (null, $"Invalid management type '{request.ManagementType}'. Valid values: MTS, MTO, NA, NM.");
 
         if (!string.IsNullOrWhiteSpace(request.ItemType) && !IsValidItemType(request.ItemType))
-            return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit.");
+            return (null, $"Invalid item type '{request.ItemType}'. Valid values: product, service, spare_part, consumable, raw_material, kit, packaging.");
 
         if (!string.IsNullOrWhiteSpace(request.PerishabilityClass) && !PerishabilityClass.IsValid(request.PerishabilityClass))
             return (null, $"Invalid perishability class '{request.PerishabilityClass}'. Valid values: fresh, chilled, standard, durable.");
@@ -389,5 +389,10 @@ public sealed class ItemService : IItemService
         type is "MTS" or "MTO" or "NA" or "NM";
 
     private static bool IsValidItemType(string type) =>
-        type is "product" or "service" or "spare_part" or "consumable" or "raw_material" or "kit";
+        // "packaging" added TASK-406 (marketing analytics): lets a tenant tag pallets/boxes/
+        // crates as items so Receipts/Transfers can track them, while
+        // MarketingAnalyticsRepository excludes ItemType="packaging" from top-product/
+        // affinity/basket aggregation (RFM_ANALYSIS.md §11.2 — "packaging" is never a real
+        // purchase-intent product line).
+        type is "product" or "service" or "spare_part" or "consumable" or "raw_material" or "kit" or "packaging";
 }

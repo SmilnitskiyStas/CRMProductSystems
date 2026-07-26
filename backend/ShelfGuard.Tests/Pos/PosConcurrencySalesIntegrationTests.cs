@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using ShelfGuard.Application.Features.Pos;
@@ -194,7 +195,20 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
     private AppDbContext NewContext()
     {
         var dataSource = new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build();
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(dataSource).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(dataSource)
+            // TASK-417: this file builds a fresh NpgsqlDataSource/DbContextOptions per call, and
+            // the test assembly now has several such raw-Postgres integration-test files
+            // (LoyaltyRepositoryIntegrationTests, LoyaltyConcurrencySalesIntegrationTests,
+            // LoyaltyJoinRlsIntegrationTests) whose combined distinct instances trip EF Core's
+            // ManyServiceProvidersCreatedWarning-as-error past its cumulative ~20-instance
+            // process-wide threshold when the full suite runs together — this file was the one
+            // observed failing once TASK-417 added another such file. Purely an EF internal
+            // diagnostic about provider-cache growth, not a correctness signal for anything this
+            // file actually asserts (same fix LoyaltyRepositoryIntegrationTests.NewContext
+            // already applies to itself for the identical reason).
+            .ConfigureWarnings(w => w.Log(CoreEventId.ManyServiceProvidersCreatedWarning))
+            .Options;
         return new AppDbContext(options);
     }
 
@@ -205,6 +219,8 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
             new ItemRepository(db),
             new DiscountRepository(db),
             new StaticFiscalServiceFactory(new NoopFiscalService()),
+            new LoyaltyRepository(db),
+            new CustomerRepository(db),
             NullLogger<PosService>.Instance);
 
     private sealed class StaticFiscalServiceFactory : IFiscalServiceFactory

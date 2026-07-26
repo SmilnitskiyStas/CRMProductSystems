@@ -37,4 +37,20 @@ public interface IJwtService
     /// Returns the user id, or null when the token is invalid/expired.
     /// </summary>
     Guid? ValidateTwoFactorChallengeToken(string token);
+
+    /// <summary>
+    /// TASK-405 (Loyalty Фаза 0): generates an access token for a
+    /// <see cref="ShelfGuard.Domain.Entities.ConsumerAccount"/> session — a wholly separate
+    /// identity space from staff <see cref="ShelfGuard.Domain.Entities.User"/> sessions.
+    /// Claims: sub=consumerAccountId, role="consumer", consumer_account_id=consumerAccountId.
+    /// Deliberately carries NO tenant_id claim — a consumer session is cross-tenant by
+    /// design (reads every LoyaltyMembership it holds via the consumer_self_access RLS
+    /// policy, keyed off app.consumer_account_id, never app.tenant_id). Uses the SAME
+    /// audience as a staff access token (unlike the dedicated 2FA-challenge audience) so it
+    /// passes ordinary [Authorize] on consumer-facing endpoints. Longer-lived than the staff
+    /// access token by design: ConsumerAccount has no refresh-token table (schema frozen for
+    /// this task — RefreshToken is keyed to User, not ConsumerAccount), so there is no
+    /// silent-refresh path; default 30 days, configurable via Jwt:ConsumerAccessTokenDays.
+    /// </summary>
+    string GenerateConsumerAccessToken(Guid consumerAccountId, string? fullName = null);
 }

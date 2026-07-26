@@ -30,4 +30,12 @@ public sealed class TotpService : ITotpService
             ? timestep
             : null;
     }
+
+    /// <summary>TASK-405 (Loyalty Фаза 0): computes the current code — see interface doc.</summary>
+    public string GenerateCode(string base32Secret)
+    {
+        var key = Base32Encoding.ToBytes(base32Secret.Trim());
+        var totp = new Totp(key);
+        return totp.ComputeTotp(DateTime.UtcNow);
+    }
 }

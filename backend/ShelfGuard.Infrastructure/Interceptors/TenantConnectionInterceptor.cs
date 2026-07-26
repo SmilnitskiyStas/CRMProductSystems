@@ -8,9 +8,13 @@ namespace ShelfGuard.Infrastructure.Interceptors;
 
 /// <summary>
 /// Fires on every connection open (including pool checkout) and sets PostgreSQL session
-/// variables app.tenant_id, app.role, and app.user_id so that RLS policies activate
-/// automatically. app.user_id (TASK-392b) is prep for Stage 3's user_locations
-/// EXISTS-subquery RESTRICTIVE policies — no such policy reads it yet.
+/// variables app.tenant_id, app.role, app.user_id, and app.consumer_account_id so that
+/// RLS policies activate automatically. app.user_id (TASK-392b) is prep for Stage 3's
+/// user_locations EXISTS-subquery RESTRICTIVE policies. app.consumer_account_id
+/// (TASK-404, Loyalty Фаза 0) backs the new identity-based consumer_self_access RLS
+/// policy on loyalty_memberships/loyalty_ledger_entries — a consumer JWT has no
+/// tenant_id claim at all (it reads across every tenant it holds a membership in), so it
+/// cannot rely on app.tenant_id/tenant_isolation the way every staff request does.
 /// </summary>
 public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
 {
@@ -24,6 +28,12 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
         // grants no RLS bypass, just lets app.role be set to a real value for a
         // capability-template-only user.
         "staff",
+        // TASK-404 (Loyalty Фаза 0): consumer-app end users, authenticated against
+        // ConsumerAccount rather than User — no tenant_id claim, cross-tenant by design.
+        // Harmless to whitelist: no RLS policy anywhere else in the schema checks
+        // app.role = 'consumer', so this cannot unlock anything on any other table —
+        // it only ever matters together with app.consumer_account_id below.
+        "consumer",
     };
 
     private readonly IHttpContextAccessor _http;
@@ -56,12 +66,13 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
         // The users-table RLS policy allows full visibility when app.tenant_id IS NULL,
         // which is the correct behaviour for the login lookup.
         if (user?.Identity?.IsAuthenticated != true)
-            return "RESET app.tenant_id; RESET app.role; RESET app.user_id;";
+            return "RESET app.tenant_id; RESET app.role; RESET app.user_id; RESET app.consumer_account_id;";
 
-        var tenantId = user.FindFirstValue("tenant_id");
-        var role     = user.FindFirstValue(ClaimTypes.Role);
-        var userId   = user.FindFirstValue(ClaimTypes.NameIdentifier);
-        return BuildSetSql(tenantId, role, userId);
+        var tenantId          = user.FindFirstValue("tenant_id");
+        var role              = user.FindFirstValue(ClaimTypes.Role);
+        var userId            = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        var consumerAccountId = user.FindFirstValue("consumer_account_id");
+        return BuildSetSql(tenantId, role, userId, consumerAccountId);
     }
 
     private static async Task ExecuteSqlAsync(DbConnection connection, string sql, CancellationToken ct)
@@ -76,7 +87,8 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
     /// Internal and static so unit tests can exercise it without a live connection.
     /// Returns null when there is nothing to set.
     /// </summary>
-    internal static string? BuildSetSql(string? tenantId, string? role, string? userId = null)
+    internal static string? BuildSetSql(
+        string? tenantId, string? role, string? userId = null, string? consumerAccountId = null)
     {
         var sb = new StringBuilder();
 
@@ -103,6 +115,17 @@ public sealed class TenantConnectionInterceptor : DbConnectionInterceptor
             sb.Append($"SET app.user_id = '{userGuid:D}';");
         else
             sb.Append("SET app.user_id = '00000000-0000-0000-0000-000000000000';");
+
+        // app.consumer_account_id (TASK-404): same always-set/null-uuid-fallback
+        // discipline as app.tenant_id/app.user_id above. Backs consumer_self_access on
+        // loyalty_memberships/loyalty_ledger_entries — a null-uuid can never match a real
+        // ConsumerAccountId, so a staff session (which never carries this claim) fails
+        // safe (0 rows via this policy) exactly like the others' fallbacks, same as a
+        // pooled connection must never carry a stale real value across requests.
+        if (!string.IsNullOrEmpty(consumerAccountId) && Guid.TryParse(consumerAccountId, out var consumerGuid))
+            sb.Append($"SET app.consumer_account_id = '{consumerGuid:D}';");
+        else
+            sb.Append("SET app.consumer_account_id = '00000000-0000-0000-0000-000000000000';");
 
         return sb.Length > 0 ? sb.ToString() : null;
     }

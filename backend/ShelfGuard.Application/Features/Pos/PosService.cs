@@ -29,6 +29,8 @@ public sealed class PosService : IPosService
     private readonly IItemRepository _catalog;
     private readonly IDiscountRepository _discounts;
     private readonly IFiscalServiceFactory _fiscalFactory;
+    private readonly ILoyaltyRepository _loyalty;
+    private readonly ICustomerRepository _customers;
     private readonly ILogger<PosService> _log;
 
     public PosService(
@@ -37,6 +39,8 @@ public sealed class PosService : IPosService
         IItemRepository catalog,
         IDiscountRepository discounts,
         IFiscalServiceFactory fiscalFactory,
+        ILoyaltyRepository loyalty,
+        ICustomerRepository customers,
         ILogger<PosService> log)
     {
         _pos = pos;
@@ -44,6 +48,8 @@ public sealed class PosService : IPosService
         _catalog = catalog;
         _discounts = discounts;
         _fiscalFactory = fiscalFactory;
+        _loyalty = loyalty;
+        _customers = customers;
         _log = log;
     }
 
@@ -208,6 +214,42 @@ public sealed class PosService : IPosService
             !string.Equals(request.PaymentType, "Card", StringComparison.OrdinalIgnoreCase))
             return (null, "PaymentType must be 'Cash' or 'Card'.", 400);
 
+        // TASK-405 (Loyalty Фаза 0): resolve + validate the optional customer/membership up
+        // front, same "fail fast before touching stock" discipline as the checks above.
+        // customer/membership are fetched via the shared scoped AppDbContext (PosService,
+        // CustomerRepository and LoyaltyRepository all resolve to the same per-request
+        // context — see AuthService.IssueTokensAsync's identical reasoning), so mutating
+        // their tracked properties further down needs no extra SaveChanges of its own; the
+        // single COMMIT below picks everything up together.
+        Customer? customer = null;
+        if (request.CustomerId.HasValue)
+        {
+            customer = await _customers.GetByIdAsync(request.CustomerId.Value, tenantId, ct);
+            if (customer is null)
+                return (null, "Customer not found.", 400);
+        }
+
+        LoyaltyMembership? membership = null;
+        LoyaltyProgramSettings? loyaltySettings = null;
+        if (request.LoyaltyMembershipId.HasValue)
+        {
+            membership = await _loyalty.GetMembershipByIdAsync(request.LoyaltyMembershipId.Value, tenantId, ct);
+            if (membership is null)
+                return (null, "Loyalty membership not found.", 400);
+            if (membership.Status != LoyaltyMembershipStatus.Active)
+                return (null, "Loyalty membership is blocked.", 400);
+
+            // No settings row yet -> proposed defaults (3%/50%/enabled), same fallback as
+            // LoyaltyService.GetSettingsAsync, so loyalty works out of the box once the
+            // "loyalty" module is on, without forcing a Settings visit first.
+            loyaltySettings = await _loyalty.GetSettingsAsync(tenantId, ct)
+                ?? new LoyaltyProgramSettings { TenantId = tenantId };
+        }
+        else if (request.RedeemAmount is > 0m)
+        {
+            return (null, "LoyaltyMembershipId is required when RedeemAmount is set.", 400);
+        }
+
         // 2. Resolve products + stock
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var resolvedItems = new List<ResolvedSaleItem>();
@@ -279,6 +321,7 @@ public sealed class PosService : IPosService
             PaymentType = request.PaymentType.ToLower(),
             Status = "pending_fiscalization",
             CreatedAt = DateTime.UtcNow,
+            CustomerId = customer?.Id,
         };
 
         var txItemDtos = new List<SaleItemDto>();
@@ -342,6 +385,72 @@ public sealed class PosService : IPosService
 
         // Set totals
         tx.TotalAmount = txItemDtos.Sum(i => i.Total);
+
+        // TASK-405 (Loyalty Фаза 0): redemption/accrual computed on the NET (post-redemption)
+        // amount — matches the plan's "чиста сума, від якої далі рахується нарахування", and
+        // means VAT below is also computed on what the customer actually ends up paying.
+        // Ledger entries are staged (AddLedgerEntryAsync doesn't save on its own — mirrors
+        // IPosRepository's Add*Async methods) and only actually persist at the single COMMIT
+        // further down — a failed sale can never leave a dangling ledger entry or an
+        // out-of-sync membership balance.
+        decimal? loyaltyAccrued = null;
+        decimal? loyaltyRedeemed = null;
+
+        if (membership is not null && loyaltySettings is { IsEnabled: true })
+        {
+            if (request.RedeemAmount is > 0m)
+            {
+                var redeem = request.RedeemAmount.Value;
+                var cap = Math.Round(tx.TotalAmount * loyaltySettings.RedemptionCapPercent / 100m, 2);
+                if (redeem > cap)
+                    return (null, $"Redeem amount exceeds the redemption cap ({loyaltySettings.RedemptionCapPercent:0.##}% of the sale).", 400);
+                if (redeem > membership.Balance)
+                    return (null, "Insufficient loyalty balance.", 400);
+                if (membership.Balance - redeem < loyaltySettings.MinRedemptionBalance)
+                    return (null, "Redemption would drop the balance below the minimum allowed.", 400);
+
+                tx.TotalAmount -= redeem;
+                membership.Balance -= redeem;
+                loyaltyRedeemed = redeem;
+                await _loyalty.AddLedgerEntryAsync(new LoyaltyLedgerEntry
+                {
+                    TenantId = tenantId,
+                    MembershipId = membership.Id,
+                    EntryType = LoyaltyEntryType.Redemption,
+                    Amount = -redeem,
+                    BalanceAfter = membership.Balance,
+                    PosTransactionId = tx.Id,
+                }, ct);
+            }
+
+            // Accrual reads tx.TotalAmount AFTER the possible reduction above.
+            var accrual = Math.Round(tx.TotalAmount * loyaltySettings.AccrualRatePercent / 100m, 2);
+            if (accrual > 0m)
+            {
+                membership.Balance += accrual;
+                loyaltyAccrued = accrual;
+                await _loyalty.AddLedgerEntryAsync(new LoyaltyLedgerEntry
+                {
+                    TenantId = tenantId,
+                    MembershipId = membership.Id,
+                    EntryType = LoyaltyEntryType.Accrual,
+                    Amount = accrual,
+                    BalanceAfter = membership.Balance,
+                    PosTransactionId = tx.Id,
+                }, ct);
+            }
+
+            _loyalty.UpdateMembership(membership);
+        }
+
+        // Dead-until-now aggregate fields (TASK-405) — start reflecting reality for any sale
+        // with a customer attached, independent of whether a loyalty membership is involved.
+        if (customer is not null)
+        {
+            customer.TotalOrders++;
+            customer.TotalSpent += tx.TotalAmount;
+        }
+
         tx.TaxAmount = Math.Round(tx.TotalAmount * 0.2m / 1.2m, 2); // Standard VAT 20%
 
         // Persist entire sale (stock updates + events + tx + items) in one SaveChanges
@@ -355,17 +464,20 @@ public sealed class PosService : IPosService
 
         try
         {
-            await _pos.SaveChangesAsync(ct); // COMMIT (FEFO write-down + tx + items + stock events)
+            await _pos.SaveChangesAsync(ct); // COMMIT (FEFO write-down + tx + items + stock events + loyalty balance)
         }
         catch (ConcurrencyConflictException ex)
         {
             // Two concurrent sales raced on the same batch's Quantity (e.g. last unit sold
-            // twice at the same moment). ProductStock uses xmin optimistic concurrency
-            // (TASK-356) — nothing was persisted, so it's safe to just ask the cashier to
-            // retry with fresh stock rather than silently overselling.
+            // twice at the same moment) OR on the same loyalty membership's Balance (e.g. two
+            // redemptions against the same membership at once) — both ProductStock (TASK-356)
+            // and LoyaltyMembership (TASK-414) use xmin optimistic concurrency, and this one
+            // SaveChangesAsync commits both kinds of writes together. Nothing was persisted, so
+            // it's safe to just ask the cashier to retry with fresh data rather than silently
+            // overselling stock or overspending a loyalty balance.
             _log.LogWarning(ex,
-                "Concurrent stock update conflict while creating sale for tenant {TenantId}", tenantId);
-            return (null, "Stock was updated concurrently by another sale. Please retry.", 409);
+                "Concurrent update conflict (stock or loyalty balance) while creating sale for tenant {TenantId}", tenantId);
+            return (null, "Stock or loyalty balance was updated concurrently by another operation. Please retry.", 409);
         }
 
         // 4. Fiscalization — attempted synchronously, bounded by a short timeout, so a healthy
@@ -433,7 +545,12 @@ public sealed class PosService : IPosService
             FiscalStatus: tx.Status,
             FiscalNumber: tx.FiscalNumber,
             ReceiptNumber: tx.ReceiptNumber,
-            CreatedAt: tx.CreatedAt);
+            CreatedAt: tx.CreatedAt,
+            LoyaltyAccrued: loyaltyAccrued,
+            LoyaltyRedeemed: loyaltyRedeemed,
+            LoyaltyBalance: membership?.Balance,
+            CustomerId: customer?.Id,
+            CustomerName: customer?.Name);
 
         return (dto, null, null);
     }
@@ -563,29 +680,78 @@ public sealed class PosService : IPosService
     public async Task<SalesListDto> GetSalesForShiftAsync(
         Guid tenantId, Guid shiftId, CancellationToken ct = default)
     {
-        var transactions = await _pos.GetTransactionsByShiftAsync(shiftId, ct);
+        var transactions = (await _pos.GetTransactionsByShiftAsync(shiftId, ct))
+            .Where(t => t.TenantId == tenantId)
+            .ToList();
+
+        // TASK-410: PosTransaction carries no LoyaltyMembershipId of its own — the ledger
+        // (matched via LoyaltyLedgerEntry.PosTransactionId) is the only persisted record of
+        // whether a sale had any loyalty activity, and for how much. Batched once for the
+        // whole shift rather than queried per row.
+        var ledgerByTx = (await _loyalty.GetLedgerEntriesForTransactionsAsync(
+                tenantId, transactions.Select(t => t.Id).ToList(), ct))
+            .Where(e => e.PosTransactionId.HasValue)
+            .GroupBy(e => e.PosTransactionId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderBy(e => e.CreatedAt).ToList());
 
         var dtos = transactions
-            .Where(t => t.TenantId == tenantId)
-            .Select(t => new SaleDto(
-                TransactionId: t.Id,
-                ShiftId: t.ShiftId ?? shiftId,
-                Items: t.Items.Select(i => new SaleItemDto(
-                    ProductId: i.ProductId,
-                    ProductName: i.Product?.Name ?? "—",
-                    Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
-                    Quantity: i.Quantity,
-                    UnitPrice: i.PriceRetail,
-                    DiscountAmount: i.DiscountAmount,
-                    Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
-                Subtotal: t.TotalAmount,
-                PaymentType: t.PaymentType,
-                PaymentAmount: t.TotalAmount, // payment amount stored in TotalAmount
-                Change: 0,
-                FiscalStatus: t.Status,
-                FiscalNumber: t.FiscalNumber,
-                ReceiptNumber: t.ReceiptNumber,
-                CreatedAt: t.CreatedAt))
+            .Select(t =>
+            {
+                decimal? loyaltyAccrued = null;
+                decimal? loyaltyRedeemed = null;
+                decimal? loyaltyBalance = null;
+
+                if (ledgerByTx.TryGetValue(t.Id, out var entries))
+                {
+                    var accrualSum = entries
+                        .Where(e => e.EntryType == LoyaltyEntryType.Accrual)
+                        .Sum(e => e.Amount);
+                    if (accrualSum > 0m)
+                        loyaltyAccrued = accrualSum;
+
+                    // Stored as a negative delta (see CreateSaleAsync) — surfaced here as a
+                    // positive figure, matching CreateSaleAsync's own LoyaltyRedeemed sign and
+                    // what SaleDetailDrawer.tsx already renders ("-{value} ₴").
+                    var redemptionSum = entries
+                        .Where(e => e.EntryType == LoyaltyEntryType.Redemption)
+                        .Sum(e => e.Amount);
+                    if (redemptionSum < 0m)
+                        loyaltyRedeemed = -redemptionSum;
+
+                    // entries is ordered oldest-first above; the LAST one is whichever ledger
+                    // effect completed this transaction (redemption then accrual, per
+                    // CreateSaleAsync's write order), so its BalanceAfter is the membership's
+                    // balance at the moment THIS sale finished — i.e. a historical, per-sale
+                    // snapshot, not the membership's current/live balance (which a later sale
+                    // on the same membership may have since moved further).
+                    loyaltyBalance = entries[^1].BalanceAfter;
+                }
+
+                return new SaleDto(
+                    TransactionId: t.Id,
+                    ShiftId: t.ShiftId ?? shiftId,
+                    Items: t.Items.Select(i => new SaleItemDto(
+                        ProductId: i.ProductId,
+                        ProductName: i.Product?.Name ?? "—",
+                        Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
+                        Quantity: i.Quantity,
+                        UnitPrice: i.PriceRetail,
+                        DiscountAmount: i.DiscountAmount,
+                        Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
+                    Subtotal: t.TotalAmount,
+                    PaymentType: t.PaymentType,
+                    PaymentAmount: t.TotalAmount, // payment amount stored in TotalAmount
+                    Change: 0,
+                    FiscalStatus: t.Status,
+                    FiscalNumber: t.FiscalNumber,
+                    ReceiptNumber: t.ReceiptNumber,
+                    CreatedAt: t.CreatedAt,
+                    LoyaltyAccrued: loyaltyAccrued,
+                    LoyaltyRedeemed: loyaltyRedeemed,
+                    LoyaltyBalance: loyaltyBalance,
+                    CustomerId: t.CustomerId,
+                    CustomerName: t.Customer?.Name);
+            })
             .ToList();
 
         return new SalesListDto(dtos, dtos.Sum(d => d.Subtotal));

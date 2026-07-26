@@ -225,6 +225,32 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IUserLocationRepository,
             Data.Repositories.UserLocationRepository>();
 
+        // TASK-405 - Loyalty program Фаза 0 (ConsumerAccount / LoyaltyMembership / ledger / settings)
+        services.AddScoped<Domain.Interfaces.IConsumerAccountRepository,
+            Data.Repositories.ConsumerAccountRepository>();
+        services.AddScoped<Domain.Interfaces.ILoyaltyRepository,
+            Data.Repositories.LoyaltyRepository>();
+        // Backs the resolve-code per-membership rate-limit/lockout (IResolveCodeAttemptTracker) —
+        // single-instance-deployment tradeoff, see that interface's doc.
+        services.AddMemoryCache();
+        services.AddSingleton<Application.Services.IResolveCodeAttemptTracker,
+            Services.MemoryResolveCodeAttemptTracker>();
+        // TASK-417: lets LoyaltyService.JoinAsync temporarily assume the target tenant's RLS
+        // context for the one consumer-session write path (customers) that has no
+        // identity-based RLS policy of its own — see ITenantSessionOverride's doc for the
+        // security contract. Scoped (not singleton) — wraps the request-scoped AppDbContext.
+        services.AddScoped<Application.Services.ITenantSessionOverride,
+            Services.TenantSessionOverride>();
+
+        // TASK-406 - Marketing analytics Фаза 1 (RFM engine + dashboard)
+        services.AddScoped<Application.Features.MarketingAnalytics.IMarketingAnalyticsRepository,
+            Data.Repositories.MarketingAnalyticsRepository>();
+        services.AddScoped<Domain.Interfaces.IMarketingAdvisor,
+            AI.MarketingAdvisor.MarketingAdvisor>();
+        // Stateless — same AddSingleton convention as IContractPdfGenerator above.
+        services.AddSingleton<Application.Common.IExcelExportService,
+            Export.ExcelExportService>();
+
         return services;
     }
 }

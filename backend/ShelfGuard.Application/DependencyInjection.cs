@@ -124,6 +124,13 @@ services.AddScoped<IAuthService, AuthService>();
         // ADR-020 / TASK-345/346 - Tenant custom role capability templates
         services.AddScoped<Features.TenantRoles.ITenantRoleService, Features.TenantRoles.TenantRoleService>();
 
+        // TASK-405 - Loyalty program Фаза 0 (ConsumerAccount auth + membership/bonus logic)
+        services.AddScoped<Features.ConsumerAuth.IConsumerAuthService, Features.ConsumerAuth.ConsumerAuthService>();
+        services.AddScoped<Features.Loyalty.ILoyaltyService, Features.Loyalty.LoyaltyService>();
+
+        // TASK-406 - Marketing analytics Фаза 1 (RFM engine + dashboard)
+        services.AddScoped<Features.MarketingAnalytics.IMarketingAnalyticsService, Features.MarketingAnalytics.MarketingAnalyticsService>();
+
         return services;
     }
 }

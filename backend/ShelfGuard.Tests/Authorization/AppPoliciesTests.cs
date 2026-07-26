@@ -218,6 +218,7 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.AiOrdersViewOrCapability, TenantRoleCapabilities.AiOrdersView)]
     [InlineData(AppPolicies.AiOrdersManageOrCapability, TenantRoleCapabilities.AiOrdersManage)]
     [InlineData(AppPolicies.StoreManagerOrUsersManage, TenantRoleCapabilities.UsersManage)]
+    [InlineData(AppPolicies.MarketingAnalyticsViewOrCapability, TenantRoleCapabilities.MarketingAnalyticsView)]
     public void RoleOrCapabilityPolicy_carries_expected_capability(string policyName, string expectedCapability)
         => Assert.Equal(expectedCapability, RequirementFor(policyName).Capability);
 
@@ -283,6 +284,32 @@ public sealed class AppPoliciesTests
         Assert.Contains(AppRoles.EnterpriseAdmin, roles);
     }
 
+    // TASK-414 (security review TASK-412, finding C): MarketingAnalyticsController's
+    // class-level gate used to be a bare CanViewAnalytics role policy — the exact same role set
+    // as MarketingAnalyticsExportPii's own first branch, so that capability could never
+    // actually be exercised by anyone (nobody lacking store_manager+ rank could ever reach the
+    // controller to try). This policy's base roles must still match CanViewAnalyticsRoles
+    // exactly (zero regression for every existing role) while ALSO carrying the new
+    // marketing_analytics.view capability as the OR — see the next test for the actual bug
+    // this fixes: a sub-store_manager role becomes able to pass this policy at all.
+    [Fact]
+    public void MarketingAnalyticsViewOrCapability_base_roles_match_CanViewAnalytics()
+        => AssertSameRoles(AppPolicies.CanViewAnalyticsRoles, AppPolicies.MarketingAnalyticsViewOrCapability);
+
+    [Fact]
+    public void MarketingAnalyticsViewOrCapability_admits_a_capability_holder_below_store_manager()
+    {
+        var requirement = RequirementFor(AppPolicies.MarketingAnalyticsViewOrCapability);
+
+        // Cashier is below store_manager rank and absent from CanViewAnalyticsRoles — under the
+        // old bare-role policy this user would be 403'd before ever reaching a capability
+        // check. The handler itself (RoleOrCapabilityHandler) is exercised end-to-end in
+        // RoleOrCapabilityHandlerTests; this assertion pins the specific role/capability pair
+        // that was previously unreachable.
+        Assert.DoesNotContain(AppRoles.Cashier, requirement.AllowedRoles);
+        Assert.Equal(TenantRoleCapabilities.MarketingAnalyticsView, requirement.Capability);
+    }
+
     [Theory]
     [InlineData(AppPolicies.SchedulesManageOrCapability)]
     [InlineData(AppPolicies.AnalyticsViewOrCapability)]
@@ -295,6 +322,7 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.AiOrdersViewOrCapability)]
     [InlineData(AppPolicies.AiOrdersManageOrCapability)]
     [InlineData(AppPolicies.StoreManagerOrUsersManage)]
+    [InlineData(AppPolicies.MarketingAnalyticsViewOrCapability)]
     public void RoleOrCapabilityPolicy_is_registered(string policyName)
         => Assert.NotNull(_options.GetPolicy(policyName));
 

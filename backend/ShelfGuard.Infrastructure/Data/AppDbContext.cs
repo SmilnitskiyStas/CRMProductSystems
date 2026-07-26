@@ -153,6 +153,13 @@ public sealed class AppDbContext : DbContext
     // Store-scoped user access grants — Stage 1 schema only, enforcement is Stage 3 (TASK-392)
     public DbSet<UserLocation> UserLocations => Set<UserLocation>();
 
+    // Loyalty program — Фаза 0 (TASK-404). ConsumerAccount is global/no-RLS by design;
+    // the other three are tenant-scoped (see AddLoyaltyProgram migration for RLS detail).
+    public DbSet<ConsumerAccount> ConsumerAccounts => Set<ConsumerAccount>();
+    public DbSet<LoyaltyMembership> LoyaltyMemberships => Set<LoyaltyMembership>();
+    public DbSet<LoyaltyLedgerEntry> LoyaltyLedgerEntries => Set<LoyaltyLedgerEntry>();
+    public DbSet<LoyaltyProgramSettings> LoyaltyProgramSettings => Set<LoyaltyProgramSettings>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -2038,6 +2045,123 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<User>().WithMany()
              .HasForeignKey(x => x.AssignedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── ConsumerAccount (Loyalty Фаза 0, TASK-404) ────────────────────────
+        // Global identity, no TenantId column at all — deliberately excluded from RLS
+        // (see AddLoyaltyProgram migration for the full rationale). Protected only by
+        // application code, same precedent as Tenant.
+        builder.Entity<ConsumerAccount>(e =>
+        {
+            e.ToTable("consumer_accounts");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.Phone).HasColumnType("text").IsRequired();
+            e.Property(a => a.PasswordHash).HasColumnType("text").IsRequired();
+            e.Property(a => a.FullName).HasColumnType("text").IsRequired();
+            e.Property(a => a.Email).HasColumnType("text");
+            e.Property(a => a.FailedLoginAttempts).HasDefaultValue(0);
+            e.Property(a => a.IsActive).HasDefaultValue(true);
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            // Globally unique — unlike Customer.Phone, which is only unique per-tenant.
+            e.HasIndex(a => a.Phone)
+             .IsUnique()
+             .HasDatabaseName("uq_consumer_accounts_phone");
+            e.HasMany(a => a.Memberships).WithOne(m => m.ConsumerAccount)
+             .HasForeignKey(m => m.ConsumerAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── LoyaltyMembership (Loyalty Фаза 0, TASK-404) ──────────────────────
+        builder.Entity<LoyaltyMembership>(e =>
+        {
+            e.ToTable("loyalty_memberships");
+            e.HasKey(m => m.Id);
+            e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.TenantId).IsRequired();
+            e.Property(m => m.ConsumerAccountId).IsRequired();
+            e.Property(m => m.TotpSecret).HasColumnType("text").IsRequired();
+            e.Property(m => m.Balance).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+            e.Property(m => m.Status).HasMaxLength(20).HasDefaultValue(LoyaltyMembershipStatus.Active);
+            e.Property(m => m.JoinedAt).HasDefaultValueSql("NOW()");
+            // TASK-414 (security review TASK-412, finding B): same xmin optimistic-concurrency
+            // pattern as ProductStock above (TASK-356) — no schema change needed, xmin already
+            // exists on every row. Without this, two concurrent writers to the same
+            // membership's Balance (e.g. two POS sales redeeming/accruing on the same
+            // membership at once, or a POS sale racing LoyaltyService.ManualAdjustAsync) both
+            // read the same pre-write Balance, both pass their own "sufficient balance" check,
+            // and the loser's decrement is silently overwritten — a lost update that lets a
+            // customer redeem more than they actually have. Now the loser's SaveChangesAsync
+            // throws DbUpdateConcurrencyException instead; callers (PosService.CreateSaleAsync,
+            // LoyaltyService.ManualAdjustAsync) turn that into a clean "retry" error.
+            e.Property<uint>("xmin").IsRowVersion();
+            // One membership per (tenant, consumer) — also the "does this consumer already
+            // have a card here" lookup used at enrollment time.
+            e.HasIndex(m => new { m.TenantId, m.ConsumerAccountId })
+             .IsUnique()
+             .HasDatabaseName("uq_loyalty_memberships_tenant_consumer");
+            e.HasIndex(m => m.TenantId)
+             .HasDatabaseName("idx_loyalty_memberships_tenant");
+            e.HasOne(m => m.Tenant).WithMany()
+             .HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(m => m.Customer).WithMany()
+             .HasForeignKey(m => m.CustomerId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(m => m.LinkedUser).WithMany()
+             .HasForeignKey(m => m.LinkedUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(m => m.LedgerEntries).WithOne(l => l.Membership)
+             .HasForeignKey(l => l.MembershipId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── LoyaltyLedgerEntry (Loyalty Фаза 0, TASK-404) ─────────────────────
+        // Append-only — MembershipId uses Restrict (not Cascade) so the audit trail can
+        // never be silently destroyed by deleting its parent membership, same precedent
+        // as StockMovement.ProductId -> catalog_products (log rows referencing a
+        // long-lived master record). In practice LoyaltyMembership is never hard-deleted
+        // anyway (Status active/blocked only), matching the project's "soft delete only"
+        // rule.
+        builder.Entity<LoyaltyLedgerEntry>(e =>
+        {
+            e.ToTable("loyalty_ledger_entries");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(l => l.TenantId).IsRequired();
+            e.Property(l => l.MembershipId).IsRequired();
+            e.Property(l => l.EntryType).HasMaxLength(20).IsRequired();
+            e.Property(l => l.Amount).HasColumnType("decimal(18,2)").IsRequired();
+            e.Property(l => l.BalanceAfter).HasColumnType("decimal(18,2)").IsRequired();
+            e.Property(l => l.Note).HasColumnType("text");
+            e.Property(l => l.CreatedAt).HasDefaultValueSql("NOW()");
+            // Paginated ledger history per membership (GET /api/consumer/loyalty/{tenantId}/history).
+            e.HasIndex(l => new { l.TenantId, l.MembershipId, l.CreatedAt })
+             .IsDescending(false, false, true)
+             .HasDatabaseName("idx_loyalty_ledger_membership_created");
+            // "Loyalty entries for this sale" lookup (SaleDetailDrawer).
+            e.HasIndex(l => l.PosTransactionId)
+             .HasDatabaseName("idx_loyalty_ledger_pos_transaction")
+             .HasFilter("\"PosTransactionId\" IS NOT NULL");
+            e.HasOne(l => l.PosTransaction).WithMany()
+             .HasForeignKey(l => l.PosTransactionId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(l => l.CreatedByUser).WithMany()
+             .HasForeignKey(l => l.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── LoyaltyProgramSettings (Loyalty Фаза 0, TASK-404) ─────────────────
+        builder.Entity<LoyaltyProgramSettings>(e =>
+        {
+            e.ToTable("loyalty_program_settings");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.TenantId).IsRequired();
+            e.Property(s => s.IsEnabled).HasDefaultValue(true);
+            e.Property(s => s.AccrualRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(3.0m);
+            e.Property(s => s.RedemptionCapPercent).HasColumnType("decimal(5,2)").HasDefaultValue(50.0m);
+            e.Property(s => s.MinRedemptionBalance).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+            e.Property(s => s.CodeTtlSeconds).HasDefaultValue(30);
+            e.Property(s => s.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(s => s.TenantId)
+             .IsUnique()
+             .HasDatabaseName("uq_loyalty_program_settings_tenant");
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

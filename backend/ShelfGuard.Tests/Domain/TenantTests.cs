@@ -54,6 +54,19 @@ public sealed class TenantTests
     }
 
     [Fact]
+    public void UpdateModules_LoyaltyAndMarketingAnalytics_Accepted()
+    {
+        // TASK-405 (Loyalty Фаза 0/1): module keys registered for the loyalty/RFM plan.
+        var tenant = Tenant.Create("Acme", "acme");
+
+        var error = tenant.UpdateModules(["loyalty", "marketing_analytics"]);
+
+        Assert.Null(error);
+        Assert.True(tenant.HasModule("loyalty"));
+        Assert.True(tenant.HasModule("marketing_analytics"));
+    }
+
+    [Fact]
     public void UpdateBusinessType_UnknownValue_ReturnsError()
     {
         var tenant = Tenant.Create("Acme", "acme");

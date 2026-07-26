@@ -73,6 +73,49 @@ public static class TenantRoleCapabilities
     /// <summary>Generate/update/accept/reject AI order suggestions.</summary>
     public const string AiOrdersManage = "ai_orders.manage";
 
+    // ── Маркетинг (TASK-406) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Read-only access to the whole MarketingAnalyticsController (RFM dashboard + exports) —
+    /// the base floor a "marketing specialist" role below store_manager needs just to reach any
+    /// action on the controller at all. Checked via the <c>MarketingAnalyticsViewOrCapability</c>
+    /// policy (<see cref="ShelfGuard.Infrastructure.Authorization.AppPolicies"/>), same
+    /// "CanViewAnalyticsRoles OR capability" shape as <c>AnalyticsViewOrCapability</c>.
+    ///
+    /// TASK-414 (security review TASK-412, finding C): added because
+    /// <see cref="MarketingAnalyticsExportPii"/> was dead code without this. The controller's
+    /// original class-level gate was a bare role-only <c>CanViewAnalytics</c> policy — the exact
+    /// same 4-role set (<c>CanViewAnalyticsRoles</c>) that <c>MarketingAnalyticsExportPii</c>'s
+    /// own first branch already required, so nobody who lacked one of those 4 roles could ever
+    /// reach the controller's action methods to exercise the capability in the first place. This
+    /// is precisely the bug class ADR-020 already documented once ("the blocking discovery") —
+    /// unlike <c>LegalEntityAuthorization</c>, where the controller's floor (store_manager+) is
+    /// strictly LOOSER than the imperative check's own role branch (enterprise_admin+), leaving
+    /// room for a capability holder to be admitted, this controller's floor and the check's role
+    /// branch were identical, leaving no such room. Adding this capability + widening the
+    /// class-level policy to OR it in (mirroring <c>AnalyticsController</c>) is what actually
+    /// lets a granted capability holder below store_manager reach the export action at all, so
+    /// <see cref="MarketingAnalyticsExportPii"/> can finally do what its own doc comment always
+    /// said it did.
+    /// </summary>
+    public const string MarketingAnalyticsView = "marketing_analytics.view";
+
+    /// <summary>
+    /// Unmasks phone/email in marketing-analytics Excel exports (segment / product-buyers /
+    /// product-pair-buyers). Default floor is store_manager+ (checked directly, same
+    /// "AtLeastStoreManagerRoles OR capability" shape as every other row here) — this
+    /// capability only ever WIDENS who can request the unmasked export, e.g. down to a
+    /// dedicated marketing specialist role; it never narrows the store_manager+ default. Only
+    /// reachable at all by a sub-store_manager role once <see cref="MarketingAnalyticsView"/> is
+    /// ALSO granted (see that constant's doc for why). Checked by
+    /// <c>MarketingAnalyticsAuthorization.CanExportPii</c>
+    /// (backend/ShelfGuard.Infrastructure/Authorization) — an imperative check, same shape as
+    /// <c>LegalEntityAuthorization</c>, because the decision depends on a request field (does
+    /// the caller ask to unmask?), not the whole action, so it can't be a blanket per-action
+    /// policy attribute.
+    /// </summary>
+    public const string MarketingAnalyticsExportPii = "marketing_analytics.export_pii";
+
     /// <summary>
     /// Every assignable capability key, including the reused
     /// <see cref="TenantUserPermissions.LegalEntitiesManage"/> — the single validation source
@@ -86,6 +129,7 @@ public static class TenantRoleCapabilities
         TenantUserPermissions.LegalEntitiesManage,
         OrdersManage, SuppliersView, SuppliersManage, ReceiptsView,
         AiOrdersView, AiOrdersManage,
+        MarketingAnalyticsView, MarketingAnalyticsExportPii,
     ];
 
     /// <summary>
@@ -115,6 +159,11 @@ public static class TenantRoleCapabilities
             new(ReceiptsView, "Перегляд поставок"),
             new(AiOrdersView, "Перегляд AI-замовлень"),
             new(AiOrdersManage, "Керування AI-замовленнями"),
+        ]),
+        new("Маркетинг",
+        [
+            new(MarketingAnalyticsView, "Перегляд маркетингової аналітики (RFM-дашборд, сегменти, експорти)"),
+            new(MarketingAnalyticsExportPii, "Вивантаження повних контактів (телефон, email) в експортах маркетингової аналітики"),
         ]),
     ];
 }

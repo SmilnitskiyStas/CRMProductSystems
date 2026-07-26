@@ -47,7 +47,14 @@ public sealed class Tenant
             // v4 module-based activation
             "inventory", "procurement", "pos", "auto_service", "production", "marketplace",
             // v4.1 supplier self-service (ADR-016)
-            "marketplace_supplier"
+            "marketplace_supplier",
+            // TASK-405 (loyalty/RFM plan Фаза 0/1): "loyalty" gates consumer accounts, QR
+            // bonus accrual/redemption, POS loyalty UI; "marketing_analytics" gates the
+            // Фаза 1 RFM dashboard (Features/MarketingAnalytics/, a later task) — key
+            // registered now so Tenant.UpdateModules doesn't reject it once that feature
+            // lands. Independent of each other: a tenant can run the bonus program without
+            // the analytics dashboard.
+            "loyalty", "marketing_analytics"
         };
         var unknown = modules.Where(m => !valid.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
         if (unknown.Count > 0)

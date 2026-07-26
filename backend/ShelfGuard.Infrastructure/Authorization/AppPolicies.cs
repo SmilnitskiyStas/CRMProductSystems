@@ -37,6 +37,7 @@ namespace ShelfGuard.Infrastructure.Authorization;
 /// AiOrdersViewOrCapability         | AtLeastStoreManagerRoles   | ai_orders.view
 /// AiOrdersManageOrCapability       | AtLeastStoreManagerRoles   | ai_orders.manage
 /// StoreManagerOrUsersManage        | AtLeastStoreManagerRoles   | users.manage
+/// MarketingAnalyticsViewOrCapability | CanViewAnalyticsRoles    | marketing_analytics.view
 ///
 /// TASK-352 (Block 1 audit, user decision): Invite/Update/Deactivate on UsersController were
 /// split across two floors (Invite/Deactivate = AtLeastEnterpriseAdmin, Update =
@@ -45,6 +46,16 @@ namespace ShelfGuard.Infrastructure.Authorization;
 /// Update and the spec. The former `EnterpriseAdminOrUsersManage` policy (AtLeastEnterpriseAdmin
 /// + users.manage) is removed — all three actions now share `StoreManagerOrUsersManage`, so a
 /// second, narrower policy for the same capability no longer serves a purpose.
+///
+/// TASK-414 (security review TASK-412, finding C): `MarketingAnalyticsController`'s class-level
+/// gate was a bare `CanViewAnalytics` role policy — the exact same role set as
+/// `MarketingAnalyticsExportPii`'s own first branch, so that capability could never actually be
+/// exercised by anyone the class-level gate didn't already admit by role alone (ADR-020's "the
+/// blocking discovery", recurring). `MarketingAnalyticsViewOrCapability` fixes this the same way
+/// `AnalyticsViewOrCapability` already does for its sibling controller: OR in a new
+/// `marketing_analytics.view` capability at the class level so a granted capability holder below
+/// store_manager can actually reach the controller's actions (and, from there, separately clear
+/// or fail the `export_pii` check same as before).
 /// </summary>
 public static class AppPolicies
 {
@@ -74,6 +85,7 @@ public static class AppPolicies
     public const string ReceiptsViewOrCapability        = "ReceiptsViewOrCapability";
     public const string AiOrdersViewOrCapability        = "AiOrdersViewOrCapability";
     public const string AiOrdersManageOrCapability      = "AiOrdersManageOrCapability";
+    public const string MarketingAnalyticsViewOrCapability = "MarketingAnalyticsViewOrCapability";
 
     /// <summary>
     /// UsersController's "users.manage" capability unlocks Invite/Update/Deactivate. All three
@@ -174,5 +186,7 @@ public static class AppPolicies
             new RoleOrCapabilityRequirement(AtLeastStoreManagerRoles, TenantRoleCapabilities.AiOrdersManage)));
         options.AddPolicy(StoreManagerOrUsersManage, p => p.AddRequirements(
             new RoleOrCapabilityRequirement(AtLeastStoreManagerRoles, TenantRoleCapabilities.UsersManage)));
+        options.AddPolicy(MarketingAnalyticsViewOrCapability, p => p.AddRequirements(
+            new RoleOrCapabilityRequirement(CanViewAnalyticsRoles, TenantRoleCapabilities.MarketingAnalyticsView)));
     }
 }

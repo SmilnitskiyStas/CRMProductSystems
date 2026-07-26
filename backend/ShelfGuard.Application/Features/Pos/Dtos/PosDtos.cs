@@ -16,11 +16,24 @@ public sealed record OpenShiftRequest(
 /// the shift) to compute CashDiscrepancy in the response.</param>
 public sealed record CloseShiftRequest(decimal? ActualClosingCash = null);
 
+/// <param name="CustomerId">
+/// TASK-405 (Loyalty Фаза 0): optional CRM customer to attribute this sale to. Sets
+/// PosTransaction.CustomerId and updates Customer.TotalOrders/TotalSpent — independent of
+/// LoyaltyMembershipId (a sale can carry a customer with no loyalty membership at all).
+/// </param>
+/// <param name="LoyaltyMembershipId">
+/// Optional loyalty membership to accrue bonus on (and redeem from, with RedeemAmount).
+/// Omitting all three new fields behaves exactly as before this task.
+/// </param>
+/// <param name="RedeemAmount">Bonus amount to redeem against this sale. Requires LoyaltyMembershipId.</param>
 public sealed record CreateSaleRequest(
     Guid ShiftId,
     IReadOnlyList<SaleItemRequest> Items,
     string PaymentType,     // "Cash" | "Card"
-    decimal PaymentAmount);
+    decimal PaymentAmount,
+    Guid? CustomerId = null,
+    Guid? LoyaltyMembershipId = null,
+    decimal? RedeemAmount = null);
 
 public sealed record SaleItemRequest(
     string Barcode,
@@ -60,7 +73,19 @@ public sealed record SaleDto(
     string FiscalStatus,    // pending_fiscalization | fiscalized
     string? FiscalNumber,
     string ReceiptNumber,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    // TASK-405 (Loyalty Фаза 0): null when the sale had no LoyaltyMembershipId. Balance is
+    // the membership's balance AFTER this sale's accrual/redemption — lets the register
+    // display an up-to-date figure without a second call (resolve-code's own balance
+    // snapshot is from before this sale).
+    decimal? LoyaltyAccrued = null,
+    decimal? LoyaltyRedeemed = null,
+    decimal? LoyaltyBalance = null,
+    // TASK-410: CRM customer attributed to this sale (PosTransaction.CustomerId, written
+    // since TASK-405 but never mapped back into this DTO until now). Null when no customer
+    // was attached at sale time.
+    Guid? CustomerId = null,
+    string? CustomerName = null);
 
 public sealed record SaleItemDto(
     Guid ProductId,

@@ -56,6 +56,9 @@ public sealed class CustomerRepository : ICustomerRepository
         return query.AnyAsync(ct);
     }
 
+    public Task<Customer?> FindByPhoneAsync(string phone, Guid tenantId, CancellationToken ct) =>
+        _db.Customers.FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Phone == phone, ct);
+
     public async Task<Customer> CreateAsync(Customer customer, CancellationToken ct)
     {
         await _db.Customers.AddAsync(customer, ct);

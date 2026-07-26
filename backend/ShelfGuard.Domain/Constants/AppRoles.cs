@@ -26,6 +26,17 @@ public static class AppRoles
     /// <summary>v4.1 (ADR-016): self-service supplier tenant admin. Access limited to /api/supplier-cabinet — not part of any tenant-staff policy.</summary>
     public const string SupplierAdmin   = "supplier_admin";
 
+    /// <summary>
+    /// TASK-405 (Loyalty Фаза 0): end-user of the consumer loyalty wallet, authenticated
+    /// against <see cref="Entities.ConsumerAccount"/> — never a <see cref="Entities.User"/>
+    /// row. Emitted only in a consumer-session JWT's role claim (no tenant_id claim
+    /// alongside it). Deliberately NOT part of <see cref="All"/> (which enumerates roles a
+    /// staff <see cref="Entities.User"/> can be assigned) or any tenant-staff
+    /// <c>AppPolicies</c> role array — a consumer session must never pass a staff
+    /// role/policy check.
+    /// </summary>
+    public const string Consumer        = "consumer";
+
     public static readonly IReadOnlySet<string> ProviderTeamRoles =
         new HashSet<string> { Provider, ProviderAdmin, ProviderAgent };
 

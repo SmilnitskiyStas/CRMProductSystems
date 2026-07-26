@@ -160,6 +160,111 @@ file sealed class FakeDiscountRepo : IDiscountRepository
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
+/// <summary>TASK-405 (Loyalty Фаза 0): fake ILoyaltyRepository backing PosService's new accrual/redemption path.</summary>
+file sealed class FakeLoyaltyRepo : ILoyaltyRepository
+{
+    public List<LoyaltyMembership> Memberships { get; } = [];
+    public List<LoyaltyLedgerEntry> LedgerEntries { get; } = [];
+    public List<LoyaltyProgramSettings> Settings { get; } = [];
+
+    public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult(Memberships.FirstOrDefault(m => m.Id == id && m.TenantId == tenantId));
+
+    public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) =>
+        Task.FromResult(Memberships.FirstOrDefault(m => m.TenantId == tenantId && m.ConsumerAccountId == consumerAccountId));
+
+    public Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(Guid tenantId, Guid linkedUserId, CancellationToken ct = default) =>
+        Task.FromResult(Memberships.FirstOrDefault(m => m.TenantId == tenantId && m.LinkedUserId == linkedUserId));
+
+    public Task<List<LoyaltyMembership>> GetMembershipsForConsumerAsync(Guid consumerAccountId, CancellationToken ct = default) =>
+        Task.FromResult(Memberships.Where(m => m.ConsumerAccountId == consumerAccountId).ToList());
+
+    public Task AddMembershipAsync(LoyaltyMembership membership, CancellationToken ct = default)
+    {
+        Memberships.Add(membership);
+        return Task.CompletedTask;
+    }
+
+    public void UpdateMembership(LoyaltyMembership membership) { }
+
+    public Task<bool> TryClaimTimestepAsync(Guid membershipId, Guid tenantId, long timestep, CancellationToken ct = default) =>
+        Task.FromResult(true);
+
+    public Task<(List<LoyaltyLedgerEntry> Items, int Total)> GetLedgerPagedAsync(
+        Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var items = LedgerEntries.Where(e => e.TenantId == tenantId && e.MembershipId == membershipId).ToList();
+        return Task.FromResult((items, items.Count));
+    }
+
+    public Task<List<LoyaltyLedgerEntry>> GetLedgerEntriesForTransactionsAsync(
+        Guid tenantId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct = default) =>
+        Task.FromResult(LedgerEntries
+            .Where(e => e.TenantId == tenantId && e.PosTransactionId.HasValue && transactionIds.Contains(e.PosTransactionId.Value))
+            .ToList());
+
+    public Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default)
+    {
+        LedgerEntries.Add(entry);
+        return Task.CompletedTask;
+    }
+
+    public Task<LoyaltyProgramSettings?> GetSettingsAsync(Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult(Settings.FirstOrDefault(s => s.TenantId == tenantId));
+
+    public Task AddSettingsAsync(LoyaltyProgramSettings settings, CancellationToken ct = default)
+    {
+        Settings.Add(settings);
+        return Task.CompletedTask;
+    }
+
+    public void UpdateSettings(LoyaltyProgramSettings settings) { }
+
+    public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+}
+
+/// <summary>TASK-405: fake ICustomerRepository backing PosService's Customer.TotalOrders/TotalSpent update.</summary>
+file sealed class FakeCustomerRepo : ICustomerRepository
+{
+    public List<Customer> Customers { get; } = [];
+
+    public Task<List<Customer>> GetAllAsync(Guid tenantId, CancellationToken ct) =>
+        Task.FromResult(Customers.Where(c => c.TenantId == tenantId).ToList());
+
+    public Task<(List<Customer> Items, int Total)> GetPagedAsync(
+        Guid tenantId, int page, int pageSize, string? search, CancellationToken ct)
+    {
+        var items = Customers.Where(c => c.TenantId == tenantId).ToList();
+        return Task.FromResult((items, items.Count));
+    }
+
+    public Task<Customer?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct) =>
+        Task.FromResult(Customers.FirstOrDefault(c => c.Id == id && c.TenantId == tenantId));
+
+    public Task<Customer?> GetByIdWithTransactionsAsync(Guid id, Guid tenantId, CancellationToken ct) =>
+        Task.FromResult(Customers.FirstOrDefault(c => c.Id == id && c.TenantId == tenantId));
+
+    public Task<bool> ExistsByPhoneAsync(string phone, Guid tenantId, Guid? excludeId, CancellationToken ct) =>
+        Task.FromResult(Customers.Any(c => c.TenantId == tenantId && c.Phone == phone && c.Id != excludeId));
+
+    public Task<Customer?> FindByPhoneAsync(string phone, Guid tenantId, CancellationToken ct) =>
+        Task.FromResult(Customers.FirstOrDefault(c => c.TenantId == tenantId && c.Phone == phone));
+
+    public Task<Customer> CreateAsync(Customer customer, CancellationToken ct)
+    {
+        Customers.Add(customer);
+        return Task.FromResult(customer);
+    }
+
+    public Task UpdateAsync(Customer customer, CancellationToken ct) => Task.CompletedTask;
+
+    public Task DeleteAsync(Guid id, Guid tenantId, CancellationToken ct)
+    {
+        Customers.RemoveAll(c => c.Id == id && c.TenantId == tenantId);
+        return Task.CompletedTask;
+    }
+}
+
 file sealed class FakeFiscalFactory : IFiscalServiceFactory
 {
     private readonly IFiscalService _service;
@@ -210,7 +315,9 @@ public sealed class PosServiceTests
         IStockRepository? stock = null,
         IItemRepository? catalog = null,
         IDiscountRepository? discounts = null,
-        IFiscalService? fiscal = null)
+        IFiscalService? fiscal = null,
+        ILoyaltyRepository? loyalty = null,
+        ICustomerRepository? customers = null)
     {
         return new PosService(
             pos ?? new FakePosRepo(),
@@ -218,6 +325,8 @@ public sealed class PosServiceTests
             catalog ?? new FakeCatalogRepo(),
             discounts ?? new FakeDiscountRepo(),
             new FakeFiscalFactory(fiscal ?? new NoopFiscalService()),
+            loyalty ?? new FakeLoyaltyRepo(),
+            customers ?? new FakeCustomerRepo(),
             NullLogger<PosService>.Instance);
     }
 
@@ -840,6 +949,278 @@ public sealed class PosServiceTests
         Assert.Equal(80m, item.Total);              // 100 - 20
     }
 
+    // ── Create Sale — Loyalty (TASK-405) ──────────────────────────────────
+
+    [Fact]
+    public async Task CreateSale_without_loyalty_fields_behaves_exactly_as_before()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("NO_LOYALTY", price: 20m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 5));
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("NO_LOYALTY", 1)], "Cash", 20m));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(20m, sale.Subtotal);
+        Assert.Null(sale.LoyaltyAccrued);
+        Assert.Null(sale.LoyaltyRedeemed);
+        Assert.Null(sale.LoyaltyBalance);
+    }
+
+    [Fact]
+    public async Task CreateSale_with_customerId_updates_customer_aggregates()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("CUST_AGG", price: 50m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var customer = new Customer { TenantId = TenantId, Name = "Ірина", TotalOrders = 2, TotalSpent = 100m };
+        var customers = new FakeCustomerRepo();
+        customers.Customers.Add(customer);
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, customers: customers);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("CUST_AGG", 1)], "Cash", 50m, CustomerId: customer.Id));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(3, customer.TotalOrders);
+        Assert.Equal(150m, customer.TotalSpent);
+    }
+
+    [Fact]
+    public async Task CreateSale_with_unknown_customerId_returns_400()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+        var svc = BuildService(pos: pos);
+
+        var (sale, error, statusCode) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("123", 1)], "Cash", 10, CustomerId: Guid.NewGuid()));
+
+        Assert.Equal(400, statusCode);
+        Assert.Contains("Customer", error);
+    }
+
+    [Fact]
+    public async Task CreateSale_with_loyalty_membership_accrues_bonus()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("ACCRUAL", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var membership = new LoyaltyMembership { TenantId = TenantId, Balance = 0m, Status = LoyaltyMembershipStatus.Active };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = TenantId, IsEnabled = true, AccrualRatePercent = 10m });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("ACCRUAL", 1)], "Cash", 100m, LoyaltyMembershipId: membership.Id));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(10m, sale.LoyaltyAccrued);
+        Assert.Equal(10m, membership.Balance);
+        Assert.Equal(10m, sale.LoyaltyBalance);
+        Assert.Single(loyalty.LedgerEntries);
+        Assert.Equal(LoyaltyEntryType.Accrual, loyalty.LedgerEntries[0].EntryType);
+    }
+
+    [Fact]
+    public async Task CreateSale_with_redemption_reduces_total_and_records_ledger()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("REDEEM", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var membership = new LoyaltyMembership { TenantId = TenantId, Balance = 50m, Status = LoyaltyMembershipStatus.Active };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings
+        {
+            TenantId = TenantId, IsEnabled = true, AccrualRatePercent = 0m, RedemptionCapPercent = 50m,
+        });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("REDEEM", 1)], "Cash", 80m,
+                LoyaltyMembershipId: membership.Id, RedeemAmount: 20m));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(80m, sale.Subtotal);       // 100 - 20 redeemed
+        Assert.Equal(20m, sale.LoyaltyRedeemed);
+        Assert.Equal(30m, membership.Balance);  // 50 - 20
+        Assert.Single(loyalty.LedgerEntries);
+        Assert.Equal(LoyaltyEntryType.Redemption, loyalty.LedgerEntries[0].EntryType);
+        Assert.Equal(-20m, loyalty.LedgerEntries[0].Amount);
+    }
+
+    [Fact]
+    public async Task CreateSale_redemption_over_cap_returns_400()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("OVERCAP", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var membership = new LoyaltyMembership { TenantId = TenantId, Balance = 100m, Status = LoyaltyMembershipStatus.Active };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = TenantId, IsEnabled = true, RedemptionCapPercent = 50m });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        // Cap is 50% of 100 = 50; trying to redeem 60 must fail.
+        var (sale, error, statusCode) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("OVERCAP", 1)], "Cash", 40m,
+                LoyaltyMembershipId: membership.Id, RedeemAmount: 60m));
+
+        Assert.Equal(400, statusCode);
+        Assert.Contains("cap", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(100m, membership.Balance); // unchanged
+        Assert.Empty(loyalty.LedgerEntries);
+    }
+
+    [Fact]
+    public async Task CreateSale_redemption_over_balance_returns_400()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("OVERBALANCE", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var membership = new LoyaltyMembership { TenantId = TenantId, Balance = 5m, Status = LoyaltyMembershipStatus.Active };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = TenantId, IsEnabled = true, RedemptionCapPercent = 100m });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, statusCode) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("OVERBALANCE", 1)], "Cash", 90m,
+                LoyaltyMembershipId: membership.Id, RedeemAmount: 10m));
+
+        Assert.Equal(400, statusCode);
+        Assert.Contains("Insufficient loyalty balance", error);
+    }
+
+    [Fact]
+    public async Task CreateSale_blocked_membership_returns_400()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var membership = new LoyaltyMembership { TenantId = TenantId, Status = LoyaltyMembershipStatus.Blocked };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+
+        var svc = BuildService(pos: pos, loyalty: loyalty);
+
+        var (sale, error, statusCode) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("123", 1)], "Cash", 10, LoyaltyMembershipId: membership.Id));
+
+        Assert.Equal(400, statusCode);
+        Assert.Contains("blocked", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateSale_redeemAmount_without_membershipId_returns_400()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+        var svc = BuildService(pos: pos);
+
+        var (sale, error, statusCode) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("123", 1)], "Cash", 10, RedeemAmount: 5m));
+
+        Assert.Equal(400, statusCode);
+        Assert.Contains("LoyaltyMembershipId", error);
+    }
+
+    [Fact]
+    public async Task CreateSale_loyalty_disabled_by_settings_skips_accrual_but_still_sells()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("DISABLED_PROGRAM", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var membership = new LoyaltyMembership { TenantId = TenantId, Balance = 0m, Status = LoyaltyMembershipStatus.Active };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = TenantId, IsEnabled = false, AccrualRatePercent = 10m });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("DISABLED_PROGRAM", 1)], "Cash", 100m,
+                LoyaltyMembershipId: membership.Id));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Null(sale.LoyaltyAccrued);
+        Assert.Equal(0m, membership.Balance);
+        Assert.Empty(loyalty.LedgerEntries);
+    }
+
     // ── List Sales ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -849,5 +1230,116 @@ public sealed class PosServiceTests
         var result = await svc.GetSalesForShiftAsync(TenantId, Guid.NewGuid());
         Assert.Empty(result.Items);
         Assert.Equal(0, result.TotalAmount);
+    }
+
+    // ── List Sales — Customer + Loyalty mapping (TASK-410) ─────────────────
+
+    [Fact]
+    public async Task GetSalesForShift_maps_customer_and_leaves_loyalty_null_with_no_ledger_activity()
+    {
+        var pos = new FakePosRepo();
+        var shiftId = Guid.NewGuid();
+        var customer = new Customer { TenantId = TenantId, Name = "Ірина" };
+        var tx = new PosTransaction
+        {
+            TenantId = TenantId,
+            ShiftId = shiftId,
+            PaymentType = "cash",
+            TotalAmount = 100m,
+            ReceiptNumber = "R-1",
+            CustomerId = customer.Id,
+            Customer = customer, // FakePosRepo doesn't run EF Include — set directly.
+        };
+        pos.Transactions.Add(tx);
+
+        var svc = BuildService(pos: pos);
+        var result = await svc.GetSalesForShiftAsync(TenantId, shiftId);
+
+        var sale = Assert.Single(result.Items);
+        Assert.Equal(customer.Id, sale.CustomerId);
+        Assert.Equal("Ірина", sale.CustomerName);
+        Assert.Null(sale.LoyaltyAccrued);
+        Assert.Null(sale.LoyaltyRedeemed);
+        Assert.Null(sale.LoyaltyBalance);
+    }
+
+    [Fact]
+    public async Task GetSalesForShift_maps_accrual_only_ledger_entry()
+    {
+        var pos = new FakePosRepo();
+        var shiftId = Guid.NewGuid();
+        var tx = new PosTransaction
+        {
+            TenantId = TenantId, ShiftId = shiftId, PaymentType = "cash",
+            TotalAmount = 100m, ReceiptNumber = "R-1",
+        };
+        pos.Transactions.Add(tx);
+
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.LedgerEntries.Add(new LoyaltyLedgerEntry
+        {
+            TenantId = TenantId,
+            MembershipId = Guid.NewGuid(),
+            EntryType = LoyaltyEntryType.Accrual,
+            Amount = 10m,
+            BalanceAfter = 40m,
+            PosTransactionId = tx.Id,
+        });
+
+        var svc = BuildService(pos: pos, loyalty: loyalty);
+        var result = await svc.GetSalesForShiftAsync(TenantId, shiftId);
+
+        var sale = Assert.Single(result.Items);
+        Assert.Equal(10m, sale.LoyaltyAccrued);
+        Assert.Null(sale.LoyaltyRedeemed);
+        Assert.Equal(40m, sale.LoyaltyBalance);
+    }
+
+    [Fact]
+    public async Task GetSalesForShift_balance_reflects_last_ledger_entry_when_both_redemption_and_accrual_exist()
+    {
+        var pos = new FakePosRepo();
+        var shiftId = Guid.NewGuid();
+        var tx = new PosTransaction
+        {
+            TenantId = TenantId, ShiftId = shiftId, PaymentType = "cash",
+            TotalAmount = 80m, ReceiptNumber = "R-1",
+        };
+        pos.Transactions.Add(tx);
+
+        // Mirrors CreateSaleAsync's write order: redemption entry persisted first, accrual
+        // second — explicit CreatedAt values (rather than relying on two back-to-back
+        // DateTimeOffset.UtcNow calls) so the "last entry wins" ordering is deterministic.
+        var membershipId = Guid.NewGuid();
+        var loyalty = new FakeLoyaltyRepo();
+        var now = DateTimeOffset.UtcNow;
+        loyalty.LedgerEntries.Add(new LoyaltyLedgerEntry
+        {
+            TenantId = TenantId,
+            MembershipId = membershipId,
+            EntryType = LoyaltyEntryType.Redemption,
+            Amount = -20m,
+            BalanceAfter = 30m,
+            PosTransactionId = tx.Id,
+            CreatedAt = now,
+        });
+        loyalty.LedgerEntries.Add(new LoyaltyLedgerEntry
+        {
+            TenantId = TenantId,
+            MembershipId = membershipId,
+            EntryType = LoyaltyEntryType.Accrual,
+            Amount = 8m,
+            BalanceAfter = 38m,
+            PosTransactionId = tx.Id,
+            CreatedAt = now.AddMilliseconds(1),
+        });
+
+        var svc = BuildService(pos: pos, loyalty: loyalty);
+        var result = await svc.GetSalesForShiftAsync(TenantId, shiftId);
+
+        var sale = Assert.Single(result.Items);
+        Assert.Equal(8m, sale.LoyaltyAccrued);
+        Assert.Equal(20m, sale.LoyaltyRedeemed); // positive, sign flipped from the stored -20m
+        Assert.Equal(38m, sale.LoyaltyBalance);  // last entry (accrual) wins, not redemption's 30m
     }
 }

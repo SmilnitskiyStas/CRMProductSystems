@@ -550,6 +550,58 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("chat_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text");
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTimeOffset?>("LastLoginAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LockoutUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Phone")
+                        .IsUnique()
+                        .HasDatabaseName("uq_consumer_accounts_phone");
+
+                    b.ToTable("consumer_accounts", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1331,6 +1383,177 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("LocationId");
 
                     b.ToTable("location_zones", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntryType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("PosTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("PosTransactionId")
+                        .HasDatabaseName("idx_loyalty_ledger_pos_transaction")
+                        .HasFilter("\"PosTransactionId\" IS NOT NULL");
+
+                    b.HasIndex("TenantId", "MembershipId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("idx_loyalty_ledger_membership_created");
+
+                    b.ToTable("loyalty_ledger_entries", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("Balance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<Guid>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("JoinedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<long?>("LastRedeemedTimestep")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("LinkedUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("active");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TotpSecret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConsumerAccountId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("LinkedUserId");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("idx_loyalty_memberships_tenant");
+
+                    b.HasIndex("TenantId", "ConsumerAccountId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_loyalty_memberships_tenant_consumer");
+
+                    b.ToTable("loyalty_memberships", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyProgramSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("AccrualRatePercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(3.0m);
+
+                    b.Property<int>("CodeTtlSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(30);
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal>("MinRedemptionBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("RedemptionCapPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(50.0m);
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_loyalty_program_settings_tenant");
+
+                    b.ToTable("loyalty_program_settings", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MarketplaceOrder", b =>
@@ -4960,6 +5183,75 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Location");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyLedgerEntry", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyMembership", "Membership")
+                        .WithMany("LedgerEntries")
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.PosTransaction", "PosTransaction")
+                        .WithMany()
+                        .HasForeignKey("PosTransactionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Membership");
+
+                    b.Navigation("PosTransaction");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyMembership", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", "ConsumerAccount")
+                        .WithMany("Memberships")
+                        .HasForeignKey("ConsumerAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "LinkedUser")
+                        .WithMany()
+                        .HasForeignKey("LinkedUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ConsumerAccount");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("LinkedUser");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyProgramSettings", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MarketplaceOrder", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.SupplierAgreement", "Agreement")
@@ -6001,6 +6293,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Messages");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerAccount", b =>
+                {
+                    b.Navigation("Memberships");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Customer", b =>
                 {
                     b.Navigation("Transactions");
@@ -6014,6 +6311,11 @@ namespace ShelfGuard.Infrastructure.Migrations
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Location", b =>
                 {
                     b.Navigation("Zones");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyMembership", b =>
+                {
+                    b.Navigation("LedgerEntries");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MarketplaceOrder", b =>

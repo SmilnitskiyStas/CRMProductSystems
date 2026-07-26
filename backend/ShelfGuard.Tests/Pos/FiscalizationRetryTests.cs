@@ -166,6 +166,39 @@ file sealed class RetryFakeFiscalFactory : IFiscalServiceFactory
     public IFiscalService Create(Guid tenantId, PrroConnectionConfig config) => _service;
 }
 
+/// <summary>TASK-405 (Loyalty Фаза 0): no-op — this file only exercises fiscalization retry, never loyalty.</summary>
+file sealed class RetryFakeLoyaltyRepo : ILoyaltyRepository
+{
+    public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
+    public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
+    public Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(Guid tenantId, Guid linkedUserId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
+    public Task<List<LoyaltyMembership>> GetMembershipsForConsumerAsync(Guid consumerAccountId, CancellationToken ct = default) => Task.FromResult(new List<LoyaltyMembership>());
+    public Task AddMembershipAsync(LoyaltyMembership membership, CancellationToken ct = default) => Task.CompletedTask;
+    public void UpdateMembership(LoyaltyMembership membership) { }
+    public Task<bool> TryClaimTimestepAsync(Guid membershipId, Guid tenantId, long timestep, CancellationToken ct = default) => Task.FromResult(true);
+    public Task<(List<LoyaltyLedgerEntry> Items, int Total)> GetLedgerPagedAsync(Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default) => Task.FromResult((new List<LoyaltyLedgerEntry>(), 0));
+    public Task<List<LoyaltyLedgerEntry>> GetLedgerEntriesForTransactionsAsync(Guid tenantId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct = default) => Task.FromResult(new List<LoyaltyLedgerEntry>());
+    public Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default) => Task.CompletedTask;
+    public Task<LoyaltyProgramSettings?> GetSettingsAsync(Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyProgramSettings?>(null);
+    public Task AddSettingsAsync(LoyaltyProgramSettings settings, CancellationToken ct = default) => Task.CompletedTask;
+    public void UpdateSettings(LoyaltyProgramSettings settings) { }
+    public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+}
+
+/// <summary>TASK-405: no-op — this file only exercises fiscalization retry, never customer aggregates.</summary>
+file sealed class RetryFakeCustomerRepo : ICustomerRepository
+{
+    public Task<List<Customer>> GetAllAsync(Guid tenantId, CancellationToken ct) => Task.FromResult(new List<Customer>());
+    public Task<(List<Customer> Items, int Total)> GetPagedAsync(Guid tenantId, int page, int pageSize, string? search, CancellationToken ct) => Task.FromResult((new List<Customer>(), 0));
+    public Task<Customer?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct) => Task.FromResult<Customer?>(null);
+    public Task<Customer?> GetByIdWithTransactionsAsync(Guid id, Guid tenantId, CancellationToken ct) => Task.FromResult<Customer?>(null);
+    public Task<bool> ExistsByPhoneAsync(string phone, Guid tenantId, Guid? excludeId, CancellationToken ct) => Task.FromResult(false);
+    public Task<Customer?> FindByPhoneAsync(string phone, Guid tenantId, CancellationToken ct) => Task.FromResult<Customer?>(null);
+    public Task<Customer> CreateAsync(Customer customer, CancellationToken ct) => Task.FromResult(customer);
+    public Task UpdateAsync(Customer customer, CancellationToken ct) => Task.CompletedTask;
+    public Task DeleteAsync(Guid id, Guid tenantId, CancellationToken ct) => Task.CompletedTask;
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 public sealed class FiscalizationRetryTests
@@ -181,6 +214,8 @@ public sealed class FiscalizationRetryTests
             new RetryFakeCatalogRepo(),
             new RetryFakeDiscountRepo(),
             new RetryFakeFiscalFactory(fiscal ?? new NoopFiscalService()),
+            new RetryFakeLoyaltyRepo(),
+            new RetryFakeCustomerRepo(),
             NullLogger<PosService>.Instance);
 
     private static PosTransaction MakePendingTx(int retryCount = 0, int ageSeconds = 60) =>
