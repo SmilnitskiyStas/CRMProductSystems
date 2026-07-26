@@ -1,7 +1,7 @@
 # Domain Model
 
 **Owner:** project-architect
-**Updated:** 2026-07-20
+**Updated:** 2026-07-26
 **Source:** v1-spec.md
 
 ## Core Entities
@@ -128,6 +128,78 @@ Fields: id, tenant_id, user_id, channel, event_type, payload (JSONB), status, re
 ### ActivityLog
 Immutable audit log. All impersonated actions flagged.
 Fields: id, tenant_id, user_id, action, entity_type, entity_id, meta (JSONB), ip_address, is_impersonated, created_at
+
+### ConsumerAccount
+Global, cross-tenant identity for an end customer (Loyalty Фаза 0, TASK-404) — **no** `tenant_id`,
+**no** RLS (`database-schema.md` — same precedent as `Tenant`, protected only by application code
+that never exposes a generic lookup to a non-owner). One `ConsumerAccount` backs exactly one JWT
+(`consumer_account_id` claim, no `tenant_id`) and can hold a `LoyaltyMembership` in many tenants at
+once — a "wallet of cards," no re-login per network.
+Fields: id, phone (globally unique, normalized `+380XXXXXXXXX`), password_hash, full_name, email?,
+failed_login_attempts, lockout_until, is_active, created_at, last_login_at
+
+### LoyaltyMembership
+A `ConsumerAccount`'s enrollment in one tenant's bonus program. Tenant-scoped, standard RLS triad
+plus the identity-based `consumer_self_access` policy (`database-schema.md`). `Balance` is a
+denormalized running total (same pattern as `Customer.total_spent`) protected by an `xmin`
+optimistic-concurrency token (TASK-414) — the authoritative audit trail is `LoyaltyLedgerEntry`.
+The "live" rotating QR/barcode is backed by `totp_secret` (Base32) — reuses the same TOTP
+infrastructure as `User` 2FA (`ITotpService`); the secret never leaves the server, the client only
+ever receives the current rotating code.
+Fields: id, tenant_id, consumer_account_id, customer_id?, linked_user_id?, totp_secret,
+last_redeemed_timestep? (anti-replay high-water mark), balance, status (active/blocked), joined_at
+Unique (tenant_id, consumer_account_id).
+
+### LoyaltyLedgerEntry
+Append-only audit trail behind `LoyaltyMembership.balance` — rows are never updated or deleted;
+balance only ever moves by inserting a new row and updating the parent membership's balance in the
+same transaction (mirrors `StockMovement`'s discipline against `ProductStock`).
+Fields: id, tenant_id, membership_id, entry_type (accrual/redemption/manual_adjustment/expiry),
+amount (signed — positive accrual, negative redemption/expiry), balance_after, pos_transaction_id?,
+created_by_user_id?, note?, created_at
+
+### LoyaltyProgramSettings
+One row per tenant — bonus program configuration. Defaults (3% accrual / 50% redemption cap) are
+plan-proposed starting values, not competitor-sourced figures (the competitor analysis this plan
+followed covers analytics only, never bonus mechanics).
+Fields: id, tenant_id (unique), is_enabled, accrual_rate_percent (default 3.0),
+redemption_cap_percent (default 50.0), min_redemption_balance, code_ttl_seconds (default 30),
+updated_at
+
+#### Relationships to existing entities
+- **`Customer`** — `LoyaltyMembership.customer_id` (nullable, `SetNull`) links to the tenant's own
+  CRM record, auto-found by phone or auto-created at membership-join time. This is what finally
+  gives `PosTransaction.customer_id` (existed since v1, never previously written by any code path)
+  a real writer: every sale carrying a `CustomerId` now updates `Customer.TotalOrders`/`TotalSpent`.
+  `Customer` itself does **not** become a membership entity — it stays tenant-scoped CRM data;
+  `LoyaltyMembership` sits alongside it.
+- **`PosTransaction`** — `LoyaltyLedgerEntry.pos_transaction_id` (nullable, `SetNull`) links an
+  accrual/redemption entry to the sale that produced it; `manual_adjustment`/`expiry` entries have
+  none. Redemption reduces `PosTransaction.TotalAmount` *before* tax; accrual is computed on that
+  same net amount — both happen inside `PosService.CreateSaleAsync`'s one existing
+  `SaveChangesAsync()`, no separate commit.
+- **`User`** — two distinct, deliberately different relationships:
+  1. `LoyaltyLedgerEntry.created_by_user_id` (nullable, `SetNull`) — which staff member performed a
+     `manual_adjustment`.
+  2. `LoyaltyMembership.linked_user_id` (nullable, `SetNull`) — see "Two staff-join cases" below.
+- **`Tenant`** — `LoyaltyMembership`/`LoyaltyLedgerEntry`/`LoyaltyProgramSettings` are all
+  tenant-scoped (`FK ... Restrict`, RLS-isolated); `ConsumerAccount` is not tenant-scoped at all.
+  `Tenant.modules` gained two independent keys: `"loyalty"` (this cluster) and
+  `"marketing_analytics"` (RFM dashboard, Фаза 1 — no new tables of its own; see ADR-023).
+
+#### Two ways staff end up with a LoyaltyMembership — deliberately different mechanisms
+1. **Pure consumer** (never a `User` row) — registers through a wholly separate auth flow
+   (`POST /api/consumer-auth/register`/`login`, `ConsumerAccount` + its own JWT, no `tenant_id`
+   claim at all). Joins a tenant's program via `POST /api/consumer/loyalty/{tenantId}/join`.
+2. **Staff member joining their own employer's program** — no new auth flow, no cross-tenant
+   identity needed. From their existing staff session: `POST /api/loyalty/join-as-staff` finds-or-
+   creates a `ConsumerAccount` by the caller's own `User.Phone`, then creates (or backfills)
+   `LoyaltyMembership.linked_user_id = callerUserId` **in the caller's own tenant only**. This is
+   an ordinary tenant-scoped staff endpoint (`[Authorize]`, reads `tenant_id`/`sub` claims from the
+   normal staff JWT) — deliberately not routed through the consumer auth/identity machinery at all,
+   since "which tenant" is already answered by the staff session itself. A given `ConsumerAccount`
+   can simultaneously be case 1 in tenants it registered into directly and case 2 in its own
+   employer's tenant — `linked_user_id` is simply null in the former, set in the latter.
 
 ---
 

@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-07-20
+**Updated:** 2026-07-26
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -479,3 +479,277 @@ Frontend TODO (not yet built as of TASK-356): a cash-count input on the "close s
 that posts `actualClosingCash`, and a way to surface `cashDiscrepancy` to the
 cashier/manager (e.g. a warning banner when non-zero) — `frontend/features/pos` currently
 has no UI for this at all.
+
+---
+
+### Consumer Auth (Loyalty Фаза 0 — TASK-405)
+
+Wholly separate identity from staff `/api/auth` — a `ConsumerAccount`, never a `User` row. Same
+rate-limit policy as staff login (`"auth-login"`, 10/min per IP, TASK-329).
+```
+POST /api/consumer-auth/register   [AllowAnonymous, rate limit "auth-login"]
+  Body: { phone, password, fullName, email? }
+  200: ConsumerAuthResponse
+  400: { error }              -- validation
+  409: { error }              -- phone already registered
+
+POST /api/consumer-auth/login      [AllowAnonymous, rate limit "auth-login"]
+  Body: { phone, password }
+  200: ConsumerAuthResponse
+  401: { error }               -- generic (lockout/wrong password not distinguished)
+```
+`phone` is normalized server-side (`PhoneNormalizer`, `+380XXXXXXXXX`) — any common UA format is
+accepted on input. Lockout mirrors TASK-329 exactly (5 failed attempts → 15 min,
+`ConsumerAccount.FailedLoginAttempts`/`LockoutUntil`).
+
+#### ConsumerAuthResponse
+```json
+{ "accessToken": "string", "consumerAccountId": "uuid", "fullName": "string", "phone": "string" }
+```
+No refresh-token flow — the consumer access token is long-lived (30 days,
+`Jwt:ConsumerAccessTokenDays`) with **no revocation mechanism yet** (flagged by security-reviewer,
+TASK-412 item #4 — accepted for initial rollout, not closed). JWT carries `sub` +
+`consumer_account_id` = the ConsumerAccount id, `role="consumer"`, **no** `tenant_id` claim at all
+— this is what makes the session cross-tenant. Same audience as the staff access token (not a
+separate challenge-token audience), since it must pass the same `[Authorize]` middleware.
+
+---
+
+### Loyalty — consumer wallet (`/api/consumer/loyalty`, Фаза 0 — TASK-405)
+
+`[Authorize]` + a ConsumerAccount session (claim `consumer_account_id`) — a staff JWT never
+carries this claim and is rejected by the controller's own claim check (RLS's
+`consumer_self_access` policy backs this up at the DB layer regardless). Deliberately **not**
+gated by `[RequireModule("loyalty")]` — that filter reads the `tenant_id` claim, which a consumer
+session never has; module activation is checked inside `LoyaltyService.JoinAsync` itself instead.
+```
+POST /api/consumer/loyalty/{tenantId}/join                          -> 200 LoyaltyMembershipSummaryDto | 4xx { error }
+GET  /api/consumer/loyalty/memberships                              -> 200 LoyaltyMembershipSummaryDto[]   -- the "wallet", all tenants
+GET  /api/consumer/loyalty/{tenantId}/code                          -> 200 LoyaltyCodeDto | 4xx { error }
+GET  /api/consumer/loyalty/{tenantId}/history?page=1&pageSize=50    -> 200 LoyaltyLedgerEntryDto[] | 4xx { error }
+```
+`Join` is idempotent — an existing membership is returned as-is, never an error.
+
+#### LoyaltyMembershipSummaryDto
+```json
+{ "membershipId": "uuid", "tenantId": "uuid", "tenantName": "string",
+  "balance": 0.00, "status": "active|blocked", "joinedAt": "ISO8601" }
+```
+
+#### LoyaltyCodeDto — the "live" rotating QR/barcode payload
+```json
+{ "code": "string", "balance": 0.00, "expiresInSeconds": 30 }
+```
+`code` is the raw rotating TOTP code returned by the server (the secret itself never leaves the
+backend). The actual scannable/typeable string the client renders is
+`SGLOY1.{membershipId}.{code}` (version prefix + membership id for O(1) staff-side lookup + the
+rotating code) — client-assembled, not returned pre-formatted by this endpoint. Poll this endpoint
+only while the wallet screen has focus (recommended ~20-25s, matches `CodeTtlSeconds`).
+
+#### LoyaltyLedgerEntryDto
+```json
+{ "id": "uuid", "entryType": "accrual|redemption|manual_adjustment|expiry",
+  "amount": 0.00, "balanceAfter": 0.00, "note": "string|null", "createdAt": "ISO8601" }
+```
+
+---
+
+### Loyalty — staff/POS (`/api/loyalty`, Фаза 0 — TASK-405)
+
+`[RequireModule("loyalty")]` at the controller level (a staff JWT always carries `tenant_id`, so
+the standard filter applies cleanly here, unlike the consumer controller above).
+```
+POST /api/loyalty/resolve-code   [CanAccessPos]
+  Body: { code: "SGLOY1.{membershipId}.{code}" }   -- full string, from scan OR manual entry, never just the 6 digits
+  200: ResolveLoyaltyCodeResult
+  400: { error }    -- malformed payload, unknown membership, blocked status
+  409: { error }    -- code already claimed (anti-replay) — "ask the customer to refresh their code"
+  429: { error }    -- rate-limited (per membershipId, in-memory, 5/15min shape)
+
+POST /api/loyalty/manual-adjust  [AtLeastStoreManager]
+  Body: { membershipId, amount, note? }             -- amount signed; guarded against negative balance
+  200: LoyaltyMembershipSummaryDto | 400 { error } | 404
+  409: { error }    -- optimistic-concurrency conflict (TASK-414) — safe to retry
+
+GET  /api/loyalty/my-membership   [Authorize]        -- Кейс 2: staff in their OWN employer's program
+  200: LoyaltyMembershipSummaryDto | 404
+
+POST /api/loyalty/join-as-staff   [Authorize]        -- Кейс 2: creates/backfills the caller's own membership
+  200: LoyaltyMembershipSummaryDto | 400 { error }
+```
+
+#### ResolveLoyaltyCodeResult
+```json
+{ "membershipId": "uuid", "customerId": "uuid|null", "customerName": "string|null",
+  "maskedPhone": "string|null", "balance": 0.00 }
+```
+Does **not** carry the redemption cap (`RedemptionCapPercent`/`MinRedemptionBalance` live in
+`LoyaltyProgramSettings`, `enterprise_admin`-only — a cashier session can't read it). Clients
+should soft-cap a redemption UI to `min(balance, saleSubtotal)` as a hint and rely on the server's
+`400` on `POST /api/pos/sales` for the real cap enforcement (see POS extension below).
+
+---
+
+### Loyalty settings (`/api/settings/loyalty`, Фаза 0 — TASK-405)
+
+`[AtLeastEnterpriseAdmin]`, mirrors `PrroSettingsController`'s upsert shape.
+```
+GET /api/settings/loyalty   -> 200 LoyaltyProgramSettingsDto
+PUT /api/settings/loyalty   Body: UpsertLoyaltyProgramSettingsRequest -> 200 LoyaltyProgramSettingsDto | 400 { error }
+```
+GET returns proposed defaults (`isEnabled=true`, `accrualRatePercent=3.0`,
+`redemptionCapPercent=50.0`, `minRedemptionBalance=0`, `codeTtlSeconds=30`) when the tenant has
+never saved a row — the program works "out of the box" the moment the module is activated, no
+mandatory Settings visit first.
+
+#### LoyaltyProgramSettingsDto / UpsertLoyaltyProgramSettingsRequest (same shape)
+```json
+{ "isEnabled": true, "accrualRatePercent": 3.0, "redemptionCapPercent": 50.0,
+  "minRedemptionBalance": 0.0, "codeTtlSeconds": 30, "updatedAt": "ISO8601|null" }
+```
+
+---
+
+### POS extension — loyalty + customer on sales (Фаза 0 — TASK-405/410)
+
+`POST /api/pos/sales` (`CreateSaleRequest`) gained three optional fields — a sale without them
+behaves exactly as before:
+```json
+{ "customerId": "uuid|null", "loyaltyMembershipId": "uuid|null", "redeemAmount": 0.00 }
+```
+`redeemAmount` requires `loyaltyMembershipId`. Redemption is checked against balance/cap/
+`MinRedemptionBalance` and reduces `TotalAmount` **before** tax; accrual is computed on that same
+net amount — both happen inside the sale's one existing commit.
+
+`SaleDto` (both `POST /api/pos/sales` and `GET /api/pos/sales`) gained:
+```json
+{ "customerId": "uuid|null", "customerName": "string|null",
+  "loyaltyAccrued": 0.00, "loyaltyRedeemed": 0.00, "loyaltyBalance": 0.00 }
+```
+All five `null` when the sale carried no customer/membership. `loyaltyBalance` is the ledger
+entry's `BalanceAfter` **at the time of this specific sale** (a historical snapshot), not the
+membership's current live balance — it can differ from a later `GET` if the same membership had
+further activity afterward. TASK-410 closed a gap where `GetSalesForShiftAsync` (what
+`GET /api/pos/sales` actually calls) never populated these fields even though `CreateSaleAsync`
+did from TASK-405 onward.
+
+---
+
+### Marketing Analytics / RFM (`/api/marketing-analytics`, Фаза 1 — TASK-406/409)
+
+`[Authorize(Policy = MarketingAnalyticsViewOrCapability)]` (store_manager+ **or** the
+`marketing_analytics.view` TenantRole capability, ADR-020 — widened from a role-only floor by the
+TASK-414 security fix, see ADR-023) + `[RequireModule("marketing_analytics")]`. All responses
+camelCase (default `System.Text.Json` web policy).
+
+#### Shared filter query params (every GET below, plus `/explain`)
+```
+period?: "3m" | "6m" | "12m" | "all" | anything-else   (default "6m" if no from/to either)
+from?: "YYYY-MM-DD"
+to?: "YYYY-MM-DD"                 -- from+to together always override period
+storeIds?: string[]               -- repeated param: ?storeIds=guid1&storeIds=guid2; omitted/empty = all stores
+```
+
+#### `RfmSegmentKey` — string enum on the wire, exact spelling, case-insensitive on the way in
+`"Champions" | "Loyal" | "CannotLoseThem" | "AtRisk" | "New" | "PotentialLoyalist" |
+"Promising" | "AboutToSleep" | "Hibernating" | "Lost" | "NeedsAttention"`
+— numeric order = classification priority (first matching rule wins). "Without purchase" is
+**not** a member of this enum (zero-transaction customers never enter R/F/M scoring at all) — it
+is a separate card, `RfmOverviewDto.noPurchase`.
+
+```
+GET  /api/marketing-analytics/overview                                          -> RfmOverviewDto
+GET  /api/marketing-analytics/segments/{key}                                    -> RfmSegmentDetailDto
+GET  /api/marketing-analytics/segments/{key}/products/{productName}/affinity    -> RfmAffinityResultDto
+GET  /api/marketing-analytics/segments/{key}/products/{productName}/basket      -> RfmBasketResultDto
+POST /api/marketing-analytics/segments/{key}/explain                           -> ExplainRfmSegmentResultDto | 503 { error }
+POST /api/marketing-analytics/exports/segment                                  -> .xlsx
+POST /api/marketing-analytics/exports/product-buyers                           -> .xlsx
+POST /api/marketing-analytics/exports/product-pair-buyers                      -> .xlsx
+```
+`{productName}` must be URL-encoded by the caller (free text — spaces/Cyrillic/punctuation).
+`/explain` is `POST` (triggers a real Claude call, costs tokens) but still reads its filter from
+the query string like the GETs — no body needed. Every export writes one `ActivityLog` row.
+
+#### `GET /overview` → `RfmOverviewDto`
+```ts
+{
+  periodFrom: string; periodTo: string;                          // "YYYY-MM-DD"
+  periodCustomerCount: number; periodRevenue: number;
+  registeredCustomerCount: number; everPurchasedCustomerCount: number;
+  everPurchasedSharePercent: number;                              // 0-100
+  segments: {
+    key: RfmSegmentKey; labelUa: string; shortDescriptionUa: string;
+    customerCount: number; sharePercentOfPeriodCustomers: number;
+    revenue: number; sharePercentOfPeriodRevenue: number;
+  }[];                                     // ALWAYS 11 entries, priority order, zero-count included
+  noPurchase: { customerCount: number; sharePercentOfRegisteredBase: number };
+  filtersHash: string; calculatedAt: string;                      // ISO8601 with offset
+}
+```
+`registeredCustomerCount` is tenant-wide (`Customer` has no store association at all);
+`everPurchasedCustomerCount`/`noPurchase` **do** respect the store filter — a store-scoped view
+can reasonably show "no purchase at these stores" for a customer with history elsewhere in the
+tenant. Segment shares sum to ~100% of period customers/revenue (rounding).
+
+#### `GET /segments/{key}` → `RfmSegmentDetailDto`
+```ts
+{
+  key: RfmSegmentKey; labelUa: string; shortDescriptionUa: string; customerCount: number;
+  topProducts: { rank: number; productName: string; coveragePercent: number;
+                 uniqueCustomerCount: number; receiptCount: number; barcode: string | null }[];
+  behavior: {
+    peakDayOfWeekIso: number | null;   // 1=Mon..7=Sun
+    peakHour: number | null;           // 0-23, Europe/Kyiv
+    averageTicket: number; receiptCount: number; receiptsPerCustomer: number;
+    lastVisit: string | null;          // "YYYY-MM-DD"
+    averageRecencyDays: number; averageLtv: number; totalLtv: number;   // LTV always all-time
+    byDayOfWeek: { dayOfWeekIso: number; sharePercent: number }[];
+    byHour: { hour: number; sharePercent: number }[];
+    topPeakHours: { hour: number; sharePercent: number }[];             // top 3 by receipts
+  };
+  recommendation: { triggerUa: string; actionUa: string; offerUa: string; cautionUa: string;
+                    productsForPromo: string[] };
+  filtersHash: string; calculatedAt: string;
+}
+```
+Empty segment (0 customers) still returns 200 — all numeric fields 0, arrays `[]`, a
+fully-populated `recommendation` (templates generate sensible zero-KPI copy) — never 404.
+
+#### `GET .../affinity` → `RfmAffinityResultDto` (optional `?limit=10`, 1-50)
+```ts
+{ segmentKey: RfmSegmentKey; anchorProductName: string;
+  items: { productName: string; lift: number; bothBuyersCount: number;
+           shareAmongAnchorBuyersPercent: number; shareAmongSegmentPercent: number;
+           barcode: string | null }[];   // sorted by lift desc, may be []
+  filtersHash: string; calculatedAt: string; }
+```
+
+#### `GET .../basket` → `RfmBasketResultDto` (same `?limit=` — different formula, different numbers)
+```ts
+{ segmentKey: RfmSegmentKey; anchorProductName: string;
+  items: { productName: string; togetherSharePercent: number; bothReceiptsCount: number;
+           barcode: string | null }[];
+  filtersHash: string; calculatedAt: string; }
+```
+
+#### `POST .../explain` → `ExplainRfmSegmentResultDto`
+```json
+{ "explanationUa": "string", "model": "string", "tokensUsed": 0 }
+```
+`503 { "error": "..." }` when no Claude key is configured (tenant `integration_configs` nor env).
+
+#### Exports — all 3 `POST`, JSON body, response is the raw `.xlsx` file
+```
+POST /exports/segment              Body: { key, from, to, storeIds: string[]|null, unmaskPii: boolean }
+POST /exports/product-buyers       Body: { key, from, to, storeIds, unmaskPii, productName: string }
+POST /exports/product-pair-buyers  Body: { key, from, to, storeIds, unmaskPii, productName, pairedProductName: string }
+```
+`unmaskPii: true` only actually unmasks if the caller holds `marketing_analytics.export_pii`
+(TenantRole capability) or is store_manager+ — otherwise silently masked, never a 403. Phone
+masked as `+380 XX *** ** 67`-style; email masked the same way (first char + domain kept) since
+TASK-414 — both were previously inconsistent (email was unmasked, fixed by the TASK-412 security
+review). Row cap 50 000 with a visible truncation banner row. Every cell is passed through
+formula-injection sanitization (`ExcelExportService`, TASK-414 fix) — a leading `=`/`+`/`-`/`@`
+in any string value (e.g. a self-registered consumer's `FullName` flowing into a `Customer.Name`
+export) is neutralized via Excel's own quote-prefix convention, not just string-escaped.

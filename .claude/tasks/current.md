@@ -3,6 +3,427 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-417 — Backend: fix CRITICAL RLS break in consumer loyalty join flow
+**Status:** done — fixed and verified live against real Postgres RLS, no blocker · **Agent:**
+backend-developer · **Depends:** TASK-416 (QA repro + root cause) · **Next:** security-reviewer
+should sanity-check the new `ITenantSessionOverride` primitive before wider release (not urgent,
+narrow usage today)
+Log: `.claude/logs/tasks/417_2026-07-26_fix-consumer-join-rls_backend-developer.md`
+Fixed the 100%-reproducible `POST /api/consumer/loyalty/{tenantId}/join` 500 QA found: a consumer
+session never carries `app.tenant_id` (cross-tenant by design), and `customers` only has the
+canonical `tenant_isolation`/`provider_bypass`/`worker_bypass` RLS triad — no identity-based policy
+the way `loyalty_memberships`/`loyalty_ledger_entries` got in TASK-404 — so every lookup silently
+returned 0 rows and every create-fallback INSERT was rejected by RLS. Confirmed via the migration's
+own policy text that `LoyaltyMembership`'s insert was never actually broken (`consumer_self_access`
+covers it independent of `tenant_id`) — only the `customers` step was. Rejected adding a new
+identity-based policy to `customers` (no natural `ConsumerAccountId` column, shared with
+staff-created customers). Fix: new `ITenantSessionOverride`/`TenantSessionOverride`
+(`Application/Services` + `Infrastructure/Services`) — `ExecuteAsync<T>(tenantId, action, ct)` opens
+an explicit transaction, `SET LOCAL app.tenant_id = ...`, runs `action`, commits; Postgres
+auto-reverts `SET LOCAL` at transaction end (commit or rollback), so it can never leak to a later
+query on the same pooled connection, even on an unhandled exception — no manual restore step to
+forget. `LoyaltyService.JoinAsync`'s customer-lookup-or-create + membership-create branch now runs
+inside it (atomic as a side benefit); the idempotent existing-membership branch is untouched (needs
+no override); `JoinAsStaffAsync` untouched and confirmed unaffected (staff sessions already carry
+the correct `tenant_id` claim). New live-Postgres `LoyaltyJoinRlsIntegrationTests.cs` — real repos
+(not mocks), throwaway NOSUPERUSER NOBYPASSRLS role, exact consumer-session GUC shape: new-join
+happy path (+ confirms the SET LOCAL override doesn't leak past its own transaction), idempotent
+second call (no duplicate rows), second-tenant join stays isolated (a tenant-A-scoped staff read
+relying purely on RLS sees exactly 1 customer) and the cross-tenant wallet read
+(`GetMembershipsForConsumerAsync`, guarded solely by `consumer_self_access`, untouched by this fix)
+still correctly returns both memberships — exactly the live-RLS coverage QA flagged as missing.
+Updated `LoyaltyServiceTests.cs`'s mocks (new `ITenantSessionOverride` pass-through) so every
+pre-existing `JoinAsync` test still passes unchanged, plus one new mock-level regression pinning the
+override is actually invoked with the right `tenantId`. **Test-infra side effect, fixed in scope:**
+the new integration test file (a 4th fresh-`NpgsqlDataSource`-per-call Postgres test class) tipped
+EF Core's process-wide `ManyServiceProvidersCreatedWarning`-as-error threshold over the edge,
+intermittently failing 2 unrelated pre-existing tests (`PosConcurrencySalesIntegrationTests`,
+`LoyaltyConcurrencySalesIntegrationTests` — neither had the defensive `.ConfigureWarnings(...)`
+downgrade `LoyaltyRepositoryIntegrationTests`/`MarketingAnalyticsRepositoryIntegrationTests` already
+carry for the identical reason); fixed by sharing one data source per test method in the new file and
+adding the same one-line downgrade precedent to those two files (test-infra hygiene only, zero
+behavior change to what either asserts). `dotnet build` 0 err (1 pre-existing unrelated warning),
+`dotnet test` full suite run **3× consecutively, 1109/1109 green each time** (was 1105; +4), new
+integration tests independently re-verified in isolation too (real DB round-trips, 3-10s each, not
+silent soft-skips). Not committed.
+
+## TASK-414 — Backend: security remediation of 3 findings from TASK-412 (Loyalty + Marketing Analytics)
+**Status:** done — **all 3 fixed and verified, no blocker** · **Agent:** backend-developer ·
+**Depends:** TASK-412 · **Next:** re-review by security-reviewer before release (recommended, not
+re-run this session), then frontend/mobile/qa as originally queued behind TASK-412
+Log: `.claude/logs/tasks/414_2026-07-26_security-fixes-loyalty-rfm_backend-developer.md`
+Fixed exactly the 3 assigned findings, nothing else. **(1) CRITICAL Excel/CSV formula
+injection:** `ExcelExportService.SetCellValue` now routes every string (headers, truncation
+banner, every row value) through one centralized `SanitizeForSpreadsheet` helper — leading
+`=`/`+`/`-`/`@`/Tab/CR gets apostrophe-prefixed. Empirically verified via a throwaway ClosedXML
+0.105.1 probe (not assumed) that ClosedXML implements the real OOXML "quote prefix" convention —
+it strips the apostrophe and sets `cell.Style.IncludeQuotePrefix` (`quotePrefix="1"` in
+styles.xml) rather than keeping a literal `'` in the stored text, same as real Excel's own
+manual-quote behavior; tests assert on that style flag. New
+`ExcelExportServiceTests.cs` (9 tests, real ClosedXML round-trip of actual output, not mocks).
+**(2) HIGH LoyaltyMembership.Balance TOCTOU:** added `xmin`/`IsRowVersion()` to
+`LoyaltyMembership` (same pattern as `ProductStock`/TASK-356); new no-op EF migration
+`AddLoyaltyMembershipConcurrencyToken` (xmin is a reserved system column, already exists —
+applied cleanly to dev DB, no backfill needed); `LoyaltyRepository.SaveChangesAsync` now
+translates `DbUpdateConcurrencyException` → `ConcurrencyConflictException` (mirrors
+`PosRepository`); `LoyaltyService.ManualAdjustAsync` catches it → clean 409;
+`PosService.CreateSaleAsync`'s existing catch (same shared `SaveChangesAsync`) needed only a
+comment/message update, not new logic. New real-Postgres
+`LoyaltyConcurrencySalesIntegrationTests.cs`: two concurrent redemptions (40 each) off a
+shared membership starting at 100, deterministic rendezvous (not timing luck) — confirmed
+exactly 1 success + 1 clean 409, final balance exactly 60 (not 100 lost-update, not 20
+double-applied). **(3) Dead `marketing_analytics.export_pii` capability + unmasked email:**
+root cause confirmed — controller's class-level `CanViewAnalytics` floor was the *identical*
+role set as `CanExportPii`'s own first branch (unlike `LegalEntityAuthorization`, where the
+floor is strictly looser), so nobody outside store_manager+ could ever reach the capability
+check. Applied the exact `AnalyticsController`/`AnalyticsViewOrCapability` ADR-020 precedent:
+new `TenantRoleCapabilities.MarketingAnalyticsView` + `AppPolicies.
+MarketingAnalyticsViewOrCapability`, swapped onto the controller's class-level attribute — zero
+behavior change for existing roles, but a granted capability holder below store_manager can now
+actually reach the export endpoints. Email now masked by default in exports (new `MaskEmail`
+helper), same posture phone already had. `dotnet build` 0 err (1 pre-existing unrelated
+warning), `dotnet test` **1105/1105 green** (full suite, including all pre-existing
+`PosServiceTests`/`MarketingAnalyticsServiceTests`/TASK-406 Excel tests, no regressions; 2 new
+live-Postgres integration tests each re-run once more to rule out flakiness). Did not touch
+anything outside the 3 findings (#4 consumer JWT revocation, RLS `FOR` clause narrowing,
+rls_audit_test_role gap, etc. remain open per TASK-412, out of this task's scope). Not
+committed (repo convention — main session/user commits).
+
+## TASK-413 — Frontend: wire "loyalty"/"marketing_analytics" into provider + admin module lists
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-409 (flagged this as a
+follow-up chip) · **Next:** none identified beyond the further follow-up flagged below
+Log: `.claude/logs/tasks/413_2026-07-26_provider-admin-module-list_frontend-developer.md`
+`frontend/features/provider/types.ts` and `frontend/features/admin/types.ts` each own a separate
+`ALL_MODULES` list driving the provider/admin panel's tenant module-activation checkboxes; neither
+had `"loyalty"` (TASK-405) or `"marketing_analytics"` (TASK-406), so a provider had no UI path to
+activate either module for a tenant — only a direct DB write (what TASK-409 itself had to do to
+test). Added both keys to provider's `TenantModule` union + `ALL_MODULES` (used by
+`TenantDetailPanel.tsx`'s edit checklist and `CreateTenantWizard.tsx` step 3) and to admin's own
+`ALL_MODULES` (`TenantDetailDrawer.tsx`; admin has no create-time module picker). Added i18n
+labels/descriptions to both `en.json`/`uk.json` (`Dashboard.provider.modules`/`moduleDescriptions`,
+`Dashboard.admin.modules`), reusing TASK-409's English copy for `marketing_analytics` and writing
+new copy for `loyalty`. **Found + fixed an unrelated bug that was blocking verification**: the
+admin panel's module/plan "Save" 405'd — `admin.ts`'s `updatePlan`/`updateModules` called `api.put`
+but `AdminController` declares both `[HttpPatch]` (its own doc-comments already said "PATCH"); every
+admin-panel plan/module change has silently 405'd since TASK-074, not specific to these two new
+modules. Fixed both call sites to `api.patch`. Live-verified both panels end-to-end (provider
+`PUT → 204`, admin `PATCH → 200`, both persisted after hard-reload and cleanly reverted, both
+locales render correctly). `tsc`/`build` clean. Deliberately did NOT touch
+`frontend/features/modules/types.ts` (`ALL_MODULE_KEYS`) — the tenant-facing **read-only** Settings
+"Modules" tab already has `marketing_analytics` (TASK-409) but still lacks `loyalty`; flagged as a
+separate follow-up via `spawn_task` (chip `task_cc5b2371`) rather than folded into this task's
+narrower provider/admin scope. Dismissed the now-superseded chip `task_22a39ac1`. Not committed.
+
+## TASK-412 — Security: review of Loyalty + Marketing Analytics (Фаза 0 + Фаза 1)
+**Status:** done — **verdict: NOT clear to ship as-is** · **Agent:** security-reviewer ·
+**Depends:** TASK-404..411 · **Next:** backend-developer (fix blocker + high-priority item below),
+then re-review before release
+Log: `.claude/logs/tasks/412_2026-07-26_security-review-loyalty-rfm_security-reviewer.md`
+Audited all 8 loyalty/RFM task logs (404-411) then the actual code directly (entities, migration
+SQL, controllers, services, repos, `AppDbContext.cs`, `TenantConnectionInterceptor.cs`). Of the 9
+items the brief called out: 6 verified **OK** (`ConsumerAccount` no-RLS — no generic GetById
+exposure found anywhere; `consumer_self_access` RLS + JWT claim validation — fail-closed, correct,
+minor hardening nit only; `TryClaimTimestepAsync` anti-replay — genuinely atomic + parameterized;
+`MarketingAnalyticsRepository`'s raw SQL — all 9 methods fully parameterized, zero injection risk;
+`FixLoyaltyTableGrants` migration — scoped to exactly 4 tables; `ConsumerAuthController` rate-limit/
+lockout — present, consistent with TASK-329). 3 are real gaps: consumer JWT is a genuinely
+unrevoked 30-day token in the actual `appsettings.json` config (not just a doc claim); the new
+`marketing_analytics.export_pii` TenantRole capability is **dead code** — proven by direct
+comparison with `LegalEntityAuthorization`'s own doc comment, which explicitly documents the exact
+"class-level policy must be looser than the capability check" rule this codebase learned once
+already (ADR-020 "the blocking discovery") and which `MarketingAnalyticsController` violates (its
+class-level `CanViewAnalytics` floor is identical to, not looser than, `CanExportPii`'s role
+branch); Excel export never masks email regardless of the PII flag. Also flagged (per brief's
+"add anything else you find" instruction) the documented rls_audit_test_role test-blind-spot as
+confirmed-real but acceptable to defer.
+**2 new findings neither of the 8 building agents caught:** (A) **CRITICAL, blocks release** —
+`ExcelExportService.SetCellValue` writes raw strings into cells with no Excel-formula
+neutralization; since `Customer.Name` for a loyalty-joined customer comes verbatim from
+self-registered `ConsumerAccount.FullName` (`POST /api/consumer-auth/register` is `[AllowAnonymous]`,
+validates only non-empty), **any anonymous member of the public can plant a formula payload that
+executes in a trusted store_manager's Excel** the moment they export a segment — full path traced
+end-to-end, not speculative. Small, standard fix (prefix `=`/`+`/`-`/`@`-leading strings with `'`).
+(B) **HIGH** — `LoyaltyMembership` has no optimistic-concurrency token anywhere in `AppDbContext.cs`
+(confirmed absent), unlike `ProductStock`, which explicitly uses `xmin`/`IsRowVersion()` in the same
+file for the identical bug class ("two cashiers selling the last unit at the same moment"). Both
+`PosService.CreateSaleAsync`'s redemption/accrual and `LoyaltyService.ManualAdjustAsync` mutate
+`Balance` via plain `SaveChangesAsync()` — concurrent sales against the same membership can each
+pass the balance-sufficiency check against a stale read, and the loser's decrement is silently lost
+(TOCTOU), letting a customer redeem more than their real balance. Requires staff-level POS access
+(insider/race risk, not remote), but is a real money-integrity gap the same file already knows how
+to fix on a sibling entity. Full verdict table + all recommendations in the log. No code changed
+(audit only, per brief) — everything above needs a follow-up implementation task before wider
+rollout.
+
+## TASK-411 — DB: fix — 4 loyalty tables owned by migration superuser, zero app-role grants
+**Status:** done — fixed and live-verified in dev; staging unaffected (migration hasn't reached
+it yet); production cannot have this bug yet (nothing loyalty-related ever committed/deployed) ·
+**Agent:** database-engineer · **Depends:** TASK-410 (found the bug live, spawned background task
+`task_693b439c`) · **Next:** apply both `AddLoyaltyProgram` + `FixLoyaltyTableGrants` via a
+superuser connection (not the automatic boot-time `MigrateAsync()`) whenever this reaches
+staging/production — documented deploy risk, not yet executed in either environment
+Log: `.claude/logs/tasks/411_2026-07-26_loyalty-db-grants-fix_database-engineer.md`
+Root cause (reproduced live, not assumed): this codebase has no bootstrap script/
+`ALTER DEFAULT PRIVILEGES` — every table's access for the real app role comes purely from table
+**ownership**, established once by TASK-372/KI-027 and inherited automatically ever since because
+migrations normally run through the app's own already-owning connection. TASK-404's
+`AddLoyaltyProgram` broke this: its own task log says it was applied via the `crm` **superuser**
+connection (routing around the documented FK-validation-under-RLS gotcha), leaving all 4 loyalty
+tables owned by `crm` with **zero** grants to `shelfguard_app_dev` — exactly the `42501 permission
+denied` TASK-410 hit live on `GET /api/pos/sales`. Fix: new migration `FixLoyaltyTableGrants`
+(20260726154747) — a `DO $$ ... ALTER TABLE {each of the 4} OWNER TO %I` block resolving the
+target role **dynamically** from whichever role currently owns `tenants`, not a hardcoded dev role
+name (so the same migration is correct in staging/production too). Touches only these 4 tables;
+`Down()` is an intentional no-op (reverting would silently reintroduce the bug). Verified live: real
+app-role `psql` insert/select on all 4 tables now succeeds inside a rolled-back transaction (RLS
+still correctly rejects a write with no `app.tenant_id` set — ownership fix didn't weaken RLS);
+full live run through the actual API — `GET /api/pos/sales` (TASK-410's exact failing call) now
+`200 OK`. `dotnet build` 0 err, `dotnet test` 1086/1086 unchanged (permissions-only fix, no new
+behavior — see testing-gap note below). Staging: `AddLoyaltyProgram` hasn't reached it yet, so no
+bug there today. Production: `git log --all | grep -i loyalty` is empty and `main`'s HEAD predates
+TASK-404 entirely — cannot have this bug yet, independent of any live check (a direct SSH
+confirmation attempt was blocked by the harness's own permission classifier, same as TASK-371/372,
+not worked around). **Flagged, not fixed:** the live-Postgres RLS test suite
+(`LoyaltyRlsIntegrationTests` etc.) connects as `rls_audit_test_role`, which has its own explicit
+`GRANT ALL` independent of table ownership — this is why `dotnet test` stayed green through the
+entire incident despite the real app connection being broken; recommend a follow-up live test
+against the actual configured `DefaultConnection` asserting basic `SELECT` on every FORCE RLS
+table. Also flagged: a `known-issues.md` KI-027/028 cross-reference addendum for this incident —
+not added (out of this task's scope). Not committed.
+
+## TASK-410 — Backend: SaleDto customer fields + loyalty ledger mapping on GetSalesForShiftAsync
+**Status:** done (code+tests) — feature not visible live yet, blocked by an unrelated DB
+permissions gap (see below) · **Agent:** backend-developer · **Depends:** TASK-408 (found the
+gap), TASK-405 (loyalty ledger/customer fields it fills in) · **Next:** database-engineer
+(spawned task `task_693b439c`, see below) before this is actually visible end-to-end
+Log: `.claude/logs/tasks/410_2026-07-26_saledto-loyalty-fields_backend-developer.md`
+Closed the two mapping gaps TASK-408 found: `SaleDto` gained `CustomerId`/`CustomerName`
+(mapped in both `CreateSaleAsync` and `GetSalesForShiftAsync`, the latter via a new
+`.Include(t => t.Customer)` on `PosRepository.GetTransactionsByShiftAsync`); `GetSalesForShiftAsync`
+now also maps `LoyaltyAccrued/Redeemed/Balance` by batch-querying `LoyaltyLedgerEntry` via new
+`ILoyaltyRepository.GetLedgerEntriesForTransactionsAsync` (PosTransaction has no
+LoyaltyMembershipId of its own — the ledger is the only signal). `LoyaltyBalance` = the
+chronologically-last ledger entry's `BalanceAfter` for that transaction — a per-sale historical
+snapshot, not the membership's current live balance. `dotnet build` 0 err, `dotnet test`
+1086/1086 (+3 new, was 1083). **Found a critical, unrelated pre-existing bug while live-verifying:**
+`GET /api/pos/sales` 500s with Postgres `42501 permission denied for table
+loyalty_ledger_entries` — all 4 loyalty tables from TASK-404 (`consumer_accounts`,
+`loyalty_memberships`, `loyalty_ledger_entries`, `loyalty_program_settings`) are owned by the `crm`
+migration superuser with zero grants to the actual app role (`shelfguard_app_dev`), unlike every
+other RLS table in the codebase. This means the entire loyalty feature chain (TASK-404..408) is
+non-functional through the real app connection in every environment provisioned the same way —
+confirmed live in dev, staging/production not yet checked. Did not attempt a fix (DB
+ownership/grants, out of scope for this task and this repo's own TASK-371/KI-027 precedent says
+don't work around DB permission issues without a dedicated review) — flagged via a spawned
+background task (`task_693b439c`) for database-engineer with full root-cause and repro steps.
+Not committed.
+
+## TASK-406 — Backend: Marketing analytics (RFM) engine + dashboard API (Фаза 1)
+**Status:** done (2026-07-26) · **Agent:** backend-developer · **Depends:** TASK-405 (Task #2 of
+the loyalty/RFM plan's agent sequence — Фаза 0's `PosTransaction.CustomerId` writing) · **Next:**
+frontend-developer (TASK-409), security-reviewer (mandatory pass, esp. raw-SQL parametrization +
+PII export gate), documentation-writer (glossary/api-contracts/ADR)
+Log: `.claude/logs/tasks/406_2026-07-26_marketing-analytics-backend_backend-developer.md` (full
+frontend API contract for TASK-409 lives there — read it instead of the C#).
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Фаза 1". New
+`Features/MarketingAnalytics/` (mirrors `Features/Analytics/`'s thin service→repository shape):
+`RfmSegmentClassifier` (pure, 11 named-constant if-branches, plan's exact priority-table order;
+caught+fixed a real bug while testing — "Lost" `>6 months` needed strict `<`, not `<=`),
+`RecommendationTemplates` (one method per segment, live-KPI Ukrainian copy),
+`MarketingAnalyticsRepository` (Infrastructure — **first raw-SQL in the codebase**,
+`Database.SqlQueryRaw<T>` with positional `{n}` params for `NTILE(5)` R/F/M scoring + segment-
+scoped top-products/affinity/basket/behavior/LTV; verified via 2 throwaway spikes against live
+Postgres before writing the real file, then 8 real integration tests seeding real POS data —
+caught a real EXTRACT(DAY FROM interval) pitfall (doesn't give total elapsed days across months)
+before it shipped, replaced with a plain `date - date` subtraction), `MarketingAnalyticsService`
+(classification/aggregation orchestration, PII masking, ActivityLog on export),
+`ExcelExportService` (Infrastructure/Export, ClosedXML 0.105.1 MIT — not EPPlus), new
+`MarketingAnalyticsController` (`CanViewAnalytics` floor + `[RequireModule("marketing_analytics")]`,
+8 endpoints: overview/segment-detail/affinity/basket/explain/3×export). New
+`TenantRoleCapabilities.MarketingAnalyticsExportPii` (ADR-020) + `MarketingAnalyticsAuthorization`
+(imperative check, store_manager+ or the capability — mirrors `LegalEntityAuthorization`'s shape).
+`ItemType="packaging"` added to `ItemService.IsValidItemType` (string field, no schema change) —
+excluded from top-products/affinity/basket aggregation. **Test-infra note (flagged for review):**
+adding this task's 3rd raw-Postgres integration-test class pushed the full suite's cumulative
+distinct-`DbContextOptions` count past EF Core's `ManyServiceProvidersCreatedWarning`-as-error
+threshold (~20, process-wide) — added one `.ConfigureWarnings(...)` line to the pre-existing
+`LoyaltyRepositoryIntegrationTests.NewContext()` (test-infra only, zero behavior change to what
+that test verifies) since `Features/Loyalty/` itself was out of scope, not that test helper.
+`dotnet build` 0 err/0 warn (1 pre-existing unrelated warning), `dotnet test` **1083/1083 green**
+(was 1004; +79: 39 classifier + 18 recommendation-template + 8 authorization + 6 service + 8 live-
+Postgres repository integration, ran full suite twice to confirm no flakiness). Did not touch
+`Features/Loyalty/`, `Features/ConsumerAuth/`, `PosService.cs`, Domain entities/DbContext/
+migrations (beyond the packaging string value), or any frontend/mobile UI, per the task's explicit
+scope boundaries. Not committed.
+
+## TASK-407 — Mobile: consumer loyalty wallet + POS loyalty scan (Фаза 0, Task #3 mobile half)
+**Status:** done · **Agent:** mobile-developer · **Depends:** TASK-405 · **Parallel with:**
+TASK-408 (frontend half) · **Next:** security-reviewer (mandatory pass before release),
+qa-tester (end-to-end scenario — no emulator/device in this environment, contract-level
+verification only so far)
+Log: `.claude/logs/tasks/407_2026-07-26_mobile-loyalty_mobile-developer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Зміни в POS" → "Mobile", §"Роль
+і навігація в мобільному застосунку". New `(consumer)` route group (Tabs: wallet/history/
+account, no `index.tsx` of its own — both it and `(app)` carry no path prefix, so an index in
+both would collide on `/`) reached via a new `(auth)/select-role.tsx` chooser +
+`consumer-login.tsx`/`consumer-register.tsx`, wired to new `POST /api/consumer-auth/
+register|login`. `useAuthStore` gained `sessionKind`/`consumerUser`/`setConsumerAuth` purely
+additively — every existing staff call site (`setAuth`/`setUser`/`clearAuth`/`loadToken`)
+kept its exact signature. Wallet screen polls `GET /consumer/loyalty/{tenantId}/code` every
+22s gated on BOTH navigation focus (`useFocusEffect`) AND `AppState==='active'` — stricter
+than the existing `useCurrentShift` pattern, deliberately, since this is a rotating security
+code. POS gained `pos/loyalty.tsx` (scan/manual-code/customer-search) inserted between
+`scanner.tsx` and `payment.tsx` (1-line pathname change in `scanner.tsx`, rest of that
+already-audited file untouched); new shared `BarcodeCameraView` used only by the new screen.
+**Found + fixed a real correctness gap while wiring `payment.tsx`**: the backend computes the
+sale's actual owed total as `subtotal - redeemAmount` (before tax/change) — `payment.tsx` now
+computes that same `netTotal` for the cash-sufficiency/change check instead of the raw cart
+subtotal, or the cashier would demand more cash than the customer owes once bonuses are
+redeemed; zero visible diff when redeemAmount is 0 (the normal case). Staff "join own
+program" added to `profile/index.tsx` (`GET /loyalty/my-membership` 404→join button,
+403→section hidden entirely — module not enabled for that tenant). New dependency
+`react-native-qrcode-svg` + peer `react-native-svg` (SDK-56-compatible, via `npx expo
+install`, no config-plugin/app.json change needed). **Plan-vs-actual deviations documented in
+the log:** manual code entry needs the FULL `SGLOY1.{id}.{code}` string, not "6 digits" as the
+plan said; `resolve-code` returns no redemption-cap field (that lives in enterprise_admin-only
+settings), so the client only soft-caps to `min(balance, subtotal)` and trusts the server's
+400 on an actual cap violation (already correctly surfaced by the existing generic error
+handler); no backend endpoint exists to "browse" tenants with loyalty enabled, so the wallet's
+"join a new program" is a minimal manual Tenant-ID entry, flagged as needing a better UX
+later. `npx tsc --noEmit` clean across the whole mobile project (checked after every file
+touched). `npm run lint` still fails on the pre-existing missing `eslint.config.js`
+(TASK-366, not this task's regression). No test runner exists in mobile (no `"test"` script,
+zero test files) and no emulator/device in this environment — verification was contract-level
+(controllers/DTOs read directly, full param flow traced by hand) plus a clean `tsc`, not a
+live run. Not committed.
+
+## TASK-408 — Frontend: Web POS read-only "Лояльність" block (Фаза 0, Task #3 frontend half)
+**Status:** done (UI correct but dormant — see backend follow-ups below) · **Agent:**
+frontend-developer · **Depends:** TASK-405 · **Next:** mobile-developer (Task #3 mobile
+half, parallel, separate task), a NEW backend task to close the two mapping gaps found here,
+security-reviewer (already scheduled, unaffected by this task)
+Log: `.claude/logs/tasks/408_2026-07-26_web-pos-loyalty-section_frontend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Зміни в POS" → "Web".
+**Found the actual backend contract diverges from the plan brief** (verified by reading
+`PosDtos.cs`/`PosService.cs` directly, then live end-to-end on the dev stack — opened a real
+shift, created a real sale via the API, fetched it back): `SaleDto` has NO
+`CustomerId`/`CustomerName` field at all on either endpoint (not "sometimes null" — genuinely
+absent from the DTO, despite `PosTransaction.CustomerId` being persisted at
+`PosService.cs:324`), so the customer-name-with-link part of the brief cannot be built without
+a new backend DTO extension. Separately, `loyaltyAccrued/Redeemed/Balance` ARE real `SaleDto`
+fields (TASK-405) but only `CreateSaleAsync` (mobile's immediate checkout response) populates
+them — `GetSalesForShiftAsync` (what `GET /api/pos/sales`, i.e. this web view, actually calls)
+never does, confirmed live (created a sale, fetched it back via the list endpoint, got
+`null`/`null`/`null`). Followed "don't invent data": did NOT add a fake `customerId` field to
+`frontend/features/pos/types.ts`; DID add the three loyalty fields (real, just always-null via
+this endpoint today) plus a shared `saleHasLoyaltyActivity()` helper, and gated a new
+"Лояльність" `DrawerSection` in `SaleDetailDrawer.tsx` + a `Gift` icon indicator in
+`SalesTable.tsx` on it — both correct and forward-compatible, but dormant until a backend
+follow-up wires `GetSalesForShiftAsync` to the ledger. Also noted: `features/customers/` has
+no per-customer deep link (`CustomerDetail` is a client-state drawer, no `/customers/[id]`), so
+even a future `CustomerId` could only link to the customers list, not a specific record.
+`npx tsc --noEmit` clean, `npm run build` clean (exit 0, `/pos` route present). Live-verified
+on the dev stack end-to-end (backend+frontend+Postgres, seeded `manager@demo.local`): opened
+shift, created a real sale via the API, confirmed the web `/pos` page renders it with no Gift
+icon (correct — no loyalty data) and the drawer's General info section unaffected with the new
+Loyalty section correctly absent; no console errors. Cleaned up after: closed the test shift,
+stopped both preview servers, killed the orphaned backend process. Only
+`frontend/features/pos/{types.ts,components/SaleDetailDrawer.tsx,components/SalesTable.tsx}` +
+`frontend/messages/{en,uk}.json` touched — confirmed via `git diff` that the pre-existing
+uncommitted activity-log-labels changes already sitting in the two message files (unrelated,
+predates this task) are untouched by my hunk. **New backend task needed:** (1) add
+`CustomerId`/`CustomerName` to `SaleDto`, map in both `CreateSaleAsync` and
+`GetSalesForShiftAsync`; (2) map `LoyaltyLedgerEntry` (by `PosTransactionId`) into
+`GetSalesForShiftAsync` so the already-built web section actually shows real data. Not
+committed (repo convention — main session/user commits).
+
+## TASK-409 — Frontend: Marketing analytics (RFM) dashboard (Фаза 1)
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-406 (backend contract) ·
+**Next:** security-reviewer (already scheduled against 404-411, unaffected by this frontend-only
+task), documentation-writer (glossary/api-contracts notes — closed by TASK-415)
+Log: `.claude/logs/tasks/409_2026-07-26_marketing-analytics-frontend_frontend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Фаза 1". Built
+`frontend/features/marketing-analytics/` off task log 406's "Frontend API-контракт" section as the
+sole contract source (never read the C#) and `docs/uployal/RFM_ANALYSIS.md` for UI/UX behavior. New
+`/marketing-analytics` page (role gate matching backend's `CanViewAnalytics` floor,
+`useRequireTab`, module gate), full `types.ts` transcription of the RFM contract plus an own-
+judgment 11-segment→6-color-group mapping (the competitor doc only defines the 6 color
+*meanings*, not a segment table), `api/marketingAnalytics.ts` (all 8 endpoints), one `useQuery` per
+GET keyed on the full filter object (deliberately no `keepPreviousData` — never shows a mix of
+old/new-filter data), components for the filter bar (new multi-store popover — existing
+`useStoreContext`/`StoreSelector` is single-store only), the 11+1 segment grid, and a 4-panel
+segment-detail cluster (top products / affinity+basket tabs / behavior charts / recommendation
+card with the separate on-click "explain more" Claude call). **Shared-lib changes, small and
+deliberate:** `frontend/lib/download.ts` gained `downloadFilePost` (plan assumed GET-only exports;
+actual backend contract is POST+JSON body for all 3 exports), `frontend/lib/roles.ts` gained
+`canExportMarketingAnalyticsPii`, `frontend/features/modules/types.ts`/`Sidebar.tsx` gained the
+`marketing_analytics` module key/NavGroup. Full live browser verification on the dev stack: seeded
+~12 synthetic customers into an existing dev tenant to get a non-trivial RFM population, confirmed
+overview/segment-detail math, affinity vs. basket returning genuinely different numbers for the
+same product, `/explain`'s real 503 (no Claude key in dev) rendering below (not replacing) the
+template recommendation, atomic recalculation on period/store changes, the documented
+"Hibernating always beats Lost" priority interaction from task log 406 reproduced live with seeded
+data, empty-segment and store-scoped "no purchase" behavior matching the documented backend design,
+and all 3 exports returning real non-trivial `.xlsx` files. **Discrepancy found and documented, not
+invented around:** export responses carry no `Content-Disposition` header (log 406 said the
+filename would arrive that way) — harmless here since `downloadFilePost` always uses its own
+client-generated filename. `tsc`/`build` clean (`/marketing-analytics` 13.1 kB, in line with sibling
+analytics routes). Flagged a follow-up via `spawn_task` (became TASK-413): provider/admin panel
+module-activation lists didn't have `marketing_analytics`/`loyalty` yet, only a direct DB write
+could enable the module for testing. Not committed.
+
+## TASK-405 — Backend: Loyalty program Application+Api layer (Фаза 0)
+**Status:** done (2026-07-26) · **Agent:** backend-developer · **Depends:** TASK-404 (Task #2
+of the loyalty/RFM plan's agent sequence) · **Next:** frontend-developer + mobile-developer
+(Task #4, parallel), security-reviewer (mandatory pass before release)
+Log: `.claude/logs/tasks/405_2026-07-26_loyalty-backend_backend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Фаза 0". `ConsumerAuthController`
+(`/api/consumer-auth/register|login`, own service — claim shape too different from staff
+`AuthService` to share) issuing a new `IJwtService.GenerateConsumerAccessToken` (sub+
+`consumer_account_id`, role="consumer", no tenant_id, 30-day lifetime since ConsumerAccount has
+no refresh-token flow — **flagged for security-reviewer**, no revocation mechanism yet).
+`PhoneNormalizer` (+380XXXXXXXXX, Application/Common, ConsumerAccount-only). `LoyaltyService`
+(join/code/history for consumers; resolve-code/manual-adjust/my-membership/join-as-staff/settings
+for staff) — QR payload `SGLOY1.{membershipId}.{code}`, `ITotpService.GenerateCode` (new: server
+computes the code, unlike 2FA's verify-only). Anti-replay via new
+`ILoyaltyRepository.TryClaimTimestepAsync` — single WHERE-guarded `ExecuteSqlInterpolatedAsync`
+UPDATE (LoyaltyMembership has no EF concurrency token), proven atomic against live Postgres
+(4 new tests). Resolve-code rate-limit/lockout via new `IResolveCodeAttemptTracker`
+(`IMemoryCache`-backed, since LoyaltyMembership has no FailedLoginAttempts/LockoutUntil columns —
+**flagged for security-reviewer**: single-instance-deployment tradeoff, doesn't survive restart or
+scale across instances). `PosService.CreateSaleAsync` extended (redemption then accrual, both
+computed on net TotalAmount, all in the sale's one existing SaveChangesAsync — no separate
+commit); `Customer.TotalOrders/TotalSpent` finally get written for any sale with a CustomerId.
+`AppRoles.Consumer` added (deliberately NOT in `AppRoles.All`); `Tenant.UpdateModules` gained
+`"loyalty"`/`"marketing_analytics"` keys; `frontend/lib/roles.ts`/`mobile/lib/roles.ts` mirrored
+with the bare `Consumer` constant only (no role-set inclusion — different session shape
+entirely). Did NOT touch Domain entities/DbContext/migrations (TASK-404's schema, frozen).
+`dotnet build` 0 err/0 warn, `dotnet test` 1004/1004 green (was 936; +68 new, incl. 4 live-Postgres
+anti-replay tests and the existing live RLS/concurrency suites re-verified green with the new
+dependencies wired in). `tsc --noEmit` clean on frontend+mobile. Not committed.
+
+## TASK-404 — DB: Loyalty program schema (Фаза 0 — ConsumerAccount/LoyaltyMembership/LoyaltyLedgerEntry/LoyaltyProgramSettings)
+**Status:** done (2026-07-26) · **Agent:** database-engineer · **Depends:** none (Task #1 of the
+loyalty/RFM plan's agent sequence) · **Next:** backend-developer (Task #2)
+Log: `.claude/logs/tasks/404_2026-07-26_loyalty-schema_database-engineer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Фаза 0". 4 new entities +
+`AddLoyaltyProgram` migration: `ConsumerAccount` (global, no TenantId, **no RLS at all** —
+deliberate, same precedent as `tenants`, flagged for mandatory security-reviewer pass);
+`LoyaltyMembership`/`LoyaltyLedgerEntry`/`LoyaltyProgramSettings` (tenant-scoped, canonical
+fail-closed triad). New identity-based `consumer_self_access` policy on
+`loyalty_memberships`/`loyalty_ledger_entries` (first of its kind in this repo — lets a
+cross-tenant ConsumerAccount JWT, which never sets `app.tenant_id`, read its own rows via
+`app.consumer_account_id` instead). `provider_bypass` written as `IN ('provider',
+'provider_admin')` from day one on all 3 tenant tables (deviates from database-schema.md's
+literal single-role template — matches the precedent `ExpandProviderBypassToProviderAdmin`
+already established for the other 71 tables). Extended `TenantConnectionInterceptor` (new
+`app.consumer_account_id` session var + `"consumer"` role whitelist entry). Verified live via
+`psql`: `customers` RLS already has the full canonical triad (plan's claim confirmed, no fix
+needed). `dotnet build` 0 err/0 warn, `dotnet test` 936/936 (14 new: interceptor unit tests +
+4 new live `LoyaltyRlsIntegrationTests` proving cross-tenant consumer read, ledger EXISTS-scoping,
+staff-session isolation unaffected, fail-closed on full reset). Migration applied to dev DB via
+`crm` superuser (FK-validation-under-RLS gotcha), Down()/Up() round-tripped clean. Not committed.
+
 ## TASK-401 — Backend: store-scope filter on GET /api/locations (ADR-022 Stage 3 companion)
 **Status:** done (2026-07-23) · **Agent:** backend-developer · **Depends:** TASK-392 (user_locations Stage 1), ADR-022
 Log: `.claude/logs/tasks/401_2026-07-23_locations-list-store-scope-filter_backend-developer.md`

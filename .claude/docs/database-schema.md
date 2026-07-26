@@ -1,7 +1,7 @@
 # Database Schema
 
 **Owner:** database-engineer
-**Updated:** 2026-06-04
+**Updated:** 2026-07-26
 **Source:** v1-spec.md section 4
 
 ## Multi-Tenancy
@@ -471,6 +471,88 @@ storekeeper/cashier/staff user with zero `user_locations` rows goes to **zero vi
 all 9 tables the instant this migration runs — immediate, total functional outage for that user
 across stock/sales/POS/write-offs/etc, not a gradual degradation. Safe only after Stage 2's
 manual backfill (product owner assigning locations to every affected user) reaches 100% coverage.
+
+## TASK-404/411/414 — Loyalty program schema (`AddLoyaltyProgram`, 2026-07-26)
+
+Four new tables (Фаза 0 of the `docs/uployal/` RFM+loyalty plan, `deep-cooking-nygaard.md`). First
+schema in this project with a genuinely new, identity-based RLS policy shape, and the first table
+in the project with **no RLS at all**.
+
+| Table | RLS | Purpose | Key fields |
+|---|---|---|---|
+| `consumer_accounts` | **none** (see below) | Global, cross-tenant identity of an end customer (phone+password login) | `Phone` (globally unique, normalized `+380XXXXXXXXX`), `PasswordHash`, `FullName`, `Email?`, `FailedLoginAttempts`/`LockoutUntil` (TASK-329-shaped lockout), `IsActive` |
+| `loyalty_memberships` | canonical triad + `consumer_self_access` | One `ConsumerAccount`'s enrollment in one tenant's bonus program | `TenantId`, `ConsumerAccountId` (FK→consumer_accounts, Restrict), `CustomerId` (FK→customers, SetNull — auto-linked/auto-created by phone), `LinkedUserId` (FK→users, SetNull — "staff joined their own employer's program" case), `TotpSecret`, `LastRedeemedTimestep` (anti-replay), `Balance`, `Status` (active\|blocked). Unique `(TenantId, ConsumerAccountId)`. `xmin`/`IsRowVersion()` optimistic-concurrency token added by `AddLoyaltyMembershipConcurrencyToken` (TASK-414 security fix — see below) |
+| `loyalty_ledger_entries` | canonical triad + `consumer_self_access` (EXISTS via membership) | Append-only bonus audit trail behind `LoyaltyMembership.Balance` | `TenantId`, `MembershipId` (FK, Restrict), `EntryType` (accrual\|redemption\|manual_adjustment\|expiry), `Amount` (signed), `BalanceAfter`, `PosTransactionId` (FK→pos_transactions, SetNull), `CreatedByUserId` (FK→users, SetNull). Every property `init`-only in the C# entity — rows are never updated/deleted, only inserted alongside a `LoyaltyMembership.Balance` write in the same `SaveChangesAsync()` |
+| `loyalty_program_settings` | canonical triad only | One row per tenant — bonus program configuration | `TenantId` (unique), `IsEnabled`, `AccrualRatePercent` (default 3.0), `RedemptionCapPercent` (default 50.0), `MinRedemptionBalance`, `CodeTtlSeconds` (default 30) |
+
+### `consumer_self_access` — first identity-based (not role-based) RLS policy in this repo
+
+Every other RLS policy in this file scopes on `app.tenant_id` (role/tenant identity). A
+`ConsumerAccount` session is cross-tenant by design — its JWT never carries `tenant_id` at all,
+only `consumer_account_id` — so `tenant_isolation` can never match it. `TenantConnectionInterceptor`
+now also sets `app.consumer_account_id` (same always-set/null-uuid-fallback discipline as every
+other session var; the unauthenticated RESET branch clears it too) and whitelists role `"consumer"`.
+
+```sql
+-- loyalty_memberships: direct column comparison
+CREATE POLICY consumer_self_access ON loyalty_memberships
+  USING ("ConsumerAccountId" = (NULLIF(current_setting('app.consumer_account_id', true), ''))::uuid);
+
+-- loyalty_ledger_entries: EXISTS through the parent membership (no ConsumerAccountId column of its own)
+CREATE POLICY consumer_self_access ON loyalty_ledger_entries
+  USING (
+    EXISTS (
+      SELECT 1 FROM loyalty_memberships m
+      WHERE m."Id" = loyalty_ledger_entries."MembershipId"
+        AND m."ConsumerAccountId" = (NULLIF(current_setting('app.consumer_account_id', true), ''))::uuid
+    )
+  );
+```
+Postgres ORs multiple PERMISSIVE policies together, so this is **additive** on top of
+`tenant_isolation` (which a consumer session never satisfies anyway), not a replacement — a staff
+session's tenant-scoped visibility is completely unaffected by this policy's existence. Not added
+to `loyalty_program_settings` — consumers never read that table (staff/enterprise_admin
+configuration only).
+
+### `consumer_accounts` has NO RLS at all — deliberate, not an oversight
+
+Same precedent as `tenants`: globally readable at the database level, protected only by
+application code that never hands a generic `GetById` to a non-owner (verified end-to-end by
+security-reviewer, TASK-412 — every call site resolves the id from the JWT `consumer_account_id`
+claim or from the caller's own phone, never from a route/body parameter supplied by someone else).
+**This is a project convention now, not a one-off exception** — if a future agent finds this table
+has no RLS, that is by design; do not "fix" it by adding a policy without first re-reading this
+note and the `AddLoyaltyProgram` migration's own class-level doc comment.
+
+### Lesson from TASK-411 — table ownership, not a GRANT script, is what gives the app role access
+
+This codebase has no bootstrap script and no `ALTER DEFAULT PRIVILEGES` anywhere. Every table's
+access for the real app role (`shelfguard_app_dev` in dev, etc.) comes purely from **table
+ownership** — established once for pre-existing tables by TASK-372/KI-027's bulk `ALTER TABLE ...
+OWNER TO` loop, and inherited automatically by every table created since, because the migration
+that creates it normally runs through the app's own (already-owning) connection.
+
+`AddLoyaltyProgram` broke this silently: it was applied to dev via the `crm` **superuser**
+connection (to route around the FK-validation-under-RLS gotcha documented above under "Local-dev
+gotcha worth knowing for Stage 3" — inserting a FK against an RLS-protected parent through the
+restricted role can false-positive `23503`). Net effect: all 4 loyalty tables ended up owned by
+`crm`, with **zero grants** to the app role — `dotnet test` stayed green throughout (the
+live-Postgres RLS tests connect as a separate test role with its own explicit `GRANT ALL`, not the
+real app connection string), but the real running API 500'd with Postgres `42501 permission
+denied` the moment any endpoint touched these tables. Fixed by `FixLoyaltyTableGrants`
+(20260726154747) — a `DO $$ ... ALTER TABLE {each of the 4} OWNER TO %I` block that resolves the
+target role **dynamically** from whichever role currently owns `tenants`, rather than hardcoding a
+per-environment role name.
+
+**Actionable takeaway for any future migration applied outside the normal `MigrateAsync()` path**
+(superuser escape hatch for the FK-under-RLS gotcha, manual `dotnet ef database update
+--connection`, etc.): explicitly verify the new table(s)' owner afterward
+(`SELECT tablename, tableowner FROM pg_tables WHERE schemaname='public' AND tableowner <>
+'<app role>'` should return zero rows). A migration applying cleanly and `dotnet test` staying
+green are **not** sufficient evidence that the app's real connection can use the table.
+`ALTER TABLE ... OWNER TO` itself requires the executing role to be a superuser or the table's
+*current* owner, so this class of fix must always run via a superuser connection too, never the
+automatic boot-time migration path.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

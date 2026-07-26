@@ -1,7 +1,112 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-20
+**Updated:** 2026-07-26
+
+## ADR-023: Loyalty program & RFM marketing analytics — cross-tenant ConsumerAccount identity, TOTP-based live QR, independent module keys, RfmSegment naming
+Date: 2026-07-26
+Status: accepted
+
+Context: `docs/uployal/RFM_ANALYSIS.md` is a competitive analysis of a retail RFM/marketing-
+analytics dashboard. Reproducing it exposed a blocker: `PosTransaction.CustomerId` (nullable FK,
+existed since v1) is never written by any code path — every sale is anonymous today, so RFM/LTV
+would show all-zero data with no way to attribute a receipt to a person. Plan
+`C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` splits the work into Фаза 0 (a loyalty/bonus
+program that gives customers a reason to identify themselves at checkout — scan a QR, earn bonus
+points — and thereby writes `CustomerId`) and Фаза 1 (the RFM dashboard itself, built on Фаза 0's
+now-populated data). TASK-404 through TASK-414 implemented both; this ADR records the
+architectural decisions behind the identity model and naming, verified against the actual shipped
+code (not just the plan).
+
+Decision:
+
+1. **`ConsumerAccount` is a new, separate, global (no `TenantId`, no RLS) entity — not an
+   extension of `Customer` or `User`.** `Customer` is tenant-scoped CRM data (phone unique only
+   *within* a tenant — confirmed via `CustomerRepository.ExistsByPhoneAsync`); `User` is a
+   tenant-scoped staff account. Neither can back "one login reads every tenant's bonus balance"
+   (the plan's explicit requirement — a multi-tenant "wallet of cards"): a `ConsumerAccount` JWT
+   carries `consumer_account_id` and **no** `tenant_id` at all, and reads across every
+   `LoyaltyMembership` it holds regardless of tenant. Extending `Customer` would have required
+   either making `Customer.Phone` globally unique (breaking existing tenant-scoped semantics — two
+   unrelated tenants legitimately have customers who share a phone number) or bolting a parallel
+   global-identity concept onto an entity whose entire reason to exist is tenant scoping. A
+   `LoyaltyMembership` join row (tenant-scoped, FK to both `ConsumerAccount` and `Customer`)
+   composes both without compromising either — `Customer` keeps its existing tenant-local meaning;
+   `ConsumerAccount` is the only genuinely global identity concept added by this series.
+   Consequence, accepted deliberately: `consumer_accounts` is the one table in the project with
+   **no RLS** (same precedent as `tenants`), reviewed explicitly by security-reviewer (TASK-412,
+   item #1 — verdict OK, no generic non-owner lookup exists anywhere in the codebase) and
+   documented as a standing convention in `database-schema.md`, not a gap to "fix" later.
+
+2. **The "live" rotating QR/barcode reuses the existing TOTP infrastructure (`Otp.NET`/
+   `ITotpService`, already used for `User` 2FA) instead of inventing a new rotating-token format.**
+   The plan's requirement (protect against screenshot-sharing — a static code defeats the whole
+   point of scan-to-earn) is structurally identical to what TOTP already solves for 2FA: a shared
+   secret plus a time-step counter produces a code that rotates on a fixed interval and can be
+   verified with a bounded-window anti-replay check. `LoyaltyMembership.TotpSecret` +
+   `LastRedeemedTimestep` mirror `User`'s 2FA columns exactly; `ITotpService` gained one new
+   method, `GenerateCode(secret)` (the server computes the *current* code and hands it to the
+   wallet screen) — the mirror image of the existing `VerifyCode` used for staff 2FA login. The QR
+   payload itself (`SGLOY1.{membershipId}.{code}`) is a thin, new, deliberately simple wrapper —
+   version tag + membership id for O(1) staff-side lookup + the rotating TOTP code — not a new
+   cryptographic primitive. Anti-replay reuses the same "atomic claim of a monotonically
+   increasing counter" shape `ProductStock`'s optimistic concurrency already established in this
+   codebase (`ILoyaltyRepository.TryClaimTimestepAsync`, a single WHERE-guarded
+   `ExecuteSqlInterpolatedAsync` UPDATE — verified genuinely atomic and parameterized by
+   security-reviewer, TASK-412 item #3). Rejected: inventing a bespoke rotating-token scheme — it
+   would duplicate exactly what TOTP already does correctly and add a second, unaudited crypto
+   primitive to the codebase for no behavioral gain.
+
+3. **`"loyalty"` and `"marketing_analytics"` are two independent `Tenant.modules` keys, not one.**
+   A tenant can run a bonus program without ever activating the RFM dashboard (e.g. a small
+   single-store client that wants scan-to-earn but has no marketing analyst to act on
+   segmentation), and — less obviously but just as real — a tenant could in principle activate
+   `marketing_analytics` without `loyalty` at all, since Фаза 1's RFM engine only needs
+   `PosTransaction.CustomerId` populated, which POS's plain customer-search-and-attach path
+   (`CustomerId` alone, no membership/balance involved) already provides independently of the
+   bonus mechanism. Coupling both features behind a single module key would force an all-or-
+   nothing activation that doesn't match either real usage pattern, and would entangle two
+   independently-evolving features' rollout/pricing decisions behind one flag. Both keys were
+   added to `Tenant.UpdateModules`'s `valid[]` list together (TASK-405) since Фаза 1 depends on
+   Фаза 0's data-writing path existing, but they gate unrelated endpoint sets
+   (`[RequireModule("loyalty")]` on `LoyaltyController` vs. `[RequireModule("marketing_analytics")]`
+   on `MarketingAnalyticsController`) and can be toggled independently per tenant from day one.
+
+4. **Naming discipline: always `RfmSegment...` (`RfmSegmentKey`, `RfmSegmentDetailDto`, ...),
+   never a bare `Segment...`.** `Item.Segment` (nav property to `ProductSegment`) already means the
+   promo-cannibalization demand segment from v2 (`Features/Cannibalization/`) — confirmed in
+   `Item.cs` before any RFM code was written. A bare `SegmentDto`/`ISegmentService` in a new
+   `Features/MarketingAnalytics/` module would silently collide in meaning (not in compiler-checked
+   namespace — C# would happily compile two different `SegmentDto`s in two namespaces — but in the
+   mind of every future reader grepping "Segment" across the codebase) with an unrelated,
+   already-shipped concept. `RfmSegmentKey`'s own doc comment states this explicitly, and the
+   convention is applied consistently across the whole new module — DTOs, the classifier, the
+   repository methods, the frontend `types.ts` transcription (TASK-409) — with zero exceptions.
+
+Consequences:
++ Cross-tenant loyalty wallet works with zero compromise to `Customer`'s existing tenant-scoped
+  uniqueness semantics — no migration risk to the many existing tenant-scoped tables' assumption
+  that a phone number is only meaningful within one tenant
++ Zero new cryptographic primitive — the QR "liveness" mechanism is exactly as auditable as the
+  already-shipped, already-reviewed 2FA TOTP path, just pointed at a different entity
++ Independent module activation matches real tenant variation (bonus-only, analytics-only-via-
+  plain-attach, or both) without a forced bundle
++ `RfmSegment...` naming avoids a real, confirmed collision with `ProductSegment`'s existing meaning
+- `ConsumerAccount` carrying no RLS is a permanent, deliberate exception to this codebase's
+  otherwise-universal "every tenant-touching table gets RLS" rule — every future reader must learn
+  this is intentional (documented in three places: the migration's own class doc comment,
+  `database-schema.md`, and this ADR) rather than assume it is an oversight
+- Two module keys instead of one is marginally more provider-panel/admin-panel surface (two
+  checkboxes, two i18n label pairs) for a feature pair that, in practice, most tenants will
+  probably activate together — accepted, since the independent-activation case is real, not
+  hypothetical
+- `LoyaltyMembership`/`LoyaltyLedgerEntry`'s identity-based `consumer_self_access` RLS policy
+  (`database-schema.md`) is the first of its kind in this repo — a new pattern future agents must
+  learn alongside the existing role-based `tenant_isolation`/`provider_bypass`/`worker_bypass` triad
+
+Extends: reuses ADR-020's `TenantRoleCapabilities`/`RoleOrCapabilityRequirement` mechanism
+verbatim for `marketing_analytics.view`/`marketing_analytics.export_pii` (new "Маркетинг"
+capability group) — no new authorization primitive introduced for Фаза 1's own access control.
 
 ## ADR-022: Store-scoped user assignment & data visibility (`user_locations` + RLS)
 Date: 2026-07-19
