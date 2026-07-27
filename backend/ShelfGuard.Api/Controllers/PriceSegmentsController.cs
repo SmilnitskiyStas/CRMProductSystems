@@ -66,8 +66,12 @@ public sealed class PriceSegmentsController : ControllerBase
         if (tenantId is null) return Forbid();
 
         var (resolvedFrom, resolvedTo) = ResolvePeriod(period, from, to);
+        // TASK-425: masking decision is re-derived server-side from the caller's own
+        // role/capability — same gate the export path uses (MarketingAnalyticsAuthorization.
+        // CanExportPii) — never a client-supplied flag; there is no "unmask" query parameter here.
         var request = new PriceAudienceTableRequest(
-            audience, resolvedFrom, resolvedTo, storeIds, NormalizePage(page), NormalizePageSize(pageSize), sortBy, sortDescending);
+            audience, resolvedFrom, resolvedTo, storeIds, NormalizePage(page), NormalizePageSize(pageSize), sortBy, sortDescending,
+            MarketingAnalyticsAuthorization.CanExportPii(User));
         var result = await _service.GetAudienceTableAsync(tenantId.Value, request, ct);
         return Ok(result);
     }
@@ -132,8 +136,10 @@ public sealed class PriceSegmentsController : ControllerBase
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
+        // TASK-425: same server-derived masking gate as GetAudienceTable above — no client input.
         var request = new AllTimeCustomerTableRequest(
-            segment, storeIds, NormalizePage(page), NormalizePageSize(pageSize), sortBy, sortDescending);
+            segment, storeIds, NormalizePage(page), NormalizePageSize(pageSize), sortBy, sortDescending,
+            MarketingAnalyticsAuthorization.CanExportPii(User));
         var result = await _service.GetAllTimeCustomerTableAsync(tenantId.Value, request, ct);
         return Ok(result);
     }
@@ -202,9 +208,11 @@ public sealed class PriceSegmentsController : ControllerBase
         if (tenantId is null) return Forbid();
 
         var (resolvedFrom, resolvedTo) = ResolvePeriod(period, from, to);
+        // TASK-425: same server-derived masking gate as GetAudienceTable above — no client input.
         var request = new FrequencyAudienceTableRequest(
             audience, resolvedFrom, resolvedTo, storeIds, declineThresholdPercent, minSpend, maxSpend, priceSegment,
-            NormalizePage(page), NormalizePageSize(pageSize), sortBy, sortDescending);
+            NormalizePage(page), NormalizePageSize(pageSize), sortBy, sortDescending,
+            MarketingAnalyticsAuthorization.CanExportPii(User));
         var result = await _service.GetFrequencyAudienceTableAsync(tenantId.Value, request, ct);
         return Ok(result);
     }

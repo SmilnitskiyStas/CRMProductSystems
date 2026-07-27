@@ -576,6 +576,19 @@ public sealed class PriceSegmentsService : IPriceSegmentsService
     private static string StoresLabel(IReadOnlyList<Guid>? storeIds) =>
         storeIds is { Count: > 0 } ? string.Join(",", storeIds) : "all";
 
+    /// <summary>
+    /// TASK-425 (QA finding, TASK-424): the 3 paginated on-screen tables (comparison audience /
+    /// all-time customer / frequency audience) were returning <c>Phone</c> unmasked
+    /// unconditionally — masking previously existed only inside the 3 Excel export builders below.
+    /// This mirrors that same masking, applied by default to every GET-table row too, gated by the
+    /// SAME capability the export path already checks (<c>MarketingAnalyticsAuthorization.
+    /// CanExportPii</c>, resolved server-side by the controller and threaded through as
+    /// <c>CanViewUnmaskedPii</c> on the request — see that field's doc for why it can't be checked
+    /// here directly: Application has no reference to Infrastructure).
+    /// </summary>
+    private static string? MaskPhoneUnlessAuthorized(string? phone, bool canViewUnmaskedPii) =>
+        canViewUnmaskedPii ? phone : PiiMasking.MaskPhone(phone);
+
     private static decimal SharePercent(int numerator, int denominator) =>
         denominator <= 0 ? 0m : Math.Round(numerator / (decimal)denominator * 100m, 2);
 

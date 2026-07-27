@@ -876,3 +876,13 @@ Same PII posture as Фаза 1: phone masked by default (`PiiMasking.MaskPhone`,
 selects `Email` anywhere, so there is no email-masking surface to check here (unlike Фаза 1's
 export). Row cap 50 000, hardcoded server-side — export request DTOs carry no page/pageSize field
 at all.
+
+#### On-screen `phone` masking (all 3 GET tables — TASK-425 fix)
+`PriceAudienceTableDto`/`AllTimeCustomerTableDto`/`FrequencyAudienceTableDto` rows' `phone` field
+is masked by default (same `PiiMasking.MaskPhone`), full number only when the caller passes the
+SAME `MarketingAnalyticsAuthorization.CanExportPii` check the exports already use — resolved
+server-side by the controller, no client-facing parameter exists for this on any of the 3 GET
+endpoints (unlike exports, there is no request-body `unmaskPii` to neutralize). QA (TASK-424)
+found these 3 endpoints previously returned `phone` raw and unconditionally — masking existed only
+in the export builders — a real gap wherever `marketing_analytics.view` is granted without
+`marketing_analytics.export_pii` (ADR-020 capability split); fixed in TASK-425.

@@ -294,4 +294,150 @@ public sealed class PriceSegmentsServiceTests
             Arg.Any<CancellationToken>());
         await _activityLogs.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
+
+    // ── On-screen PII masking, GET tables (TASK-425) ─────────────────────────────────────────
+    // QA (TASK-424) found all 3 paginated GET-table endpoints returned Phone unmasked
+    // unconditionally — masking previously existed only inside the 3 Excel export builders
+    // above. These prove the fix: masked by default (no capability), full number only when the
+    // controller resolves CanViewUnmaskedPii=true (i.e. MarketingAnalyticsAuthorization.
+    // CanExportPii(User) was true) — same gate the export path already used.
+
+    private const string RawPhone = "+380671112233";
+
+    [Fact]
+    public async Task GetAudienceTableAsync_masks_phone_on_screen_by_default()
+    {
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 30);
+        _repo.GetBoundariesAsync(TenantId, null, Arg.Any<CancellationToken>()).Returns(Boundaries);
+        _repo.GetPriceAudienceTableAsync(
+                TenantId, null, from, to, Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Boundaries,
+                (int)PriceAudienceKey.Declining, 1, 20, null, false, Arg.Any<CancellationToken>())
+            .Returns(new List<PriceAudienceTableRowRaw>
+            {
+                new(Guid.NewGuid(), "Іван", RawPhone, 5, 1, 3m, 3m, 100m, 5000m,
+                    TotalCount: 1, WithPhoneCount: 1, AnalyzedCount: 1, AverageLtvOverall: 5000m),
+            });
+
+        var request = new PriceAudienceTableRequest(PriceAudienceKey.Declining, from, to, null, 1, 20, null, false);
+        var result = await _sut.GetAudienceTableAsync(TenantId, request);
+
+        var row = Assert.Single(result.Rows);
+        Assert.NotEqual(RawPhone, row.Phone);
+        Assert.Equal("+380 67 *** ** 33", row.Phone);
+    }
+
+    [Fact]
+    public async Task GetAudienceTableAsync_reveals_full_phone_when_caller_can_view_unmasked_pii()
+    {
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 30);
+        _repo.GetBoundariesAsync(TenantId, null, Arg.Any<CancellationToken>()).Returns(Boundaries);
+        _repo.GetPriceAudienceTableAsync(
+                TenantId, null, from, to, Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Boundaries,
+                (int)PriceAudienceKey.Declining, 1, 20, null, false, Arg.Any<CancellationToken>())
+            .Returns(new List<PriceAudienceTableRowRaw>
+            {
+                new(Guid.NewGuid(), "Іван", RawPhone, 5, 1, 3m, 3m, 100m, 5000m,
+                    TotalCount: 1, WithPhoneCount: 1, AnalyzedCount: 1, AverageLtvOverall: 5000m),
+            });
+
+        var request = new PriceAudienceTableRequest(
+            PriceAudienceKey.Declining, from, to, null, 1, 20, null, false, CanViewUnmaskedPii: true);
+        var result = await _sut.GetAudienceTableAsync(TenantId, request);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(RawPhone, row.Phone);
+    }
+
+    [Fact]
+    public async Task GetAllTimeCustomerTableAsync_masks_phone_on_screen_by_default()
+    {
+        _repo.GetBoundariesAsync(TenantId, null, Arg.Any<CancellationToken>()).Returns(Boundaries);
+        _repo.GetAllTimeCustomerTableAsync(
+                TenantId, null, Boundaries, (int?)null, 1, 20, null, false, Arg.Any<CancellationToken>())
+            .Returns(new List<AllTimeCustomerRowRaw>
+            {
+                new(Guid.NewGuid(), "Марія", RawPhone, 3, 4m, 250m, 10, 3000m, TotalCount: 1),
+            });
+
+        var request = new AllTimeCustomerTableRequest(null, null, 1, 20, null, false);
+        var result = await _sut.GetAllTimeCustomerTableAsync(TenantId, request);
+
+        var row = Assert.Single(result.Rows);
+        Assert.NotEqual(RawPhone, row.Phone);
+        Assert.Equal("+380 67 *** ** 33", row.Phone);
+    }
+
+    [Fact]
+    public async Task GetAllTimeCustomerTableAsync_reveals_full_phone_when_caller_can_view_unmasked_pii()
+    {
+        _repo.GetBoundariesAsync(TenantId, null, Arg.Any<CancellationToken>()).Returns(Boundaries);
+        _repo.GetAllTimeCustomerTableAsync(
+                TenantId, null, Boundaries, (int?)null, 1, 20, null, false, Arg.Any<CancellationToken>())
+            .Returns(new List<AllTimeCustomerRowRaw>
+            {
+                new(Guid.NewGuid(), "Марія", RawPhone, 3, 4m, 250m, 10, 3000m, TotalCount: 1),
+            });
+
+        var request = new AllTimeCustomerTableRequest(null, null, 1, 20, null, false, CanViewUnmaskedPii: true);
+        var result = await _sut.GetAllTimeCustomerTableAsync(TenantId, request);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(RawPhone, row.Phone);
+    }
+
+    [Fact]
+    public async Task GetFrequencyAudienceTableAsync_masks_phone_on_screen_by_default()
+    {
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 30);
+        _repo.GetSettingsAsync(TenantId, Arg.Any<CancellationToken>()).Returns((PriceSegmentSettings?)null);
+        _repo.GetBoundariesAsync(TenantId, null, Arg.Any<CancellationToken>()).Returns(Boundaries);
+        _repo.GetFrequencyAudienceTableAsync(
+                TenantId, null, from, to, Arg.Any<DateOnly>(), Arg.Any<DateOnly>(),
+                30.0m, Boundaries, (int)FrequencyAudienceKey.Declining, true,
+                null, null, (int?)null, 1, 20, null, false, Arg.Any<CancellationToken>())
+            .Returns(new List<FrequencyAudienceTableRowRaw>
+            {
+                new(Guid.NewGuid(), "Петро", RawPhone, 10, 5, -5, -50m, 120m, 600m, 3000m,
+                    TotalCount: 1, WithPhoneCount: 1, UnionPopulationCount: 4,
+                    AverageLtvOverall: 3000m, AveragePreviousFrequencyOverall: 10m, AverageCurrentFrequencyOverall: 5m),
+            });
+
+        var request = new FrequencyAudienceTableRequest(
+            FrequencyAudienceKey.Declining, from, to, null, null, null, null, null, 1, 20, null, false);
+        var result = await _sut.GetFrequencyAudienceTableAsync(TenantId, request);
+
+        var row = Assert.Single(result.Rows);
+        Assert.NotEqual(RawPhone, row.Phone);
+        Assert.Equal("+380 67 *** ** 33", row.Phone);
+    }
+
+    [Fact]
+    public async Task GetFrequencyAudienceTableAsync_reveals_full_phone_when_caller_can_view_unmasked_pii()
+    {
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 30);
+        _repo.GetSettingsAsync(TenantId, Arg.Any<CancellationToken>()).Returns((PriceSegmentSettings?)null);
+        _repo.GetBoundariesAsync(TenantId, null, Arg.Any<CancellationToken>()).Returns(Boundaries);
+        _repo.GetFrequencyAudienceTableAsync(
+                TenantId, null, from, to, Arg.Any<DateOnly>(), Arg.Any<DateOnly>(),
+                30.0m, Boundaries, (int)FrequencyAudienceKey.Declining, true,
+                null, null, (int?)null, 1, 20, null, false, Arg.Any<CancellationToken>())
+            .Returns(new List<FrequencyAudienceTableRowRaw>
+            {
+                new(Guid.NewGuid(), "Петро", RawPhone, 10, 5, -5, -50m, 120m, 600m, 3000m,
+                    TotalCount: 1, WithPhoneCount: 1, UnionPopulationCount: 4,
+                    AverageLtvOverall: 3000m, AveragePreviousFrequencyOverall: 10m, AverageCurrentFrequencyOverall: 5m),
+            });
+
+        var request = new FrequencyAudienceTableRequest(
+            FrequencyAudienceKey.Declining, from, to, null, null, null, null, null, 1, 20, null, false,
+            CanViewUnmaskedPii: true);
+        var result = await _sut.GetFrequencyAudienceTableAsync(TenantId, request);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(RawPhone, row.Phone);
+    }
 }
