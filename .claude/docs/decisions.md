@@ -1,7 +1,7 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-26
+**Updated:** 2026-07-27
 
 ## ADR-023: Loyalty program & RFM marketing analytics — cross-tenant ConsumerAccount identity, TOTP-based live QR, independent module keys, RfmSegment naming
 Date: 2026-07-26
@@ -107,6 +107,53 @@ Consequences:
 Extends: reuses ADR-020's `TenantRoleCapabilities`/`RoleOrCapabilityRequirement` mechanism
 verbatim for `marketing_analytics.view`/`marketing_analytics.export_pii` (new "Маркетинг"
 capability group) — no new authorization primitive introduced for Фаза 1's own access control.
+
+**Addendum (TASK-419/420, 2026-07-27) — Фаза 2 price segments + frequency/reactivation.** Same
+plan (`deep-cooking-nygaard.md` §"Фази 2-4"), same module key (`marketing_analytics`, no new one),
+same `RfmSegment`-style naming discipline extended to `PriceSegmentKey`/`PriceAudienceKey`/
+`FrequencyAudienceKey`. Three decisions worth recording:
+
+1. **`PERCENTILE_CONT` (ordered-set aggregate), not `NTILE` (window function), for price-segment
+   boundaries — a different quantile primitive than Фаза 1, deliberately.** Фаза 1's R/F/M scoring
+   needs a per-customer **bucket assignment relative to the current query's own rows**
+   (`NTILE(5)` — "which fifth is this customer in, among these rows, right now") and is always
+   recomputed fresh; the assignment is never reused as a standalone number. Фаза 2 needs the
+   opposite: an actual **₴ cutoff value** (P20/P40/.../P97) that must mean the same thing across
+   three separate call sites — the comparison table, the all-time table, and the frequency tab's
+   `priceSegment` filter all need to agree on what "Tier3" *is* in currency terms, not just which
+   rows fall in it this query. `NTILE` has no notion of an interpolated cutoff that survives outside
+   the query that produced it; `PERCENTILE_CONT(0.20/.../0.97) WITHIN GROUP (ORDER BY
+   median_check)` computes exactly that reusable boundary, which `PriceSegmentCatalog.RangeLabelUa`
+   renders as `"120–190 ₴"`. Implementation trap, not a design point: every `PERCENTILE_CONT` call
+   must be cast `::numeric` — Postgres always returns `double precision` from it regardless of the
+   input column's type, caught live when 7/10 of TASK-420's integration tests threw
+   `InvalidCastException` before the cast was added at all 15 call sites (task log 420).
+
+2. **Segment boundaries are computed all-time, never from the active comparison window.**
+   `PriceSegmentsRepository.GetBoundariesAsync` carries no date filter at all — one P20..P97 cutoff
+   set per tenant, shared by the 30/60/90-day comparison view, the all-time view, and the frequency
+   tab's segment filter alike. Not an arbitrary simplification: the competitor analysis
+   (`docs/uployal/PRICE_SEGMENTS_ANALYSIS.md` §8.3) directly observed the competitor's own
+   boundaries holding identical across every period it tested and concluded "це вказує на мережеві,
+   а не періодичні межі сегментації" — empirically confirmed competitor behavior, not a guess filled
+   in where the source was silent. Recomputing boundaries per-window would also make a customer's
+   tier label mean a different ₴ range depending only on which period filter happens to be active —
+   actively confusing for a label whose whole purpose is a stable, nameable price tier.
+
+3. **`Stable` (comparison mode) ships as a full first-class `PriceAudienceKey` member from day
+   one — list, sort, paginate, export, and a real recommendation — not just the KPI number the
+   competitor limits it to.** The competitor computes and displays a `Стабільні` count but
+   deliberately gives it no card/list/export (analysis doc §7.4/§25.3 flags this as a functional gap,
+   not a design worth copying). Since `PriceAudienceKey`/`PriceSegmentCatalog`/the repository's
+   shared classification CASE ladder already treat all 4 audiences identically end-to-end, full
+   parity for `Stable` cost nothing beyond the 4th enum member and its recommendation copy.
+
+Consequences: (+) tier labels stay stable, comparable numbers across every view instead of shifting
+meaning per filter; (+) `Stable` gives marketers a genuine "protect this base" workflow the
+competitor's page structurally can't offer; (-) a brand-new tenant with little history gets
+boundaries computed over a small all-time sample — `PriceSegmentSettings.
+MinReceiptsForBoundaries` is persisted but not yet read by `GetBoundariesAsync`, flagged by
+security-reviewer (TASK-422) as an inert functional gap for a follow-up task, not a security one.
 
 ## ADR-022: Store-scoped user assignment & data visibility (`user_locations` + RLS)
 Date: 2026-07-19

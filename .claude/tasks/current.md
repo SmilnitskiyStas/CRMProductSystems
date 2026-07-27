@@ -3,6 +3,134 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-422 — Security: review of Фаза 2 (price segments + frequency/reactivation)
+**Status:** done — **verdict: CLEAR TO SHIP**, no blocker, no risk-level finding · **Agent:**
+security-reviewer · **Depends:** TASK-419..421 · **Next:** none blocking; optional follow-up below
+Log: `.claude/logs/tasks/422_2026-07-27_security-review-price-segments_security-reviewer.md`
+Read TASK-419/420/421's logs, then the code directly (didn't trust the logs' security claims).
+All 6 mandatory checklist items verdict **OK**: (1) raw-SQL parameterization in
+`PriceSegmentsRepository.cs` — traced `sortBy` end-to-end for all 3 paginated queries, confirmed it
+only ever selects a hardcoded literal column name through `PriceSegmentSortKeys`'s fixed allowlist
+switch, never reaches the SQL string itself; verified each mapped literal actually exists as a
+column in that query's CTE; every other filter is a genuine positional `SqlQueryRaw` parameter.
+(2) RLS on `price_segment_settings` — diffed the migration byte-for-byte against
+`loyalty_program_settings`'s own (`20260726132332_AddLoyaltyProgram.cs`): identical canonical triad,
+NULLIF-guarded fail-closed, no `consumer_self_access`. (3) PII in exports — all 3 new export
+builders route through the same `ExcelExportService.SetCellValue`/`SanitizeForSpreadsheet`
+formula-injection guard (TASK-414) as Фаза 1, phone masked by default via the same (moved, not
+forked) `PiiMasking.MaskPhone`, `UnmaskPii` re-derived server-side against
+`MarketingAnalyticsAuthorization.CanExportPii` regardless of what the client sends; Phase 2 never
+selects Email at all, so no email-masking gap exists to check here. (4) capability gates — confirmed
+`PriceSegmentsController` carries both `MarketingAnalyticsViewOrCapability` and
+`[RequireModule("marketing_analytics")]` at class level on every action;
+`PriceSegmentSettingsController`'s missing `[RequireModule]` matches the `LoyaltySettingsController`
+precedent exactly (enterprise_admin-gated settings controllers never carry one), not a gap.
+(5) threshold validation — `UpsertSettingsAsync` rejects `DefaultFrequencyDeclineThresholdPercent`
+outside 0-100 and negative `MinReceiptsForBoundaries` with a 400 before touching the repository.
+(6) `PERCENTILE_CONT`/`::numeric` — all 15 call sites (grepped, matches TASK-420's own count) wrapped
+consistently, no stray unfixed occurrence; Фаза 1 doesn't use `PERCENTILE_CONT` at all so no
+cross-file drift risk. **Also checked beyond the list:** DI lifetimes all correctly `AddScoped`;
+`PriceSegmentAdvisor`'s tenant-filter-free `IntegrationConfigs` lookup is a byte-for-byte copy of the
+already-shipped `MarketingAdvisor` pattern, not a new risk; page-size ceiling is actually enforced by
+`PriceSegmentsService.NormalizePaging`'s `MaxPageSize=200` (the controller's own uncapped
+`NormalizePageSize` is redundant but harmless since the service re-clamps); export requests have no
+client-supplied page size at all (hardcoded 50k cap); out-of-range enum ordinals just match zero SQL
+rows, not an injection vector or a crash; store-filter arrays are always ANDed with the JWT-sourced
+`TenantId`, so a cross-tenant store ID can only narrow, never leak. **Non-security note for a future
+task:** `PriceSegmentSettings.MinReceiptsForBoundaries` is validated/persisted/returned but never
+actually read by `GetBoundariesAsync` or any other query — currently inert, a functional gap not a
+security one. Did not re-run the test suite (read-only code review; TASK-420's own log already
+reports 1180/1180 green for these exact paths). No code changed.
+
+## TASK-421 — Frontend: price segments + frequency/reactivation UI (Фаза 2)
+**Status:** done — `tsc`/`build` clean, live-verified end-to-end in browser, no blocker ·
+**Agent:** frontend-developer · **Depends:** TASK-420 (API contract) · **Next:** security-reviewer
+(raw-SQL/PII gate already scheduled against TASK-420, unaffected by this frontend-only task),
+qa-tester (regression pass), documentation-writer (glossary/api-contracts/ADR for Фаза 2)
+Log: `.claude/logs/tasks/421_2026-07-27_price-segments-frontend_frontend-developer.md`
+Continuation of a session that hit its usage limit mid-task (not a code error) — verified the
+prior agent's partial work first (types/api/hooks + `ModeTabs`/`ComparisonFilterBar`/
+`PriceSegmentChart`/`PriceAudienceCards`/`PriceAudienceTable`/`ExportButtons` + bonus
+`RecommendationBlock`/`TableControls`, all correct, matched the TASK-420 contract exactly, genuine
+server-side pagination confirmed) before building the rest: the 3-tab page.tsx, `AllTimeView/`
+(5 components) and `FrequencyView/` (3 components), Sidebar nav item, and the full
+`Dashboard.priceSegments.*` i18n namespace in `en.json`/`uk.json` (confirmed neither file had ANY
+key there yet, despite the prior agent's components already referencing it). Fixed 1 real
+pre-existing type bug (`buildStoreQs`'s `extra` param missing `boolean`) caught by `tsc --noEmit`
+before writing anything new. Resolved (didn't fix) the brief's flagged concern about
+`ExportButtons.tsx`'s inline styles — direct comparison against Фаза 1 RFM's sibling components
+confirmed inline-style-with-hex-colors is this feature area's actual, consistent convention
+(`Btn.tsx` itself is inline-styled), not a deviation. Live-verified on the dev stack against real
+seeded customer data: all 3 modes, atomic recalculation on period change (including an
+already-open audience table refetching to a different customer), the 3-way
+analyzed/current-buyers/previous-buyers denominator distinction, All-time's clickable
+distribution-chart tier → filtered table + recommendation, and Frequency's Sleeping audience
+(filter labels flip to previous-period wording, no decline-threshold field, `Тип. чек` renders
+"—") vs Declining (decline-threshold field appears, labels stay current-period, empty state
+handled cleanly). Found and fixed an unrelated environment issue while starting the dev servers:
+an orphaned `node.exe` from a previous session held port 3000, forcing `frontend-dev` onto
+58083 and breaking CORS (backend only allows `localhost:3000`) — killed it, restarted clean.
+Not committed.
+
+## TASK-420 — Backend: price segments + frequency/reactivation engine (Фаза 2)
+**Status:** done — builds clean, full suite green (1180/1180, was 1109), no blocker · **Agent:**
+backend-developer · **Depends:** TASK-419 (PriceSegmentSettings schema) · **Next:**
+frontend-developer (full API contract in the task log below), security-reviewer (raw-SQL
+parametrization + PII export gate, same pattern as TASK-412 covered for Фаза 1),
+documentation-writer (glossary/api-contracts/ADR)
+Log: `.claude/logs/tasks/420_2026-07-27_price-segments-backend_backend-developer.md` (full API
+contract for the frontend agent lives there). Plan:
+`C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Фази 2-4" + scratchpad design doc.
+Continuation of a session that hit its usage limit mid-task (not a code error) — verified the
+prior agent's partial work (classifiers/DTOs/catalog/filter-hash, all correct, unchanged) before
+building the rest: `Dtos/FrequencyDtos.cs`, `PriceSegmentRecommendationTemplates.cs`,
+`PriceSegmentSortKeys.cs`, `IPriceSegmentsRepository.cs`/`PriceSegmentsRepository.cs` (2nd
+raw-SQL repository in the codebase — per-customer period metrics, all-time boundaries/KPI/
+monthly-trend/distribution, network unit-price, LTV map, and 3 real server-side paginated/sorted
+tables with `COUNT(*) OVER()`), `IPriceSegmentsService.cs`/`PriceSegmentsService.cs`,
+`Infrastructure/AI/PriceSegmentAdvisor/` (5th Claude advisor, same key-resolution pattern as
+`MarketingAdvisor`), `PriceSegmentsController.cs` + `PriceSegmentSettingsController.cs` (reuses
+`AppPolicies.MarketingAnalyticsViewOrCapability` + `[RequireModule("marketing_analytics")]` +
+`MarketingAnalyticsAuthorization.CanExportPii` literally, no new module key/capability), DI in
+both `Application`/`Infrastructure` `DependencyInjection.cs`. **Bug found only via live-Postgres
+verification (would have shipped silently broken otherwise):** `PERCENTILE_CONT` always returns
+`double precision` in Postgres regardless of input column type — every one of 15 call sites
+originally mapped straight to a C# `decimal` and threw `InvalidCastException` at runtime; fixed
+with an explicit `::numeric` cast at each site, then re-verified live (10/10 integration tests
+green, including the two riskiest paths: nullable `int?`/`decimal?` SQL parameters via a new
+`NullableParam`/`DBNull.Value` helper, and the Sleeping-audience previous-period filter
+re-orientation). Every SQL-computed audience/segment classification is cross-checked in tests
+against the pure C# classifier for the same inputs. 71 new tests (61 unit + 10 live-Postgres
+integration), `dotnet build` 0 warnings/0 errors. Domain entities/DbContext/migrations untouched
+beyond reading (confirmed `PosTransaction.StoreId` → `"LocationId"` column at
+`AppDbContext.cs:1065`); `Features/Loyalty/`/`Features/ConsumerAuth/`/frontend/mobile untouched.
+Not committed (repo convention — main session/user commits).
+
+## TASK-419 — DB: PriceSegmentSettings schema (Фаза 2 price segments + frequency/reactivation)
+**Status:** done — created, migrated, live-verified against the real non-superuser app role, no
+blocker · **Agent:** database-engineer · **Depends:** none (Task #1 of Фаза 2) · **Next:**
+backend-developer (TASK-420)
+Log: `.claude/logs/tasks/419_2026-07-27_price-segment-settings-schema_database-engineer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Фази 2-4". One new tenant-settings
+table, `price_segment_settings` — direct analogy to `LoyaltyProgramSettings` (TASK-404); per the
+brief, segments/audiences/customer metrics stay computed live on every request, nothing else
+persisted. `PriceSegmentSettings` entity (`Id`/`TenantId`, `DefaultFrequencyDeclineThresholdPercent`
+default 30.0m, nullable `MinReceiptsForBoundaries`, `UpdatedAt`) + `AppDbContext` DbSet/fluent
+config + migration `AddPriceSegmentSettings` (20260726211248) — canonical RLS triad only
+(`tenant_isolation` NULLIF-guarded + `provider_bypass` `IN ('provider','provider_admin')` +
+`worker_bypass`), deliberately **no** `consumer_self_access` — staff-only, same posture as
+`loyalty_program_settings`. Applied via the app's own non-superuser `shelfguard_app_dev` connection
+first (not the `crm` superuser escape hatch) — applied cleanly, confirmed table ownership
+immediately after; TASK-411's grant-ownership incident did not recur. Live-verified against the
+real app role: positive path (insert/select/update, rolled back), fail-closed with no
+`app.tenant_id` set, cross-tenant isolation, provider/provider_admin/worker bypass, and the policy/
+flag byte-check (`relrowsecurity`/`relforcerowsecurity` both `t`, 3 policies, correct `qual` text).
+No new xUnit file — already covered by the 2 existing dynamic RLS audits in
+`RlsCrossTenantIntegrationTests.cs` that enumerate every FORCE-RLS table at query time. `dotnet
+build` 0 err (1 pre-existing unrelated warning), `dotnet test` **1109/1109 green**, unchanged from
+TASK-417's baseline. Domain entities/migration only — no controller/service code (that's TASK-420).
+Not committed.
+
 ## TASK-417 — Backend: fix CRITICAL RLS break in consumer loyalty join flow
 **Status:** done — fixed and verified live against real Postgres RLS, no blocker · **Agent:**
 backend-developer · **Depends:** TASK-416 (QA repro + root cause) · **Next:** security-reviewer

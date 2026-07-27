@@ -1,7 +1,7 @@
 # Database Schema
 
 **Owner:** database-engineer
-**Updated:** 2026-07-26
+**Updated:** 2026-07-27
 **Source:** v1-spec.md section 4
 
 ## Multi-Tenancy
@@ -553,6 +553,30 @@ green are **not** sufficient evidence that the app's real connection can use the
 `ALTER TABLE ... OWNER TO` itself requires the executing role to be a superuser or the table's
 *current* owner, so this class of fix must always run via a superuser connection too, never the
 automatic boot-time migration path.
+
+## TASK-419 — Price segment settings schema (`AddPriceSegmentSettings`, 2026-07-27)
+
+One new tenant-settings table (Фаза 2 of the `docs/uployal/` plan, `deep-cooking-nygaard.md`) —
+direct analogy to `loyalty_program_settings` (TASK-404). Segments/audiences/customer metrics
+themselves are **not** persisted anywhere — computed live from `pos_transactions`/`customers` on
+every request (`PriceSegmentsRepository.cs`, raw SQL, `PERCENTILE_CONT`-based — see `decisions.md`
+ADR-023 addendum for why not `NTILE`). This is the only new table for all of Фаза 2.
+
+| Table | RLS | Purpose | Key fields |
+|---|---|---|---|
+| `price_segment_settings` | canonical triad only (no `consumer_self_access`) | One row per tenant — Фаза 2 configuration | `TenantId` (unique), `DefaultFrequencyDeclineThresholdPercent` (default 30.0), `MinReceiptsForBoundaries` (nullable int — **validated/persisted/returned but not yet read** by `GetBoundariesAsync`; flagged by security-reviewer TASK-422 as an inert functional gap, not a security one), `UpdatedAt` |
+
+Staff-only, same posture as `loyalty_program_settings` — no consumer-facing read path exists to
+this table at all (unlike `loyalty_memberships`/`loyalty_ledger_entries`), so it carries only the
+canonical fail-closed `tenant_isolation` (NULLIF-guarded) / `provider_bypass`
+(`IN ('provider','provider_admin')`) / `worker_bypass` triad, no identity-based policy.
+
+Applied via the app's own non-superuser `shelfguard_app_dev` connection first, not the `crm`
+superuser escape hatch — a brand-new, empty FK column doesn't trigger the FK-validation-under-RLS
+false-positive documented under TASK-404/411 above, so it applied cleanly with correct table
+ownership from the start; no `FixLoyaltyTableGrants`-style companion migration was needed here.
+Live-verified against the real app role (positive path, fail-closed, cross-tenant isolation, bypass
+roles, policy/flag byte-check) — see task log for detail.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

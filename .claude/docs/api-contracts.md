@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-07-26
+**Updated:** 2026-07-27
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -753,3 +753,126 @@ review). Row cap 50 000 with a visible truncation banner row. Every cell is pass
 formula-injection sanitization (`ExcelExportService`, TASK-414 fix) — a leading `=`/`+`/`-`/`@`
 in any string value (e.g. a self-registered consumer's `FullName` flowing into a `Customer.Name`
 export) is neutralized via Excel's own quote-prefix convention, not just string-escaped.
+
+---
+
+### Price Segments + Frequency/Reactivation (`/api/marketing-analytics/price-segments`, Фаза 2 — TASK-420)
+
+Base route for every path below: `api/marketing-analytics/price-segments`. Same gate as the RFM
+dashboard above — `[Authorize(Policy = MarketingAnalyticsViewOrCapability)]` +
+`[RequireModule("marketing_analytics")]` at class level, same module key (not a new one). All
+responses camelCase. Three independent modes on one controller: **comparison** (default),
+**all-time** (no period param — a genuinely separate mode, design doc §10), **frequency** (no
+all-time mode — needs two comparable windows by definition).
+
+#### Shared period resolution (comparison + frequency GETs, and their `/explain` siblings)
+```
+period?: "30" | "60" | "90" | anything-else   (default "30" — competitor's own confirmed default)
+from?: "YYYY-MM-DD"
+to?: "YYYY-MM-DD"                 -- from+to together always override period
+storeIds?: string[]               -- repeated param, omitted/empty = all stores
+```
+Previous period = same length, immediately preceding.
+
+#### Enums on the wire — strings, exact spelling
+`PriceSegmentKey`: `"Tier1".."Tier7"` (1=lowest spend .. 7=open-ended top tier; ₴ range label
+computed dynamically per tenant, never hardcoded). `PriceAudienceKey` (comparison mode):
+`"RealGrowth" | "PriceGrowth" | "Declining" | "Stable"`. `FrequencyAudienceKey`:
+`"Sleeping" | "Declining" | "Growing" | "Other"`.
+
+#### Comparison mode
+```
+GET  .../overview?period=&from=&to=&storeIds=                            -> PriceSegmentsOverviewDto
+GET  .../audiences/{audience}?...&page=&pageSize=&sortBy=&sortDescending= -> PriceAudienceTableDto
+POST .../audiences/{audience}/explain?...                                 -> ExplainPriceSegmentResultDto | 503
+POST .../exports/audience   Body: ExportPriceAudienceRequest             -> .xlsx
+```
+`sortBy`: `name|segment|items|check|ltv` — an unrecognized value silently falls back to a hardcoded
+default (never a 400; allowlisted in `PriceSegmentSortKeys`, never reaches SQL text).
+
+`PriceSegmentsOverviewDto`:
+```ts
+{
+  periodFrom, periodTo, previousPeriodFrom, previousPeriodTo: string;   // "YYYY-MM-DD"
+  analyzedCount: number;             // comparison cohort = bought BOTH windows
+  currentPeriodBuyerCount, previousPeriodBuyerCount: number;  // each window's own active-buyer count
+  raisedCount, declinedCount, stableCount: number;            // sum to analyzedCount
+  priceIndexPercent: number;
+  distribution: { segment, rangeLabelUa, currentCount, previousCount }[];  // always 7
+  audiences: { audience, labelUa, customerCount, sharePercentOfAnalyzed, averageLtv }[];  // always 4
+  filtersHash: string; calculatedAt: string;
+}
+```
+`analyzedCount`/`currentPeriodBuyerCount`/`previousPeriodBuyerCount` are THREE different
+denominators — never conflate (the competitor's own UI blurs exactly this, analysis doc §6.2/§25.1).
+
+`PriceAudienceTableDto`: `totalCount`, `withPhoneCount`, `rows: [{customerId, name, phone,
+previousSegment/currentSegment (+ …LabelUa each), itemsPerReceiptPrevious/Current,
+typicalCheckCurrent, ltv}]`, `page/pageSize/totalPages`, `sortBy/sortDescending` (echoes the
+normalized value), `recommendation: {triggerUa, actionUa, offerUa, cautionUa}`.
+
+#### All-time mode (no period param at all)
+```
+GET  .../all-time?selectedSegment=Tier1..7&storeIds=                     -> PriceSegmentsAllTimeOverviewDto
+GET  .../all-time/customers?segment=&storeIds=&page=&pageSize=&sortBy=&sortDescending= -> AllTimeCustomerTableDto
+POST .../all-time/segments/{segment}/explain?storeIds=                   -> ExplainPriceSegmentResultDto | 503
+POST .../exports/all-time   Body: ExportAllTimeRequest                    -> .xlsx
+```
+`sortBy`: `name|segment|items|check|purchases|ltv`.
+
+`PriceSegmentsAllTimeOverviewDto`: `customersInBase`, `networkAverageCheck` (arithmetic mean —
+**not** the median typical check), `purchasesTotal`, `turnoverTotal`,
+`monthlyTrend: [{year, month, medianCheck, itemsPerReceipt}]`,
+`insights: {yoyPercent, last3MonthsTrendPercent, belowPeakPercent, historicalPeakMedianCheck,
+itemsPerReceiptChangePercent}` (all nullable — not enough history yet),
+`distribution: [{segment, rangeLabelUa, customerCount, averageLtv}]` (always 7), `selectedSegment`,
+`recommendation` (**null until a segment is selected** — mirrors the competitor's own "Оберіть
+сегмент нижче" prompt, not a missing-data bug).
+
+`AllTimeCustomerTableDto` — same page/sort envelope as the comparison table; rows carry
+`purchaseCount` instead of before/after segment; no `recommendation` slot (table-level, not
+row-level).
+
+#### Frequency mode (`period=30|60|90`, no all-time)
+```
+GET  .../frequency/overview?...&declineThresholdPercent=                 -> FrequencyOverviewDto
+GET  .../frequency/audiences/{audience}?...&minSpend=&maxSpend=&priceSegment=Tier1..7&declineThresholdPercent=&page=&pageSize=&sortBy=&sortDescending= -> FrequencyAudienceTableDto
+POST .../frequency/audiences/{audience}/explain?...                      -> ExplainPriceSegmentResultDto | 503
+POST .../exports/frequency-audience   Body: ExportFrequencyAudienceRequest -> .xlsx
+```
+`declineThresholdPercent` omitted → tenant's saved
+`PriceSegmentSettings.DefaultFrequencyDeclineThresholdPercent` (default 30%).
+
+`FrequencyOverviewDto`: `activeCurrentBuyerCount`, `activeBuyerCountChangePercent`,
+`averageFrequencyCurrent/Previous`, `unionPopulationCount` (current ∪ previous buyers — frequency's
+own denominator, distinct from comparison mode's `analyzedCount`), `atRiskCount`, **both**
+`atRiskPercentOfUnionPopulation` and `atRiskPercentOfActiveCurrentBuyers` (the competitor only ever
+shows the latter, ambiguously — analysis doc §17.6/§25.2), `averageSpendCurrentPeriod`, `audiences`
+(4: Sleeping/Declining/Growing/Other).
+
+`FrequencyAudienceTableDto` rows: `{customerId, name, phone, previousFrequency, currentFrequency,
+frequencyDeltaAbsolute, frequencyDeltaPercent (nullable — null when previousFrequency=0, render
+"—" never "∞"), typicalCheckCurrent (nullable — **always null for Sleeping**, render "—"),
+spendCurrentPeriod, ltv}`. **For `audience=Sleeping`, `minSpend`/`maxSpend`/`priceSegment` filter
+against the customer's PREVIOUS-period figures**, not current (current is always 0/null for
+Sleeping by definition — the competitor's equivalent filter silently breaks here instead, analysis
+doc §20.2) — only the filter re-orients, the displayed columns keep their stated meaning.
+
+#### Settings (`/api/settings/price-segments`)
+`[Authorize(Policy = AtLeastEnterpriseAdmin)]`, no `[RequireModule]` — same convention as
+`LoyaltySettingsController` (enterprise_admin-gated settings controllers never carry one).
+```
+GET/PUT api/settings/price-segments -> PriceSegmentSettingsDto { defaultFrequencyDeclineThresholdPercent,
+  minReceiptsForBoundaries, updatedAt }
+```
+GET returns proposed defaults (30%, `null`) before first save; `updatedAt` stays `null` until an
+actual save happens. `PUT` rejects `defaultFrequencyDeclineThresholdPercent` outside 0-100 and a
+negative `minReceiptsForBoundaries` with `400`.
+
+#### Exports — all 3 `POST`, JSON body, response is the raw `.xlsx` file
+Same PII posture as Фаза 1: phone masked by default (`PiiMasking.MaskPhone`, moved verbatim from
+`MarketingAnalyticsService`, not forked), `unmaskPii` re-derived server-side against
+`MarketingAnalyticsAuthorization.CanExportPii` regardless of what the client sends. Phase 2 never
+selects `Email` anywhere, so there is no email-masking surface to check here (unlike Фаза 1's
+export). Row cap 50 000, hardcoded server-side — export request DTOs carry no page/pageSize field
+at all.

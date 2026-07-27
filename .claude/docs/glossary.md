@@ -1,7 +1,7 @@
 # Glossary
 
 **Owner:** documentation-writer
-**Updated:** 2026-07-26
+**Updated:** 2026-07-27
 
 ## Business Terms
 
@@ -68,3 +68,46 @@
 **Loyalty membership** — `LoyaltyMembership`: a `ConsumerAccount`'s enrollment in one tenant's bonus program (balance, TOTP-backed rotating QR/barcode, status active/blocked). Tenant-scoped, standard RLS. One `ConsumerAccount` can hold many memberships, one per tenant it has joined.
 
 **Consumer account** — `ConsumerAccount`: the global, cross-tenant identity of an end customer (phone+password login) — completely separate from the tenant-scoped `Customer` (CRM record) and `User` (staff account). One `ConsumerAccount` JWT reads every `LoyaltyMembership` it holds across every tenant ("wallet of cards," no re-login per network). See `database-schema.md` for why this is the one table in the project with no RLS at all.
+
+## Price Segments & Frequency/Reactivation (Фаза 2)
+
+Source: `docs/uployal/PRICE_SEGMENTS_ANALYSIS.md` (competitor analysis); implemented in
+`Features/MarketingAnalytics/PriceSegments/` (TASK-419/420) — a second mode on the same
+`marketing_analytics` module key as RFM (Фаза 1), not a new module.
+
+**Медіанний чек / типовий чек (typical check)** — `MEDIAN(receipt_amount)` per customer, over a
+period or all-time. **Deliberately the median, not the mean** — this is the whole point: one
+outlier receipt must not alone push a normally-200₴ customer into a top tier. Computed via
+Postgres `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ...)`, always cast `::numeric` (Postgres
+returns `double precision` otherwise — see `decisions.md` ADR-023 addendum).
+
+**Ціновий сегмент / тір (price segment)** — `PriceSegmentKey.Tier1`..`Tier7`, a quantile tier
+(cutoffs at **P20/P40/P60/P80/P90/P97** of the network's typical-check distribution — 7 tiers from
+6 cutoffs, top tier open-ended). A customer's tier compares their own typical check against the
+**network's own live boundaries**, never a fixed ₴ figure — the human-readable range label
+(`"120–190 ₴"`) is computed dynamically per tenant (`PriceSegmentCatalog.RangeLabelUa`). Boundaries
+themselves are computed **all-time**, not from whatever comparison window is active — see
+`decisions.md` ADR-023 addendum for why.
+
+**Індекс цін (price index)** — network-wide change in average unit price between the current and
+previous comparison windows: `(avg_unit_price_current / avg_unit_price_previous - 1) * 100%`.
+Separates genuine buying-appetite growth from a receipt that only grew because of inflation.
+
+**"Ростуть по-справжньому" (RealGrowth) vs "Ростуть через ціни" (PriceGrowth)** — both are
+"segment rose" customers (`PriceAudienceKey`), split by whether `items_per_receipt` also rose.
+RealGrowth = segment up **and** more items per receipt (real appetite). PriceGrowth = segment up
+but same/fewer items (bigger check from price alone — loyalty not confirmed). `Declining` = segment
+fell. **`Stable`** (same segment both periods) is a full 4th `PriceAudienceKey` member with list/
+sort/export/recommendation parity to the other three — unlike the competitor, which shows a
+`Стабільні` KPI number but no card/list/export for it at all (analysis doc §7.4/§25.3).
+
+**Sleeping / declining / growing / stable (частотні аудиторії)** — `FrequencyAudienceKey`, over the
+**union** (not intersection) of current+previous period buyers:
+- **Sleeping (Зовсім сплять)** — bought previous period, zero purchases this period.
+- **Declining (Купують рідше)** — bought this period, but frequency fell by at least the tenant's
+  configured decline threshold (`PriceSegmentSettings.DefaultFrequencyDeclineThresholdPercent`,
+  default 30%).
+- **Growing (Частота зросла)** — current frequency > previous (includes brand-new buyers with
+  previous = 0 — shown as `—` percent change, never "∞").
+- **Other / stable (Інші / стабільні)** — everything else in the union: unchanged frequency, or a
+  decline below threshold. No dedicated card in the competitor; fully listable here.
