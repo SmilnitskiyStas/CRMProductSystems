@@ -198,6 +198,7 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     moduleKey: "marketing_analytics",
     items: [
       { href: "/marketing-analytics", label: t("marketingAnalytics.dashboard"), icon: <Megaphone size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
+      { href: "/marketing-analytics/price-segments", label: t("marketingAnalytics.priceSegments"), icon: <TrendingUp size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
     ],
   },
   {

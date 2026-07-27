@@ -331,7 +331,8 @@
         },
         "marketingAnalytics": {
           "label": "Маркетингова аналітика",
-          "dashboard": "RFM-дашборд"
+          "dashboard": "RFM-дашборд",
+          "priceSegments": "Цінові сегменти"
         },
         "workforce": {
           "label": "Персонал",
@@ -1663,6 +1664,192 @@
         "productBuyersButton": "Покупці у файл",
         "pairBuyersButton": "Покупці обох → файл",
         "unmaskPiiLabel": "Показати повний номер телефону"
+      }
+    },
+    "priceSegments": {
+      "page": {
+        "title": "Цінові сегменти та частота",
+        "subtitle": "Поведінка покупців за сумою чека та частотою покупок",
+        "historicalDataBanner": "Аналітика враховує лише продажі, прив'язані до клієнта (через програму лояльності). Історичні продажі на касі до впровадження цього зв'язку в аналітику не потрапляють.",
+        "moduleGate": {
+          "title": "Модуль «Маркетингова аналітика» не активовано",
+          "body": "Зверніться до адміністратора платформи, щоб увімкнути модуль «Маркетингова аналітика»."
+        },
+        "comparisonSection": "Суми покупок",
+        "frequencySection": "Частота та реактивація",
+        "allTimeSection": "Весь час",
+        "noData": "Немає даних",
+        "kpi": {
+          "analyzed": "Проаналізовано",
+          "raised": "Піднялись у сумах",
+          "declined": "Опустились у сумах",
+          "stable": "Стабільні",
+          "priceIndex": "Індекс цін",
+          "denominatorsFootnote": "«Проаналізовано» — лише клієнти, що купували в ОБОХ періодах. Це не те саме, що активні покупці поточного періоду ({current}) чи попереднього періоду ({previous}) — див. графік нижче."
+        }
+      },
+      "modeTabs": {
+        "comparison": "Суми покупок",
+        "frequency": "Частота та реактивація",
+        "allTime": "Весь час"
+      },
+      "filterBar": {
+        "periodLabel": "Період",
+        "preset": {
+          "30": "30 дн.",
+          "60": "60 дн.",
+          "90": "90 дн.",
+          "custom": "Свій період"
+        },
+        "fromLabel": "Від",
+        "toLabel": "До",
+        "storesLabel": "Заклади",
+        "allStores": "Усі заклади",
+        "storesCount": "{count} закладів",
+        "storesPopoverTitle": "Оберіть заклади",
+        "selectAllStores": "Усі заклади",
+        "doneButton": "Готово",
+        "refreshButton": "Оновити"
+      },
+      "chart": {
+        "title": "Розподіл клієнтів за ціновими сегментами",
+        "currentSeries": "Поточний період",
+        "previousSeries": "Попередній період"
+      },
+      "audienceCards": {
+        "ltvLabel": "Сер. LTV",
+        "percentBasisHint": "Відсоток рахується від «Проаналізовано» (клієнти, що купували в обох періодах)."
+      },
+      "priceAudienceTable": {
+        "loading": "Завантаження…",
+        "empty": "Немає клієнтів у цій аудиторії за обраний період і заклади.",
+        "totalCount": "{count} клієнтів",
+        "withPhoneCount": "{count} з телефоном",
+        "headerName": "Клієнт",
+        "headerPhone": "Телефон",
+        "headerSegment": "Сегмент: було → стало",
+        "headerItems": "Товарів/чек",
+        "headerCheck": "Тип. чек, ₴",
+        "headerLtv": "LTV, ₴"
+      },
+      "table": {
+        "prev": "Назад",
+        "next": "Вперед"
+      },
+      "export": {
+        "successToast": "Файл готовий — перевірте завантаження",
+        "errorToast": "Помилка експорту: {message}",
+        "downloading": "Завантаження…",
+        "exportButton": "Вивантажити Excel",
+        "unmaskPiiLabel": "Показати повний номер телефону"
+      },
+      "recommendation": {
+        "triggerLabel": "Тригер — чому зараз",
+        "actionLabel": "Дія · канал · час",
+        "offerLabel": "Оффер",
+        "cautionLabel": "Застереження",
+        "explainButton": "Пояснити детальніше",
+        "explainLoading": "Аналізуємо…",
+        "aiBadge": "AI-пояснення",
+        "explainUnavailable": "AI-пояснення недоступне — для цього робочого простору не налаштовано ключ Claude API.",
+        "explainError": "Не вдалося згенерувати пояснення. Спробуйте пізніше."
+      },
+      "allTime": {
+        "kpi": {
+          "customersInBase": "Клієнтів у базі",
+          "networkAverageCheck": "Сер. чек по мережі",
+          "purchasesTotal": "Покупок усього",
+          "turnoverTotal": "Оборот",
+          "yoy": "Рік до року",
+          "last3Months": "Останні 3 місяці",
+          "itemsPerReceiptChange": "Товарів у чеку",
+          "belowPeak": "Нижче піку ({peak} ₴)",
+          "noInsightsYet": "Ще недостатньо історії для автоматичних інсайтів."
+        },
+        "trendChart": {
+          "title": "Медіанний чек по місяцях",
+          "subtitle": "І чи беруть клієнти більше товарів у чеку",
+          "empty": "Ще немає достатньо даних для місячного тренду.",
+          "medianCheckSeries": "Медіанний чек",
+          "itemsPerReceiptSeries": "Товарів/чек",
+          "months": {
+            "jan": "Січ",
+            "feb": "Лют",
+            "mar": "Бер",
+            "apr": "Кві",
+            "may": "Тра",
+            "jun": "Чер",
+            "jul": "Лип",
+            "aug": "Сер",
+            "sep": "Вер",
+            "oct": "Жов",
+            "nov": "Лис",
+            "dec": "Гру"
+          }
+        },
+        "distributionChart": {
+          "title": "Розподіл усієї бази за ціновими сегментами",
+          "subtitle": "Натисніть стовпець або кнопку, щоб відфільтрувати таблицю нижче",
+          "customersSeries": "Клієнтів",
+          "ltvSeries": "Сер. LTV",
+          "allSegmentsButton": "Всі"
+        },
+        "recommendation": {
+          "title": "Рекомендація для сегмента",
+          "selectSegmentHint": "Оберіть ціновий сегмент нижче — рекомендація підлаштується під нього."
+        }
+      },
+      "allTimeTable": {
+        "title": "Клієнти",
+        "loading": "Завантаження…",
+        "empty": "Немає клієнтів за обраними фільтрами.",
+        "totalCount": "{count} клієнтів",
+        "headerName": "Клієнт",
+        "headerPhone": "Телефон",
+        "headerSegment": "Ціновий сегмент",
+        "headerItems": "Товарів/чек",
+        "headerCheck": "Тип. чек, ₴",
+        "headerPurchases": "Покупок",
+        "headerLtv": "LTV, ₴"
+      },
+      "frequency": {
+        "kpi": {
+          "activeBuyers": "Активних покупців",
+          "activeBuyersChangeSub": "{sign}{percent}% до попереднього періоду",
+          "averageFrequency": "Середня частота",
+          "averageFrequencyPreviousSub": "Було {value}",
+          "atRisk": "Під ризиком",
+          "atRiskBothDenominatorsSub": "{unionPercent}% від об'єднаної бази · {activePercent}% від активних поточних покупців",
+          "averageSpend": "Сер. витрати за період",
+          "unionPopulationSub": "з {count} клієнтів (обидва періоди разом)"
+        },
+        "filter": {
+          "ltvLabel": "Сер. LTV",
+          "declineThresholdLabel": "Падіння частоти, % і більше",
+          "declineThresholdPlaceholder": "30",
+          "minSpendLabelCurrent": "Витрати за поточний період, від ₴",
+          "minSpendLabelPrevious": "Витрати за попередній період, від ₴",
+          "maxSpendLabelCurrent": "Витрати за поточний період, до ₴",
+          "maxSpendLabelPrevious": "Витрати за попередній період, до ₴",
+          "priceSegmentLabelCurrent": "Ціновий сегмент (поточний)",
+          "priceSegmentLabelPrevious": "Ціновий сегмент (попередній)",
+          "allSegmentsOption": "Всі сегменти"
+        }
+      },
+      "frequencyTable": {
+        "loading": "Завантаження…",
+        "empty": "Немає клієнтів у цій аудиторії за обраний період і заклади.",
+        "totalCount": "{count} клієнтів",
+        "withPhoneCount": "{count} з телефоном",
+        "headerName": "Клієнт",
+        "headerPhone": "Телефон",
+        "headerPrevious": "Покупок було",
+        "headerCurrent": "Покупок стало",
+        "headerDelta": "Зміна, шт",
+        "headerDeltaPercent": "Зміна, %",
+        "headerCheck": "Тип. чек, ₴",
+        "headerSpend": "Витрати, ₴",
+        "headerLtv": "LTV, ₴"
       }
     },
     "dashboard": {
