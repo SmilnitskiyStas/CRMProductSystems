@@ -159,6 +159,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<LoyaltyMembership> LoyaltyMemberships => Set<LoyaltyMembership>();
     public DbSet<LoyaltyLedgerEntry> LoyaltyLedgerEntries => Set<LoyaltyLedgerEntry>();
     public DbSet<LoyaltyProgramSettings> LoyaltyProgramSettings => Set<LoyaltyProgramSettings>();
+    public DbSet<PriceSegmentSettings> PriceSegmentSettings => Set<PriceSegmentSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -2160,6 +2161,25 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(s => s.TenantId)
              .IsUnique()
              .HasDatabaseName("uq_loyalty_program_settings_tenant");
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── PriceSegmentSettings (Marketing Analytics Фаза 2, TASK-419) ───────
+        // Staff-only tenant configuration, same shape as LoyaltyProgramSettings above —
+        // canonical RLS triad only, no consumer_self_access (no consumer access path to
+        // this table at all, unlike loyalty_memberships/loyalty_ledger_entries).
+        builder.Entity<PriceSegmentSettings>(e =>
+        {
+            e.ToTable("price_segment_settings");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.TenantId).IsRequired();
+            e.Property(s => s.DefaultFrequencyDeclineThresholdPercent).HasColumnType("decimal(5,2)").HasDefaultValue(30.0m);
+            e.Property(s => s.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(s => s.TenantId)
+             .IsUnique()
+             .HasDatabaseName("uq_price_segment_settings_tenant");
             e.HasOne(s => s.Tenant).WithMany()
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         });

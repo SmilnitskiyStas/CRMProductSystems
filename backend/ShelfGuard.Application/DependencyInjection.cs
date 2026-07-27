@@ -131,6 +131,11 @@ services.AddScoped<IAuthService, AuthService>();
         // TASK-406 - Marketing analytics Фаза 1 (RFM engine + dashboard)
         services.AddScoped<Features.MarketingAnalytics.IMarketingAnalyticsService, Features.MarketingAnalytics.MarketingAnalyticsService>();
 
+        // TASK-420 - Marketing analytics Фаза 2 (price segments + frequency/reactivation)
+        services.AddScoped<
+            Features.MarketingAnalytics.PriceSegments.IPriceSegmentsService,
+            Features.MarketingAnalytics.PriceSegments.PriceSegmentsService>();
+
         return services;
     }
 }

@@ -251,6 +251,12 @@ public static class DependencyInjection
         services.AddSingleton<Application.Common.IExcelExportService,
             Export.ExcelExportService>();
 
+        // TASK-420 - Marketing analytics Фаза 2 (price segments + frequency/reactivation)
+        services.AddScoped<Application.Features.MarketingAnalytics.PriceSegments.IPriceSegmentsRepository,
+            Data.Repositories.PriceSegmentsRepository>();
+        services.AddScoped<Domain.Interfaces.IPriceSegmentAdvisor,
+            AI.PriceSegmentAdvisor.PriceSegmentAdvisor>();
+
         return services;
     }
 }

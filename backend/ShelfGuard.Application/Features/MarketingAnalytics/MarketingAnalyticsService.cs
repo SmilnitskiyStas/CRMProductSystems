@@ -321,8 +321,8 @@ public sealed class MarketingAnalyticsService : IMarketingAnalyticsService
             .Select(c => (IReadOnlyList<object?>)new object?[]
             {
                 c.Name,
-                unmaskPii ? c.Phone : MaskPhone(c.Phone),
-                unmaskPii ? c.Email : MaskEmail(c.Email),
+                unmaskPii ? c.Phone : PiiMasking.MaskPhone(c.Phone),
+                unmaskPii ? c.Email : PiiMasking.MaskEmail(c.Email),
                 c.TotalOrders,
                 c.TotalSpent,
             })
@@ -355,49 +355,8 @@ public sealed class MarketingAnalyticsService : IMarketingAnalyticsService
         await _activityLogs.SaveChangesAsync(ct);
     }
 
-    /// <summary>Keeps country code + operator prefix + last 2 digits visible, e.g.
-    /// "+380 XX *** ** 67" (brief's exact masking example) for a normalized 12-digit
-    /// "380XXXXXXXXX" number. Falls back to a generic last-4-visible mask for any other shape —
-    /// Customer.Phone (unlike ConsumerAccount.Phone) is free-form CRM input, not guaranteed to
-    /// be PhoneNormalizer-shaped.</summary>
-    private static string? MaskPhone(string? phone)
-    {
-        if (string.IsNullOrWhiteSpace(phone)) return phone;
-
-        var digits = new string(phone.Where(char.IsDigit).ToArray());
-        if (digits.Length == 12 && digits.StartsWith("380", StringComparison.Ordinal))
-        {
-            var operatorCode = digits.Substring(3, 2);
-            var lastTwo = digits.Substring(10, 2);
-            return $"+380 {operatorCode} *** ** {lastTwo}";
-        }
-
-        return phone.Length <= 4 ? phone : new string('*', phone.Length - 4) + phone[^4..];
-    }
-
-    /// <summary>
-    /// TASK-414 (security review TASK-412, finding C): email was previously written to every
-    /// export unconditionally, regardless of <c>unmaskPii</c>/capability — inconsistent with the
-    /// "PII masked by default" design this same method already applies to Phone. Keeps the first
-    /// character of the local part and the full domain visible (e.g. "i***@gmail.com" for
-    /// "ivan@gmail.com") — enough for a marketer to eyeball a pattern (which domain, roughly
-    /// whose address) without exposing the actual contactable address. Uses a fixed-length mask
-    /// (not proportional to local-part length like <see cref="MaskPhone"/>'s fallback branch) so
-    /// the mask itself doesn't leak how long the local part is. Falls back to masking everything
-    /// but the last 2 characters for any string with no '@' at all (shouldn't happen for a real
-    /// email column, but mirrors MaskPhone's own defensive fallback for non-conforming input).
-    /// </summary>
-    private static string? MaskEmail(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return email;
-
-        var at = email.IndexOf('@');
-        if (at <= 0)
-            return email.Length <= 2 ? email : new string('*', email.Length - 2) + email[^2..];
-
-        var domain = email[at..];
-        return $"{email[..1]}***{domain}";
-    }
+    // MaskPhone/MaskEmail moved to PiiMasking.cs (TASK-420, clean move — see that file's doc
+    // comment) so Фаза 2's PriceSegmentsService can share the exact same masking rules.
 
     private static decimal SharePercent(int numerator, int denominator) =>
         denominator <= 0 ? 0m : Math.Round(numerator / (decimal)denominator * 100m, 2);
