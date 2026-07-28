@@ -332,7 +332,8 @@
         "marketingAnalytics": {
           "label": "Marketing Analytics",
           "dashboard": "RFM Dashboard",
-          "priceSegments": "Price Segments"
+          "priceSegments": "Price Segments",
+          "audienceBuilder": "Audience Builder"
         },
         "workforce": {
           "label": "Staff",
@@ -1850,6 +1851,152 @@
         "headerCheck": "Typical check, ₴",
         "headerSpend": "Spend, ₴",
         "headerLtv": "LTV, ₴"
+      }
+    },
+    "audienceBuilder": {
+      "page": {
+        "title": "Audience Builder",
+        "subtitle": "Turn receipt history into a ready marketing audience — by product, category, or against a competitor",
+        "historicalDataBanner": "This tool only reflects sales linked to a customer (via the loyalty program). Historical POS sales made before that link existed are not included here.",
+        "moduleGate": {
+          "title": "Marketing Analytics module is not active",
+          "body": "Contact your platform administrator to enable the \"Marketing Analytics\" module."
+        },
+        "searchSection": "Search for consumers",
+        "emptyState": {
+          "title": "No conditions set yet",
+          "body": "Add a product, several products, or a category above, then click \"Build list\" to see who bought it, find a lookalike audience against a competitor, or export a receipt-level list for a giveaway."
+        },
+        "competitorEmptyHint": "Enter a competitor brand or product above to build this audience."
+      },
+      "periodBar": {
+        "fromLabel": "From",
+        "toLabel": "To",
+        "storesLabel": "Stores",
+        "allStores": "All stores",
+        "storesCount": "{count} stores",
+        "selectAllStores": "All stores",
+        "doneButton": "Done"
+      },
+      "termSearchBar": {
+        "modeText": "By name / barcode / ID",
+        "modeCategory": "By category",
+        "placeholderFirstText": "e.g. Doritos, a barcode, or an ID…",
+        "placeholderNextText": "another product…",
+        "placeholderCategory": "start typing a category name",
+        "searching": "Searching…",
+        "noCategoryResults": "No categories found",
+        "categoryItemCount": "{count} items"
+      },
+      "termChips": {
+        "removeLabel": "remove",
+        "categoryItemCount": "{count} items"
+      },
+      "combineModeToggle": {
+        "label": "Count as audience",
+        "any": "Any product",
+        "all": "All products"
+      },
+      "thresholdInputs": {
+        "minQuantityLabel": "Min. quantity, pcs (optional)",
+        "minAmountLabel": "Min. amount, ₴ (optional)"
+      },
+      "buildResetBar": {
+        "buildButton": "Build list",
+        "resetButton": "Reset",
+        "statusTermsSingle": "1 condition",
+        "statusTermsMulti": "{count} conditions · {mode}",
+        "statusModeAny": "any",
+        "statusModeAll": "all",
+        "statusMinQuantity": "from {value} pcs",
+        "statusMinAmount": "from {value} ₴",
+        "statusExcluded": "{count} excluded"
+      },
+      "resultTabs": {
+        "buyers": "Product buyers",
+        "competitor": "Competitor audience",
+        "matchedItems": "Matched items"
+      },
+      "buyersKpi": {
+        "participants": "Participants",
+        "itemsInSelection": "Items in selection",
+        "unitsPurchased": "Units purchased",
+        "totalSpend": "Total spend",
+        "itemsInSelectionHint": "See the full list with barcodes in the \"Matched items\" tab."
+      },
+      "buyersTable": {
+        "title": "Matched buyers",
+        "subtitle": "One row = one participant. The XLSX export is receipt-level (receipt number, for giveaways).",
+        "loading": "Loading…",
+        "empty": "No buyers match this audience for the selected period and stores.",
+        "totalCount": "{count} buyers",
+        "withPhoneCount": "{count} with phone",
+        "headerName": "Customer",
+        "headerPhone": "Phone",
+        "headerQty": "Purchased, pcs",
+        "headerReceipts": "Receipts",
+        "headerAmount": "Amount, ₴"
+      },
+      "exportReceipts": {
+        "button": "Export receipts (XLSX)",
+        "hint": "Receipt-level file: one row = one receipt, not one buyer.",
+        "successToast": "Export ready — check your downloads",
+        "errorToast": "Export failed: {message}",
+        "downloading": "Downloading…",
+        "unmaskPiiLabel": "Show full phone number"
+      },
+      "competitorTermInput": {
+        "label": "Competitor brand / product",
+        "placeholderFirst": "e.g. Lays, then Pringles…",
+        "placeholderNext": "another competitor…",
+        "removeLabel": "remove"
+      },
+      "horizonToggle": {
+        "inPeriod": "…in period",
+        "allTime": "…ever",
+        "inPeriodHint": "Customers who bought the competitor term(s) in the selected period, but did not buy your product in that SAME period — a new audience for the current campaign.",
+        "allTimeHint": "Customers who bought the competitor term(s) in the selected period, but have NEVER bought your product — a stricter, smaller audience with no prior contact with your brand."
+      },
+      "competitorKpi": {
+        "newAudience": "New audience",
+        "competitorItems": "Competitor items",
+        "unitsPurchased": "Units purchased",
+        "totalSpend": "Total spend"
+      },
+      "competitorTable": {
+        "title": "Competitor buyers",
+        "subtitle": "Buy the competitor, not your product — potential new buyers for your brand",
+        "loading": "Loading…",
+        "empty": "No buyers match this competitor audience for the selected period and stores.",
+        "totalCount": "{count} buyers",
+        "withPhoneCount": "{count} with phone",
+        "headerName": "Customer",
+        "headerPhone": "Phone",
+        "headerQty": "Purchased, pcs",
+        "headerReceipts": "Receipts",
+        "headerAmount": "Amount, ₴",
+        "exportButton": "Export XLSX",
+        "downloading": "Downloading…",
+        "unmaskPiiLabel": "Show full phone number",
+        "exportSuccessToast": "Export ready — check your downloads",
+        "exportErrorToast": "Export failed: {message}"
+      },
+      "matchedItemsTable": {
+        "title": "Matched items",
+        "hint": "Uncheck an item to exclude it from the audience.",
+        "selectedCount": "Selected {selected} of {total}",
+        "totalCount": "{count} items",
+        "loading": "Loading…",
+        "empty": "No items match the current search conditions.",
+        "headerName": "Item",
+        "headerBarcode": "Barcode",
+        "headerSold": "Sold, pcs",
+        "headerReceipts": "Receipts",
+        "headerBuyers": "Buyers"
+      },
+      "bulkSelectionActions": {
+        "selectAll": "Select all",
+        "deselectShown": "Deselect shown"
       }
     },
     "dashboard": {

@@ -41,6 +41,7 @@ import {
   MessageCircle,
   Landmark,
   Megaphone,
+  Target,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -199,6 +200,7 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     items: [
       { href: "/marketing-analytics", label: t("marketingAnalytics.dashboard"), icon: <Megaphone size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
       { href: "/marketing-analytics/price-segments", label: t("marketingAnalytics.priceSegments"), icon: <TrendingUp size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
+      { href: "/marketing-analytics/audience-builder", label: t("marketingAnalytics.audienceBuilder"), icon: <Target size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
     ],
   },
   {

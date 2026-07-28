@@ -332,7 +332,8 @@
         "marketingAnalytics": {
           "label": "Маркетингова аналітика",
           "dashboard": "RFM-дашборд",
-          "priceSegments": "Цінові сегменти"
+          "priceSegments": "Цінові сегменти",
+          "audienceBuilder": "Конструктор аудиторії"
         },
         "workforce": {
           "label": "Персонал",
@@ -1850,6 +1851,152 @@
         "headerCheck": "Тип. чек, ₴",
         "headerSpend": "Витрати, ₴",
         "headerLtv": "LTV, ₴"
+      }
+    },
+    "audienceBuilder": {
+      "page": {
+        "title": "Конструктор аудиторії",
+        "subtitle": "Перетворіть історію чеків на готову маркетингову аудиторію — за товаром, категорією або проти конкурента",
+        "historicalDataBanner": "Цей інструмент враховує лише продажі, прив'язані до клієнта (через програму лояльності). Історичні продажі на касі до впровадження цього зв'язку в аналітику не потрапляють.",
+        "moduleGate": {
+          "title": "Модуль «Маркетингова аналітика» не активовано",
+          "body": "Зверніться до адміністратора платформи, щоб увімкнути модуль «Маркетингова аналітика»."
+        },
+        "searchSection": "Пошук споживачів",
+        "emptyState": {
+          "title": "Умови для формування аудиторії ще не задано",
+          "body": "Додайте товар, кілька товарів або категорію вище, потім натисніть «Сформувати список» — побачите, хто його купував, знайдіть аудиторію конкурента або вивантажте список на рівні чеків для розіграшу."
+        },
+        "competitorEmptyHint": "Введіть бренд або товар конкурента вище, щоб сформувати цю аудиторію."
+      },
+      "periodBar": {
+        "fromLabel": "Від",
+        "toLabel": "До",
+        "storesLabel": "Заклади",
+        "allStores": "Усі заклади",
+        "storesCount": "{count} закладів",
+        "selectAllStores": "Усі заклади",
+        "doneButton": "Готово"
+      },
+      "termSearchBar": {
+        "modeText": "За назвою / штрихкодом / ID",
+        "modeCategory": "За категорією",
+        "placeholderFirstText": "напр. Doritos, штрихкод або ID…",
+        "placeholderNextText": "ще товар…",
+        "placeholderCategory": "почніть вводити назву категорії",
+        "searching": "Пошук…",
+        "noCategoryResults": "Категорій не знайдено",
+        "categoryItemCount": "{count} товарів"
+      },
+      "termChips": {
+        "removeLabel": "видалити",
+        "categoryItemCount": "{count} товарів"
+      },
+      "combineModeToggle": {
+        "label": "Кого вважати аудиторією",
+        "any": "Будь-який товар",
+        "all": "Усі товари"
+      },
+      "thresholdInputs": {
+        "minQuantityLabel": "Мін. кількість, шт (необов'язково)",
+        "minAmountLabel": "Мін. сума, ₴ (необов'язково)"
+      },
+      "buildResetBar": {
+        "buildButton": "Сформувати список",
+        "resetButton": "Скинути",
+        "statusTermsSingle": "1 умова",
+        "statusTermsMulti": "{count} умов · {mode}",
+        "statusModeAny": "будь-який",
+        "statusModeAll": "усі",
+        "statusMinQuantity": "від {value} шт",
+        "statusMinAmount": "від {value} ₴",
+        "statusExcluded": "вилучено {count} товар(ів)"
+      },
+      "resultTabs": {
+        "buyers": "Покупці товару",
+        "competitor": "Конкурентна аудиторія",
+        "matchedItems": "Знайдені товари"
+      },
+      "buyersKpi": {
+        "participants": "Учасників",
+        "itemsInSelection": "Товарів у вибірці",
+        "unitsPurchased": "Куплено одиниць",
+        "totalSpend": "Сума витрат",
+        "itemsInSelectionHint": "Повний список зі штрихкодами — у вкладці «Знайдені товари»."
+      },
+      "buyersTable": {
+        "title": "Знайдені покупці",
+        "subtitle": "Один рядок = учасник. Вивантаження XLSX — на рівні чеків (№ чека для розіграшу).",
+        "loading": "Завантаження…",
+        "empty": "Немає покупців у цій аудиторії за обраний період і заклади.",
+        "totalCount": "{count} покупців",
+        "withPhoneCount": "{count} з телефоном",
+        "headerName": "Клієнт",
+        "headerPhone": "Телефон",
+        "headerQty": "Куплено, шт",
+        "headerReceipts": "Чеків",
+        "headerAmount": "Сума, ₴"
+      },
+      "exportReceipts": {
+        "button": "Вивантажити чеки (XLSX)",
+        "hint": "Файл на рівні чеків: один рядок = один чек, не один покупець.",
+        "successToast": "Файл готовий — перевірте завантаження",
+        "errorToast": "Помилка експорту: {message}",
+        "downloading": "Завантаження…",
+        "unmaskPiiLabel": "Показати повний номер телефону"
+      },
+      "competitorTermInput": {
+        "label": "Конкурентний бренд / товар",
+        "placeholderFirst": "напр. Lays, потім Pringles…",
+        "placeholderNext": "ще конкурент…",
+        "removeLabel": "видалити"
+      },
+      "horizonToggle": {
+        "inPeriod": "…у періоді",
+        "allTime": "…будь-коли",
+        "inPeriodHint": "Покупці, що за обраний період купували товар(и) конкурента, але не купували ваш товар у ТОМУ САМОМУ періоді — нова аудиторія для поточної кампанії.",
+        "allTimeHint": "Покупці, що за обраний період купували товар(и) конкурента, але ЖОДНОГО РАЗУ не купували ваш товар — суворіша, менша аудиторія без попереднього контакту з вашим брендом."
+      },
+      "competitorKpi": {
+        "newAudience": "Нова аудиторія",
+        "competitorItems": "Товарів конкурента",
+        "unitsPurchased": "Куплено одиниць",
+        "totalSpend": "Сума витрат"
+      },
+      "competitorTable": {
+        "title": "Покупці конкурента",
+        "subtitle": "Купують конкурента, але не ваш товар — потенційні нові покупці бренду",
+        "loading": "Завантаження…",
+        "empty": "Немає покупців у цій конкурентній аудиторії за обраний період і заклади.",
+        "totalCount": "{count} покупців",
+        "withPhoneCount": "{count} з телефоном",
+        "headerName": "Клієнт",
+        "headerPhone": "Телефон",
+        "headerQty": "Куплено, шт",
+        "headerReceipts": "Чеків",
+        "headerAmount": "Сума, ₴",
+        "exportButton": "Вивантажити XLSX",
+        "downloading": "Завантаження…",
+        "unmaskPiiLabel": "Показати повний номер телефону",
+        "exportSuccessToast": "Файл готовий — перевірте завантаження",
+        "exportErrorToast": "Помилка експорту: {message}"
+      },
+      "matchedItemsTable": {
+        "title": "Знайдені товари",
+        "hint": "Зніміть галочку, щоб виключити товар з бази.",
+        "selectedCount": "Обрано {selected} з {total}",
+        "totalCount": "{count} товарів",
+        "loading": "Завантаження…",
+        "empty": "Немає товарів за поточними умовами пошуку.",
+        "headerName": "Товар",
+        "headerBarcode": "Штрихкод",
+        "headerSold": "Продано, шт",
+        "headerReceipts": "Чеків",
+        "headerBuyers": "Покупців"
+      },
+      "bulkSelectionActions": {
+        "selectAll": "Обрати всі",
+        "deselectShown": "Зняти показані"
       }
     },
     "dashboard": {
