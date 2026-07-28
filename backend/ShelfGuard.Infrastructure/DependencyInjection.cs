@@ -257,6 +257,11 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IPriceSegmentAdvisor,
             AI.PriceSegmentAdvisor.PriceSegmentAdvisor>();
 
+        // TASK-429 - Marketing analytics Фаза 3 (AudienceBuilder — product/category audiences,
+        // competitor conquest audiences)
+        services.AddScoped<Application.Features.MarketingAnalytics.AudienceBuilder.IAudienceBuilderRepository,
+            Data.Repositories.AudienceBuilderRepository>();
+
         return services;
     }
 }

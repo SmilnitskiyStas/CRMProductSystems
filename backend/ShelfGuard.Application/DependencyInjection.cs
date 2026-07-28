@@ -136,6 +136,11 @@ services.AddScoped<IAuthService, AuthService>();
             Features.MarketingAnalytics.PriceSegments.IPriceSegmentsService,
             Features.MarketingAnalytics.PriceSegments.PriceSegmentsService>();
 
+        // TASK-429 - Marketing analytics Фаза 3 (AudienceBuilder)
+        services.AddScoped<
+            Features.MarketingAnalytics.AudienceBuilder.IAudienceBuilderService,
+            Features.MarketingAnalytics.AudienceBuilder.AudienceBuilderService>();
+
         return services;
     }
 }

@@ -408,6 +408,13 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(p => p.Barcodes)
              .HasDatabaseName("idx_items_barcodes_gin")
              .HasAnnotation("Npgsql:IndexMethod", "gin");
+            // Trigram GIN index for substring search (Фаза 3 AudienceBuilder — ILIKE '%term%' on
+            // Name). Same pattern as idx_notification_queue_title_trgm; pg_trgm already enabled by
+            // 20260712122713_ExtendNotificationQueueFiltering.
+            e.HasIndex(p => p.Name)
+             .HasDatabaseName("idx_items_name_trgm")
+             .HasMethod("gin")
+             .HasOperators("gin_trgm_ops");
             e.HasOne(p => p.Tenant).WithMany()
              .HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(p => p.Category).WithMany()
