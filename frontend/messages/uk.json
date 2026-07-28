@@ -330,7 +330,7 @@
           "posAnalytics": "POS Аналітика"
         },
         "marketingAnalytics": {
-          "label": "Маркетингова аналітика",
+          "label": "Маркетинг",
           "dashboard": "RFM-дашборд",
           "priceSegments": "Цінові сегменти",
           "audienceBuilder": "Конструктор аудиторії"

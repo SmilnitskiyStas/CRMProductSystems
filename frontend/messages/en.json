@@ -330,7 +330,7 @@
           "posAnalytics": "POS Analytics"
         },
         "marketingAnalytics": {
-          "label": "Marketing Analytics",
+          "label": "Marketing",
           "dashboard": "RFM Dashboard",
           "priceSegments": "Price Segments",
           "audienceBuilder": "Audience Builder"
