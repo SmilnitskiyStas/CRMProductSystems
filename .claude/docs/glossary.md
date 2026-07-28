@@ -111,3 +111,67 @@ sort/export/recommendation parity to the other three — unlike the competitor, 
   previous = 0 — shown as `—` percent change, never "∞").
 - **Other / stable (Інші / стабільні)** — everything else in the union: unchanged frequency, or a
   decline below threshold. No dedicated card in the competitor; fully listable here.
+
+## Audience Builder (Фаза 3)
+
+Source: `docs/uployal/AUDIENCE_PREPARATION_ANALYSIS.md` (competitor analysis); implemented in
+`Features/MarketingAnalytics/AudienceBuilder/` (TASK-428..431) — a third mode on the same
+`marketing_analytics` module key as RFM (Фаза 1) and Price Segments (Фаза 2), not a new module.
+
+**Audience builder (побудова аудиторії за товаром/категорією)** — turns purchase history into a
+ready marketing audience: add one or more search terms (product-name substring, exact barcode, or
+exact item id) and/or a category, optionally set a minimum quantity/amount threshold over a
+period, and get every matching customer back, plus a receipt-level XLSX export for raffles/
+campaigns. A different question from RFM ("who bought THIS", not "who is valuable"). Three result
+tabs: Покупці товару (own-product buyers), Конкурентна аудиторія (competitor audience), Знайдені
+товари (matched items — manual curation).
+
+**Term (термін)** — one chip in the term-builder: `Text` (matches `Item.Name` by substring
+`ILIKE`, OR an exact `Item.Barcodes` entry, OR an exact `Item.Id` — one field, mirroring the
+competitor's "name, barcode, or external ID" box; this schema has no separate external-SKU-id
+column, so `Item.Id` fills that role) or `Category` (picked from a typeahead, never free text). A
+term missing its own kind's value is silently dropped server-side — same defensive posture as an
+empty `Terms` list resolving to a zeroed result without touching the database.
+
+**Any / All (Будь-який товар / Усі товари, OR / AND)** — how multiple terms combine at the
+customer level; the toggle only appears once a 2nd term exists.
+- **Any (OR)** — customer bought at least one item matching *any* term.
+- **All (AND)** — customer bought at least one item matching *each* term — not "bought every
+  matched SKU." See term coverage below for how this is evaluated without double-counting.
+
+**Term coverage (покриття терміна)** — the AND-mode bookkeeping unit: which term_indexes a given
+customer's purchases satisfied, tracked separately from that customer's total quantity/spend. One
+item can match more than one term at once (e.g. a text term and a category term both matching the
+same product) — that single purchase must cover both term indexes (satisfying AND) while still
+counting its quantity/amount exactly **once** toward totals, never once per matching term.
+`AudienceBuilderRepository` enforces this with two separate CTEs off the same underlying
+line-items set (`customer_totals` vs `customer_term_coverage`) instead of one combined aggregate —
+a real double-counting bug in the design doc's own SQL sketch, caught and fixed in TASK-429 with a
+dedicated regression test.
+
+**Manual SKU curation (ручна курація SKU)** — the "Знайдені товари" tab: every SKU any term/
+category matched, with sold qty/receipts/buyers for the active period (zero-sales SKUs included,
+never filtered out) and a checkbox. Unchecking a SKU removes it from the active selection and
+instantly recalculates every KPI/table across all three tabs. This is the intended fix for text
+search's main failure mode — a name substring can pull in bundles, multipacks, or discontinued
+items the marketer doesn't actually want in the audience.
+
+**Competitive audience (конкурентна аудиторія)** — `competitor_buyers_in_period MINUS
+own_product_buyers` — customers who bought a competitor's term but not the tenant's own term (a
+conquest/reactivation audience). Needs the shared own-product term state
+(`ownTerms`/`ownExcludedItemIds` — same term-builder state the main tab uses) plus its own
+`competitorTerms` chips; both sides must resolve to at least one valid term or the request
+short-circuits to a zeroed result. `unitsPurchased`/`totalSpend` on this tab are always
+period-scoped — the exclusion horizon below only changes who counts as "new," never the KPI window.
+
+**Exclusion horizon (горизонт виключення) — "у періоді" vs "будь-коли"** — the two historical
+windows for the competitive audience's exclusion side:
+- **InPeriod (у періоді)** — excludes customers who bought the own product **within the same
+  active period** as their competitor purchase. Old, out-of-window own-brand history doesn't
+  disqualify them — the larger, "win back this period's basket" audience.
+- **AllTime (будь-коли)** — excludes customers who **ever**, in all available history, bought the
+  own product. Stricter and typically much smaller (competitor analysis' own tested example: ~23%
+  the size of InPeriod) — the true never-bought-us conquest audience.
+
+Same own-term state and manual SKU exclusions apply under both horizons; only the exclusion side's
+historical window changes.

@@ -578,6 +578,51 @@ ownership from the start; no `FixLoyaltyTableGrants`-style companion migration w
 Live-verified against the real app role (positive path, fail-closed, cross-tenant isolation, bypass
 roles, policy/flag byte-check) — see task log for detail.
 
+## TASK-428 — `items.Name` trigram index (`AddItemNameTrigramIndex`, 2026-07-27)
+
+`idx_items_name_trgm` — GIN trigram index (`gin_trgm_ops`) on `items."Name"`, added ahead of
+Фаза 3's AudienceBuilder text-search feature, same shape as the pre-existing
+`idx_notification_queue_title_trgm` (`ExtendNotificationQueueFiltering`). `pg_trgm` was already
+enabled by that earlier migration — this one only adds the new index, no new extension.
+
+```sql
+CREATE INDEX idx_items_name_trgm ON items USING gin ("Name" gin_trgm_ops);
+```
+
+**⚠️ Known v1 limitation, not a bug — the index exists but the planner cannot use it on the real,
+RLS-protected app connection. Do not "fix" this by re-tuning the index itself; the blocker is a
+general Postgres/RLS rule, not this migration's DDL.**
+
+`items` carries the canonical RLS triad + `FORCE ROW LEVEL SECURITY`. `ILIKE` compiles to
+Postgres's `texticlike` function, confirmed `proleakproof = false` directly against `pg_proc`.
+Under `FORCE ROW LEVEL SECURITY`, any predicate built from a non-`LEAKPROOF` function can only be
+evaluated as a post-scan `Filter` — never pushed into an index condition — even for the table
+owner, once `FORCE` is set. Live-verified (seeded 500k synthetic rows in a transaction, rolled
+back afterward, dev DB confirmed clean): the real app-role connection produces a `Seq Scan`
+(~1085ms) on `"Name" ILIKE '%term%'`, even with `enable_seqscan=off` (proof no index-based plan
+exists at all, not merely a deprioritized one). The identical query as a superuser
+(`rolbypassrls=true`, RLS never applies) produces `Bitmap Index Scan on idx_items_name_trgm`
+(~2ms) — same index, same data. Full measurement in
+`.claude/logs/tasks/428_2026-07-27_item-name-trigram-index_database-engineer.md`.
+
+**Not new to this index** — the identical live test against the pre-existing
+`idx_notification_queue_title_trgm` (`notification_queue."Title"`) shows the same `Filter`-not-
+`Index Cond` behavior under RLS. That index has, as far as this session could tell, never actually
+accelerated a real tenant-scoped keyword search in production either — flagged as a separate
+background task, not fixed as part of TASK-428.
+
+**Accepted for v1**: at realistic per-tenant catalog sizes (thousands of SKUs — this is a "type a
+term, press Enter" field, not a live-autocomplete search), the Seq Scan cost is judged acceptable.
+Every `i."Name" ILIKE` call site in `AudienceBuilderRepository.cs` carries a doc comment pointing
+back to this note (see `IAudienceBuilderRepository`'s class remarks, TASK-429) rather than
+silently assuming the index helps; every AudienceBuilder query also carries its own redundant,
+explicit `TenantId = {0}` filter on top of RLS regardless (defense-in-depth — the non-leakproof
+`ILIKE` only blocks the index path, it never disables tenant scoping itself). Real fixes — marking
+`texticlike` `LEAKPROOF` after a dedicated security review, or a `SECURITY DEFINER` search function
+that re-applies its own hardcoded tenant guard — are each a cross-cutting security-posture change,
+out of scope for an indexing task. See `decisions.md` ADR-023 addendum (Фаза 3) for the three-option
+tradeoff and why the conservative "accept it" option was picked for v1.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

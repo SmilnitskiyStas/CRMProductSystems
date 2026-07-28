@@ -3,6 +3,193 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-431 — Security: review of Фаза 3 (AudienceBuilder)
+**Status:** done — **verdict: CLEAR TO SHIP**, no blocker, no risk-level finding · **Agent:**
+security-reviewer · **Depends:** TASK-428..430 · **Next:** none blocking; optional low-priority
+follow-up below
+Log: `.claude/logs/tasks/431_2026-07-27_security-review-audience-builder_security-reviewer.md`
+Read TASK-428/429/430's logs, then the code directly. All 7 mandatory checklist items verdict
+**OK**: (1) raw-SQL parameterization in `AudienceBuilderRepository.cs` (3rd raw-SQL repository,
+first with free-text user input reaching SQL, not just GUID/date/enum) — every one of the 7 methods
+binds search terms/category ids/excluded-item ids/store ids/dates/thresholds as genuine positional
+`SqlQueryRaw` parameters; free-text terms travel as a typed `string[]` bound to `UNNEST({n}::text[])`,
+with the `'%' || tt.value || '%'` `ILIKE` pattern built server-side in Postgres against the already-
+parameter-bound value, never C#-side string concatenation — traced all 7 methods, zero exceptions.
+(2) `sortBy` allowlist — `AudienceBuilderSortKeys`'s 2 fixed `HashSet`s normalize any input to a
+closed literal set (same shape as `PriceSegmentSortKeys`), then the repository's
+`BuyerSortColumn`/`MatchedItemSortColumn`/`CompetitorBuyerSortColumn` map that to a SECOND hardcoded
+SQL-column-name literal before `{SORT_COLUMN}` substitution — raw client string never reaches SQL
+text. (3) `::timestamptz` casts — checked every `t."CreatedAt"` comparison across all 6 query
+methods touching `pos_transactions` (incl. both competitor CTEs) — 100% consistent, no exception.
+(4) PII masking day-0 — `MaskPhoneUnlessAuthorized` reuses the same shared `PiiMasking.MaskPhone`
+(not forked); `CanViewUnmaskedPii`/`UnmaskPii` always server-resolved/ANDed via
+`MarketingAnalyticsAuthorization.CanExportPii(User)`, never trusted from client input on reads;
+Overview/MatchedItems DTOs carry no phone field at all. (5) capability gate — confirmed
+`AudienceBuilderController` carries byte-for-byte the same
+`[Authorize(Policy=MarketingAnalyticsViewOrCapability)]` + `[RequireModule("marketing_analytics")]`
+as `PriceSegmentsController`/`MarketingAnalyticsController`, no new capability/module key; tenantId/
+userId always from JWT claims, never request body. (6) Excel export — both export builders route
+through the injected `IExcelExportService` (ClosedXML-backed, TASK-414's
+`SetCellValue`/`SanitizeForSpreadsheet` formula-injection guard), no direct ClosedXML usage, no
+second unguarded path. (7) Seq Scan tradeoff — documented redundantly at 3 levels (interface XML
+doc, repository class doc, inline categories-query comment), all citing TASK-428's actual
+measurement; independently confirmed this is PERFORMANCE-only, not a tenant-isolation bypass — the
+non-leakproof ILIKE only blocks the index path, TASK-428's own EXPLAIN output shows the RLS tenant
+predicate still applies as a `Filter`; every CTE also carries its own redundant explicit
+`TenantId = {0}` filter on top of RLS (defense-in-depth). **Additional observations (non-blocking):**
+`ExcludedItemIds`/`CategoryTermIds`/`StoreIds` cross-tenant IDOR not exploitable (arrays only
+filter/exclude within an already tenant-scoped CTE, can only narrow, never leak); `customers`/
+`locations` joins downstream of a scoped CTE don't re-filter by TenantId explicitly, but this is
+identical pre-existing convention already in `PriceSegmentsRepository.cs` (cleared in TASK-422), not
+a new regression; no explicit cap on `Terms`/`StoreIds`/`ExcludedItemIds` array length, systemic
+pre-existing pattern shared with PriceSegments, not urgent. Reconfirmed `dotnet build` clean (0
+warnings/0 errors) before writing the verdict; did not re-run `dotnet test` (read-only review, no
+code changed — TASK-429's log already reports 1213/1213 green for these exact paths). No code
+changed.
+
+## TASK-430 — Frontend: AudienceBuilder UI (Фаза 3)
+**Status:** done — `tsc --noEmit`/`npm run build` clean, live-verified end-to-end in browser
+against real seeded data, no blocker · **Agent:** frontend-developer · **Depends:** TASK-429
+(API contract) · **Next:** security-reviewer (raw-SQL/PII gate already scheduled against TASK-429,
+unaffected by this frontend-only task), qa-tester (regression pass), documentation-writer
+(glossary/api-contracts/ADR for Фаза 3)
+Log: `.claude/logs/tasks/430_2026-07-27_audience-builder-frontend_frontend-developer.md`
+New `frontend/features/marketing-analytics/audience-builder/` (types/api/Zustand store/hooks/
+12 components across `BuyersTab`/`CompetitorTab`/`MatchedItemsTab`) + page route + Sidebar nav item
+(3rd item in `marketing_analytics` group) + full `Dashboard.audienceBuilder.*` i18n namespace in
+both `en.json`/`uk.json`. Reused directly (not duplicated): `SortableHeader`/
+`TablePaginationFooter` from `price-segments/components/TableControls.tsx` (all 3 tables),
+`canExportMarketingAnalyticsPii`/`useStores`/`useRequireTab`/`AccessDenied`/`downloadFilePost`.
+Zustand store (terms/mode/thresholds/excludedItemIds/isBuilt/competitor state) is a deliberate
+structural difference from Фаза 1/2's page-local `useState` — justified because leaf control
+components (TermChips, ThresholdInputs, MatchedItemsTable's checkboxes, CompetitorTermInput,
+HorizonToggle) sit 2-3 folders deep and would otherwise need setters prop-drilled through
+`ResultTabs`/3 tab folders; period/store selection stays page-local `useState`, matching Фаза 1/2,
+and `store.reset()` deliberately does not touch it. New `AudiencePeriodBar.tsx` (own file, NOT a
+reuse of `price-segments/ComparisonFilterBar.tsx`) — `AudienceBuildRequest` takes raw From/To with
+no server-resolved period-preset concept (confirmed in the actual DTO), and this repo's own
+precedent is that every phase gets its own period/store filter component (Фаза 1's
+`PeriodStoreFilterBar` vs Фаза 2's `ComparisonFilterBar`, neither reusing the other). **Deliberate
+deviation from the design doc's aspirational "don't refetch matched-items on exclusion, debounce
+~300ms" note**: all three own-audience queries (overview/buyers/matched-items) refetch together on
+every exclusion via the shared full-filter-object query key, uniformly, no debounce — matches both
+the verified backend contract's own description ("re-calling this endpoint is how the UI refreshes
+it") and the mandatory "миттєвий перерахунок" (INSTANT) requirement, which a debounce would work
+against. One real optimization kept: `matchedItemsPage` only resets to 1 on a genuine search-filter
+change, never on an exclusion-only change (the matched-item *set* never changes on exclusion, only
+each row's `isExcluded` flag). PII on-screen phone is rendered exactly as the server sends it,
+never re-masked client-side (confirmed the backend already resolves `CanViewUnmaskedPii`
+server-side for `buyers`/`competitor/buyers` reads, unlike price-segments where on-screen phone is
+never masked at all). **Live-verified on the dev stack against real Postgres data** (logged in as
+seeded `ea@demo.local`, tenant "Свіжий Кут", 125 real customer-linked transactions) — the full
+mandatory checklist: text term → chip → 2nd term → OR/AND toggle appears → OR gives 11
+participants, AND gives 0 (genuinely different, 0-state renders cleanly); quantity threshold
+narrows 11→4; "Знайдені товари" tab shows a matched item with 0 sold/0 receipts/0 buyers (zero-
+sales-still-shown, live); **unchecking a SKU instantly updated both the KPIs AND the buyers table
+together** on the other tab (core requirement); competitor tab horizon toggle confirmed via
+`read_network_requests` to send a genuinely different wire payload between InPeriod/AllTime
+(different `filtersHash` values) even though this specific dataset coincidentally produced the same
+count for both (backend's own dedicated test already covers the size-differs case with controlled
+data); real server-side pagination confirmed (page 2 shows a different row, not a client slice);
+"Скинути" fully restores the initial empty state; export button text explicitly says "на рівні
+чеків" so it can't be confused with the on-screen buyer-level table; zero console errors throughout.
+**Data gap noted, not a code defect**: the `categories` table is empty (0 rows) across the entire
+dev DB, so the category-typeahead path could only be verified structurally (correct request/empty-
+response/empty-state render), not with real populated suggestions — flagged for whichever future
+task seeds category data. `npm run build` output has repeated `ENVIRONMENT_FALLBACK` stderr noise
+during static generation — confirmed pre-existing/unrelated (appears for dozens of untouched
+routes, exit code 0, no real compile/type errors anywhere). Not committed.
+
+## TASK-429 — Backend: AudienceBuilder engine (Фаза 3)
+**Status:** done — `dotnet build`/`dotnet test` clean (1213/1213, was 1186; +27), no blocker ·
+**Agent:** backend-developer · **Depends:** TASK-428 (`idx_items_name_trgm` + its Seq Scan finding,
+handled per orchestrator's accept-for-v1 decision, no LEAKPROOF/SECURITY DEFINER) · **Next:**
+frontend-developer (full API contract in the task log below), security-reviewer (raw-SQL
+parametrization on a 3rd raw-SQL repository + PII export gate, same pattern as TASK-412/422),
+documentation-writer (glossary/api-contracts/ADR)
+Log: `.claude/logs/tasks/429_2026-07-27_audience-builder-backend_backend-developer.md` (full API
+contract for the frontend agent lives there). Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md`
+§"Фази 2-4". Design doc: scratchpad `phase3-audience-builder-design.md`. From-scratch continuation
+of a session that hit its usage limit before any code existed. New
+`Features/MarketingAnalytics/AudienceBuilder/` (thin service → 3rd raw-SQL repository, same shape
+as RFM Фаза 1/PriceSegments Фаза 2) + `AudienceBuilderController.cs` (POST-for-reads, design doc
+§1's explicit decision — filter shape doesn't fit a query string) + DI in both
+`Application`/`Infrastructure` `DependencyInjection.cs`. No AI advisor (design doc has no `/explain`
+for this feature). **Found and fixed 2 real bugs in the design doc's own SQL sketch** (both covered
+by dedicated live-Postgres regression tests): (1) an item matching MORE THAN ONE term (e.g. a text
+term AND a category term both matching the same product — a realistic AND-mode combination) would
+double-count that purchase's quantity/amount once per matching term while still correctly
+satisfying AND-mode coverage — fixed by splitting the aggregation into a deduplicated
+customer-totals CTE and a separately-derived term-coverage CTE (re-joining the already-computed
+line-items back to the small in-memory matched-terms set, not a second scan of
+`pos_transaction_items`); (2) line amount was `PriceFinal` alone (a PER-UNIT price, confirmed
+against `AnalyticsRepository`'s own `PriceFinal * Quantity` convention) instead of
+`PriceFinal * Quantity`, which would have under-reported spend on any line with quantity != 1.
+TASK-428's finding handled exactly as decided: no LEAKPROOF/SECURITY DEFINER, Seq Scan accepted
+with a documented comment on both the interface and the repository class; every `CreatedAt`
+date-range parameter explicitly cast `::timestamptz` per the brief's "Обов'язково" instruction.
+PII masking (design doc §9) applied from day 0 — reuses the existing `PiiMasking.MaskPhone`
+verbatim (no duplicate), `CanViewUnmaskedPii` always server-resolved via
+`MarketingAnalyticsAuthorization.CanExportPii` on reads, client `UnmaskPii` ANDed with the same
+check on exports; every export writes an `ActivityLog` row (same audit contract as Фаза 1/2).
+Deliberate, documented deviations from the design doc's literal DTO sketch: `CompetitorAudienceRequest`
+omits `OwnMode`/`OwnMinQuantity`/`OwnMinAmount` (the design doc's own SQL never gates the
+competitor-exclusion set by them); `OwnExcludedItemIds` IS applied to the competitor query's
+`own_matched` set (the sketch didn't parameterize this at all — verified via a dedicated test that
+excluding the sole own-matching item disables the whole exclusion, a real behavior difference);
+export request DTOs are their own flat records (matches the actual Фаза 2 precedent, not the design
+doc's abbreviated endpoint-table shorthand); `AudienceBuilderFilterHash` is its own small copy
+rather than reaching into the sibling `PriceSegments` namespace for a same-shaped utility. 27 new
+tests (13 service-level NSubstitute unit tests + 14 live-Postgres integration tests covering OR/AND
+semantics, the double-counting regression, manual SKU exclusion, thresholds, period boundaries,
+pagination/sort, zero-sales matched items, receipt-level export scoping, and the competitor
+InPeriod-vs-AllTime horizon distinction with a real different-result fixture). Dev DB confirmed
+clean after the run. **Unrelated pre-existing note, not from this task:** found 3 leftover
+`Loyalty Repo Test *` tenant rows in the dev DB from a 2026-07-26 test run whose cleanup didn't
+fully run — harmless (dev-only), not fixed, flagged for awareness only. Domain entities/DbContext/
+migrations untouched beyond reading; `Features/Loyalty/`/`Features/ConsumerAuth/`/existing
+RFM/PriceSegments code/frontend/mobile untouched; no "saved named audiences" (explicitly out of
+scope per design doc §11). Not committed.
+
+## TASK-428 — DB: Item.Name trigram index (Фаза 3 AudienceBuilder prep)
+**Status:** done — index created/migrated, `dotnet build`/`test` clean · **BLOCKING FINDING: new
+index cannot be used by the planner on the real RLS connection** · **Agent:** database-engineer ·
+**Depends:** none (Task #1 of Фаза 3) · **Next:** backend-developer should NOT start the
+AudienceBuilder repository's `ILIKE` query until the finding below gets a decision (project-architect
+or security-reviewer call) — otherwise the query will silently full-scan `items` in production
+exactly like the pre-existing bug found below
+Log: `.claude/logs/tasks/428_2026-07-27_item-name-trigram-index_database-engineer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md`. Design doc: scratchpad
+`phase3-audience-builder-design.md` §2.1/§11. Added `idx_items_name_trgm` (GIN, `gin_trgm_ops`) on
+`items.Name` — migration `AddItemNameTrigramIndex` (20260727175924), applied to dev DB via the
+app's own non-superuser connection (`shelfguard_app_dev`, TASK-419 discipline). **Critical finding
+from live verification (the brief explicitly asked to confirm real planner usage, not just that
+the DDL is correct):** seeded 500k synthetic `items` rows in a rolled-back transaction — under the
+real RLS-protected app connection, `EXPLAIN ANALYZE` on `"Name" ILIKE '%term%'` shows a full `Seq
+Scan` (1085ms), never uses the new index, **even with `enable_seqscan=off`** (proof no index plan
+exists at all, not just a deprioritized one). Root cause: PostgreSQL requires quals using
+non-`LEAKPROOF` functions to be evaluated only as a post-scan Filter under RLS + `FORCE ROW LEVEL
+SECURITY` — confirmed `texticlike` (backs ILIKE) is `proleakproof=false` in `pg_proc`. Same query
+as RLS-bypassing superuser (`crm`): `Bitmap Index Scan on idx_items_name_trgm`, 2ms. **This is not
+new** — live-confirmed the identical bug already silently affects the shipped
+`idx_notification_queue_title_trgm` (`notification_queue.Title`, the design doc's own cited working
+precedent) — that feature has likely never actually used its GIN index in production either.
+Flagged as a separate background task (`task_336e9c7a`) rather than fixed in this narrow task.
+**Did not unilaterally fix** (marking a core Postgres function `LEAKPROOF` is a schema-wide
+security-posture call, not an isolated indexing decision — flagged per CLAUDE.md's
+clarify-before-implementing gate, with 3 options listed in the full log: SECURITY DEFINER search
+function / mark specific functions LEAKPROOF after dedicated security review / accept Seq Scan at
+realistic per-tenant catalog sizes). Separately assessed (brief's optional §3): composite
+`(TenantId, CustomerId, CreatedAt)` on `pos_transactions` for Фаза 3's audience queries — seeded a
+realistic 100k-transaction scenario (rolled back after), confirmed the design doc's actual CTEs
+reach `pos_transactions` only via `PK` join (composite index structurally can't help), and a
+hypothetical direct tenant+customer+date filter shape showed no measurable difference
+before/after creating the composite (planner kept using the existing `idx_pos_tx_customer`) —
+**no new index added**, existing indexes sufficient. `dotnet build` 0 err (1 pre-existing
+unrelated warning), `dotnet test` **1186/1186 green**, no regressions, no new test file (index-only
+change). Dev DB confirmed left clean (all seeded test data rolled back, row counts back to 0).
+Not committed.
+
 ## TASK-422 — Security: review of Фаза 2 (price segments + frequency/reactivation)
 **Status:** done — **verdict: CLEAR TO SHIP**, no blocker, no risk-level finding · **Agent:**
 security-reviewer · **Depends:** TASK-419..421 · **Next:** none blocking; optional follow-up below

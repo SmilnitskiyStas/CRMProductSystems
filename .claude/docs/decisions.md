@@ -155,6 +155,76 @@ boundaries computed over a small all-time sample — `PriceSegmentSettings.
 MinReceiptsForBoundaries` is persisted but not yet read by `GetBoundariesAsync`, flagged by
 security-reviewer (TASK-422) as an inert functional gap for a follow-up task, not a security one.
 
+**Addendum (TASK-428/429/431, 2026-07-27) — Фаза 3 AudienceBuilder: accept the Seq Scan; do not
+mark `texticlike` LEAKPROOF or add a SECURITY DEFINER search function for v1.**
+
+Context: TASK-428 (database-engineer) live-verified that `idx_items_name_trgm` — the new GIN
+trigram index added specifically for AudienceBuilder's text-term search — is **structurally
+unusable** by the query planner on the real, RLS-protected app connection. `items` has canonical
+RLS + `FORCE ROW LEVEL SECURITY`; `ILIKE` compiles to `texticlike`, which Postgres's own `pg_proc`
+marks `proleakproof = false`. Under `FORCE ROW LEVEL SECURITY`, a predicate built from a
+non-LEAKPROOF function can only be applied as a post-scan `Filter`, never pushed into an index
+condition — this holds even for the table owner. Live-measured: ~1085ms Seq Scan (real app role,
+500k synthetic rows, rolled back after) vs ~2ms Bitmap Index Scan (superuser bypassing RLS, same
+index/data; `enable_seqscan=off` on the app-role side still produced no index plan at all — proof
+the planner has no alternative, not merely a deprioritized one). Not new to this feature: the same
+live test against the pre-existing `idx_notification_queue_title_trgm` shows the identical
+Filter-not-Index-Cond behavior — that index has, as best this session could tell, never actually
+accelerated a real tenant-scoped keyword search in production either.
+
+Three options were on the table (TASK-428's log; decided by the orchestrating session before
+TASK-429 began, per CLAUDE.md's clarify-before-implementing gate — marking a core Postgres
+function LEAKPROOF is a schema-wide security-posture change, not an isolated indexing decision):
+
+1. **Mark `texticlike` (and related pattern-matching support functions) `LEAKPROOF`.** Would fix
+   the index path for every RLS table using LIKE/ILIKE across the whole codebase, not just
+   `items` — broadest fix, broadest blast radius. Rejected for v1: `LEAKPROOF` is Postgres's
+   promise that a function reveals nothing about its arguments through side channels (errors,
+   timing) to a caller who shouldn't see the underlying rows — asserting that for a core
+   string-matching primitive used everywhere is a real security claim about timing side-channels
+   that needs its own dedicated review, not a decision to make as a side effect of one feature's
+   index tuning.
+2. **A `SECURITY DEFINER` search function**, owned by a privileged role, that bypasses RLS
+   internally but re-applies its own hardcoded, provably-safe `TenantId = current_setting(...)`
+   guard before returning rows — narrower blast radius than (1) (scoped to whichever call sites
+   adopt it, not every ILIKE in the codebase), same spirit as the existing `provider_bypass`/
+   `worker_bypass` policy escape hatches. Rejected for v1: still a new, hand-written RLS-bypass
+   surface that has to be gotten exactly right (the whole point of RLS is that the tenant guard is
+   enforced uniformly by Postgres, not re-implemented correctly by every function that opts out of
+   it) — worth building only if the Seq Scan cost actually becomes a measured problem.
+3. **Accept the Seq Scan at realistic per-tenant catalog sizes, change nothing.** `items.Name`
+   text search is a "type a term, press Enter" field, not a live-autocomplete search — at the scale
+   this actually runs at (thousands of SKUs per tenant, not the 500k-row/all-tenants synthetic
+   worst case TASK-428 tested), a few hundred milliseconds is not a UX problem worth a new
+   security-posture decision to solve pre-emptively. **Chosen.**
+
+Option 3 was picked as the most conservative of the three: it changes zero existing security
+posture, defers both (1) and (2) as available future fixes rather than foreclosing them, and costs
+nothing beyond documented latency at a scale this feature doesn't run at today. The tradeoff is
+recorded redundantly in code (not just here), so a future reader doesn't have to rediscover it from
+scratch: `IAudienceBuilderRepository`'s class-level doc comment, `AudienceBuilderRepository`'s
+class doc comment, and an inline comment on `SearchCategoriesAsync` (the categories-`ILIKE` path
+has the identical tradeoff, smaller table) — all three cite TASK-428's actual measurement.
+security-reviewer (TASK-431) independently re-verified this is a **performance-only** tradeoff, not
+a tenant-isolation bypass: TASK-428's own `EXPLAIN ANALYZE` shows the RLS tenant predicate still
+applies as a `Filter` regardless of the index question, and every AudienceBuilder CTE additionally
+carries its own redundant, explicit `TenantId = {0}` filter on top of whatever RLS does
+(defense-in-depth, consistent with existing repository convention) — only query latency at large
+multi-tenant catalog sizes is the accepted cost, never correctness or isolation.
+
+Consequences: (+) zero new security-posture surface, zero new attack surface, decision fully
+reversible later if (1) or (2) becomes worth it; (+) the same tradeoff note now also explains why
+the pre-existing `idx_notification_queue_title_trgm` has likely never helped production either,
+closing a question that would otherwise have resurfaced independently; (-) `idx_items_name_trgm`
+is inert on the only connection that matters (the real app role) until (1) or (2) is adopted —
+flagged as a known v1 limitation in `database-schema.md`, not a defect to "fix" by re-tuning the
+index itself; (-) the identical class of bug (non-LEAKPROOF cross-type comparison functions) can
+recur silently for any future raw-SQL query that compares a `timestamptz` column against a bare
+`DateOnly`-derived parameter — mitigated here by explicit `::timestamptz` casts at every
+`t."CreatedAt"` comparison in `AudienceBuilderRepository` (TASK-428's own side-finding, applied by
+TASK-429, confirmed consistent by TASK-431), but the general pattern is worth remembering for the
+next raw-SQL repository, not just this one.
+
 ## ADR-022: Store-scoped user assignment & data visibility (`user_locations` + RLS)
 Date: 2026-07-19
 Status: accepted (Stage 1 live in production; Stage 3 written and tested but deliberately not

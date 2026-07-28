@@ -886,3 +886,108 @@ endpoints (unlike exports, there is no request-body `unmaskPii` to neutralize). 
 found these 3 endpoints previously returned `phone` raw and unconditionally — masking existed only
 in the export builders — a real gap wherever `marketing_analytics.view` is granted without
 `marketing_analytics.export_pii` (ADR-020 capability split); fixed in TASK-425.
+
+---
+
+### Audience Builder (`/api/marketing-analytics/audience-builder`, Фаза 3 — TASK-429)
+
+Base route: `api/marketing-analytics/audience-builder`. Same gate as RFM/Price Segments —
+`[Authorize(Policy = MarketingAnalyticsViewOrCapability)]` + `[RequireModule("marketing_analytics")]`
+at class level, same module key (not a new one). Every read endpoint below is **POST**, not GET —
+the filter shape (term list, exclusions, two thresholds) doesn't fit a query string cleanly. All
+DTO fields camelCase; enums are PascalCase **strings** (`JsonStringEnumConverter`), e.g.
+`"kind": "Text"`.
+
+#### `AudienceTermRequest`
+```ts
+{ kind: "Text" | "Category"; text: string | null; categoryId: string /* guid */ | null }
+```
+Only the field matching `kind` is read; the other is ignored. A term missing its own kind's value
+is silently dropped server-side (never a 400). `Text` matches `Item.Name` (substring `ILIKE`), OR
+an exact `Item.Barcodes` entry, OR an exact `Item.Id` — one field covers name/barcode/internal-id,
+mirroring the competitor's "name, barcode, or external ID" box (this schema has no separate
+external-SKU-id column, so `Item.Id` fills that role — see `glossary.md` "Term").
+
+#### `GET /categories?search=&limit=` → `AudienceCategoryOptionDto[]`
+`{ categoryId, name, itemCount }`. `limit <= 0` falls back to 20 server-side, clamped to `[1,100]`.
+
+#### `POST /overview` — body `AudienceBuildRequest` → `AudienceOverviewDto`
+```ts
+AudienceBuildRequest = {
+  from, to: string;                          // "YYYY-MM-DD"
+  storeIds: string[] | null;                 // guids, null/empty = all stores
+  terms: AudienceTermRequest[];
+  mode: "Any" | "All";                       // OR / AND — see glossary.md "Term coverage"
+  minQuantity, minAmount: number | null;      // combined via AND when both set
+  excludedItemIds: string[] | null;           // manual SKU curation, guids
+  page: number; pageSize: number; sortBy: string | null; sortDescending: boolean;
+  canViewUnmaskedPii: boolean;                // IGNORED server-side on every read below — the
+                                               // controller always recomputes it from the caller's
+                                               // own capability, send false/omit
+}
+AudienceOverviewDto = { participantsCount, itemsInSelectionCount, unitsPurchased, totalSpend,
+                         filtersHash, calculatedAt }
+```
+An empty (or all-malformed) `terms` list never touches the database — returns a zeroed DTO with a
+valid `filtersHash` (mirrors "formation button disabled until a term exists").
+
+#### `POST /buyers` — same body → `AudienceBuyerTableDto`
+```ts
+AudienceBuyerRowDto = { customerId, name, phone, quantityPurchased, receiptCount, totalAmount }
+AudienceBuyerTableDto = { totalCount, withPhoneCount, rows: AudienceBuyerRowDto[],
+  page, pageSize, totalPages, sortBy, sortDescending, filtersHash, calculatedAt }
+```
+`sortBy` allowlist: `name|qty|receipts|amount`, default `qty` descending. Unrecognized values
+silently fall back to default (never a 400).
+
+#### `POST /matched-items` — same body → `MatchedItemsTableDto`
+```ts
+MatchedItemRowDto = { itemId, name, barcodesJoined, isExcluded, quantitySold, receiptCount, buyerCount }
+MatchedItemsTableDto = { totalCount, rows: MatchedItemRowDto[], page, pageSize, totalPages,
+  sortBy, sortDescending, filtersHash, calculatedAt }
+```
+`sortBy` allowlist: `name|sold|receipts|buyers`, default `sold` descending. `barcodesJoined` is
+`null` (never `""`) when the item has no barcode. Zero-sales SKUs are included (all 3 sales fields
+`0`); `isExcluded` reflects whatever `excludedItemIds` was sent in the SAME request — toggling a
+checkbox and re-calling this endpoint is how the UI refreshes it (no separate toggle endpoint).
+
+#### `POST /exports/buyers` — body `ExportAudienceBuyersRequest` → `.xlsx`
+Same fields as `AudienceBuildRequest` minus paging, plus `unmaskPii: boolean` (real client flag,
+ANDed server-side with the caller's actual capability — requesting unmask without permission
+silently falls back to masked, never a 403). **Receipt-level**, not customer-level — one row per
+receipt (so one participant can produce several rows): Ім'я, Телефон, № чека, Дата, Заклад,
+Куплено (шт — only the matched/selected SKUs on THAT receipt, not the receipt's full total), Сума
+(₴ — same restriction). Capped at 50,000 rows server-side.
+
+#### `POST /competitor/overview` — body `CompetitorAudienceRequest` → `CompetitorOverviewDto`
+```ts
+CompetitorAudienceRequest = {
+  from, to: string; storeIds: string[] | null;
+  ownTerms: AudienceTermRequest[]; ownExcludedItemIds: string[] | null;   // SAME state as the main tab
+  competitorTerms: AudienceTermRequest[];
+  horizon: "InPeriod" | "AllTime";           // see glossary.md "Exclusion horizon"
+  page, pageSize, sortBy, sortDescending, canViewUnmaskedPii   // same as AudienceBuildRequest
+}
+CompetitorOverviewDto = { newAudienceCount, competitorItemsCount, unitsPurchased, totalSpend,
+                           filtersHash, calculatedAt }
+```
+`ownTerms`/`competitorTerms` must each resolve to at least 1 valid term or the request
+short-circuits to a zeroed result without touching the database. `unitsPurchased`/`totalSpend` are
+always period-scoped — `horizon` only changes who counts as "new," never the KPI window.
+
+#### `POST /competitor/buyers` — same body → `CompetitorBuyerTableDto`
+Same row/table shape as `/buyers` (`CompetitorBuyerRowDto`/`CompetitorBuyerTableDto` — identical
+fields, different type names). Same `sortBy` allowlist as `/buyers`, default `qty` descending.
+
+#### `POST /exports/competitor-buyers` — body `ExportCompetitorBuyersRequest` → `.xlsx`
+Same shape as `CompetitorAudienceRequest` minus paging, plus `unmaskPii`. **Customer-level**, not
+receipt-level (Ім'я, Телефон, Куплено шт, Чеків, Сума ₴) — no raffle/draw scenario here, so
+receipt granularity isn't needed.
+
+#### PII + capability posture (same as RFM/Price Segments — TASK-431 confirmed)
+`buyers`/`competitor/buyers` reads always resolve `CanViewUnmaskedPii` server-side
+(`MarketingAnalyticsAuthorization.CanExportPii(User)`), never trusting the client's
+`canViewUnmaskedPii` field. `AudienceOverviewDto`/`MatchedItemRowDto` carry no phone field at all.
+Every export writes an `ActivityLog` row (filter snapshot + row count + masked flag), same audit
+contract as Фаза 1/2. See `database-schema.md` TASK-428 and `decisions.md` ADR-023 addendum (Фаза
+3) for the accepted Seq-Scan-on-ILIKE tradeoff behind the text-term search these endpoints use.
