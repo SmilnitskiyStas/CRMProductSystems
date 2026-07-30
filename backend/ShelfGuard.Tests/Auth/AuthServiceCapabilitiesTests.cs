@@ -24,12 +24,14 @@ public sealed class AuthServiceCapabilitiesTests
     private readonly ITotpService _totp = Substitute.For<ITotpService>();
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
+    private readonly IPasswordResetTokenRepository _passwordResetTokens = Substitute.For<IPasswordResetTokenRepository>();
+    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly AuthService _sut;
 
     public AuthServiceCapabilitiesTests()
     {
         _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants, _tenantRoles,
-            NullLogger<AuthService>.Instance);
+            _passwordResetTokens, _notifications, NullLogger<AuthService>.Instance);
         _permissionGrants.GetActiveGrantsForUserAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(Array.Empty<UserPermissionGrant>());
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));

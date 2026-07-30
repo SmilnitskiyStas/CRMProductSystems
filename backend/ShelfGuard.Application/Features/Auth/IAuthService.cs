@@ -37,4 +37,27 @@ public interface IAuthService
     /// <summary>Disables 2FA after verifying both the password and a valid code.</summary>
     Task<string?> DisableTwoFactorAsync(
         Guid userId, string password, string code, CancellationToken ct = default);
+
+    // ── Forgot / reset password (TASK-456) ──────────────────────────────────
+
+    /// <summary>
+    /// First step of the forgot-password flow. Never throws / never signals whether the
+    /// email exists — the controller responds identically regardless of outcome, same
+    /// no-enumeration posture as <see cref="LoginAsync"/>. Unknown or inactive email → a
+    /// warning log only, no DB write. Known active user who requested a reset within the last
+    /// 60s (TASK-460 per-user cooldown, independent of the per-IP rate limiter) → same no-op as
+    /// the unknown-email branch. Otherwise → invalidates any prior active reset token, mints and
+    /// hashes a new one (30 min TTL), and enqueues a targeted outbox notification (email +
+    /// Telegram) carrying the reset link.
+    /// </summary>
+    Task ForgotPasswordAsync(string email, string? ipAddress = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Second step: validates the raw reset token, applies the new password, marks the token
+    /// used, clears any lockout, and revokes every refresh token (other sessions are logged
+    /// out). Errors here CAN be specific — same posture as <see cref="VerifyTwoFactorAsync"/>:
+    /// whoever holds the token already received it over a private channel (email/Telegram).
+    /// Returns null on success, or an error message otherwise.
+    /// </summary>
+    Task<string?> ResetPasswordAsync(string rawToken, string newPassword, CancellationToken ct = default);
 }

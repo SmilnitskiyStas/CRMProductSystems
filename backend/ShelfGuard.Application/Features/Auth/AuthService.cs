@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Auth.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
@@ -14,6 +17,16 @@ public sealed class AuthService : IAuthService
     private const string GenericLoginError = "Invalid email or password.";
     private const int RecoveryCodeCount = 8;
 
+    // TASK-456: forgot/reset-password token lifetime + generic (non-enumerating) error text.
+    private const int PasswordResetTokenTtlMinutes = 30;
+    private const string GenericResetError = "Invalid or expired reset link.";
+
+    // TASK-460 (TASK-458 security review, MEDIUM): per-user cooldown for ForgotPasswordAsync,
+    // independent of the "auth-forgot-password" per-IP rate limit — KI-014 confirms per-IP
+    // limiting doesn't work in production, so this is the real backstop against repeated
+    // notification sends (email/Telegram) to the same known/guessed address.
+    private static readonly TimeSpan PasswordResetCooldown = TimeSpan.FromSeconds(60);
+
     private readonly IUserRepository _users;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IPasswordHasher _passwordHasher;
@@ -22,7 +35,10 @@ public sealed class AuthService : IAuthService
     private readonly ITotpService _totp;
     private readonly IUserPermissionGrantRepository _permissionGrants;
     private readonly ITenantRoleRepository _tenantRoles;
+    private readonly IPasswordResetTokenRepository _passwordResetTokens;
+    private readonly INotificationRepository _notifications;
     private readonly ILogger<AuthService> _logger;
+    private readonly string _frontendBaseUrl;
 
     public AuthService(
         IUserRepository users,
@@ -33,6 +49,8 @@ public sealed class AuthService : IAuthService
         ITotpService totp,
         IUserPermissionGrantRepository permissionGrants,
         ITenantRoleRepository tenantRoles,
+        IPasswordResetTokenRepository passwordResetTokens,
+        INotificationRepository notifications,
         ILogger<AuthService> logger)
     {
         _users = users;
@@ -43,7 +61,11 @@ public sealed class AuthService : IAuthService
         _totp = totp;
         _permissionGrants = permissionGrants;
         _tenantRoles = tenantRoles;
+        _passwordResetTokens = passwordResetTokens;
+        _notifications = notifications;
         _logger = logger;
+        // Application layer has no IConfiguration dependency — env var with a sane default.
+        _frontendBaseUrl = Environment.GetEnvironmentVariable("Frontend__BaseUrl") ?? "http://localhost:3000";
     }
 
     public async Task<LoginOutcome> LoginAsync(
@@ -290,6 +312,121 @@ public sealed class AuthService : IAuthService
         return null;
     }
 
+    // ── Forgot / reset password (TASK-456) ────────────────────────────────
+
+    public async Task ForgotPasswordAsync(string email, string? ipAddress = null, CancellationToken ct = default)
+    {
+        var user = await _users.GetByEmailAsync(email.ToLowerInvariant(), ct);
+
+        if (user is null || !user.IsActive)
+        {
+            // Unknown/inactive email — no DB write, no user enumeration (same posture as
+            // LoginAsync); keep an audit trail in app logs only.
+            _logger.LogWarning("Password reset requested for unknown or inactive email {Email} from {Ip}",
+                email, ipAddress ?? "unknown");
+            return;
+        }
+
+        // TASK-460: per-user cooldown, checked BEFORE InvalidateActiveTokensAsync below (which
+        // only prevents two simultaneously-active tokens — it does not throttle request
+        // frequency). Enumeration-safety: on a hit, behave EXACTLY like the unknown-email branch
+        // above — same no-op, same log level, no distinguishable side effect or response — so this
+        // never becomes a new signal for whether an email is known/active.
+        if (await _passwordResetTokens.HasRecentActiveTokenAsync(user.Id, PasswordResetCooldown, ct))
+        {
+            _logger.LogWarning("Password reset requested again for {Email} within cooldown window from {Ip}",
+                email, ipAddress ?? "unknown");
+            return;
+        }
+
+        // Only one active reset link at a time (same rule TelegramLinkService applies to its
+        // link codes). Bulk ExecuteUpdateAsync — commits immediately regardless of the batched
+        // writes below; must run before AddAsync of the new token, never after.
+        await _passwordResetTokens.InvalidateActiveTokensAsync(user.Id, ct);
+
+        var rawToken = GenerateResetToken();
+        var token = PasswordResetToken.Create(
+            user.Id, _jwt.HashToken(rawToken), DateTime.UtcNow.AddMinutes(PasswordResetTokenTtlMinutes));
+        await _passwordResetTokens.AddAsync(token, ct);
+
+        // The raw token only ever goes into this URL — the hash above is what's persisted.
+        // Uri.EscapeDataString: base64's '+'/'/'/'=' are not query-string-safe as-is; this only
+        // affects how the token is embedded in the link, not how it's generated or hashed.
+        var resetUrl = $"{_frontendBaseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
+
+        await _activityLogs.LogAsync(new ActivityLog
+        {
+            TenantId   = user.TenantId,
+            UserId     = user.Id,
+            Action     = "user.password_reset_requested",
+            EntityType = "user",
+            EntityId   = user.Id,
+            Meta       = user.Email,
+            IpAddress  = ipAddress,
+        }, ct);
+
+        // NotificationRepository.EnqueueAsync commits immediately on its own (unlike the other
+        // repositories used above) — called last so its own SaveChangesAsync flushes the token
+        // insert and the activity log above in the same round trip. A literal single shared
+        // SaveChangesAsync call (TASK-370's batching pattern) isn't reachable here since
+        // EnqueueAsync owns its own commit; this ordering gets the same effect in practice.
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = user.TenantId,
+            UserId    = user.Id,
+            Channel   = "system",
+            EventType = "auth.password_reset_requested",
+            Title     = "Запит на відновлення пароля",
+            Payload   = JsonSerializer.Serialize(new
+            {
+                resetUrl,
+                expiresInMinutes = PasswordResetTokenTtlMinutes,
+            }),
+            Status    = "pending",
+        }, ct);
+    }
+
+    public async Task<string?> ResetPasswordAsync(string rawToken, string newPassword, CancellationToken ct = default)
+    {
+        var token = await _passwordResetTokens.GetActiveByHashAsync(_jwt.HashToken(rawToken), ct);
+        if (token is null)
+            return GenericResetError;
+
+        var user = await _users.GetByIdAsync(token.UserId, ct);
+        if (user is null || !user.IsActive)
+            return GenericResetError; // same generic text — don't distinguish token vs. account state
+
+        var passwordError = PasswordValidator.Validate(newPassword, user.Email);
+        if (passwordError is not null)
+            return passwordError;
+
+        user.ChangePassword(_passwordHasher.Hash(newPassword));
+        user.ResetLockout(); // proven ownership of email/Telegram is no weaker than a password
+        _users.Update(user);
+
+        token.MarkUsed();
+
+        // TASK-329: a stolen session must not survive a password reset either (same call as
+        // UserService.ChangePasswordAsync). Deferred — does not call SaveChanges itself.
+        await _refreshTokens.RevokeAllForUserAsync(user.Id, ct);
+
+        await _activityLogs.LogAsync(new ActivityLog
+        {
+            TenantId   = user.TenantId,
+            UserId     = user.Id,
+            Action     = "user.password_reset_completed",
+            EntityType = "user",
+            EntityId   = user.Id,
+            Meta       = user.Email,
+        }, ct);
+
+        // Single commit: the user update, token.MarkUsed() (tracked entity — no dedicated
+        // Update method on IPasswordResetTokenRepository), revoked refresh tokens, and the
+        // activity log above all share this AppDbContext.
+        await _passwordResetTokens.SaveChangesAsync(ct);
+        return null;
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
 
     /// <summary>Checks a TOTP code (±1 timestep, anti-replay) or consumes a recovery code.</summary>
@@ -482,6 +619,15 @@ public sealed class AuthService : IAuthService
     /// <summary>Uppercases and strips separators so "ab2c-3def" == "AB2C3DEF".</summary>
     private static string NormalizeRecoveryCode(string code) =>
         new(code.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+
+    /// <summary>
+    /// Cryptographically random raw reset token — same generation approach as
+    /// <see cref="IJwtService.GenerateRefreshToken"/>'s raw half (64 random bytes, base64),
+    /// copied here rather than reusing that method directly since it serves a different,
+    /// unrelated token family/lifecycle (refresh session vs. one-time password reset).
+    /// </summary>
+    private static string GenerateResetToken() =>
+        Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
     private static AuthUserDto ToDto(
         User u,

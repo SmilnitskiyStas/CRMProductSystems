@@ -118,6 +118,19 @@ builder.Services.AddRateLimiter(options =>
                 Window      = TimeSpan.FromMinutes(1),
                 QueueLimit  = 0,
             }));
+
+    // TASK-456: forgot-password — 5 req/min per client IP. This endpoint actually sends a
+    // notification (email/Telegram) per request, unlike a plain login attempt — same limit
+    // shape as public-leads for that reason.
+    options.AddPolicy("auth-forgot-password", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
 });
 
 var jwtSecret = builder.Configuration["Jwt:Secret"]

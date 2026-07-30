@@ -431,7 +431,27 @@
       "useAuthenticatorCode": "Використати код із застосунку",
       "signingIn": "Вхід…",
       "signIn": "Увійти",
-      "sessionExpired": "Час сеансу сплив. Будь ласка, увійдіть знову."
+      "sessionExpired": "Час сеансу сплив. Будь ласка, увійдіть знову.",
+      "forgotPasswordLink": "Забули пароль?",
+      "forgotPasswordTitle": "Відновлення пароля",
+      "forgotPasswordDescription": "Введіть email, який ви використовували для реєстрації — ми надішлемо інструкції для відновлення пароля.",
+      "forgotPasswordSubmitButton": "Надіслати інструкції",
+      "forgotPasswordSending": "Надсилання…",
+      "forgotPasswordSuccessMessage": "Якщо такий email існує в нашій системі, на нього надіслано інструкції з відновлення пароля.",
+      "somethingWentWrongError": "Щось пішло не так. Спробуйте пізніше.",
+      "backToSignIn": "Повернутися до входу",
+      "resetPasswordTitle": "Новий пароль",
+      "newPasswordLabel": "Новий пароль",
+      "confirmPasswordLabel": "Підтвердження",
+      "newPasswordMinError": "Мінімум 12 символів",
+      "newPasswordComplexityError": "Пароль має містити літери та цифри",
+      "confirmMismatchError": "Паролі не співпадають",
+      "passwordPolicyHint": "Мінімум 12 символів, літери та цифри",
+      "resetPasswordSubmitButton": "Встановити новий пароль",
+      "resetPasswordSubmitting": "Оновлення…",
+      "resetPasswordSuccessMessage": "Пароль оновлено. Тепер ви можете увійти.",
+      "resetPasswordInvalidOrExpired": "Посилання недійсне або застаріло. Будь ласка, запросіть нове.",
+      "resetPasswordMissingToken": "Це посилання недійсне. Будь ласка, запросіть відновлення пароля ще раз зі сторінки входу."
     },
     "ui": {
       "dateRange": {
@@ -4415,7 +4435,8 @@
         "iotTempAlert": "Температурний алерт",
         "iotOffline": "Пристрій офлайн",
         "accessTemporaryExpiringSoon": "Тимчасовий доступ незабаром закінчується",
-        "accessTemporaryExpired": "Тимчасовий доступ закінчився"
+        "accessTemporaryExpired": "Тимчасовий доступ закінчився",
+        "authPasswordResetRequested": "Запит на відновлення пароля"
       },
       "channels": {
         "telegram": "Telegram",
@@ -4442,7 +4463,8 @@
         "iotTempAlert": { "service": "IoT моніторинг", "actor": "Датчик температури" },
         "iotOffline": { "service": "IoT моніторинг", "actor": "Стан пристрою" },
         "accessTemporaryExpiringSoon": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
-        "accessTemporaryExpired": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" }
+        "accessTemporaryExpired": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
+        "authPasswordResetRequested": { "service": "Автентифікація", "actor": "Відновлення пароля" }
       }
     },
     "serviceDesk": {

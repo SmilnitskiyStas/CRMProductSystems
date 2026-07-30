@@ -53,7 +53,15 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
 const TARGETED_EVENT_CHANNELS: Record<string, string[]> = {
   "access.temporary_expiring_soon": ["telegram", "push"],
   "access.temporary_expired": ["telegram", "push"],
+  // TASK-456: forgot/reset-password link. No "push" — deliberate, unlike the access.* rows
+  // above (push delivery isn't implemented at all yet; email/Telegram are the only channels
+  // that can actually carry a clickable link today).
+  "auth.password_reset_requested": ["email", "telegram"],
 };
+
+// TASK-456: shape of the outbox row's Payload jsonb for auth.password_reset_requested — `pg`
+// auto-parses jsonb columns, so row.payload already arrives as a JS object, not a string.
+type PasswordResetPayload = { resetUrl?: string; expiresInMinutes?: number };
 
 type PendingIntentRow = {
   id: string;
@@ -66,6 +74,18 @@ type PendingIntentRow = {
 };
 
 function formatText(row: PendingIntentRow): string {
+  if (row.event_type === "auth.password_reset_requested") {
+    const payload = row.payload as PasswordResetPayload | null;
+    const resetUrl = payload?.resetUrl ?? "";
+    const expiresInMinutes = payload?.expiresInMinutes ?? 30;
+    return (
+      `🔑 <b>ShelfGuard</b>\n\n` +
+      `Хтось (можливо ви) запросив відновлення пароля. Перейдіть за посиланням протягом ` +
+      `${expiresInMinutes} хвилин: <a href="${resetUrl}">${resetUrl}</a>\n\n` +
+      `Якщо це не ви — проігноруйте це повідомлення.`
+    );
+  }
+
   const icons: Record<string, string> = {
     "receipt.created": "📦",
     "supplier.message": "💬",
@@ -78,6 +98,21 @@ function formatText(row: PendingIntentRow): string {
 }
 
 function formatEmail(row: PendingIntentRow): { subject: string; html: string } {
+  if (row.event_type === "auth.password_reset_requested") {
+    const payload = row.payload as PasswordResetPayload | null;
+    const resetUrl = payload?.resetUrl ?? "";
+    const expiresInMinutes = payload?.expiresInMinutes ?? 30;
+    const subject = "[ShelfGuard] Відновлення пароля";
+    const html = `
+      <h2>ShelfGuard</h2>
+      <p>Хтось (можливо ви) запросив відновлення пароля. Перейдіть за посиланням протягом ${expiresInMinutes} хвилин:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>Якщо це не ви — проігноруйте цей лист.</p>
+      <p style="color:#888;font-size:12px">ShelfGuard — система управління термінами придатності</p>
+    `;
+    return { subject, html };
+  }
+
   const subject = `[ShelfGuard] ${row.title ?? "Нове сповіщення"}`;
   const html = `
     <h2>ShelfGuard</h2>
@@ -169,11 +204,23 @@ async function dispatchTargeted(
     }
   }
 
+  // TASK-460 (HIGH, TASK-458 security review): logNotifications() persists `payload` verbatim
+  // into notification_queue rows that GET /api/notifications/history returns to ANY
+  // authenticated same-tenant user (no per-user scoping there) — for auth.password_reset_requested
+  // that payload is a live, unhashed, single-use reset token, so logging it verbatim turns a
+  // routine history read into an account-takeover primitive. Redact before logging only; the
+  // real resetUrl was already used above (formatText/formatEmail) for the actual send. Any future
+  // targeted event whose payload carries a bearer secret should redact the same way here.
+  const logPayload =
+    row.event_type === "auth.password_reset_requested"
+      ? { expiresInMinutes: (row.payload as PasswordResetPayload | null)?.expiresInMinutes ?? 30 }
+      : row.payload;
+
   await logNotifications(client, {
     tenantId: row.tenant_id,
     userId: user.id,
     eventType: row.event_type,
-    payload: row.payload,
+    payload: logPayload,
     outcomes,
   });
 

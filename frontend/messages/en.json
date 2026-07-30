@@ -431,7 +431,27 @@
       "useAuthenticatorCode": "Use the authenticator app code",
       "signingIn": "Signing in…",
       "signIn": "Sign in",
-      "sessionExpired": "Your session has expired. Please sign in again."
+      "sessionExpired": "Your session has expired. Please sign in again.",
+      "forgotPasswordLink": "Forgot password?",
+      "forgotPasswordTitle": "Reset your password",
+      "forgotPasswordDescription": "Enter the email you used to sign up — we'll send instructions to reset your password.",
+      "forgotPasswordSubmitButton": "Send instructions",
+      "forgotPasswordSending": "Sending…",
+      "forgotPasswordSuccessMessage": "If that email exists in our system, we've sent instructions to reset your password.",
+      "somethingWentWrongError": "Something went wrong. Please try again later.",
+      "backToSignIn": "Back to sign in",
+      "resetPasswordTitle": "Set a new password",
+      "newPasswordLabel": "New password",
+      "confirmPasswordLabel": "Confirm password",
+      "newPasswordMinError": "At least 12 characters",
+      "newPasswordComplexityError": "Password must contain letters and digits",
+      "confirmMismatchError": "Passwords don't match",
+      "passwordPolicyHint": "At least 12 characters, letters and digits",
+      "resetPasswordSubmitButton": "Set new password",
+      "resetPasswordSubmitting": "Updating…",
+      "resetPasswordSuccessMessage": "Your password has been updated. You can now sign in.",
+      "resetPasswordInvalidOrExpired": "This link is invalid or has expired. Please request a new one.",
+      "resetPasswordMissingToken": "This link is invalid. Please request a new password reset from the login page."
     },
     "ui": {
       "dateRange": {
@@ -4415,7 +4435,8 @@
         "iotTempAlert": "Temperature alert",
         "iotOffline": "Device offline",
         "accessTemporaryExpiringSoon": "Temporary access expiring soon",
-        "accessTemporaryExpired": "Temporary access expired"
+        "accessTemporaryExpired": "Temporary access expired",
+        "authPasswordResetRequested": "Password reset requested"
       },
       "channels": {
         "telegram": "Telegram",
@@ -4442,7 +4463,8 @@
         "iotTempAlert": { "service": "IoT monitoring", "actor": "Temperature sensor" },
         "iotOffline": { "service": "IoT monitoring", "actor": "Device status" },
         "accessTemporaryExpiringSoon": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
-        "accessTemporaryExpired": { "service": "Access management", "actor": "Temporary grants (ADR-019)" }
+        "accessTemporaryExpired": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
+        "authPasswordResetRequested": { "service": "Authentication", "actor": "Password reset" }
       }
     },
     "serviceDesk": {

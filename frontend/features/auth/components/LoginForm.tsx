@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useLogin, useVerifyTwoFactor } from "../hooks/useAuth";
 import { isTwoFactorChallenge } from "../types";
 import { ApiError } from "@/lib/api";
@@ -287,6 +288,13 @@ export function LoginForm() {
             {errors.password.message}
           </span>
         )}
+      </div>
+
+      {/* Forgot password */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <Link href="/forgot-password" style={linkBtnStyle}>
+          {t("forgotPasswordLink")}
+        </Link>
       </div>
 
       {/* API error */}

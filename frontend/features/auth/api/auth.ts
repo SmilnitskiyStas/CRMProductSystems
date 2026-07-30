@@ -3,9 +3,11 @@ import { setStoredUser, clearStoredUser } from "../store";
 import {
   isTwoFactorChallenge,
   type AuthUserDto,
+  type ForgotPasswordRequest,
   type LoginRequest,
   type LoginResponse,
   type LoginSuccessResponse,
+  type ResetPasswordRequest,
   type TwoFactorDisableRequest,
   type TwoFactorEnableResponse,
   type TwoFactorSetupResponse,
@@ -47,6 +49,17 @@ export const authApi = {
   },
 
   getMe: (): Promise<AuthUserDto> => api.get<AuthUserDto>("/api/auth/me"),
+
+  // ---- Forgot / reset password (public) ----
+
+  /** Always resolves — the backend returns 204 regardless of whether the email exists. */
+  forgotPassword: (payload: ForgotPasswordRequest): Promise<void> =>
+    api.post<void>("/api/auth/forgot-password", payload),
+
+  /** 204 on success; throws ApiError(400, "...") for an invalid/expired token or a
+   *  password-policy violation — both shown to the user as-is by the caller. */
+  resetPassword: (payload: ResetPasswordRequest): Promise<void> =>
+    api.post<void>("/api/auth/reset-password", payload),
 
   // ---- 2FA management (authorized) ----
 

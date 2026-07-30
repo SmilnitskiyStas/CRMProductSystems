@@ -3,6 +3,335 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-460 — Backend: security remediation of TASK-458's forgot/reset-password findings
+
+**Status:** done — build 0/0, tests 1221/1221 (was 1220, +1), worker `tsc --noEmit` clean · **Agent:**
+backend-developer · **Depends:** TASK-458 · **Next:** optional confirm-only re-read by
+security-reviewer before real users hit this flow (not a full re-audit, not blocking)
+Log: `.claude/logs/tasks/460_2026-07-30_security-remediation-forgot-reset-password_backend-developer.md`
+Closed both TASK-458 findings. **HIGH:** `worker/src/jobs/notification-dispatch.job.ts`'s
+`dispatchTargeted()` now redacts the outbox payload to `{ expiresInMinutes }` only before the
+`logNotifications()` call for `auth.password_reset_requested` — the live `resetUrl` no longer
+reaches the `notification_queue` rows `GET /api/notifications/history` returns to any same-tenant
+user; the real (unredacted) URL is still used earlier in the same function for the actual
+email/Telegram send, so delivery is unaffected. Every other event type's logged payload is
+untouched (same ternary falls through to `row.payload` as before). **MEDIUM:** new
+`IPasswordResetTokenRepository.HasRecentActiveTokenAsync(userId, window, ct)` (checks
+`CreatedAt > utcNow - window` + `UsedAt == null`, ignoring `ExpiresAt` on purpose) backs a new
+60s `PasswordResetCooldown` in `AuthService.ForgotPasswordAsync`, checked before
+`InvalidateActiveTokensAsync` — a hit behaves exactly like the unknown-email branch (same log, same
+no-op, no response difference), so it adds no new enumeration signal. `NotificationRepository
+.GetHistoryAsync`/`NotificationsController` deliberately left untouched — confirmed out of scope,
+a separate wider access-control pattern per the review. Verified the worker redaction logic in
+isolation (Node eval against a reset-payload fixture and a non-reset fixture — redacted output has
+zero trace of the token, other event types pass through unchanged); did not rebuild/drive the
+shared dev worker container for a full live check (not "simple" per the brief's fallback — that
+container runs built `dist/`, not live source). New `AuthServiceTests.cs` case
+(`ForgotPasswordAsync_within_cooldown_window_has_no_side_effects`) plus an explicit
+`HasRecentActiveTokenAsync → false` stub added to the existing happy-path test.
+
+## TASK-458 — Security: review of forgot/reset-password flow
+
+**Status:** done — **verdict: NOT clear to ship as-is.** 1 HIGH, 1 MEDIUM finding · **Agent:**
+security-reviewer · **Depends:** TASK-456, TASK-457 · **Next:** backend-developer/devops follow-up
+on the 2 findings below before real users get this flow
+Log: `.claude/logs/tasks/458_2026-07-30_security-review-forgot-reset-password_security-reviewer.md`
+Read TASK-455/456/457 logs, then the code directly. 6 of 8 checklist items **OK**: token entropy
+(64-byte `RandomNumberGenerator`, same as refresh tokens), forgot-password's always-204 posture
+(timing asymmetry vs. unknown email noted as low-severity, same pre-existing pattern as
+`LoginAsync`), the RLS fail-open exception + its test/doc coverage (`allowedFailOpen` correctly
+3 entries, `database-schema.md` exceptions table verified accurate), lockout-clear +
+refresh-revocation ordering (all one `SaveChangesAsync`, no partial-persistence path), the
+frontend reset-password surface (no external resources/analytics anywhere in
+`app/(auth)/**`, token travels in the POST body not the query string), and reset-password's
+enumeration posture (not-found/expired/used/inactive-owner all return the identical generic
+string). **HIGH finding:** the live raw reset token (`resetUrl` in the outbox `Payload`) survives
+into `notification_queue` rows written by the worker's `logNotifications()`
+(`worker/src/services/notification-log.ts:36-52`) with `Channel="email"/"telegram"` — NOT excluded
+by `NotificationRepository.GetHistoryAsync`'s `Channel != "system"` filter
+(`NotificationRepository.cs:63`) — and `NotificationsController.GetHistory`/`GetById`
+(`NotificationsController.cs:57-80`) scope only by `tenantId`, no per-user enforcement, bare
+`[Authorize]`, no role gate. Net effect: any authenticated same-tenant user of any role can call
+`GET /api/notifications/history` and read any colleague's live, unexpired password-reset link —
+account takeover, no IP tricks/brute force needed. Pre-existing endpoint gap, but TASK-456 is the
+first event type whose payload carries a bearer secret through it. Recommend redacting `resetUrl`
+before it reaches `logNotifications` (still use the real URL for the actual send, which happens
+earlier in the same function) — worker-side, `notification-dispatch.job.ts`'s `dispatchTargeted()`.
+**MEDIUM finding:** `ForgotPasswordAsync` has no per-user/per-email cooldown independent of the
+`"auth-forgot-password"` per-IP limiter (5/min, confirmed correctly wired,
+`Program.cs:125-133`/`AuthController.cs:220`) — and KI-014 already confirms per-IP limiting is
+ineffective in production. Since Telegram delivery already works today, this is currently an
+unmitigated notification-spam vector against any known/guessed email. Recommend a per-user cooldown
+in `AuthService.ForgotPasswordAsync` in addition to the IP limiter. No code changed (audit only);
+both findings are recommendations for a follow-up implementation task, not applied here.
+
+## TASK-459 — Docs: forgot/reset-password flow (api-contracts, database-schema confirm, ADR-024, blocked.md cross-ref)
+
+**Status:** done · **Agent:** documentation-writer · **Depends:** TASK-456, TASK-457 · **Next:** none blocking (TASK-458 security-reviewer runs in parallel)
+Log: `.claude/logs/tasks/459_2026-07-30_docs-forgot-reset-password_documentation-writer.md`
+Plan: `C:\Users\stass\.claude\plans\reflective-churning-quail.md` §"Документація (TASK-459)".
+`.claude/docs/api-contracts.md` — added `POST /api/auth/forgot-password`/`reset-password` to the
+Auth block (rate limits, 204/400 shapes, reset-link URL shape, outbox delivery pointer to
+ADR-024); header date bumped 2026-07-30. `.claude/docs/database-schema.md` — verified TASK-455's
+exceptions-table fix (3 rows: `users`/`refresh_tokens`/`password_reset_tokens`, `notification_settings`
+correctly removed) and its new `## TASK-455` section are both already accurate — no content
+change, only bumped the stale header date to match. `.claude/docs/decisions.md` — new
+**ADR-024** (outbox/`dispatchTargeted()` reuse over a new C# BullMQ producer, `password_reset_tokens`
+as the 3rd fail-open RLS exception, email-primary/Telegram-fallback with the TASK-260 dependency,
+`Frontend__BaseUrl` env-var-not-IConfiguration precedent, 400-not-401 rationale), header bumped.
+`.claude/tasks/blocked.md` — added a one-paragraph cross-reference under the existing TASK-260
+entry (forgot/reset-password's email channel depends on the same Resend DNS blocker; Telegram
+fallback doesn't and works today). No `known-issues.md` entry created (deliberate — not a new
+problem, a new dependent of an already-tracked one, per brief). No code touched.
+
+## TASK-457 — Frontend: forgot/reset-password UI + back-to-landing navigation
+
+**Status:** done — `tsc --noEmit` 0 errors, `npm run build` clean, live-verified end-to-end
+against the real TASK-456 backend · **Agent:** frontend-developer · **Depends:** TASK-456 ·
+**Next:** security-reviewer (TASK-458), documentation-writer (TASK-459)
+Log: `.claude/logs/tasks/457_2026-07-30_forgot-reset-password-frontend_frontend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\reflective-churning-quail.md` §"Frontend (TASK-457,
+frontend-developer)". New `AuthLogo.tsx` (shield+wordmark wrapped in `<Link href="/">`, replaces
+`LoginCard.tsx`'s old unclickable inline markup — used by all 3 public auth cards now) +
+`ForgotPasswordCard/Form.tsx` + `ResetPasswordCard/Form.tsx` + their `/forgot-password` and
+`/reset-password` routes + `LoginForm.tsx`'s new "Forgot password?" link + `useForgotPassword`/
+`useResetPassword` hooks + `middleware.ts` (`/forgot-password` gated same as `/login`,
+`/reset-password` deliberately not — token in URL authorizes the action independent of session)
++ `notifications/types.ts`'s `auth.password_reset_requested` entry (not added to
+`NotificationSettingsTable.tsx`'s `ALL_EVENTS`, matching the `access.*` precedent) + full
+`Dashboard.auth` i18n block in both locales. Reset-password's 400 body: the known
+`"Invalid or expired reset link."` sentinel gets a localized replacement, any other message
+(password-policy violation) is shown verbatim in English, mirroring `ChangePasswordForm.tsx`'s
+existing convention. **Live-verified end-to-end against the real backend** (dev servers via
+`preview_start`; had to restart the backend once with `Cors__Origins` widened to include the
+auto-reassigned frontend dev port, same CORS issue TASK-421 already hit): real
+`POST /api/auth/forgot-password` → 204 → unconditional success message; real
+`POST /api/auth/reset-password` with a fake token → 400
+`{"error":"Invalid or expired reset link."}` → correctly localized in the UI; no-token URL shows
+a friendly message with no form; client-side zod validation (short password, mismatched confirm)
+fires with zero network calls; logo click lands on the public landing page;
+`AUTH_ROUTES`/`/reset-password` middleware exclusion both confirmed via a manually-set
+`sg_session` cookie. The sandboxed browser's `computer` click tool couldn't land clicks here
+(pane not compositing) — interactions were driven via `javascript_tool` dispatching real
+bubbling DOM events instead, exercising the same code paths. One i18n key added beyond the
+brief's enumerated list, `somethingWentWrongError` (generic transport-failure fallback — the
+brief's prose required the behavior but didn't name a key). Not committed.
+
+## TASK-456 — Backend: forgot/reset-password business logic + API + worker
+
+**Status:** done — build 0/0, tests 1220/1220 (was 1213, +7), worker tsc/build clean · **Agent:**
+backend-developer · **Depends:** TASK-455 · **Next:** frontend-developer (TASK-457)
+Log: `.claude/logs/tasks/456_2026-07-30_forgot-reset-password-backend_backend-developer.md` (full
+API contract for TASK-457 there). Plan: `C:\Users\stass\.claude\plans\reflective-churning-quail.md`
+§"Backend (TASK-456, backend-developer)". Added `AuthService.ForgotPasswordAsync`/
+`ResetPasswordAsync` (both no-enumeration/generic-error posture matching `LoginAsync`/
+`VerifyTwoFactorAsync`), `POST /api/auth/forgot-password` (always 204, rate limit 5/min new
+`"auth-forgot-password"` policy) and `POST /api/auth/reset-password` (204/400, shares `"auth-login"`
+10/min), `Frontend__BaseUrl` env plumbing (staging/production `.env.example` + compose files),
+`NotificationService.ValidEventTypes` entry, and worker `notification-dispatch.job.ts`
+`TARGETED_EVENT_CHANNELS`/`formatText`/`formatEmail` support for
+`auth.password_reset_requested` (email + Telegram, no push). **Found and resolved a real
+pre-code-review risk**: both new methods run on anonymous (`[AllowAnonymous]`, no `app.tenant_id`
+set) connections — live-verified directly against the real non-superuser `shelfguard_app_dev` role
+(rolled-back transaction) that `activity_logs`/`notification_queue` INSERTs and `users`/
+`refresh_tokens`/`password_reset_tokens` UPDATEs all succeed under real RLS in that exact anonymous
+session state; dev DB confirmed clean afterward. Email channel stays invisible to real users until
+TASK-260 (Resend DNS) unblocks; Telegram works today for linked accounts. Not committed.
+
+## TASK-455 — DB: Password reset tokens schema (forgot/reset-password flow)
+
+**Status:** done — created, migrated, live-verified against the real non-superuser app role · **Agent:** database-engineer · **Depends:** none (Task #1 of the flow) · **Next:** backend-developer (TASK-456)
+Log: `.claude/logs/tasks/455_2026-07-30_password-reset-tokens-schema_database-engineer.md`
+Plan: `C:\Users\stass\.claude\plans\reflective-churning-quail.md` §"Database (TASK-455,
+database-engineer)". New `password_reset_tokens` table + `PasswordResetToken` entity (styled like
+`RefreshToken` — private setters, `Create()` factory, computed `IsActive`, `MarkUsed()`) +
+standalone `IPasswordResetTokenRepository` (`InvalidateActiveTokensAsync` bulk `ExecuteUpdateAsync`,
+`AddAsync`, `GetActiveByHashAsync`, `SaveChangesAsync`) + migration `AddPasswordResetTokens`
+(20260730090415). No own `TenantId` — tenant derived via `UserId → users.TenantId`; RLS
+`tenant_isolation` is deliberately fail-open (`EXISTS`-through-`users`, verified byte-for-byte
+against `refresh_tokens`' live policy), the 3rd documented exception alongside `users`/
+`refresh_tokens`. Fixed stale `notification_settings` references in
+`RlsCrossTenantIntegrationTests.cs` and `database-schema.md`'s exceptions table (removed by
+TASK-360 back in July, docs/test text just hadn't caught up) while there. `dotnet build` 0 err/0
+warn, `dotnet test` **1213/1213 green** including the 6 RLS regression tests run live against
+Postgres (no soft-skip). No `AuthController`/`AuthService` changes — that's TASK-456.
+
+## TASK-435 — Mobile: real-device baseline QA
+
+**Status:** paused_user_request / partial acceptance · **Agent:** qa-tester (Codex) · **Updated:** 2026-07-29
+
+Fresh current-source debug APK was built and installed on realme RMX2063, Android 11 / API 30,
+serial `13cb6660`, against `https://api.agrusystems.pp.ua:10054/api`. Native cold start passes,
+but the first QA build failed before usable auth UI. Root cause was a NativeWind
+`react-native-css-interop` development warning serializer crashing while dynamically adding
+`shadow-sm` to tab controls; the reported navigation-context error was a secondary symptom.
+All equivalent dynamic shadow toggles were removed and static regression passes: TypeScript,
+lint (0 errors/13 warnings), Jest, Android bundle export. The unauthenticated-QA `Required`
+localization defect is also fixed across staff login and consumer login/register with shared
+field-specific Ukrainian schemas (18 suites/78 tests). Rebuild/install, then resume device QA;
+authenticated acceptance additionally needs seeded business data.
+
+Post-fix physical retest passes on a newly packaged/installed APK: current bundle and auth choice
+render, staff login entry and Android Back work, force-stop/relaunch returns to usable auth, and
+unauthenticated schedules/service-desk/POS/marketplace deep links fail closed without the prior
+navigation-context error. Remaining authenticated TASK-437–444 acceptance needs approved
+staff/2FA credentials and seeded tenant/store/location/product/POS-shift/warehouse data.
+Unauthenticated QA additionally passes staff/consumer entry, malformed email, synthetic invalid
+credentials, Back, and hot background/foreground. A low localization defect remains: empty auth
+fields show English `Required` inside Ukrainian UI. Offline-specific presentation was inconclusive;
+Wi-Fi was restored to its original enabled state and mobile data remained disabled.
+
+Authenticated continuation completed for provider, network manager, store manager, storekeeper,
+and merchandiser. Role dashboards/navigation render and guarded routes fail closed. The camera
+permission/scanner flow passes. The enterprise-admin account reaches the implemented mobile 2FA
+challenge but cannot complete without a current OTP/recovery code. Store-manager HOT restoration
+passes, while force-stop plus dev-client reconnect loses the visible staff session (TASK-437 high
+defect). Storekeeper POS needs a seeded `pos` tab/module and a safe follow-up session; no sale or
+shift was created. See `.claude/logs/reviews/2026-07-29_mobile-baseline.md`.
+
+TASK-437 cold restoration and TASK-438 Back cancellation fixes are now prepared. Explicit
+pending/ready hydration gates auth/staff/consumer routing until SecureStore and `/auth/me` or
+terminal cleanup complete. The 2FA challenge handles hardware Back, Android IME Back dismissal,
+header Back, and unmount through one safe cancellation boundary. TypeScript passes; lint has
+0 errors/13 existing warnings; Jest passes (20 suites/84 tests); Android export passes. Physical
+retest remains required.
+
+TASK-437 offline cold-bootstrap follow-up and TASK-444 owner-switch draft loss are also
+`fix_ready_for_device_retest`. Transient bootstrap/refresh failures preserve secure auth while
+clearing private cache and showing retry; terminal auth failures still clean all session state.
+Draft storage is owner-namespaced and legacy shared records migrate only for their embedded owner.
+Current verification: TypeScript pass, lint 0 errors/13 warnings, Jest 20 suites/90 tests, Android
+export pass.
+
+TASK-444 same-owner cold restore had a second root cause: load validation rejected and deleted
+incomplete form snapshots that autosave legitimately wrote. Validation now accepts incomplete
+draft fields, submit rules remain unchanged, and AppState background flushes the latest sanitized
+snapshot. Restart and foreign-owner integration tests pass; baseline is 20 suites/92 tests.
+
+Physical retest of those fixes now passes. Store-manager force-stop/reconnect restores the same
+authenticated identity after the bootstrap loading phase; HOT resume and logout/private-cache
+cleanup pass. 2FA hardware Back safely cancels before input and after focusing the code field.
+Exactly one approved recovery code was accepted for enterprise admin; its value is not recorded
+and reuse was not attempted. Enterprise-admin role navigation and logout pass. Live TOTP remains
+untested, as do safe seeded POS mutation/durability flows.
+
+## TASK-444 — Mobile: durable warehouse and production drafts
+
+**Status:** transfer_draft_device_pass / receipt-create contract pending · **Agent:** mobile-developer (Codex) ·
+**Depends:** TASK-443 · **Next:** TASK-445; Android acceptance through TASK-435
+
+Added reusable, owner-isolated/versioned operational drafts and integrated them into the existing
+write-off, transfer, and production-order forms. Drafts restore after process restart, survive
+confirmed failures/conflicts/ambiguous timeouts, clear only after confirmed success or explicit
+discard, and cannot persist auth/QR/2FA secrets. Transfer stock and production recipe references
+are server-refetched before submit; write-off stock conflicts rely on backend `409` because its
+form has no batch reference. Owner-context changes fail closed immediately and FEFO remains
+server-authoritative. The mobile receipt module has
+no create form or approved create DTO, so receipt-create support awaits the recorded contract
+handoff. TypeScript/lint/tests pass; Android force-close QA remains TASK-435.
+
+Log: `.claude/logs/tasks/444_2026-07-29_durable-operational-drafts_mobile-developer.md`
+Handoff: `.claude/logs/handoffs/444-to-backend-product_mobile-developer.md`
+
+Device QA: transfer autosave/offline banner/discard pass, but switching manager → storekeeper hides
+and deletes the manager snapshot, so returning to manager cannot restore it. High defect:
+`.claude/logs/reviews/bug-task444-owner-switch-deletes-draft_2026-07-29.md`. No test draft remains.
+
+Current-source retest still fails earlier: same-owner transfer note did not restore after
+force-stop. Full user-switch and offline-cold sequences were stopped; no marker remained visible.
+
+Final focused retest now passes the exact incomplete transfer-note path: background, same-owner
+cold restore, manager/storekeeper isolation, manager-return restore, explicit discard, and cold
+absence. No marker or server mutation remains.
+
+Testing is explicitly paused by user request. Durable handoff:
+`.claude/logs/reviews/2026-07-29_TASK-435-mobile-device-qa-pause-handoff.md`.
+Remaining work: live TOTP, seeded active POS shift, controlled offline-cold bootstrap, receipt
+contract, and write-off/production fixtures.
+
+## TASK-443 — Mobile: durable POS cart and network recovery
+
+**Status:** review_pending_device · **Agent:** mobile-developer (Codex) ·
+**Depends:** TASK-437 · **Next:** TASK-444; Android acceptance through TASK-435
+
+Persisted owner-scoped/versioned POS shift, cart, quantities, customer/loyalty selection, and
+payment draft with a secret-whitelisting serializer. Added NetInfo UI, offline submit guard,
+single-flight double-tap lock, and explicit pending/failed/completed/conflict/uncertain states.
+Timeout/no-response is never auto-retried because the current API has no idempotency key or
+reconciliation lookup; the uncertain draft is retained for shift reconciliation. Only confirmed
+success clears storage. Cross-shift carts fail closed, rapid durable writes are serialized, and
+editing cannot silently clear uncertain/conflict state. TypeScript passes; lint has 0 errors/19
+baseline warnings; 13 suites/61
+tests pass. Device force-close acceptance remains TASK-435.
+
+Log: `.claude/logs/tasks/443_2026-07-29_durable-pos-network-recovery_mobile-developer.md`
+Backend handoff: `.claude/logs/handoffs/443-to-backend_mobile-developer.md`
+
+Device QA is blocked by seeded state: manager and storekeeper POS both report no open shift.
+Opening one was prohibited; no sale/shift mutation occurred.
+
+## TASK-439 — Mobile: module activation and role-aware navigation
+**Status:** review_pending_device (implementation complete 2026-07-29) · **Agent:** mobile-developer (Codex) ·
+**Depends:** TASK-437 · **Next:** Android acceptance through TASK-435
+Log: `.claude/logs/tasks/439_2026-07-29_module-role-navigation_mobile-developer.md`
+Handoff: `.claude/logs/handoffs/439-to-backend_mobile-developer.md`
+Current controller inspection corrected stale documentation: authenticated tenant staff can read
+server-derived `businessType` and modules from `/api/settings/modules`. Mobile preserves
+permissions/capabilities/tabs, centralizes all route requirements, filters Dashboard/More and
+bottom tabs, and guards every `(app)` deep link fail-closed. Provider tenant-module access remains
+closed. TypeScript and lint pass; 10 suites/45 tests pass. Android acceptance awaits TASK-435.
+
+## TASK-438 — Mobile: 2FA login with TOTP and recovery codes
+**Status:** device_pass_recovery_totp_pending ·
+**Agent:** mobile-developer (Codex main session) · **Depends:** TASK-437 ·
+**Next:** TASK-439; final live acceptance returns through TASK-435
+Log: `.claude/logs/tasks/438_2026-07-29_mobile-2fa-login_mobile-developer.md`
+Handoff: `.claude/logs/handoffs/438-to-442_mobile-developer.md`
+Implemented the existing backend challenge contract in mobile: password login routes 2FA-enabled
+staff to a dedicated Ukrainian screen supporting six-digit TOTP and `XXXX-XXXX` recovery codes.
+The challenge token is memory-only, never written to SecureStore or logs, and is cleared on success
+or whenever the verification route is left. Invalid-code `401` responses bypass auth refresh so
+they cannot accidentally terminate an existing session. Type-check and lint pass; 8 suites/30
+tests pass. Live TOTP/recovery verification remains pending because TASK-435 has no device/AVD.
+Mobile 2FA setup/enable/disable remains intentionally web-only.
+Android Back/IME dismissal and header Back now clear the challenge and return to staff login;
+focused cleanup also clears it on unmount. See
+`.claude/logs/tasks/438_2026-07-29_android-back-cancellation_mobile-developer.md`.
+
+## TASK-437 — Mobile: auth refresh and terminal session cleanup
+**Status:** done / Android device verified ·
+**Agent:** mobile-developer (Codex main session) · **Depends:** TASK-436 ·
+**Next:** TASK-439; final device acceptance returns through TASK-435
+Log: `.claude/logs/tasks/437_2026-07-29_auth-refresh-session-cleanup_mobile-developer.md`
+Handoff: `.claude/logs/handoffs/437-to-442_mobile-developer.md`
+Implemented authenticated-only single-flight refresh, exactly-once request retry, terminal cleanup
+of SecureStore + Zustand + private React Query cache, resilient partial-keystore cleanup, and a
+session-epoch guard preventing logout/refresh races. Failed unauthenticated login no longer attempts
+refresh; a refreshed token rejected with another 401 terminates without a loop. Staff logout,
+consumer logout, and cold-start invalid-session handling share the same cleanup boundary.
+`type-check`/lint (0 errors)/`npm ls` clean; 7 suites/24 tests pass. Android native cookie and
+redirect behavior remains unverified because TASK-435 has no device/AVD, so the task is not marked
+done. Existing TASK-427 notification implementation remains untouched.
+Cold start now uses explicit hydration gating and redirects a restored staff/consumer session only
+after persisted state plus `/auth/me` or terminal cleanup finish. See
+`.claude/logs/tasks/437_2026-07-29_cold-session-hydration_mobile-developer.md`.
+
+## TASK-436 — Mobile: ESLint and automated test infrastructure
+**Status:** done (2026-07-29) · **Agent:** mobile-developer (Codex main session) ·
+**Depends:** TASK-434; TASK-435 device QA remains blocked · **Next:** TASK-437
+Log: `.claude/logs/tasks/436_2026-07-29_mobile-test-infrastructure_mobile-developer.md`
+Roadmap: `.claude/tasks/mobile-roadmap.md`
+Added Expo SDK 56 ESLint flat config and Jest/RNTL infrastructure: typecheck PASS, lint PASS
+(0 errors/19 recorded warnings), 6 suites/17 tests PASS. Covered auth persistence/restoration,
+canonical roles, auth API mapping/2FA failure, TASK-427 paged notifications, POS loyalty totals,
+and a shared RN component. Fixed a real conditional Hooks violation in Customers. Expo Doctor
+follow-up added missing `expo-font`, removed unused incompatible direct React Navigation tabs,
+and aligned SDK 56 dependencies; 20/21 checks pass, with the last `.expo` tracking check clearing
+after the generated tracked README deletion is committed. Non-force audit fixed runtime axios
+high findings; remaining production findings are 10 moderate Expo/Xcode `uuid` advisories whose
+only npm proposal is an unsafe forced Expo 56→46 downgrade, not applied. Device test deferred to
+TASK-435. Existing uncommitted TASK-427 notification implementation preserved.
+
 ## TASK-431 — Security: review of Фаза 3 (AudienceBuilder)
 **Status:** done — **verdict: CLEAR TO SHIP**, no blocker, no risk-level finding · **Agent:**
 security-reviewer · **Depends:** TASK-428..430 · **Next:** none blocking; optional low-priority

@@ -211,6 +211,34 @@ public sealed class AuthController : ControllerBase
         return error is null ? NoContent() : BadRequest(new { error });
     }
 
+    /// <summary>
+    /// First step of the forgot-password flow (TASK-456). Always responds 204 regardless of
+    /// whether the email exists/is active — same no-enumeration posture as Login.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-forgot-password")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ForgotPassword(
+        [FromBody] ForgotPasswordRequest request, CancellationToken ct)
+    {
+        await _auth.ForgotPasswordAsync(request.Email, ClientIp(), ct);
+        return NoContent();
+    }
+
+    /// <summary>Second step: consumes the reset token/link and sets a new password (TASK-456).</summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword(
+        [FromBody] ResetPasswordRequest request, CancellationToken ct)
+    {
+        var error = await _auth.ResetPasswordAsync(request.Token, request.NewPassword, ct);
+        return error is null ? NoContent() : BadRequest(new { error });
+    }
+
     // NOTE (2026-07-15, security fix): a `POST telegram/link` endpoint used to live here,
     // accepting a raw client-supplied Telegram chat_id and writing it straight to
     // users.TelegramChatId with zero proof of ownership — any user could paste an arbitrary

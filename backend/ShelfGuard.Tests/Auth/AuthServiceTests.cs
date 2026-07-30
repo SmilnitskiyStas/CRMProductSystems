@@ -19,12 +19,14 @@ public sealed class AuthServiceTests
     private readonly ITotpService _totp = Substitute.For<ITotpService>();
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
+    private readonly IPasswordResetTokenRepository _passwordResetTokens = Substitute.For<IPasswordResetTokenRepository>();
+    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly AuthService _sut;
 
     public AuthServiceTests()
     {
         _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants, _tenantRoles,
-            NullLogger<AuthService>.Instance);
+            _passwordResetTokens, _notifications, NullLogger<AuthService>.Instance);
         _permissionGrants.GetActiveGrantsForUserAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(Array.Empty<UserPermissionGrant>());
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
@@ -252,6 +254,147 @@ public sealed class AuthServiceTests
 
         _tokens.Received(1).Update(Arg.Is<RefreshToken>(t => t.RevokedAt.HasValue));
         await _tokens.Received(1).SaveChangesAsync(default);
+    }
+
+    // ── Forgot password (TASK-456) ──────────────────────────────────────────
+
+    [Fact]
+    public async Task ForgotPasswordAsync_unknown_email_has_no_side_effects()
+    {
+        _users.GetByEmailAsync(Arg.Any<string>(), default).ReturnsNull();
+
+        await _sut.ForgotPasswordAsync("nobody@example.com");
+
+        await _passwordResetTokens.DidNotReceive().InvalidateActiveTokensAsync(Arg.Any<Guid>(), default);
+        await _passwordResetTokens.DidNotReceive().AddAsync(Arg.Any<PasswordResetToken>(), default);
+        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), default);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_inactive_user_has_no_side_effects()
+    {
+        var user = MakeInactiveUser();
+        _users.GetByEmailAsync("test@example.com", default).Returns(user);
+
+        await _sut.ForgotPasswordAsync("test@example.com");
+
+        await _passwordResetTokens.DidNotReceive().AddAsync(Arg.Any<PasswordResetToken>(), default);
+        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), default);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_known_active_user_creates_token_and_enqueues_notification()
+    {
+        var user = MakeUser();
+        _users.GetByEmailAsync("test@example.com", default).Returns(user);
+        _jwt.HashToken(Arg.Any<string>()).Returns("reset_hash");
+        // Explicit, not relying on NSubstitute's implicit false default — documents the precondition.
+        _passwordResetTokens.HasRecentActiveTokenAsync(user.Id, Arg.Any<TimeSpan>(), default).Returns(false);
+
+        await _sut.ForgotPasswordAsync("test@example.com", "1.2.3.4");
+
+        await _passwordResetTokens.Received(1).InvalidateActiveTokensAsync(user.Id, default);
+        await _passwordResetTokens.Received(1).AddAsync(
+            Arg.Is<PasswordResetToken>(t => t.UserId == user.Id && t.TokenHash == "reset_hash"), default);
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n =>
+                n.UserId == user.Id &&
+                n.TenantId == user.TenantId &&
+                n.Channel == "system" &&
+                n.EventType == "auth.password_reset_requested" &&
+                n.Status == "pending" &&
+                n.Payload != null && n.Payload.Contains("resetUrl")),
+            default);
+        await _activityLogs.Received(1).LogAsync(
+            Arg.Is<ActivityLog>(l => l.Action == "user.password_reset_requested" && l.UserId == user.Id), default);
+    }
+
+    // ── Forgot password cooldown (TASK-460) ─────────────────────────────────
+
+    [Fact]
+    public async Task ForgotPasswordAsync_within_cooldown_window_has_no_side_effects()
+    {
+        // A repeat request within the cooldown must behave EXACTLY like the unknown-email
+        // branch — no token, no notification, no activity log — regardless of what
+        // InvalidateActiveTokensAsync would otherwise do (that guards two simultaneously-active
+        // tokens, not request frequency). This is the enumeration-safety requirement: no branch
+        // may be distinguishable from "email not found".
+        var user = MakeUser();
+        _users.GetByEmailAsync("test@example.com", default).Returns(user);
+        _passwordResetTokens.HasRecentActiveTokenAsync(user.Id, Arg.Any<TimeSpan>(), default).Returns(true);
+
+        await _sut.ForgotPasswordAsync("test@example.com", "1.2.3.4");
+
+        await _passwordResetTokens.DidNotReceive().InvalidateActiveTokensAsync(Arg.Any<Guid>(), default);
+        await _passwordResetTokens.DidNotReceive().AddAsync(Arg.Any<PasswordResetToken>(), default);
+        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), default);
+        await _activityLogs.DidNotReceive().LogAsync(
+            Arg.Is<ActivityLog>(l => l.Action == "user.password_reset_requested"), default);
+    }
+
+    // ── Reset password (TASK-456) ───────────────────────────────────────────
+
+    [Fact]
+    public async Task ResetPasswordAsync_returns_error_for_invalid_or_expired_token()
+    {
+        _passwordResetTokens.GetActiveByHashAsync(Arg.Any<string>(), default).ReturnsNull();
+
+        var error = await _sut.ResetPasswordAsync("bad_token", "NewPassw0rd1234");
+
+        Assert.Equal("Invalid or expired reset link.", error);
+        _users.DidNotReceive().Update(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_returns_generic_error_when_owner_not_found_or_inactive()
+    {
+        var user = MakeInactiveUser();
+        var token = PasswordResetToken.Create(user.Id, "reset_hash", DateTime.UtcNow.AddMinutes(30));
+        _passwordResetTokens.GetActiveByHashAsync(Arg.Any<string>(), default).Returns(token);
+        _users.GetByIdAsync(user.Id, default).Returns(user);
+
+        var error = await _sut.ResetPasswordAsync("raw_reset_token", "NewPassw0rd1234");
+
+        Assert.Equal("Invalid or expired reset link.", error);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_returns_policy_error_for_weak_password_without_consuming_token()
+    {
+        var user = MakeUser();
+        var token = PasswordResetToken.Create(user.Id, "reset_hash", DateTime.UtcNow.AddMinutes(30));
+        _passwordResetTokens.GetActiveByHashAsync(Arg.Any<string>(), default).Returns(token);
+        _users.GetByIdAsync(user.Id, default).Returns(user);
+
+        var error = await _sut.ResetPasswordAsync("raw_reset_token", "short");
+
+        Assert.NotNull(error);
+        Assert.NotEqual("Invalid or expired reset link.", error);
+        Assert.Null(token.UsedAt); // rejected before the token is ever marked used
+        await _tokens.DidNotReceive().RevokeAllForUserAsync(Arg.Any<Guid>(), default);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_happy_path_changes_password_and_revokes_sessions()
+    {
+        var user = MakeUser();
+        user.RegisterFailedLogin(3, TimeSpan.FromMinutes(15)); // nonzero counter to prove ResetLockout runs
+        var token = PasswordResetToken.Create(user.Id, "reset_hash", DateTime.UtcNow.AddMinutes(30));
+        _passwordResetTokens.GetActiveByHashAsync(Arg.Any<string>(), default).Returns(token);
+        _users.GetByIdAsync(user.Id, default).Returns(user);
+        _hasher.Hash("NewPassw0rd1234").Returns("new_hash");
+
+        var error = await _sut.ResetPasswordAsync("raw_reset_token", "NewPassw0rd1234");
+
+        Assert.Null(error);
+        Assert.Equal("new_hash", user.PasswordHash);
+        Assert.Equal(0, user.FailedLoginAttempts);
+        Assert.Null(user.LockoutUntil);
+        Assert.NotNull(token.UsedAt);
+        await _tokens.Received(1).RevokeAllForUserAsync(user.Id, default);
+        await _activityLogs.Received(1).LogAsync(
+            Arg.Is<ActivityLog>(l => l.Action == "user.password_reset_completed" && l.UserId == user.Id), default);
+        await _passwordResetTokens.Received(1).SaveChangesAsync(default);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

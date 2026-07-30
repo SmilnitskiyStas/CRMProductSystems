@@ -262,6 +262,10 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.MarketingAnalytics.AudienceBuilder.IAudienceBuilderRepository,
             Data.Repositories.AudienceBuilderRepository>();
 
+        // TASK-455 - Forgot/reset-password flow — schema only (AuthService lands in TASK-456)
+        services.AddScoped<Domain.Interfaces.IPasswordResetTokenRepository,
+            Data.Repositories.PasswordResetTokenRepository>();
+
         return services;
     }
 }

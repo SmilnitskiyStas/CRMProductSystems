@@ -1,7 +1,103 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-27
+**Updated:** 2026-07-30
+
+## ADR-024: Forgot/reset-password flow — outbox reuse, third fail-open RLS exception, env-var frontend URL, 400 not 401
+Date: 2026-07-30
+Status: accepted
+
+Context: ShelfGuard had no way for a user locked out of `/login` to recover a forgotten
+password — a repo-wide grep (`backend`/`frontend`/`mobile`/`worker`/`.claude`) for
+forgot/reset-password confirmed zero existing code, and `v1-spec.md` never specified the
+flow either. Two possible delivery channels exist for reaching that user: email
+(`worker/src/services/email.ts` — complete, working code, but blocked today: `RESEND_API_KEY`'s
+domain `agrusystems.pp.ua` has not passed Resend's DNS verification, TASK-260, blocked since
+2026-06-19) and Telegram (works today, but only for a user who already linked their account —
+an authenticated, opt-in flow that cannot be the *only* channel for someone locked out right
+now). User confirmed via `AskUserQuestion`: email as the primary channel, Telegram as fallback
+for already-linked accounts; build complete, correct code now so it activates the instant
+TASK-260 unblocks — the same posture already accepted for `weekly-report`. TASK-455 (schema),
+TASK-456 (backend + worker), TASK-457 (frontend) implemented this; this ADR records the
+cross-cutting decisions behind it, verified against the shipped code.
+
+Decision:
+
+1. **Delivery reuses the existing Postgres outbox (ADR-018), not a new C# BullMQ producer.**
+   ADR-018 already settled this question for backend-originated notifications in general: no
+   new cross-language job-producer infrastructure — the triggering C# service inserts a row
+   into `notification_queue` and `notification-dispatch.job.ts` (Node, 1-min poll) picks it up.
+   `AuthService.ForgotPasswordAsync` follows this exactly: `INotificationRepository.EnqueueAsync`
+   with `UserId` set (a **targeted**, not broadcast, intent row — the same shape ADR-019
+   introduced for temporary-access-grant expiry notifications), `EventType =
+   "auth.password_reset_requested"`, `Payload = {resetUrl, expiresInMinutes}`. The worker's
+   `dispatchTargeted()` (added by ADR-019) already handles single-recipient delivery via
+   `TARGETED_EVENT_CHANNELS`; this task only adds one map entry (`["email", "telegram"]` —
+   deliberately no `"push"`, not implemented anywhere in this codebase yet) plus the
+   `formatEmail`/`formatText` branches that turn the payload into an actual clickable-link
+   message. Zero new delivery infrastructure of any kind.
+2. **`password_reset_tokens` is the third documented fail-open RLS exception — not a fourth,
+   and not a new kind of exception.** `database-schema.md`'s exceptions table already correctly
+   lists exactly `users` / `refresh_tokens` / `password_reset_tokens` (`notification_settings`
+   was removed from that list on 2026-07-15, TASK-360 — it never had a real pre-auth access
+   path to begin with, so its old fail-open branch was a plain leak, not a necessary exception).
+   The reasoning for the new table is identical to `refresh_tokens`'s: an anonymous
+   forgot/reset-password request must find its token/user row through an `EXISTS`-through-`users`
+   join before `TenantConnectionInterceptor` has any `app.tenant_id` to `SET` — there is no
+   tighter alternative, since the interceptor only ever `RESET`s session vars for unauthenticated
+   connections rather than setting them to something narrower.
+3. **Email primary / Telegram fallback is a product decision (`AskUserQuestion`), not an
+   engineering default — and it carries an explicit, tracked dependency.** The email channel will
+   not actually reach a real user until TASK-260 (Resend DNS verification for
+   `agrusystems.pp.ua`) unblocks — the same standing dependency already accepted for
+   `weekly-report`. Telegram works today for any user who has already linked their account via
+   the existing `/start <code>` flow and does not depend on TASK-260 at all.
+   `.claude/tasks/blocked.md`'s TASK-260 entry now cross-references this flow rather than a new
+   `known-issues.md` entry being created for it — it is a new dependent of an already-tracked
+   blocker, not a new problem.
+4. **`Frontend__BaseUrl` is read via `Environment.GetEnvironmentVariable`, not
+   `IConfiguration`.** `ShelfGuard.Application.csproj` carries no `Microsoft.Extensions.
+   Configuration` package reference at all (confirmed directly) — `AuthService` lives in the
+   Application layer and physically cannot resolve `IConfiguration["Frontend:BaseUrl"]`.
+   `TelegramLinkService.cs` already established the exact precedent for this same constraint
+   (`Environment.GetEnvironmentVariable("Telegram__BotUsername") ?? "shelfguard_bot"`, with a
+   comment stating "Application layer has no IConfiguration dependency — env var with a sane
+   default"); `AuthService`'s constructor copies this pattern verbatim for `Frontend__BaseUrl`
+   (default `http://localhost:3000`). Env plumbing (`.env.staging.example`,
+   `.env.production.example`, both `docker-compose.*.yml`) follows the existing per-environment
+   convention — no new mechanism, and no new appsettings.json entry.
+5. **`POST /api/auth/reset-password` returns `400`, not `401`, on failure — unlike
+   `2fa/verify`.** `2fa/verify` is mid-authentication (the password already checked out; the
+   code is the second factor of that *same* login attempt), so a rejected code is genuinely an
+   authorization failure — `401` fits. `reset-password` authenticates nothing and issues no
+   tokens; it is a state-changing action gated by possession of a single-use, out-of-band
+   secret — the same category as `change-password`/`public-leads`, both already `400`. Using
+   `401` here would incorrectly imply the caller was attempting to authenticate as someone,
+   which is not what this endpoint does.
+
+Consequences:
++ Zero new delivery infrastructure — the outbox/`dispatchTargeted()` path from ADR-018/019
+  absorbs a fourth event type with one map entry and two formatting branches
++ The fail-open RLS list stays a closed, understood, three-row exception set rather than
+  growing unboundedly — a future table needing a similar "look this up before we know the
+  tenant" flow is still expected to get its own narrower policy per `database-schema.md`'s
+  existing warning, not join this list by default
++ Email ships fully built and correct, ready to work the moment TASK-260 unblocks — no
+  half-finished code to revisit later — but also no way to demonstrate real end-to-end email
+  delivery until that DNS dependency clears; Telegram is the only channel demonstrably live
+  today, and only for already-linked accounts
++ One more confirmed precedent (`Frontend__BaseUrl`) for "Application layer has no
+  `IConfiguration`, use an env var with a default" alongside `Telegram__BotUsername` — no
+  architectural surprise for the next similar case
+- The generic reset-link error text ("Invalid or expired reset link.") deliberately conflates
+  three distinct backend states (token not found, token expired/used, owner account gone or
+  inactive) into one message — correct for not leaking account state to the caller, but means
+  support/debugging must rely on server-side `ActivityLog`/logs, never the client-visible error,
+  to tell these apart
+
+Extends: ADR-018 (Postgres outbox mechanism) and ADR-019 (`dispatchTargeted()` single-recipient
+delivery, introduced for temporary-access-grant expiry notifications) — reuses both verbatim for
+a fourth targeted event type; introduces no new notification-delivery primitive.
 
 ## ADR-023: Loyalty program & RFM marketing analytics — cross-tenant ConsumerAccount identity, TOTP-based live QR, independent module keys, RfmSegment naming
 Date: 2026-07-26

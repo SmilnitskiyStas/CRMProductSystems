@@ -25,6 +25,17 @@ export interface LoginRequest {
   password: string;
 }
 
+// ---- Forgot / reset password (public, TASK-457) ----
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+}
+
 /** Successful login/refresh/2FA-verify — tokens issued. */
 export interface LoginSuccessResponse {
   accessToken: string;

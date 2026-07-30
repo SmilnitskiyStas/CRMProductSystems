@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-07-27
+**Updated:** 2026-07-30
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -73,7 +73,23 @@ POST /api/auth/change-password [Authorize]
   Body: { currentPassword, newPassword } — політика: 12+ символів, літера+цифра
   204: усі refresh-токени відкликано (інші пристрої розлогінено)
   400: { error } (текст політики англійською, показується as-is)
+
+POST /api/auth/forgot-password [public, rate limit 5/min per IP]        (TASK-456)
+  Body: { email }
+  204: завжди — незалежно від того, чи існує email/чи активний користувач (той самий
+        no-enumeration принцип, що й login). UI не має розгалужувати копію за відповіддю.
+
+POST /api/auth/reset-password  [public, той самий ліміт що auth-login]  (TASK-456)
+  Body: { token, newPassword }
+  204: пароль змінено, усі refresh-токени відкликано (інші пристрої розлогінено), lockout скинуто
+  400: { error } — generic "Invalid or expired reset link." (недійсний/прострочений/вже
+        використаний токен АБО акаунт-власник не знайдений/неактивний — навмисно не
+        розрізняються) або текст політики пароля (як change-password, показується as-is)
 ```
+Reset-link (лист/Telegram): `{Frontend__BaseUrl}/reset-password?token={urlEncodedRawToken}` —
+одноразовий, TTL 30 хв. Доставка — через існуючий Postgres outbox
+(`INotificationRepository.EnqueueAsync`, `EventType="auth.password_reset_requested"`,
+`Channels=[email, telegram]`), не новий C# BullMQ producer — див. ADR-024.
 
 #### AuthUserDto
 ```json

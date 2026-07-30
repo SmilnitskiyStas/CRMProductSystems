@@ -161,6 +161,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<LoyaltyProgramSettings> LoyaltyProgramSettings => Set<LoyaltyProgramSettings>();
     public DbSet<PriceSegmentSettings> PriceSegmentSettings => Set<PriceSegmentSettings>();
 
+    // Forgot/reset-password flow — schema only (TASK-455); AuthService/controller land in TASK-456.
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -2189,6 +2192,29 @@ public sealed class AppDbContext : DbContext
              .HasDatabaseName("uq_price_segment_settings_tenant");
             e.HasOne(s => s.Tenant).WithMany()
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── PasswordResetToken (Forgot/reset-password, TASK-455) ──────────────
+        // No own TenantId column — tenant is derived transitively through
+        // UserId -> users.TenantId, same as RefreshToken/TelegramLinkCode. See the
+        // AddPasswordResetTokens migration for the RLS policy (fail-open EXISTS-through-users,
+        // same shape/reason as refresh_tokens — an anonymous forgot/reset-password request has
+        // no app.tenant_id yet).
+        builder.Entity<PasswordResetToken>(e =>
+        {
+            e.ToTable("password_reset_tokens");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
+            e.HasIndex(t => t.TokenHash).IsUnique();
+            e.Property(t => t.ExpiresAt).IsRequired();
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            // Bulk-invalidation lookup (InvalidateActiveTokensAsync) — not unique, a user can
+            // accumulate many used/expired rows over time.
+            e.HasIndex(t => t.UserId)
+             .HasDatabaseName("idx_password_reset_tokens_user");
+            e.HasOne(t => t.User).WithMany()
+             .HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

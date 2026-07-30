@@ -74,3 +74,9 @@ public sealed record TwoFactorSetupResponse(string Secret, string OtpauthUri);
 public sealed record TwoFactorEnableRequest(string Code);
 
 public sealed record TwoFactorDisableRequest(string Password, string Code);
+
+// ── Forgot / reset password (TASK-456) ──────────────────────────────────────
+
+public sealed record ForgotPasswordRequest(string Email);
+
+public sealed record ResetPasswordRequest(string Token, string NewPassword);

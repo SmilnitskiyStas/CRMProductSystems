@@ -13,7 +13,8 @@ export type NotificationEventType =
   | "iot.temp_alert"
   | "iot.offline"
   | "access.temporary_expiring_soon"
-  | "access.temporary_expired";
+  | "access.temporary_expired"
+  | "auth.password_reset_requested";
 
 export interface NotificationSetting {
   id: string;
@@ -83,6 +84,7 @@ export const EVENT_TYPE_I18N_KEY: Record<NotificationEventType, string> = {
   "iot.offline": "iotOffline",
   "access.temporary_expiring_soon": "accessTemporaryExpiringSoon",
   "access.temporary_expired": "accessTemporaryExpired",
+  "auth.password_reset_requested": "authPasswordResetRequested",
 };
 
 /** Translated event-type label. `t` must be scoped to `Dashboard.notifications.eventTypes`. */

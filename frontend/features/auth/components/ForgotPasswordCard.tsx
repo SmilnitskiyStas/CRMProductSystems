@@ -1,28 +1,31 @@
 "use client";
 
-import { Suspense } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { AuthLogo } from "./AuthLogo";
-import { LoginForm } from "./LoginForm";
-import { SessionExpiredNotice } from "./SessionExpiredNotice";
+import { ForgotPasswordForm } from "./ForgotPasswordForm";
+
+const linkBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  color: "#2D7DD2",
+  fontSize: 12,
+  fontFamily: '"Inter", sans-serif',
+  cursor: "pointer",
+  textDecoration: "underline",
+  textUnderlineOffset: 3,
+};
 
 /**
- * Visual chrome for `/login` (logo, tagline, card, footer). Split out of
- * `app/(auth)/login/page.tsx` (i18n Block 1, TASK-376) because that page needs to stay a
- * Server Component to keep its `export const metadata` — Next.js doesn't allow `metadata`
- * exports in a "use client" file, and the tagline text below needs `useTranslations`.
+ * Visual chrome for `/forgot-password` — mirrors LoginCard.tsx's card/footer shell so all
+ * three public auth surfaces (login, forgot-password, reset-password) look identical.
  */
-export function LoginCard() {
+export function ForgotPasswordCard() {
   const t = useTranslations("Dashboard.auth");
 
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 400,
-        padding: "0 16px",
-      }}
-    >
+    <div style={{ width: "100%", maxWidth: 400, padding: "0 16px" }}>
       {/* Card */}
       <div
         style={{
@@ -43,19 +46,20 @@ export function LoginCard() {
               fontFamily: '"Inter", sans-serif',
             }}
           >
-            {t("tagline")}
+            {t("forgotPasswordTitle")}
           </p>
         </div>
 
         {/* Divider */}
         <div style={{ borderTop: "1px solid #2A3347", marginBottom: 24 }} />
 
-        {/* useSearchParams requires a Suspense boundary in a server-rendered page */}
-        <Suspense fallback={null}>
-          <SessionExpiredNotice />
-        </Suspense>
+        <ForgotPasswordForm />
 
-        <LoginForm />
+        <div style={{ marginTop: 20, textAlign: "center" }}>
+          <Link href="/login" style={linkBtnStyle}>
+            {t("backToSignIn")}
+          </Link>
+        </div>
       </div>
 
       {/* Footer */}

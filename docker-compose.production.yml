@@ -21,6 +21,7 @@ services:
       Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
       Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
       Cors__Origins: ${Cors__Origins:-http://localhost:3000}
+      Frontend__BaseUrl: ${Frontend__BaseUrl:-http://localhost:3000}
       Claude__ApiKey: ${CLAUDE_API_KEY:-}
       Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
       PRRO__PROVIDER: ${PRRO__PROVIDER:-}

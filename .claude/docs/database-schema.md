@@ -1,7 +1,7 @@
 # Database Schema
 
 **Owner:** database-engineer
-**Updated:** 2026-07-27
+**Updated:** 2026-07-30
 **Source:** v1-spec.md section 4
 
 ## Multi-Tenancy
@@ -74,7 +74,13 @@ Fixed on 57 of 60 affected tables by `20260714180000_FixFailOpenTenantIsolationO
 |---|---|
 | `users` | Login must find a user by email before the caller's tenant is known. |
 | `refresh_tokens` | Token refresh must find the token/user before the caller's tenant is known (same shape, via `EXISTS` through `users`). |
-| `notification_settings` | Same `EXISTS`-through-`users` pre-auth lookup shape as `refresh_tokens`. |
+| `password_reset_tokens` | Forgot/reset-password (TASK-455) must find the token/user before the caller's tenant is known — same shape, via `EXISTS` through `users`. |
+
+`notification_settings` previously held a slot on this list under the same "pre-auth lookup"
+assumption, but TASK-360 (Block 9 audit, 2026-07-15) found it has no actual pre-auth access path
+(both its reads/writes sit behind `[Authorize]`) — its fail-open branch was a real cross-tenant
+leak, not a necessary one, and was removed by `20260715120000_FixNotificationSettingsRlsFailOpen`.
+Do not re-add it here without re-verifying that finding still holds.
 
 Any other table needing a similar "look this up before we know the tenant" flow should get its
 own narrowly-scoped policy (or, better, explicitly `SET app.role = 'worker'`/resolve the tenant
@@ -622,6 +628,35 @@ explicit `TenantId = {0}` filter on top of RLS regardless (defense-in-depth — 
 that re-applies its own hardcoded tenant guard — are each a cross-cutting security-posture change,
 out of scope for an indexing task. See `decisions.md` ADR-023 addendum (Фаза 3) for the three-option
 tradeoff and why the conservative "accept it" option was picked for v1.
+
+## TASK-455 — Password reset tokens schema (`AddPasswordResetTokens`, 2026-07-30)
+
+New `password_reset_tokens` table for the forgot/reset-password flow — schema only, no
+service/controller yet (TASK-456, backend-developer, next). Same "single active token per user"
+shape as `telegram_link_codes`, but the entity is styled like `RefreshToken` (private setters,
+`Create()` factory, computed `IsActive`, `MarkUsed()`) rather than `TelegramLinkCode`'s anemic style.
+
+| Table | RLS | Purpose | Key fields |
+|---|---|---|---|
+| `password_reset_tokens` | fail-open triad — 3rd documented exception, see above | Single-use, time-boxed token for `POST /api/auth/forgot-password` → `reset-password` | `UserId` (FK→users, Cascade), `TokenHash` (unique), `ExpiresAt`, `UsedAt` (nullable), `CreatedAt` |
+
+No own `TenantId` column — tenant is derived transitively through `UserId → users.TenantId`, same
+as `refresh_tokens`/`telegram_link_codes`. `tenant_isolation` therefore joins through `users` via
+`EXISTS`, with the same `NULLIF(...) IS NULL OR ...` fail-open branch as `refresh_tokens`'s current
+live policy (verified byte-for-byte against `20260629010000_FixAllRlsPoliciesNullIfEmptyString`'s
+`refresh_tokens` policy before writing this one) — an anonymous forgot/reset-password request has
+no `app.tenant_id` yet, since `TenantConnectionInterceptor` only ever `RESET`s session vars for
+unauthenticated connections rather than setting them. `provider_bypass` is written as
+`IN ('provider', 'provider_admin')` from day one (current convention since
+`20260714150000_ExpandProviderBypassToProviderAdmin`), not the single-value form still shown in
+this file's own `RLS Template` section above — that template predates the `provider_admin`
+expansion and has not been revisited since; treat the `AddPriceSegmentSettings`/`AddLoyaltyProgram`/
+this migration's actual SQL as the current source of truth for `provider_bypass`, not that template.
+
+Repository: `IPasswordResetTokenRepository` (`InvalidateActiveTokensAsync` — bulk
+`ExecuteUpdateAsync`, same pattern as `ITelegramLinkRepository.InvalidateActiveCodesAsync`;
+`AddAsync`, `GetActiveByHashAsync`, `SaveChangesAsync`), deliberately kept separate from
+`IUserRepository`/`IRefreshTokenRepository` rather than one more method bolted onto either.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

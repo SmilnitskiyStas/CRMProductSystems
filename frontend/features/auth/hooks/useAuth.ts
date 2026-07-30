@@ -72,6 +72,24 @@ export function useVerifyTwoFactor() {
   });
 }
 
+/** Requests a password-reset link by email. Always resolves once the HTTP request itself
+ *  succeeds — the backend returns 204 unconditionally, regardless of whether the email
+ *  exists/is active, so there is no auth side effect and no onSuccess handler here. */
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: authApi.forgotPassword,
+  });
+}
+
+/** Completes a password reset from a `?token=` link. No auth side effects — the backend
+ *  revokes all refresh tokens on success, so the user signs in again with the new
+ *  password from /login; nothing here touches the token/user cache. */
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: authApi.resetPassword,
+  });
+}
+
 /** Logout mutation — clears all auth state and redirects to /login. */
 export function useLogout() {
   const queryClient = useQueryClient();
