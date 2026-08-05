@@ -26,7 +26,19 @@ export function useUpdateProfile() {
 }
 
 export function useChangePassword() {
-  return useMutation({ mutationFn: changePassword });
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: changePassword,
+    onSuccess: () => {
+      // Backend clears the temp-password marker on a successful change (TASK-465) —
+      // invalidate so TemporaryPasswordBanner.tsx (and anything else reading
+      // passwordIsTemporary) drops it as soon as possible instead of waiting for some
+      // unrelated refetch/relogin. changePassword itself returns void (204), so there's
+      // no fresh user payload to patch in directly, unlike useUpdateProfile above.
+      qc.invalidateQueries({ queryKey: ME_KEY });
+    },
+  });
 }
 
 // ---- 2FA management ----

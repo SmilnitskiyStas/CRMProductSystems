@@ -21,6 +21,20 @@ const MESSAGES_BY_LOCALE: Record<DashboardLocale, { Common: unknown; Dashboard: 
   en: { Common: enMessages.Common, Dashboard: enMessages.Dashboard },
 };
 
+interface Props {
+  children: React.ReactNode;
+  /**
+   * What to resolve to when no cookie/cached-user/browser-language signal is available,
+   * and what the very first (server-rendered) pass renders before the client-only
+   * `useEffect` below can run at all. Defaults to "uk" — the authenticated dashboard
+   * (`app/(dashboard)/layout.tsx`) relies on this default and passes nothing, unchanged
+   * from before this prop existed. The public auth screens (`app/(auth)/layout.tsx`) pass
+   * "en" (TASK-466) — a different audience (not-yet-onboarded/logged-out visitors) than
+   * the dashboard's already-onboarded Ukrainian-speaking staff.
+   */
+  defaultLocale?: DashboardLocale;
+}
+
 /**
  * Client-only i18n provider for the authenticated dashboard + auth screens (i18n
  * rollout Block 1, TASK-376). Mounted in `app/(dashboard)/layout.tsx` and
@@ -30,24 +44,25 @@ const MESSAGES_BY_LOCALE: Record<DashboardLocale, { Common: unknown; Dashboard: 
  * alongside translated shell chrome).
  *
  * Locale resolution is cookie -> cached user.preferredLocale -> browser language ->
- * "uk" (see `resolveDashboardLocale`), which needs `document`/`navigator`/localStorage
- * and so only runs client-side after mount. "uk" is used for the very first
- * (server-rendered) pass — matches the app's hardcoded `<html lang="uk">` root — then
+ * `defaultLocale` (see `resolveDashboardLocale`), which needs
+ * `document`/`navigator`/localStorage and so only runs client-side after mount.
+ * `defaultLocale` is used for the very first (server-rendered) pass — matches the app's
+ * hardcoded `<html lang="uk">` root when left at its "uk" default — then
  * `resolveDashboardLocale()` runs in a `useEffect` and may flip the locale once, exactly
  * like the existing `mounted` gate pattern already used in the dashboard layout.
  */
-export function DashboardIntlProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocale] = useState<DashboardLocale>("uk");
+export function DashboardIntlProvider({ children, defaultLocale = "uk" }: Props) {
+  const [locale, setLocale] = useState<DashboardLocale>(defaultLocale);
 
   useEffect(() => {
-    setLocale(resolveDashboardLocale());
+    setLocale(resolveDashboardLocale(defaultLocale));
 
     function handleLocaleChanged() {
-      setLocale(resolveDashboardLocale());
+      setLocale(resolveDashboardLocale(defaultLocale));
     }
     window.addEventListener(LOCALE_CHANGE_EVENT, handleLocaleChanged);
     return () => window.removeEventListener(LOCALE_CHANGE_EVENT, handleLocaleChanged);
-  }, []);
+  }, [defaultLocale]);
 
   return (
     <NextIntlClientProvider locale={locale} messages={MESSAGES_BY_LOCALE[locale]}>

@@ -1,7 +1,7 @@
 # Database Schema
 
 **Owner:** database-engineer
-**Updated:** 2026-07-30
+**Updated:** 2026-08-04
 **Source:** v1-spec.md section 4
 
 ## Multi-Tenancy
@@ -69,12 +69,16 @@ and was still being copied as "the" canonical pattern as recently as
 `20260714100000_FixMissingRlsGuardsAndProviderBypass` (same day, earlier in this same audit).
 Fixed on 57 of 60 affected tables by `20260714180000_FixFailOpenTenantIsolationOnReset`.
 
-**Documented exceptions — keep the fail-open branch on these three, do not "fix" them:**
+**Documented exceptions — keep the fail-open branch on these two, do not "fix" them:**
 | Table | Why it must stay fail-open |
 |---|---|
 | `users` | Login must find a user by email before the caller's tenant is known. |
 | `refresh_tokens` | Token refresh must find the token/user before the caller's tenant is known (same shape, via `EXISTS` through `users`). |
-| `password_reset_tokens` | Forgot/reset-password (TASK-455) must find the token/user before the caller's tenant is known — same shape, via `EXISTS` through `users`. |
+
+`password_reset_tokens` briefly held a third slot on this list (TASK-455, same "pre-auth lookup"
+shape via `EXISTS` through `users`) but the table itself was dropped by TASK-464 — the link/token-
+based reset flow it backed was redesigned into a temporary-password flow that needs no pre-auth
+token lookup at all. See `## TASK-455` (superseded) and `## TASK-464` below.
 
 `notification_settings` previously held a slot on this list under the same "pre-auth lookup"
 assumption, but TASK-360 (Block 9 audit, 2026-07-15) found it has no actual pre-auth access path
@@ -97,7 +101,7 @@ this class of bug going forward (run locally against `docker compose up -d postg
 Postgres service in CI today, see `.github/workflows/ci.yml`):
 `AllForceRlsTables_HaveTenantIsolationNullifGuard_ProviderBypass_AndWorkerBypass` (policy
 presence/naming) and `TenantIsolationPolicies_HaveNoFailOpenBranch_ExceptDocumentedPreAuthLookups`
-(no table outside the three exceptions above may have the fail-open branch) plus
+(no table outside the two exceptions above may have the fail-open branch) plus
 `ProductStock_FullyResetSession_ReturnsZeroRows_NotEveryRow` (direct live reproduction of the
 exact RESET-state scenario that was vulnerable).
 
@@ -631,6 +635,13 @@ tradeoff and why the conservative "accept it" option was picked for v1.
 
 ## TASK-455 — Password reset tokens schema (`AddPasswordResetTokens`, 2026-07-30)
 
+**⚠️ Superseded by TASK-464 (2026-08-04).** The link/token-based design documented in this
+section was replaced with a temporary-password design (no link, no separate reset step — the
+temp password itself becomes the user's real password immediately). `password_reset_tokens`,
+`PasswordResetToken`, and `IPasswordResetTokenRepository` were all dropped/deleted; the 3rd
+fail-open exception this table held is gone too (back to 2 — see "Documented exceptions" above).
+Kept below as historical context only — do not build against anything in this section.
+
 New `password_reset_tokens` table for the forgot/reset-password flow — schema only, no
 service/controller yet (TASK-456, backend-developer, next). Same "single active token per user"
 shape as `telegram_link_codes`, but the entity is styled like `RefreshToken` (private setters,
@@ -657,6 +668,69 @@ Repository: `IPasswordResetTokenRepository` (`InvalidateActiveTokensAsync` — b
 `ExecuteUpdateAsync`, same pattern as `ITelegramLinkRepository.InvalidateActiveCodesAsync`;
 `AddAsync`, `GetActiveByHashAsync`, `SaveChangesAsync`), deliberately kept separate from
 `IUserRepository`/`IRefreshTokenRepository` rather than one more method bolted onto either.
+
+## TASK-464 — Temp-password redesign: drop `password_reset_tokens`, add `users.TempPasswordExpiresAt`
+(`DropPasswordResetTokensAddTempPasswordExpiry`, 2026-08-04)
+
+Redesigns the forgot/reset-password flow from TASK-455/456's one-time link/token (live on prod
+since commit `647bde4c`, 2026-07-30) to a temporary password the user receives and can log in
+with directly — no link, no separate "click link, enter new password" step. Product-owner
+decision, not a bug fix.
+
+**Dropped entirely**, schema and code alike (see `## TASK-455` above for what this replaces):
+`password_reset_tokens` table (RLS policies went with it — `DROP TABLE` takes a table's policies
+with it, no separate `DROP POLICY` needed), `PasswordResetToken` entity,
+`IPasswordResetTokenRepository` + its EF Core repository, the DbSet/fluent config in
+`AppDbContext`, and the DI registration. The table's fail-open `tenant_isolation` exception is
+retired along with it — `TenantIsolationPolicies_HaveNoFailOpenBranch_ExceptDocumentedPreAuthLookups`
+(`RlsCrossTenantIntegrationTests.cs`) is back to exactly 2 allowed exceptions (`users`,
+`refresh_tokens`), same as before TASK-455.
+
+**Added:** `users.TempPasswordExpiresAt` (nullable `timestamptz`, plain column — no FK, no
+index; a single-user, single-row lookup that's already reached via `users`' own PK/email index).
+Entity-level (`ShelfGuard.Domain/Entities/User.cs`), styled directly after the pre-existing
+`LockoutUntil`/`IsLockedOut` pair (TASK-329) per project convention — private setter, no public
+setter, dedicated methods instead of exposing the field directly:
+
+```csharp
+public DateTime? TempPasswordExpiresAt { get; private set; }   // private setter
+
+public bool HasActiveTempPassword =>                            // computed, mirrors IsLockedOut
+    TempPasswordExpiresAt.HasValue && TempPasswordExpiresAt.Value > DateTime.UtcNow;
+
+public void SetTempPasswordExpiry(DateTime expiresAt) =>        // caller must already have set
+    TempPasswordExpiresAt = expiresAt;                           // PasswordHash via ChangePassword
+
+public void ClearTempPasswordExpiry() => TempPasswordExpiresAt = null;
+```
+
+No background job expires it — lazily checked (e.g. at login), same pattern as `LockoutUntil`.
+`ChangePassword(string newHash)` (pre-existing) is deliberately untouched/does not auto-clear
+this field — it's called from both "issue a temp password" (needs to SET the expiry alongside)
+and "user sets their own password" (needs to CLEAR it) flows, which want opposite outcomes on the
+same call; TASK-465 (backend-developer, next) is expected to call `SetTempPasswordExpiry`/
+`ClearTempPasswordExpiry` explicitly alongside `ChangePassword` at each call site rather than
+folding the behavior into `ChangePassword` itself. The actual temp-password generation/hashing,
+the 3-hour expiry window value, and the login-time enforcement of `HasActiveTempPassword` are
+TASK-465's job — this migration only adds the column and the entity-level get/set/clear surface.
+
+**Build note for whoever picks up TASK-465:** deleting `IPasswordResetTokenRepository`/
+`PasswordResetToken` leaves `ShelfGuard.Application/Features/Auth/AuthService.cs` (constructor
+field + `ForgotPasswordAsync`/`ResetPasswordAsync` bodies, added by TASK-456/460) and four files
+under `ShelfGuard.Tests/Auth/` (`AuthServiceTests.cs`, `AuthServiceCapabilitiesTests.cs`,
+`TwoFactorAuthTests.cs`, `AuthServiceTabsTests.cs` — the latter three only via a
+`Substitute.For<IPasswordResetTokenRepository>()` constructor-injection field, unrelated to their
+actual test subjects) not compiling — confirmed by a real `dotnet build ShelfGuard.sln` after
+this task's deletions, 2 errors, both `CS0246` on `AuthService.cs:38`/`:52`. Rewriting
+`AuthService`'s forgot/reset-password methods for the temp-password design (and fixing the two
+`IAuthService` signatures — `ResetPasswordAsync(string rawToken, ...)` no longer makes sense once
+there's no token) is TASK-465's actual scope, not a pre-existing bug — this note exists so
+TASK-465 doesn't waste time rediscovering it. The EF migration and the `users` schema change
+above do not depend on `AuthService` and are unaffected by this — verified by generating and
+live-applying the migration through a temporary, fully-reverted stub of `AuthService.cs` (net
+diff zero — confirmed via `git diff`/`git status` showing no changes to that file) purely so
+`dotnet ef migrations add`/`database update` had a compiling `ShelfGuard.Api` startup graph to
+build against; the same technique TASK-465 may find useful if it needs partial compiles mid-work.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

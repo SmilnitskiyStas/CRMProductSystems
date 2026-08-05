@@ -62,7 +62,21 @@ public record AuthUserDto(
     /// <see cref="Capabilities"/> — but a separate axis (page/route visibility, not backend
     /// actions). See ShelfGuard.Domain.Constants.TenantRoleTabs for the full rationale.
     /// </summary>
-    IReadOnlyList<string>? Tabs = null
+    IReadOnlyList<string>? Tabs = null,
+    /// <summary>
+    /// True when the account's current password is a temporary one issued by the
+    /// forgot-password flow (TASK-465) and still within its validity window. Mirrors
+    /// <see cref="ShelfGuard.Domain.Entities.User.HasActiveTempPassword"/>, recomputed fresh
+    /// at every mint site (login, 2FA verify, refresh) and on GetCurrentUserAsync — the client
+    /// uses it to show a reminder banner prompting the user to set a permanent password via
+    /// the existing change-password endpoint, which clears this on its own.
+    /// </summary>
+    bool PasswordIsTemporary = false,
+    /// <summary>
+    /// When <see cref="PasswordIsTemporary"/> is true, the UTC instant the temporary password
+    /// stops working. Null otherwise.
+    /// </summary>
+    DateTime? TemporaryPasswordExpiresAt = null
 );
 
 // ── 2FA (TASK-330) ──────────────────────────────────────────────────────────
@@ -75,8 +89,6 @@ public sealed record TwoFactorEnableRequest(string Code);
 
 public sealed record TwoFactorDisableRequest(string Password, string Code);
 
-// ── Forgot / reset password (TASK-456) ──────────────────────────────────────
+// ── Forgot password / temporary password (TASK-465) ─────────────────────────
 
 public sealed record ForgotPasswordRequest(string Email);
-
-public sealed record ResetPasswordRequest(string Token, string NewPassword);

@@ -432,26 +432,19 @@
       "signingIn": "Вхід…",
       "signIn": "Увійти",
       "sessionExpired": "Час сеансу сплив. Будь ласка, увійдіть знову.",
+      "temporaryPasswordExpiredError": "Термін дії тимчасового пароля закінчився. Запросіть новий.",
       "forgotPasswordLink": "Забули пароль?",
       "forgotPasswordTitle": "Відновлення пароля",
-      "forgotPasswordDescription": "Введіть email, який ви використовували для реєстрації — ми надішлемо інструкції для відновлення пароля.",
-      "forgotPasswordSubmitButton": "Надіслати інструкції",
+      "forgotPasswordDescription": "Введіть email, який ви використовували для реєстрації, і ми надішлемо на нього тимчасовий пароль.",
+      "forgotPasswordSubmitButton": "Надіслати тимчасовий пароль",
       "forgotPasswordSending": "Надсилання…",
-      "forgotPasswordSuccessMessage": "Якщо такий email існує в нашій системі, на нього надіслано інструкції з відновлення пароля.",
+      "forgotPasswordSuccessMessage": "Якщо такий email існує в нашій системі, на нього надіслано тимчасовий пароль. Увійдіть з ним і встановіть новий пароль.",
       "somethingWentWrongError": "Щось пішло не так. Спробуйте пізніше.",
       "backToSignIn": "Повернутися до входу",
-      "resetPasswordTitle": "Новий пароль",
-      "newPasswordLabel": "Новий пароль",
-      "confirmPasswordLabel": "Підтвердження",
-      "newPasswordMinError": "Мінімум 12 символів",
-      "newPasswordComplexityError": "Пароль має містити літери та цифри",
-      "confirmMismatchError": "Паролі не співпадають",
-      "passwordPolicyHint": "Мінімум 12 символів, літери та цифри",
-      "resetPasswordSubmitButton": "Встановити новий пароль",
-      "resetPasswordSubmitting": "Оновлення…",
-      "resetPasswordSuccessMessage": "Пароль оновлено. Тепер ви можете увійти.",
-      "resetPasswordInvalidOrExpired": "Посилання недійсне або застаріло. Будь ласка, запросіть нове.",
-      "resetPasswordMissingToken": "Це посилання недійсне. Будь ласка, запросіть відновлення пароля ще раз зі сторінки входу."
+      "temporaryPasswordBanner": {
+        "message": "Ваш пароль тимчасовий, дійсний до {expiresAt}.",
+        "actionLabel": "Встановити новий пароль"
+      }
     },
     "ui": {
       "dateRange": {

@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-07-30
+**Updated:** 2026-08-05
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -46,6 +46,9 @@ POST /api/auth/login        [public, rate limit 10/min per IP]
   200: { accessToken, user: AuthUserDto } + Set-Cookie: refreshToken (HttpOnly)
   200 (2FA увімкнено): { requiresTwoFactor: true, challengeToken } — БЕЗ токенів/cookie, challenge живе 5 хв
   401: { error }   (generic — lockout/inactive не розкриваються)
+  401: { error: "Temporary password has expired. Please request a new one." }  (TASK-465) —
+        повертається ТІЛЬКИ коли пароль зійшовся з хешем, що належить простроченому тимчасовому
+        паролю; на дійсно невірний пароль завжди generic-помилка вище, ніколи ця
   429: { error: "Too many requests. Try again later." }
 
 POST /api/auth/2fa/verify   [public, той самий ліміт]     (TASK-330)
@@ -74,22 +77,25 @@ POST /api/auth/change-password [Authorize]
   204: усі refresh-токени відкликано (інші пристрої розлогінено)
   400: { error } (текст політики англійською, показується as-is)
 
-POST /api/auth/forgot-password [public, rate limit 5/min per IP]        (TASK-456)
+POST /api/auth/forgot-password [public, rate limit 5/min per IP]  (TASK-456; редизайн TASK-464..466, 2026-08-04)
   Body: { email }
   204: завжди — незалежно від того, чи існує email/чи активний користувач (той самий
         no-enumeration принцип, що й login). UI не має розгалужувати копію за відповіддю.
-
-POST /api/auth/reset-password  [public, той самий ліміт що auth-login]  (TASK-456)
-  Body: { token, newPassword }
-  204: пароль змінено, усі refresh-токени відкликано (інші пристрої розлогінено), lockout скинуто
-  400: { error } — generic "Invalid or expired reset link." (недійсний/прострочений/вже
-        використаний токен АБО акаунт-власник не знайдений/неактивний — навмисно не
-        розрізняються) або текст політики пароля (як change-password, показується as-is)
+        Генерує і надсилає тимчасовий пароль (14 символів, `RandomNumberGenerator`-backed,
+        літера+цифра гарантовані конструктивно, без неоднозначних 0/O/1/I/l) — він одразу стає
+        реальним `PasswordHash` акаунта, дійсний 3 години (`User.TempPasswordExpiresAt`). Немає
+        окремого кроку "перейти за лінком і ввести новий пароль" — користувач одразу логіниться
+        цим паролем через звичайний `POST /api/auth/login`.
 ```
-Reset-link (лист/Telegram): `{Frontend__BaseUrl}/reset-password?token={urlEncodedRawToken}` —
-одноразовий, TTL 30 хв. Доставка — через існуючий Postgres outbox
+Доставка (лист/Telegram) — через той самий існуючий Postgres outbox
 (`INotificationRepository.EnqueueAsync`, `EventType="auth.password_reset_requested"`,
-`Channels=[email, telegram]`), не новий C# BullMQ producer — див. ADR-024.
+`Payload={tempPassword, expiresInMinutes: 180}`, `Channels=[email, telegram]`), не новий C# BullMQ
+producer — механізм доставки не змінився попри редизайн, див. ADR-024 (superseded) + ADR-026.
+
+Зміна пароля (включно з позбавленням від тимчасового статусу) йде через уже існуючий,
+задокументований вище `POST /api/auth/change-password` — тепер він додатково скидає
+`TempPasswordExpiresAt`. `POST /api/auth/reset-password` **більше не існує** (видалений разом зі
+схемою токенів, TASK-464..466) — запит на цей шлях повертає стандартний 404.
 
 #### AuthUserDto
 ```json
@@ -102,7 +108,9 @@ Reset-link (лист/Telegram): `{Frontend__BaseUrl}/reset-password?token={urlEn
   "capabilities": ["string", "..."] ,
   "telegramChatId": "string|null",
   "preferredLocale": "string|null",
-  "tabs": ["string", "..."]
+  "tabs": ["string", "..."],
+  "passwordIsTemporary": false,
+  "temporaryPasswordExpiresAt": "ISO8601|null"
 }
 ```
 `capabilities` (ADR-020) and `tabs` (ADR-021, TASK-391b) are independent axes resolved from the
@@ -110,6 +118,12 @@ same `TenantRole` (via `TenantRoleId`) — both `null`/absent when the user has 
 or its template is archived. Both are UI-mirrors of the equally-named JWT claims below; real
 enforcement is server-side (`RoleOrCapabilityHandler` for capabilities — nothing enforces `tabs`
 server-side yet, see ADR-021 Tier 1/Tier 2).
+
+`passwordIsTemporary`/`temporaryPasswordExpiresAt` (TASK-465, ADR-026) mirror
+`User.HasActiveTempPassword`/`TempPasswordExpiresAt` — computed fresh by the same `ToDto` mapper
+at every mint site (`login`, `2fa/verify`, `refresh`) and on `GET /auth/me`, so any one of them is
+safe to read the flag from, not just the initial login response. Self-clears once the temp
+password is changed (`change-password`) or simply expires — no client action needed to reset it.
 
 #### JWT Claims
 ```

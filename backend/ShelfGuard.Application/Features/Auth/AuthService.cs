@@ -17,15 +17,24 @@ public sealed class AuthService : IAuthService
     private const string GenericLoginError = "Invalid email or password.";
     private const int RecoveryCodeCount = 8;
 
-    // TASK-456: forgot/reset-password token lifetime + generic (non-enumerating) error text.
-    private const int PasswordResetTokenTtlMinutes = 30;
-    private const string GenericResetError = "Invalid or expired reset link.";
+    // TASK-465: temporary-password forgot-password redesign (supersedes TASK-456/460's
+    // link/token design — see User.cs TASK-464/465 doc comments). 3-hour validity per the
+    // product brief.
+    private const int TempPasswordValidHours = 3;
+    private const int TempPasswordLength = 14;
+    private const string TempPasswordExpiredError = "Temporary password has expired. Please request a new one.";
 
-    // TASK-460 (TASK-458 security review, MEDIUM): per-user cooldown for ForgotPasswordAsync,
-    // independent of the "auth-forgot-password" per-IP rate limit — KI-014 confirms per-IP
-    // limiting doesn't work in production, so this is the real backstop against repeated
-    // notification sends (email/Telegram) to the same known/guessed address.
-    private static readonly TimeSpan PasswordResetCooldown = TimeSpan.FromSeconds(60);
+    // TASK-469 (security review TASK-467, MEDIUM #1): per-user forgot-password cooldown.
+    // TASK-465 shipped without one — re-requesting simply overwrote the previous temp
+    // password/expiry in place, with only the "auth-forgot-password" per-IP rate limit as a
+    // throttle. That limit doesn't accumulate in prod (KI-014: the hosting provider's
+    // port-mapping layer doesn't preserve client IPs), so an attacker who knows/guesses a
+    // victim's email could loop this endpoint and keep overwriting PasswordHash faster than
+    // the victim could ever use a single issued temp password — a low-effort targeted
+    // lockout/DoS vector. No new column: TempPasswordExpiresAt already encodes "when was the
+    // current temp password issued" indirectly (issuedAt = TempPasswordExpiresAt -
+    // TempPasswordValidHours).
+    private const int ForgotPasswordCooldownSeconds = 60;
 
     private readonly IUserRepository _users;
     private readonly IRefreshTokenRepository _refreshTokens;
@@ -35,10 +44,8 @@ public sealed class AuthService : IAuthService
     private readonly ITotpService _totp;
     private readonly IUserPermissionGrantRepository _permissionGrants;
     private readonly ITenantRoleRepository _tenantRoles;
-    private readonly IPasswordResetTokenRepository _passwordResetTokens;
     private readonly INotificationRepository _notifications;
     private readonly ILogger<AuthService> _logger;
-    private readonly string _frontendBaseUrl;
 
     public AuthService(
         IUserRepository users,
@@ -49,7 +56,6 @@ public sealed class AuthService : IAuthService
         ITotpService totp,
         IUserPermissionGrantRepository permissionGrants,
         ITenantRoleRepository tenantRoles,
-        IPasswordResetTokenRepository passwordResetTokens,
         INotificationRepository notifications,
         ILogger<AuthService> logger)
     {
@@ -61,11 +67,8 @@ public sealed class AuthService : IAuthService
         _totp = totp;
         _permissionGrants = permissionGrants;
         _tenantRoles = tenantRoles;
-        _passwordResetTokens = passwordResetTokens;
         _notifications = notifications;
         _logger = logger;
-        // Application layer has no IConfiguration dependency — env var with a sane default.
-        _frontendBaseUrl = Environment.GetEnvironmentVariable("Frontend__BaseUrl") ?? "http://localhost:3000";
     }
 
     public async Task<LoginOutcome> LoginAsync(
@@ -97,6 +100,16 @@ public sealed class AuthService : IAuthService
             await RegisterFailedAttemptAsync(user, "user.login_failed", ipAddress, ct);
             return new LoginOutcome(null, null, GenericLoginError);
         }
+
+        // TASK-465: the hash matched — but if it matched a temporary password (forgot-password
+        // flow) that has since expired, reject with a specific error instead of proceeding.
+        // Only reachable on a hash MATCH (never on a mismatch above), so this can't be used to
+        // distinguish "wrong password" from "right password, expired" by timing/branch alone —
+        // whoever typed the correct temp password already proved possession of it, so a
+        // specific message here discloses nothing an attacker doesn't already know. Ordered
+        // before the TOTP branch: an expired credential shouldn't earn a 2FA challenge.
+        if (user.TempPasswordExpiresAt.HasValue && !user.HasActiveTempPassword)
+            return new LoginOutcome(null, null, TempPasswordExpiredError);
 
         // TASK-330: password ok but TOTP enabled → no tokens yet, hand out a
         // short-lived challenge for POST /api/auth/2fa/verify.
@@ -312,7 +325,7 @@ public sealed class AuthService : IAuthService
         return null;
     }
 
-    // ── Forgot / reset password (TASK-456) ────────────────────────────────
+    // ── Forgot password / temporary password (TASK-465) ──────────────────
 
     public async Task ForgotPasswordAsync(string email, string? ipAddress = null, CancellationToken ct = default)
     {
@@ -327,32 +340,47 @@ public sealed class AuthService : IAuthService
             return;
         }
 
-        // TASK-460: per-user cooldown, checked BEFORE InvalidateActiveTokensAsync below (which
-        // only prevents two simultaneously-active tokens — it does not throttle request
-        // frequency). Enumeration-safety: on a hit, behave EXACTLY like the unknown-email branch
-        // above — same no-op, same log level, no distinguishable side effect or response — so this
-        // never becomes a new signal for whether an email is known/active.
-        if (await _passwordResetTokens.HasRecentActiveTokenAsync(user.Id, PasswordResetCooldown, ct))
+        // TASK-469: per-user cooldown, checked AFTER the unknown/inactive-email branch above
+        // (so the timing/enumeration posture for an unknown email is unaffected) but BEFORE any
+        // write below. A temp password issued within the last ForgotPasswordCooldownSeconds
+        // means this is a repeat call — handled EXACTLY like the unknown-email branch (log +
+        // return, no side effects, no difference in the controller's response, which is always
+        // 204) so this can never become a second oracle that distinguishes "known email, in
+        // cooldown" from "unknown email" by timing or behavior.
+        if (user.TempPasswordExpiresAt.HasValue)
         {
-            _logger.LogWarning("Password reset requested again for {Email} within cooldown window from {Ip}",
-                email, ipAddress ?? "unknown");
-            return;
+            var issuedAt = user.TempPasswordExpiresAt.Value.AddHours(-TempPasswordValidHours);
+            if (DateTime.UtcNow - issuedAt < TimeSpan.FromSeconds(ForgotPasswordCooldownSeconds))
+            {
+                _logger.LogWarning("Password reset re-requested within cooldown for {Email} from {Ip}",
+                    email, ipAddress ?? "unknown");
+                return;
+            }
         }
 
-        // Only one active reset link at a time (same rule TelegramLinkService applies to its
-        // link codes). Bulk ExecuteUpdateAsync — commits immediately regardless of the batched
-        // writes below; must run before AddAsync of the new token, never after.
-        await _passwordResetTokens.InvalidateActiveTokensAsync(user.Id, ct);
+        var tempPassword = GenerateTempPassword();
+        user.ChangePassword(_passwordHasher.Hash(tempPassword));
+        user.SetTempPasswordExpiry(DateTime.UtcNow.AddHours(TempPasswordValidHours));
+        _users.Update(user);
 
-        var rawToken = GenerateResetToken();
-        var token = PasswordResetToken.Create(
-            user.Id, _jwt.HashToken(rawToken), DateTime.UtcNow.AddMinutes(PasswordResetTokenTtlMinutes));
-        await _passwordResetTokens.AddAsync(token, ct);
+        // TASK-469 (security review TASK-467, MEDIUM #2): anti-hijack session revocation,
+        // mirroring UserService.ChangePasswordAsync's existing call (UserService.cs:419). If an
+        // attacker already holds a live, stolen refresh token from an earlier, unrelated
+        // compromise, forgot-password is often used specifically because the legitimate user
+        // suspects exactly that ("I think someone else has access to my account") — it must
+        // evict the attacker's session as a side effect of recovery, the same way an
+        // authenticated password change already does. RevokeAllForUserAsync only stages the
+        // revocation (no internal SaveChanges — see RefreshTokenRepository); the commit happens
+        // below.
+        await _refreshTokens.RevokeAllForUserAsync(user.Id, ct);
 
-        // The raw token only ever goes into this URL — the hash above is what's persisted.
-        // Uri.EscapeDataString: base64's '+'/'/'/'=' are not query-string-safe as-is; this only
-        // affects how the token is embedded in the link, not how it's generated or hashed.
-        var resetUrl = $"{_frontendBaseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
+        // Committed immediately, on its own: this just replaced the account's real credential
+        // and revoked its sessions — that must be durable before anything else here runs,
+        // independent of whether the activity log / outbox notification writes below succeed.
+        // _users and _refreshTokens share the same scoped AppDbContext (see IssueTokensAsync
+        // above), so this single call flushes both the credential change and the revocation
+        // together in one round trip.
+        await _users.SaveChangesAsync(ct);
 
         await _activityLogs.LogAsync(new ActivityLog
         {
@@ -366,65 +394,23 @@ public sealed class AuthService : IAuthService
         }, ct);
 
         // NotificationRepository.EnqueueAsync commits immediately on its own (unlike the other
-        // repositories used above) — called last so its own SaveChangesAsync flushes the token
-        // insert and the activity log above in the same round trip. A literal single shared
-        // SaveChangesAsync call (TASK-370's batching pattern) isn't reachable here since
-        // EnqueueAsync owns its own commit; this ordering gets the same effect in practice.
+        // repositories used above) — called last so its own SaveChangesAsync flushes the
+        // activity log staged just above in the same round trip (same idiom the superseded
+        // TASK-456 design used for this method).
         await _notifications.EnqueueAsync(new NotificationQueue
         {
             TenantId  = user.TenantId,
             UserId    = user.Id,
             Channel   = "system",
             EventType = "auth.password_reset_requested",
-            Title     = "Запит на відновлення пароля",
+            Title     = "Тимчасовий пароль",
             Payload   = JsonSerializer.Serialize(new
             {
-                resetUrl,
-                expiresInMinutes = PasswordResetTokenTtlMinutes,
+                tempPassword,
+                expiresInMinutes = TempPasswordValidHours * 60,
             }),
             Status    = "pending",
         }, ct);
-    }
-
-    public async Task<string?> ResetPasswordAsync(string rawToken, string newPassword, CancellationToken ct = default)
-    {
-        var token = await _passwordResetTokens.GetActiveByHashAsync(_jwt.HashToken(rawToken), ct);
-        if (token is null)
-            return GenericResetError;
-
-        var user = await _users.GetByIdAsync(token.UserId, ct);
-        if (user is null || !user.IsActive)
-            return GenericResetError; // same generic text — don't distinguish token vs. account state
-
-        var passwordError = PasswordValidator.Validate(newPassword, user.Email);
-        if (passwordError is not null)
-            return passwordError;
-
-        user.ChangePassword(_passwordHasher.Hash(newPassword));
-        user.ResetLockout(); // proven ownership of email/Telegram is no weaker than a password
-        _users.Update(user);
-
-        token.MarkUsed();
-
-        // TASK-329: a stolen session must not survive a password reset either (same call as
-        // UserService.ChangePasswordAsync). Deferred — does not call SaveChanges itself.
-        await _refreshTokens.RevokeAllForUserAsync(user.Id, ct);
-
-        await _activityLogs.LogAsync(new ActivityLog
-        {
-            TenantId   = user.TenantId,
-            UserId     = user.Id,
-            Action     = "user.password_reset_completed",
-            EntityType = "user",
-            EntityId   = user.Id,
-            Meta       = user.Email,
-        }, ct);
-
-        // Single commit: the user update, token.MarkUsed() (tracked entity — no dedicated
-        // Update method on IPasswordResetTokenRepository), revoked refresh tokens, and the
-        // activity log above all share this AppDbContext.
-        await _passwordResetTokens.SaveChangesAsync(ct);
-        return null;
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
@@ -620,14 +606,40 @@ public sealed class AuthService : IAuthService
     private static string NormalizeRecoveryCode(string code) =>
         new(code.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
 
+    // Letters: A-Z minus I/O, a-z minus i/l/o. Digits: 2-9 minus 0/1. All visually ambiguous
+    // (0/O, 1/I/l) — excluded to ease manual entry of a temp password read off a notification.
+    private const string TempPasswordLetters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
+    private const string TempPasswordDigits = "23456789";
+
     /// <summary>
-    /// Cryptographically random raw reset token — same generation approach as
-    /// <see cref="IJwtService.GenerateRefreshToken"/>'s raw half (64 random bytes, base64),
-    /// copied here rather than reusing that method directly since it serves a different,
-    /// unrelated token family/lifecycle (refresh session vs. one-time password reset).
+    /// Cryptographically random, human-typeable temporary password (TASK-465) — replaces the
+    /// superseded design's raw URL-safe reset token. Letter and digit character classes are
+    /// guaranteed by construction (fixed into two positions before an unbiased Fisher–Yates
+    /// shuffle), not left to the draw: a purely random pick from a mixed alphabet could in
+    /// principle land on an all-letters or all-digits result and fail
+    /// <see cref="PasswordValidator.Validate"/>, which would break forgot-password on a
+    /// genuinely rare, hard-to-reproduce edge case.
     /// </summary>
-    private static string GenerateResetToken() =>
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+    private static string GenerateTempPassword()
+    {
+        const string all = TempPasswordLetters + TempPasswordDigits;
+
+        var chars = new char[TempPasswordLength];
+        chars[0] = TempPasswordLetters[RandomNumberGenerator.GetInt32(TempPasswordLetters.Length)];
+        chars[1] = TempPasswordDigits[RandomNumberGenerator.GetInt32(TempPasswordDigits.Length)];
+        for (var i = 2; i < chars.Length; i++)
+            chars[i] = all[RandomNumberGenerator.GetInt32(all.Length)];
+
+        // Unbiased shuffle (Fisher–Yates) — without it the guaranteed letter/digit would always
+        // sit in positions 0/1, a small but needless positional predictability in a password.
+        for (var i = chars.Length - 1; i > 0; i--)
+        {
+            var j = RandomNumberGenerator.GetInt32(i + 1);
+            (chars[i], chars[j]) = (chars[j], chars[i]);
+        }
+
+        return new string(chars);
+    }
 
     private static AuthUserDto ToDto(
         User u,
@@ -637,5 +649,6 @@ public sealed class AuthService : IAuthService
         new(u.Id, u.Email, u.FullName, u.Role, u.TenantId, u.Tenant?.Name, u.StoreId,
             effectivePermissions is null ? u.Permissions : new Dictionary<string, bool>(effectivePermissions),
             u.LegalEntityId, u.TotpEnabled, effectiveCapabilities, u.TelegramChatId,
-            u.PreferredLocale, effectiveTabs);
+            u.PreferredLocale, effectiveTabs,
+            u.HasActiveTempPassword, u.HasActiveTempPassword ? u.TempPasswordExpiresAt : null);
 }

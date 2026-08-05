@@ -18,8 +18,8 @@ const linkBtnStyle: React.CSSProperties = {
 };
 
 /**
- * Visual chrome for `/forgot-password` — mirrors LoginCard.tsx's card/footer shell so all
- * three public auth surfaces (login, forgot-password, reset-password) look identical.
+ * Visual chrome for `/forgot-password` — mirrors LoginCard.tsx's card/footer shell so both
+ * public auth surfaces (login, forgot-password) look identical.
  */
 export function ForgotPasswordCard() {
   const t = useTranslations("Dashboard.auth");

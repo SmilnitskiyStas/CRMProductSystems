@@ -1,11 +1,267 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-07-30
+**Updated:** 2026-08-05
+
+## ADR-026: Forgot-password redesign — temporary password replaces link/token, third RLS exception retired, auth-locale default flips to English
+Date: 2026-08-04
+Status: accepted
+
+Context: ADR-024/TASK-455..460 shipped a one-time email/Telegram link+token forgot-password flow
+to production on 2026-07-30 (commit `647bde4c`). Days later the product owner asked for a
+different UX: instead of a link the user clicks to then enter a new password on a separate page,
+the system should generate a temporary password the user can log in with immediately — no second
+step, no link, no token. TASK-464 (database-engineer), TASK-465 (backend-developer), TASK-466
+(frontend-developer) implemented this over 2026-08-04, fully replacing (not extending) ADR-024's
+design end-to-end. This ADR records the cross-cutting decisions, verified against the shipped code.
+
+Decision:
+
+1. **A temporary password overwrites `User.PasswordHash` directly; no separate token/link
+   entity.** `AuthService.ForgotPasswordAsync` generates a 14-character
+   `RandomNumberGenerator`-backed password (letter and digit classes constructively guaranteed —
+   one character drawn from a letters-only pool, one from a digits-only pool, the rest from the
+   combined pool, then an unbiased Fisher–Yates shuffle so the guaranteed positions aren't
+   predictable — never left to chance, so it always passes `PasswordValidator.Validate`; visually
+   ambiguous characters 0/O/1/I/l excluded), calls the pre-existing `user.ChangePassword(hash)`
+   with it, and sets `User.TempPasswordExpiresAt = UtcNow.AddHours(3)` via the new
+   `SetTempPasswordExpiry` method (TASK-464). This becomes the account's real, immediately-usable
+   password — logging in with it goes through the ordinary `POST /api/auth/login`, no new
+   endpoint. The credential write commits on its own, before the activity log / outbox
+   notification, so the password change is durable independent of whether logging or notification
+   delivery succeeds.
+2. **`password_reset_tokens` is dropped entirely, not deprecated — the third fail-open RLS
+   exception it required (ADR-024 point 2) is retired with it.** `database-schema.md`'s documented
+   fail-open exceptions list is back to exactly two rows (`users`, `refresh_tokens`), matching the
+   state before ADR-024/TASK-455. The temporary-password design has no pre-auth token lookup to
+   perform at all — `ForgotPasswordAsync` only ever writes to `users`, which already carries its
+   own necessary fail-open exception for login. No new narrower RLS policy was needed to replace
+   it; the whole category of problem ("look this row up before the caller's tenant is known")
+   disappears along with the token table, it isn't relocated.
+3. **`POST /api/auth/reset-password` is removed, not repointed — password changes flow through the
+   existing authenticated `change-password` endpoint instead.** There is no second step in the new
+   design. Completing a password change — whether starting from a temporary password or not — goes
+   through the existing *authenticated* `POST /api/auth/change-password`, which now also calls the
+   new `user.ClearTempPasswordExpiry()` right after a successful change (the one place a user
+   "takes control" back from a temp password). `POST /api/auth/forgot-password` itself keeps its
+   existing shape, rate limit (5/min/IP), and always-204 no-enumeration behavior — only its payload
+   changed, from a link to a directly-usable credential. `AuthUserDto` gained
+   `passwordIsTemporary`/`temporaryPasswordExpiresAt`, computed fresh at every mint site through
+   the shared `ToDto` mapper, and `POST /api/auth/login` gained one new specific 401 ("Temporary
+   password has expired. Please request a new one.") — reachable only after a real hash match
+   against an expired temp password, never on a genuinely wrong password, so it adds no new
+   account-enumeration signal.
+4. **TASK-467 (security-reviewer, 2026-08-05) reviewed this whole redesign and returned CLEAR TO
+   SHIP — 0 HIGH findings, 2 MEDIUM findings, both recommended to fix soon, neither a deploy
+   blocker. Both MEDIUM findings are now fixed — TASK-469 (backend-developer, 2026-08-05), same
+   day — see the closing paragraph below.**
+   - **No per-user forgot-password cooldown.** The old design's 60-second `PasswordResetCooldown`
+     (`HasRecentActiveTokenAsync` against the token table, added by TASK-460 as a MEDIUM fix from
+     TASK-458's review) has no equivalent here: TASK-465's brief specified a 9-step
+     `ForgotPasswordAsync` sequence with no cooldown, and TASK-464 added no field that could back
+     one independent of `TempPasswordExpiresAt` itself — the old cooldown was keyed off the
+     now-deleted token table. The per-IP rate limit (`auth-forgot-password`, 5/min) is once again
+     the *only* throttle, and `known-issues.md` KI-014 already documents per-IP limiting as
+     unreliable in production (the hosting provider's edge does not preserve client source IPs).
+     TASK-467 judged this **materially worse** than in the superseded design: there, repeated
+     forgot-password calls only spammed notifications while the real password stayed untouched
+     until a separate reset step completed; here, every call immediately overwrites `PasswordHash`,
+     so an attacker who knows/guesses a victim's email can loop the endpoint and keep invalidating
+     whatever credential the legitimate user currently holds — a low-effort, repeatable
+     account-lockout/denial-of-access vector, not just harassment. Kept at MEDIUM rather than HIGH
+     because it needs no new capability beyond what KI-014 already concedes and crosses no
+     tenant/account boundary. Low-cost fix identified, no new migration needed: derive "when was
+     the current temp password issued" from the existing `TempPasswordExpiresAt` field and
+     no-op/skip re-issuance within a ~60s window.
+   - **`ForgotPasswordAsync` never calls `RevokeAllForUserAsync`, unlike the superseded
+     `ResetPasswordAsync`.** The old design's reset step revoked every refresh token as its last
+     write — an explicit anti-hijack measure TASK-458 had confirmed present. The new
+     `ForgotPasswordAsync` has no equivalent call anywhere in its body; only the pre-existing,
+     authenticated `UserService.ChangePasswordAsync` still does (unchanged — TASK-467 re-confirmed
+     it at `UserService.cs:419`). Concrete impact: if an attacker already holds a live, stolen
+     refresh token (7-day TTL) from an earlier, unrelated compromise, and the legitimate user runs
+     forgot-password specifically *because* they suspect that compromise, this design no longer
+     evicts the attacker's session as a side effect of recovery — the stolen token keeps minting
+     access tokens until the user separately completes a full `change-password`, a follow-up step
+     nothing forces (a temp password is fully usable for up to 3 hours and can be re-requested
+     indefinitely without ever visiting "set a new password"). MEDIUM rather than HIGH because it
+     requires a pre-existing compromise to matter — a failure to fully remediate a takeover, not a
+     standalone way to gain access nobody already had. Fix identified: add
+     `await _refreshTokens.RevokeAllForUserAsync(user.Id, ct)` inside `ForgotPasswordAsync`,
+     mirroring `ChangePasswordAsync`'s existing call, ideally flushed in the same early
+     `_users.SaveChangesAsync` round trip that already durably commits the credential change.
+
+   **Both fixes landed the same day, in TASK-469 (backend-developer).** Cooldown: `AuthService`
+   now derives `issuedAt = TempPasswordExpiresAt - TempPasswordValidHours` (no new column/migration)
+   and, when a temp password was issued <60s ago, no-ops the re-issuance — zero side effects, same
+   204 response — checked after the unknown/inactive-email branch so that branch's
+   timing/enumeration posture is unchanged. Revocation: `ForgotPasswordAsync` now calls
+   `await _refreshTokens.RevokeAllForUserAsync(user.Id, ct)`, mirroring
+   `UserService.ChangePasswordAsync`, placed before the early `_users.SaveChangesAsync(ct)` so both
+   the credential change and the revocation commit in the same round trip. Verified: build 0
+   warnings/0 errors, tests 1222/1222 (net +2 new). Full detail:
+   `.claude/logs/tasks/467_2026-08-05_security-review-temp-password-redesign_security-reviewer.md`
+   (original findings) and
+   `.claude/logs/tasks/469_2026-08-05_fix-forgot-password-medium-findings_backend-developer.md`
+   (fixes).
+5. **Auth-page default locale flips from Ukrainian to English for non-`uk-*` browsers — a smaller,
+   independent change bundled into the same TASK-466.** `DashboardIntlProvider` gained a
+   `defaultLocale` prop (default `"uk"`, so every existing dashboard call site stays
+   behavior-identical); `app/(auth)/layout.tsx` passes `"en"` for the two public auth pages
+   (`/login`, `/forgot-password`) — the dashboard's own default is untouched. Not a security or
+   architecture decision on its own; recorded here only because it shipped inside the same task as
+   the rest of this redesign and would otherwise go undocumented.
+
+Consequences:
++ Removes an entire class of link/token bugs (expiry math, single-use enforcement, URL
+  construction) — ADR-024 point 4's `Frontend__BaseUrl` env-var plumbing is now unused by this
+  flow specifically, though the underlying "Application layer has no `IConfiguration`" pattern it
+  established remains valid precedent for the next service that needs it
++ One fewer standing fail-open RLS exception to reason about — `database-schema.md`'s exceptions
+  table is back to a shorter, easier-to-audit two-row list
++ Simpler user flow end-to-end: one email/Telegram message, one login, no intermediate page —
+  matches the product owner's explicit request
+- TASK-467 confirmed two MEDIUM gaps versus the superseded design (full detail at point 4): no
+  per-user forgot-password cooldown — worse here than in the old design, since every call
+  overwrites the real password immediately rather than just sending another link — and no
+  `RevokeAllForUserAsync` call in `ForgotPasswordAsync`, so a stolen refresh token from an earlier
+  compromise survives a forgot-password request where the old `ResetPasswordAsync` would have
+  evicted it. Verdict was CLEAR TO SHIP with 0 HIGH — neither gap blocked the design already live.
+  **Both are now fixed, same-day, by TASK-469** — see point 4 above
+- A temporary password is a directly-usable credential in transit (email/Telegram) — a materially
+  bigger blast radius than a single-purpose link if a delivery channel is compromised or
+  intercepted. TASK-465 carried forward the same pre-`logNotifications()` redaction ADR-024/
+  TASK-460 established for `resetUrl` (now redacting `tempPassword` the same way), so the live
+  value never reaches `notification_queue`/`GET /api/notifications/history` — but the underlying
+  channel security (email/Telegram delivery itself) is unchanged from ADR-024's own accepted
+  posture, and the credential itself is now higher-stakes than the link it replaced
+- ADR-024 is left superseded rather than deleted, per this repo's documentation convention —
+  future readers must follow the superseded pointer rather than assume its content is current if
+  they land on it directly (e.g. via search)
+
+Supersedes: ADR-024 (points 2 and 5 specifically; points 1, 3, 4 carry over unchanged in
+substance — see the superseded-note added to ADR-024 below for the exact breakdown).
+
+## ADR-025: Mobile offline boundary — durable drafts and limited cached reads, online-only mutations
+Date: 2026-08-01
+Status: accepted
+
+Context: TASK-443 and TASK-444 made POS and operational form state durable, but deliberately did
+not introduce automatic mutation replay. The current create contracts do not provide a universal
+client idempotency key or reconciliation lookup, and POS additionally crosses stock, loyalty,
+shift and fiscal boundaries. Product owner confirmed the first mobile release targets Android and
+iOS phones, portrait-only; tablet adaptation is deferred; preview builds use the production API.
+The selected offline scope is durable drafts plus limited offline reads, with no mutation queue and
+no full offline POS. This ADR defines that boundary before persisted server-state queries are added.
+
+Decision:
+
+1. **Goals and non-goals.** Mobile preserves user-entered POS/warehouse/production draft state and
+   may show explicitly selected, last-successful read models while disconnected. It must never
+   represent cached stock, price, entitlement, shift, loyalty, fiscal or module state as current.
+   Completing a sale, write-off, transfer, receipt operation, production order, loyalty redemption,
+   shift action or any other business mutation requires confirmed online connectivity and a fresh
+   server validation. Offline mutation replay and full offline POS are explicit non-goals.
+2. **Allowed cached read models.** Initial allowlist: product/catalog summaries needed to identify
+   an item, non-secret customer display/search summaries, recipe summaries, notification/list
+   summaries, schedules, marketplace/supplier summaries, and recent read-only document/list views.
+   Stock quantities/batches, active POS shift, prices/discounts, loyalty balances, permissions,
+   module activation, fiscal state and operational eligibility may be cached only for display and
+   must carry a prominent stale marker; they can never authorize or parameterize an offline submit.
+   Detail payloads containing secrets, rotating loyalty QR/code values, TOTP/recovery/challenge
+   values, auth tokens, payment data or unrestricted PII are excluded.
+3. **Staleness UI, TTL and retention.** Every cached surface displays `Офлайн-дані` and the
+   last successful server timestamp in local time. Missing timestamps mean no usable offline data.
+   Default soft TTL is 15 minutes for stock/price/loyalty/shift-derived views, 24 hours for catalog,
+   customers, recipes, schedules and documents, and 6 hours for notifications/marketplace. Expired
+   data may remain viewable for up to 7 days with an explicit `можуть бути застарілими` state, but
+   is never silently treated as fresh. Cache retention is capped at 7 days; durable drafts have a
+   30-day retention target and require explicit user discard or confirmed-success cleanup.
+4. **Ownership and storage.** Persisted keys are versioned and namespaced by environment,
+   tenant ID, user ID, query family and normalized scope/filter. Rehydration fails closed until the
+   authenticated tenant+user owner is known. Account/tenant switching must synchronously hide the
+   previous namespace. AsyncStorage may hold the allowlisted, minimized read models and draft
+   payloads; SecureStore remains for auth secrets only. Native iOS Keychain/Android Keystore-backed
+   encryption protects secrets, not arbitrary query caches. No claim is made that AsyncStorage is
+   encrypted at rest; sensitive fields are excluded rather than relying on device storage alone.
+5. **Query persistence and connectivity.** React Query remains the owner of server state. A
+   versioned, allowlisted persistence adapter may dehydrate only approved query keys and must
+   validate schema, owner, timestamp and size before rehydration. NetInfo is a UX/input signal, not
+   proof that the API is reachable: online submit additionally requires a successful fresh API
+   request/revalidation. Reconnect invalidates or refetches stale active-screen queries; logout or
+   terminal session cleanup cancels queries, clears in-memory private data and deletes that owner's
+   persisted query cache and drafts according to the existing explicit session-cleanup contract.
+6. **Submit, idempotency and conflicts.** All business submit controls are disabled offline.
+   Before submit, mobile refetches the authoritative dependencies appropriate to the flow
+   (including shift, stock/batch, recipe/module, price/discount and loyalty state) and rejects a
+   stale/conflicting draft with actionable UI. FEFO and stock allocation remain exclusively
+   server-authoritative. A locally generated correlation ID may be logged, but it is not an
+   idempotency guarantee. Until the backend contracts in TASK-443/444 handoffs support idempotency
+   or lookup, timeout/no-response remains `uncertain`, automatic retry is forbidden, and `409`
+   remains an explicit conflict requiring reconciliation. No background worker drains mutations.
+7. **POS/fiscal/loyalty limit.** An offline POS cart/customer choice can be restored, but checkout,
+   payment finalization, loyalty redemption/accrual, shift open/close and Checkbox/PRRO fiscalization
+   cannot start offline. Cached balance, price, discount and shift data are informational only and
+   must be revalidated online. This avoids duplicate sales, overselling, replayed loyalty codes and
+   undocumented deferred fiscalization.
+8. **Platform and presentation boundary.** The same behavior ships on Android and iOS phones.
+   Portrait is the only supported launch orientation. iOS background suspension and Keychain access
+   classes, and Android process death/Auto Backup/device-transfer behavior, must be tested separately;
+   query/draft caches must not be included in cloud/device backup unless an explicit security review
+   approves it. Tablet and landscape POS layouts are deferred and do not alter this data boundary.
+9. **Observability and privacy.** Record cache schema/version, family, age bucket, rehydrate outcome,
+   invalidation reason, online revalidation result and conflict class. Never log payload bodies,
+   query contents, names, phones, tokens, QR/TOTP/recovery data, payment fields or draft values.
+   Tenant/user identifiers must be omitted or irreversibly pseudonymized in telemetry. Metrics are
+   aggregate operational signals, not a second store of user data.
+10. **Rollout and migration.** Introduce the read cache behind a mobile feature flag and allowlist,
+    starting with catalog/schedules/marketplace before stock/customer/loyalty-derived surfaces.
+    Schema changes bump the persistence version; unknown/corrupt/legacy read-cache records are
+    deleted fail-closed. Existing TASK-443/444 draft schemas remain in place and migrate only via
+    explicit owner-safe version handlers. Rollout acceptance requires Android and iOS process-death,
+    logout/account-switch, reconnect, stale-data, storage-pressure and privacy tests.
+
+Consequences:
++ Users retain in-progress work and can consult bounded last-known information during outages.
++ The online server remains the single authority for FEFO, stock, prices, permissions, loyalty,
+  shifts and fiscal state; no hidden queue can duplicate or reorder business operations.
++ One cross-platform policy applies to Android and iOS phone launch; portrait-only reduces the
+  initial layout/test matrix while preserving a later tablet adaptation path.
+- Offline users cannot complete a sale or warehouse/production mutation; the UI must make this
+  limitation explicit rather than suggesting that an operation was queued.
+- Cached reads add storage, privacy, invalidation and stale-data UX complexity and therefore must
+  be introduced per-query-family, never by persisting the whole React Query cache.
+
+Rejected alternatives:
+
+- **Durable drafts only:** safer but insufficient for useful read-only work during a temporary
+  outage; rejected in favor of a strict cached-read allowlist.
+- **Generic mutation queue:** rejected because current contracts lack universal idempotency and
+  reconciliation, stock changes conflict, and ordering/retry can duplicate irreversible actions.
+- **Full offline POS:** rejected for launch because shift, stock, price, loyalty, payment and
+  Checkbox/PRRO rules require a separately designed and legally validated synchronization model.
+- **Persist every React Query response:** rejected because it would cache secrets/PII and
+  authorization-sensitive state without deliberate TTL, ownership or UX review.
+
+Follow-up: TASK-461 (allowlisted query-cache foundation), TASK-462 (offline read UX rollout), and
+TASK-463 (cross-platform offline security/device acceptance). TASK-443/444 handoffs remain the
+authority for future idempotency contracts; they do not authorize a mutation queue.
 
 ## ADR-024: Forgot/reset-password flow — outbox reuse, third fail-open RLS exception, env-var frontend URL, 400 not 401
 Date: 2026-07-30
-Status: accepted
+Status: **superseded by ADR-026** (2026-08-05) — kept below verbatim as historical context, do not
+build against it.
+
+**⚠️ Why superseded.** Product owner asked for a different UX only days after this design shipped
+to prod (2026-07-30, commit `647bde4c`): a temporary password the user receives and can log in
+with directly, not a one-time link+token requiring a second "click link, enter new password"
+step. TASK-464..466 (2026-08-04) implemented the replacement end-to-end; ADR-026 above records it.
+Of the 5 decisions this ADR made, **(2)** the third fail-open RLS exception and **(5)** the
+400-vs-401 reasoning for `POST /api/auth/reset-password` no longer apply — `password_reset_tokens`
+and that endpoint are both gone entirely. **(1)** outbox reuse, **(3)** email-primary/
+Telegram-fallback channel choice, and **(4)** the `Environment.GetEnvironmentVariable`
+Application-layer pattern all remain true of the new design too, unchanged in substance — see
+ADR-026 for exactly what carried over vs. what changed.
 
 Context: ShelfGuard had no way for a user locked out of `/login` to recover a forgotten
 password — a repo-wide grep (`backend`/`frontend`/`mobile`/`worker`/`.claude`) for

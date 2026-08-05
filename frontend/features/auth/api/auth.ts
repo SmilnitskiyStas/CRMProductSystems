@@ -7,7 +7,6 @@ import {
   type LoginRequest,
   type LoginResponse,
   type LoginSuccessResponse,
-  type ResetPasswordRequest,
   type TwoFactorDisableRequest,
   type TwoFactorEnableResponse,
   type TwoFactorSetupResponse,
@@ -50,16 +49,13 @@ export const authApi = {
 
   getMe: (): Promise<AuthUserDto> => api.get<AuthUserDto>("/api/auth/me"),
 
-  // ---- Forgot / reset password (public) ----
+  // ---- Forgot password (public) ----
 
-  /** Always resolves — the backend returns 204 regardless of whether the email exists. */
+  /** Always resolves — the backend returns 204 regardless of whether the email exists.
+   *  Issues a temporary password (valid 3h) to the address if it belongs to a known,
+   *  active account — no separate reset step; the user just logs in with it. */
   forgotPassword: (payload: ForgotPasswordRequest): Promise<void> =>
     api.post<void>("/api/auth/forgot-password", payload),
-
-  /** 204 on success; throws ApiError(400, "...") for an invalid/expired token or a
-   *  password-policy violation — both shown to the user as-is by the caller. */
-  resetPassword: (payload: ResetPasswordRequest): Promise<void> =>
-    api.post<void>("/api/auth/reset-password", payload),
 
   // ---- 2FA management (authorized) ----
 

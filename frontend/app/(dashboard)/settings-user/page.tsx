@@ -139,11 +139,13 @@ function SectionCard({
 }) {
   return (
     <div
+      id={section.id}
       style={{
         background: "#0D1117",
         border: "1px solid #1F2937",
         borderRadius: 12,
         overflow: "hidden",
+        scrollMarginTop: 16,
       }}
     >
       {/* Section header */}

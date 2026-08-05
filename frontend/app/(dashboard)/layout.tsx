@@ -8,6 +8,7 @@ import { getToken } from "@/lib/api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { ImpersonationBanner } from "@/features/provider/components/ImpersonationBanner";
+import { TemporaryPasswordBanner } from "@/features/auth/components/TemporaryPasswordBanner";
 import { DashboardIntlProvider } from "@/i18n/DashboardIntlProvider";
 
 interface ImpersonationInfo {
@@ -92,6 +93,7 @@ function DashboardChrome({ children }: { children: React.ReactNode }) {
       >
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <TemporaryPasswordBanner />
           <TopBar />
           <main style={{ flex: 1, overflowY: "auto" }}>{children}</main>
         </div>

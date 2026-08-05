@@ -7,9 +7,6 @@ import { routing } from "@/i18n/routing";
 // the real auth validation happens server-side on /api/auth/me.
 
 const PROTECTED = ["/dashboard", "/stock", "/products", "/analytics", "/provider"];
-// /reset-password is deliberately NOT here — its token lives in the URL, not the session,
-// and authorizes the action on its own. A signed-in user with a valid link (e.g. from
-// another device) must still be able to use it (TASK-457).
 const AUTH_ROUTES = ["/login", "/forgot-password"];
 
 // next-intl handles locale routing/detection only for the public landing

@@ -30,6 +30,17 @@ public sealed class User
     /// <summary>While set and in the future, logins are rejected with a generic error.</summary>
     public DateTime? LockoutUntil { get; private set; }
 
+    // ── Temporary password (forgot-password flow, TASK-464/465) ─────────────
+    /// <summary>
+    /// While set and in the future, <see cref="PasswordHash"/> holds a temporary password
+    /// issued by the forgot-password flow rather than one the user chose. Not a token/link —
+    /// the temporary password itself becomes the user's real, immediately-usable password.
+    /// Cleared once the user changes their password through the authenticated change-password
+    /// flow. No background job expires it; callers check <see cref="HasActiveTempPassword"/>
+    /// (e.g. at login) since a lazily-checked timestamp needs no separate cleanup process.
+    /// </summary>
+    public DateTime? TempPasswordExpiresAt { get; private set; }
+
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
     /// <summary>Base32 TOTP secret. Non-null with TotpEnabled=false means "pending setup".</summary>
     public string? TotpSecret { get; private set; }
@@ -168,6 +179,22 @@ public sealed class User
         FailedLoginAttempts = 0;
         LockoutUntil = null;
     }
+
+    // ── Temporary password (forgot-password flow, TASK-464/465) ─────────────
+
+    /// <summary>True while <see cref="PasswordHash"/> still holds an unexpired temporary password.</summary>
+    public bool HasActiveTempPassword =>
+        TempPasswordExpiresAt.HasValue && TempPasswordExpiresAt.Value > DateTime.UtcNow;
+
+    /// <summary>
+    /// Marks the current <see cref="PasswordHash"/> as a temporary password valid until
+    /// <paramref name="expiresAt"/>. Caller is responsible for having already set
+    /// <see cref="PasswordHash"/> (via <see cref="ChangePassword"/>) to the temp password's hash.
+    /// </summary>
+    public void SetTempPasswordExpiry(DateTime expiresAt) => TempPasswordExpiresAt = expiresAt;
+
+    /// <summary>Clears the temporary-password marker (e.g. once the user sets their own password).</summary>
+    public void ClearTempPasswordExpiry() => TempPasswordExpiresAt = null;
 
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
 

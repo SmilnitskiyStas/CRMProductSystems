@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 /**
- * Shared logo header for every public auth surface (login, forgot-password,
- * reset-password). Wraps the shield + wordmark in a `<Link href="/">` back to the public
+ * Shared logo header for every public auth surface (login, forgot-password).
+ * Wraps the shield + wordmark in a `<Link href="/">` back to the public
  * marketing landing — previously a plain, unclickable `<span>` in LoginCard.tsx, a dead
  * end for anyone who landed on `/login` directly (TASK-457, Частина A).
  *

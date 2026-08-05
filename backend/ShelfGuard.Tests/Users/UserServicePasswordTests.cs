@@ -48,6 +48,26 @@ public sealed class UserServicePasswordTests
     }
 
     [Fact]
+    public async Task ChangePassword_clears_temp_password_expiry_on_success()
+    {
+        // TASK-465: this is the one place a user "takes control" of a temporary password
+        // issued by the forgot-password flow — a successful change-password must clear the
+        // marker so the account stops being treated as running on a temporary/expiring password.
+        var user = MakeUser();
+        user.SetTempPasswordExpiry(DateTime.UtcNow.AddHours(3));
+        _users.GetByIdAsync(user.Id, default).Returns(user);
+        _hasher.Verify("old-password-1", "hash").Returns(true);
+        _hasher.Hash("new-Password-42").Returns("new_hash");
+
+        var error = await _sut.ChangePasswordAsync(user.Id,
+            new ChangePasswordRequest("old-password-1", "new-Password-42"), default);
+
+        Assert.Null(error);
+        Assert.False(user.HasActiveTempPassword);
+        Assert.Null(user.TempPasswordExpiresAt);
+    }
+
+    [Fact]
     public async Task ChangePassword_rejects_weak_new_password_without_touching_sessions()
     {
         var user = MakeUser();

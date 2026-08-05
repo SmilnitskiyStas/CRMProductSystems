@@ -3,6 +3,205 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-470 — Docs: mark TASK-467's 2 MEDIUM findings as resolved (ADR-026 §4, TASK-467 entry)
+
+**Status:** done · **Agent:** documentation-writer · **Depends:** TASK-469 · **Next:** none
+Log: `.claude/logs/tasks/470_2026-08-05_mark-medium-findings-resolved_documentation-writer.md`
+
+TASK-469 fixed both MEDIUM findings from TASK-467's security review (per-user cooldown +
+refresh-token revocation) but, per its own brief, left docs untouched — flagging `decisions.md`'s
+ADR-026 §4 and this file's TASK-467 entry as stale ("open"/"not yet fixed"). Closed that gap:
+ADR-026 §4's closing paragraph and its Consequences bullet now state both fixes landed in TASK-469
+(with a one-line summary of each) instead of "neither fix has landed"/"both still open"; TASK-467's
+entry below now points its **Next** field at TASK-469 and carries a short **Update** paragraph
+with the same summary + log link. No code changed, no new findings — pure documentation sync.
+
+## TASK-469 — Backend: fix forgot-password MEDIUM findings (cooldown + session revocation)
+
+**Status:** done — build 0/0, tests 1222/1222 (was 1220, net +2) · **Agent:** backend-developer ·
+**Depends:** TASK-467 · **Next:** none required; docs (ADR-026 §4, this file's own TASK-467
+summary below) now describe both findings as open and are stale — flagged for a future
+documentation-writer pass, not fixed here (out of scope per brief)
+Log: `.claude/logs/tasks/469_2026-08-05_fix-forgot-password-medium-findings_backend-developer.md`
+
+Closed both MEDIUM findings from TASK-467's security review. **Cooldown:** added
+`ForgotPasswordCooldownSeconds = 60` to `AuthService`; `ForgotPasswordAsync` now derives
+`issuedAt = TempPasswordExpiresAt - TempPasswordValidHours` (no new column) and, when a temp
+password was issued <60s ago, treats the request exactly like an unknown email — log + return,
+zero side effects, no response difference (endpoint was already unconditionally 204). Checked
+after the unknown/inactive-email branch so that branch's timing/enumeration posture is untouched.
+**Revocation:** added `await _refreshTokens.RevokeAllForUserAsync(user.Id, ct)`, mirroring
+`UserService.ChangePasswordAsync`'s existing anti-hijack call — placed before the early
+`_users.SaveChangesAsync(ct)` so both the credential change and the revocation commit together in
+one round trip (`RevokeAllForUserAsync` only stages in-memory, shared `AppDbContext` with `_users`).
+New tests: cooldown-blocks and cooldown-elapsed-allows-retry cases, plus a
+`RevokeAllForUserAsync` call-count assertion added to the existing success-path test.
+
+## TASK-468 — Docs: temp-password forgot-password redesign (api-contracts, ADR-026, database-schema verification)
+
+**Status:** done · **Agent:** documentation-writer · **Depends:** TASK-464/465/466, TASK-467 ·
+**Updated:** 2026-08-05
+Log: `.claude/logs/tasks/468_2026-08-05_docs-temp-password-redesign_documentation-writer.md`
+
+`api-contracts.md`: forgot-password тепер описує видачу тимчасового пароля (не лінка),
+`POST /api/auth/reset-password` прибрано з документації (404, видалений), `AuthUserDto` +
+`passwordIsTemporary`/`temporaryPasswordExpiresAt`, новий login-401 для простроченого
+temp-пароля. `decisions.md`: ADR-024 позначено `superseded by ADR-026` (контент лишився без
+змін, тільки статус + пояснення зверху); новий **ADR-026** документує редизайн, включно з
+TASK-467's фінальним verdict (CLEAR TO SHIP, 0 HIGH, 2 MEDIUM — відсутній cooldown + відсутній
+`RevokeAllForUserAsync`, обидва fix-soon, не блокери) в п.4. `database-schema.md` — звірено проти
+реального стану файлу, вже коректний після TASK-464, без правок. Додатково поправлено один
+застарілий рядок в `blocked.md` (TASK-260) — досі згадував "лінк відновлення" замість
+тимчасового пароля.
+
+## TASK-467 — Security: review of temporary-password forgot-password redesign
+
+**Status:** done — verdict: **CLEAR TO SHIP**, 0 HIGH, 2 MEDIUM (fix soon, not blockers; both since
+fixed, see update below) · **Agent:** security-reviewer · **Depends:** TASK-466 · **Next:**
+TASK-468 (documentation-writer); TASK-469 (backend-developer) — closed both MEDIUM findings
+Log: `.claude/logs/tasks/467_2026-08-05_security-review-temp-password-redesign_security-reviewer.md`
+
+Re-audited TASK-464..466's link→temp-password redesign against TASK-458's original 8-item
+checklist. TASK-458's HIGH (raw secret leaking into `notification_queue`/notification history)
+stays fixed under the new design — `dispatchTargeted()` in `notification-dispatch.job.ts`
+redacts `tempPassword` to `{expiresInMinutes}` before `logNotifications()`, same defense as
+TASK-460, correctly re-applied to the new payload shape without being asked. Entropy/generation
+(14 chars, CSPRNG, letter+digit classes guaranteed by construction, verified by tracing the
+shuffle) and the login expiry-check ordering (only after a successful hash match, never
+distinguishable from a wrong guess) are both OK, verified directly in code + existing tests.
+
+**2 new/updated MEDIUM findings, not blocking:**
+1. No per-user cooldown on `POST /api/auth/forgot-password` (TASK-465 flagged as a deliberate
+   deviation) — worse than the old design's "notification spam" framing because every call now
+   overwrites the account's real password, so repeated calls (per-IP limiter confirmed
+   ineffective in prod, KI-014) are a low-effort repeatable lockout/DoS against one targeted
+   account. Cheap fix available without a migration: derive "issued <60s ago" from the existing
+   `TempPasswordExpiresAt` field itself.
+2. `ForgotPasswordAsync` no longer calls `_refreshTokens.RevokeAllForUserAsync`, unlike the
+   superseded `ResetPasswordAsync`. If an attacker already holds a stolen refresh token (7-day
+   TTL) from an unrelated prior compromise, a legitimate forgot-password recovery no longer
+   evicts that session — it survives untouched until the user separately completes an
+   authenticated password change (`UserService.ChangePasswordAsync` still does revoke). Fix:
+   mirror that same call inside `ForgotPasswordAsync`.
+
+Full checklist detail + file:line citations in the task log.
+
+**Update (TASK-469, 2026-08-05):** both MEDIUM findings closed same-day. #1 (cooldown):
+`AuthService` now derives `issuedAt` from the existing `TempPasswordExpiresAt` field and no-ops
+re-issuance when the last one was issued <60s ago. #2 (revocation): `ForgotPasswordAsync` now
+calls `_refreshTokens.RevokeAllForUserAsync`, mirroring `ChangePasswordAsync`. Build 0/0, tests
+1222/1222 (+2 new). Log:
+`.claude/logs/tasks/469_2026-08-05_fix-forgot-password-medium-findings_backend-developer.md`.
+
+## TASK-466 — Frontend: temporary-password forgot-password UI (remove reset-password, banner, auth-locale default)
+
+**Status:** done — tsc 0, build clean (`/reset-password` confirmed gone from route table), lint
+0/0 · **Agent:** frontend-developer · **Depends:** TASK-465 · **Next:** TASK-467
+(security-reviewer), TASK-468 (documentation-writer)
+Log: `.claude/logs/tasks/466_2026-08-04_temp-password-frontend_frontend-developer.md`
+
+Deleted the old reset-password-by-link UI entirely (`ResetPasswordCard`/`ResetPasswordForm`,
+`app/(auth)/reset-password/`, `authApi.resetPassword`, `useResetPassword`,
+`ResetPasswordRequest`, 12 now-dead i18n keys — verified en/uk key parity after, 3589 keys each).
+Forgot-password copy now talks about a temporary password instead of "instructions"
+(`forgotPasswordDescription`/`forgotPasswordSubmitButton`/`forgotPasswordSuccessMessage`). New
+`TemporaryPasswordBanner.tsx` (persistent, amber, mounted above `TopBar` in
+`app/(dashboard)/layout.tsx`) shows `passwordIsTemporary`'s formatted local expiry + a link to
+`/settings-user#password`; disappears on its own after a password change because
+`useChangePassword` now invalidates `ME_KEY` (it had no `onSuccess` before). `LoginForm.tsx` now
+surfaces the backend's new "temporary password expired" 401 text instead of collapsing it into
+the generic invalid-credentials message (implied by TASK-465's contract, not one of the brief's
+literal 4 steps — flagged as a deviation). Auth pages (`/login`, `/forgot-password`) now default
+to English instead of Ukrainian for a non-uk browser (`DashboardIntlProvider`'s new
+`defaultLocale` prop, `app/(auth)/layout.tsx` passes `"en"`); dashboard default untouched ("uk").
+
+Live-verified against the real TASK-465 backend + a client-side `window.fetch` mock for the
+banner (real temp-password delivery goes through Telegram/email, out of frontend scope to chase).
+**Note for whoever uses the dev admin account next:** live-testing forgot-password against
+`stassmilnitskiy@gmail.com` really did overwrite its password with a new temp one (3h from
+~00:10 UTC 2026-08-05) — the generated value itself was never visible to this task.
+
+## TASK-465 — Backend: temporary-password forgot-password logic (AuthService rewrite)
+
+**Status:** done — build 0/0, tests 1220/1220 (was 1221, net -1: 8 old link/token tests removed,
+7 new added), worker `tsc --noEmit` clean · **Agent:** backend-developer · **Depends:** TASK-464
+· **Next:** TASK-466 (frontend-developer) — banner on `passwordIsTemporary`, remove
+`/reset-password` page; TASK-468 (documentation-writer) — docs
+Log: `.claude/logs/tasks/465_2026-08-04_temp-password-backend-logic_backend-developer.md`
+
+Rewrote `AuthService.ForgotPasswordAsync` for TASK-464's temp-password design: generates a
+14-char `RandomNumberGenerator`-backed temp password (letter+digit classes constructively
+guaranteed, not left to chance — always passes `PasswordValidator.Validate`; ambiguous chars
+0/O/1/I/l excluded), sets it as the account's real password + 3h expiry, commits immediately
+on its own (durability independent of the notification/log writes that follow), then enqueues
+the existing `auth.password_reset_requested` outbox event with `{ tempPassword,
+expiresInMinutes: 180 }`. Deleted `ResetPasswordAsync`/`IAuthService.ResetPasswordAsync`/
+`ResetPasswordRequest`/`POST /api/auth/reset-password` entirely — no second step in this design.
+`LoginAsync` now rejects an expired temp password with a specific error (only reachable after a
+real hash match, never on a wrong password) —
+`"Temporary password has expired. Please request a new one."`. `AuthUserDto` gained
+`passwordIsTemporary`/`temporaryPasswordExpiresAt` (fresh at every mint site + `/auth/me`, via
+the shared `ToDto` mapper). `UserService.ChangePasswordAsync` now clears the temp-password
+marker — the one place a user "takes control" of it. Worker's `notification-dispatch.job.ts`
+carries forward TASK-460's pre-`logNotifications()` redaction (now for `tempPassword` instead of
+`resetUrl` — arguably higher stakes, a directly-usable credential vs. a single-purpose link).
+
+**Flagged, not carried over:** TASK-460's 60s per-user forgot-password cooldown has no
+equivalent in the new 9-step design the brief specified, and TASK-464 didn't add a field that
+would support one independent of `TempPasswordExpiresAt`. The per-IP rate limit
+(`auth-forgot-password`, 5/min) is now the only throttle again, same gap KI-014 already
+documents as unreliable in prod. Full detail + contract for TASK-466 in the task log.
+
+## TASK-464 — DB: redesign forgot/reset-password from link/token to temporary password (drops TASK-455's schema)
+
+**Status:** schema done (build 0/0, tests unaffected — full suite not runnable, see blocker below)
+· **Agent:** database-engineer · **Depends:** TASK-460 · **Next:** TASK-465 (backend-developer) —
+rewrite `AuthService` for the new design; frontend/mobile/worker follow after that
+Log: `.claude/logs/tasks/464_2026-08-04_drop-password-reset-tokens-add-temp-password-field_database-engineer.md`
+
+**⚠️ Renumbered from the brief.** Originally assigned as "TASK-461" (follow-up "TASK-462"), but
+both numbers are already in use by an unrelated, active mobile feature (offline-read cache/UX
+rollout — see `461_2026-08-01_allowlisted-offline-read-cache_mobile-developer.md`,
+`462_2026-08-01_limited-offline-read-ux_mobile-developer.md`, and their extensive `blocked.md`
+entries, most recently updated 2026-08-01). Confirmed the true current max task log number is 463
+before picking 464/465 as the next free pair. Whoever owns the authoritative task sequence should
+double check this is the number they want going forward.
+
+Product owner decided to redesign the forgot/reset-password flow (TASK-455..460, live on prod
+since commit `647bde4c`, 2026-07-30) from a one-time email/Telegram link+token to a temporary
+password the user receives and can log in with directly — no link, no separate "click link, enter
+new password" step; the temp password becomes the real password immediately, valid 3 hours unless
+the user changes it first via the existing authenticated change-password flow. Migration
+`DropPasswordResetTokensAddTempPasswordExpiry` (`20260804194648`) drops `password_reset_tokens`
+entirely (table + its RLS policies — a table's policies go with `DROP TABLE`, confirmed live: 0
+rows in `pg_policies` for the table afterward) and adds `users.TempPasswordExpiresAt` (nullable
+timestamptz). Deleted `PasswordResetToken` entity, `IPasswordResetTokenRepository` + EF repo, the
+`AppDbContext` DbSet/config, and the DI registration — no dead code left. `User.cs` gets
+`TempPasswordExpiresAt`/`HasActiveTempPassword`/`SetTempPasswordExpiry(DateTime)`/
+`ClearTempPasswordExpiry()`, styled directly after the pre-existing `LockoutUntil`/`IsLockedOut`
+pair (private setter, no public setter, dedicated methods) — see full signatures and rationale in
+the task log and `.claude/docs/database-schema.md`'s new `## TASK-464` section.
+`RlsCrossTenantIntegrationTests.cs`'s fail-open-exceptions test is back to 2 allowed tables
+(`users`, `refresh_tokens`), same as before TASK-455.
+
+**Blocker for TASK-465 (backend-developer, not a defect in this task):** `AuthService.cs`
+(`ForgotPasswordAsync`/`ResetPasswordAsync`, added by TASK-456/460) still references the now-deleted
+`IPasswordResetTokenRepository`/`PasswordResetToken` — confirmed via a real `dotnet build
+ShelfGuard.sln`, 2 × `CS0246` at `AuthService.cs:38`/`:52`. Same coupling also breaks 4 files under
+`ShelfGuard.Tests/Auth/` (`AuthServiceTests.cs` + 3 others that only construct `AuthService`
+directly and need a `Substitute.For<IPasswordResetTokenRepository>()` for that, unrelated to what
+they actually test). Left untouched per the brief ("Не чіпай AuthController/AuthService/DTO — це
+TASK-462" — now TASK-465): rewriting `ForgotPasswordAsync`/`ResetPasswordAsync` for the
+temp-password design, and fixing the `IAuthService.ResetPasswordAsync(string rawToken, ...)`
+signature (a raw token no longer exists in the new design), is TASK-465's actual scope, not a
+mechanical fix-up. The EF migration and `users` schema change themselves do not depend on
+`AuthService` and were generated/live-applied cleanly (verified against the real non-superuser
+`shelfguard_app_dev` connection) using a temporary, fully-reverted stub of `AuthService.cs` purely
+so `dotnet ef` tooling had a compiling `ShelfGuard.Api` startup graph to build against — net diff
+on that file is zero (confirmed via `git diff`/`git status`), nothing about the redesign itself was
+implemented there. `dotnet build`/`dotnet test` will not go green again until TASK-465 lands.
+
+
 ## TASK-460 — Backend: security remediation of TASK-458's forgot/reset-password findings
 
 **Status:** done — build 0/0, tests 1221/1221 (was 1220, +1), worker `tsc --noEmit` clean · **Agent:**

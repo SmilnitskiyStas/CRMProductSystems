@@ -30,25 +30,32 @@ function readLocaleCookie(): DashboardLocale | null {
 }
 
 /** "uk" if the browser reports a uk-* language, "en" for any other determined
- * language, "uk" if nothing could be determined at all (no `navigator`/SSR). */
-function resolveBrowserLocale(): DashboardLocale {
-  if (typeof navigator === "undefined" || !navigator.language) return "uk";
+ * language, `fallback` if nothing could be determined at all (no `navigator`/SSR). */
+function resolveBrowserLocale(fallback: DashboardLocale): DashboardLocale {
+  if (typeof navigator === "undefined" || !navigator.language) return fallback;
   return navigator.language.toLowerCase().startsWith("uk") ? "uk" : "en";
 }
 
 /**
- * cookie -> cached user.preferredLocale -> browser language -> "uk".
+ * cookie -> cached user.preferredLocale -> browser language -> `fallback`.
  * Client-only — reads `document`/`navigator`/localStorage, so only call this after
  * mount (e.g. from a `useEffect` or an event handler), never during SSR.
+ *
+ * `fallback` is what to use when NO signal is available at all (no cookie, no cached
+ * user, no readable browser language) — it is NOT a shortcut that skips browser-language
+ * detection. The authenticated dashboard passes "uk" (its long-standing default, unpassed
+ * callers get the same via the parameter default below); the public auth screens
+ * (`/login`, `/forgot-password`) pass "en" so a browser that isn't explicitly uk-* lands
+ * in English (TASK-466), while a uk-* browser still resolves to "uk" either way.
  */
-export function resolveDashboardLocale(): DashboardLocale {
+export function resolveDashboardLocale(fallback: DashboardLocale = "uk"): DashboardLocale {
   const cookieLocale = readLocaleCookie();
   if (cookieLocale) return cookieLocale;
 
   const userLocale = getStoredUser()?.preferredLocale;
   if (isSupportedLocale(userLocale)) return userLocale;
 
-  return resolveBrowserLocale();
+  return resolveBrowserLocale(fallback);
 }
 
 /**

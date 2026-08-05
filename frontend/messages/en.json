@@ -432,26 +432,19 @@
       "signingIn": "Signing in…",
       "signIn": "Sign in",
       "sessionExpired": "Your session has expired. Please sign in again.",
+      "temporaryPasswordExpiredError": "Your temporary password has expired. Please request a new one.",
       "forgotPasswordLink": "Forgot password?",
       "forgotPasswordTitle": "Reset your password",
-      "forgotPasswordDescription": "Enter the email you used to sign up — we'll send instructions to reset your password.",
-      "forgotPasswordSubmitButton": "Send instructions",
+      "forgotPasswordDescription": "Enter the email you used to sign up and we'll send you a temporary password.",
+      "forgotPasswordSubmitButton": "Send temporary password",
       "forgotPasswordSending": "Sending…",
-      "forgotPasswordSuccessMessage": "If that email exists in our system, we've sent instructions to reset your password.",
+      "forgotPasswordSuccessMessage": "If that email exists in our system, we've sent a temporary password to it. Sign in with it, then set a new password.",
       "somethingWentWrongError": "Something went wrong. Please try again later.",
       "backToSignIn": "Back to sign in",
-      "resetPasswordTitle": "Set a new password",
-      "newPasswordLabel": "New password",
-      "confirmPasswordLabel": "Confirm password",
-      "newPasswordMinError": "At least 12 characters",
-      "newPasswordComplexityError": "Password must contain letters and digits",
-      "confirmMismatchError": "Passwords don't match",
-      "passwordPolicyHint": "At least 12 characters, letters and digits",
-      "resetPasswordSubmitButton": "Set new password",
-      "resetPasswordSubmitting": "Updating…",
-      "resetPasswordSuccessMessage": "Your password has been updated. You can now sign in.",
-      "resetPasswordInvalidOrExpired": "This link is invalid or has expired. Please request a new one.",
-      "resetPasswordMissingToken": "This link is invalid. Please request a new password reset from the login page."
+      "temporaryPasswordBanner": {
+        "message": "Your password is temporary and valid until {expiresAt}.",
+        "actionLabel": "Set a new password"
+      }
     },
     "ui": {
       "dateRange": {

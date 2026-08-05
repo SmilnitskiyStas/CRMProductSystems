@@ -276,18 +276,18 @@ public sealed class RlsCrossTenantIntegrationTests : IAsyncLifetime
     /// 20260715120000_FixNotificationSettingsRlsFailOpen. This test asserts no OTHER table's
     /// tenant_isolation policy still has the dangerous prefix, so it can't quietly reappear
     /// (e.g. via a future bulk fix that reintroduces the pattern, as happened once already).
-    /// `password_reset_tokens` (TASK-455, `AddPasswordResetTokens`) joins the exception list as a
-    /// genuinely new third case, same shape/reason as `refresh_tokens`: an anonymous
-    /// forgot/reset-password request must find the token/user row before
-    /// `TenantConnectionInterceptor` has anything to `SET` — there is no authenticated JWT yet to
-    /// derive a tenant from, unlike `notification_settings`' case above.
+    /// `password_reset_tokens` (TASK-455, `AddPasswordResetTokens`) briefly joined the exception
+    /// list as a third case, same shape/reason as `refresh_tokens`, but the table — and the
+    /// link-based reset flow it backed — was dropped entirely by TASK-464 in favor of a
+    /// temporary-password design that needs no pre-auth token lookup at all. Back to two
+    /// documented exceptions.
     /// </summary>
     [Fact]
     public async Task TenantIsolationPolicies_HaveNoFailOpenBranch_ExceptDocumentedPreAuthLookups()
     {
         if (!_dbAvailable) return; // soft-skip, see class remarks
 
-        var allowedFailOpen = new HashSet<string> { "users", "refresh_tokens", "password_reset_tokens" };
+        var allowedFailOpen = new HashSet<string> { "users", "refresh_tokens" };
 
         const string sql = @"
             SELECT tablename, qual FROM pg_policies
@@ -307,7 +307,7 @@ public sealed class RlsCrossTenantIntegrationTests : IAsyncLifetime
         Assert.True(
             offending.Count == 0,
             "tenant_isolation polic(ies) with a fail-open IS-NULL-OR branch outside the " +
-            "documented pre-auth-lookup exceptions (users/refresh_tokens/password_reset_tokens): " +
+            "documented pre-auth-lookup exceptions (users/refresh_tokens): " +
             string.Join(", ", offending));
     }
 

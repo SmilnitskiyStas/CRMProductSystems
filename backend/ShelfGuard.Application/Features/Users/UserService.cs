@@ -408,6 +408,11 @@ public sealed class UserService : IUserService
             return "Current password is incorrect.";
 
         user.ChangePassword(_hasher.Hash(request.NewPassword));
+        // TASK-465: this is the one place a user "takes control" of a temporary password
+        // issued by the forgot-password flow — clears the marker so it stops being treated as
+        // temporary/expiring. No-op (ClearTempPasswordExpiry sets null → null) when the
+        // account's password wasn't temporary to begin with.
+        user.ClearTempPasswordExpiry();
         _users.Update(user);
 
         // TASK-329: a stolen session must not survive a password change.

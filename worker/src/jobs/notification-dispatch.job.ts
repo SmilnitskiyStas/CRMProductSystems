@@ -53,15 +53,18 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
 const TARGETED_EVENT_CHANNELS: Record<string, string[]> = {
   "access.temporary_expiring_soon": ["telegram", "push"],
   "access.temporary_expired": ["telegram", "push"],
-  // TASK-456: forgot/reset-password link. No "push" — deliberate, unlike the access.* rows
-  // above (push delivery isn't implemented at all yet; email/Telegram are the only channels
-  // that can actually carry a clickable link today).
+  // TASK-465: forgot-password temporary password (supersedes TASK-456's link/token design —
+  // same event type, new payload shape below). No "push" — deliberate, unchanged from before
+  // (push delivery isn't implemented at all yet; email/Telegram are the only channels that can
+  // actually carry a temporary password today).
   "auth.password_reset_requested": ["email", "telegram"],
 };
 
-// TASK-456: shape of the outbox row's Payload jsonb for auth.password_reset_requested — `pg`
+// TASK-465: shape of the outbox row's Payload jsonb for auth.password_reset_requested — `pg`
 // auto-parses jsonb columns, so row.payload already arrives as a JS object, not a string.
-type PasswordResetPayload = { resetUrl?: string; expiresInMinutes?: number };
+// Carries the temporary password itself now (supersedes TASK-456's `resetUrl` link shape) —
+// the user logs in directly with it, no separate reset-link step.
+type TempPasswordPayload = { tempPassword?: string; expiresInMinutes?: number };
 
 type PendingIntentRow = {
   id: string;
@@ -75,13 +78,14 @@ type PendingIntentRow = {
 
 function formatText(row: PendingIntentRow): string {
   if (row.event_type === "auth.password_reset_requested") {
-    const payload = row.payload as PasswordResetPayload | null;
-    const resetUrl = payload?.resetUrl ?? "";
-    const expiresInMinutes = payload?.expiresInMinutes ?? 30;
+    const payload = row.payload as TempPasswordPayload | null;
+    const tempPassword = payload?.tempPassword ?? "";
+    const expiresInMinutes = payload?.expiresInMinutes ?? 180;
     return (
       `🔑 <b>ShelfGuard</b>\n\n` +
-      `Хтось (можливо ви) запросив відновлення пароля. Перейдіть за посиланням протягом ` +
-      `${expiresInMinutes} хвилин: <a href="${resetUrl}">${resetUrl}</a>\n\n` +
+      `Ваш тимчасовий пароль: <code>${tempPassword}</code>\n\n` +
+      `Дійсний ${expiresInMinutes} хвилин. Увійдіть з цим паролем і встановіть новий у ` +
+      `налаштуваннях профілю.\n\n` +
       `Якщо це не ви — проігноруйте це повідомлення.`
     );
   }
@@ -99,14 +103,15 @@ function formatText(row: PendingIntentRow): string {
 
 function formatEmail(row: PendingIntentRow): { subject: string; html: string } {
   if (row.event_type === "auth.password_reset_requested") {
-    const payload = row.payload as PasswordResetPayload | null;
-    const resetUrl = payload?.resetUrl ?? "";
-    const expiresInMinutes = payload?.expiresInMinutes ?? 30;
-    const subject = "[ShelfGuard] Відновлення пароля";
+    const payload = row.payload as TempPasswordPayload | null;
+    const tempPassword = payload?.tempPassword ?? "";
+    const expiresInMinutes = payload?.expiresInMinutes ?? 180;
+    const subject = "[ShelfGuard] Тимчасовий пароль";
     const html = `
       <h2>ShelfGuard</h2>
-      <p>Хтось (можливо ви) запросив відновлення пароля. Перейдіть за посиланням протягом ${expiresInMinutes} хвилин:</p>
-      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>Ваш тимчасовий пароль:</p>
+      <p style="font-family:monospace;font-weight:bold;font-size:18px;letter-spacing:1px;padding:8px 12px;background:#f4f4f4;border-radius:4px;display:inline-block">${tempPassword}</p>
+      <p>Дійсний ${expiresInMinutes} хвилин. Увійдіть з цим паролем і встановіть новий у налаштуваннях профілю.</p>
       <p>Якщо це не ви — проігноруйте цей лист.</p>
       <p style="color:#888;font-size:12px">ShelfGuard — система управління термінами придатності</p>
     `;
@@ -204,16 +209,18 @@ async function dispatchTargeted(
     }
   }
 
-  // TASK-460 (HIGH, TASK-458 security review): logNotifications() persists `payload` verbatim
-  // into notification_queue rows that GET /api/notifications/history returns to ANY
-  // authenticated same-tenant user (no per-user scoping there) — for auth.password_reset_requested
-  // that payload is a live, unhashed, single-use reset token, so logging it verbatim turns a
-  // routine history read into an account-takeover primitive. Redact before logging only; the
-  // real resetUrl was already used above (formatText/formatEmail) for the actual send. Any future
-  // targeted event whose payload carries a bearer secret should redact the same way here.
+  // TASK-460 (HIGH, TASK-458 security review), carried forward by TASK-465: logNotifications()
+  // persists `payload` verbatim into notification_queue rows that GET
+  // /api/notifications/history returns to ANY authenticated same-tenant user (no per-user
+  // scoping there) — for auth.password_reset_requested that payload is now the temporary
+  // password itself (an immediately-usable live credential, arguably worse than the superseded
+  // design's single-use link token), so logging it verbatim would turn a routine history read
+  // into an account-takeover primitive. Redact before logging only; the real tempPassword was
+  // already used above (formatText/formatEmail) for the actual send. Any future targeted event
+  // whose payload carries a bearer secret should redact the same way here.
   const logPayload =
     row.event_type === "auth.password_reset_requested"
-      ? { expiresInMinutes: (row.payload as PasswordResetPayload | null)?.expiresInMinutes ?? 30 }
+      ? { expiresInMinutes: (row.payload as TempPasswordPayload | null)?.expiresInMinutes ?? 180 }
       : row.payload;
 
   await logNotifications(client, {

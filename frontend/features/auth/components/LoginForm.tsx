@@ -74,11 +74,21 @@ const linkBtnStyle: React.CSSProperties = {
   textUnderlineOffset: 3,
 };
 
+// Backend's exact sentinel (AuthService.LoginAsync, TASK-465) for a password hash that
+// DID match but belonged to an expired temporary password — deliberately distinguished
+// from a genuinely wrong password, which always stays the generic invalidCredentials
+// message (no enumeration signal either way). Matched verbatim, same convention as
+// ResetPasswordForm.tsx's (now-removed) INVALID_OR_EXPIRED_SENTINEL.
+const TEMP_PASSWORD_EXPIRED_SENTINEL = "Temporary password has expired. Please request a new one.";
+
 /** Maps API errors from the credentials step to a translated UI message. */
 function loginErrorMessage(error: Error, t: ReturnType<typeof useTranslations>): string {
   if (error instanceof ApiError) {
     if (error.status === 429) return t("tooManyAttempts");
-    if (error.status === 401) return t("invalidCredentials");
+    if (error.status === 401) {
+      if (error.message === TEMP_PASSWORD_EXPIRED_SENTINEL) return t("temporaryPasswordExpiredError");
+      return t("invalidCredentials");
+    }
   }
   return error.message;
 }

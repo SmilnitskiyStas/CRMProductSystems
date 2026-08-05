@@ -18,6 +18,14 @@ export interface AuthUserDto {
    * signal (no Tier 2 backend enforcement yet) — see Sidebar.tsx/useRequireTab.ts for how
    * it's combined (OR) with the existing role/capability-based visibility checks. */
   tabs?: string[] | null;
+  /** True while the account's current password is a temporary one issued by
+   * `POST /api/auth/forgot-password` (TASK-465/466 temp-password redesign) — valid 3h,
+   * cleared the moment the user changes it via `POST /api/auth/change-password`, or simply
+   * expires on its own. Fresh on every mint site (login/refresh/2fa-verify) and `/auth/me`. */
+  passwordIsTemporary: boolean;
+  /** ISO UTC datetime the temporary password stops working; null whenever
+   * `passwordIsTemporary` is false. */
+  temporaryPasswordExpiresAt: string | null;
 }
 
 export interface LoginRequest {
@@ -25,15 +33,11 @@ export interface LoginRequest {
   password: string;
 }
 
-// ---- Forgot / reset password (public, TASK-457) ----
+// ---- Forgot password (public, TASK-457; redesigned to issue a temporary password
+// instead of a reset link/token — TASK-465/466) ----
 
 export interface ForgotPasswordRequest {
   email: string;
-}
-
-export interface ResetPasswordRequest {
-  token: string;
-  newPassword: string;
 }
 
 /** Successful login/refresh/2FA-verify — tokens issued. */

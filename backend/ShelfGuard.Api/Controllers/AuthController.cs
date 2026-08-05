@@ -212,8 +212,11 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// First step of the forgot-password flow (TASK-456). Always responds 204 regardless of
-    /// whether the email exists/is active — same no-enumeration posture as Login.
+    /// Forgot-password flow (TASK-465 — supersedes the TASK-456 link/token design; see
+    /// AuthService.ForgotPasswordAsync). Always responds 204 regardless of whether the email
+    /// exists/is active — same no-enumeration posture as Login. On success the account gets a
+    /// new temporary password (valid 3 hours) delivered via email/Telegram — there is no
+    /// separate reset-password step; the user logs in directly with it.
     /// </summary>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
@@ -224,19 +227,6 @@ public sealed class AuthController : ControllerBase
     {
         await _auth.ForgotPasswordAsync(request.Email, ClientIp(), ct);
         return NoContent();
-    }
-
-    /// <summary>Second step: consumes the reset token/link and sets a new password (TASK-456).</summary>
-    [HttpPost("reset-password")]
-    [AllowAnonymous]
-    [EnableRateLimiting("auth-login")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ResetPassword(
-        [FromBody] ResetPasswordRequest request, CancellationToken ct)
-    {
-        var error = await _auth.ResetPasswordAsync(request.Token, request.NewPassword, ct);
-        return error is null ? NoContent() : BadRequest(new { error });
     }
 
     // NOTE (2026-07-15, security fix): a `POST telegram/link` endpoint used to live here,
