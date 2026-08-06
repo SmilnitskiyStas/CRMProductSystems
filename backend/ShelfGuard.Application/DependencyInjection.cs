@@ -141,6 +141,11 @@ services.AddScoped<IAuthService, AuthService>();
             Features.MarketingAnalytics.AudienceBuilder.IAudienceBuilderService,
             Features.MarketingAnalytics.AudienceBuilder.AudienceBuilderService>();
 
+        // TASK-472 - Marketing analytics Фаза 4 (post-campaign audience analysis)
+        services.AddScoped<
+            Features.MarketingAnalytics.PostCampaign.IPostCampaignService,
+            Features.MarketingAnalytics.PostCampaign.PostCampaignService>();
+
         return services;
     }
 }

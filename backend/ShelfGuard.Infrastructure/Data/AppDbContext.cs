@@ -161,6 +161,11 @@ public sealed class AppDbContext : DbContext
     public DbSet<LoyaltyProgramSettings> LoyaltyProgramSettings => Set<LoyaltyProgramSettings>();
     public DbSet<PriceSegmentSettings> PriceSegmentSettings => Set<PriceSegmentSettings>();
 
+    // Post-campaign audience analysis — Фаза 4 (TASK-471). Unlike Фаза 1-3, this persists the
+    // uploaded id list + frozen before/after windows (see PostCampaignSegment class remarks).
+    public DbSet<PostCampaignSegment> PostCampaignSegments => Set<PostCampaignSegment>();
+    public DbSet<PostCampaignSegmentMember> PostCampaignSegmentMembers => Set<PostCampaignSegmentMember>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -2192,6 +2197,74 @@ public sealed class AppDbContext : DbContext
              .HasDatabaseName("uq_price_segment_settings_tenant");
             e.HasOne(s => s.Tenant).WithMany()
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── PostCampaignSegment (Marketing Analytics Фаза 4, TASK-471) ────────
+        // Top-level tenant-scoped table — real Tenant FK, same shape as LoyaltyMembership/
+        // PriceSegmentSettings above. Canonical RLS triad only, no consumer_self_access
+        // (staff-only, no consumer access path — see class remarks).
+        builder.Entity<PostCampaignSegment>(e =>
+        {
+            e.ToTable("post_campaign_segments");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.TenantId).IsRequired();
+            e.Property(s => s.CreatedByUserId).IsRequired();
+            e.Property(s => s.Name).HasColumnType("text");
+            e.Property(s => s.UploadedCount).HasDefaultValue(0);
+            e.Property(s => s.MatchedCount).HasDefaultValue(0);
+            e.Property(s => s.DuplicateCount).HasDefaultValue(0);
+            e.Property(s => s.UnknownCount).HasDefaultValue(0);
+            e.Property(s => s.InvalidCount).HasDefaultValue(0);
+            // List<string> as jsonb — same pattern as Item.Barcodes (KI-013: EnableDynamicJson
+            // in DependencyInjection.cs already covers List<string>/JSONB round-tripping).
+            e.Property(s => s.UnknownTokensSample)
+             .HasColumnType("jsonb")
+             .HasDefaultValueSql("'[]'::jsonb");
+            e.Property(s => s.InvalidTokensSample)
+             .HasColumnType("jsonb")
+             .HasDefaultValueSql("'[]'::jsonb");
+            e.Property(s => s.SegmentHash).HasColumnType("text").IsRequired();
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            // "My segments" listing.
+            e.HasIndex(s => new { s.TenantId, s.CreatedByUserId })
+             .HasDatabaseName("idx_post_campaign_segments_tenant_creator");
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+            // Restrict — mirrors UserPermissionGrant.GrantedByUserId (other staff-authored,
+            // non-nullable User reference in this codebase).
+            e.HasOne(s => s.CreatedByUser).WithMany()
+             .HasForeignKey(s => s.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(s => s.Members).WithOne(m => m.Segment)
+             .HasForeignKey(m => m.SegmentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── PostCampaignSegmentMember (Marketing Analytics Фаза 4, TASK-471) ──
+        // TenantId here is a plain, denormalized, indexed column (RLS + "filter by segment
+        // within tenant" query support) with NO separate FK to tenants — same treatment as
+        // LoyaltyLedgerEntry.TenantId, which likewise defers to its real parent FK
+        // (SegmentId -> post_campaign_segments here, MembershipId there) rather than adding a
+        // redundant direct tenants FK on a child row.
+        builder.Entity<PostCampaignSegmentMember>(e =>
+        {
+            e.ToTable("post_campaign_segment_members");
+            e.HasKey(m => m.Id);
+            e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.TenantId).IsRequired();
+            e.Property(m => m.SegmentId).IsRequired();
+            e.Property(m => m.CustomerId).IsRequired();
+            // Every report query filters by segment within tenant.
+            e.HasIndex(m => new { m.TenantId, m.SegmentId })
+             .HasDatabaseName("idx_post_campaign_segment_members_tenant_segment");
+            // A customer appears at most once per segment — import step dedups before insert,
+            // this is the hard backstop.
+            e.HasIndex(m => new { m.SegmentId, m.CustomerId })
+             .IsUnique()
+             .HasDatabaseName("uq_post_campaign_segment_members_segment_customer");
+            // SegmentId FK is wired via PostCampaignSegment.HasMany above (Cascade) — members
+            // die with their segment.
+            e.HasOne(m => m.Customer).WithMany()
+             .HasForeignKey(m => m.CustomerId).OnDelete(DeleteBehavior.Cascade);
         });
 
     }

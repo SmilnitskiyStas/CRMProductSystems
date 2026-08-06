@@ -1,7 +1,7 @@
 # Domain Model
 
 **Owner:** project-architect
-**Updated:** 2026-07-26
+**Updated:** 2026-08-06
 **Source:** v1-spec.md
 
 ## Core Entities
@@ -200,6 +200,49 @@ updated_at
    since "which tenant" is already answered by the staff session itself. A given `ConsumerAccount`
    can simultaneously be case 1 in tenants it registered into directly and case 2 in its own
    employer's tenant — `linked_user_id` is simply null in the former, set in the latter.
+
+### PostCampaignSegment
+A marketer-uploaded list of customer identifiers (`Customer.Id` GUIDs or phone numbers), sourced
+from *outside* this system (Post-Campaign Analysis, Фаза 4, TASK-471), compared across equal
+before/after date windows around a campaign. The first **persisted** entity in the whole
+marketing-analytics initiative — Фаза 1-3 (RFM, Price Segments, Audience Builder) compute
+everything live on every request instead; see `decisions.md` ADR-023 addendum (Фаза 4) for why this
+phase had to break that precedent. The nullability of `after_start`/`after_end`/`before_start`/
+`before_end` together IS the draft-vs-analyzed state (see `database-schema.md` TASK-471 and
+`glossary.md` "Draft vs. analyzed segment") — no separate boolean/enum column.
+Fields: id, tenant_id, created_by_user_id (FK→users, Restrict, non-nullable — a segment always has
+an owner), name?, uploaded_count, matched_count, duplicate_count, unknown_count, invalid_count,
+unknown_tokens_sample (jsonb string[], capped ~20), invalid_tokens_sample (jsonb string[], capped
+~20), after_start? / after_end? / before_start? / before_end? (date), segment_hash, created_at,
+analyzed_at?
+
+### PostCampaignSegmentMember
+One matched customer within a `PostCampaignSegment` — created only for tokens that resolved to a
+real `Customer.Id` in this tenant at import time. Unknown/invalid tokens are never materialized as
+rows here; they exist only as counts plus a capped sample on the parent segment.
+Fields: id, tenant_id (plain denormalized column, no separate FK to `tenants` — same treatment
+`loyalty_ledger_entries.tenant_id` already gets), segment_id (FK→post_campaign_segments, Cascade),
+customer_id (FK→customers, Cascade)
+Unique (segment_id, customer_id) — a customer appears at most once per segment.
+
+#### Relationships to existing entities (PostCampaignSegment/PostCampaignSegmentMember)
+- **`Customer`** — `PostCampaignSegmentMember.customer_id` (Cascade) links to the tenant's existing
+  CRM record; import matches an uploaded token against `Customer.Id` (GUID) **or** the customer's
+  normalized phone, reusing Фаза 0's existing `PhoneNormalizer` verbatim — not a new identity
+  concept (`decisions.md` ADR-023 addendum, Фаза 4, point b).
+- **`User`** — `PostCampaignSegment.created_by_user_id` (Restrict, non-nullable) is the staff
+  member who uploaded the segment. Unlike most `CreatedBy`/`CreatedByUserId` columns in this
+  codebase (nullable, `SetNull`), this one is required — mirrors
+  `UserPermissionGrant.granted_by_user_id`'s existing "staff-authored row always has an author"
+  precedent, since a segment always has an owner.
+- **`PosTransaction`** — read-only, never a stored FK: every report tab
+  (summary/daily-turnover/rfm-activity/customers/migration) reads `PosTransaction` rows live for
+  each matched member's before/after window, the same way Фаза 0-3 already do; nothing about a
+  transaction is ever written back.
+- **`Tenant`** — both entities are tenant-scoped (`PostCampaignSegment` via a real FK, `Restrict`;
+  `PostCampaignSegmentMember` via a denormalized column, no FK — see `database-schema.md`), RLS
+  isolated, and ride under the existing `"marketing_analytics"` module key — no new module key
+  introduced for this phase.
 
 ---
 

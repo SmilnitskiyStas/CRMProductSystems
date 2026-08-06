@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-08-05
+**Updated:** 2026-08-06
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -1021,3 +1021,219 @@ receipt granularity isn't needed.
 Every export writes an `ActivityLog` row (filter snapshot + row count + masked flag), same audit
 contract as Фаза 1/2. See `database-schema.md` TASK-428 and `decisions.md` ADR-023 addendum (Фаза
 3) for the accepted Seq-Scan-on-ILIKE tradeoff behind the text-term search these endpoints use.
+
+---
+
+### Post-Campaign Analysis (`/api/marketing-analytics/post-campaign`, Фаза 4 — TASK-472)
+
+Base route: `api/marketing-analytics/post-campaign`. Same class-level gate as RFM/Price Segments/
+Audience Builder — `[Authorize(Policy = MarketingAnalyticsViewOrCapability)]` +
+`[RequireModule("marketing_analytics")]`, same module key as the rest of Фаза 1-3 (not a new one).
+All DTO fields camelCase. The one wire-facing enum this module reuses is Фаза 1's `RfmSegmentKey`
+(`segmentBefore`/`segmentAfter` below — PascalCase string, e.g. `"Champions"`, nullable = "Без
+покупок"); `PostCampaignBehaviorStatus` (reactivated/retained/dropped/notReturned — see
+`glossary.md`) is classified server-side but never itself serialized — only its aggregate counts
+appear in `PostCampaignSummaryDto`.
+
+**⚠️ `Import` carries a STRICTER gate than every other action on this controller — easy to miss on
+a skim, since every other module controller in this file uses exactly one floor for all its
+actions.** `ListSegments`, `Analyze`, all 5 report-tab GETs, `Explain`, and both exports only need
+the class-level `MarketingAnalyticsViewOrCapability` floor (store_manager+ **or** the
+`marketing_analytics.view` TenantRole capability). `Import` additionally requires
+`MarketingAnalyticsAuthorization.CanImportSegments` — **role-only** (`AtLeastStoreManagerRoles`,
+no capability-widening escape hatch at all, unlike `CanExportPii`'s role-OR-capability shape) — so
+a caller holding `marketing_analytics.view` (or even `marketing_analytics.export_pii`) but ranked
+below store_manager can open every report tab on an already-analyzed segment yet cannot import a
+new one. Added by TASK-477 as the fix for TASK-474 finding B (source doc §32's explicit "окреме
+право на upload" ask); returns `403 Forbid()`, not a silent no-op. See `decisions.md` ADR-023
+addendum (Фаза 4) point (e) for why this is role-only rather than a new delegable capability.
+
+`storeIds` is a repeated query param on every report GET (`?storeIds=guid1&storeIds=guid2`,
+omitted/empty = all stores) — same shape as Фаза 1/2/3. A `PostCampaignSegment` isn't itself
+store-scoped (its members came from an externally-sourced list, not a store-scoped query); this is
+purely an analysis-time filter over which stores' transactions count toward the before/after KPIs.
+
+#### `GET /segments` → `PostCampaignSegmentListItemDto[]`
+```ts
+{ id: string; name: string | null; createdAt: string;
+  uploadedCount: number; matchedCount: number; isAnalyzed: boolean;
+  afterStart: string | null; afterEnd: string | null;    // "YYYY-MM-DD", null while draft
+  analyzedAt: string | null }
+```
+
+#### `POST /segments/import` — multipart/form-data (the only non-JSON endpoint in this module,
+since the same call must also accept a binary file)
+```
+file?: binary             -- .csv / .xlsx / .txt only (extension allowlist)
+rawText?: string           -- exactly one of file/rawText must be present
+name?: string              -- optional segment label, e.g. "SMS блиц — серпень"
+columnIndex?: number       -- re-submit the SAME file with an explicit column after reviewing
+                              the auto-detected preview (see columnPreview below)
+```
+Request-size cap: **10 MB**, enforced by `[RequestSizeLimit]` at the Kestrel/authorization-filter
+stage — genuinely enforced (confirmed this app runs Kestrel-behind-Nginx, not IIS in-process), and
+covers the whole multipart body (file + rawText + other fields together), not just the file part.
+
+**Import size limits are two layers, not one — verify-the-fix lesson from TASK-474→477 (full story
+in `decisions.md` ADR-023 addendum, Фаза 4 point d):**
+1. **`ImportLimits.MaxUncompressedZipEntryBytes` (20 MB), XLSX only, checked BEFORE ClosedXML ever
+   opens the file.** A `.xlsx` is a ZIP container; `System.IO.Compression.ZipArchive` +
+   `ZipArchiveEntry.Length` reads each part's real uncompressed size directly off the ZIP central
+   directory — cheap (0-9 ms measured even against an 85 MB payload) regardless of file size,
+   because no decompression is needed to read it. This is the layer that actually matters: `new
+   XLWorkbook(stream)` alone (ClosedXML's constructor) fully materializes the whole workbook into
+   memory before any row/column count is available to check against — a <5 MB crafted file was
+   measured costing ~38 s / ~1.7 GB allocated inside that constructor call alone.
+2. **`ImportLimits.MaxRows` (25,000) / `MaxColumns` (300)**, checked against the parsed range's
+   bounding box before the per-cell copy loop runs. Applies to XLSX; the row check alone (no
+   column check — a rows-by-columns nested materialization only happens for XLSX) also applies to
+   CSV/raw-text via `SegmentImportParser.ParseTextList`/`ParseCsvText`, ahead of their own
+   per-token/per-line work (defense-in-depth — that path was already bounded by the 10 MB request
+   cap above).
+
+Both ceilings are deliberately more generous than `PostCampaignService.MaxAcceptedRows`
+(**20,000** — the real, user-facing business cap, checked separately and later in `ImportAsync`)
+so a submission only a little over 20,000 still gets that friendlier, specific error message
+instead of the generic "too large" one; only a drastically oversized upload (the actual attack
+shape) hits the `ImportLimits` ceilings. Exceeding any of the three ceilings returns `400 { error
+}` — never a 500 (TASK-477 finding C also hardened the malformed-file case: a `.xlsx`-named file
+ClosedXML can't actually parse now returns a clean `400`, not an unhandled exception).
+
+```ts
+PostCampaignImportResultDto = {
+  segmentId: string; name: string | null;
+  uploadedCount: number; matchedCount: number; duplicateCount: number;
+  unknownCount: number; invalidCount: number;
+  unknownTokensSample: string[];       // first ~20 unmatched-but-well-formed tokens
+  invalidTokensSample: string[];       // first ~20 tokens that failed format validation entirely
+  columnPreview: {                      // null for raw-text imports (no tabular structure)
+    headers: string[]; detectedColumnIndex: number; detectedColumnHeader: string | null;
+    sampleRows: (string | null)[][]     // every column, not just the detected one
+  } | null;
+  createdAt: string;
+}
+```
+A fresh `PostCampaignSegment` row is created on EVERY import call, even a re-upload of the same
+content — there is no "update an existing draft" endpoint (see `glossary.md` "Draft vs. analyzed
+segment"). Each token classifies as a whole GUID or a whole phone number (never a substring — the
+source doc's own documented competitor bug), then resolves against real `Customer` rows in this
+tenant by `Customer.Id` OR normalized phone, reusing Фаза 0's existing `PhoneNormalizer` (see
+`decisions.md` ADR-023 addendum, Фаза 4, point b).
+
+#### `POST /segments/{id}/analyze` — body `{ afterStart: string; afterEnd: string }` (`"YYYY-MM-DD"`)
+```ts
+PostCampaignAnalyzeResultDto = {
+  segmentId: string; afterStart: string; afterEnd: string;
+  beforeStart: string; beforeEnd: string;       // before window auto-derived, equal length
+  segmentHash: string; analyzedAt: string;
+}
+```
+`400` if `afterStart > afterEnd`; `404` if the segment doesn't exist or doesn't belong to this
+tenant. Safe to call again on an already-analyzed segment with new dates — re-freezes the window in
+place (`glossary.md` "Draft vs. analyzed segment").
+
+#### Report tabs — all `GET`, all take `?storeIds=` only
+All five `404` if the segment doesn't exist; a still-**draft** segment returns `400` (not `404`) —
+`MapError` maps any service error ending in `"not found."` to `404`, everything else (including
+"Segment has not been analyzed yet") to `400`.
+
+`GET .../summary` → `PostCampaignSummaryDto`:
+```ts
+{ matchedCount: number;
+  moneyBefore: number; moneyAfter: number; moneyDeltaPercent: number | null;
+  buyersAfter: number;
+  reactivated: number; reactivationRatePercent: number | null;    // reactivated / inactiveBefore
+  inactiveBefore: number;                                         // reactivated + notReturned
+  retained: number; retentionRatePercent: number | null;          // retained / activeBefore
+  activeBefore: number;                                           // retained + dropped
+  dropped: number; churnRatePercent: number | null;                // dropped / activeBefore
+  notReturned: number;
+  recommendation: { triggerUa: string; actionUa: string; offerUa: string; cautionUa: string };
+  segmentHash: string; afterStart: string; afterEnd: string;
+  beforeStart: string; beforeEnd: string; calculatedAt: string; }
+```
+`reactivated + retained + dropped + notReturned` always equals `matchedCount` (`glossary.md`).
+Every `*RatePercent` is `null`, never `0`, when its own denominator is zero.
+
+`GET .../daily-turnover` → `PostCampaignDailyTurnoverDto`:
+```ts
+{ points: { dayIndex: number; afterCalendarDate: string; beforeAmount: number; afterAmount: number }[];
+  totalBefore: number; totalAfter: number;
+  segmentHash: string; afterStart: string; afterEnd: string;
+  beforeStart: string; beforeEnd: string; calculatedAt: string; }
+```
+`dayIndex` is 1-based, shared ordinal position between the before/after series (aligned by ordinal
+day-in-window, not calendar date); `afterCalendarDate` is the real after-window date for that
+ordinal day, for the chart's X-axis labels.
+
+`GET .../rfm-activity` → `PostCampaignRfmActivityDto`:
+```ts
+{ checksBefore: number; checksAfter: number; checksDeltaPercent: number | null;
+  turnoverBefore: number; turnoverAfter: number; turnoverDeltaPercent: number | null;
+  averageCheckBefore: number | null; averageCheckAfter: number | null; averageCheckDeltaPercent: number | null;
+  recencyBeforeDays: number | null; recencyAfterDays: number | null; recencyDeltaPercent: number | null;
+  recencyDenominatorBefore: number; recencyDenominatorAfter: number;   // see below
+  segmentHash: string; afterStart: string; afterEnd: string;
+  beforeStart: string; beforeEnd: string; calculatedAt: string; }
+```
+`recencyDenominatorBefore`/`After` expose exactly how many segment members had ANY purchase in that
+window — customers with none are excluded from the recency average entirely rather than pulled in
+with a made-up value (source doc's "show the denominator" transparency rule).
+
+`GET .../customers?storeIds=&page=&pageSize=&sortBy=&sortDescending=` → `PostCampaignCustomerTableDto`.
+`sortBy` allowlist: `checksbefore|checksafter|turnoverbefore|turnoverafter|transition`, default
+`turnoverafter` descending (unrecognized value silently falls back, never a `400`). Full server
+pagination, **no Top-200 cap** — same explicit fix-over-competitor pattern as Фаза 3's
+AudienceBuilder customer table.
+```ts
+PostCampaignCustomerRowDto = {
+  customerId: string; name: string; phone: string | null;    // masked unless CanExportPii
+  checksBefore: number; checksAfter: number; turnoverBefore: number; turnoverAfter: number;
+  segmentBefore: RfmSegmentKey | null; segmentBeforeLabelUa: string;   // null = "Без покупок"
+  segmentAfter: RfmSegmentKey | null; segmentAfterLabelUa: string;
+}
+```
+`phone` resolves `CanViewUnmaskedPii` server-side (`MarketingAnalyticsAuthorization.CanExportPii`),
+same as every sibling phase's on-screen table — no client-facing unmask parameter on this endpoint.
+
+`GET .../migration` → `PostCampaignMigrationDto`:
+```ts
+{ beforeDistribution: { segment: RfmSegmentKey | null; labelUa: string; count: number; sharePercent: number }[];
+  afterDistribution:  { segment: RfmSegmentKey | null; labelUa: string; count: number; sharePercent: number }[];
+  matrix: { before: RfmSegmentKey | null; beforeLabelUa: string;
+            after: RfmSegmentKey | null; afterLabelUa: string; count: number }[];
+  upCount: number; stableCount: number; downCount: number;      // sum to matchedCount
+  recommendation: { triggerUa: string; actionUa: string; offerUa: string; cautionUa: string };
+  segmentHash: string; afterStart: string; afterEnd: string;
+  beforeStart: string; beforeEnd: string; calculatedAt: string; }
+```
+`matrix` is **sparse** (only cells that actually occurred) — the frontend renders the full fixed
+12×12 grid itself with dots for empty cells. `null` segment = the "Без покупок" bucket. See
+`glossary.md` "RFM migration matrix" and `decisions.md` ADR-023 addendum (Фаза 4) point (c) for how
+`beforeDistribution`/`afterDistribution`/`matrix` are computed without a second RFM implementation.
+
+#### `POST /segments/{id}/explain` → `ExplainPostCampaignResultDto`
+```json
+{ "explanationUa": "string", "model": "string", "tokensUsed": 0 }
+```
+`503 { "error": "..." }` when no Claude key is configured — same failure shape as every other
+`/explain` endpoint in this module. The prompt never receives the raw uploaded token samples —
+only aggregate counts/rates and the already-shown template recommendation strings, plus the
+staff-typed segment `Name` (low-severity, same accepted shape as Фаза 1's `TopProductName`
+precedent — TASK-474 item 8).
+
+#### Exports — both `POST`, response is the raw `.xlsx` file
+```
+POST .../exports/customers        Body: { storeIds: string[] | null; unmaskPii: boolean }
+POST .../exports/unknown-tokens   No body
+```
+`exports/customers` — same row shape as the on-screen customer table; `unmaskPii` is ANDed
+server-side with `CanExportPii` (requesting unmask without permission silently falls back to
+masked, never a `403`). `exports/unknown-tokens` — the uploader's own raw unmatched/invalid tokens
+(never resolved Customer PII, so no PII gate applies), backing the "download error report" flow
+after an import with unknowns. Both write an `ActivityLog` row
+(`marketing_analytics.post_campaign.export_customers` / `..._export_unknown_tokens`), same audit
+contract as every sibling phase's exports, and both pass every cell through the same
+`ExcelExportService`/`SanitizeForSpreadsheet` formula-injection guard as every other export in this
+codebase (TASK-414) — confirmed to cover raw uploaded token text too, not just resolved customer
+names (TASK-474 item 2).

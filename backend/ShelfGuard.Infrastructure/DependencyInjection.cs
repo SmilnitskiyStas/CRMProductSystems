@@ -262,6 +262,15 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.MarketingAnalytics.AudienceBuilder.IAudienceBuilderRepository,
             Data.Repositories.AudienceBuilderRepository>();
 
+        // TASK-472 - Marketing analytics Фаза 4 (post-campaign audience analysis)
+        services.AddScoped<Application.Features.MarketingAnalytics.PostCampaign.IPostCampaignRepository,
+            Data.Repositories.PostCampaignRepository>();
+        services.AddScoped<Domain.Interfaces.IPostCampaignAdvisor,
+            AI.PostCampaignAdvisor.PostCampaignAdvisor>();
+        // Stateless — same AddSingleton convention as IExcelExportService above.
+        services.AddSingleton<Application.Common.IExcelImportService,
+            Export.ExcelImportService>();
+
         return services;
     }
 }

@@ -546,6 +546,58 @@ future database-engineer work: default to `NOT VALID` + a follow-up `VALIDATE CO
 for any FK added to a pre-existing, potentially-populated column, rather than relying on knowing
 the column is "almost certainly empty everywhere."
 
+### KI-030: `TenantRole` capabilities (ADR-020) never reach the JWT on login or refresh — the entire role-or-capability escape hatch is silently inert tenant-wide
+Severity: high (not a tenant-isolation/security *leak* — the opposite: capability grants a tenant
+admin believes they've made are silently never honored; a whole, previously-shipped authorization
+feature is dead in production for every tenant)
+Status: open — found 2026-08-06 (TASK-476, Фаза 4 post-campaign E2E acceptance), not fixed. Not a
+Фаза 4 regression, not caused by TASK-471/472/473/474/477's own code — pre-existing, unrelated
+platform bug, out of scope for that task to fix.
+Description: Every user's JWT `capabilities`/`tabs` claims are always empty on every password
+login and every token refresh, regardless of whether that user has a real `TenantRoleId` with a
+non-empty `TenantRole.Capabilities` list. Root cause: `TenantConnectionInterceptor.GetSetSql()`
+(`backend/ShelfGuard.Infrastructure/Interceptors/TenantConnectionInterceptor.cs:64-69`) correctly
+`RESET`s `app.tenant_id` for unauthenticated requests (`/api/auth/login`, `/refresh`, 2FA verify —
+needed for `users`' own RLS carve-out), but `AuthService.IssueTokensAsync`
+(`backend/ShelfGuard.Application/Features/Auth/AuthService.cs:469-475,515-525`) also queries
+`tenant_roles` via `BuildEffectiveCapabilitiesAsync`/`BuildEffectiveTabsAsync` on that same RESET
+connection. `tenant_roles`' RLS policy has no equivalent carve-out (`TenantId =
+(NULLIF(current_setting('app.tenant_id'), ''))::uuid` — the standard fail-closed guard, correctly
+strict for every other unauthenticated context) — with `app.tenant_id` NULL, the table is
+completely invisible mid-login, so the lookup always returns `null` and both Build* methods always
+fall through to `[]`. Live-confirmed for 2 real users with real non-empty `TenantRole` grants on
+the dev tenant "Свіжий Кут" — both get `"capabilities": []`/`"tabs": []` in the raw login response
+body (not just a missing JWT claim). Contrast: `GetCurrentUserAsync` (`/api/auth/me`) calls the
+identical `BuildEffectiveCapabilitiesAsync` but on an *authenticated* connection (`app.tenant_id`
+already set), so it computes correctly — meaning the admin UI can show a `TenantRole`'s
+capabilities correctly (reads are authenticated), while the JWT actually minted for that role's
+assignee never carries them, for the token's entire lifetime. Impact: every controller using
+`RoleOrCapabilityRequirement`/`RoleOrCapabilityHandler` (`AppPolicies.cs` lists 7+: Schedules,
+Analytics, Integrations ×2, Orders, Suppliers, AiOrders ×2, Users, MarketingAnalytics) has its
+capability-widening half silently dead — only the base-role branch ever actually grants access.
+The documented, intended ADR-020 workflow ("delegate one capability to a lower-ranked role without
+granting the full higher role") currently does nothing: the grant looks correct in the admin UI
+but never unlocks anything for its assignee. Why the existing test suite missed it: every
+capability test (`AuthServiceCapabilitiesTests.cs`) mocks `ITenantRoleRepository` entirely, so none
+exercise the real EF query against the real RLS-guarded table on a RESET connection — the same
+"mocked repository hides a real RLS-interaction bug" shape TASK-476 also found twice more in Фаза
+4's own code that session (phone-matching, unknown-tokens export), suggesting a recurring blind
+spot in this codebase's test strategy at exactly the DB/RLS boundary, not three unrelated
+coincidences. Full repro, decoded-JWT evidence, and code citations:
+`.claude/logs/reviews/bug-task476-tenantrole-capabilities-never-reach-jwt_2026-08-06.md`.
+Resolution (not applied — needs a decision on fix shape before implementation, flagged for a
+dedicated backend-developer + security-reviewer follow-up given the auth-boundary sensitivity):
+(a) give `tenant_roles`' RLS policy the same NULL-`tenant_id`-passthrough carve-out `users` already
+has — broadest fix, smallest diff, but widens `tenant_roles`' visibility during any unauthenticated
+connection state tenant-wide, needs the same scrutiny this codebase's own KI-027/KI-028 history
+already applies to RLS carve-outs; (b) narrower — have `IssueTokensAsync` run the `tenant_roles`
+lookup inside a scoped `SET LOCAL app.role = 'provider'`-style bracket for just that one query,
+mirroring the existing `worker`/`provider_bypass` pattern, without loosening the table's general
+policy. Either way, add a real integration test that performs an actual login through a real
+RLS-enabled Postgres connection for a user with a real `TenantRoleId` and asserts the resulting
+capabilities/tabs are non-empty — the category of test currently missing that would have caught
+this.
+
 ## Resolved Issues
 
 ### KI-012: Existing tenants have stale legacy module keys, not v4 module keys ✅ resolved (2026-06-16)

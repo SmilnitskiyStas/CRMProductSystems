@@ -333,7 +333,8 @@
           "label": "Marketing",
           "dashboard": "RFM Dashboard",
           "priceSegments": "Price Segments",
-          "audienceBuilder": "Audience Builder"
+          "audienceBuilder": "Audience Builder",
+          "postCampaign": "Post-Campaign"
         },
         "workforce": {
           "label": "Staff",
@@ -2010,6 +2011,189 @@
       "bulkSelectionActions": {
         "selectAll": "Select all",
         "deselectShown": "Deselect shown"
+      }
+    },
+    "postCampaign": {
+      "page": {
+        "title": "Post-Campaign Analysis",
+        "subtitle": "Upload a customer list from an external campaign and compare their behavior before and after",
+        "moduleGate": {
+          "title": "Marketing Analytics module is not active",
+          "body": "Contact your platform administrator to enable the \"Marketing Analytics\" module."
+        },
+        "importSection": "Upload segment",
+        "clearButton": "Clear",
+        "historicalDataBanner": "This tool only reflects sales linked to a customer (via the loyalty program). Historical POS sales made before that link existed are not included here.",
+        "invalidRangeError": "The start date must be on or before the end date.",
+        "analyzeErrorToast": "Analysis failed: {message}",
+        "emptyStateHint": "Upload a segment and click \"Analyze segment\" to see the campaign's effect."
+      },
+      "reportTabs": {
+        "overview": "Overview",
+        "activity": "R/F/M Activity",
+        "migration": "Segment Migration"
+      },
+      "recommendation": {
+        "title": "Recommendation",
+        "triggerLabel": "Trigger — why now",
+        "actionLabel": "Action · channel · time",
+        "offerLabel": "Offer",
+        "cautionLabel": "Caution",
+        "explainButton": "Explain in more detail",
+        "explainLoading": "Analyzing…",
+        "aiBadge": "AI explanation",
+        "explainUnavailable": "AI explanation unavailable — no Claude API key configured for this workspace.",
+        "explainError": "Couldn't generate an explanation. Try again later.",
+        "noControlGroupNote": "This is a before/after comparison with no control group — treat causal wording as a hypothesis, not a proven result."
+      },
+      "draftBanner": {
+        "title": "Unapplied audience changes",
+        "body": "You've imported a new list, but the report below still reflects the previously analyzed segment.",
+        "cta": "Analyze now"
+      },
+      "columnPreview": {
+        "title": "Confirm the ID column",
+        "detected": "Detected column: {column}",
+        "unnamedColumn": "Column {index}",
+        "columnLabel": "Column",
+        "confirmButton": "Re-import with this column",
+        "reimporting": "Re-importing…"
+      },
+      "importPanel": {
+        "modeList": "ID list",
+        "modeFile": "File",
+        "listPlaceholder": "1024\n2048\n4096",
+        "listHint": "One ID per line, or several separated by commas. Accepts customer GUIDs or phone numbers — not arbitrary numeric IDs.",
+        "dropHint": "Drag a file here, or click to choose one",
+        "fileHint": "Accepted: .csv, .xlsx, .txt · up to 10 MB · up to 20,000 IDs. The first row of a file is always treated as a header and is not imported.",
+        "removeFile": "remove",
+        "nameLabel": "Segment name (optional)",
+        "namePlaceholder": "e.g. SMS blast — August",
+        "errorExtension": "Unsupported file format. Allowed: .csv, .xlsx, .txt.",
+        "errorSize": "File is too large. Maximum 10 MB.",
+        "importing": "Importing…",
+        "importButton": "Import"
+      },
+      "validationSummary": {
+        "title": "Import validation",
+        "uploaded": "Uploaded",
+        "matched": "Matched",
+        "duplicate": "Duplicate",
+        "unknown": "Unknown",
+        "invalid": "Invalid",
+        "unknownSampleTitle": "First {count} unknown tokens",
+        "invalidSampleTitle": "First {count} invalid tokens",
+        "moreInExportOnly": "+ {count} more — see the exported file",
+        "exportErrorsButton": "Download error report (XLSX)",
+        "exporting": "Exporting…",
+        "exportErrorsHintComplete": "Contains all {unknownCount} unknown + {invalidCount} invalid tokens.",
+        "exportErrorsHintTruncated": "Showing {unknownShown} of {unknownCount} unknown + {invalidShown} of {invalidCount} invalid tokens — the rest weren't saved at import time.",
+        "exportSuccessToast": "Export ready — check your downloads",
+        "exportErrorToast": "Export failed: {message}"
+      },
+      "afterPeriodBar": {
+        "fromLabel": "After: from",
+        "toLabel": "After: to",
+        "storesLabel": "Stores",
+        "allStores": "All stores",
+        "storesCount": "{count} stores",
+        "selectAllStores": "All stores",
+        "doneButton": "Done",
+        "analyzing": "Analyzing…",
+        "refreshButton": "Refresh",
+        "analyzeButton": "Analyze segment",
+        "presetsLabel": "Quick range:",
+        "preset": {
+          "last7": "Last 7 days",
+          "last14": "Last 14 days",
+          "last30": "Last 30 days",
+          "thisMonth": "This month",
+          "lastMonth": "Last month"
+        },
+        "beforeWindowLabel": "Before window (auto):",
+        "beforeWindowHint": "same length as the after window, ending the day before it starts"
+      },
+      "segmentsList": {
+        "unnamed": "Untitled segment",
+        "placeholder": "Select a segment…",
+        "popoverTitle": "Saved segments",
+        "loading": "Loading…",
+        "empty": "No segments yet",
+        "matchedCount": "{count} matched"
+      },
+      "topKpi": {
+        "notAvailable": "n/a",
+        "moneyAfter": "Money after campaign",
+        "buyersAfter": "{count} buyers after",
+        "reactivated": "Reactivated",
+        "allActiveBefore": "all were active before",
+        "reactivationRate": "{rate} of inactive-before",
+        "retained": "Retained",
+        "retentionRate": "{rate} of active-before",
+        "dropped": "Dropped",
+        "churnRate": "{rate} churn of active-before",
+        "notReturned": "Not returned",
+        "notReturnedHint": "no purchases before or after"
+      },
+      "dailyTurnoverChart": {
+        "title": "Daily turnover: before vs after",
+        "subtitle": "Segment's daily revenue, aligned by day-in-window",
+        "empty": "No data for this period",
+        "afterSeries": "After",
+        "beforeSeries": "Before"
+      },
+      "statusDonut": {
+        "title": "Segment status",
+        "subtitle": "Behavioral breakdown of the full segment",
+        "empty": "No data",
+        "reactivated": "Reactivated",
+        "retained": "Retained",
+        "dropped": "Dropped",
+        "notReturned": "Not returned",
+        "centerLabel": "segment"
+      },
+      "rfmActivity": {
+        "notAvailable": "n/a",
+        "checks": "Checks",
+        "turnover": "Turnover",
+        "averageCheck": "Average check",
+        "recency": "Recency (days)",
+        "daysSuffix": "{n} days",
+        "recencyDenominatorFootnote": "Recency is averaged only over members with a purchase in that window: {before} before, {after} after."
+      },
+      "migrationTab": {
+        "up": "Moved up",
+        "stable": "No change",
+        "down": "Moved down",
+        "beforeDonutTitle": "Segments before",
+        "afterDonutTitle": "Segments after"
+      },
+      "transitionMatrix": {
+        "title": "Transition matrix",
+        "subtitle": "Rows = before, columns = after. Diagonal = no change, green = improvement, red = decline, a dot = no such transition.",
+        "cornerLabel": "Before / After",
+        "legendStable": "No change",
+        "legendUp": "Improved",
+        "legendDown": "Declined",
+        "legendEmpty": "no transitions"
+      },
+      "customerTable": {
+        "title": "Segment customers",
+        "subtitle": "Full segment, server-paginated — no Top-200 cap",
+        "totalCount": "{count} customers",
+        "headerName": "Customer",
+        "headerPhone": "Phone",
+        "headerChecksBefore": "Checks before",
+        "headerChecksAfter": "Checks after",
+        "headerTurnoverBefore": "Turnover before, ₴",
+        "headerTurnoverAfter": "Turnover after, ₴",
+        "headerTransition": "Segment before → after",
+        "loading": "Loading…",
+        "empty": "No customers in this segment for the selected stores.",
+        "exportButton": "Export XLSX",
+        "exporting": "Exporting…",
+        "exportSuccessToast": "Export ready — check your downloads",
+        "exportErrorToast": "Export failed: {message}"
       }
     },
     "dashboard": {
@@ -4171,13 +4355,26 @@
         "empty": "No activity yet",
         "actions": {
           "user": {
+            "login": "Login",
+            "login_failed": "Failed login attempt",
+            "2fa_enabled": "Enabled two-factor authentication",
+            "2fa_disabled": "Disabled two-factor authentication",
+            "2fa_failed": "Failed 2FA check",
+            "locked_out": "Locked out after failed login attempts",
             "invited": "Invited a new user",
             "updated": "Updated details",
             "deactivated": "Deactivated",
             "profile_updated": "Updated profile",
             "password_changed": "Changed password",
             "telegram_linked": "Connected Telegram",
-            "permissions_updated": "Updated access"
+            "permissions_updated": "Updated access",
+            "permission_granted": "Temporary access granted",
+            "permission_revoked": "Temporary access revoked",
+            "tenant_role_assigned": "Access role changed",
+            "locations_updated": "Locations updated"
+          },
+          "auth": {
+            "refresh_reuse_detected": "Token reuse detected — sessions revoked"
           }
         }
       },

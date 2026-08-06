@@ -3,6 +3,236 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-478 — Backend: fix Фаза 4 QA findings (phone matching + export truncation)
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-476 (QA findings) ·
+**Next:** none blocking — KI-030 (TenantRole capabilities never reach the JWT, the 3rd TASK-476
+finding) is a separate, pre-existing platform bug, deliberately not touched here
+Log: `.claude/logs/tasks/478_2026-08-06_post-campaign-qa-fixes_backend-developer.md`
+Fixed both confirmed Фаза 4 bugs from TASK-476's QA pass. (1) HIGH — phone-based import matching:
+`PostCampaignRepository.FindCustomersByIdsOrPhonesAsync` now normalizes stored `Customer.Phone`
+client-side (same `PhoneNormalizer` the import parser uses) before comparing against the always-
+normalized candidate phones, instead of raw string equality — fixed entirely within the repository
+file, no `Customer`/`CustomerService` change, no migration. (2) MEDIUM-HIGH — unknown/invalid-
+tokens export silently capped at 20+20: raised both persisted sample caps to 500, added
+`PostCampaignUnknownTokensExportResult` (`TotalUnknownCount`/`TotalInvalidCount`/`Truncated`) plus
+response headers, inserted an honest in-sheet note row when a segment still exceeds the new cap,
+and updated the frontend hint text to say "showing X of Y" instead of implying completeness — same
+honesty standard `CustomerTable`'s own pagination footer already uses. `dotnet test` 1314/1314
+(1310 baseline + 4 new, incl. the missing live-Postgres repository test category the QA report
+flagged), `tsc`/lint/`next build` clean, plus live browser + curl E2E re-verification (real phone-
+format mismatch reproduced then confirmed fixed; real truncated segment's export headers/in-file
+note both confirmed correct).
+
+## TASK-476 — QA: E2E acceptance post-campaign (Фаза 4)
+**Status:** done — **verdict: SHIP WITH FOLLOW-UP** · **Agent:** qa-tester · **Depends:**
+TASK-471/472/473/474/477 · **Next:** backend-developer follow-up for the 2 Фаза-4 bugs below (not
+spawned yet — reported only, per this task's brief); TenantRole-capabilities bug needs its own
+separate backend-developer + security-reviewer follow-up
+Log: `.claude/logs/tasks/476_2026-08-06_post-campaign-e2e-acceptance_qa-tester.md`
+Full live re-verification against the real dev stack (real tenant "Свіжий Кут", 14 customers, 127
+`pos_transactions`), most of it against hand-computed ground truth, not just the app's own
+self-report: parser edge cases (one self-designed input covering every §36.1 case at once — UUID-
+not-split, decimal-not-two-IDs, free-text-not-a-phone, 4 real phone formats, normalization-based
+dedup), CSV/XLSX import + column auto-detect/override (hand-built real binary `.xlsx` via Python
+`zipfile`), draft-vs-analyzed banner (live in browser — appears and disappears correctly), period
+formula (7-day via API, 30-day via live UI, both exact), all 5 top KPI cards incl. `NotReturned` as
+a real 5th card, null-not-zero zero-denominator handling (backend AND frontend), behavioral-balance
+identity, RFM migration matrix marginal-sum identities + the null "Без покупок" bucket vs. the
+non-null case-b fallback (5 independent real customers), customer table pagination/sort/PII
+masking, empty-segment handling (every endpoint + live UI), AI-explain 503 not-configured path,
+the 20,000-row import cap (fast-fail, 0.27s), 3 real malformed-`.xlsx` shapes (all clean 400s,
+never 500), and the `CanImportSegments` role-floor boundary (live 403 below floor, live 200 at/
+above floor). `dotnet test` 1310/1310, filtered 96/96, `tsc`/lint/`next build` all clean, zero
+regressions, bundle size byte-identical to TASK-473's own figure.
+**Found 3 real bugs (reported, none fixed)**: (1) HIGH, Фаза 4's own code — post-campaign phone-
+based import matching only works when `Customer.Phone` is already stored in exact canonical
+`+380XXXXXXXXX` form; `CustomerService`'s write path never normalizes it, so real customers'
+correctly-formatted phones silently resolve to "unknown," corrupting this feature's own core
+existence-validation promise. (2) MEDIUM-HIGH, Фаза 4's own code — the unknown/invalid-tokens error-
+report export is silently capped at 20+20=40 rows (all `PostCampaignSegment` ever persists) with no
+truncation indicator, contradicting the source doc's "full downloadable error report" requirement;
+byte-level export check proved a real 49-token segment exports only 40. (3) HIGH, pre-existing
+platform bug, NOT Фаза 4's own code, found as a byproduct of testing the import-permission item —
+`TenantRole` capabilities (ADR-020) never reach the JWT on login/refresh for ANY user, tenant-wide:
+`TenantConnectionInterceptor` correctly RESETs `app.tenant_id` for the unauthenticated login
+request, but `tenant_roles`' RLS policy (unlike `users`') has no NULL-passthrough carve-out, so it's
+invisible mid-login — live-confirmed via 2 real users' login responses showing `"capabilities": []`
+despite real non-empty grants in the DB. Silently disables the capability-widening half of every
+`RoleOrCapability`-gated controller (7+ policies) tenant-wide. Full writeups: `.claude/logs/reviews/
+bug-task476-phone-import-matching-format-mismatch_2026-08-06.md`, `bug-task476-unknown-tokens-
+export-capped-at-20_2026-08-06.md`, `bug-task476-tenantrole-capabilities-never-reach-jwt_2026-08-06.md`.
+Dev servers stopped cleanly at end; QA-test segments/TenantRole left in the dev DB (same residue
+precedent TASK-433/424 already set for this series).
+
+## TASK-475 — Docs: post-campaign glossary/schema/ADR (Фаза 4)
+**Status:** done · **Agent:** documentation-writer · **Depends:** TASK-471/472/473/474/477 ·
+**Next:** none blocking (qa-tester/TASK-476 runs in parallel, not dependent on this)
+Log: `.claude/logs/tasks/475_2026-08-06_post-campaign-docs_documentation-writer.md`
+Updated all 5 docs for Фаза 4 (post-campaign audience analysis), mirroring TASK-432's Фаза 3 pass:
+`glossary.md` (new "Post-Campaign Analysis (Фаза 4)" section — draft-vs-analyzed segment, before/
+after window, the 4 behavior states, RFM migration matrix, segment hash), `database-schema.md`
+(new "TASK-471" entry — both tables, canonical RLS triad only, draft-vs-analyzed nullable-date
+design), `api-contracts.md` (new "Post-Campaign Analysis" section, all 11 controller actions —
+task logs said "10," code has 11, documented from the code; flags the `Import`-only
+`CanImportSegments` auth asymmetry and the two-layer XLSX/CSV import size guard), `domain-model.md`
+(new `PostCampaignSegment`/`PostCampaignSegmentMember` entities + relationships), `decisions.md`
+(new ADR-023 addendum, Фаза 4 — 5 numbered decisions: breaking the stateless precedent, import
+identity matching reusing Фаза 0's `PhoneNormalizer`, the RFM migration matrix's 3-call reuse of
+`GetScoredCustomersAsync`/`RfmSegmentClassifier` with zero new RFM logic, the XLSX-bomb security
+story as its own subsection with TASK-477's measured numbers table, and why `CanImportSegments` is
+role-only with no new capability). Verified every claim against the actual shipped code (entities,
+controller, DTOs, parser, classifier, `ImportLimits`, `MarketingAnalyticsAuthorization`, migration)
+rather than transcribing task-log prose. No code changes, `known-issues.md` untouched (out of
+scope per brief — zero KI entries exist for this whole initiative).
+
+## TASK-477 — Backend: fix Фаза 4 import security findings (A/B/C)
+**Status:** done — `dotnet build` 0/0, `dotnet test` **1308/1308 green** (was 1289, net +19, all
+new) · **Agent:** backend-developer · **Depends:** TASK-474 · **Next:** documentation-writer
+(TASK-475), qa-tester (TASK-476) — both now unblocked
+Log: `.claude/logs/tasks/477_2026-08-06_post-campaign-import-security-fix_backend-developer.md`
+Fixed all 3 findings from TASK-474's review. **Finding A (HIGH, XLSX resource exhaustion):** new
+shared `ImportLimits` (`MaxRows=25_000`/`MaxColumns=300`, ~1.25x `PostCampaignService.
+MaxAcceptedRows`) checked in `ExcelImportService.ParseXlsx` off the range's bounding-box
+`RowCount()`/`ColumnCount()` **before** the per-cell copy loop runs, throwing a new
+`ImportTooLargeException`; same early-exit added to `SegmentImportParser.ParseTextList`/
+`ParseCsvText` for defense-in-depth (CSV/text was already 10 MB-bounded). **Finding C (LOW,
+malformed file → bare 500):** empirically confirmed (throwaway probe, not assumed) ClosedXML
+0.105.1 throws `System.IO.FileFormatException` (a real `FormatException` subtype) for corrupt/empty
+input and a bare `NullReferenceException` for a well-formed zip that isn't a valid xlsx package;
+`PostCampaignService.ImportAsync` now catches both narrowly around just the parse call, returning
+the same clean `(null, error)` shape. **Finding B (MEDIUM, no separate upload permission):** added
+`MarketingAnalyticsAuthorization.CanImportSegments` gating `PostCampaignController.Import`
+specifically — deliberately role-only (`AtLeastStoreManagerRoles`, matching `CanExportPii`'s own
+floor), no new capability, mirroring `TenantRoleCapabilities.ReceiptsView`'s documented precedent
+that write-heavy actions stay out of the capability catalog; returns `Forbid()` (403) for anyone
+below the floor. 19 new tests (`ExcelImportServiceTests.cs` new file, +5 `PostCampaignServiceTests`,
++8 `MarketingAnalyticsAuthorizationTests`) — ceiling rejection (row + column), malformed-input
+exception pinning, exception-translation in the service, real (unmocked) CSV/raw-text ceiling
+rejection, and capability-bypass-proof-negative tests for the new auth check. Nothing else touched
+— RLS/formula-injection/strict-parser-Classify/raw-SQL-absence/PII-masking/IDOR all left as the
+review found them (OK). Not committed.
+
+## TASK-474 — Security: review of Фаза 4 (post-campaign analysis)
+**Status:** done — **verdict: NOT clear to ship the import endpoint as-is** · **Agent:**
+security-reviewer · **Depends:** TASK-471/472/473 · **Next:** backend-developer fix task for
+finding A (+ C), then re-review, then documentation-writer/qa-tester
+Log: `.claude/logs/tasks/474_2026-08-05_post-campaign-security-review_security-reviewer.md`
+Live-verified RLS on `post_campaign_segments`/`post_campaign_segment_members` against the real
+non-superuser `shelfguard_app_dev` role (owned, forced RLS, canonical triad, no
+`consumer_self_access`) — OK, and confirmed structurally unreachable by a consumer JWT at all three
+layers (authz policy, controller claim resolution, RLS). Confirmed OK: TASK-414's Excel/CSV
+formula-injection fix still applies uniformly (customer names + raw uploaded tokens both
+sanitized); `SegmentImportParser`'s strict whole-token GUID/phone classification independently
+re-traced against every source-doc §5.3 adversarial case (UUID-must-not-split, decimal-not-two-IDs,
+free-text-not-a-phone) and cross-checked against its actual passing tests; zero raw SQL anywhere
+(grep-confirmed); PII masking/export-capability parity matches sibling phases exactly; every
+repository method threads `tenantId` explicitly (stronger than the accepted RLS-only baseline
+elsewhere); AI advisor never leaks the API key and never puts raw uploaded token text in the
+prompt (only the staff-typed segment Name, same low-severity shape as a prior accepted finding).
+**1 HIGH finding (blocks the import endpoint):** the 20,000-row import cap is checked only AFTER
+`ExcelImportService.ParseXlsx` has already fully materialized the uploaded workbook into memory
+with no row/column guard — a small, zip-compressed `.xlsx` well within the (correctly enforced)
+10 MB limit can expand into a very large in-memory cell grid before the cap ever runs (this
+codebase's first file-upload feature, no prior convention to inherit); also no try/catch around
+the parse call, so a malformed file crashes to a bare 500. Given the shared multi-tenant API
+process, recommend fixing before general rollout — mirrors this exact series' TASK-412→TASK-414
+review-then-fix pattern. **1 MEDIUM:** no separate "upload" permission — Import shares the same
+view-level floor as read-only report tabs, though source doc §32 asks for a distinct one. LOW/info
+only: report-tab views aren't audit-logged (pre-existing across all of Фаза 1-4, not a regression),
+no antivirus scan on uploads (new gap but low actual impact — file bytes are parsed and discarded,
+never stored or re-served to another user). No fixes applied (audit only).
+
+## TASK-473 — Frontend: post-campaign dashboard UI (Фаза 4)
+**Status:** done — `tsc --noEmit`/`next lint`/`next build` all clean · **Agent:** frontend-developer
+· **Depends:** TASK-472 · **Next:** security-reviewer (TASK-474)
+Log: `.claude/logs/tasks/473_2026-08-05_post-campaign-frontend_frontend-developer.md`
+New feature `frontend/features/marketing-analytics/post-campaign/` (types/api/hooks/Zustand
+store/17 components) + route + Sidebar 4th `marketing_analytics` nav item + full
+`Dashboard.postCampaign.*` i18n (en/uk). Zustand store tracks `draftSegmentId` vs `reportSegmentId`
+as two separate ids (source doc §7's draft-vs-analyzed rule — every import creates a NEW segment
+row server-side, no update-in-place) plus a `reportVersion` folded into every report query key
+(report GETs take no date params — the window is frozen server-side by `/analyze`, so re-analyzing
+the SAME segment with new dates needs a version bump to force a refetch). Import panel has no
+client-side parse preview by design (strict parser is server-only); column auto-detect/override,
+validation summary, draft-vs-analyzed banner, 5 top KPIs (incl. the explicit "Не повернулись" 5th
+card per the brief's fix-over-competitor), 3 report tabs (daily turnover chart + status donut +
+recommendation; 4 R/F/M activity cards with recency's inverted delta-color convention; migration
+KPIs + before/after donuts + a full 12×12 transition matrix with dots for empty cells), full
+server-paginated customer table (no Top-200 cap). `RecommendationCard`/export buttons built
+locally rather than literally imported from Фаза 1 — matches the ACTUAL precedent Фаза 2/3 already
+set (both independently re-implement this block against their own DTO/endpoint shape); only the
+truly generic `PiiUnmaskToggle`/`TableControls` are imported verbatim, per the brief. One real bug
+caught in self-review (not by the type-checker): a column-picker override could leak from one
+file's chosen column into a different file's preview — fixed. Build/lint/typecheck all clean; dev
+server confirmed the route compiles/resolves (200, no console errors beyond the expected
+missing-backend connection failure) but full authenticated live-UI verification wasn't done — no
+seeded local login was available in-session and this product has no self-service signup (flagged
+explicitly in the task log rather than overclaiming).
+
+## TASK-472 — Backend: post-campaign analysis engine (Фаза 4 post-campaign audience analysis)
+**Status:** done — `dotnet build` 0/0, `dotnet test` **1289/1289 green** (was 1222, net +67, all
+new) · **Agent:** backend-developer (interrupted by a session-limit error mid-run; finished by the
+orchestrating main session, see task log) · **Depends:** TASK-471 · **Next:** frontend-developer
+(TASK-473)
+Log: `.claude/logs/tasks/472_2026-08-05_post-campaign-backend_backend-developer.md`
+Full engine on top of TASK-471's schema: `Features/MarketingAnalytics/PostCampaign/` (service,
+repository — **zero raw SQL**, plain LINQ, unlike Фаза 1/2's NTILE/PERCENTILE_CONT — pure
+behavior classifier, recommendation templates, strict import parser), `PostCampaignController`
+(10 endpoints: list/import/analyze/summary/daily-turnover/rfm-activity/customers/migration/
+explain/2 exports), `IPostCampaignAdvisor` (a separate advisor interface rather than reusing
+`IMarketingAdvisor` — deliberate, mirrors the `IPriceSegmentAdvisor`/TASK-420 precedent since the
+context DTO shape differs; same key-resolution plumbing). Import: strict whole-token GUID-or-phone
+classification (never substring-extracts, the source doc's critical fix over the competitor's own
+broken parser), CSV/XLSX column auto-detect + preview + confirm-override, 20,000-row cap. RFM
+migration matrix reuses `IMarketingAnalyticsRepository.GetScoredCustomersAsync` +
+`RfmSegmentClassifier` unchanged (no second RFM implementation), calling it a third time
+(all-time) to distinguish "never purchased" (null "Без покупок" bucket) from "real history, zero
+in this window" (ordinary low-R classification via sentinel R=F=M=1 scores). PII masking, export
+capability gate, and `SegmentHash`/`CalculatedAt` transparency all follow Фаза 1-3's established
+conventions. Interrupted mid-run by a session-limit error while the agent was polishing its own
+test file (all production code already complete); main session fixed 3 test-authoring bugs
+directly (1 stray `await` on a synchronous export call, 2 NSubstitute ambiguous-argument matcher
+mixups, 1 test assertion that assumed the wrong RFM segment for its own fixture data — traced the
+real classifier rules by hand to confirm `PotentialLoyalist`, not `Champions`, was the correct
+expectation) — zero production code changed during recovery. Flagged for TASK-474
+(security-reviewer): file-upload limits (10 MB, extension allowlist, memory-only), confirmed
+zero new raw-SQL surface, strict-parser test coverage against the source doc's documented
+competitor failure modes.
+
+## TASK-471 — DB: PostCampaignSegment schema (Фаза 4 post-campaign audience analysis)
+**Status:** done — created, migrated, live-verified against the real non-superuser app role, no
+blocker · **Agent:** database-engineer · **Depends:** none (Фаза 4's first task; Фаза 0-3 already
+shipped) · **Next:** backend-developer (TASK-472)
+Log: `.claude/logs/tasks/471_2026-08-05_post-campaign-schema_database-engineer.md`
+Plan: `C:\Users\stass\.claude\plans\deep-cooking-nygaard.md` §"Фази 2-4"; full spec
+`docs/uployal/AUDIENCE_ANALYSIS.md`. Two new tables — unlike Фаза 1-3 (fully stateless, computed
+live from pos_transactions/items/customers on every request), Фаза 4 persists an uploaded
+customer-id list plus its import-validation results and frozen before/after date windows, per the
+source doc's own draft-vs-analyzed state requirement (§7). `PostCampaignSegment` (header: `Id`/
+`TenantId`/`CreatedByUserId` [Restrict — mirrors `UserPermissionGrant.GrantedByUserId`], `Name`,
+`UploadedCount`/`MatchedCount`/`DuplicateCount`/`UnknownCount`/`InvalidCount`,
+`UnknownTokensSample`/`InvalidTokensSample` [`List<string>` as jsonb, same pattern as
+`Item.Barcodes`], `AfterStart`/`AfterEnd`/`BeforeStart`/`BeforeEnd` [`DateOnly?` — null = draft,
+non-null = frozen/analyzed snapshot], `SegmentHash`, `CreatedAt`/`AnalyzedAt`) +
+`PostCampaignSegmentMember` (one row per matched customer: `Id`/`TenantId`/`SegmentId`
+[FK→segment, Cascade]/`CustomerId` [FK→customers, Cascade], unique `(SegmentId, CustomerId)`;
+`TenantId` here is a plain denormalized column with no separate `tenants` FK, same treatment as
+`loyalty_ledger_entries.TenantId`). Migration `AddPostCampaignSegmentSchema` (20260805190701) —
+canonical RLS triad only on both tables (no `consumer_self_access` — staff-only, same posture as
+`price_segment_settings`, TASK-419). Applied cleanly via the app's own non-superuser
+`shelfguard_app_dev` connection, no TASK-411-style grant incident (confirmed table ownership
+immediately after). Live-verified against the real app role: ownership, policy/flag byte-check (3
+policies each, correct qual), positive path (insert/select/update, rolled back), unique-constraint
+backstop, fail-closed with no session vars, cross-tenant isolation, provider/provider_admin/worker
+bypass, and cascade-delete (member row correctly disappears when its parent segment is deleted).
+No new xUnit file — already covered by the 2 existing dynamic RLS audits in
+`RlsCrossTenantIntegrationTests.cs`. `dotnet build` 0 warnings/0 errors, `dotnet test`
+**1222/1222 green**, unchanged from TASK-469's baseline — no regressions. Domain entities/migration
+only — no controller/service/frontend code (that's TASK-472). `.claude/docs/database-schema.md`
+not updated, same precedent TASK-404/TASK-419 both set (documentation-writer's job once Фаза 4
+ships in full). Not committed.
+
+
 ## TASK-470 — Docs: mark TASK-467's 2 MEDIUM findings as resolved (ADR-026 §4, TASK-467 entry)
 
 **Status:** done · **Agent:** documentation-writer · **Depends:** TASK-469 · **Next:** none

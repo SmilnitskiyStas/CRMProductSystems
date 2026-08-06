@@ -47,6 +47,47 @@ public sealed class MarketingAnalyticsAuthorizationTests
         => Assert.False(MarketingAnalyticsAuthorization.CanExportPii(
             MakeUser(AppRoles.Cashier, capabilitiesClaim: "analytics.view,orders.manage")));
 
+    // ── CanImportSegments (TASK-477, security review TASK-474 finding B) ───────────────────────
+    // Deliberately role-ONLY (AtLeastStoreManagerRoles, matching CanExportPii's own floor) with NO
+    // capability escape hatch — see MarketingAnalyticsAuthorization.CanImportSegments's doc
+    // comment for the reasoning. The two "false ... capability" tests below are the important
+    // negative cases: they pin that this permission has no capability-based bypass at all, unlike
+    // CanExportPii.
+
+    [Fact]
+    public void CanImportSegments_true_for_store_manager_role()
+        => Assert.True(MarketingAnalyticsAuthorization.CanImportSegments(MakeUser(AppRoles.StoreManager)));
+
+    [Fact]
+    public void CanImportSegments_true_for_network_manager_role()
+        => Assert.True(MarketingAnalyticsAuthorization.CanImportSegments(MakeUser(AppRoles.NetworkManager)));
+
+    [Fact]
+    public void CanImportSegments_true_for_enterprise_admin_role()
+        => Assert.True(MarketingAnalyticsAuthorization.CanImportSegments(MakeUser(AppRoles.EnterpriseAdmin)));
+
+    [Fact]
+    public void CanImportSegments_true_for_provider_role()
+        => Assert.True(MarketingAnalyticsAuthorization.CanImportSegments(MakeUser(AppRoles.Provider)));
+
+    [Fact]
+    public void CanImportSegments_false_for_cashier_with_no_capability()
+        => Assert.False(MarketingAnalyticsAuthorization.CanImportSegments(MakeUser(AppRoles.Cashier)));
+
+    [Fact]
+    public void CanImportSegments_false_for_merchandiser_with_no_capability()
+        => Assert.False(MarketingAnalyticsAuthorization.CanImportSegments(MakeUser(AppRoles.Merchandiser)));
+
+    [Fact]
+    public void CanImportSegments_false_even_with_the_marketing_analytics_view_capability_claim()
+        => Assert.False(MarketingAnalyticsAuthorization.CanImportSegments(
+            MakeUser(AppRoles.Staff, capabilitiesClaim: "marketing_analytics.view")));
+
+    [Fact]
+    public void CanImportSegments_false_even_with_the_export_pii_capability_claim_a_different_permission()
+        => Assert.False(MarketingAnalyticsAuthorization.CanImportSegments(
+            MakeUser(AppRoles.Cashier, capabilitiesClaim: "marketing_analytics.export_pii")));
+
     private static ClaimsPrincipal MakeUser(string role, string? capabilitiesClaim = null)
     {
         var claims = new List<Claim> { new(ClaimTypes.Role, role) };

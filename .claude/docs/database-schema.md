@@ -1,7 +1,7 @@
 # Database Schema
 
 **Owner:** database-engineer
-**Updated:** 2026-08-04
+**Updated:** 2026-08-06
 **Source:** v1-spec.md section 4
 
 ## Multi-Tenancy
@@ -731,6 +731,52 @@ live-applying the migration through a temporary, fully-reverted stub of `AuthSer
 diff zero — confirmed via `git diff`/`git status` showing no changes to that file) purely so
 `dotnet ef migrations add`/`database update` had a compiling `ShelfGuard.Api` startup graph to
 build against; the same technique TASK-465 may find useful if it needs partial compiles mid-work.
+
+## TASK-471 — Post-campaign segment schema (`AddPostCampaignSegmentSchema`, 2026-08-05)
+
+Two new tables (Фаза 4 of the `docs/uployal/` plan, `deep-cooking-nygaard.md`) — the first
+**persisted** entity in the whole marketing-analytics initiative. Фаза 1-3 are fully stateless
+(everything computed live from `pos_transactions`/`items`/`customers` on every request); Фаза 4
+must persist an externally-sourced uploaded customer list, its import-validation results, and the
+frozen before/after date windows — see `decisions.md` ADR-023 addendum (Фаза 4) for why.
+
+| Table | RLS | Purpose | Key fields |
+|---|---|---|---|
+| `post_campaign_segments` | canonical triad only (no `consumer_self_access`) | One row per uploaded/analyzed audience | `TenantId`, `CreatedByUserId` (FK→users, **Restrict**, non-nullable — mirrors `UserPermissionGrant.GrantedByUserId`, not the more common nullable+SetNull `CreatedBy` shape, since a segment always has an owner), `Name?`, `UploadedCount`/`MatchedCount`/`DuplicateCount`/`UnknownCount`/`InvalidCount`, `UnknownTokensSample`/`InvalidTokensSample` (`List<string>` as `jsonb` + `'[]'::jsonb` default, same pattern as `Item.Barcodes`), `AfterStart`/`AfterEnd`/`BeforeStart`/`BeforeEnd` (`DateOnly?` — see below), `SegmentHash`, `CreatedAt`/`AnalyzedAt?` |
+| `post_campaign_segment_members` | canonical triad only (no `consumer_self_access`) | One row per matched customer within a segment (unknown/invalid tokens are never materialized here — only counted + sampled on the parent) | `TenantId` (plain denormalized column, **no** separate FK to `tenants` — same treatment `loyalty_ledger_entries.TenantId` already gets), `SegmentId` (FK→post_campaign_segments, **Cascade**), `CustomerId` (FK→customers, **Cascade**). Unique `(SegmentId, CustomerId)` |
+
+Staff-only, same posture as `price_segment_settings` (TASK-419) — no consumer-facing read path
+exists to either table at all, so both carry only the canonical fail-closed `tenant_isolation`
+(NULLIF-guarded) / `provider_bypass` (`IN ('provider','provider_admin')`) / `worker_bypass` triad,
+no identity-based policy (unlike `loyalty_memberships`'s `consumer_self_access` — not applicable
+here; this is a staff-only marketing tool, no `ConsumerAccount` session ever touches it).
+
+**The nullability of `AfterStart`/`AfterEnd`/`BeforeStart`/`BeforeEnd` IS the draft-vs-analyzed
+state — no separate boolean/enum column.** All four null (together with a null `AnalyzedAt`) means
+"imported but not yet analyzed" (draft); all four set means "frozen, computed snapshot" that every
+report tab (`summary`/`daily-turnover`/`rfm-activity`/`customers`/`migration`) reads without
+re-validating the uploaded list. `POST .../segments/{id}/analyze` is the only place these four
+columns are ever written, and re-running it on an already-analyzed segment overwrites all four plus
+`SegmentHash`/`AnalyzedAt` in place — it does not create a new segment row. See `glossary.md`
+"Draft vs. analyzed segment" and `decisions.md` ADR-023 addendum (Фаза 4) for the full rationale.
+
+Indexes: `idx_post_campaign_segments_tenant_creator` (TenantId, CreatedByUserId),
+`idx_post_campaign_segment_members_tenant_segment` (TenantId, SegmentId),
+`uq_post_campaign_segment_members_segment_customer` (unique, SegmentId+CustomerId — the hard
+backstop against a customer appearing twice in one segment), plus the two EF-default FK indexes
+(`CreatedByUserId` on the parent, `CustomerId` on the member table).
+
+Neither table had any pre-existing data to validate a new FK against — both are brand-new
+`CREATE TABLE`s, not an `ALTER TABLE ... ADD CONSTRAINT` against an already-populated column — so
+the TASK-392/KI-029 FK-validation-under-RLS false positive did not apply here. Applied cleanly via
+the app's own non-superuser `shelfguard_app_dev` connection, correct table ownership from the
+start, no `FixLoyaltyTableGrants`-style companion migration needed. Live-verified against the real
+app role: ownership, policy/flag byte-check (3 policies each, correct qual text), positive path
+(insert/select/update, rolled back), unique-constraint backstop, fail-closed with no session vars,
+cross-tenant isolation, provider/provider_admin/worker bypass, and cascade-delete (deleting the
+parent segment correctly removes its member rows). No new xUnit file — already covered by the 2
+existing dynamic RLS audits in `RlsCrossTenantIntegrationTests.cs` that enumerate every FORCE-RLS
+table at query time.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

@@ -90,6 +90,13 @@ export interface ActivityLogDto {
  * `features/provider/components/ProviderLogsPanel.tsx`'s own (separate) audit-log view.
  */
 export const KNOWN_ACTIONS = [
+  "user.login",
+  "user.login_failed",
+  "user.2fa_enabled",
+  "user.2fa_disabled",
+  "user.2fa_failed",
+  "user.locked_out",
+  "auth.refresh_reuse_detected",
   "user.invited",
   "user.updated",
   "user.deactivated",
@@ -97,6 +104,10 @@ export const KNOWN_ACTIONS = [
   "user.password_changed",
   "user.telegram_linked",
   "user.permissions_updated",
+  "user.permission_granted",
+  "user.permission_revoked",
+  "user.tenant_role_assigned",
+  "user.locations_updated",
 ] as const;
 
 /**

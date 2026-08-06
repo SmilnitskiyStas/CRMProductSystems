@@ -1987,6 +1987,123 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("pos_transaction_items", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PostCampaignSegment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateOnly?>("AfterEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("AfterStart")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("AnalyzedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("BeforeEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("BeforeStart")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DuplicateCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("InvalidCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<List<string>>("InvalidTokensSample")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<int>("MatchedCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SegmentHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("UnknownCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<List<string>>("UnknownTokensSample")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<int>("UploadedCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TenantId", "CreatedByUserId")
+                        .HasDatabaseName("idx_post_campaign_segments_tenant_creator");
+
+                    b.ToTable("post_campaign_segments", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PostCampaignSegmentMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SegmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("SegmentId", "CustomerId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_post_campaign_segment_members_segment_customer");
+
+                    b.HasIndex("TenantId", "SegmentId")
+                        .HasDatabaseName("idx_post_campaign_segment_members_tenant_segment");
+
+                    b.ToTable("post_campaign_segment_members", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PriceSegmentSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5415,6 +5532,44 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Transaction");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PostCampaignSegment", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PostCampaignSegmentMember", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.PostCampaignSegment", "Segment")
+                        .WithMany("Members")
+                        .HasForeignKey("SegmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Segment");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PriceSegmentSettings", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
@@ -6378,6 +6533,11 @@ namespace ShelfGuard.Infrastructure.Migrations
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PosTransaction", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PostCampaignSegment", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionOrder", b =>

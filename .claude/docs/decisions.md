@@ -1,7 +1,7 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-05
+**Updated:** 2026-08-06
 
 ## ADR-026: Forgot-password redesign — temporary password replaces link/token, third RLS exception retired, auth-locale default flips to English
 Date: 2026-08-04
@@ -576,6 +576,173 @@ recur silently for any future raw-SQL query that compares a `timestamptz` column
 `t."CreatedAt"` comparison in `AudienceBuilderRepository` (TASK-428's own side-finding, applied by
 TASK-429, confirmed consistent by TASK-431), but the general pattern is worth remembering for the
 next raw-SQL repository, not just this one.
+
+**Addendum (TASK-471/472/473/474/477, 2026-08-05/06) — Фаза 4 post-campaign audience analysis:
+first persisted entity in the marketing-analytics series, reused RFM/phone-matching infrastructure,
+and a two-round XLSX-import security fix.**
+
+Context: same plan (`deep-cooking-nygaard.md` §"Фази 2-4"), same module key (`marketing_analytics`,
+no new one), full spec `docs/uployal/AUDIENCE_ANALYSIS.md`. Фаза 4 compares an externally-sourced
+list of customers (an SMS blast, a raffle list, a Фаза 3 AudienceBuilder export) against equal
+before/after date windows around a campaign — a different question from Фаза 1-3's ("did THIS
+specific already-contacted list of people actually come back," not "who bought THIS" or "who is
+valuable"). Five decisions worth recording, the last two the most consequential for future readers:
+
+a. **Фаза 4 needs a persisted entity, breaking Фаза 1-3's "fully stateless, computed live on every
+   request" precedent — a deliberate, necessary exception, not scope creep.** Every prior mode in
+   this series (RFM, Price Segments, Audience Builder) computes its entire response fresh from
+   `pos_transactions`/`items`/`customers` on every call, with nothing of its own persisted anywhere
+   (TASK-432's own docs pass confirmed this explicitly for Фаза 3: "no new entities... computes
+   everything live"). Фаза 4 cannot follow that pattern, for two reasons the source doc requires:
+   (1) the customer list itself is **externally sourced** — uploaded once, not derivable from any
+   live query — so it has to be stored somewhere between the import call and every later report
+   call; (2) the source doc's own §7 ("Чернетка та застосований сегмент") requires "draft" (what's
+   currently uploaded) and "analyzed" (what the current report reflects) to be two distinct,
+   explicitly-tracked states — re-uploading must NOT silently invalidate an already-computed report
+   until the user explicitly re-runs analysis. A stateless design has no way to represent "uploaded
+   but not yet analyzed" at all. `PostCampaignSegment`'s `AfterStart`/`AfterEnd`/`BeforeStart`/
+   `BeforeEnd` (all `DateOnly?`) ARE that draft-vs-analyzed state directly — no separate
+   boolean/enum column exists anywhere in the schema. All four null (together with a null
+   `AnalyzedAt`) means draft; all four set means frozen/analyzed. `POST .../segments/{id}/analyze`
+   is the only place that ever writes them, and re-running it on an already-analyzed segment
+   overwrites all four (plus `SegmentHash`/`AnalyzedAt`) in place rather than minting a new segment
+   row. See `database-schema.md` TASK-471 and `glossary.md` "Draft vs. analyzed segment" for the
+   schema/wire detail.
+
+b. **Import matches an uploaded token against `Customer.Id` (GUID) OR the customer's normalized
+   phone — reusing Фаза 0's existing phone-matching infrastructure verbatim, not a new identity
+   concept.** `SegmentImportParser.Classify` calls the same `PhoneNormalizer.Normalize` that Фаза
+   0's consumer registration/login and POS customer-attach flows already use, behind the same
+   strict character-class pre-check discipline (never handed arbitrary text — the source doc's
+   §5.3 competitor-bug avoidance; TASK-474 item 4 independently re-verified every adversarial case
+   by hand). No second phone representation, no bespoke matching table —
+   `PostCampaignRepository.FindCustomersByIdsOrPhonesAsync` is a plain `Customer.Id IN (...) OR
+   Customer.Phone IN (...)` bulk lookup against the tenant's existing `Customer` rows, the same
+   `list.Contains(x) => ANY(@p)` EF translation `MarketingAnalyticsRepository.
+   GetExportCustomersAsync` already established. Phone matching is exact-string against whatever
+   normalized format is actually stored — the same known limitation `LoyaltyService.
+   FindOrCreateCustomerAsync` already accepts elsewhere in this codebase, not a new gap.
+
+c. **The RFM migration matrix reuses `IMarketingAnalyticsRepository.GetScoredCustomersAsync` +
+   `RfmSegmentClassifier` completely unchanged, called a THIRD time (all-time) — the single most
+   reusable/elegant piece of this phase.** `GET .../segments/{id}/migration` (and
+   `GET .../customers`, which needs the same before/after RFM key per row) needs to classify each
+   matched customer's RFM segment independently in the before window and the after window, then
+   cross-tabulate into a 12×12 transition matrix. Rather than write a second RFM implementation,
+   `PostCampaignService.ComputeRfmKeysAsync` calls Фаза 1's existing, unmodified
+   `GetScoredCustomersAsync` three times: once for the before window, once for the after window,
+   and — new to this feature — once **all-time** (`DateOnly.MinValue` through the after-window's
+   end, the same "all" period convention `MarketingAnalyticsController.ResolvePeriod` already
+   uses). The third call's only purpose: telling apart, for a customer absent from a given window's
+   scored rows, (1) genuinely zero purchases ever (Фаза 1's own "Без покупок" null bucket) from (2)
+   real all-time purchase history that simply has none in this specific window — which must
+   classify as an ordinary (if low-R) real segment, never null. `ClassifyForWindow` resolves case
+   (2) by feeding the SAME `RfmSegmentClassifier.Classify` a sentinel worst-case R=F=M=1 alongside
+   the customer's real lifetime facts (first-purchase-date/lifetime-receipt-count/last-purchase-date
+   — all window-independent per `RfmScoredCustomerRow`'s own doc comment, so any of the three
+   calls' row is an equally valid source for them). Verified by hand and by test: case (2) resolves
+   to `Hibernating` (R≤2 ∧ F≤2 ∧ M≤2), never null. Zero changes to `IMarketingAnalyticsRepository`
+   itself — this is three ordinary calls to its existing public method, not a new overload or a
+   forked classifier. A future reader building a fifth marketing-analytics mode that needs "segment
+   membership as of some window, correctly distinguishing never-purchased from zero-in-window"
+   should reach for this exact three-call pattern rather than re-deriving it.
+
+d. **The XLSX import security story — verify the fix, not just the intent; this is now the
+   required pattern for every file-upload feature in this codebase, not just this one.**
+   TASK-474 (security-reviewer) found a HIGH resource-exhaustion risk: `ExcelImportService.
+   ParseXlsx` copied every cell into memory with no size guard, and `PostCampaignService.
+   MaxAcceptedRows` (20,000) was only checked afterward. TASK-477's first fix looked reasonable on
+   its face — add `ImportLimits.MaxRows`/`MaxColumns` (25,000/300, ~1.25x the real business cap)
+   and reject based on the parsed range's `RowCount()`/`ColumnCount()` **before** the per-cell
+   `GetString()` copy loop ran. It shipped, tested green, and was recorded as closing finding A.
+
+   It did not close finding A. A same-day empirical follow-up (a throwaway xUnit probe, not
+   committed — see TASK-477's own log addendum for the full method) measured `new
+   XLWorkbook(stream)` — ClosedXML's constructor, called BEFORE any row/column count is available
+   to check — in isolation, against synthetic `.xlsx` files built via direct ZIP-entry surgery (the
+   classic OOXML zip-bomb shape: every cell references the same shared-strings-table entry, so the
+   file stays tiny on disk regardless of row count). The result: the constructor alone performs the
+   full, expensive per-cell materialization; checking `RowCount()`/`ColumnCount()` afterward guards
+   a loop that was never the expensive part. Measured numbers, release build / .NET 8 / ClosedXML
+   0.105.1, a file comfortably under the controller's 10 MB upload cap in every row:
+
+   | rows | file on disk | `new XLWorkbook(stream)` alone |
+   |---|---|---|
+   | 25,000 (the row guard's own ceiling) | 0.12 MB | 374 ms / 41.6 MB allocated |
+   | 250,000 | 1.17 MB | 4,866 ms / 410.8 MB allocated |
+   | 1,048,576 (Excel's own hard row ceiling) | 4.86 MB | 37,703 ms / 1,725.8 MB allocated (~496 MB retained live after a forced GC) |
+
+   A **file under 5 MB** — well inside the already-correctly-enforced 10 MB request cap — costs
+   roughly **~38 seconds of wall time and ~1.7 GB allocated inside the constructor call by
+   itself**, in a shared, multi-tenant API process where one tenant's crafted upload can degrade or
+   hang request handling for every other tenant. Cost also scales super-linearly with row count
+   (~10x rows from 25k→250k gave ~13-15x constructor time), so the exposure gets
+   disproportionately worse the closer an attacker pushes toward what the 10 MB cap and Excel's own
+   row ceiling allow.
+
+   The real fix had to run BEFORE ClosedXML ever touches the stream, at the ZIP-container level,
+   not the parsed-workbook level: a `.xlsx` is a standard ZIP archive, so `System.IO.Compression.
+   ZipArchive` + `ZipArchiveEntry.Length` can read every part's real UNCOMPRESSED size directly off
+   the ZIP central directory — no decompression required, confirmed empirically cheap (0-9 ms even
+   against an entry that decompresses to 85 MB) regardless of the declared size. `ImportLimits.
+   MaxUncompressedZipEntryBytes` (20 MB — real headroom over the ~2 MB a legitimate 25,000-row/
+   few-column workbook actually needs, per the same measurement, while firmly rejecting the
+   demonstrated attack sizes) now gates `ExcelImportService.ParseXlsx` before the `XLWorkbook`
+   constructor runs at all. The original row/column guard was not deleted — it still catches a
+   workbook that passes the ZIP-size check but is unreasonably tall/wide within that budget — but
+   it is no longer the layer doing the actual resource-exhaustion protection; that is now the
+   ZIP-level check.
+
+   **This two-layer guard shape — a cheap container-level size check BEFORE the expensive parse,
+   THEN a structural row/column check after parsing — is now the required pattern for this
+   codebase's next file-upload feature, not merely a fact about this one.**
+   `IExcelImportService`'s own doc comment already frames itself as shared, reusable infrastructure
+   for "any future feature needing to let the user upload an .xlsx" — Фаза 4 is the first
+   file-upload feature in the entire codebase (Фаза 0-3's exports only ever *produce* `.xlsx` files
+   via the already-hardened `ExcelExportService`; nothing before this task ever consumed one), so
+   there was no prior convention to inherit, and this addendum's measured numbers are now that
+   convention's evidence base. A future agent adding a second upload-accepting feature should read
+   `ImportLimits`'s own doc comment and this addendum before assuming a post-parse size/count check
+   is sufficient on its own — it measurably is not, for any library that fully deserializes its
+   input before exposing any way to bound the work.
+
+e. **`CanImportSegments` is role-only (`AtLeastStoreManagerRoles`), deliberately with no new
+   `TenantRoleCapabilities` catalog entry — narrower than the read-only report tabs it sits
+   alongside.** TASK-474 finding B: the source doc's §32 explicitly calls for "окреме право на
+   upload" (a separate upload-specific permission), and as originally shipped `Import` shared the
+   exact same `MarketingAnalyticsViewOrCapability` floor as every read-only report GET on the same
+   controller — meaning the population that could trigger finding A's resource-exhaustion risk was
+   no smaller than the population that could merely view an already-analyzed report. TASK-477
+   considered two shapes: a new `marketing_analytics.import`-style capability (mirroring
+   `MarketingAnalyticsExportPii`'s own shape), or reusing `AppPolicies.AtLeastStoreManagerRoles`
+   directly with no capability-widening escape hatch at all (matching `CanExportPii`'s own default
+   floor, minus the capability branch). It chose the second, narrower option, for the same reason
+   `TenantRoleCapabilities.ReceiptsView`'s own doc comment already gives for excluding
+   Create/Receive/Cancel from the capability catalog (ADR-020 point 3): a write-heavy, cost-bearing
+   action does not automatically earn a delegable capability just because its sibling read actions
+   have one. Import creates DB rows and, per finding A, is this controller's single most
+   resource-costly action — exactly the shape that precedent says to keep role-gated rather than
+   capability-delegable. A tenant that genuinely needs a sub-store_manager "marketing specialist"
+   role to import segments can still grant `store_manager` outright; a dedicated capability can be
+   added later if that specific need actually materializes, rather than speculatively widening the
+   catalog now. `MarketingAnalyticsAuthorization.CanImportSegments` follows `CanExportPii`'s
+   existing imperative, in-body-check shape (needed for the same reason: it narrows ONE action
+   within an otherwise class-level-gated controller, so it cannot be a blanket `[Authorize]` policy
+   attribute) but returns only the role check, no capability branch — confirmed by dedicated tests
+   that a capability holder alone (without the role) is correctly still rejected.
+
+Consequences: (+) the draft-vs-analyzed persisted state finally lets this series represent
+"uploaded, not yet analyzed" at all, which no prior Фаза could express; (+) zero duplicate RFM
+logic anywhere in the codebase — a third mode now reuses the exact same classifier a third,
+independent way; (+) the two-layer XLSX guard is a concrete, measured pattern the next upload
+feature can adopt directly rather than re-discovering the same gap from scratch; (-) Фаза 4 is now
+the one mode in this whole series an operator must remember has real, growing storage (segments +
+members), unlike Фаза 1-3's zero-footprint designs — no retention/cleanup policy exists yet for
+old/abandoned draft segments, a candidate for a future follow-up, not filed as a
+`known-issues.md` entry by this task (out of scope per this task's own brief); (-) `Import`'s
+role-only floor means a tenant cannot delegate "upload segments" to a capability-holding
+non-store_manager the way it can delegate `marketing_analytics.export_pii` or `.view` — an
+intentional, not accidental, gap per point (e) above.
 
 ## ADR-022: Store-scoped user assignment & data visibility (`user_locations` + RLS)
 Date: 2026-07-19

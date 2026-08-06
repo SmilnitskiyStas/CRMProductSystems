@@ -1,7 +1,7 @@
 # Glossary
 
 **Owner:** documentation-writer
-**Updated:** 2026-07-27
+**Updated:** 2026-08-06
 
 ## Business Terms
 
@@ -175,3 +175,69 @@ windows for the competitive audience's exclusion side:
 
 Same own-term state and manual SKU exclusions apply under both horizons; only the exclusion side's
 historical window changes.
+
+## Post-Campaign Analysis (Фаза 4)
+
+Source: `docs/uployal/AUDIENCE_ANALYSIS.md` (competitor analysis); implemented in
+`Features/MarketingAnalytics/PostCampaign/` (TASK-471..474/477) — a fourth mode on the same
+`marketing_analytics` module key as RFM (Фаза 1), Price Segments (Фаза 2), and Audience Builder
+(Фаза 3), not a new module.
+
+**Post-campaign segment (пост-кампанійний сегмент)** — `PostCampaignSegment`: a marketer-uploaded
+list of customer identifiers (`Customer.Id` GUIDs or phone numbers), sourced from *outside* this
+system (an SMS blast, a raffle list, a Фаза 3 AudienceBuilder export), compared across equal
+before/after date windows around a campaign. A different question again from RFM/Price Segments/
+Audience Builder — "did THIS specific list of already-contacted people actually come back," not
+"who bought THIS" or "who is valuable." Unlike Фаза 1-3 (fully stateless, computed live on every
+request), this is the first **persisted** entity in the whole marketing-analytics initiative — see
+`database-schema.md` TASK-471 and `decisions.md` ADR-023 addendum (Фаза 4) for why.
+
+**Draft vs. analyzed segment (чернетка / застосований сегмент)** — a segment's lifecycle has
+exactly two states, both derived from the same four nullable date columns
+(`AfterStart`/`AfterEnd`/`BeforeStart`/`BeforeEnd`) — no separate boolean/enum column exists:
+- **Draft** — just imported (`POST .../segments/import` succeeded); all four date columns and
+  `AnalyzedAt` are null. The uploaded list and its validation results exist, but no report tab can
+  be read yet (every report GET returns a 400 "not analyzed yet" on a draft segment).
+- **Analyzed** — `POST .../segments/{id}/analyze` has run at least once: all four dates are frozen
+  and `SegmentHash`/`AnalyzedAt` are set, and every report tab (summary/daily-turnover/rfm-activity/
+  customers/migration) reads this same frozen snapshot. Re-running analyze on the same segment (new
+  dates) re-freezes the window and bumps `SegmentHash`/`AnalyzedAt` in place — it never creates a
+  new segment row or re-touches the uploaded member list.
+
+**Before/after window (вікно до/після)** — `POST .../segments/{id}/analyze` takes only
+`afterStart`/`afterEnd`; the before window is derived automatically as an equal-length window
+immediately preceding it (`beforeEnd = afterStart − 1 day`, `beforeStart` sized to match the
+after-window's exact day count) — the caller never picks the before dates directly.
+
+**Reactivated / retained / dropped / not returned (Реактивовані / Утримані / Відпали / Не
+повернулись)** — `PostCampaignBehaviorStatus`, the four mutually-exclusive behavioral states for
+one matched customer, computed purely from whether they had any purchase in the before window and
+any in the after window (an exhaustive 2×2 truth table):
+- **Reactivated** — no purchase before, a purchase after (the campaign's target outcome).
+- **Retained** — purchased both before and after.
+- **Dropped** — purchased before, nothing after (churn).
+- **Not returned** — no purchase before, none after either (never really active to begin with).
+
+These four always partition the full matched segment exactly
+(`reactivated + retained + dropped + notReturned == matchedCount`, enforced by construction, not by
+convention — `PostCampaignBehaviorClassifier.Classify`'s truth table is exhaustive). Every rate
+built on top of them (reactivation rate = reactivated / inactiveBefore; retention rate = retained /
+activeBefore; churn rate = dropped / activeBefore) returns `null`, never `0%`, when its own
+denominator is zero. `PostCampaignBehaviorStatus` itself is a backend-only classification — it is
+never serialized on the wire; only its aggregate counts appear in `PostCampaignSummaryDto`.
+
+**RFM migration matrix (матриця міграції RFM)** — `GET .../segments/{id}/migration`: classifies
+every matched customer's RFM segment (Фаза 1's `RfmSegmentKey`) independently in the before window
+and the after window, then cross-tabulates the two into a sparse 12×12 transition matrix (11 named
+segments + the "Без покупок"/no-purchase null bucket; the frontend renders the full fixed grid with
+dots for empty cells). Reuses Фаза 1's existing `IMarketingAnalyticsRepository.
+GetScoredCustomersAsync` + `RfmSegmentClassifier` completely unchanged — no second RFM
+implementation exists anywhere in this feature. See `decisions.md` ADR-023 addendum (Фаза 4) for
+how a third, all-time call to the same repository method tells apart "never purchased" from "real
+history, zero purchases in this specific window."
+
+**Segment hash (in this feature's sense)** — `PostCampaignSegment.SegmentHash`: a versioning token
+recomputed only when `POST .../analyze` runs (not on every request, unlike Фаза 1-3's per-request
+`filtersHash`), since Фаза 4's report tabs read a frozen snapshot rather than live-filtered data.
+Stored on the segment row itself rather than derived fresh per response; every report DTO echoes it
+back so the frontend can detect a stale cached response after a re-analyze.

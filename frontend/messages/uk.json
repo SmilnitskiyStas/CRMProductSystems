@@ -333,7 +333,8 @@
           "label": "Маркетинг",
           "dashboard": "RFM-дашборд",
           "priceSegments": "Цінові сегменти",
-          "audienceBuilder": "Конструктор аудиторії"
+          "audienceBuilder": "Конструктор аудиторії",
+          "postCampaign": "Пост-кампанія"
         },
         "workforce": {
           "label": "Персонал",
@@ -2010,6 +2011,189 @@
       "bulkSelectionActions": {
         "selectAll": "Обрати всі",
         "deselectShown": "Зняти показані"
+      }
+    },
+    "postCampaign": {
+      "page": {
+        "title": "Аналіз пост-кампанії",
+        "subtitle": "Завантажте список клієнтів із зовнішньої кампанії та порівняйте їхню поведінку до і після",
+        "moduleGate": {
+          "title": "Модуль «Маркетингова аналітика» не активовано",
+          "body": "Зверніться до адміністратора платформи, щоб увімкнути модуль «Маркетингова аналітика»."
+        },
+        "importSection": "Завантаження сегменту",
+        "clearButton": "Очистити",
+        "historicalDataBanner": "Цей інструмент враховує лише продажі, прив'язані до клієнта (через програму лояльності). Історичні продажі на касі до впровадження цього зв'язку в аналітику не потрапляють.",
+        "invalidRangeError": "Дата початку має бути не пізніше дати завершення.",
+        "analyzeErrorToast": "Помилка аналізу: {message}",
+        "emptyStateHint": "Завантажте сегмент і натисніть «Аналізувати сегмент», щоб побачити ефект кампанії."
+      },
+      "reportTabs": {
+        "overview": "Огляд",
+        "activity": "Активність R/F/M",
+        "migration": "Міграція сегментів"
+      },
+      "recommendation": {
+        "title": "Рекомендація",
+        "triggerLabel": "Тригер — чому зараз",
+        "actionLabel": "Дія · канал · час",
+        "offerLabel": "Оффер",
+        "cautionLabel": "Застереження",
+        "explainButton": "Пояснити детальніше",
+        "explainLoading": "Аналізуємо…",
+        "aiBadge": "AI-пояснення",
+        "explainUnavailable": "AI-пояснення недоступне — для цього робочого простору не налаштовано ключ Claude API.",
+        "explainError": "Не вдалося згенерувати пояснення. Спробуйте пізніше.",
+        "noControlGroupNote": "Це порівняння до/після без контрольної групи — причинні формулювання варто сприймати як гіпотезу, а не доведений результат."
+      },
+      "draftBanner": {
+        "title": "Є незастосовані зміни аудиторії",
+        "body": "Ви завантажили новий список, але звіт нижче ще відображає раніше проаналізований сегмент.",
+        "cta": "Аналізувати зараз"
+      },
+      "columnPreview": {
+        "title": "Підтвердьте колонку з ID",
+        "detected": "Визначена колонка: {column}",
+        "unnamedColumn": "Колонка {index}",
+        "columnLabel": "Колонка",
+        "confirmButton": "Перезавантажити з цією колонкою",
+        "reimporting": "Перезавантаження…"
+      },
+      "importPanel": {
+        "modeList": "Список ID",
+        "modeFile": "Файл",
+        "listPlaceholder": "1024\n2048\n4096",
+        "listHint": "Один ID у рядку або кілька через кому. Приймаються GUID клієнта або номери телефонів — довільні числові ID не підтримуються.",
+        "dropHint": "Перетягніть файл сюди або натисніть, щоб обрати",
+        "fileHint": "Дозволено: .csv, .xlsx, .txt · до 10 МБ · до 20 000 ID. Перший рядок файлу завжди вважається заголовком і не імпортується.",
+        "removeFile": "видалити",
+        "nameLabel": "Назва сегмента (необов'язково)",
+        "namePlaceholder": "напр. SMS-розсилка — серпень",
+        "errorExtension": "Непідтримуваний формат файлу. Дозволено: .csv, .xlsx, .txt.",
+        "errorSize": "Файл завеликий. Максимум 10 МБ.",
+        "importing": "Завантаження…",
+        "importButton": "Імпортувати"
+      },
+      "validationSummary": {
+        "title": "Перевірка імпорту",
+        "uploaded": "Завантажено",
+        "matched": "Знайдено",
+        "duplicate": "Дублікати",
+        "unknown": "Невідомі",
+        "invalid": "Некоректні",
+        "unknownSampleTitle": "Перші {count} невідомих токенів",
+        "invalidSampleTitle": "Перші {count} некоректних токенів",
+        "moreInExportOnly": "+ ще {count} — дивіться у файлі експорту",
+        "exportErrorsButton": "Завантажити звіт про помилки (XLSX)",
+        "exporting": "Експорт…",
+        "exportErrorsHintComplete": "Містить усі {unknownCount} невідомих + {invalidCount} некоректних токенів.",
+        "exportErrorsHintTruncated": "Показано {unknownShown} з {unknownCount} невідомих + {invalidShown} з {invalidCount} некоректних токенів — решта не збереглася під час імпорту.",
+        "exportSuccessToast": "Файл готовий — перевірте завантаження",
+        "exportErrorToast": "Помилка експорту: {message}"
+      },
+      "afterPeriodBar": {
+        "fromLabel": "Після: від",
+        "toLabel": "Після: до",
+        "storesLabel": "Заклади",
+        "allStores": "Усі заклади",
+        "storesCount": "{count} закладів",
+        "selectAllStores": "Усі заклади",
+        "doneButton": "Готово",
+        "analyzing": "Аналізуємо…",
+        "refreshButton": "Оновити",
+        "analyzeButton": "Аналізувати сегмент",
+        "presetsLabel": "Швидкий вибір:",
+        "preset": {
+          "last7": "Останні 7 днів",
+          "last14": "Останні 14 днів",
+          "last30": "Останні 30 днів",
+          "thisMonth": "Поточний місяць",
+          "lastMonth": "Минулий місяць"
+        },
+        "beforeWindowLabel": "Період «до» (авто):",
+        "beforeWindowHint": "та сама тривалість, що й період «після», закінчується за день до його початку"
+      },
+      "segmentsList": {
+        "unnamed": "Сегмент без назви",
+        "placeholder": "Оберіть сегмент…",
+        "popoverTitle": "Збережені сегменти",
+        "loading": "Завантаження…",
+        "empty": "Поки що немає сегментів",
+        "matchedCount": "{count} знайдено"
+      },
+      "topKpi": {
+        "notAvailable": "н/д",
+        "moneyAfter": "Гроші після кампанії",
+        "buyersAfter": "{count} покупців після",
+        "reactivated": "Реактивовані",
+        "allActiveBefore": "усі були активні до",
+        "reactivationRate": "{rate} від неактивних до",
+        "retained": "Утримані",
+        "retentionRate": "{rate} активних до",
+        "dropped": "Відпали",
+        "churnRate": "{rate} відтік від активних до",
+        "notReturned": "Не повернулись",
+        "notReturnedHint": "жодних покупок ні до, ні після"
+      },
+      "dailyTurnoverChart": {
+        "title": "Щоденний оборот: до vs після",
+        "subtitle": "Щоденна виручка сегмента, вирівняна по днях вікна",
+        "empty": "Немає даних за цей період",
+        "afterSeries": "Після",
+        "beforeSeries": "До"
+      },
+      "statusDonut": {
+        "title": "Статус сегмента",
+        "subtitle": "Поведінковий розподіл повного сегмента",
+        "empty": "Немає даних",
+        "reactivated": "Реактивовані",
+        "retained": "Утримані",
+        "dropped": "Відпали",
+        "notReturned": "Не повернулись",
+        "centerLabel": "сегмент"
+      },
+      "rfmActivity": {
+        "notAvailable": "н/д",
+        "checks": "Чеки",
+        "turnover": "Оборот",
+        "averageCheck": "Середній чек",
+        "recency": "Давність (дн)",
+        "daysSuffix": "{n} дн.",
+        "recencyDenominatorFootnote": "Давність рахується лише за учасниками з покупкою у відповідному вікні: {before} до, {after} після."
+      },
+      "migrationTab": {
+        "up": "Піднялись",
+        "stable": "Без змін",
+        "down": "Знизились",
+        "beforeDonutTitle": "Сегменти до",
+        "afterDonutTitle": "Сегменти після"
+      },
+      "transitionMatrix": {
+        "title": "Матриця переходів",
+        "subtitle": "Рядки — сегмент до, колонки — сегмент після. Діагональ — без змін, зелений — покращення, червоний — погіршення, крапка — такого переходу не було.",
+        "cornerLabel": "До / Після",
+        "legendStable": "Без змін",
+        "legendUp": "Покращення",
+        "legendDown": "Погіршення",
+        "legendEmpty": "немає переходів"
+      },
+      "customerTable": {
+        "title": "Споживачі сегмента",
+        "subtitle": "Повний сегмент із серверною пагінацією — без обмеження Топ-200",
+        "totalCount": "{count} клієнтів",
+        "headerName": "Клієнт",
+        "headerPhone": "Телефон",
+        "headerChecksBefore": "Чеки до",
+        "headerChecksAfter": "Чеки після",
+        "headerTurnoverBefore": "Оборот до, ₴",
+        "headerTurnoverAfter": "Оборот після, ₴",
+        "headerTransition": "Сегмент до → після",
+        "loading": "Завантаження…",
+        "empty": "Немає клієнтів у цьому сегменті для обраних закладів.",
+        "exportButton": "Експорт XLSX",
+        "exporting": "Експорт…",
+        "exportSuccessToast": "Файл готовий — перевірте завантаження",
+        "exportErrorToast": "Помилка експорту: {message}"
       }
     },
     "dashboard": {
@@ -4171,13 +4355,26 @@
         "empty": "Активність відсутня",
         "actions": {
           "user": {
+            "login": "Вхід",
+            "login_failed": "Невдала спроба входу",
+            "2fa_enabled": "Увімкнено двофакторну автентифікацію",
+            "2fa_disabled": "Вимкнено двофакторну автентифікацію",
+            "2fa_failed": "Невдала перевірка 2FA",
+            "locked_out": "Заблоковано після невдалих спроб входу",
             "invited": "Запрошено нового користувача",
             "updated": "Оновлено дані",
             "deactivated": "Деактивовано",
             "profile_updated": "Оновлено профіль",
             "password_changed": "Змінено пароль",
             "telegram_linked": "Підключено Telegram",
-            "permissions_updated": "Оновлено доступи"
+            "permissions_updated": "Оновлено доступи",
+            "permission_granted": "Надано тимчасовий доступ",
+            "permission_revoked": "Відкликано тимчасовий доступ",
+            "tenant_role_assigned": "Змінено роль доступу",
+            "locations_updated": "Оновлено локації"
+          },
+          "auth": {
+            "refresh_reuse_detected": "Виявлено повторне використання токена — сесії відкликано"
           }
         }
       },
