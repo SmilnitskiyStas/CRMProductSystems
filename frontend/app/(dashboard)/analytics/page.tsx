@@ -11,6 +11,7 @@ import {
   useCategoryAnalytics,
   useLosses,
   useLossesCompare,
+  useLossesTrend,
 } from "@/features/analytics/hooks/useAnalytics";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
@@ -19,9 +20,11 @@ import { useRequireTab } from "@/lib/useRequireTab";
 import { ExpiryDonut } from "@/features/analytics/components/ExpiryDonut";
 import { LossesByReasonChart } from "@/features/analytics/components/LossesByReasonChart";
 import { LossesByStoreChart } from "@/features/analytics/components/LossesByStoreChart";
+import { LossesTrendChart } from "@/features/analytics/components/LossesTrendChart";
 import { CategoryStatusChart } from "@/features/analytics/components/CategoryStatusChart";
 import { CategoryDetailPanel } from "@/features/analytics/components/CategoryDetailPanel";
 import { LossesProductBreakdownPanel } from "@/features/analytics/components/LossesProductBreakdownPanel";
+import { ProductTrendPanel } from "@/features/analytics/components/ProductTrendPanel";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
 
@@ -212,6 +215,11 @@ export default function AnalyticsPage() {
     { from, to, compareFrom, compareTo },
     compareActive,
   );
+  // No compare-mode variant on this endpoint (TASK-489) — always the page's CURRENT from/to,
+  // same "never compare" rule this initiative already applies to CategoryDetailPanel/
+  // LossesProductBreakdownPanel's own queries, and ungated by compareEnabled entirely (matches
+  // useExpirySummary above, the other hook on this page with no compare variant at all).
+  const { data: lossesTrend, isLoading: lossesTrendLoading } = useLossesTrend({ from, to }, enabled);
 
   // Unified view of write-offs/losses regardless of compare mode.
   const writeoffs = compareEnabled ? writeoffsCompare?.current : writeoffsFlat;
@@ -239,6 +247,20 @@ export default function AnalyticsPage() {
   // precedent of a small, noted deviation from the brief when the literal type doesn't hold up).
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | undefined>(undefined);
   const [selectedLossDimension, setSelectedLossDimension] = useState<{ type: "reason" | "store"; value: string } | null>(null);
+  // Product-row drill-down (TASK-488) from inside CategoryDetailPanel/LossesProductBreakdownPanel
+  // above — same {id,name} shape and toggle-on-reselect convention as analytics/pos/page.tsx's own
+  // selectedProduct (TASK-484). One shared piece of state for all three trigger panels (by-category,
+  // losses-by-reason, losses-by-store) rather than one per panel: it's rendered in a single spot
+  // below (not nested under any one of the three), so closing whichever panel triggered it does NOT
+  // clear it — deliberate, ProductTrendPanel has its own independent close button, and nesting it
+  // under one specific trigger would risk it re-surfacing a stale product when that trigger is
+  // reopened later with different data selected.
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string } | null>(null);
+  // Day-drill-down from LossesTrendChart (TASK-492) — same toggle-on-reselect convention as
+  // every other selection on this page, own independent piece of state (not reused/shared with
+  // selectedLossDimension, since a day and a reason/store are different drill axes that can be
+  // open at the same time without conflict).
+  const [selectedLossDay, setSelectedLossDay] = useState<string | null>(null);
 
   function handleCategoryClick(categoryId: string | null) {
     setSelectedCategoryId((prev) => (prev === categoryId ? undefined : categoryId));
@@ -250,6 +272,18 @@ export default function AnalyticsPage() {
 
   function handleStoreLossClick(storeId: string) {
     setSelectedLossDimension((prev) => (prev?.type === "store" && prev.value === storeId ? null : { type: "store", value: storeId }));
+  }
+
+  function handleProductClick(productId: string, productName: string) {
+    // Same toggle-on-reselect convention as handleCategoryClick/handleReasonClick/handleStoreLossClick
+    // above, and as analytics/pos/page.tsx's own handleProductClick (TASK-484).
+    setSelectedProduct((prev) => (prev?.id === productId ? null : { id: productId, name: productName }));
+  }
+
+  function handleLossDayClick(date: string) {
+    // Same toggle-on-reselect convention as the handlers above, and as analytics/pos/page.tsx's
+    // own handleDayClick (TASK-485).
+    setSelectedLossDay((prev) => (prev === date ? null : date));
   }
 
   if (access === null) return null;
@@ -424,6 +458,38 @@ export default function AnalyticsPage() {
             />
           </div>
 
+          {/* ── Losses trend over time (TASK-489/492) ─────────────────────── */}
+          {/* Own independent query (no compare-mode variant, always current from/to — see the
+              useLossesTrend call above) so it gets its own loading gate rather than riding the
+              outer writeoffsLoadingEffective one, which tracks a different query entirely. */}
+          {lossesTrendLoading ? (
+            <div style={{ color: "#4B5563", fontSize: 13, marginBottom: 16 }}>{tCommon("loading")}</div>
+          ) : lossesTrend ? (
+            <div style={{ marginBottom: 16 }}>
+              <LossesTrendChart
+                data={lossesTrend}
+                onDayClick={handleLossDayClick}
+                selectedDay={selectedLossDay}
+              />
+              {selectedLossDay && (
+                <LossesProductBreakdownPanel
+                  title={t("lossesProductPanelTitle", {
+                    value: new Date(`${selectedLossDay}T00:00:00Z`).toLocaleDateString(intlLocale, {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    }),
+                  })}
+                  totalLoss={lossesTrend.points.find((p) => p.date === selectedLossDay)?.totalLoss ?? 0}
+                  from={selectedLossDay}
+                  to={selectedLossDay}
+                  onClose={() => setSelectedLossDay(null)}
+                  onProductClick={handleProductClick}
+                />
+              )}
+            </div>
+          ) : null}
+
           <LossesByReasonChart
             data={writeoffs.byReason}
             onReasonClick={handleReasonClick}
@@ -478,6 +544,7 @@ export default function AnalyticsPage() {
               from={from}
               to={to}
               onClose={() => setSelectedLossDimension(null)}
+              onProductClick={handleProductClick}
             />
           )}
         </section>
@@ -600,7 +667,13 @@ export default function AnalyticsPage() {
           </div>
 
           {selectedCategoryId !== undefined && (
-            <CategoryDetailPanel categoryId={selectedCategoryId} from={from} to={to} onClose={() => setSelectedCategoryId(undefined)} />
+            <CategoryDetailPanel
+              categoryId={selectedCategoryId}
+              from={from}
+              to={to}
+              onClose={() => setSelectedCategoryId(undefined)}
+              onProductClick={handleProductClick}
+            />
           )}
         </section>
       )}
@@ -699,9 +772,27 @@ export default function AnalyticsPage() {
               from={from}
               to={to}
               onClose={() => setSelectedLossDimension(null)}
+              onProductClick={handleProductClick}
             />
           )}
         </section>
+      )}
+
+      {/* ── Product trend (TASK-488) ──────────────────────────────── */}
+      {/* Triggered by a product-row click inside CategoryDetailPanel or LossesProductBreakdownPanel
+          above (by-category / losses-by-reason / losses-by-store — three trigger points, one shared
+          panel). Reuses ProductTrendPanel unmodified — the exact same component PosTopProductsTable
+          already opens on /analytics/pos (TASK-484), renamed from PosProductTrendPanel now that it's
+          used outside /analytics/pos too. No store_id is threaded in: unlike /analytics/pos, this
+          page has no page-wide store filter of its own (every hook above takes no store_id — the
+          per-row store links in the expiry/zone tables navigate to /stock, they aren't a page
+          filter), so there is nothing to pass. */}
+      {selectedProduct && (
+        <ProductTrendPanel
+          productId={selectedProduct.id}
+          productName={selectedProduct.name}
+          onClose={() => setSelectedProduct(null)}
+        />
       )}
     </div>
   );

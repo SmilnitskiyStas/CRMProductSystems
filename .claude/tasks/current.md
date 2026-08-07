@@ -3,6 +3,267 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-495 — QA: live E2E for analytics follow-up batch (TASK-488..494)
+**Status:** done — **verdict: SHIP** · **Agent:** qa-tester · **Depends:** TASK-488..494 (all done) ·
+**Next:** none blocking — batch complete, F1 below is the only open, non-blocking item
+Log: `.claude/logs/tasks/495_2026-08-07_batch2-qa_qa-tester.md`
+First genuine authenticated live E2E for this batch — every prior frontend task (488, 492, 493, 494)
+only verified compile/build, and TASK-492 itself flagged TASK-488's "live check" as a false positive
+(hit Next's not-found catch-all, not the real page). Read all 7 task logs + source files, then stood
+up the real stack (Docker Desktop wasn't running — started it, `docker compose up -d`, `dotnet run`
+port 5000 with `Cors__Origins` widened, `next dev` auto-port 50888) and tested with real logins
+(`manager@demo.local` store_manager, `ea@demo.local` enterprise_admin). Same Browser-pane limitation
+TASK-486 first found (hidden/unfocused tab blocks recharts' `ResizeObserver`/pointer-tracking) —
+worked around via trusted DOM `.click()` dispatch (fully reliable for every plain element) plus
+direct API probes; only genuine gap is chart-native day/point clicks (F1, non-blocking, same
+precedent TASK-486/492 already documented). All 4 features PASS live, including the two highest-risk
+checks: **worst-products correctly surfaces true zero-sale products** (8 live-confirmed, disjoint
+from the 7-product top-sellers list, each with real `currentStock`) and **margin-gating is
+unaffected by the new days-of-stock column** (`git diff` shows the `canViewMargin &&` gate itself
+byte-for-byte untouched; live-confirmed absent for store_manager, present with correct ADR-027
+arithmetic for enterprise_admin). Days-of-stock-remaining confirmed in all 3 states including the
+real-number path — dev seed data had zero `ProductAdu` rows anywhere (`POST /api/adu/recalculate`
+processed 0 products, a pre-existing seed/eligibility gap, not this batch's bug), so inserted one
+temporary row directly via SQL (stock 70 ÷ ADU 5.0), confirmed the card rendered exactly "14d" end to
+end through the full new client-side pipeline (`useAdu` → `stockApi` → division/rounding), then
+deleted it (confirmed 0 rows left). `PosDayDetailPanel`/`ExpiryDonut`/`CategoryStatusChart`/
+`LossesByReasonChart`/`LossesByStoreChart`/`PosRevenueTrendChart` all show **zero** uncommitted diff
+— byte-identical to what TASK-486 already fully live-tested, strongest possible regression guarantee.
+`dotnet build`/`dotnet test` (1344/1344, matches TASK-491's baseline) and `tsc`/lint/`next build`
+(exit 0, 57/57 pages, same route sizes TASK-494 logged) independently re-run clean. Zero 500s,
+zero React/hydration errors across the whole session. **F1 (non-blocking):** `LossesTrendChart`'s
+day-point click itself still can't be live-clicked in this environment — mitigated by a source diff
+proving it's structurally identical to the already-proven `PosRevenueTrendChart` mechanism, plus
+independently confirming its entire downstream data path (panel + exact API call) live via an
+equivalent trigger. Recommends the same 30-second manual spot-check TASK-486 already suggested — not
+done by anyone across TASK-486/492/this pass. No blocking findings.
+
+## TASK-494 — Frontend: days-of-stock-remaining UI (analytics follow-up batch)
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-491 (backend, done) ·
+**Next:** TASK-495 (qa-tester) — last frontend task in the batch, feeds directly into that brief
+Log: `.claude/logs/tasks/494_2026-08-07_days-of-stock-ui_frontend-developer.md`
+Sixth of the follow-up batch (TASK-488..495). Consumed TASK-491's `daysOfStockRemaining: number |
+null` field on `CategoryProductRowDto` (verified fresh against `AnalyticsDtos.cs` — `TotalQuantity
+/ ProductAdu.AduEffective`, null both when the request has no `store_id` and when the product has
+no ADU signal yet, the UI doesn't distinguish either case, renders "—"). `types.ts` gained the
+field (appended to the existing interface, TASK-493's `WorstProductsDto`/`WorstProductRowDto` read
+fresh and left untouched) plus a new `AduDto` (mirrors backend `AduDtos.cs`). New sortable "Днів
+запасу"/"Days of stock" column in `CategoryDetailPanel.tsx` — deliberately **not**
+margin-gated (operational, not cost data), red/amber/green/gray urgency coloring reusing this
+table's own status-cell palette. `ProductAnalyticsTab.tsx` gained an optional
+`daysOfStockRemaining?: number | null` prop (purely presentational, same posture as
+`canViewMargin`) rendering one more `SummaryCard` — `undefined` omits the card entirely, `null`
+renders "—", a number renders color-coded — mirrors the DTO's own absent-vs-empty null semantics.
+`ProductTrendPanel.tsx` now actually wires up the `storeId?` prop it already accepted since
+TASK-488 but never used: when concrete, fetches ADU via a new minimal `useAdu` hook (no prior
+frontend consumption of `GET /api/adu/{storeId}/{productId}` existed anywhere — grepped first) and
+on-hand stock via the existing `stockApi.getAll({store_id, product_id})` (features/shelf, no
+backend change needed), computes `currentStock / aduEffective` client-side with the same
+sold_out/archived exclusion and rounding the backend uses elsewhere, passes the result down. No
+fetch at all when `storeId` is undefined (today: always true on `/analytics`, which has no
+page-wide store filter — confirmed again, not re-fixed, per the brief's explicit
+out-of-scope note; `/analytics/pos` does pass a concrete storeId and gets real numbers). New
+`frontend/features/analytics/api/adu.ts` + `hooks/useAdu.ts` (retry skips an expected 404, same
+precedent as `usePos.ts`'s `useCurrentShift`). Deliberately used `stockApi` directly via a local
+`useQuery` instead of the shelf feature's `useStock` hook (which has no `enabled` param) to avoid
+touching a shared hook outside this task's scope. `tsc --noEmit`/`npm run lint`/`npm run build` all
+clean (build exit 0, 57/57 static pages, `/analytics` 8.51 kB/270 kB, `/analytics/pos` 5.39 kB/
+261 kB First Load JS — both +~2kB as expected, same shared-tree Size-column churn TASK-493 already
+flagged). Live dev-server check hit the same no-Docker-this-session constraint as every prior task
+in this batch (confirmed via `docker ps` failing to reach the daemon): `/analytics` redirected to
+`/login` cleanly, zero hydration/module-resolution errors from any new code.
+
+## TASK-493 — Frontend: worst-performing products / dead-stock table UI (analytics follow-up batch)
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-490 (backend, done) ·
+**Next:** none blocking
+Log: `.claude/logs/tasks/493_2026-08-07_worst-products-ui_frontend-developer.md`
+Fifth of the follow-up batch (TASK-488..495). Consumed TASK-490's `pos/worst-products` endpoint
+end to end: `types.ts` gained `WorstProductsDto`/`WorstProductRowDto` (appended after TASK-492's
+`LossesTrendDto`, untouched), `api/pos-analytics.ts` gained `getWorstProducts`,
+`usePosAnalytics.ts` gained `useWorstProducts` (full-filter query key, no `keepPreviousData`, same
+discipline as every sibling hook) — shape verified fresh against `PosAnalyticsDtos.cs`/
+`AnalyticsController.cs` before writing types. New `WorstProductsTable.tsx` mirrors
+`PosTopProductsTable.tsx`'s structure/styling verbatim (same hover/active-row `#111827`
+mechanism, same `onRowClick?`/`selectedProductId?` prop shape) minus the barcode column (not in
+the DTO) plus one new `currentStock` column in amber (`#FBBF24`, reusing this feature's existing
+"warning"-class color from `CategoryDetailPanel.tsx` rather than inventing one) — the "N units
+sitting unsold" evidence that makes a zero-revenue row actionable. `analytics/pos/page.tsx` read
+fresh (built on top of TASK-484's `selectedProduct`/`handleProductClick` and TASK-488's renamed
+`ProductTrendPanel` import, both confirmed unmodified) — new section rendered directly below the
+existing Top-products+Cashiers grid, wired to the *same* `handleProductClick`/`selectedProduct`
+values already passed to `PosTopProductsTable`, so either table's row click opens the same
+`ProductTrendPanel` instance with zero new state. Deliberately no page-level `<h2>` wrapper for
+the new section — followed this page's own precedent where `PosTopProductsTable`/
+`PosCashierStatsTable` render their own internal title bar instead of an external heading (unlike
+the KPI-style sections, which have no internal title and do get one); the internal title itself
+("Товари, що не продаються" / "Products not selling") already reads as clearly distinct from "Топ
+товари" / "Top products". New `Dashboard.analytics.pos.worstProducts` i18n block in both locale
+files, inserted next to the sibling `topProducts` block. `tsc --noEmit`/`npm run lint`/`npm run
+build` all clean (build exit 0 confirmed explicitly, 57/57 static pages, `/analytics/pos` 6.93
+kB/259 kB First Load JS — route-specific size *smaller* than TASK-488's logged 11.4 kB figure for
+the same route, most likely explained by intermediate churn from TASK-489..492's own edits already
+sitting in this same still-uncommitted working tree rather than a regression from this task's own
+diff; total First Load JS for the route unchanged at 259 kB either way). Live dev-server check hit
+the same now-well-documented constraint as every prior build task this batch (no Docker/backend
+this session): confirmed live that `/analytics/pos` is still edge-redirected by `middleware.ts`
+before Next compiles the page at all (zero "analytics/pos" compile log line, zero hydration/
+module-resolution console errors, only pre-existing `ENVIRONMENT_FALLBACK` next-intl noise and
+expected `ERR_CONNECTION_REFUSED` from the unreachable backend) — `npm run build`'s successful
+compile of the real bundle is the strongest signal available without a backend, same conclusion
+TASK-492 already reached.
+
+## TASK-492 — Frontend: losses/write-offs trend chart UI (analytics follow-up batch)
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-489 (backend, done) ·
+**Next:** none blocking
+Log: `.claude/logs/tasks/492_2026-08-07_losses-trend-ui_frontend-developer.md`
+Fourth of the follow-up batch (TASK-488..495). Consumed TASK-489's `losses/trend` endpoint end to
+end: `types.ts`/`api/analytics.ts`/`useAnalytics.ts` gained `LossesTrendDto`/`LossesTrendPointDto`,
+`getLossesTrend`, `useLossesTrend` (full-filter query key, no `keepPreviousData`, shape verified
+fresh against `AnalyticsDtos.cs`/`AnalyticsController.cs`). New `LossesTrendChart.tsx` mirrors
+`PosRevenueTrendChart.tsx`'s `AreaChart`/recharts-3.8.1-click mechanism verbatim (single series,
+red instead of blue, no compare Line/Legend — endpoint has none); tooltip tone matches the sibling
+`LossesByReasonChart`/`LossesByStoreChart` instead. `analytics/page.tsx` read fresh (built on top
+of TASK-488's merged `selectedProduct` wiring, nothing reverted) — new `useLossesTrend({from, to},
+enabled)` call deliberately ungated by `compareEnabled` (matches `useExpirySummary`'s own
+no-compare-variant shape on this page, not the flat/compare toggle other losses hooks use); new
+`selectedLossDay` state + `handleLossDayClick` (toggle-on-reselect, same convention as every other
+handler here), rendered inside the existing Write-offs section between the summary cards and
+`LossesByReasonChart`. Day click reuses `LossesProductBreakdownPanel` unmodified (confirmed prop
+shape unchanged: `{title, totalLoss, storeId?, reason?, from, to, onClose, onProductClick?}`) —
+called with no `storeId`/`reason`, `from = to = selectedLossDay`, title built from the *existing*
+`lossesProductPanelTitle` i18n key (reused, not duplicated) with a long-form date. New
+`Dashboard.analytics.lossesTrendChart` i18n block in both locale files. `tsc --noEmit`/`npm run
+lint`/`npm run build` all clean (build exit 0, 57/57 static pages, `/analytics` 9.96 kB/268 kB First
+Load JS, up from TASK-488's 9.27 kB/263 kB as expected). **Correction to TASK-488's live-check
+precedent:** its "`/uk/analytics` compiled and redirected to `/login` cleanly" claim doesn't
+actually exercise the real page — that URL 404s to Next's `[...not-found]` catch-all (confirmed by
+reading the rendered page text), which only *looks* like a pass because it shares
+`(dashboard)/layout.tsx`'s auth-redirect wrapper. The real `/analytics` route sits in
+`middleware.ts`'s `PROTECTED` array and is edge-redirected before Next compiles the page at all,
+confirmed by reading `middleware.ts` directly — with Docker itself not running this session (not
+just the containers down), there was no way to reach it live; `npm run build`'s successful compile
+of the real `/analytics` bundle is the strongest signal available without a backend.
+
+## TASK-491 — Backend: days-of-stock-remaining field on by-category/products (analytics follow-up batch)
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-481 (by-category/products
+endpoint, done — extended, not modified); TASK-490 (worst-products, done — same shared files, read
+fresh, nothing of theirs touched) · **Next:** TASK-494 (frontend-developer, consume the new field)
+unblocked
+Log: `.claude/logs/tasks/491_2026-08-07_days-of-stock-field_backend-developer.md`
+Third of the follow-up batch (TASK-488..495). Extends `CategoryProductRowDto`
+(`AnalyticsDtos.cs`) with `decimal? DaysOfStockRemaining` — wire field `daysOfStockRemaining`,
+`TotalQuantity / ProductAdu.AduEffective` rounded to 1 decimal. No controller/service/interface
+signature changes — `storeId` already flowed into `GetCategoryProductBreakdownAsync` since
+TASK-481. Verified `ProductAdu.AduEffective` fresh (matches secondhand description exactly) via
+the entity, `AduService`/`AduCalculator.Compute`, and `AduController`/`AduRepository` as the
+single-product/bulk-by-store precedents — confirmed `AduEffective` can be a real `0m` (not just
+null), so the zero-guard is load-bearing, not defensive-only. `AnalyticsRepository.cs`: one new
+bulk `_db.ProductAdus` query (keyed by `ProductId` via `ToDictionaryAsync`, `TenantId` filter
+belt-and-suspenders like every other method in this file), gated on `storeId.HasValue` so a
+network-wide/multi-store rollup never even runs it — every row's field stays `null` in that case.
+Per-row null also when the product has no `ProductAdu` row, or `AduEffective` is `null`/`0m`
+(division-by-zero guard doubling as "no usage history yet"). 3 new tests in
+`PosAnalyticsServiceTests.cs` (populated when store-scoped / null without store scope / null on
+zero-or-missing ADU) plus 3 pre-existing `CategoryProductRowDto` construction sites updated for the
+new field — same service-layer pass-through-only boundary this file already uses for
+`GetWorstProductsAsync`'s merge logic (division itself isn't independently unit-tested, no
+EF-InMemory harness wired for this repository). `dotnet build`/`dotnet test` both clean
+(1344/1344 = 1341 baseline + 3 new). No `AnalyticsController.cs`/`AnalyticsService.cs`/
+`IAnalyticsService.cs`/`IAnalyticsRepository.cs`/`PosAnalyticsDtos.cs` edits — those already showed
+modified from TASK-490's still-uncommitted work; diffed to confirm `GetWorstProductsAsync`/
+`GetLossesTrendAsync` bodies untouched. No `losses/by-product`, `losses/trend`, `pos/worst-products`,
+`AnalyticsAuthorization.cs`, `TenantRoleCapabilities.cs`, or `frontend/` touched.
+
+## TASK-490 — Backend: worst-performing products / dead-stock endpoint (analytics follow-up batch)
+**Status:** done · **Agent:** backend-developer · **Depends:** none (TASK-489's losses/trend
+touches the same shared files but no code overlap — read fresh, built on top, nothing of theirs
+modified) · **Next:** TASK-493 (frontend-developer, dead-stock table UI) unblocked
+Log: `.claude/logs/tasks/490_2026-08-07_worst-products-endpoint_backend-developer.md`
+Second of the small follow-up batch (TASK-488..495). New
+`GET /api/analytics/pos/worst-products` on `AnalyticsController.cs` (`store_id`/`from`/`to`/`limit`,
+same clamp as `pos/top-products`: `if (limit is < 1 or > 100) limit = 10;`). **Deliberately not**
+`pos/top-products` sorted ascending — that query groups `PosTransactionItems`, so a zero-sale
+product never appears in the result at all (no rows to group), and dead stock specifically needs
+those zero-sale-but-in-stock products surfaced as the more actionable signal. New
+`GetWorstProductsAsync` (repo) instead starts from the catalog/stock side: active `Item`s
+(`IsActive`, tenant-scoped) with on-hand `ProductStock` (`Quantity > 0`, excluding
+sold_out/archived — reused `GetByCategoryAsync`'s own on-hand-quantity convention), then merges in
+a sales rollup for the period (same aggregate shape as `GetPosTopProductsAsync`), COALESCEing
+missing sales to 0. Two-query shape (SQL-side scalar stock aggregate, then a sales aggregate
+pre-filtered to just those product ids, merged via `Dictionary` in C#) rather than one LEFT JOIN +
+GroupBy LINQ query, per the brief's guidance given this file's already-documented EF/Npgsql
+GroupBy-translation limits (TASK-482/489) — both aggregates still run server-side, only two
+already-small result sets merge client-side, so this isn't a repeat of
+`GetPosTopProductsAsync`'s/`GetLossesByProductAsync`'s accepted-but-larger in-memory-materialize
+pattern. New DTOs in `PosAnalyticsDtos.cs` (not `AnalyticsDtos.cs` — POS-specific, same file as
+`PosTopProductsDto`): `WorstProductsDto`/`WorstProductRowDto`. No margin gate (same sensitivity
+class as `pos/top-products`, already ungated for store_manager+) — DTO carries no
+`PricePurchase`-derived field at all. Thin service pass-through. 4 new tests in
+`PosAnalyticsServiceTests.cs` (zero-sales product round-trips `SalesRevenue: 0`, ascending-order
+pass-through, `limit` forwarding, store-filter + `CurrentStock` round-trip). **Noted deviation:**
+the brief asked for "limit clamping" test coverage, but the clamp is controller-only logic and this
+codebase has zero `*ControllerTests.cs` files anywhere (TASK-482 precedent) — added a
+pass-through-forwarding test instead of introducing a new controller-test file/pattern; documented
+as an objective convention-consistency call per CLAUDE.md, not a product/UX judgment call. `dotnet
+build`/`dotnet test` both clean (1341/1341 = 1337 baseline + 4 new). No `AnalyticsDtos.cs`,
+`losses/trend` (TASK-489), margin/authorization files, or `frontend/` touched.
+
+## TASK-488 — Frontend: category/losses product drill-down → shared ProductTrendPanel
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-483/484 (both done, same
+components) · **Next:** none blocking — user-flagged gap closed; a future task (TASK-493) will
+import the renamed `ProductTrendPanel`
+Log: `.claude/logs/tasks/488_2026-08-07_category-losses-product-drilldown_frontend-developer.md`
+User-flagged gap after live review of TASK-479..487: `CategoryDetailPanel`/
+`LossesProductBreakdownPanel` (TASK-483) product rows had no click handler, while
+`PosTopProductsTable` (TASK-484) already opened `PosProductTrendPanel` on row click. Closed by
+reusing that exact panel — confirmed genuinely generic first (`productId`/`productName`/`storeId?`/
+`onClose`, no POS-specific coupling), so no logic changes were needed. Added new `onProductClick?`
+props to both panels: a button-style hover-chip on the product-name cell only (not the whole grid
+row), `#111827` accent matching `PosTopProductsTable`'s row hover/active-row highlight, visually
+distinct from `SortableHeader`'s uppercase/gray sort buttons in the same row. New `selectedProduct`
+state in `analytics/page.tsx` mirrors `analytics/pos/page.tsx`'s exact toggle-on-reselect pattern.
+Panel renders once in a single shared spot at the bottom of the page rather than nested under each
+of the 3 triggering panels (by-category/losses-by-reason/losses-by-store) — avoids a stale-state
+cross-link since all three share one piece of state. No `storeId` threaded through — verified
+`/analytics` has no page-wide store filter at all (every hook on the page takes no `store_id`),
+unlike `/analytics/pos`. **Renamed** `PosProductTrendPanel.tsx` → `ProductTrendPanel.tsx` (`git mv`,
+function renamed, both call sites updated, plus 2 stale name-only comment references fixed in
+`ProductAnalyticsTab.tsx`/`PosTopProductsTable.tsx` — explicitly permitted as part of the rename,
+nothing else in either file touched) since the panel is no longer POS-page-only — **future imports
+(TASK-493) should use the new name/path**: `frontend/features/analytics/components/
+ProductTrendPanel.tsx`, export `ProductTrendPanel`. `tsc --noEmit`/`npm run lint`/`npm run build`
+all clean (exit 0, 57/57 static pages, `/analytics` 9.27 kB/263 kB, `/analytics/pos` 11.4 kB/259 kB
+First Load JS — both small upticks expected/explained in the task log). Live dev-server check (no
+backend in this session, same constraint TASK-483/484/485 all hit): both routes compiled and
+redirected to `/login` cleanly, zero hydration/module-resolution errors. Full authenticated click-
+through untested (no backend available) but low-risk — `ProductTrendPanel` itself was already live
+E2E-verified end-to-end by TASK-486 and is reused completely unmodified here.
+
+## TASK-489 — Backend: losses/write-offs trend-over-time endpoint (analytics follow-up batch)
+**Status:** done · **Agent:** backend-developer · **Depends:** none (independent of TASK-479/480's
+margin-authorization work — this endpoint carries no margin data) · **Next:** TASK-492
+(frontend-developer, losses trend chart UI) unblocked
+Log: `.claude/logs/tasks/489_2026-08-07_losses-trend-endpoint_backend-developer.md`
+First of a small follow-up batch (TASK-488..495) requested after the user reviewed the shipped
+interactive-analytics initiative (TASK-479..487, commit 99bbde97) live. New
+`GET /api/analytics/losses/trend` on `AnalyticsController.cs`, mirrors `pos/revenue-trend`'s shape
+exactly (`store_id`/`from`/`to`/`group_by=day|week`, no compare-mode). New
+`LossesTrendDto`/`LossesTrendPointDto` in `AnalyticsDtos.cs` (not `PosAnalyticsDtos.cs` — that's
+POS-specific), thin service pass-through. New `GetLossesTrendAsync` (repo) groups `WriteOffs`
+**in SQL before `ToListAsync`** (mirrors `GetProductSalesTrendAsync`'s TASK-482 two-step
+SQL-aggregate-then-map shape, not `GetLossesAsync`'s/`GetWriteOffAnalyticsAsync`'s in-memory
+GroupBy-after-materialize pattern) — reused TASK-482's already-verified day/week bucketing rather
+than reinventing it (day via the provider's `DateTime.Date` translation, week via the same inlined
+Monday-anchored ISO-offset arithmetic `IsoWeekStart()` uses; `EF.Functions.DateTrunc` still doesn't
+exist in this repo's installed Npgsql EF Core provider, and EF still can't translate a call to an
+arbitrary private C# method, so the arithmetic has to be inlined again at this call site). No
+margin gate (ADR-027 §1 precedent from `losses/by-product`, TASK-481) — `TotalLoss` is already
+shown in aggregate to every store_manager+ caller today, this endpoint is the same data re-sliced
+by day/week instead of by store/reason/product. 4 new tests in `PosAnalyticsServiceTests.cs`
+(day/week pass-through, store-filter forwarding, empty-range handling). `dotnet build`/`dotnet
+test` both clean (1337/1337 = 1333 baseline + 4 new). No `AnalyticsAuthorization.cs`/
+`TenantRoleCapabilities.cs`, `PosAnalyticsDtos.cs`, `pos/top-products`, or `frontend/` touched.
+
 ## TASK-487 — Security review: margin authorization (interactive analytics + margin plan)
 **Status:** done — **verdict: SHIP** · **Agent:** security-reviewer · **Depends:** TASK-480..486
 (all done) · **Next:** none blocking — initiative (TASK-479..487) complete

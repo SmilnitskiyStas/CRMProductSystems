@@ -86,3 +86,26 @@ public sealed record ProductSalesTrendPointDto(
     decimal Quantity,
     int TransactionCount,
     decimal? MarginAmount);
+
+// ── TASK-490: worst-performing products / dead stock (pos/worst-products) ───────────────────
+
+/// <summary>
+/// The dead-stock counterpart to <see cref="PosTopProductsDto"/> -- but not simply that query
+/// sorted ascending. That query groups PosTransactionItems, so a product with zero sales in the
+/// period never appears at all (no rows to group). This DTO's source query instead starts from
+/// the catalog/stock side (active items currently on-hand) and LEFT-JOINs the sales rollup, so a
+/// zero-sale product still shows up with <see cref="WorstProductRowDto.SalesRevenue"/> == 0.
+/// <see cref="WorstProductRowDto.CurrentStock"/> is what makes a zero-revenue row actionable --
+/// it's the evidence of exactly how many units are sitting unsold. Products are ordered ascending
+/// by SalesRevenue (worst/zero first) and capped at the caller's `limit`.
+/// </summary>
+public sealed record WorstProductsDto(
+    IReadOnlyList<WorstProductRowDto> Products);
+
+public sealed record WorstProductRowDto(
+    Guid ProductId,
+    string ProductName,
+    decimal SalesRevenue,
+    decimal UnitsSold,
+    int TransactionCount,
+    decimal CurrentStock);

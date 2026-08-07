@@ -5,6 +5,29 @@
 
 ## Active Issues
 
+### KI-032: Dev/demo tenant has zero ADU-eligible products — `POST /api/adu/recalculate` always processes 0, blocks live QA of any ADU-dependent feature
+Severity: low (dev/demo seed-data completeness gap only — not a bug in the ADU engine or in any
+feature that consumes it; a real tenant with real `SupplySchedules` configured would not hit this)
+Status: open — found 2026-08-07 (TASK-495, live QA of the analytics follow-up batch,
+`daysOfStockRemaining`/TASK-491/494)
+Description: `AduRepository.GetEligibleProductIdsAsync` (backend/ShelfGuard.Infrastructure/Data/
+Repositories/AduRepository.cs:13) requires a product to be `ManagementType == "MTS"`, have a
+`DefaultSupplierId`, and that supplier must have an `IsActive` `SupplySchedule` row into the
+specific store — live-confirmed `POST /api/adu/recalculate` returns `productsProcessed: 0` for
+**both** seed stores on the "Свіжий Кут" demo tenant, so no `product_adu` row can ever be produced
+for this tenant via the normal recalculate path today. This blocked live verification of TASK-494's
+days-of-stock-remaining "populated with a real number" case — worked around by inserting one
+`product_adu` row directly via SQL for the test, then deleting it (see TASK-495's log); any future
+QA/demo of ADU-dependent UI (days-of-stock-remaining, the v2 auto-order buffer engine itself) will
+hit the same wall on this seed data.
+Not caused by TASK-479..494 — ADU/`SupplySchedules`/`MTS` eligibility is pre-existing v2-spec
+functionality, untouched by this or the prior analytics initiative.
+Resolution: seed at least one active `SupplySchedule` for one of the demo tenant's suppliers into
+each seed store, and ensure at least a few catalog items have `ManagementType = "MTS"` +
+`DefaultSupplierId` set to that supplier — then `POST /api/adu/recalculate` will have a real
+eligible-product pool to compute against (still separately gated on having enough `DailySale`/sales-
+window history to produce a non-null `AduEffective`, per `AduCalculator`'s own day-count thresholds).
+
 ### KI-031: Seeded `netmgr@demo.local` has zero `user_locations` grants — blocks live QA/demo as this account
 Severity: low (test/demo friction only — fails closed, not a security issue; a real tenant admin
 granting a real network_manager proper `user_locations` rows would not hit this)

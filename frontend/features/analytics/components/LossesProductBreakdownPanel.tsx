@@ -26,6 +26,11 @@ interface Props {
   from: string;
   to: string;
   onClose: () => void;
+  /** TASK-488: row-click drill-down — opens ProductTrendPanel (the same panel PosTopProductsTable
+   * already opens on /analytics/pos) for the clicked product. Omitted means the product name
+   * renders as plain text, no click handler — same opt-in convention as PosTopProductsTable's own
+   * onRowClick? (TASK-484). */
+  onProductClick?: (productId: string, productName: string) => void;
 }
 
 const PAGE_SIZE = 10;
@@ -43,6 +48,30 @@ const numCell: React.CSSProperties = {
   fontFamily: "monospace",
 };
 
+/** TASK-488: product-name click target when onProductClick is provided — same treatment as
+ * CategoryDetailPanel.tsx's own productNameButton (not the whole grid row, not styled like
+ * SortableHeader's sort buttons above; a background chip on hover reusing the #111827 hover
+ * accent PosTopProductsTable's row hover already uses elsewhere in this feature). */
+const productNameButton: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  background: "transparent",
+  border: "none",
+  borderRadius: 6,
+  padding: "2px 6px",
+  margin: "-2px -6px",
+  color: "#E8EDF5",
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: "inherit",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  transition: "background 0.1s",
+};
+
 /**
  * Shared drill-down for BOTH the losses-by-store and losses-by-reason sections on /analytics
  * (interactive-analytics-and-margin plan, TASK-483) — one component, parameterized by whichever
@@ -50,7 +79,7 @@ const numCell: React.CSSProperties = {
  * (ADR-027 §1 — losses aren't margin-gated, LossAmount is already shown unrestricted in
  * aggregate elsewhere on this page for every store_manager+).
  */
-export function LossesProductBreakdownPanel({ title, totalLoss, storeId, reason, from, to, onClose }: Props) {
+export function LossesProductBreakdownPanel({ title, totalLoss, storeId, reason, from, to, onClose, onProductClick }: Props) {
   const t = useTranslations("Dashboard.analytics.lossesProductBreakdownPanel");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
@@ -160,9 +189,22 @@ export function LossesProductBreakdownPanel({ title, totalLoss, storeId, reason,
                   gap: 8,
                 }}
               >
-                <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {p.productName}
-                </div>
+                {onProductClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onProductClick(p.productId, p.productName)}
+                    title={p.productName}
+                    style={productNameButton}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+                  >
+                    {p.productName}
+                  </button>
+                ) : (
+                  <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.productName}
+                  </div>
+                )}
                 <div style={numCell}>{p.quantity.toLocaleString(intlLocale)}</div>
                 <div style={{ ...numCell, color: "#F87171" }}>{p.lossAmount.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴</div>
                 <div style={numCell}>{p.sharePercent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%</div>

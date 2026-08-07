@@ -177,7 +177,8 @@ public sealed class PosAnalyticsServiceTests
             Products: new List<CategoryProductRowDto>
             {
                 new(productId, "Milk", Safe: 5, Warning: 1, Critical: 0, Expired: 0, TotalQuantity: 60m,
-                    SalesRevenue: 500m, UnitsSold: 50m, MarginAmount: null, MarginPercent: null),
+                    SalesRevenue: 500m, UnitsSold: 50m, MarginAmount: null, MarginPercent: null,
+                    DaysOfStockRemaining: null),
             });
 
         _repo.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default)
@@ -225,7 +226,7 @@ public sealed class PosAnalyticsServiceTests
             CategoryName: "Dairy",
             Products: new List<CategoryProductRowDto>
             {
-                new(productId, "Milk", 5, 1, 0, 0, 60m, 500m, 50m, MarginAmount: null, MarginPercent: null),
+                new(productId, "Milk", 5, 1, 0, 0, 60m, 500m, 50m, MarginAmount: null, MarginPercent: null, DaysOfStockRemaining: null),
             });
 
         var withMargin = new CategoryProductBreakdownDto(
@@ -233,7 +234,7 @@ public sealed class PosAnalyticsServiceTests
             CategoryName: "Dairy",
             Products: new List<CategoryProductRowDto>
             {
-                new(productId, "Milk", 5, 1, 0, 0, 60m, 500m, 50m, MarginAmount: 150m, MarginPercent: 30m),
+                new(productId, "Milk", 5, 1, 0, 0, 60m, 500m, 50m, MarginAmount: 150m, MarginPercent: 30m, DaysOfStockRemaining: null),
             });
 
         _repo.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default)
@@ -258,6 +259,100 @@ public sealed class PosAnalyticsServiceTests
 
         await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default);
         await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, true, default);
+    }
+
+    // ── TASK-491: GetCategoryProductBreakdownAsync — DaysOfStockRemaining ──────
+    //
+    // The division itself (TotalQuantity / ProductAdu.AduEffective) and its store-scope /
+    // zero-ADU guards live in AnalyticsRepository.GetCategoryProductBreakdownAsync -- not
+    // independently unit-tested anywhere in this codebase, same precedent as
+    // GetWorstProductsAsync's stock/sales merge and every other GetXxxAsync repository method in
+    // this file (see that section's own comment above). These three pin the DTO shape/pass-through
+    // at the service layer: whatever value the repository computes for each of the three
+    // null-semantics cases round-trips through AnalyticsService unchanged.
+
+    [Fact]
+    public async Task GetCategoryProductBreakdownAsync_days_of_stock_remaining_populated_when_store_scoped()
+    {
+        var storeId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        var expected = new CategoryProductBreakdownDto(
+            CategoryId: categoryId,
+            CategoryName: "Dairy",
+            Products: new List<CategoryProductRowDto>
+            {
+                new(productId, "Milk", Safe: 5, Warning: 1, Critical: 0, Expired: 0, TotalQuantity: 60m,
+                    SalesRevenue: 500m, UnitsSold: 50m, MarginAmount: null, MarginPercent: null,
+                    DaysOfStockRemaining: 12.5m),
+            });
+
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, false, default)
+             .Returns(expected);
+
+        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, includeMargin: false);
+
+        var row = Assert.Single(result.Products);
+        Assert.Equal(12.5m, row.DaysOfStockRemaining);
+        await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, false, default);
+    }
+
+    // No store_id on the request -- ProductAdu is per-(product, store), so a network-wide/
+    // multi-store rollup has no single meaningful ADU to divide by. Repository is expected to
+    // return null (never 0) for every row in this shape; this test confirms the service doesn't
+    // coerce or reinterpret that null.
+    [Fact]
+    public async Task GetCategoryProductBreakdownAsync_days_of_stock_remaining_null_without_store_scope()
+    {
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        var expected = new CategoryProductBreakdownDto(
+            CategoryId: categoryId,
+            CategoryName: "Dairy",
+            Products: new List<CategoryProductRowDto>
+            {
+                new(productId, "Milk", 5, 1, 0, 0, 60m, 500m, 50m, MarginAmount: null, MarginPercent: null,
+                    DaysOfStockRemaining: null),
+            });
+
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default)
+             .Returns(expected);
+
+        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, includeMargin: false);
+
+        var row = Assert.Single(result.Products);
+        Assert.Null(row.DaysOfStockRemaining);
+    }
+
+    // store_id IS present but the product has no ProductAdu row (or AduEffective is 0/null --
+    // "no usage history yet", a real valid state). Repository's division-by-zero guard is what
+    // produces this null; this test proves resolving it doesn't throw and the null survives the
+    // service pass-through untouched, same as the no-store-scope case above.
+    [Fact]
+    public async Task GetCategoryProductBreakdownAsync_days_of_stock_remaining_null_when_adu_zero_or_missing()
+    {
+        var storeId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        var expected = new CategoryProductBreakdownDto(
+            CategoryId: categoryId,
+            CategoryName: "Dairy",
+            Products: new List<CategoryProductRowDto>
+            {
+                new(productId, "New Item", 0, 0, 0, 0, 10m, 0m, 0m, MarginAmount: null, MarginPercent: null,
+                    DaysOfStockRemaining: null),
+            });
+
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, false, default)
+             .Returns(expected);
+
+        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, includeMargin: false);
+
+        var row = Assert.Single(result.Products);
+        Assert.Null(row.DaysOfStockRemaining);
     }
 
     // ── TASK-481: GetLossesByProductAsync ─────────────────────────────────────
@@ -328,6 +423,78 @@ public sealed class PosAnalyticsServiceTests
         Assert.Equal(300m, row.LossAmount);
         Assert.Equal(100m, row.SharePercent);
         await _repo.Received(1).GetLossesByProductAsync(_tenantId, null, null, From30, Today, default);
+    }
+
+    // ── TASK-489: GetLossesTrendAsync ────────────────────────────────────────
+
+    [Fact]
+    public async Task GetLossesTrendAsync_day_groupBy_delegates_to_repository()
+    {
+        var expected = new LossesTrendDto(
+            Points: new List<LossesTrendPointDto>
+            {
+                new(Today, TotalLoss: 150m, Count: 3),
+            },
+            GroupBy: "day");
+
+        _repo.GetLossesTrendAsync(_tenantId, null, From30, Today, "day", default)
+             .Returns(expected);
+
+        var result = await _sut.GetLossesTrendAsync(_tenantId, null, From30, Today, "day");
+
+        Assert.Equal("day", result.GroupBy);
+        var point = Assert.Single(result.Points);
+        Assert.Equal(150m, point.TotalLoss);
+        Assert.Equal(3, point.Count);
+        await _repo.Received(1).GetLossesTrendAsync(_tenantId, null, From30, Today, "day", default);
+    }
+
+    [Fact]
+    public async Task GetLossesTrendAsync_week_groupBy_passes_week_to_repository()
+    {
+        var expected = new LossesTrendDto(Points: [], GroupBy: "week");
+
+        _repo.GetLossesTrendAsync(_tenantId, null, From30, Today, "week", default)
+             .Returns(expected);
+
+        var result = await _sut.GetLossesTrendAsync(_tenantId, null, From30, Today, "week");
+
+        Assert.Equal("week", result.GroupBy);
+        await _repo.Received(1).GetLossesTrendAsync(_tenantId, null, From30, Today, "week", default);
+    }
+
+    [Fact]
+    public async Task GetLossesTrendAsync_store_filter_is_forwarded_unchanged()
+    {
+        var storeId = Guid.NewGuid();
+        var expected = new LossesTrendDto(
+            Points: new List<LossesTrendPointDto> { new(Today, TotalLoss: 40m, Count: 1) },
+            GroupBy: "day");
+
+        _repo.GetLossesTrendAsync(_tenantId, storeId, From30, Today, "day", default)
+             .Returns(expected);
+
+        var result = await _sut.GetLossesTrendAsync(_tenantId, storeId, From30, Today, "day");
+
+        var point = Assert.Single(result.Points);
+        Assert.Equal(40m, point.TotalLoss);
+        await _repo.Received(1).GetLossesTrendAsync(_tenantId, storeId, From30, Today, "day", default);
+    }
+
+    // Empty-range / no-write-offs case: repository returns an empty points list rather than
+    // null or throwing -- same "no data" shape as GetPosTopProductsAsync_empty_period above.
+    [Fact]
+    public async Task GetLossesTrendAsync_empty_range_returns_empty_points()
+    {
+        var expected = new LossesTrendDto(Points: [], GroupBy: "day");
+
+        _repo.GetLossesTrendAsync(Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(expected);
+
+        var result = await _sut.GetLossesTrendAsync(Guid.NewGuid(), null, Today, Today, "day");
+
+        Assert.Empty(result.Points);
+        Assert.Equal("day", result.GroupBy);
     }
 
     // ── TASK-482: GetProductSalesTrendAsync ──────────────────────────────────
@@ -441,6 +608,102 @@ public sealed class PosAnalyticsServiceTests
 
         Assert.Null(result);
         await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, unknownProductId, From30, Today, "day", false, default);
+    }
+
+    // ── TASK-490: GetWorstProductsAsync ──────────────────────────────────────
+
+    // The whole point of this endpoint (see AnalyticsRepository.GetWorstProductsAsync's own
+    // comments): a product with zero sales in the period must still appear, with SalesRevenue
+    // coerced to 0 rather than the row silently vanishing the way it would from a plain GroupBy
+    // over PosTransactionItems. The stock/sales merge itself lives in the repository (not
+    // independently unit-tested anywhere in this codebase -- same precedent as every other
+    // GetXxxAsync repository method in this file); this pins the DTO shape/pass-through at the
+    // service layer.
+    [Fact]
+    public async Task GetWorstProductsAsync_zero_sales_product_has_zero_revenue()
+    {
+        var productId = Guid.NewGuid();
+        var expected = new WorstProductsDto(Products: new List<WorstProductRowDto>
+        {
+            new(productId, "Dead Stock Item", SalesRevenue: 0m, UnitsSold: 0m, TransactionCount: 0, CurrentStock: 42m),
+        });
+
+        _repo.GetWorstProductsAsync(_tenantId, null, From30, Today, 10, default)
+             .Returns(expected);
+
+        var result = await _sut.GetWorstProductsAsync(_tenantId, null, From30, Today, 10);
+
+        var row = Assert.Single(result.Products);
+        Assert.Equal(0m, row.SalesRevenue);
+        Assert.Equal(0, row.TransactionCount);
+        Assert.Equal(42m, row.CurrentStock);
+        await _repo.Received(1).GetWorstProductsAsync(_tenantId, null, From30, Today, 10, default);
+    }
+
+    [Fact]
+    public async Task GetWorstProductsAsync_returns_items_ordered_ascending_by_revenue()
+    {
+        var productA = Guid.NewGuid();
+        var productB = Guid.NewGuid();
+
+        var expected = new WorstProductsDto(Products: new List<WorstProductRowDto>
+        {
+            new(productA, "Stale Bread", SalesRevenue: 0m,  UnitsSold: 0m, TransactionCount: 0, CurrentStock: 20m),
+            new(productB, "Slow Milk",   SalesRevenue: 15m, UnitsSold: 2m, TransactionCount: 1, CurrentStock: 8m),
+        });
+
+        _repo.GetWorstProductsAsync(_tenantId, null, From30, Today, 10, default)
+             .Returns(expected);
+
+        var result = await _sut.GetWorstProductsAsync(_tenantId, null, From30, Today, 10);
+
+        Assert.Equal(2, result.Products.Count);
+        Assert.True(result.Products[0].SalesRevenue <= result.Products[1].SalesRevenue,
+            "Items should be ordered by revenue ascending (worst/zero first)");
+        Assert.Equal(productA, result.Products[0].ProductId);
+    }
+
+    // The actual 1-100 clamp (mirrors pos/top-products' `if (limit is < 1 or > 100) limit = 10;`)
+    // lives in AnalyticsController, not this service -- GetWorstProductsAsync forwards whatever
+    // `limit` the controller already resolved, unchanged, same as every other limit-taking method
+    // in this file (GetPosTopProductsAsync included). This codebase has no *ControllerTests.cs
+    // anywhere (see GetProductSalesTrendAsync_returns_null_when_repository_finds_no_matching_product
+    // above for the same precedent re: that action's 404 ternary), so the clamp math itself isn't
+    // independently unit-tested; this pins the one thing actually testable at this layer -- that
+    // whatever value arrives is passed through untouched, not silently re-clamped or defaulted a
+    // second time.
+    [Fact]
+    public async Task GetWorstProductsAsync_limit_is_forwarded_unchanged_to_repository()
+    {
+        var expected = new WorstProductsDto(Products: []);
+
+        _repo.GetWorstProductsAsync(_tenantId, null, From30, Today, 5, default)
+             .Returns(expected);
+
+        var result = await _sut.GetWorstProductsAsync(_tenantId, null, From30, Today, 5);
+
+        Assert.Empty(result.Products);
+        await _repo.Received(1).GetWorstProductsAsync(_tenantId, null, From30, Today, 5, default);
+    }
+
+    [Fact]
+    public async Task GetWorstProductsAsync_store_filter_is_forwarded_and_current_stock_round_trips()
+    {
+        var storeId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var expected = new WorstProductsDto(Products: new List<WorstProductRowDto>
+        {
+            new(productId, "Local Dead Stock", SalesRevenue: 0m, UnitsSold: 0m, TransactionCount: 0, CurrentStock: 5m),
+        });
+
+        _repo.GetWorstProductsAsync(_tenantId, storeId, From30, Today, 10, default)
+             .Returns(expected);
+
+        var result = await _sut.GetWorstProductsAsync(_tenantId, storeId, From30, Today, 10);
+
+        var row = Assert.Single(result.Products);
+        Assert.Equal(5m, row.CurrentStock);
+        await _repo.Received(1).GetWorstProductsAsync(_tenantId, storeId, From30, Today, 10, default);
     }
 
     private static ClaimsPrincipal MakeUser(string role)

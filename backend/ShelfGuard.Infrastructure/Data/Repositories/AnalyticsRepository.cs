@@ -405,6 +405,25 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
                 .ToDictionaryAsync(x => x.Id, x => x.PricePurchase, ct)
             : new Dictionary<Guid, decimal?>();
 
+        // ── ADU (TASK-491): bulk-fetched in one extra query, only when the request is
+        // store-scoped -- ProductAdu is per-(product, store), so a network-wide/multi-store
+        // rollup has no single meaningful ADU to divide by (DaysOfStockRemaining stays null for
+        // every row below in that case). Keyed by ProductId via ToDictionaryAsync -- same
+        // bulk-fetch-then-Dictionary-lookup shape as purchasePrices just above, deliberately not
+        // one query per product (N+1).
+        var aduByProduct = new Dictionary<Guid, decimal?>();
+        if (storeId.HasValue && productIds.Count > 0)
+        {
+            var aduQuery = _db.ProductAdus
+                .Where(a => a.StoreId == storeId.Value && productIds.Contains(a.ProductId));
+            if (tenantId.HasValue)
+                aduQuery = aduQuery.Where(a => a.TenantId == tenantId.Value);
+
+            aduByProduct = await aduQuery
+                .Select(a => new { a.ProductId, a.AduEffective })
+                .ToDictionaryAsync(x => x.ProductId, x => x.AduEffective, ct);
+        }
+
         var products = productIds
             .Select(productId =>
             {
@@ -425,6 +444,17 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
                     marginPercent = salesRevenue == 0m ? null : Math.Round(marginAmount.Value / salesRevenue * 100m, 2);
                 }
 
+                // DaysOfStockRemaining (TASK-491): null unless store-scoped (aduByProduct is empty
+                // otherwise) AND a ProductAdu row exists with a nonzero AduEffective -- the same
+                // division-by-zero guard doubles as the "no usage history yet" representation,
+                // since that's a real, valid state rather than an error.
+                decimal? daysOfStockRemaining = null;
+                if (aduByProduct.TryGetValue(productId, out var aduEffective) && aduEffective.HasValue && aduEffective.Value != 0m)
+                {
+                    var totalQuantity = hasStock ? stock!.TotalQuantity : 0m;
+                    daysOfStockRemaining = Math.Round(totalQuantity / aduEffective.Value, 1);
+                }
+
                 return new CategoryProductRowDto(
                     ProductId:     productId,
                     ProductName:   hasStock ? stock!.ProductName : sales!.ProductName,
@@ -436,7 +466,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
                     SalesRevenue:  salesRevenue,
                     UnitsSold:     unitsSold,
                     MarginAmount:  marginAmount,
-                    MarginPercent: marginPercent);
+                    MarginPercent: marginPercent,
+                    DaysOfStockRemaining: daysOfStockRemaining);
             })
             .OrderByDescending(p => p.SalesRevenue)
             .ToList();
@@ -501,6 +532,74 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             .ToList();
 
         return new LossesByProductDto(TotalLoss: totalLoss, Products: products);
+    }
+
+    // ── TASK-489: losses/write-offs trend over time (mirrors GetPosRevenueTrendAsync's shape,
+    // "approved" + date-range filter mirrors GetLossesAsync/GetLossesByProductAsync above) ────
+
+    public async Task<LossesTrendDto> GetLossesTrendAsync(
+        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
+    {
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
+
+        var query = _db.WriteOffs
+            .Where(w => w.Status == "approved"
+                     && w.CreatedAt >= fromDt
+                     && w.CreatedAt <= toDt);
+
+        if (tenantId.HasValue)
+            query = query.Where(w => w.TenantId == tenantId.Value);
+        if (storeId.HasValue)
+            query = query.Where(w => w.StoreId == storeId.Value);
+
+        var resolvedGroupBy = groupBy == "week" ? "week" : "day";
+
+        // SQL-side GroupBy — deliberately unlike GetLossesAsync/GetWriteOffAnalyticsAsync above
+        // (both materialize all matching WriteOffs into memory before grouping — an accepted
+        // pattern for those lower-cardinality aggregates, not to be copied here). Mirrors
+        // GetProductSalesTrendAsync's (TASK-482) two-step shape instead: aggregate into an
+        // anonymous type in SQL, terminate with ToListAsync, then map the already-collapsed
+        // (<=366-row) points into the DTO record in a cheap second pass.
+        //
+        // EF.Functions has no DateTrunc/week helper in this repo's installed Npgsql EF Core
+        // provider (see GetProductSalesTrendAsync's comment for the full root-cause). "day"
+        // relies on the provider's built-in DateTime.Date translation (-> date_trunc('day',
+        // "CreatedAt", 'UTC')). "week" inlines the same Monday-anchored ISO offset arithmetic
+        // IsoWeekStart() below uses (dow == 0 ? -6 : 1 - dow) as translatable DateTime member
+        // arithmetic instead of calling that method directly (EF cannot translate a call to an
+        // arbitrary private C# method) — same pattern already verified translatable and correct
+        // against real data in GetProductSalesTrendAsync.
+        var grouped = resolvedGroupBy == "week"
+            ? await query
+                .GroupBy(w => w.CreatedAt.Date.AddDays((int)w.CreatedAt.DayOfWeek == 0 ? -6 : 1 - (int)w.CreatedAt.DayOfWeek))
+                .Select(g => new
+                {
+                    Date = g.Key,
+                    TotalLoss = g.Sum(w => w.TotalLossAmount ?? 0m),
+                    Count = g.Count()
+                })
+                .OrderBy(p => p.Date)
+                .ToListAsync(ct)
+            : await query
+                .GroupBy(w => w.CreatedAt.Date)
+                .Select(g => new
+                {
+                    Date = g.Key,
+                    TotalLoss = g.Sum(w => w.TotalLossAmount ?? 0m),
+                    Count = g.Count()
+                })
+                .OrderBy(p => p.Date)
+                .ToListAsync(ct);
+
+        var points = grouped
+            .Select(p => new LossesTrendPointDto(
+                Date: DateOnly.FromDateTime(p.Date),
+                TotalLoss: p.TotalLoss,
+                Count: p.Count))
+            .ToList();
+
+        return new LossesTrendDto(Points: points, GroupBy: resolvedGroupBy);
     }
 
     // ── POS analytics ─────────────────────────────────────────────────────
@@ -618,6 +717,116 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             .ToList();
 
         return new PosTopProductsDto(Items: topItems);
+    }
+
+    // ── TASK-490: worst-performing products / dead stock ─────────────────────
+    //
+    // Deliberately NOT "GetPosTopProductsAsync sorted ascending" -- that query groups
+    // PosTransactionItems, so a product with zero matching rows in the period never appears in a
+    // GroupBy over that table at all. "Dead stock" specifically needs those zero-sale products
+    // surfaced (they're the more actionable/valuable signal), so this starts from the opposite
+    // side: active items that currently have on-hand stock (the catalog/stock rollup shape
+    // GetByCategoryAsync above already established, including its Status != sold_out/archived
+    // exclusion -- a batch in either of those statuses isn't meaningfully "on the shelf" even if
+    // its Quantity column hasn't been zeroed out), then LEFT-JOINs a sales rollup for the period
+    // (same aggregate shape as GetPosTopProductsAsync above), COALESCEing missing sales to 0.
+    //
+    // Two-query shape rather than one LINQ query with a LEFT JOIN + GroupBy: this repo's EF
+    // Core/Npgsql combination has already needed several workarounds in this file for translating
+    // GroupBy combined with anything beyond plain scalar aggregates (see GetProductSalesTrendAsync
+    // and GetLossesTrendAsync's comments), and a LEFT JOIN into a second GroupBy stacks that risk
+    // further. Splitting into (1) a SQL-side stock aggregate, scalar-only just like those two
+    // methods, and (2) a sales aggregate pre-filtered down to just that stock aggregate's product
+    // ids, merged with a Dictionary lookup in C#, avoids the translation risk entirely. This does
+    // NOT reintroduce the in-memory-aggregation anti-pattern GetPosTopProductsAsync/
+    // GetLossesByProductAsync accept elsewhere in this file (materializing an entire table's worth
+    // of rows before grouping) -- both aggregates here run server-side; only two small,
+    // already-collapsed result sets (bounded by catalog size, not by transaction volume) get
+    // merged client-side.
+    public async Task<WorstProductsDto> GetWorstProductsAsync(
+        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)
+    {
+        // ── Base set: on-hand stock (Quantity > 0, excluding sold_out/archived batches) summed
+        // per product, restricted to active items via a Contains-subquery against Items.IsActive
+        // (same "Subquery-Contains join" shape GetLossesByProductAsync/GetPosTopProductsAsync
+        // already use in this file) -- IsActive lives on Item, not ProductStock, so it can't be
+        // filtered directly on the stock query itself.
+        var activeItemIds = _db.Items.Where(i => i.IsActive);
+        if (tenantId.HasValue)
+            activeItemIds = activeItemIds.Where(i => i.TenantId == tenantId.Value);
+
+        var stockQuery = _db.ProductStocks
+            .Where(s => s.Quantity > 0 && s.Status != "sold_out" && s.Status != "archived");
+
+        if (tenantId.HasValue)
+            stockQuery = stockQuery.Where(s => s.TenantId == tenantId.Value);
+        if (storeId.HasValue)
+            stockQuery = stockQuery.Where(s => s.StoreId == storeId.Value);
+
+        stockQuery = stockQuery.Where(s => activeItemIds.Select(i => i.Id).Contains(s.ProductId));
+
+        // Scalar-only GroupBy+Sum (no navigation properties in the grouped select) -- the
+        // translatable shape already proven in this file by GetLossesTrendAsync/
+        // GetProductSalesTrendAsync's own SQL-side aggregates.
+        var stockRows = await stockQuery
+            .GroupBy(s => s.ProductId)
+            .Select(g => new { ProductId = g.Key, CurrentStock = g.Sum(s => s.Quantity) })
+            .ToListAsync(ct);
+
+        if (stockRows.Count == 0)
+            return new WorstProductsDto(Products: []);
+
+        var productIds = stockRows.Select(r => r.ProductId).ToList();
+
+        var itemNames = await _db.Items
+            .Where(i => productIds.Contains(i.Id))
+            .Select(i => new { i.Id, i.Name })
+            .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
+
+        // ── Sales side: same rollup shape as GetPosTopProductsAsync above, pre-filtered to just
+        // this candidate pool's product ids -- unlike that method (which pulls every product sold
+        // in the period into memory before grouping), the ProductId pre-filter here keeps the
+        // materialized row count bounded by the stock candidate pool, not by sales volume, so the
+        // in-memory GroupBy (needed for TransactionCount's distinct-transaction dedup, same as
+        // GetPosTopProductsAsync) stays cheap.
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
+        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
+
+        var salesRows = await _db.PosTransactionItems
+            .Where(i => productIds.Contains(i.ProductId) && txQuery.Select(t => t.Id).Contains(i.TransactionId))
+            .Select(i => new { i.ProductId, i.PriceFinal, i.Quantity, i.TransactionId })
+            .ToListAsync(ct);
+
+        var salesByProduct = salesRows
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => new
+            {
+                SalesRevenue     = g.Sum(i => i.PriceFinal * i.Quantity),
+                UnitsSold        = g.Sum(i => i.Quantity),
+                TransactionCount = g.Select(i => i.TransactionId).Distinct().Count()
+            });
+
+        // ── Merge: COALESCE missing sales to 0 (a product in the stock candidate pool with no
+        // matching sales rows is exactly the "dead stock" case this endpoint exists to surface),
+        // order ascending by revenue (true zero-revenue products first), then cap at `limit`.
+        var products = stockRows
+            .Select(r =>
+            {
+                var hasSales = salesByProduct.TryGetValue(r.ProductId, out var sales);
+                return new WorstProductRowDto(
+                    ProductId:        r.ProductId,
+                    ProductName:      itemNames.GetValueOrDefault(r.ProductId, "Unknown"),
+                    SalesRevenue:     hasSales ? sales!.SalesRevenue : 0m,
+                    UnitsSold:        hasSales ? sales!.UnitsSold : 0m,
+                    TransactionCount: hasSales ? sales!.TransactionCount : 0,
+                    CurrentStock:     r.CurrentStock);
+            })
+            .OrderBy(p => p.SalesRevenue)
+            .Take(limit)
+            .ToList();
+
+        return new WorstProductsDto(Products: products);
     }
 
     public async Task<PosCashierStatsDto> GetPosCashierStatsAsync(

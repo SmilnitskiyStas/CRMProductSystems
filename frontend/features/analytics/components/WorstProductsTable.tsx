@@ -1,16 +1,16 @@
 "use client";
 
 import { useTranslations, useLocale } from "next-intl";
-import type { PosTopProductsDto } from "../types";
+import type { WorstProductsDto } from "../types";
 
 interface Props {
-  data: PosTopProductsDto;
-  /** TASK-484: row-click drill-down — opens ProductTrendPanel inline on /analytics/pos (renamed
-   * from PosProductTrendPanel in TASK-488 when /analytics gained its own drill-down path to the
-   * same panel). Omitted (as at the /analytics/pos day-detail composition, PosDayDetailPanel.tsx)
-   * means rows render exactly as before — no cursor change, no click handler attached. */
+  data: WorstProductsDto;
+  /** TASK-493: row-click drill-down — reuses the exact same onRowClick/selectedProductId shape
+   * as PosTopProductsTable (TASK-484) so both tables can drive one shared ProductTrendPanel
+   * selection state on /analytics/pos, no new state needed. Omitted means rows render exactly as
+   * before — no cursor change, no click handler attached. */
   onRowClick?: (productId: string, productName: string) => void;
-  /** Currently drilled-into product, if any — reuses this table's own existing hover color
+  /** Currently drilled-into product, if any — reuses PosTopProductsTable's own hover color
    * (#111827) for a persistent "active row" highlight instead of introducing a new color. */
   selectedProductId?: string | null;
 }
@@ -28,6 +28,10 @@ const tdText: React.CSSProperties = { ...baseTd, color: "#E8EDF5", fontWeight: 5
 const tdMuted: React.CSSProperties = { ...baseTd, color: "#6B7280", fontFamily: "monospace" };
 const tdNum: React.CSSProperties = { ...baseTd, color: "#9CA3AF", fontFamily: "monospace", textAlign: "right" };
 const tdRevenue: React.CSSProperties = { ...tdNum, color: "#4ADE80" };
+// Distinct from tdRevenue's green — this is the "evidence" column (units sitting unsold), styled
+// with the same amber the rest of this feature already uses for "warning"-class status counts
+// (see CategoryDetailPanel.tsx's p.warning cell) rather than a brand-new color.
+const tdStock: React.CSSProperties = { ...tdNum, color: "#FBBF24", fontWeight: 600 };
 
 function thStyle(): React.CSSProperties {
   return {
@@ -44,12 +48,19 @@ function thStyle(): React.CSSProperties {
   };
 }
 
-export function PosTopProductsTable({ data, onRowClick, selectedProductId }: Props) {
-  const t = useTranslations("Dashboard.analytics.pos.topProducts");
+/**
+ * Dead-stock counterpart to PosTopProductsTable (TASK-490's `pos/worst-products` endpoint):
+ * active, on-hand-stock items sorted ascending by sales revenue, so true zero-sale products
+ * surface first. currentStock is the extra column that makes a zero-revenue row actionable —
+ * "N units sitting unsold" — which PosTopProductsTable has no equivalent of. No barcode column
+ * (WorstProductRowDto carries no barcode field, unlike PosTopProductItem).
+ */
+export function WorstProductsTable({ data, onRowClick, selectedProductId }: Props) {
+  const t = useTranslations("Dashboard.analytics.pos.worstProducts");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
 
-  if (!data || data.items.length === 0) {
+  if (!data || data.products.length === 0) {
     return (
       <div
         style={{
@@ -78,14 +89,14 @@ export function PosTopProductsTable({ data, onRowClick, selectedProductId }: Pro
             <tr>
               <th style={{ ...thStyle(), width: 32, textAlign: "center" }}>#</th>
               <th style={thStyle()}>{t("headers.name")}</th>
-              <th style={thStyle()}>{t("headers.barcode")}</th>
               <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.revenue")}</th>
               <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.quantity")}</th>
               <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.receipts")}</th>
+              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.currentStock")}</th>
             </tr>
           </thead>
           <tbody>
-            {data.items.map((item, idx) => {
+            {data.products.map((item, idx) => {
               const isSelected = !!onRowClick && selectedProductId === item.productId;
               return (
                 <tr
@@ -101,10 +112,10 @@ export function PosTopProductsTable({ data, onRowClick, selectedProductId }: Pro
                 >
                   <td style={{ ...tdMuted, textAlign: "center", color: "#374151" }}>{idx + 1}</td>
                   <td style={tdText}>{item.productName}</td>
-                  <td style={tdMuted}>{item.barcode}</td>
-                  <td style={tdRevenue}>{item.totalRevenue.toLocaleString(intlLocale)} ₴</td>
-                  <td style={tdNum}>{item.totalQuantity.toLocaleString(intlLocale)}</td>
+                  <td style={tdRevenue}>{item.salesRevenue.toLocaleString(intlLocale)} ₴</td>
+                  <td style={tdNum}>{item.unitsSold.toLocaleString(intlLocale)}</td>
                   <td style={tdNum}>{item.transactionCount.toLocaleString(intlLocale)}</td>
+                  <td style={tdStock}>{item.currentStock.toLocaleString(intlLocale)}</td>
                 </tr>
               );
             })}

@@ -15,6 +15,9 @@ public interface IAnalyticsService
     Task<CategoryProductBreakdownDto> GetCategoryProductBreakdownAsync(Guid? tenantId, Guid? storeId, Guid? categoryId, DateOnly from, DateOnly to, bool includeMargin, CancellationToken ct = default);
     Task<LossesByProductDto> GetLossesByProductAsync(Guid? tenantId, Guid? storeId, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default);
 
+    // ── TASK-489: losses/write-offs trend over time ──────────────────────────
+    Task<LossesTrendDto> GetLossesTrendAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default);
+
     // POS analytics
     Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default);
     Task<PosRevenueTrendDto> GetPosRevenueTrendAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default);
@@ -25,6 +28,9 @@ public interface IAnalyticsService
     // Null return means productId did not resolve to a real Item in the caller's tenant scope
     // (controller 404s), mirroring IItemService.GetByIdAsync's nullable-DTO convention.
     Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, CancellationToken ct = default);
+
+    // ── TASK-490: worst-performing products / dead stock ─────────────────────
+    Task<WorstProductsDto> GetWorstProductsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default);
 
     // ── TASK-336: period comparison ─────────────────────────────────────────
 

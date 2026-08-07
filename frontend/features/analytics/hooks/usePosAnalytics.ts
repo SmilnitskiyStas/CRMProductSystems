@@ -31,6 +31,19 @@ export function usePosTopProducts(
   });
 }
 
+// TASK-490/493: dead-stock counterpart to usePosTopProducts above. Full filter object in the
+// query key, same discipline as every hook in this file — no keepPreviousData.
+export function useWorstProducts(
+  params: PosDateRangeParams & { limit?: string },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["pos-analytics-worst-products", params],
+    queryFn: () => posAnalyticsApi.getWorstProducts(params),
+    enabled,
+  });
+}
+
 export function usePosCashiers(params: PosDateRangeParams, enabled = true) {
   return useQuery({
     queryKey: ["pos-analytics-cashiers", params],

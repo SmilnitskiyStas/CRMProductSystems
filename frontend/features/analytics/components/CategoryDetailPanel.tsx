@@ -19,7 +19,8 @@ type SortKey =
   | "salesRevenue"
   | "unitsSold"
   | "marginAmount"
-  | "marginPercent";
+  | "marginPercent"
+  | "daysOfStockRemaining";
 
 interface Props {
   /** null = the "uncategorized" bucket — same domain convention as CategoryStatusChart's
@@ -31,6 +32,11 @@ interface Props {
   from: string;
   to: string;
   onClose: () => void;
+  /** TASK-488: row-click drill-down — opens ProductTrendPanel (the same panel PosTopProductsTable
+   * already opens on /analytics/pos) for the clicked product. Omitted means the product name
+   * renders as plain text, no click handler — same opt-in convention as PosTopProductsTable's own
+   * onRowClick? (TASK-484). */
+  onProductClick?: (productId: string, productName: string) => void;
 }
 
 const PAGE_SIZE = 10;
@@ -49,9 +55,49 @@ const numCell: React.CSSProperties = {
   fontFamily: "monospace",
 };
 
+/** TASK-488: product-name click target when onProductClick is provided. Deliberately not the
+ * whole grid row (this row's other cells are just status/margin figures, not separate nav
+ * targets) and deliberately not styled like SortableHeader's uppercase/gray sort buttons above —
+ * a background chip on hover, reusing the same #111827 hover accent PosTopProductsTable's row
+ * hover (and its active-row highlight) already use elsewhere in this feature, so the affordance
+ * reads as "clickable" without being confused with column-sorting. */
+const productNameButton: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  background: "transparent",
+  border: "none",
+  borderRadius: 6,
+  padding: "2px 6px",
+  margin: "-2px -6px",
+  color: "#E8EDF5",
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: "inherit",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  transition: "background 0.1s",
+};
+
 function marginColor(v: number | null): string {
   if (v == null || v === 0) return "#6B7280";
   return v > 0 ? "#4ADE80" : "#F87171";
+}
+
+/** Urgency color for daysOfStockRemaining (TASK-494) — reuses this table's own status-cell
+ * palette (p.critical/p.warning/p.safe colors a few lines below: #F87171/#FBBF24/#4ADE80)
+ * rather than inventing a new one, so "12 days left" reads with the same urgency tone as the
+ * expiry-status columns already do. null (no store scope on this page, or no ADU signal yet —
+ * see the field's doc comment in types.ts) renders neutral gray, matching marginColor's own
+ * null/zero tone above. Thresholds (< 7 = critical, < 30 = warning) are a judgment call, not a
+ * value from the spec — no existing "low stock" threshold elsewhere in this codebase to match. */
+function daysOfStockColor(v: number | null): string {
+  if (v == null) return "#6B7280";
+  if (v < 7) return "#F87171";
+  if (v < 30) return "#FBBF24";
+  return "#4ADE80";
 }
 
 /**
@@ -62,7 +108,7 @@ function marginColor(v: number | null): string {
  * one category in a single response, unlike the server-paginated price-segments tables this
  * reuses SortableHeader/TablePaginationFooter from).
  */
-export function CategoryDetailPanel({ categoryId, from, to, onClose }: Props) {
+export function CategoryDetailPanel({ categoryId, from, to, onClose, onProductClick }: Props) {
   const t = useTranslations("Dashboard.analytics.categoryDetailPanel");
   const tStatus = useTranslations("Dashboard.analytics.status");
   const tCommon = useTranslations("Common");
@@ -99,11 +145,14 @@ export function CategoryDetailPanel({ categoryId, from, to, onClose }: Props) {
 
   // Margin columns must be entirely absent from the DOM when canViewMargin is false (ADR-027 /
   // security requirement), not just visually hidden — the grid template itself only reserves
-  // the two extra columns when they're actually going to render.
+  // the two extra columns when they're actually going to render. daysOfStockRemaining (TASK-494)
+  // is NOT margin-gated — it's operational data, visible to the same audience as every other
+  // column here — so its 100px is appended unconditionally in both branches below, always the
+  // last column.
   const GRID = canViewMargin
-    ? "minmax(160px,1.4fr) 56px 56px 56px 56px 90px 110px 90px 110px 90px"
-    : "minmax(160px,1.4fr) 56px 56px 56px 56px 90px 110px 90px";
-  const gridMinWidth = canViewMargin ? 980 : 760;
+    ? "minmax(160px,1.4fr) 56px 56px 56px 56px 90px 110px 90px 110px 90px 100px"
+    : "minmax(160px,1.4fr) 56px 56px 56px 56px 90px 110px 90px 100px";
+  const gridMinWidth = canViewMargin ? 1080 : 860;
 
   return (
     <div
@@ -182,6 +231,7 @@ export function CategoryDetailPanel({ categoryId, from, to, onClose }: Props) {
                   <SortableHeader label={t("headers.marginPercent")} sortKey="marginPercent" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
                 </>
               )}
+              <SortableHeader label={t("headers.daysOfStockRemaining")} sortKey="daysOfStockRemaining" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
             </div>
 
             {pageRows.map((p) => (
@@ -197,9 +247,22 @@ export function CategoryDetailPanel({ categoryId, from, to, onClose }: Props) {
                   gap: 8,
                 }}
               >
-                <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {p.productName}
-                </div>
+                {onProductClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onProductClick(p.productId, p.productName)}
+                    title={p.productName}
+                    style={productNameButton}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+                  >
+                    {p.productName}
+                  </button>
+                ) : (
+                  <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.productName}
+                  </div>
+                )}
                 <div style={{ ...numCell, color: "#4ADE80" }}>{p.safe}</div>
                 <div style={{ ...numCell, color: "#FBBF24" }}>{p.warning}</div>
                 <div style={{ ...numCell, color: "#F87171" }}>{p.critical}</div>
@@ -217,6 +280,11 @@ export function CategoryDetailPanel({ categoryId, from, to, onClose }: Props) {
                     </div>
                   </>
                 )}
+                <div style={{ ...numCell, color: daysOfStockColor(p.daysOfStockRemaining) }}>
+                  {p.daysOfStockRemaining == null
+                    ? "—"
+                    : t("daysOfStockValue", { days: p.daysOfStockRemaining.toLocaleString(intlLocale, { maximumFractionDigits: 1 }) })}
+                </div>
               </div>
             ))}
           </div>

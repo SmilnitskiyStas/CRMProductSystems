@@ -750,6 +750,8 @@
         },
         "tooltipZoneLabel": "Зона",
         "currentStock": "Поточний залишок",
+        "daysOfStockRemaining": "Днів запасу",
+        "daysOfStockValue": "{days} дн.",
         "chartTitle": "Динаміка залишків",
         "eventsSummary": "{count} подій за {days} дн.",
         "noMovements": "Немає рухів за вибраний період",
@@ -1459,6 +1461,17 @@
             "receipts": "Чеків"
           }
         },
+        "worstProducts": {
+          "title": "Товари, що не продаються",
+          "empty": "Немає даних",
+          "headers": {
+            "name": "Назва",
+            "revenue": "Виручка",
+            "quantity": "Кількість",
+            "receipts": "Чеків",
+            "currentStock": "Поточний залишок"
+          }
+        },
         "cashiers": {
           "title": "Касири",
           "empty": "Немає даних",
@@ -1525,6 +1538,13 @@
         "tooltipLabel": "Збиток",
         "tooltipWriteOffsSuffix": "списань"
       },
+      "lossesTrendChart": {
+        "title": "Динаміка збитків (₴)",
+        "empty": "Немає даних за обраний період",
+        "tooltipLabel": "Збиток",
+        "tooltipDocsSuffix": "док.",
+        "hint": "Натисніть на точку графіка, щоб побачити товари за цей день."
+      },
       "categoryDetailPanel": {
         "title": "Товари категорії: {category}",
         "closeButton": "Закрити",
@@ -1536,8 +1556,10 @@
           "salesRevenue": "Виручка",
           "unitsSold": "Продано",
           "marginAmount": "Маржа (оцінна)",
-          "marginPercent": "Маржа % (оцінна)"
+          "marginPercent": "Маржа % (оцінна)",
+          "daysOfStockRemaining": "Днів запасу"
         },
+        "daysOfStockValue": "{days} дн.",
         "totalCount": "{count} товарів"
       },
       "lossesProductBreakdownPanel": {

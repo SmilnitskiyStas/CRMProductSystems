@@ -5,7 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from "recharts";
-import { Loader2, TrendingUp, ArrowDownToLine, Trash2, RefreshCw, Package, Wallet } from "lucide-react";
+import { Loader2, TrendingUp, ArrowDownToLine, Trash2, RefreshCw, Package, Wallet, Clock } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useProductMovements } from "../hooks/useProductMovements";
 import type { MovementDto } from "../api/movements";
@@ -127,6 +127,20 @@ interface ChartPoint {
 function marginColor(v: number | null | undefined): string {
   if (v == null || v === 0) return "#6B7280";
   return v > 0 ? "#4ADE80" : "#F87171";
+}
+
+/** Urgency color for daysOfStockRemaining (TASK-494) — reuses the exact critical/warning/safe
+ * hex triple CategoryDetailPanel.tsx's own daysOfStockColor uses (#F87171/#FBBF24/#4ADE80), so
+ * the same product reads with the same urgency tone in both places. Kept as a local copy rather
+ * than a shared import — same "no shared chart/table formatting module today" reason
+ * marginColor's own comment above already documents for this file. null (no store context, or
+ * no ADU signal yet — see daysOfStockRemaining's doc comment on this component's props below)
+ * renders neutral gray, matching marginColor's null/zero tone. */
+function daysOfStockColor(v: number | null | undefined): string {
+  if (v == null) return "#6B7280";
+  if (v < 7) return "#F87171";
+  if (v < 30) return "#FBBF24";
+  return "#4ADE80";
 }
 
 function groupByDay(items: MovementDto[], from: string): ChartPoint[] {
@@ -392,6 +406,7 @@ export function ProductAnalyticsTab({
   buffers,
   showRevenueSeries = false,
   canViewMargin,
+  daysOfStockRemaining,
 }: {
   productId: string;
   chartHeight?: number;
@@ -400,14 +415,29 @@ export function ProductAnalyticsTab({
    * canViewMargin) on a second right-hand YAxis, driven by useProductSalesTrend. Defaults false
    * so the existing /inventory/{id}?tab=analytics call sites (ProductsTable.tsx,
    * inventory/[id]/page.tsx — neither passes this) are completely unaffected. Only
-   * PosProductTrendPanel.tsx passes true, for the inline /analytics/pos drill-down. */
+   * ProductTrendPanel.tsx passes true, for its inline drill-down on /analytics/pos and /analytics
+   * (renamed from PosProductTrendPanel in TASK-488 when the latter page started reusing it). */
   showRevenueSeries?: boolean;
   /** Purely a rendering gate — this component stays presentational w.r.t. authorization (same as
-   * it doesn't call useMe()/roles.ts for `buffers` today); the caller (PosProductTrendPanel)
+   * it doesn't call useMe()/roles.ts for `buffers` today); the caller (ProductTrendPanel)
    * resolves this via canViewAnalyticsMargin and passes the result down. The server independently
    * nulls marginAmount for unauthorized callers regardless (ADR-027), so this is defense in depth,
    * not the only gate. */
   canViewMargin?: boolean;
+  /** TASK-494: optional pre-computed days-of-stock-remaining figure (currentStock / ADU
+   * aduEffective, same division this component knows nothing about) — this component stays
+   * presentational here too, same posture as canViewMargin above: it never fetches ADU/stock
+   * data itself, the caller sources the value and passes it in (or doesn't). Three distinct
+   * states, "absent vs empty" (matches CategoryProductRowDto.daysOfStockRemaining's own
+   * null-semantics in frontend/features/analytics/types.ts):
+   * - `undefined` (prop omitted entirely) — the caller has no store context to compute this in
+   *   (e.g. ProductTrendPanel on /analytics, which has no page-wide store filter) — renders no
+   *   card at all, not even one showing "—".
+   * - `null` (prop explicitly passed as null) — the caller DOES have a store context but no
+   *   usage signal yet (no ProductAdu row, or aduEffective is 0/null) — renders the card with a
+   *   "—" value.
+   * - a number — renders the card with that many days, color-coded by daysOfStockColor above. */
+  daysOfStockRemaining?: number | null;
 }) {
   const t = useTranslations("Dashboard.inventory.analytics");
   const tSeries = useTranslations("Dashboard.inventory.analytics.series");
@@ -548,6 +578,18 @@ export function ProductAnalyticsTab({
             value={currentStock}
             sub={currentZone ? t(`zones.${currentZone.key}`) : undefined}
             color="#38BDF8"
+          />
+        )}
+        {daysOfStockRemaining !== undefined && (
+          <SummaryCard
+            icon={<Clock size={14} color={daysOfStockColor(daysOfStockRemaining)} />}
+            label={t("daysOfStockRemaining")}
+            value={
+              daysOfStockRemaining == null
+                ? "—"
+                : t("daysOfStockValue", { days: daysOfStockRemaining.toLocaleString(intlLocale, { maximumFractionDigits: 1 }) })
+            }
+            color={daysOfStockColor(daysOfStockRemaining)}
           />
         )}
         {showRevenueSeries && (

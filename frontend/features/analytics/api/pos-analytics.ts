@@ -7,6 +7,7 @@ import type {
   PosTopProductsDto,
   PosCashierStatsDto,
   ProductSalesTrendDto,
+  WorstProductsDto,
 } from "../types";
 
 export interface PosDateRangeParams {
@@ -84,6 +85,13 @@ export const posAnalyticsApi = {
   getTopProducts: (params: PosDateRangeParams & { limit?: string }) =>
     api.get<PosTopProductsDto>(
       `/api/analytics/pos/top-products${buildQs([...rangeEntries(params), ["limit", params.limit]])}`,
+    ),
+
+  // TASK-490/493: dead-stock counterpart to getTopProducts above. Same params shape (store_id/
+  // from/to/limit, server-side clamped 1-100), ascending by salesRevenue instead of descending.
+  getWorstProducts: (params: PosDateRangeParams & { limit?: string }) =>
+    api.get<WorstProductsDto>(
+      `/api/analytics/pos/worst-products${buildQs([...rangeEntries(params), ["limit", params.limit]])}`,
     ),
 
   getCashiers: (params: PosDateRangeParams) =>

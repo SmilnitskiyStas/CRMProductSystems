@@ -104,3 +104,17 @@ export function useLossesByProduct(
     enabled,
   });
 }
+
+// ── Losses/write-offs trend over time (TASK-489/492) ────────────────────────
+// No `keepPreviousData`/`placeholderData` — same discipline as every other hook in this file.
+
+export function useLossesTrend(
+  params?: { store_id?: string; from?: string; to?: string; group_by?: "day" | "week" },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["analytics-losses-trend", params],
+    queryFn: () => analyticsApi.getLossesTrend(params),
+    enabled,
+  });
+}

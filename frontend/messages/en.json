@@ -750,6 +750,8 @@
         },
         "tooltipZoneLabel": "Zone",
         "currentStock": "Current stock",
+        "daysOfStockRemaining": "Days of stock",
+        "daysOfStockValue": "{days}d",
         "chartTitle": "Stock trend",
         "eventsSummary": "{count} events over {days}d",
         "noMovements": "No movements in the selected period",
@@ -1459,6 +1461,17 @@
             "receipts": "Receipts"
           }
         },
+        "worstProducts": {
+          "title": "Products not selling",
+          "empty": "No data",
+          "headers": {
+            "name": "Name",
+            "revenue": "Revenue",
+            "quantity": "Quantity",
+            "receipts": "Receipts",
+            "currentStock": "Current stock"
+          }
+        },
         "cashiers": {
           "title": "Cashiers",
           "empty": "No data",
@@ -1525,6 +1538,13 @@
         "tooltipLabel": "Loss",
         "tooltipWriteOffsSuffix": "write-offs"
       },
+      "lossesTrendChart": {
+        "title": "Losses trend (₴)",
+        "empty": "No data for the selected period",
+        "tooltipLabel": "Loss",
+        "tooltipDocsSuffix": "docs",
+        "hint": "Click a point on the chart to see products for that day."
+      },
       "categoryDetailPanel": {
         "title": "Category products: {category}",
         "closeButton": "Close",
@@ -1536,8 +1556,10 @@
           "salesRevenue": "Revenue",
           "unitsSold": "Sold",
           "marginAmount": "Margin (est.)",
-          "marginPercent": "Margin % (est.)"
+          "marginPercent": "Margin % (est.)",
+          "daysOfStockRemaining": "Days of stock"
         },
+        "daysOfStockValue": "{days}d",
         "totalCount": "{count} products"
       },
       "lossesProductBreakdownPanel": {

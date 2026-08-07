@@ -11,15 +11,17 @@ import {
   usePosRevenueTrend,
   usePosRevenueTrendCompare,
   usePosTopProducts,
+  useWorstProducts,
   usePosCashiers,
 } from "@/features/analytics/hooks/usePosAnalytics";
 import { PosSummaryCards } from "@/features/analytics/components/PosSummaryCards";
 import { PosRevenueTrendChart } from "@/features/analytics/components/PosRevenueTrendChart";
 import { PosTopProductsTable } from "@/features/analytics/components/PosTopProductsTable";
+import { WorstProductsTable } from "@/features/analytics/components/WorstProductsTable";
 import { PosCashierStatsTable } from "@/features/analytics/components/PosCashierStatsTable";
 import { PosPaymentPieChart } from "@/features/analytics/components/PosPaymentPieChart";
 import { PosDayDetailPanel } from "@/features/analytics/components/PosDayDetailPanel";
-import { PosProductTrendPanel } from "@/features/analytics/components/PosProductTrendPanel";
+import { ProductTrendPanel } from "@/features/analytics/components/ProductTrendPanel";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
@@ -152,6 +154,10 @@ export default function PosAnalyticsPage() {
     compareActive,
   );
   const { data: topProducts, isLoading: topLoading } = usePosTopProducts(
+    { ...params, limit: "10" },
+    enabled,
+  );
+  const { data: worstProducts, isLoading: worstLoading } = useWorstProducts(
     { ...params, limit: "10" },
     enabled,
   );
@@ -326,9 +332,25 @@ export default function PosAnalyticsPage() {
         </div>
       </section>
 
-      {/* Product trend (from clicking a row on the top products table above) */}
+      {/* Worst-performing / dead-stock products — active, on-hand-stock items with no (or the
+          least) sales in the period, so true zero-sale products surface as the actionable signal.
+          Row click drives the exact same selectedProduct state as PosTopProductsTable above, so
+          it opens the same ProductTrendPanel below — no separate panel/state. */}
+      <section>
+        {worstLoading ? (
+          <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
+        ) : worstProducts ? (
+          <WorstProductsTable
+            data={worstProducts}
+            onRowClick={handleProductClick}
+            selectedProductId={selectedProduct?.id ?? null}
+          />
+        ) : null}
+      </section>
+
+      {/* Product trend (from clicking a row on the top products or worst products table above) */}
       {selectedProduct && (
-        <PosProductTrendPanel
+        <ProductTrendPanel
           productId={selectedProduct.id}
           productName={selectedProduct.name}
           storeId={storeId || undefined}

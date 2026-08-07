@@ -10,6 +10,7 @@ import type {
   LossesCompareDto,
   CategoryProductBreakdownDto,
   LossesByProductDto,
+  LossesTrendDto,
 } from "../types";
 
 interface CompareParams {
@@ -91,6 +92,25 @@ function getLossesByProduct(params?: LossesByProductParams): Promise<LossesByPro
   return api.get(`/api/analytics/losses/by-product${q ? `?${q}` : ""}`);
 }
 
+// ── Losses/write-offs trend over time (TASK-489/492) ────────────────────────
+
+interface LossesTrendParams {
+  store_id?: string;
+  from?: string;
+  to?: string;
+  group_by?: "day" | "week";
+}
+
+function getLossesTrend(params?: LossesTrendParams): Promise<LossesTrendDto> {
+  const qs = new URLSearchParams();
+  if (params?.store_id) qs.set("store_id", params.store_id);
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  if (params?.group_by) qs.set("group_by", params.group_by);
+  const q = qs.toString();
+  return api.get(`/api/analytics/losses/trend${q ? `?${q}` : ""}`);
+}
+
 export const analyticsApi = {
   getExpirySummary: (params?: { store_id?: string; network?: boolean }) => {
     const qs = new URLSearchParams();
@@ -126,4 +146,5 @@ export const analyticsApi = {
 
   getCategoryProductBreakdown,
   getLossesByProduct,
+  getLossesTrend,
 };

@@ -116,6 +116,13 @@ public sealed record CategoryProductBreakdownDto(
 // AnalyticsAuthorization.CanViewMargin resolved false) and when the product itself has no
 // Item.PricePurchase on file — two different "no value" cases the controller/repository must
 // not conflate into a shared 0 or omitted field.
+//
+// DaysOfStockRemaining (TASK-491): TotalQuantity / ProductAdu.AduEffective at the current sell
+// rate. Never margin/cost data (no AnalyticsAuthorization.CanViewMargin gate). Null — never 0,
+// never a huge/infinite number — in two independent cases: (a) the request wasn't store-scoped
+// (ProductAdu is per-(product, store), so a network-wide/multi-store rollup has no single
+// meaningful ADU to divide by); (b) the product has no ProductAdu row, or its AduEffective is
+// null/0 (division-by-zero guard — "no usage history yet" is a real, valid state, not an error).
 public sealed record CategoryProductRowDto(
     Guid ProductId,
     string ProductName,
@@ -127,7 +134,8 @@ public sealed record CategoryProductRowDto(
     decimal SalesRevenue,
     decimal UnitsSold,
     decimal? MarginAmount,
-    decimal? MarginPercent
+    decimal? MarginPercent,
+    decimal? DaysOfStockRemaining
 );
 
 public sealed record LossesByProductDto(
@@ -142,3 +150,9 @@ public sealed record LossByProductRowDto(
     decimal LossAmount,
     decimal SharePercent
 );
+
+// ── TASK-489: losses/write-offs trend over time (mirrors PosRevenueTrendDto's shape) ───────
+
+public sealed record LossesTrendDto(IReadOnlyList<LossesTrendPointDto> Points, string GroupBy);
+
+public sealed record LossesTrendPointDto(DateOnly Date, decimal TotalLoss, int Count);

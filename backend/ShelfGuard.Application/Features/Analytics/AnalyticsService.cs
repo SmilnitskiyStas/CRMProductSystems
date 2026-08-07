@@ -41,6 +41,11 @@ public sealed class AnalyticsService : IAnalyticsService
     public Task<LossesByProductDto> GetLossesByProductAsync(Guid? tenantId, Guid? storeId, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default)
         => _repo.GetLossesByProductAsync(tenantId, storeId, reason, from, to, ct);
 
+    // ── TASK-489: losses/write-offs trend over time ─────────────────────────
+
+    public Task<LossesTrendDto> GetLossesTrendAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
+        => _repo.GetLossesTrendAsync(tenantId, storeId, from, to, groupBy, ct);
+
     public Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
         => _repo.GetPosSummaryAsync(tenantId, storeId, from, to, ct);
 
@@ -57,6 +62,11 @@ public sealed class AnalyticsService : IAnalyticsService
 
     public Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, CancellationToken ct = default)
         => _repo.GetProductSalesTrendAsync(tenantId, storeId, productId, from, to, groupBy, includeMargin, ct);
+
+    // ── TASK-490: worst-performing products / dead stock ──────────────────────
+
+    public Task<WorstProductsDto> GetWorstProductsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)
+        => _repo.GetWorstProductsAsync(tenantId, storeId, from, to, limit, ct);
 
     // ── TASK-336: period comparison ─────────────────────────────────────────
 

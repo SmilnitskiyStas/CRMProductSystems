@@ -205,6 +205,28 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
+    // TASK-489: losses/write-offs trend over time — mirrors pos/revenue-trend's shape (same
+    // store_id/from/to/group_by params and day|week values). No compare-mode variant (not asked
+    // for in this follow-up batch). No margin gate: same reasoning as losses/by-product above —
+    // LossAmount is already shown in aggregate to every store_manager+ caller today (ADR-027 §1).
+    [HttpGet("losses/trend")]
+    [ProducesResponseType(typeof(LossesTrendDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetLossesTrend(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] string group_by = "day",
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+
+        var result = await _analytics.GetLossesTrendAsync(tenantId, store_id, resolvedFrom, resolvedTo, group_by, ct);
+        return Ok(result);
+    }
+
     // ── POS analytics ─────────────────────────────────────────────────────
 
     [HttpGet("pos/summary")]
@@ -280,6 +302,32 @@ public sealed class AnalyticsController : ControllerBase
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
         var result = await _analytics.GetPosTopProductsAsync(tenantId, store_id, resolvedFrom, resolvedTo, limit, ct);
+        return Ok(result);
+    }
+
+    // TASK-490: dead-stock / worst-performing-products view -- NOT pos/top-products sorted
+    // ascending. That query groups PosTransactionItems, so a product with zero sales in the
+    // period never appears in the result at all (nothing to group). This starts from the
+    // catalog/stock side instead (active items with on-hand stock) and LEFT-JOINs the sales
+    // rollup, COALESCEing missing sales to 0 -- see GetWorstProductsAsync's own comments for the
+    // query shape. No margin gate: same sensitivity class as pos/top-products above (already
+    // ungated for store_manager+).
+    [HttpGet("pos/worst-products")]
+    [ProducesResponseType(typeof(WorstProductsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetWorstProducts(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] int limit = 10,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        if (limit is < 1 or > 100) limit = 10;
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var result = await _analytics.GetWorstProductsAsync(tenantId, store_id, resolvedFrom, resolvedTo, limit, ct);
         return Ok(result);
     }
 
