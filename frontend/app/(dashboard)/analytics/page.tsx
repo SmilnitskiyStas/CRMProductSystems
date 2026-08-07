@@ -20,6 +20,8 @@ import { ExpiryDonut } from "@/features/analytics/components/ExpiryDonut";
 import { LossesByReasonChart } from "@/features/analytics/components/LossesByReasonChart";
 import { LossesByStoreChart } from "@/features/analytics/components/LossesByStoreChart";
 import { CategoryStatusChart } from "@/features/analytics/components/CategoryStatusChart";
+import { CategoryDetailPanel } from "@/features/analytics/components/CategoryDetailPanel";
+import { LossesProductBreakdownPanel } from "@/features/analytics/components/LossesProductBreakdownPanel";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
 
@@ -227,6 +229,29 @@ export default function AnalyticsPage() {
   const [hoveredCategoryRow, setHoveredCategoryRow] = useState<string | null>(null);
   const [hoveredLossRow, setHoveredLossRow] = useState<string | null>(null);
 
+  // ── Drill-down panel selection (interactive analytics plan, TASK-483) ──────
+  // `selectedCategoryId` is `string | null | undefined` rather than the plan's literal
+  // `string | null` — a plain two-state type can't tell "nothing selected" apart from "the
+  // uncategorized bucket is selected", since a category id is itself nullable (null =
+  // uncategorized, the same convention CategoryStatusChart/the by-category table already use).
+  // `undefined` = no panel open; `null` = uncategorized bucket open; a string = that category's
+  // panel open. Documented here per CLAUDE.md's judgment-call guidance (mirrors TASK-485's own
+  // precedent of a small, noted deviation from the brief when the literal type doesn't hold up).
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | undefined>(undefined);
+  const [selectedLossDimension, setSelectedLossDimension] = useState<{ type: "reason" | "store"; value: string } | null>(null);
+
+  function handleCategoryClick(categoryId: string | null) {
+    setSelectedCategoryId((prev) => (prev === categoryId ? undefined : categoryId));
+  }
+
+  function handleReasonClick(reason: string) {
+    setSelectedLossDimension((prev) => (prev?.type === "reason" && prev.value === reason ? null : { type: "reason", value: reason }));
+  }
+
+  function handleStoreLossClick(storeId: string) {
+    setSelectedLossDimension((prev) => (prev?.type === "store" && prev.value === storeId ? null : { type: "store", value: storeId }));
+  }
+
   if (access === null) return null;
   if (!access) return <AccessDenied title={t("title")} />;
 
@@ -287,6 +312,7 @@ export default function AnalyticsPage() {
               critical={expiry.critical}
               expired={expiry.expired}
               needsVerification={expiry.needsVerification}
+              onSliceClick={(status) => router.push(`/stock?status=${status}`)}
             />
 
             {expiry.stores.length > 0 && (
@@ -398,7 +424,11 @@ export default function AnalyticsPage() {
             />
           </div>
 
-          <LossesByReasonChart data={writeoffs.byReason} />
+          <LossesByReasonChart
+            data={writeoffs.byReason}
+            onReasonClick={handleReasonClick}
+            selectedReason={selectedLossDimension?.type === "reason" ? selectedLossDimension.value : undefined}
+          />
 
           {writeoffs.byReason.length > 0 && (
             <div style={{ ...tableWrapper, marginTop: 16 }}>
@@ -414,10 +444,17 @@ export default function AnalyticsPage() {
                   {writeoffs.byReason.map((r) => (
                     <tr
                       key={r.reason}
-                      onClick={() => router.push(`/write-offs?reason=${r.reason}`)}
+                      onClick={() => handleReasonClick(r.reason)}
                       onMouseEnter={() => setHoveredReasonRow(r.reason)}
                       onMouseLeave={() => setHoveredReasonRow(null)}
-                      style={rowHoverStyle(hoveredReasonRow === r.reason)}
+                      style={{
+                        cursor: "pointer",
+                        background:
+                          hoveredReasonRow === r.reason || (selectedLossDimension?.type === "reason" && selectedLossDimension.value === r.reason)
+                            ? "#0F1825"
+                            : "transparent",
+                        transition: "background 0.1s",
+                      }}
                     >
                       <td style={tdText}>{tReason.has(r.reason) ? tReason(r.reason) : r.reason}</td>
                       <td style={tdNum}>{r.count}</td>
@@ -429,6 +466,19 @@ export default function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {selectedLossDimension?.type === "reason" && (
+            <LossesProductBreakdownPanel
+              title={t("lossesProductPanelTitle", {
+                value: tReason.has(selectedLossDimension.value) ? tReason(selectedLossDimension.value) : selectedLossDimension.value,
+              })}
+              totalLoss={writeoffs.byReason.find((r) => r.reason === selectedLossDimension.value)?.totalLoss ?? 0}
+              reason={selectedLossDimension.value}
+              from={from}
+              to={to}
+              onClose={() => setSelectedLossDimension(null)}
+            />
           )}
         </section>
       )}
@@ -506,7 +556,7 @@ export default function AnalyticsPage() {
       {categories && categories.length > 0 && (
         <section>
           <h2 style={sectionTitle}>{t("byCategory.title")}</h2>
-          <CategoryStatusChart data={categories} />
+          <CategoryStatusChart data={categories} onCategoryClick={handleCategoryClick} selectedCategoryId={selectedCategoryId} />
           <div style={{ ...tableWrapper, marginTop: 16 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -524,10 +574,17 @@ export default function AnalyticsPage() {
                 {categories.map((c) => (
                   <tr
                     key={c.categoryId ?? "uncategorized"}
-                    onClick={() => router.push(`/inventory?category=${encodeURIComponent(c.categoryName)}`)}
+                    onClick={() => handleCategoryClick(c.categoryId)}
                     onMouseEnter={() => setHoveredCategoryRow(c.categoryId ?? "uncategorized")}
                     onMouseLeave={() => setHoveredCategoryRow(null)}
-                    style={rowHoverStyle(hoveredCategoryRow === (c.categoryId ?? "uncategorized"))}
+                    style={{
+                      cursor: "pointer",
+                      background:
+                        hoveredCategoryRow === (c.categoryId ?? "uncategorized") || selectedCategoryId === c.categoryId
+                          ? "#0F1825"
+                          : "transparent",
+                      transition: "background 0.1s",
+                    }}
                   >
                     <td style={tdText}>{c.categoryName}</td>
                     <td style={{ ...tdNum, color: "#4ADE80" }}>{c.safe}</td>
@@ -541,6 +598,10 @@ export default function AnalyticsPage() {
               </tbody>
             </table>
           </div>
+
+          {selectedCategoryId !== undefined && (
+            <CategoryDetailPanel categoryId={selectedCategoryId} from={from} to={to} onClose={() => setSelectedCategoryId(undefined)} />
+          )}
         </section>
       )}
 
@@ -587,7 +648,11 @@ export default function AnalyticsPage() {
               value={`${losses.averageLossPerWriteOff.toLocaleString(intlLocale)} ₴`}
             />
           </div>
-          <LossesByStoreChart data={losses.byStore} />
+          <LossesByStoreChart
+            data={losses.byStore}
+            onStoreClick={handleStoreLossClick}
+            selectedStoreId={selectedLossDimension?.type === "store" ? selectedLossDimension.value : undefined}
+          />
           <div style={{ ...tableWrapper, marginTop: 16 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -601,10 +666,17 @@ export default function AnalyticsPage() {
                 {losses.byStore.map((s) => (
                   <tr
                     key={s.storeId}
-                    onClick={() => router.push(`/write-offs?store_id=${s.storeId}`)}
+                    onClick={() => handleStoreLossClick(s.storeId)}
                     onMouseEnter={() => setHoveredLossRow(s.storeId)}
                     onMouseLeave={() => setHoveredLossRow(null)}
-                    style={rowHoverStyle(hoveredLossRow === s.storeId)}
+                    style={{
+                      cursor: "pointer",
+                      background:
+                        hoveredLossRow === s.storeId || (selectedLossDimension?.type === "store" && selectedLossDimension.value === s.storeId)
+                          ? "#0F1825"
+                          : "transparent",
+                      transition: "background 0.1s",
+                    }}
                   >
                     <td style={tdText}>{s.storeName}</td>
                     <td style={tdNum}>{s.writeOffCount}</td>
@@ -616,6 +688,19 @@ export default function AnalyticsPage() {
               </tbody>
             </table>
           </div>
+
+          {selectedLossDimension?.type === "store" && (
+            <LossesProductBreakdownPanel
+              title={t("lossesProductPanelTitle", {
+                value: losses.byStore.find((s) => s.storeId === selectedLossDimension.value)?.storeName ?? selectedLossDimension.value,
+              })}
+              totalLoss={losses.byStore.find((s) => s.storeId === selectedLossDimension.value)?.totalLoss ?? 0}
+              storeId={selectedLossDimension.value}
+              from={from}
+              to={to}
+              onClose={() => setSelectedLossDimension(null)}
+            />
+          )}
         </section>
       )}
     </div>

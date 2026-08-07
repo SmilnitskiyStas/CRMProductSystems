@@ -715,7 +715,9 @@
           "receipt": "Receipts",
           "transfer": "Transfers",
           "write_off": "Write-offs",
-          "adjustment": "Adjustments"
+          "adjustment": "Adjustments",
+          "revenue": "Revenue",
+          "margin": "Margin (est.)"
         },
         "movementType": {
           "receipt": "Receipt",
@@ -1473,7 +1475,18 @@
           "empty": "No data for the selected period",
           "currentPeriod": "Current period",
           "previousPeriod": "Previous period",
-          "dayLabel": "Day {n}"
+          "dayLabel": "Day {n}",
+          "hint": "Click a point on the chart to see details for that day."
+        },
+        "dayDetail": {
+          "title": "Details for {date}",
+          "closeButton": "Close",
+          "noData": "No data"
+        },
+        "productTrendPanel": {
+          "title": "Sales trend: {product}",
+          "closeButton": "Close",
+          "marginDisclaimer": "\"Estimated margin\" is calculated from the product's current catalog purchase price and may differ from the actual cost at the time of sale."
         },
         "paymentPie": {
           "title": "Payment breakdown",
@@ -1512,6 +1525,33 @@
         "tooltipLabel": "Loss",
         "tooltipWriteOffsSuffix": "write-offs"
       },
+      "categoryDetailPanel": {
+        "title": "Category products: {category}",
+        "closeButton": "Close",
+        "empty": "No products in this category for the selected period",
+        "marginDisclaimer": "\"Estimated margin\" is calculated from the product's current catalog purchase price and may differ from the actual cost at the time of sale.",
+        "headers": {
+          "product": "Product",
+          "totalQuantity": "Qty",
+          "salesRevenue": "Revenue",
+          "unitsSold": "Sold",
+          "marginAmount": "Margin (est.)",
+          "marginPercent": "Margin % (est.)"
+        },
+        "totalCount": "{count} products"
+      },
+      "lossesProductBreakdownPanel": {
+        "closeButton": "Close",
+        "empty": "No write-offs for the selected period",
+        "totalLossLabel": "Total loss: {amount} ₴",
+        "headers": {
+          "product": "Product",
+          "quantity": "Qty",
+          "lossAmount": "Loss",
+          "sharePercent": "Share"
+        },
+        "totalCount": "{count} products"
+      },
       "page": {
         "title": "Analytics",
         "subtitle": "Aggregated analytics on expiry, write-offs, and stock movements",
@@ -1547,6 +1587,7 @@
         "metrics": {
           "totalLoss": "Total losses"
         },
+        "lossesProductPanelTitle": "Write-off products — {value}",
         "headers": {
           "store": "Store",
           "zone": "Zone",

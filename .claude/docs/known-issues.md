@@ -1,9 +1,32 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-07-16
+**Updated:** 2026-08-07
 
 ## Active Issues
+
+### KI-031: Seeded `netmgr@demo.local` has zero `user_locations` grants — blocks live QA/demo as this account
+Severity: low (test/demo friction only — fails closed, not a security issue; a real tenant admin
+granting a real network_manager proper `user_locations` rows would not hit this)
+Status: open — found 2026-08-07 (TASK-486 QA pass on the interactive-analytics-margin initiative,
+confirmed pre-existing/unrelated by TASK-487 security review)
+Description: `manager@demo.local` (store_manager) has 2 `user_locations` rows (both seed stores);
+`netmgr@demo.local` (network_manager) has 0 — confirmed live, the only rows ever inserted into
+`user_locations` in the whole dev DB are `manager@demo.local`'s two, dated 2026-07-20 18:35:54,
+granted by `ea@demo.local`. Since the Stage 3 `store_scope` RESTRICTIVE RLS policy
+(`20260719193545_AddLocationStoreScopeRlsPolicies.cs`, bypass list `provider`/`provider_admin`/
+`worker`/`enterprise_admin` — network_manager deliberately NOT included, a TASK-393 decision) fails
+closed on zero grants, `netmgr@demo.local` sees zero stock/sales/write-off data tenant-wide despite
+being a real, correctly-provisioned role otherwise. Blocked live UI verification of
+network_manager-tier features during TASK-486 (worked around with `ea@demo.local`/enterprise_admin
+instead, which the task's brief explicitly allowed).
+Not caused by TASK-479..487 (verified: `user_locations`/`store_scope` predate that initiative by
+~2.5 weeks; `git log` shows no commit touching `DbSeeder.cs` since; no task log in that series lists
+seed data among files touched) — a pre-existing seed-data completeness gap only, not a regression
+and not a security finding.
+Resolution: one SQL insert (or a `DbSeeder.cs` addition) granting `netmgr@demo.local`
+`user_locations` rows for both seed stores, mirroring `manager@demo.local`'s existing 2 grants — so
+future QA/demo sessions needing a live network_manager account don't hit the same wall.
 
 ### KI-004: Duplicate `apiFetch` in feature API modules ✅ resolved (2026-07-15, confirmed during Block 13 pre-launch audit)
 Resolution: Verified both `features/inventory/api/products.ts` and `features/dashboard/api/dashboard.ts` already `import { api } from "@/lib/api"` — no local `apiFetch` remains anywhere in `frontend/` (`grep -rn "function apiFetch\|const apiFetch"` matches only `lib/api.ts` itself). Not clear from git history exactly which prior task fixed this (products.ts/dashboard.ts have both been touched by several since KI-004 was filed); no code change was needed here, doc was just stale.

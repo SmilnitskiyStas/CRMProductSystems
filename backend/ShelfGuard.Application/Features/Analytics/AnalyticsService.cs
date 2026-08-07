@@ -33,6 +33,14 @@ public sealed class AnalyticsService : IAnalyticsService
     public Task<LossesDto> GetLossesAsync(Guid? tenantId, Guid? storeId, DateOnly? from, DateOnly? to, CancellationToken ct = default)
         => _repo.GetLossesAsync(tenantId, storeId, from, to, ct);
 
+    // ── TASK-481: category/losses product drill-down ─────────────────────────
+
+    public Task<CategoryProductBreakdownDto> GetCategoryProductBreakdownAsync(Guid? tenantId, Guid? storeId, Guid? categoryId, DateOnly from, DateOnly to, bool includeMargin, CancellationToken ct = default)
+        => _repo.GetCategoryProductBreakdownAsync(tenantId, storeId, categoryId, from, to, includeMargin, ct);
+
+    public Task<LossesByProductDto> GetLossesByProductAsync(Guid? tenantId, Guid? storeId, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default)
+        => _repo.GetLossesByProductAsync(tenantId, storeId, reason, from, to, ct);
+
     public Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
         => _repo.GetPosSummaryAsync(tenantId, storeId, from, to, ct);
 
@@ -44,6 +52,11 @@ public sealed class AnalyticsService : IAnalyticsService
 
     public Task<PosCashierStatsDto> GetPosCashierStatsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
         => _repo.GetPosCashierStatsAsync(tenantId, storeId, from, to, ct);
+
+    // ── TASK-482: single-product sales trend ─────────────────────────────────
+
+    public Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, CancellationToken ct = default)
+        => _repo.GetProductSalesTrendAsync(tenantId, storeId, productId, from, to, groupBy, includeMargin, ct);
 
     // ── TASK-336: period comparison ─────────────────────────────────────────
 

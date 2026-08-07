@@ -5,6 +5,13 @@ import type { PosTopProductsDto } from "../types";
 
 interface Props {
   data: PosTopProductsDto;
+  /** TASK-484: row-click drill-down — opens PosProductTrendPanel inline on /analytics/pos.
+   * Omitted (as at the /analytics/pos day-detail composition, PosDayDetailPanel.tsx) means rows
+   * render exactly as before — no cursor change, no click handler attached. */
+  onRowClick?: (productId: string, productName: string) => void;
+  /** Currently drilled-into product, if any — reuses this table's own existing hover color
+   * (#111827) for a persistent "active row" highlight instead of introducing a new color. */
+  selectedProductId?: string | null;
 }
 
 const ROW_BORDER = "1px solid #1F2937";
@@ -36,7 +43,7 @@ function thStyle(): React.CSSProperties {
   };
 }
 
-export function PosTopProductsTable({ data }: Props) {
+export function PosTopProductsTable({ data, onRowClick, selectedProductId }: Props) {
   const t = useTranslations("Dashboard.analytics.pos.topProducts");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
@@ -77,21 +84,29 @@ export function PosTopProductsTable({ data }: Props) {
             </tr>
           </thead>
           <tbody>
-            {data.items.map((item, idx) => (
-              <tr
-                key={item.productId}
-                style={{ transition: "background 0.1s" }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
-                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-              >
-                <td style={{ ...tdMuted, textAlign: "center", color: "#374151" }}>{idx + 1}</td>
-                <td style={tdText}>{item.productName}</td>
-                <td style={tdMuted}>{item.barcode}</td>
-                <td style={tdRevenue}>{item.totalRevenue.toLocaleString(intlLocale)} ₴</td>
-                <td style={tdNum}>{item.totalQuantity.toLocaleString(intlLocale)}</td>
-                <td style={tdNum}>{item.transactionCount.toLocaleString(intlLocale)}</td>
-              </tr>
-            ))}
+            {data.items.map((item, idx) => {
+              const isSelected = !!onRowClick && selectedProductId === item.productId;
+              return (
+                <tr
+                  key={item.productId}
+                  onClick={onRowClick ? () => onRowClick(item.productId, item.productName) : undefined}
+                  style={{
+                    transition: "background 0.1s",
+                    cursor: onRowClick ? "pointer" : undefined,
+                    background: isSelected ? "#111827" : "transparent",
+                  }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = isSelected ? "#111827" : "transparent")}
+                >
+                  <td style={{ ...tdMuted, textAlign: "center", color: "#374151" }}>{idx + 1}</td>
+                  <td style={tdText}>{item.productName}</td>
+                  <td style={tdMuted}>{item.barcode}</td>
+                  <td style={tdRevenue}>{item.totalRevenue.toLocaleString(intlLocale)} ₴</td>
+                  <td style={tdNum}>{item.totalQuantity.toLocaleString(intlLocale)}</td>
+                  <td style={tdNum}>{item.transactionCount.toLocaleString(intlLocale)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

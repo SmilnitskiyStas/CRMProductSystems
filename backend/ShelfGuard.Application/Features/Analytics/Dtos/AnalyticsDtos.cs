@@ -103,3 +103,42 @@ public sealed record LossByStoreDto(
     decimal TotalLoss,
     int WriteOffCount
 );
+
+// ── TASK-481 (interactive analytics + margin plan): category/losses product drill-down ────
+
+public sealed record CategoryProductBreakdownDto(
+    Guid? CategoryId,
+    string CategoryName,
+    IReadOnlyList<CategoryProductRowDto> Products
+);
+
+// MarginAmount/MarginPercent are null both when the caller can't see margin (ADR-027 —
+// AnalyticsAuthorization.CanViewMargin resolved false) and when the product itself has no
+// Item.PricePurchase on file — two different "no value" cases the controller/repository must
+// not conflate into a shared 0 or omitted field.
+public sealed record CategoryProductRowDto(
+    Guid ProductId,
+    string ProductName,
+    int Safe,
+    int Warning,
+    int Critical,
+    int Expired,
+    decimal TotalQuantity,
+    decimal SalesRevenue,
+    decimal UnitsSold,
+    decimal? MarginAmount,
+    decimal? MarginPercent
+);
+
+public sealed record LossesByProductDto(
+    decimal TotalLoss,
+    IReadOnlyList<LossByProductRowDto> Products
+);
+
+public sealed record LossByProductRowDto(
+    Guid ProductId,
+    string ProductName,
+    decimal Quantity,
+    decimal LossAmount,
+    decimal SharePercent
+);

@@ -39,6 +39,21 @@ export function usePosCashiers(params: PosDateRangeParams, enabled = true) {
   });
 }
 
+// TASK-484: row-click drill-down from top-products, consumed by the extended
+// ProductAnalyticsTab. Full filter object (productId + params) in the query key, same
+// discipline as every hook above — no keepPreviousData.
+export function useProductSalesTrend(
+  productId: string,
+  params: PosDateRangeParams & { group_by?: "day" | "week" },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["pos-analytics-product-trend", productId, params],
+    queryFn: () => posAnalyticsApi.getProductSalesTrend(productId, params),
+    enabled: enabled && !!productId,
+  });
+}
+
 // ── Period comparison (ADR-016) ─────────────────────────────────────────────
 
 export function usePosSummaryCompare(

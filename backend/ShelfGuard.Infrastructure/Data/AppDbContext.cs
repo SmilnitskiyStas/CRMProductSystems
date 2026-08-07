@@ -1109,6 +1109,12 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(i => i.TransactionId)
              .HasDatabaseName("idx_pos_transaction_items_txn_covering")
              .IncludeProperties(i => new { i.ProductId, i.PriceFinal, i.Quantity });
+            // Covering index: per-product sales trend (TASK-479/482) — ProductId-leading so it also
+            // serves as the FK-lookup index for Product below, TransactionId as 2nd key column so the
+            // planner can range/join into pos_transactions for the date filter without a heap fetch.
+            e.HasIndex(i => new { i.ProductId, i.TransactionId })
+             .HasDatabaseName("idx_pos_transaction_items_product_covering")
+             .IncludeProperties(i => new { i.Quantity, i.PriceFinal });
             e.HasOne(i => i.Product).WithMany()
              .HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ProductStock>().WithMany()

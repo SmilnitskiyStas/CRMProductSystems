@@ -315,6 +315,194 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         );
     }
 
+    // ── TASK-481: category/losses product drill-down ────────────────────────
+
+    public async Task<CategoryProductBreakdownDto> GetCategoryProductBreakdownAsync(
+        Guid? tenantId, Guid? storeId, Guid? categoryId, DateOnly from, DateOnly to, bool includeMargin, CancellationToken ct = default)
+    {
+        // ── Stock side: same rollup as GetByCategoryAsync, scoped to one category and grouped
+        // by product instead of by category. ────────────────────────────────────────────────
+        var stockQuery = _db.ProductStocks
+            .Where(s => s.Quantity > 0 && s.Status != "sold_out" && s.Status != "archived");
+
+        if (tenantId.HasValue)
+            stockQuery = stockQuery.Where(s => s.TenantId == tenantId.Value);
+        if (storeId.HasValue)
+            stockQuery = stockQuery.Where(s => s.StoreId == storeId.Value);
+
+        // null category_id means the "uncategorized" bucket (mirrors GetByCategoryAsync's own
+        // null-key group), not "all categories".
+        stockQuery = categoryId.HasValue
+            ? stockQuery.Where(s => s.Product!.CategoryId == categoryId.Value)
+            : stockQuery.Where(s => s.Product!.CategoryId == null);
+
+        var stockRows = await stockQuery
+            .Select(s => new { s.ProductId, ProductName = s.Product!.Name, s.ExpiryDate, s.LastCheckedAt, s.Quantity })
+            .ToListAsync(ct);
+
+        var thresholds = StatusThresholds.Now();
+        var stockByProduct = stockRows
+            .Select(r => new
+            {
+                r.ProductId,
+                r.ProductName,
+                r.Quantity,
+                Status = ComputeStatus(r.ExpiryDate, r.LastCheckedAt, thresholds)
+            })
+            .GroupBy(b => b.ProductId)
+            .ToDictionary(g => g.Key, g => new
+            {
+                ProductName   = g.First().ProductName,
+                Safe          = g.Count(b => b.Status == "safe"),
+                Warning       = g.Count(b => b.Status == "warning"),
+                Critical      = g.Count(b => b.Status == "critical"),
+                Expired       = g.Count(b => b.Status == "expired"),
+                TotalQuantity = g.Sum(b => b.Quantity)
+            });
+
+        // ── Sales side: same rollup as GetPosTopProductsAsync, scoped to one category. ───────
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
+        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
+
+        var salesItemsQuery = _db.PosTransactionItems
+            .Where(i => txQuery.Select(t => t.Id).Contains(i.TransactionId));
+
+        salesItemsQuery = categoryId.HasValue
+            ? salesItemsQuery.Where(i => i.Product!.CategoryId == categoryId.Value)
+            : salesItemsQuery.Where(i => i.Product!.CategoryId == null);
+
+        var salesRows = await salesItemsQuery
+            .Select(i => new { i.ProductId, ProductName = i.Product!.Name, i.PriceFinal, i.Quantity })
+            .ToListAsync(ct);
+
+        var salesByProduct = salesRows
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => new
+            {
+                ProductName  = g.First().ProductName,
+                SalesRevenue = g.Sum(i => i.PriceFinal * i.Quantity),
+                UnitsSold    = g.Sum(i => i.Quantity)
+            });
+
+        // ── Category name: same null -> "Без категорії" convention as GetByCategoryAsync. ───
+        var categoryName = categoryId.HasValue
+            ? await _db.Categories
+                .Where(c => c.Id == categoryId.Value)
+                .Select(c => c.Name)
+                .FirstOrDefaultAsync(ct) ?? "Unknown"
+            : "Без категорії";
+
+        // ── Margin (ADR-027): current catalog Item.PricePurchase, retroactive estimate — only
+        // looked up when the caller cleared AnalyticsAuthorization.CanViewMargin upstream in the
+        // controller. Repository stays authorization-agnostic: it only reacts to the bool.
+        var productIds = stockByProduct.Keys.Union(salesByProduct.Keys).ToList();
+
+        var purchasePrices = includeMargin && productIds.Count > 0
+            ? await _db.Items
+                .Where(i => productIds.Contains(i.Id))
+                .Select(i => new { i.Id, i.PricePurchase })
+                .ToDictionaryAsync(x => x.Id, x => x.PricePurchase, ct)
+            : new Dictionary<Guid, decimal?>();
+
+        var products = productIds
+            .Select(productId =>
+            {
+                var hasStock = stockByProduct.TryGetValue(productId, out var stock);
+                var hasSales = salesByProduct.TryGetValue(productId, out var sales);
+
+                var salesRevenue = hasSales ? sales!.SalesRevenue : 0m;
+                var unitsSold    = hasSales ? sales!.UnitsSold : 0m;
+
+                // Two distinct "no value" cases, kept separate per the DTO's own doc comment:
+                // includeMargin == false -> always null; includeMargin == true but no
+                // PricePurchase on file -> also null, never coerced to 0.
+                decimal? marginAmount = null;
+                decimal? marginPercent = null;
+                if (includeMargin && purchasePrices.TryGetValue(productId, out var pricePurchase) && pricePurchase.HasValue)
+                {
+                    marginAmount  = salesRevenue - unitsSold * pricePurchase.Value;
+                    marginPercent = salesRevenue == 0m ? null : Math.Round(marginAmount.Value / salesRevenue * 100m, 2);
+                }
+
+                return new CategoryProductRowDto(
+                    ProductId:     productId,
+                    ProductName:   hasStock ? stock!.ProductName : sales!.ProductName,
+                    Safe:          hasStock ? stock!.Safe : 0,
+                    Warning:       hasStock ? stock!.Warning : 0,
+                    Critical:      hasStock ? stock!.Critical : 0,
+                    Expired:       hasStock ? stock!.Expired : 0,
+                    TotalQuantity: hasStock ? stock!.TotalQuantity : 0m,
+                    SalesRevenue:  salesRevenue,
+                    UnitsSold:     unitsSold,
+                    MarginAmount:  marginAmount,
+                    MarginPercent: marginPercent);
+            })
+            .OrderByDescending(p => p.SalesRevenue)
+            .ToList();
+
+        return new CategoryProductBreakdownDto(
+            CategoryId:   categoryId,
+            CategoryName: categoryName,
+            Products:     products);
+    }
+
+    public async Task<LossesByProductDto> GetLossesByProductAsync(
+        Guid? tenantId, Guid? storeId, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var writeOffQuery = _db.WriteOffs
+            .Where(w => w.Status == "approved"
+                     && w.CreatedAt >= ToUtcStart(from)
+                     && w.CreatedAt <= ToUtcEnd(to));
+
+        if (tenantId.HasValue)
+            writeOffQuery = writeOffQuery.Where(w => w.TenantId == tenantId.Value);
+        if (storeId.HasValue)
+            writeOffQuery = writeOffQuery.Where(w => w.StoreId == storeId.Value);
+
+        if (!string.IsNullOrEmpty(reason))
+        {
+            // "other" mirrors GetWriteOffAnalyticsAsync's own `w.Reason ?? "other"` bucket label:
+            // a write-off with no reason recorded is what renders as "other" in that aggregate,
+            // so drilling into "other" here must include those rows too, not just a literal
+            // Reason == "other" match.
+            writeOffQuery = reason == "other"
+                ? writeOffQuery.Where(w => w.Reason == null || w.Reason == "other")
+                : writeOffQuery.Where(w => w.Reason == reason);
+        }
+
+        // Subquery-Contains join, same shape as GetPosTopProductsAsync's item/transaction join.
+        var itemRows = await _db.WriteOffItems
+            .Where(i => writeOffQuery.Select(w => w.Id).Contains(i.WriteOffId))
+            .Select(i => new { i.ProductId, ProductName = i.Product!.Name, i.Quantity, i.LossAmount })
+            .ToListAsync(ct);
+
+        var byProduct = itemRows
+            .GroupBy(i => i.ProductId)
+            .Select(g => new
+            {
+                ProductId   = g.Key,
+                ProductName = g.First().ProductName,
+                Quantity    = g.Sum(i => i.Quantity),
+                LossAmount  = g.Sum(i => i.LossAmount ?? 0m)
+            })
+            .ToList();
+
+        var totalLoss = byProduct.Sum(p => p.LossAmount);
+
+        var products = byProduct
+            .Select(p => new LossByProductRowDto(
+                ProductId:    p.ProductId,
+                ProductName:  p.ProductName,
+                Quantity:     p.Quantity,
+                LossAmount:   p.LossAmount,
+                SharePercent: totalLoss == 0m ? 0m : Math.Round(p.LossAmount / totalLoss * 100m, 2)))
+            .OrderByDescending(p => p.LossAmount)
+            .ToList();
+
+        return new LossesByProductDto(TotalLoss: totalLoss, Products: products);
+    }
+
     // ── POS analytics ─────────────────────────────────────────────────────
 
     public async Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(
@@ -467,6 +655,106 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             .ToList();
 
         return new PosCashierStatsDto(Cashiers: cashiers);
+    }
+
+    // ── TASK-482: single-product sales trend ─────────────────────────────────
+
+    public async Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(
+        Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, CancellationToken ct = default)
+    {
+        // Tenant-scoped existence check doubles as the ProductName/PricePurchase source. Null
+        // here is the controller's 404 signal — mirrors ItemsController.GetById's nullable-DTO
+        // convention (no matching Item in the caller's tenant scope). Same belt-and-suspenders
+        // explicit tenantId filter (on top of RLS) every other method in this file already uses.
+        var itemQuery = _db.Items.Where(i => i.Id == productId);
+        if (tenantId.HasValue)
+            itemQuery = itemQuery.Where(i => i.TenantId == tenantId.Value);
+
+        var item = await itemQuery
+            .Select(i => new { i.Name, i.PricePurchase })
+            .FirstOrDefaultAsync(ct);
+
+        if (item is null)
+            return null;
+
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
+        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
+        var resolvedGroupBy = groupBy == "week" ? "week" : "day";
+
+        // SQL-side GroupBy — deliberately unlike GetPosTopProductsAsync above (which materializes
+        // rows into memory before grouping, an accepted anti-pattern for that lower-cardinality
+        // query, not to be copied here). The join+group+aggregate all run server-side, so only
+        // the already-collapsed points (<=366 rows for a 1-year day range) ever cross into
+        // memory. Filtering PosTransactionItems by ProductId first (the index's leading column)
+        // is what lets this use TASK-479's idx_pos_transaction_items_product_covering
+        // ("ProductId","TransactionId") INCLUDE ("Quantity","PriceFinal") — confirmed via
+        // EXPLAIN ANALYZE against real dev data: Index Only Scan, Heap Fetches: 0 (see task log).
+        //
+        // EF.Functions has no DateTrunc/week helper in this Npgsql EF Core provider version
+        // (verified by reflecting the installed 8.0.11 package: ILike/JsonContains/full-text/
+        // network helpers exist, date truncation does not — EF.Functions.DateTrunc doesn't
+        // compile). "day" instead relies on the provider's built-in DateTime.Date member
+        // translation (confirmed via ToQueryString(): -> date_trunc('day', "CreatedAt", 'UTC')).
+        // "week" inlines the same Monday-anchored ISO offset IsoWeekStart() below uses
+        // (dow == 0 ? -6 : 1 - dow) as translatable DateTime member arithmetic instead of calling
+        // that method directly (EF cannot translate a call to an arbitrary private C# method) —
+        // confirmed translatable and correct against real data: every resulting week bucket key
+        // landed exactly on a Monday when spot-checked, and day/week point sums both matched an
+        // independently-computed ground-truth total exactly.
+        var baseQuery = _db.PosTransactionItems
+            .Where(i => i.ProductId == productId)
+            .Join(txQuery, i => i.TransactionId, t => t.Id, (i, t) => new { i.Quantity, i.PriceFinal, t.CreatedAt });
+
+        var grouped = resolvedGroupBy == "week"
+            ? await baseQuery
+                .GroupBy(x => x.CreatedAt.Date.AddDays((int)x.CreatedAt.DayOfWeek == 0 ? -6 : 1 - (int)x.CreatedAt.DayOfWeek))
+                .Select(g => new
+                {
+                    Date = g.Key,
+                    Revenue = g.Sum(x => x.PriceFinal * x.Quantity),
+                    Quantity = g.Sum(x => x.Quantity),
+                    // Item-row count within the bucket, not a distinct-transaction count — a
+                    // single transaction with two line items for this product (e.g. two
+                    // different batches) counts as 2 here. Matches this endpoint's own per-point
+                    // granularity; unlike GetPosTopProductsAsync's TransactionCount, which
+                    // explicitly de-dupes.
+                    Transactions = g.Count()
+                })
+                .OrderBy(p => p.Date)
+                .ToListAsync(ct)
+            : await baseQuery
+                .GroupBy(x => x.CreatedAt.Date)
+                .Select(g => new
+                {
+                    Date = g.Key,
+                    Revenue = g.Sum(x => x.PriceFinal * x.Quantity),
+                    Quantity = g.Sum(x => x.Quantity),
+                    Transactions = g.Count()
+                })
+                .OrderBy(p => p.Date)
+                .ToListAsync(ct);
+
+        // Margin (ADR-027): cheap second pass over the already-collapsed (<=366-row) points list
+        // — does not reintroduce the in-memory-aggregation anti-pattern since the expensive
+        // join/group/sum already happened in SQL above. Same null-vs-authorized /
+        // null-vs-no-cost-on-file distinction as GetCategoryProductBreakdownAsync (TASK-481).
+        var points = grouped
+            .Select(p => new ProductSalesTrendPointDto(
+                Date: DateOnly.FromDateTime(p.Date),
+                Revenue: p.Revenue,
+                Quantity: p.Quantity,
+                TransactionCount: p.Transactions,
+                MarginAmount: includeMargin && item.PricePurchase.HasValue
+                    ? p.Revenue - p.Quantity * item.PricePurchase.Value
+                    : null))
+            .ToList();
+
+        return new ProductSalesTrendDto(
+            ProductId: productId,
+            ProductName: item.Name,
+            Points: points,
+            GroupBy: resolvedGroupBy);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

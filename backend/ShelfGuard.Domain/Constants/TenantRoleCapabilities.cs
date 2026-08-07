@@ -46,6 +46,20 @@ public static class TenantRoleCapabilities
     /// <summary>Read-only access to every GET on AnalyticsController (the whole controller is read-only).</summary>
     public const string AnalyticsView = "analytics.view";
 
+    /// <summary>
+    /// Widens <c>AnalyticsAuthorization.CanViewMargin</c>'s (backend/ShelfGuard.Infrastructure/
+    /// Authorization) network_manager+ default floor down to a lower-ranked role holding this
+    /// capability — same "role check ORs a capability" shape as every other row in this group.
+    /// Unlike <see cref="AnalyticsView"/> (store_manager+, gates the whole controller via
+    /// <c>AnalyticsViewOrCapability</c>), this capability only ever widens who can see
+    /// purchase-cost/margin figures specifically (<c>MarginAmount</c>/<c>MarginPercent</c> on the
+    /// category-breakdown, losses-by-product, and product-trend DTOs, TASK-480/481/482); it never
+    /// narrows the network_manager+ default and has no effect on the base analytics view. Checked
+    /// via an imperative in-body check, not a policy attribute, because it nulls out two fields
+    /// within an otherwise-successful response rather than gating the whole endpoint.
+    /// </summary>
+    public const string AnalyticsViewMargin = "analytics.view_margin";
+
     /// <summary>Read integration configs (GetAll/GetByService — secrets stay masked, same as today).</summary>
     public const string IntegrationsView = "integrations.view";
 
@@ -125,7 +139,7 @@ public static class TenantRoleCapabilities
     public static readonly HashSet<string> All =
     [
         UsersManage, SchedulesManage,
-        AnalyticsView, IntegrationsView, IntegrationsManage,
+        AnalyticsView, AnalyticsViewMargin, IntegrationsView, IntegrationsManage,
         TenantUserPermissions.LegalEntitiesManage,
         OrdersManage, SuppliersView, SuppliersManage, ReceiptsView,
         AiOrdersView, AiOrdersManage,
@@ -147,6 +161,7 @@ public static class TenantRoleCapabilities
         new("Бухгалтер / Фінансист",
         [
             new(AnalyticsView, "Перегляд аналітики"),
+            new(AnalyticsViewMargin, "Перегляд маржі/собівартості в аналітиці"),
             new(IntegrationsView, "Перегляд інтеграцій"),
             new(IntegrationsManage, "Керування інтеграціями"),
             new(TenantUserPermissions.LegalEntitiesManage, "Керування юридичними особами"),

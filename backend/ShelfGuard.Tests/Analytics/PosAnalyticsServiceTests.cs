@@ -1,7 +1,10 @@
+using System.Security.Claims;
 using NSubstitute;
 using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Application.Features.Analytics.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Interfaces;
+using ShelfGuard.Infrastructure.Authorization;
 using Xunit;
 
 namespace ShelfGuard.Tests.Analytics;
@@ -159,4 +162,287 @@ public sealed class PosAnalyticsServiceTests
         Assert.Equal(100m, cashier.AverageTicket);
         Assert.Equal(2, cashier.ShiftCount);
     }
+
+    // ── TASK-481: GetCategoryProductBreakdownAsync ───────────────────────────
+
+    [Fact]
+    public async Task GetCategoryProductBreakdownAsync_delegates_to_repository()
+    {
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        var expected = new CategoryProductBreakdownDto(
+            CategoryId: categoryId,
+            CategoryName: "Dairy",
+            Products: new List<CategoryProductRowDto>
+            {
+                new(productId, "Milk", Safe: 5, Warning: 1, Critical: 0, Expired: 0, TotalQuantity: 60m,
+                    SalesRevenue: 500m, UnitsSold: 50m, MarginAmount: null, MarginPercent: null),
+            });
+
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default)
+             .Returns(expected);
+
+        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, includeMargin: false);
+
+        Assert.Equal(categoryId, result.CategoryId);
+        Assert.Equal("Dairy", result.CategoryName);
+        var row = Assert.Single(result.Products);
+        Assert.Equal(productId, row.ProductId);
+        Assert.Equal(500m, row.SalesRevenue);
+        await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default);
+    }
+
+    [Fact]
+    public async Task GetCategoryProductBreakdownAsync_null_category_id_is_forwarded_as_uncategorized_bucket()
+    {
+        var expected = new CategoryProductBreakdownDto(CategoryId: null, CategoryName: "Без категорії", Products: []);
+
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, null, null, From30, Today, false, default)
+             .Returns(expected);
+
+        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, null, null, From30, Today, includeMargin: false);
+
+        Assert.Null(result.CategoryId);
+        Assert.Equal("Без категорії", result.CategoryName);
+        await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, null, null, From30, Today, false, default);
+    }
+
+    // Pins ADR-027's authorization contract end to end at this layer: constructs the same
+    // ClaimsPrincipal shape AnalyticsAuthorizationTests uses, resolves CanViewMargin exactly as
+    // the controller will, and proves the resulting bool is what decides whether the DTO's
+    // margin fields come back null or populated -- store_manager clears the base
+    // AnalyticsViewOrCapability controller floor but not this narrower, one-tier-higher check;
+    // network_manager clears both.
+    [Fact]
+    public async Task GetCategoryProductBreakdownAsync_margin_is_null_for_store_manager_and_populated_for_network_manager()
+    {
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        var withoutMargin = new CategoryProductBreakdownDto(
+            CategoryId: categoryId,
+            CategoryName: "Dairy",
+            Products: new List<CategoryProductRowDto>
+            {
+                new(productId, "Milk", 5, 1, 0, 0, 60m, 500m, 50m, MarginAmount: null, MarginPercent: null),
+            });
+
+        var withMargin = new CategoryProductBreakdownDto(
+            CategoryId: categoryId,
+            CategoryName: "Dairy",
+            Products: new List<CategoryProductRowDto>
+            {
+                new(productId, "Milk", 5, 1, 0, 0, 60m, 500m, 50m, MarginAmount: 150m, MarginPercent: 30m),
+            });
+
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default)
+             .Returns(withoutMargin);
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, true, default)
+             .Returns(withMargin);
+
+        var storeManagerCanViewMargin = AnalyticsAuthorization.CanViewMargin(MakeUser(AppRoles.StoreManager));
+        var networkManagerCanViewMargin = AnalyticsAuthorization.CanViewMargin(MakeUser(AppRoles.NetworkManager));
+        Assert.False(storeManagerCanViewMargin);
+        Assert.True(networkManagerCanViewMargin);
+
+        var storeManagerResult = await _sut.GetCategoryProductBreakdownAsync(
+            _tenantId, null, categoryId, From30, Today, includeMargin: storeManagerCanViewMargin);
+        var networkManagerResult = await _sut.GetCategoryProductBreakdownAsync(
+            _tenantId, null, categoryId, From30, Today, includeMargin: networkManagerCanViewMargin);
+
+        Assert.All(storeManagerResult.Products, p => Assert.Null(p.MarginAmount));
+        Assert.All(storeManagerResult.Products, p => Assert.Null(p.MarginPercent));
+        Assert.All(networkManagerResult.Products, p => Assert.NotNull(p.MarginAmount));
+        Assert.All(networkManagerResult.Products, p => Assert.NotNull(p.MarginPercent));
+
+        await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, false, default);
+        await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, null, categoryId, From30, Today, true, default);
+    }
+
+    // ── TASK-481: GetLossesByProductAsync ─────────────────────────────────────
+
+    [Fact]
+    public async Task GetLossesByProductAsync_delegates_to_repository()
+    {
+        var productId = Guid.NewGuid();
+        var expected = new LossesByProductDto(
+            TotalLoss: 200m,
+            Products: new List<LossByProductRowDto>
+            {
+                new(productId, "Bread", Quantity: 10m, LossAmount: 200m, SharePercent: 100m),
+            });
+
+        _repo.GetLossesByProductAsync(_tenantId, null, null, From30, Today, default)
+             .Returns(expected);
+
+        var result = await _sut.GetLossesByProductAsync(_tenantId, null, null, From30, Today);
+
+        Assert.Equal(200m, result.TotalLoss);
+        var row = Assert.Single(result.Products);
+        Assert.Equal(productId, row.ProductId);
+        Assert.Equal(100m, row.SharePercent);
+        await _repo.Received(1).GetLossesByProductAsync(_tenantId, null, null, From30, Today, default);
+    }
+
+    [Fact]
+    public async Task GetLossesByProductAsync_store_and_reason_filters_are_forwarded_unchanged()
+    {
+        var storeId = Guid.NewGuid();
+        var expected = new LossesByProductDto(TotalLoss: 0m, Products: []);
+
+        _repo.GetLossesByProductAsync(_tenantId, storeId, "expired", From30, Today, default)
+             .Returns(expected);
+
+        var result = await _sut.GetLossesByProductAsync(_tenantId, storeId, "expired", From30, Today);
+
+        Assert.Empty(result.Products);
+        await _repo.Received(1).GetLossesByProductAsync(_tenantId, storeId, "expired", From30, Today, default);
+    }
+
+    // No margin gate (ADR-027 §1): LossByProductRowDto carries no MarginAmount/MarginPercent
+    // fields at all, and GetLossesByProductAsync's own signature has no includeMargin/
+    // ClaimsPrincipal parameter -- unlike GetCategoryProductBreakdownAsync above, there is
+    // nothing in this call path that could vary by caller role. Confirms both roles really do
+    // differ on CanViewMargin (so this isn't vacuous), then shows the endpoint call itself never
+    // consults it.
+    [Fact]
+    public async Task GetLossesByProductAsync_has_no_margin_gate_by_construction()
+    {
+        var storeManagerCanViewMargin = AnalyticsAuthorization.CanViewMargin(MakeUser(AppRoles.StoreManager));
+        var networkManagerCanViewMargin = AnalyticsAuthorization.CanViewMargin(MakeUser(AppRoles.NetworkManager));
+        Assert.False(storeManagerCanViewMargin);
+        Assert.True(networkManagerCanViewMargin);
+
+        var productId = Guid.NewGuid();
+        var expected = new LossesByProductDto(
+            TotalLoss: 300m,
+            Products: new List<LossByProductRowDto> { new(productId, "Cheese", 5m, 300m, 100m) });
+
+        _repo.GetLossesByProductAsync(_tenantId, null, null, From30, Today, default).Returns(expected);
+
+        // Same call regardless of which role is asking -- the method takes no role/margin input.
+        var result = await _sut.GetLossesByProductAsync(_tenantId, null, null, From30, Today);
+
+        var row = Assert.Single(result.Products);
+        Assert.Equal(300m, row.LossAmount);
+        Assert.Equal(100m, row.SharePercent);
+        await _repo.Received(1).GetLossesByProductAsync(_tenantId, null, null, From30, Today, default);
+    }
+
+    // ── TASK-482: GetProductSalesTrendAsync ──────────────────────────────────
+
+    [Fact]
+    public async Task GetProductSalesTrendAsync_day_groupBy_delegates_to_repository()
+    {
+        var productId = Guid.NewGuid();
+        var expected = new ProductSalesTrendDto(
+            ProductId: productId,
+            ProductName: "Milk",
+            Points: new List<ProductSalesTrendPointDto>
+            {
+                new(Today, Revenue: 100m, Quantity: 10m, TransactionCount: 5, MarginAmount: null),
+            },
+            GroupBy: "day");
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default)
+             .Returns(expected);
+
+        var result = await _sut.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", includeMargin: false);
+
+        Assert.NotNull(result);
+        Assert.Equal("day", result!.GroupBy);
+        Assert.Equal(productId, result.ProductId);
+        var point = Assert.Single(result.Points);
+        Assert.Equal(100m, point.Revenue);
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default);
+    }
+
+    [Fact]
+    public async Task GetProductSalesTrendAsync_week_groupBy_passes_week_to_repository()
+    {
+        var productId = Guid.NewGuid();
+        var expected = new ProductSalesTrendDto(
+            ProductId: productId,
+            ProductName: "Milk",
+            Points: [],
+            GroupBy: "week");
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "week", false, default)
+             .Returns(expected);
+
+        var result = await _sut.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "week", includeMargin: false);
+
+        Assert.NotNull(result);
+        Assert.Equal("week", result!.GroupBy);
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "week", false, default);
+    }
+
+    // Pins ADR-027's authorization contract end to end at this layer, same shape as
+    // GetCategoryProductBreakdownAsync's margin test above (TASK-481): constructs the same
+    // ClaimsPrincipal shape AnalyticsAuthorizationTests uses, resolves CanViewMargin exactly as
+    // the controller will, and proves the resulting bool is what decides whether each point's
+    // MarginAmount comes back null or populated.
+    [Fact]
+    public async Task GetProductSalesTrendAsync_margin_is_null_for_store_manager_and_populated_for_network_manager()
+    {
+        var productId = Guid.NewGuid();
+
+        var withoutMargin = new ProductSalesTrendDto(
+            ProductId: productId,
+            ProductName: "Milk",
+            Points: new List<ProductSalesTrendPointDto> { new(Today, 100m, 10m, 5, MarginAmount: null) },
+            GroupBy: "day");
+
+        var withMargin = new ProductSalesTrendDto(
+            ProductId: productId,
+            ProductName: "Milk",
+            Points: new List<ProductSalesTrendPointDto> { new(Today, 100m, 10m, 5, MarginAmount: 15m) },
+            GroupBy: "day");
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default)
+             .Returns(withoutMargin);
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", true, default)
+             .Returns(withMargin);
+
+        var storeManagerCanViewMargin = AnalyticsAuthorization.CanViewMargin(MakeUser(AppRoles.StoreManager));
+        var networkManagerCanViewMargin = AnalyticsAuthorization.CanViewMargin(MakeUser(AppRoles.NetworkManager));
+        Assert.False(storeManagerCanViewMargin);
+        Assert.True(networkManagerCanViewMargin);
+
+        var storeManagerResult = await _sut.GetProductSalesTrendAsync(
+            _tenantId, null, productId, From30, Today, "day", includeMargin: storeManagerCanViewMargin);
+        var networkManagerResult = await _sut.GetProductSalesTrendAsync(
+            _tenantId, null, productId, From30, Today, "day", includeMargin: networkManagerCanViewMargin);
+
+        Assert.All(storeManagerResult!.Points, p => Assert.Null(p.MarginAmount));
+        Assert.All(networkManagerResult!.Points, p => Assert.NotNull(p.MarginAmount));
+
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default);
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", true, default);
+    }
+
+    // Repository returns null when productId doesn't resolve to a real Item in the caller's
+    // tenant scope -- that's the controller's NotFound() signal (GetProductSalesTrend:
+    // "return result is null ? NotFound() : Ok(result);", mirroring ItemsController.GetById).
+    // Proves the service is a pure pass-through of that null, same convention as
+    // ItemServiceTests' GetByIdAsync-returns-null tests use for the equivalent case one layer
+    // down. Controller action itself is a one-line ternary, consistent with this codebase having
+    // no *ControllerTests.cs files anywhere -- controllers aren't unit-tested directly here.
+    [Fact]
+    public async Task GetProductSalesTrendAsync_returns_null_when_repository_finds_no_matching_product()
+    {
+        var unknownProductId = Guid.NewGuid();
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, unknownProductId, From30, Today, "day", false, default)
+             .Returns((ProductSalesTrendDto?)null);
+
+        var result = await _sut.GetProductSalesTrendAsync(_tenantId, null, unknownProductId, From30, Today, "day", includeMargin: false);
+
+        Assert.Null(result);
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, unknownProductId, From30, Today, "day", false, default);
+    }
+
+    private static ClaimsPrincipal MakeUser(string role)
+        => new(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, role) }, "TestAuth"));
 }

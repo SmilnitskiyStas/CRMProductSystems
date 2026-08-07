@@ -63,3 +63,26 @@ public sealed record CashierStatDto(
     int TransactionCount,
     decimal AverageTicket,
     int ShiftCount);
+
+// ── TASK-482: single-product sales trend (row-click drill-down from pos/top-products) ───────
+
+/// <summary>
+/// Day/week revenue+quantity trend for one product. No compare-mode variant — this is a
+/// snapshot drill-down off a table row, not a page-level KPI trend (see PosRevenueTrendDto for
+/// that). <see cref="MarginAmount"/> on each point is null unless the caller cleared
+/// AnalyticsAuthorization.CanViewMargin (ADR-027) — same "оцінна маржа" retroactive-cost-basis
+/// caveat as GetCategoryProductBreakdownAsync (TASK-481): current Item.PricePurchase applied
+/// retroactively, not the batch cost at the time of each historical sale.
+/// </summary>
+public sealed record ProductSalesTrendDto(
+    Guid ProductId,
+    string ProductName,
+    IReadOnlyList<ProductSalesTrendPointDto> Points,
+    string GroupBy);
+
+public sealed record ProductSalesTrendPointDto(
+    DateOnly Date,
+    decimal Revenue,
+    decimal Quantity,
+    int TransactionCount,
+    decimal? MarginAmount);

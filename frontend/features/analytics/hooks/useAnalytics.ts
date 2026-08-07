@@ -75,3 +75,32 @@ export function useLossesCompare(
     enabled,
   });
 }
+
+// ── Category × product breakdown / losses × product (TASK-483) ─────────────
+// NOTE: neither hook uses `placeholderData`/`keepPreviousData` on purpose (same discipline as
+// useMarketingAnalyticsOverview etc. in useMarketingAnalytics.ts) — the full filter object is
+// the query key, so switching category/store/reason/date-range is always a brand-new key and
+// React Query shows a clean loading state instead of quietly keeping the previous selection's
+// rows on screen.
+
+export function useCategoryProductBreakdown(
+  params: { category_id: string | null; store_id?: string; from?: string; to?: string },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["analytics-category-products", params],
+    queryFn: () => analyticsApi.getCategoryProductBreakdown(params),
+    enabled,
+  });
+}
+
+export function useLossesByProduct(
+  params: { store_id?: string; reason?: string; from?: string; to?: string },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["analytics-losses-by-product", params],
+    queryFn: () => analyticsApi.getLossesByProduct(params),
+    enabled,
+  });
+}

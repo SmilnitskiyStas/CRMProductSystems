@@ -778,6 +778,65 @@ parent segment correctly removes its member rows). No new xUnit file — already
 existing dynamic RLS audits in `RlsCrossTenantIntegrationTests.cs` that enumerate every FORCE-RLS
 table at query time.
 
+## TASK-479 — `pos_transaction_items` product-covering index (`AddPosTransactionItemProductCoveringIndex`, 2026-08-07)
+
+Ahead of TASK-482 (per-product sales trend endpoint, part of the `/analytics`+`/analytics/pos`
+interactive-drill-down plan, `iterative-purring-sifakis.md`), added the index that endpoint's query
+needs: "filter by `ProductId`, need `Quantity`/`PriceFinal`, need to join to `PosTransactions` for
+the date." None of `pos_transaction_items`'s existing indexes covered that shape — it previously had
+only a plain `IX_..._ProductId`, a plain `IX_..._ProductStockId`, and a `TransactionId`-leading
+covering index (`idx_pos_transaction_items_txn_covering`, added by `20260618153017_
+AddPerformanceIndexes`, INCLUDE `ProductId`/`PriceFinal`/`Quantity` — receipt-line lookup by
+transaction, not product).
+
+```sql
+CREATE INDEX idx_pos_transaction_items_product_covering
+  ON pos_transaction_items ("ProductId", "TransactionId")
+  INCLUDE ("Quantity", "PriceFinal");
+```
+
+**Old plain `IX_pos_transaction_items_ProductId` dropped in the same migration** — same precedent
+`AddPerformanceIndexes` already set for the old plain `TransactionId` index once its covering
+replacement existed. Confirmed safe three ways, not just asserted:
+- **EF Core generated the drop itself.** Adding the new composite `HasIndex(i => new {
+  i.ProductId, i.TransactionId })` to `PosTransactionItem`'s fluent config in `AppDbContext.cs` and
+  running `dotnet ef migrations add` produced a `DropIndex("IX_pos_transaction_items_ProductId")` +
+  `CreateIndex(...)` diff automatically, with no hand-editing — EF's `ForeignKeyIndexConvention`
+  recognizes that `ProductId` (the FK to `Item`) is already the *leading* column of the new
+  composite index and stops requiring its own single-column index. This is the same mechanism that
+  made the old `e.HasIndex(i => i.TransactionId)` calls collapse into one physical index rather than
+  two — not a special case written for this task.
+- **No live query path relies on a standalone `ProductId` lookup.** Grepped every call site
+  touching `pos_transaction_items`/`PosTransactionItems` (`AnalyticsRepository.cs`,
+  `MarketingAnalyticsRepository.cs`, `AudienceBuilderRepository.cs`, `PosService.cs`): every one
+  either filters by `TransactionId` first (`.Where(i => txQuery.Select(t => t.Id).Contains(i.
+  TransactionId))`) or joins `pos_transactions t ON t."Id" = ti."TransactionId"` before ever
+  touching `ti."ProductId"` (as a join/`IN` condition, not a leading `WHERE`). No existing query
+  would have used a standalone `ProductId` index as its access path anyway.
+- **The FK-RESTRICT delete-check use case is still served.** `PosTransactionItem.ProductId → Item`
+  is `OnDelete(DeleteBehavior.Restrict)`, so Postgres needs *some* index leading on `ProductId` to
+  check "any transaction lines reference this item?" efficiently on delete. The new composite index
+  keeps `ProductId` as its first column, so it serves this exactly as well as the old plain index
+  did. (In practice this path is rarely exercised — per Architecture Rules below, items are
+  soft-deleted via `IsActive`, never hard-deleted — but the index still covers it either way.)
+
+`IX_pos_transaction_items_ProductStockId` was left untouched — out of this task's scope, and it
+serves a different (nullable, `SetNull`) FK with no relationship to the new query shape.
+
+**EXPLAIN ANALYZE not run against real volume**: local dev Postgres was reachable and the migration
+was live-applied and verified there (`pg_indexes` confirms the exact index shape above, old index
+gone), but `pos_transactions`/`items`/`pos_transaction_items` are all currently empty in that
+database (0 rows) — a planner will correctly prefer a Seq Scan over any index on a 0-row table
+regardless of which indexes exist, so running EXPLAIN ANALYZE now would not produce a meaningful
+signal either way. Real plan verification (Index Scan, not Seq Scan) is deferred to TASK-482's own
+verification step once the actual repository query exists and can run against realistic data, per
+the plan doc's own verification checklist — consistent with how `AddPerformanceIndexes` and
+TASK-428's trigram index were verified against seeded/synthetic volume, not an empty table.
+
+Applied via the app's own non-superuser `shelfguard_app_dev` connection (pure `DROP INDEX`/
+`CREATE INDEX`, no new FK against populated data, no RLS interaction) — correct table ownership
+was never in question here.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

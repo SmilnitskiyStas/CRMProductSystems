@@ -18,6 +18,8 @@ import { PosRevenueTrendChart } from "@/features/analytics/components/PosRevenue
 import { PosTopProductsTable } from "@/features/analytics/components/PosTopProductsTable";
 import { PosCashierStatsTable } from "@/features/analytics/components/PosCashierStatsTable";
 import { PosPaymentPieChart } from "@/features/analytics/components/PosPaymentPieChart";
+import { PosDayDetailPanel } from "@/features/analytics/components/PosDayDetailPanel";
+import { PosProductTrendPanel } from "@/features/analytics/components/PosProductTrendPanel";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
@@ -112,6 +114,8 @@ export default function PosAnalyticsPage() {
   const [groupBy, setGroupBy] = useState<"day" | "week">("day");
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [compareRange, setCompareRange] = useState<SimpleDateRange | undefined>(undefined);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string } | null>(null);
 
   const range: SimpleDateRange = useMemo(
     () => ({ from: parseDateInputValue(from), to: parseDateInputValue(to) }),
@@ -161,6 +165,17 @@ export default function PosAnalyticsPage() {
   const effectiveSummaryLoading = compareEnabled ? summaryCompareLoading : summaryLoading;
   const effectiveTrend = compareEnabled ? (trendCompare ? { points: trendCompare.current, groupBy: trendCompare.groupBy } : undefined) : trend;
   const effectiveTrendLoading = compareEnabled ? trendCompareLoading : trendLoading;
+
+  function handleDayClick(date: string) {
+    // Clicking the already-selected day again collapses the panel (same toggle-on-reselect
+    // convention as marketing-analytics/page.tsx's handleSelectSegment).
+    setSelectedDay((prev) => (prev === date ? null : date));
+  }
+
+  function handleProductClick(productId: string, productName: string) {
+    // Same toggle-on-reselect convention as handleDayClick above.
+    setSelectedProduct((prev) => (prev?.id === productId ? null : { id: productId, name: productName }));
+  }
 
   if (access === null) return null;
   if (!access) return <AccessDenied title={t("title")} />;
@@ -259,6 +274,8 @@ export default function PosAnalyticsPage() {
                 ? { points: trendCompare.comparison, from: trendCompare.compareFrom }
                 : undefined
             }
+            onDayClick={handleDayClick}
+            selectedDay={selectedDay}
           />
         ) : (
           <div
@@ -276,6 +293,15 @@ export default function PosAnalyticsPage() {
         )}
       </section>
 
+      {/* Day detail (from clicking a point on the revenue trend chart above) */}
+      {selectedDay && (
+        <PosDayDetailPanel
+          date={selectedDay}
+          storeId={storeId || undefined}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
+
       {/* Top products + Cashiers side by side */}
       <section>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -283,7 +309,11 @@ export default function PosAnalyticsPage() {
             {topLoading ? (
               <div style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</div>
             ) : topProducts ? (
-              <PosTopProductsTable data={topProducts} />
+              <PosTopProductsTable
+                data={topProducts}
+                onRowClick={handleProductClick}
+                selectedProductId={selectedProduct?.id ?? null}
+              />
             ) : null}
           </div>
           <div>
@@ -295,6 +325,16 @@ export default function PosAnalyticsPage() {
           </div>
         </div>
       </section>
+
+      {/* Product trend (from clicking a row on the top products table above) */}
+      {selectedProduct && (
+        <PosProductTrendPanel
+          productId={selectedProduct.id}
+          productName={selectedProduct.name}
+          storeId={storeId || undefined}
+          onClose={() => setSelectedProduct(null)}
+        />
+      )}
 
       {/* Payment pie */}
       {effectiveSummary && effectiveSummary.totalRevenue > 0 && (

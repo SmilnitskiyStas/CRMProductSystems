@@ -715,7 +715,9 @@
           "receipt": "Поставки",
           "transfer": "Передачі",
           "write_off": "Списання",
-          "adjustment": "Коригування"
+          "adjustment": "Коригування",
+          "revenue": "Виручка",
+          "margin": "Маржа (оцінна)"
         },
         "movementType": {
           "receipt": "Поставка",
@@ -1473,7 +1475,18 @@
           "empty": "Немає даних за обраний період",
           "currentPeriod": "Поточний період",
           "previousPeriod": "Попередній період",
-          "dayLabel": "День {n}"
+          "dayLabel": "День {n}",
+          "hint": "Натисніть на точку графіка, щоб побачити деталі за цей день."
+        },
+        "dayDetail": {
+          "title": "Деталі за {date}",
+          "closeButton": "Закрити",
+          "noData": "Немає даних"
+        },
+        "productTrendPanel": {
+          "title": "Динаміка продажів: {product}",
+          "closeButton": "Закрити",
+          "marginDisclaimer": "«Оцінна маржа» розрахована за поточною закупівельною ціною товару в довіднику й може відрізнятися від фактичної собівартості на момент продажу."
         },
         "paymentPie": {
           "title": "Розбивка оплат",
@@ -1512,6 +1525,33 @@
         "tooltipLabel": "Збиток",
         "tooltipWriteOffsSuffix": "списань"
       },
+      "categoryDetailPanel": {
+        "title": "Товари категорії: {category}",
+        "closeButton": "Закрити",
+        "empty": "У цій категорії немає товарів за обраний період",
+        "marginDisclaimer": "«Оцінна маржа» розрахована за поточною закупівельною ціною товару в довіднику й може відрізнятися від фактичної собівартості на момент продажу.",
+        "headers": {
+          "product": "Товар",
+          "totalQuantity": "К-сть",
+          "salesRevenue": "Виручка",
+          "unitsSold": "Продано",
+          "marginAmount": "Маржа (оцінна)",
+          "marginPercent": "Маржа % (оцінна)"
+        },
+        "totalCount": "{count} товарів"
+      },
+      "lossesProductBreakdownPanel": {
+        "closeButton": "Закрити",
+        "empty": "Немає списань за обраний період",
+        "totalLossLabel": "Загальний збиток: {amount} ₴",
+        "headers": {
+          "product": "Товар",
+          "quantity": "К-сть",
+          "lossAmount": "Збиток",
+          "sharePercent": "Частка"
+        },
+        "totalCount": "{count} товарів"
+      },
       "page": {
         "title": "Аналітика",
         "subtitle": "Зведена аналітика по термінах, списаннях та рухах товарів",
@@ -1547,6 +1587,7 @@
         "metrics": {
           "totalLoss": "Загальні збитки"
         },
+        "lossesProductPanelTitle": "Товари у списаннях — {value}",
         "headers": {
           "store": "Магазин",
           "zone": "Зона",

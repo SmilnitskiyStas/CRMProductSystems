@@ -16,23 +16,30 @@ interface Props {
   critical: number;
   expired: number;
   needsVerification: number;
+  /**
+   * Called with a status key ready for `/stock?status=...` when a slice is clicked — same
+   * values (including snake_case `needs_verification`) the MetricCards/table rows on the
+   * /analytics page already navigate with. Component stays presentational: the page owns the
+   * actual `router.push`, this just reports which slice was clicked.
+   */
+  onSliceClick?: (status: string) => void;
 }
 
-export function ExpiryDonut({ safe, warning, critical, expired, needsVerification }: Props) {
+export function ExpiryDonut({ safe, warning, critical, expired, needsVerification, onSliceClick }: Props) {
   const t = useTranslations("Dashboard.analytics.expiryDonut");
   const tStatus = useTranslations("Dashboard.analytics.status");
   const raw: Record<string, number> = { safe, warning, critical, expired, needsVerification };
 
   const SLICES = [
-    { key: "safe",              label: tStatus("safe"),             color: "#4ADE80" },
-    { key: "warning",           label: tStatus("warning"),          color: "#FBBF24" },
-    { key: "critical",          label: tStatus("critical"),         color: "#F87171" },
-    { key: "expired",           label: tStatus("expired"),          color: "#DC2626" },
-    { key: "needsVerification", label: tStatus("needsVerification"), color: "#A78BFA" },
+    { key: "safe",              status: "safe",               label: tStatus("safe"),             color: "#4ADE80" },
+    { key: "warning",           status: "warning",            label: tStatus("warning"),          color: "#FBBF24" },
+    { key: "critical",          status: "critical",           label: tStatus("critical"),         color: "#F87171" },
+    { key: "expired",           status: "expired",            label: tStatus("expired"),          color: "#DC2626" },
+    { key: "needsVerification", status: "needs_verification", label: tStatus("needsVerification"), color: "#A78BFA" },
   ] as const;
 
   const data = SLICES
-    .map((s) => ({ name: s.label, value: raw[s.key], color: s.color }))
+    .map((s) => ({ name: s.label, value: raw[s.key], color: s.color, status: s.status }))
     .filter((d) => d.value > 0);
 
   if (data.length === 0) return null;
@@ -59,9 +66,26 @@ export function ExpiryDonut({ safe, warning, critical, expired, needsVerificatio
             outerRadius={100}
             paddingAngle={3}
             dataKey="value"
+            // Recharts (3.x) dispatches per-sector clicks through the Pie's own onClick, not
+            // through <Cell onClick>: it receives back the sector's data entry (our `data` item,
+            // `status` included) — see Pie's PieSectorDataItem type, which is intentionally loose
+            // ("we spread the data object in, so we can't know what's inside") hence the cast.
+            onClick={
+              onSliceClick
+                ? (entry: unknown) => {
+                    const status = (entry as { status?: string } | null)?.status;
+                    if (status) onSliceClick(status);
+                  }
+                : undefined
+            }
           >
             {data.map((entry, i) => (
-              <Cell key={i} fill={entry.color} stroke="transparent" />
+              <Cell
+                key={i}
+                fill={entry.color}
+                stroke="transparent"
+                style={onSliceClick ? { cursor: "pointer" } : undefined}
+              />
             ))}
           </Pie>
           <Tooltip

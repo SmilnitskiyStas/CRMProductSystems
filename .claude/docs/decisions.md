@@ -1,7 +1,119 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-06
+**Updated:** 2026-08-07
+
+## ADR-027: Analytics margin — `Item.PricePurchase` as retroactive cost source, network_manager+ authorization floor, deferred cashier/payment-type drill-downs
+Date: 2026-08-07
+Status: accepted
+
+Context: Interactive-analytics-and-margin initiative (TASK-479..487) makes `/analytics` and
+`/analytics/pos` clickable (drill-down panels instead of navigate-away links) and adds
+margin/profitability figures, which do not exist anywhere in the product today. TASK-479
+(database-engineer) added the supporting covering index. This entry — written by TASK-480
+(backend-developer), which shipped `AnalyticsAuthorization.CanViewMargin` and the
+`analytics.view_margin` capability — records the two decisions that constrain every later task in
+the initiative: where margin numbers come from, and which two requested drill-downs are explicitly
+not being built this phase. TASK-481/482 (backend-developer) wire the actual DTOs/endpoints against
+both decisions; TASK-483/484/485 (frontend-developer) build the UI; TASK-486 (qa-tester)/TASK-487
+(security-reviewer) verify the result.
+
+Decision:
+
+1. **Margin cost source: current `Item.PricePurchase`, applied retroactively to every historical
+   `PosTransactionItem` — not a true point-of-sale cost snapshot.** Reconstructing the real cost of
+   the specific batch sold (`PosTransactionItem.ProductStockId → ProductStock →
+   StockReceiptItem.PricePurchase`) was checked by reading `ReceiptService.cs`, `TransferService.cs`,
+   `ProductionService.cs`, and `StockService.cs`, and the chain breaks at multiple points:
+   - `TransferService` writes the destination `ProductStock` row with `SourceType="transfer"` — the
+     original purchase cost is only reachable by recursively walking the transfer chain, which can
+     itself pass through further transfers or a production batch rather than terminating at a
+     receipt.
+   - `ProductionService` writes `SourceType="production"` with no cost link at all — resolving a
+     manufactured batch's cost would need full recipe costing (ingredient costs × BOM quantities), a
+     distinct, larger feature that does not exist today.
+   - `PosTransactionItem.ProductStockId` is nullable and is `SET NULL` when the referenced batch is
+     later deleted — so even sales that originally pointed at a cleanly-received batch lose that link
+     over time, independent of source type.
+
+   Resolving this exactly would require either a `WITH RECURSIVE` SQL walk per sale or a new
+   denormalized cost column written at every `ProductStock`-creating call site plus a backfill
+   migration — a materially larger and riskier scope than this phase's authorization-and-read-endpoint
+   work, and even then would not reach full coverage (rows that already lost their `ProductStockId`
+   stay unrecoverable either way). Given that, margin is computed as
+   `Revenue − Quantity × Item.PricePurchase`, using the item's CURRENT catalog purchase price against
+   ALL historical quantities: cheap (one pass over already-aggregated points), always available (no
+   dependency on `ProductStockId` surviving), but not what the batch actually cost at the time it was
+   sold if the supplier price has changed since.
+
+   **UI requirement, binding on TASK-483/484 (frontend-developer):** every rendered margin figure
+   (amount or percent, on any of the three new endpoints) must carry a visible "estimated" label —
+   Ukrainian "оцінна маржа" — not a tooltip-only caveat. This is a correctness disclosure, not a
+   nice-to-have: the figure is a retroactive approximation, and presenting it unlabeled would
+   overstate its precision to a network_manager+ viewer using it for a real decision.
+
+   `WriteOffItem.LossAmount` needs no equivalent decision — it is already computed and stored at
+   write-off time, not reconstructed afterward — so `losses/by-product` carries no estimation caveat
+   and, per `AnalyticsAuthorization.CanViewMargin`'s own doc comment, is also not gated by it (losses
+   are already shown in aggregate to every store_manager+ today).
+
+   **Deferred fast-follow, explicitly not built this phase:** a nullable `CostAtSale` snapshot column
+   on `PosTransactionItem`, resolved and written once at the moment of sale (the same call site that
+   already writes the row). Every sale from that point on would carry its own exact cost forever, with
+   no retroactive query and no dependency on `ProductStockId` surviving later batch deletions — but it
+   does nothing for sales that already happened, which stay on the `Item.PricePurchase` estimate
+   permanently. Not scheduled; recorded here so the idea isn't lost.
+
+2. **Two requested analytics interactions are deferred as backlog, not built this phase:**
+   - **Cashier sales-trend drill-down** (clicking a row in `PosCashierStatsTable`). No
+     `AnalyticsController` endpoint filters by `cashier_id` today; the shape would closely mirror
+     TASK-482's per-product trend endpoint (`GetProductSalesTrendAsync`), but is a new endpoint and
+     repository method, not a parameter added to an existing one. Left undone rather than half-done —
+     a clickable row with no working destination is worse UX than a non-interactive one.
+   - **Payment-type filtering on `/analytics/pos`** (from `PosPaymentPieChart`). No endpoint on the
+     POS analytics surface accepts a `PaymentType` filter today. Unlike the scoped drill-down panels
+     this phase does build (one clicked data point expands into a detail panel), this is a request to
+     refilter the ENTIRE page by a new dimension — a page-wide filter-bar addition touching every
+     card/table on `/analytics/pos` at once, a different and larger shape of work than a scoped panel,
+     and out of scope for this phase's brief.
+
+3. **Authorization primitive shipped this task (TASK-480):**
+   `AnalyticsAuthorization.CanViewMargin` (`backend/ShelfGuard.Infrastructure/Authorization/
+   AnalyticsAuthorization.cs`) gates the margin figures above — network_manager+
+   (`AppPolicies.AtLeastNetworkManagerRoles`) by default, OR the new
+   `TenantRoleCapabilities.AnalyticsViewMargin` (`"analytics.view_margin"`) capability — one tier
+   above the store_manager+ floor (`AnalyticsViewOrCapability`) that already gates the whole
+   `AnalyticsController`. Same imperative in-body-check shape as
+   `MarketingAnalyticsAuthorization.CanExportPii`, for the same structural reason: it narrows two
+   fields of an otherwise-successful response (server nulls `MarginAmount`/`MarginPercent`, it does
+   not 403 the request), not a whole endpoint. Full reasoning for the network_manager+ threshold
+   (versus the base store_manager+ floor) lives in the method's own doc comment, not repeated here.
+   Per KI-030, the capability branch is currently inert in production (`TenantRole.Capabilities`
+   doesn't reach the JWT yet) — the same standing gap `MarketingAnalyticsExportPii`'s capability
+   branch already has; the role branch (network_manager+) is unaffected and works today. TASK-481/482
+   wire this check into the actual DTOs/endpoints; TASK-487 (security-reviewer) re-verifies
+   server-side enforcement end to end (including that it does not simply duplicate the already-known
+   KI-030 finding).
+
+Consequences:
++ Margin ships this phase without a multi-call-site cost-snapshot migration and backfill — a smaller,
+  lower-risk scope for TASK-481/482
++ The authorization threshold is decided and tested up front (TASK-480, `AnalyticsAuthorizationTests`),
+  so TASK-481/482 implement against a settled contract instead of relitigating it mid-endpoint
+- Margin figures are a retroactive estimate against the CURRENT catalog price, not the actual cost at
+  time of sale — will silently drift from reality for any item whose `PricePurchase` has changed since
+  old sales; mitigated only by the mandatory "estimated" UI label, not by the number's own accuracy
+- Sales made from transferred or produced stock, and any sale whose original batch has since been
+  deleted, have no path to exact cost even after the deferred `CostAtSale` fast-follow ships, unless
+  that snapshot is written going forward — historical accuracy for those rows is permanently capped at
+  the estimate
+- Cashier trend drill-down and payment-type filtering remain non-interactive on `/analytics/pos` after
+  this phase ships — two of the four requested `/analytics/pos` interactions land, two stay backlog
+- Capability-based widening of `CanViewMargin` is inert until KI-030 is fixed — until then, granting a
+  specific sub-network_manager role the `analytics.view_margin` capability does not actually widen
+  their access in production, identical to the standing `marketing_analytics.export_pii` gap
+
+Supersedes: nothing — additive within the interactive-analytics-margin initiative (TASK-479..487).
 
 ## ADR-026: Forgot-password redesign — temporary password replaces link/token, third RLS exception retired, auth-locale default flips to English
 Date: 2026-08-04

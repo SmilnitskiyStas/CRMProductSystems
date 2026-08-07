@@ -6,6 +6,7 @@ import type {
   PosRevenueTrendCompareDto,
   PosTopProductsDto,
   PosCashierStatsDto,
+  ProductSalesTrendDto,
 } from "../types";
 
 export interface PosDateRangeParams {
@@ -88,5 +89,12 @@ export const posAnalyticsApi = {
   getCashiers: (params: PosDateRangeParams) =>
     api.get<PosCashierStatsDto>(
       `/api/analytics/pos/cashiers${buildQs(rangeEntries(params))}`,
+    ),
+
+  // TASK-484: row-click drill-down from top-products. No compare-mode variant (see
+  // getRevenueTrend above for that shape) — productId is a path segment, not a query param.
+  getProductSalesTrend: (productId: string, params: PosDateRangeParams & { group_by?: "day" | "week" }) =>
+    api.get<ProductSalesTrendDto>(
+      `/api/analytics/pos/products/${productId}/trend${buildQs([...rangeEntries(params), ["group_by", params.group_by]])}`,
     ),
 };

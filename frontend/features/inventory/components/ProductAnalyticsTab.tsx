@@ -5,10 +5,11 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from "recharts";
-import { Loader2, TrendingUp, ArrowDownToLine, Trash2, RefreshCw, Package } from "lucide-react";
+import { Loader2, TrendingUp, ArrowDownToLine, Trash2, RefreshCw, Package, Wallet } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useProductMovements } from "../hooks/useProductMovements";
 import type { MovementDto } from "../api/movements";
+import { useProductSalesTrend } from "@/features/analytics/hooks/usePosAnalytics";
 
 // ── Line config ───────────────────────────────────────────────────────────────
 // Labels come from i18n (`Dashboard.inventory.analytics.series`), built inside the
@@ -18,14 +19,28 @@ import type { MovementDto } from "../api/movements";
 
 type SeriesT = ReturnType<typeof useTranslations>;
 
-function buildLines(t: SeriesT) {
-  return [
-    { key: "stock",      label: t("stock"),      color: "#38BDF8", dash: undefined, width: 2.5 },
-    { key: "receipt",    label: t("receipt"),    color: "#3B82F6", dash: "6 3",     width: 1.5 },
-    { key: "transfer",   label: t("transfer"),   color: "#A78BFA", dash: undefined, width: 1.5 },
-    { key: "write_off",  label: t("write_off"),  color: "#F87171", dash: undefined, width: 1.5 },
-    { key: "adjustment", label: t("adjustment"), color: "#4ADE80", dash: undefined, width: 1.5 },
+/**
+ * yAxisId is baked into each line descriptor (not inferred from `key` at render time) so the
+ * quantity-scale lines (stock/movements) and the currency-scale lines (revenue/margin, TASK-484)
+ * can never accidentally end up sharing — or missing — an axis. See the two-YAxis wiring in the
+ * main chart below: every Line/ReferenceLine/ReferenceArea must carry an explicit yAxisId once a
+ * second YAxis exists, since recharts silently drops (not errors on) an axis-id mismatch.
+ */
+function buildLines(t: SeriesT, opts?: { includeRevenue?: boolean; includeMargin?: boolean }) {
+  const lines: Array<{ key: string; label: string; color: string; dash: string | undefined; width: number; yAxisId: "quantity" | "revenue" }> = [
+    { key: "stock",      label: t("stock"),      color: "#38BDF8", dash: undefined, width: 2.5, yAxisId: "quantity" },
+    { key: "receipt",    label: t("receipt"),    color: "#3B82F6", dash: "6 3",     width: 1.5, yAxisId: "quantity" },
+    { key: "transfer",   label: t("transfer"),   color: "#A78BFA", dash: undefined, width: 1.5, yAxisId: "quantity" },
+    { key: "write_off",  label: t("write_off"),  color: "#F87171", dash: undefined, width: 1.5, yAxisId: "quantity" },
+    { key: "adjustment", label: t("adjustment"), color: "#4ADE80", dash: undefined, width: 1.5, yAxisId: "quantity" },
   ];
+  if (opts?.includeRevenue) {
+    lines.push({ key: "revenue", label: t("revenue"), color: "#FBBF24", dash: undefined, width: 2, yAxisId: "revenue" });
+  }
+  if (opts?.includeMargin) {
+    lines.push({ key: "margin", label: t("margin"), color: "#34D399", dash: "4 2", width: 1.5, yAxisId: "revenue" });
+  }
+  return lines;
 }
 
 function buildMovementLabels(t: SeriesT): Record<string, string> {
@@ -95,6 +110,23 @@ interface ChartPoint {
   transfer: number;
   write_off: number;
   adjustment: number;
+  /** Revenue/quantitySold/margin (TASK-484) are only populated when showRevenueSeries is true —
+   * merged in separately below, never touched by groupByDay itself. */
+  revenue?: number;
+  quantitySold?: number;
+  /** null = a real sale happened that day but margin is unknown (no Item.PricePurchase on file,
+   * or the caller can't view margin) — distinct from 0 (a sale day with exactly zero margin) and
+   * from "no key at all" (not a showRevenueSeries render). Rendered as a connectNulls gap, not
+   * coerced to 0 — unlike revenue/quantitySold, where "no sales that day" legitimately is 0. */
+  margin?: number | null;
+}
+
+/** Same green/red/gray-by-sign convention as CategoryDetailPanel.tsx's marginColor (interactive
+ * analytics + margin plan) — kept as a local copy since these two components don't share a
+ * "chart formatting" module today, mirroring how color tokens are inlined throughout this file. */
+function marginColor(v: number | null | undefined): string {
+  if (v == null || v === 0) return "#6B7280";
+  return v > 0 ? "#4ADE80" : "#F87171";
 }
 
 function groupByDay(items: MovementDto[], from: string): ChartPoint[] {
@@ -270,7 +302,13 @@ function CustomTooltip({ active, payload, label, buffers }: {
   if (!active || !payload?.length) return null;
 
   const stock = payload.find((p) => p.dataKey === "stock")?.value ?? null;
-  const movements = payload.filter((p) => p.dataKey !== "stock" && (p.value ?? 0) > 0);
+  // revenue/margin (TASK-484) get their own dedicated rows below — currency-formatted with a ₴
+  // suffix, unlike the plain quantity movements this generic filter still handles.
+  const revenueEntry = payload.find((p) => p.dataKey === "revenue");
+  const marginEntry = payload.find((p) => p.dataKey === "margin");
+  const movements = payload.filter(
+    (p) => p.dataKey !== "stock" && p.dataKey !== "revenue" && p.dataKey !== "margin" && (p.value ?? 0) > 0,
+  );
 
   // Determine zone
   const zone = buffers && stock != null ? zoneForStock(stock, buffers) : null;
@@ -288,6 +326,24 @@ function CustomTooltip({ active, payload, label, buffers }: {
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1F2937" }}>
           <span style={{ color: "#38BDF8", fontWeight: 600 }}>{t("series.stock")}</span>
           <span style={{ color: "#38BDF8", fontFamily: "monospace", fontWeight: 700 }}>{stock}</span>
+        </div>
+      )}
+
+      {revenueEntry && (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1F2937" }}>
+          <span style={{ color: "#FBBF24", fontWeight: 600 }}>{tSeries("revenue")}</span>
+          <span style={{ color: "#FBBF24", fontFamily: "monospace", fontWeight: 700 }}>
+            {(revenueEntry.value ?? 0).toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴
+          </span>
+        </div>
+      )}
+
+      {marginEntry && (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1F2937" }}>
+          <span style={{ color: marginColor(marginEntry.value) }}>{tSeries("margin")}</span>
+          <span style={{ color: marginColor(marginEntry.value), fontFamily: "monospace" }}>
+            {marginEntry.value == null ? "—" : `${marginEntry.value.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`}
+          </span>
         </div>
       )}
 
@@ -334,17 +390,35 @@ export function ProductAnalyticsTab({
   productId,
   chartHeight = 220,
   buffers,
+  showRevenueSeries = false,
+  canViewMargin,
 }: {
   productId: string;
   chartHeight?: number;
   buffers?: ProductBuffers;
+  /** TASK-484 (interactive analytics + margin plan): adds a revenue line (and margin, when
+   * canViewMargin) on a second right-hand YAxis, driven by useProductSalesTrend. Defaults false
+   * so the existing /inventory/{id}?tab=analytics call sites (ProductsTable.tsx,
+   * inventory/[id]/page.tsx — neither passes this) are completely unaffected. Only
+   * PosProductTrendPanel.tsx passes true, for the inline /analytics/pos drill-down. */
+  showRevenueSeries?: boolean;
+  /** Purely a rendering gate — this component stays presentational w.r.t. authorization (same as
+   * it doesn't call useMe()/roles.ts for `buffers` today); the caller (PosProductTrendPanel)
+   * resolves this via canViewAnalyticsMargin and passes the result down. The server independently
+   * nulls marginAmount for unauthorized callers regardless (ADR-027), so this is defense in depth,
+   * not the only gate. */
+  canViewMargin?: boolean;
 }) {
   const t = useTranslations("Dashboard.inventory.analytics");
   const tSeries = useTranslations("Dashboard.inventory.analytics.series");
   const tFields = useTranslations("Dashboard.inventory.fields");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
-  const lines = useMemo(() => buildLines(tSeries), [tSeries]);
+  const includeMargin = showRevenueSeries && !!canViewMargin;
+  const lines = useMemo(
+    () => buildLines(tSeries, { includeRevenue: showRevenueSeries, includeMargin }),
+    [tSeries, showRevenueSeries, includeMargin],
+  );
   const movementLabels = useMemo(() => buildMovementLabels(tSeries), [tSeries]);
 
   const [rangeDays, setRangeDays] = useState(30);
@@ -374,6 +448,39 @@ export function ProductAnalyticsTab({
     () => groupByDay(movements, from),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [movements, from],
+  );
+
+  // TASK-484: always group_by "day" regardless of rangeDays — the movement chart's x-axis is
+  // always day-level, and the two series must align on the same date keys.
+  const { data: trendData } = useProductSalesTrend(
+    productId,
+    { from, to, group_by: "day" },
+    showRevenueSeries,
+  );
+  const trendPoints = trendData?.points ?? [];
+
+  // Merge onto the movement-derived chartData by matching date strings — a day with no sales
+  // becomes 0 (not a gap, unlike stock's forward-fill), a day with sales but unknown margin
+  // stays null (see ChartPoint's margin doc comment above).
+  const mergedChartData = useMemo((): ChartPoint[] => {
+    if (!showRevenueSeries) return chartData;
+    const byDate = new Map(trendPoints.map((p) => [p.date, p]));
+    return chartData.map((pt) => {
+      const trend = byDate.get(pt.date);
+      return {
+        ...pt,
+        revenue: trend?.revenue ?? 0,
+        quantitySold: trend?.quantity ?? 0,
+        margin: includeMargin ? (trend ? trend.marginAmount : 0) : undefined,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartData, trendPoints, showRevenueSeries, includeMargin]);
+
+  const revenueTotal = useMemo(
+    () => trendPoints.reduce((s, p) => s + p.revenue, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trendPoints],
   );
 
   const totals = useMemo(() => ({
@@ -443,6 +550,14 @@ export function ProductAnalyticsTab({
             color="#38BDF8"
           />
         )}
+        {showRevenueSeries && (
+          <SummaryCard
+            icon={<Wallet size={14} color="#FBBF24" />}
+            label={tSeries("revenue")}
+            value={`${revenueTotal.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`}
+            color="#FBBF24"
+          />
+        )}
         <SummaryCard icon={<ArrowDownToLine size={14} color="#3B82F6" />} label={tSeries("receipt")} value={totals.receipt}    color="#3B82F6" />
         <SummaryCard icon={<TrendingUp      size={14} color="#A78BFA" />} label={tSeries("transfer")} value={totals.transfer}   color="#A78BFA" />
         <SummaryCard icon={<Trash2          size={14} color="#F87171" />} label={tSeries("write_off")} value={totals.write_off}  color="#F87171" />
@@ -467,15 +582,17 @@ export function ProductAnalyticsTab({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={chartHeight}>
-            <LineChart data={chartData} margin={{ left: 0, right: 20, top: 4, bottom: 4 }}>
+            <LineChart data={mergedChartData} margin={{ left: 0, right: showRevenueSeries ? 0 : 20, top: 4, bottom: 4 }}>
 
-              {/* Zone backgrounds — rendered first so they're behind everything */}
+              {/* Zone backgrounds — rendered first so they're behind everything. Explicit
+                  yAxisId="quantity" is required the moment a second YAxis exists below (recharts
+                  defaults to the first-declared axis by id match, not by "the only other one") */}
               {buffers && (
                 <>
-                  <ReferenceArea y1={0}                    y2={buffers.safetyBuffer} fill="#EF444418" />
-                  <ReferenceArea y1={buffers.safetyBuffer} y2={buffers.minStock}     fill="#FACC1514" />
-                  <ReferenceArea y1={buffers.minStock}     y2={buffers.maxStock}     fill="#22C55E0C" />
-                  <ReferenceArea y1={buffers.maxStock}     y2={99999}                fill="#3B82F60A" />
+                  <ReferenceArea yAxisId="quantity" y1={0}                    y2={buffers.safetyBuffer} fill="#EF444418" />
+                  <ReferenceArea yAxisId="quantity" y1={buffers.safetyBuffer} y2={buffers.minStock}     fill="#FACC1514" />
+                  <ReferenceArea yAxisId="quantity" y1={buffers.minStock}     y2={buffers.maxStock}     fill="#22C55E0C" />
+                  <ReferenceArea yAxisId="quantity" y1={buffers.maxStock}     y2={99999}                fill="#3B82F60A" />
                 </>
               )}
 
@@ -489,11 +606,25 @@ export function ProductAnalyticsTab({
                 interval="preserveStartEnd"
               />
               <YAxis
+                yAxisId="quantity"
                 tick={{ fill: "#4B5563", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 width={36}
               />
+              {/* Second, currency-scale axis (TASK-484) — only mounted when revenue/margin lines
+                  are actually rendered below, both of which explicitly declare yAxisId="revenue". */}
+              {showRevenueSeries && (
+                <YAxis
+                  yAxisId="revenue"
+                  orientation="right"
+                  tick={{ fill: "#4B5563", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={48}
+                  tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}${locale === "en" ? "k" : "к"}`}
+                />
+              )}
               <Tooltip
                 content={<CustomTooltip buffers={buffers} />}
               />
@@ -502,16 +633,19 @@ export function ProductAnalyticsTab({
               {buffers && (
                 <>
                   <ReferenceLine
+                    yAxisId="quantity"
                     y={buffers.safetyBuffer}
                     stroke="#F97316" strokeWidth={1.5} strokeDasharray="4 2"
                     label={{ value: t("bufferShort.safetyBuffer", { value: buffers.safetyBuffer }), fill: "#F97316", fontSize: 10, position: "insideTopRight" }}
                   />
                   <ReferenceLine
+                    yAxisId="quantity"
                     y={buffers.minStock}
                     stroke="#FACC15" strokeWidth={1.5} strokeDasharray="4 2"
                     label={{ value: t("bufferShort.minStock", { value: buffers.minStock }), fill: "#FACC15", fontSize: 10, position: "insideTopRight" }}
                   />
                   <ReferenceLine
+                    yAxisId="quantity"
                     y={buffers.maxStock}
                     stroke="#34D399" strokeWidth={1.5} strokeDasharray="4 2"
                     label={{ value: t("bufferShort.maxStock", { value: buffers.maxStock }), fill: "#34D399", fontSize: 10, position: "insideTopRight" }}
@@ -521,6 +655,7 @@ export function ProductAnalyticsTab({
 
               {/* Stock balance line — most prominent */}
               <Line
+                yAxisId="quantity"
                 type="monotone"
                 dataKey="stock"
                 stroke="#38BDF8"
@@ -531,10 +666,12 @@ export function ProductAnalyticsTab({
                 hide={hiddenLines.has("stock")}
               />
 
-              {/* Movement lines */}
-              {lines.filter((l) => l.key !== "stock").map(({ key, color, dash, width }) => (
+              {/* Movement lines + revenue/margin (TASK-484) — yAxisId comes from buildLines so
+                  quantity-scale and currency-scale series can never end up on the wrong axis. */}
+              {lines.filter((l) => l.key !== "stock").map(({ key, color, dash, width, yAxisId }) => (
                 <Line
                   key={key}
+                  yAxisId={yAxisId}
                   type="monotone"
                   dataKey={key}
                   stroke={color}
@@ -543,6 +680,7 @@ export function ProductAnalyticsTab({
                   dot={false}
                   activeDot={{ r: 3, fill: color }}
                   hide={hiddenLines.has(key)}
+                  connectNulls={key === "margin"}
                 />
               ))}
             </LineChart>

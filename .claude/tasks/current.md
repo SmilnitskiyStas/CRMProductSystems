@@ -3,6 +3,272 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-487 — Security review: margin authorization (interactive analytics + margin plan)
+**Status:** done — **verdict: SHIP** · **Agent:** security-reviewer · **Depends:** TASK-480..486
+(all done) · **Next:** none blocking — initiative (TASK-479..487) complete
+Log: `.claude/logs/tasks/487_2026-08-07_margin-authorization-security-review_security-reviewer.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. Final gate for the whole
+initiative — deeper authorization-bypass/isolation angle TASK-486 (QA) explicitly deferred here.
+All 6 brief sections pass: `AnalyticsAuthorization.CanViewMargin` role-floor/shape/call-sites OK
+(no `||`/`&&` inversion, `includeMargin` traced end to end controller→service→repository, never
+client-supplied); adversarial null enforcement live-tested against the running dev API (garbage
+`?includeMargin=true`, spoofed `X-Role`/`X-User-Role` headers, hand-tampered JWT payload — all
+rejected or ignored, margin stayed null for store_manager throughout); tenant/store isolation
+live-tested with **real cross-tenant data** (discovered the dev DB actually has 20 tenants, used
+"Loyalty Concurrency Test…" as tenant B against `manager@demo.local`/tenant A via raw curl,
+bypassing the UI entirely) — cross-tenant `productId` on the trend endpoint 404s, cross-tenant
+`category_id`/`store_id` return empty with no data leak; injection/malformed-input sanity
+live-tested (SQLi-shaped `reason` payloads, malformed GUIDs, garbage `group_by`, long strings — all
+degrade cleanly, zero raw SQL confirmed by grep, zero destructive side effects); capability scope
+confirmed no creep (`analytics.view_margin` referenced exactly twice, its own group + `All`); RLS
+sanity confirmed (3 new repo methods are plain LINQ-to-EF, inherit the pre-existing Stage 3
+`store_scope` RESTRICTIVE policy automatically per that migration's own documented child-table
+inheritance, no bypass). `dotnet build` clean, `dotnet test` 1333/1333 independently reconfirmed
+(matches TASK-486's baseline exactly).
+**1 LOW/informational finding (not blocking):** `GetCategoryProductBreakdownAsync`'s `CategoryName`
+lookup (`AnalyticsRepository.cs:389-394`) has no explicit `TenantId` filter, relying on RLS alone —
+live-confirmed NOT currently exploitable (cross-tenant probe category returned "Unknown", no leak),
+same already-accepted shape as KI-028 (not a new pattern, not filed as a new KI).
+**Both QA-flagged items resolved:** F2 (`netmgr@demo.local` zero `user_locations` grants) —
+**confirmed pre-existing and unrelated** to TASK-479..486 (migration/commit dates ~2.5 weeks prior,
+`git log` shows zero `DbSeeder.cs` commits since, live DB confirms the only grants ever inserted are
+`manager@demo.local`'s from 2026-07-20); added `KI-031` for the seed-data gap itself (low severity,
+QoL only). KI-030 cross-reference — **confirmed accurate**, independently re-verified live (all 3
+real logins during this review returned `"capabilities":[]`), correctly not re-filed as new.
+No code changed (audit only). Dev servers stopped cleanly at end; only mutation was one
+insert-then-delete probe category row for the cross-tenant test (verified cleaned up).
+
+## TASK-486 — QA: live E2E for interactive analytics + margin drill-down (TASK-479..485)
+**Status:** done — **verdict: SHIP** · **Agent:** qa-tester · **Depends:** TASK-483/484/485 (all done) ·
+**Next:** TASK-487 (security-reviewer) — 2 items flagged explicitly below for it
+Log: `.claude/logs/tasks/486_2026-08-07_analytics-drilldown-qa_qa-tester.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. First live/E2E pass over the whole
+initiative — every build agent had deferred it (no dev stack in-session). Stood up
+`docker compose up -d` (postgres/worker already running with real TASK-476/482 residue data — 131
+`pos_transactions`) + `dotnet run` + `next dev` (auto-port 50643, since :3000 is a permanently-running
+unrelated container) with `Cors__Origins` widened to match. All 7 brief sections pass: regression
+(`dotnet test` 1333/1333, `tsc`/lint/build all clean, build output byte-identical to TASK-483/484's own
+figures); toggle-collapse open/close verified live for every row-triggered panel (losses-by-reason,
+losses-by-store, by-category incl. the null/"uncategorized" edge case, POS product-trend); **margin
+authorization — the highest-stakes check — passed at both DOM and raw-API level in both directions**,
+including exact-arithmetic confirmation (`Revenue − Quantity × Item.PricePurchase` matched the API's
+`marginAmount` to the cent on 2 independent products/endpoints) and the ADR-027 "estimated margin"
+disclaimer text confirmed verbatim for network_manager+; `LossesProductBreakdownPanel` confirmed
+identical for both roles with zero margin keys in its DTO at all, as designed; compare-toggle isolation
+confirmed via network inspection (no compare params ever reach the new panels' own queries); data
+correctness came back an **exact** match (not just plausible) between `PosProductTrendPanel` and
+`PosTopProductsTable` for the same product; performance smoke-test 33-134ms (no stall), plus an
+independent live re-confirmation that TASK-479's covering index exists and the old redundant one is
+gone; store-filter rescoping confirmed live for the shared POS hooks. Read all 7 prior task logs before
+testing (per the brief) rather than the literal plan brief, since several documented deviations
+(recharts 3.8.1 API, missing `EF.Functions.DateTrunc`, `reason=other` bucket matching, multi-axis
+`yAxisId`) changed the actual shipped shape.
+**2 non-blocking findings:** (F1) this session's Browser pane has no active compositor — screenshots and
+pixel-coordinate clicks both silently no-op session-wide (confirmed on plain buttons too, not just
+charts) — worked around it everywhere via trusted DOM `.click()` dispatch (fully covers every row/button/
+dropdown interaction) except recharts' own internal pointer-tracking, so `ExpiryDonut` slice-click and
+`PosRevenueTrendChart` day-click were verified by source-read only, not live-clicked; recommends a 30s
+manual spot-check of just those two before/alongside sign-off. (F2) the seeded `netmgr@demo.local`
+account has zero `user_locations` grants (unlike `manager@demo.local`'s two), so store-scope RLS shows
+it zero data tenant-wide — used `ea@demo.local` (enterprise_admin) instead, which the brief explicitly
+allows; flagged for TASK-487 since it's authorization-adjacent (is network_manager's exclusion from the
+RLS bypass list vs. enterprise_admin's inclusion intentional for this margin floor?), plus an explicit
+KI-030 cross-reference (the capability half of `CanViewMargin` is unreachable in practice tenant-wide,
+same root cause as every other `RoleOrCapability` policy — role-floor branch is the only live path,
+confirmed working). No blocking findings, no margin leaks, no crashes, no broken navigation. Dev servers
+stopped cleanly at end; no data mutated (read-only pass).
+
+## TASK-484 — Frontend: POS product sales-trend UI (interactive analytics + margin plan)
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-482 (backend, done) ·
+**Next:** TASK-486 (qa-tester, live E2E for this together with TASK-483/485)
+Log: `.claude/logs/tasks/484_2026-08-07_product-sales-trend-ui_frontend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. Row-click drill-down from
+`PosTopProductsTable` on `/analytics/pos`, rendered inline (not a route nav) via an extended
+`ProductAnalyticsTab.tsx`. New `types.ts` DTOs/`api/pos-analytics.ts` fetcher/`usePosAnalytics.ts`
+hook (`useProductSalesTrend`, full `[productId, params]` query key, no `keepPreviousData`, no
+compare-mode — matches TASK-482's endpoint shape verified fresh against
+`PosAnalyticsDtos.cs`/`AnalyticsController.cs`). `ProductAnalyticsTab` gained
+`showRevenueSeries?`/`canViewMargin?` (default `false`/`undefined`, both existing
+`/inventory/{id}?tab=analytics` call sites unaffected) — always fetches `group_by=day` regardless
+of the tab's own `rangeDays`, merges trend points into the existing movement `chartData` by date
+(revenue/quantity zero-fill on no-sales days; margin stays `null` on a real-sale/unknown-cost day
+rather than zero-filling). Second right-hand `YAxis` (`yAxisId="revenue"`) added, and — the
+brief's flagged silent-bug risk — gave the pre-existing `YAxis` + 5 `Line`s + 4 `ReferenceArea`s +
+3 `ReferenceLine`s an explicit `yAxisId="quantity"`, since they all previously relied on recharts'
+implicit default axis id, which stops matching (silently, no error) the moment a second axis
+exists; `buildLines()` now bakes `yAxisId` into each line descriptor so legend/render/tooltip
+can't cross-wire. Margin legend/line/tooltip row fully absent from the DOM (not grayed) when
+`canViewMargin` is false, matching this whole initiative's hidden-not-disabled rule. Optional
+revenue-total `SummaryCard` added (brief's suggestion); no margin-total card (brief only suggested
+revenue, kept scope tight). New `PosProductTrendPanel.tsx` resolves `canViewMargin` via
+`useMe()` + `canViewAnalyticsMargin` — the exact `CategoryDetailPanel.tsx` (TASK-483) mechanism —
+and matches `PosDayDetailPanel`'s (TASK-485) header chrome, extended to a 2-line title+disclaimer
+block since this panel (unlike `PosDayDetailPanel`) needs the "оцінна маржа" caveat when margin is
+visible. `PosTopProductsTable` gained `onRowClick?`/`selectedProductId?`, active-row highlight
+reusing the table's own existing `#111827` hover color rather than a new one. `analytics/pos/
+page.tsx` read fresh (built alongside TASK-485's already-merged `selectedDay`/`PosDayDetailPanel`,
+nothing reverted) — new `selectedProduct` state, same toggle-on-reselect convention as
+`handleDayClick`, panel rendered below the top-products/cashiers section. **Deliberate decision:**
+`PosProductTrendPanel` accepts `storeId?` (parity with `PosDayDetailPanel`, page passes its live
+filter down) but does NOT thread it into `ProductAnalyticsTab`'s trend fetch —
+`useProductMovements` (the tab's existing stock series) has no `store_id` filter at all, so a
+store-scoped revenue line next to a store-agnostic stock line would misrepresent the chart;
+matches the brief's literal example call. `tsc`/lint/build all clean (build exit 0, 57/57 static
+pages, `/analytics/pos` 11.3 kB/259 kB First Load JS). Live browser E2E not done — no backend
+process available in this session (same constraint TASK-483/485 both hit); confirmed no
+React/hydration/chunk-load errors from the new code via console inspection, deferred full
+click-through to TASK-486.
+
+## TASK-483 — Frontend: category/losses product drill-down UI (interactive analytics + margin plan)
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-481 (backend, done) ·
+**Next:** TASK-484 (frontend-developer, POS product-trend UI — separate scope, not touched here),
+TASK-486 (qa-tester, live E2E for this together with TASK-484/485)
+Log: `.claude/logs/tasks/483_2026-08-07_category-losses-drilldown-ui_frontend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. Consumed TASK-481's two
+endpoints end-to-end: `types.ts`/`api/analytics.ts`/`useAnalytics.ts` gained the 4 new
+DTOs/2 fetchers/2 hooks (full-filter query keys, no `keepPreviousData`, matches
+`useMarketingAnalyticsOverview`'s discipline). New `CategoryDetailPanel.tsx` (client-side
+sortable/paginated via the shared `TableControls.tsx` `SortableHeader`/`TablePaginationFooter` —
+neither new endpoint accepts server pagination params; margin columns conditionally rendered,
+absent from the DOM when `canViewAnalyticsMargin` is false, not just hidden; visible "(оцінна)"
+margin disclaimer per ADR-027) and `LossesProductBreakdownPanel.tsx` (shared by losses-by-store
+and losses-by-reason, `{title, totalLoss, storeId?, reason?, from, to, onClose}`, no margin
+columns — DTO has none). `CategoryStatusChart`/`LossesByReasonChart`/`LossesByStoreChart` gained
+click props using the verified-working recharts 3.8.1 `<Bar onClick={(entry) =>
+entry.payload.X}>` mechanism from `SegmentDistributionChart.tsx` (not the plan's recharts@2-shaped
+snippet — same caution TASK-485 already flagged). New `canViewAnalyticsMargin` in `roles.ts`,
+exact shape of `canExportMarketingAnalyticsPii` with `AT_LEAST_NETWORK_MANAGER` +
+`"analytics.view_margin"`. `analytics/page.tsx` read fresh (built on top of TASK-485's already-
+merged `ExpiryDonut`/state changes, nothing reverted) — new toggle-selection state, table rows
+rewired from `router.push` to the toggle handlers, panels rendered conditionally, both always
+passed the page's CURRENT (never compare) `from`/`to`. **Noted deviation:** `selectedCategoryId`
+is `string | null | undefined`, not the brief's literal `string | null` — a category id is
+itself nullable (null = uncategorized bucket), so a 2-state type can't distinguish "nothing
+selected" from "uncategorized selected"; `undefined` = closed, `null` = uncategorized open, a
+string = that category open, no sentinel values used anywhere. `CategoryStatusChart`'s
+active/inactive treatment is opacity (not a color swap like `SegmentDistributionChart.tsx`) since
+this is a 4-series stacked chart where color already encodes safe/warning/critical/expired — a
+swap would destroy that coding. `tsc --noEmit`/`npm run lint`/`npm run build` all clean (build
+exit 0, 57/57 static pages, `/analytics` 8.87 kB/247 kB First Load JS). Live browser E2E not
+done — no dev stack wired to this session's uncommitted changes (same constraint TASK-485 hit);
+deferred to TASK-486. `PosTopProductsTable.tsx`/`PosRevenueTrendChart.tsx`/
+`ProductAnalyticsTab.tsx`/`analytics/pos/*` untouched (TASK-484).
+
+## TASK-482 — Backend: single-product sales trend endpoint (interactive analytics + margin plan)
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-479 (index, done), TASK-480
+(`CanViewMargin`, done), TASK-481 (same 3 files, done — read fresh, nothing of theirs modified) ·
+**Next:** TASK-484 (frontend-developer, product trend UI: `ProductAnalyticsTab.tsx` extension +
+`PosProductTrendPanel.tsx`) unblocked
+Log: `.claude/logs/tasks/482_2026-08-07_product-sales-trend_backend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. New
+`GET /api/analytics/pos/products/{productId}/trend` (`store_id`, `from`/`to`, `group_by=day|week`,
+no compare-mode — a row-click drill-down, not a page KPI trend). 404s (`NotFound()`) when
+`productId` doesn't resolve to a real `Item` in the caller's tenant scope, mirroring
+`ItemsController.GetById`'s nullable-DTO convention. New `GetProductSalesTrendAsync` (repo) groups
+`PosTransactionItems` **in SQL before `ToListAsync`** (not `GetPosTopProductsAsync`'s in-memory
+anti-pattern) — confirmed via live `EXPLAIN ANALYZE` against real dev data (residue from TASK-476's
+QA pass, 131 `pos_transactions`) that TASK-479's covering index is actually used (`Index Only Scan`,
+`Heap Fetches: 0`) and that day/week bucket totals match an independently-computed ground truth
+exactly. **Deviation from the plan's literal snippet, root-caused not guessed:**
+`EF.Functions.DateTrunc` does not exist in this repo's installed Npgsql EF Core provider (8.0.11) —
+confirmed via build failure + XML-doc grep of every actual `Npgsql*DbFunctionsExtensions` member.
+Used the provider's built-in `DateTime.Date` translation for "day" (`date_trunc('day', …, 'UTC')`,
+confirmed via `.ToQueryString()`) and inlined `GetPosRevenueTrendAsync`'s existing `IsoWeekStart`
+Monday-anchored arithmetic as translatable `DateTime` member expressions for "week" (EF can't
+translate a call to an arbitrary private method) — both verified translatable and correct against
+real data (week keys land exactly on Monday). Margin (ADR-027) is a cheap second pass over the
+already-collapsed (≤366-row) points. New DTOs in `PosAnalyticsDtos.cs` (not TASK-481's
+`AnalyticsDtos.cs`): `ProductSalesTrendDto`/`ProductSalesTrendPointDto`. 4 new tests in
+`PosAnalyticsServiceTests.cs` (day/week pass-through, margin-by-role, null-propagation on unknown
+productId — this codebase has no `*ControllerTests.cs` anywhere, so the controller's 404 ternary
+itself isn't independently unit-tested, consistent with existing precedent). `dotnet build`/
+`dotnet test` both clean (1333/1333 = 1329 baseline + 4 new). No `AnalyticsDtos.cs`,
+`AnalyticsAuthorization.cs`/`TenantRoleCapabilities.cs`, TASK-479 migration/index, or `frontend/`
+touched.
+
+## TASK-481 — Backend: category/losses product drill-down endpoints (interactive analytics + margin plan)
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-480 (`CanViewMargin`, done),
+TASK-479 (index, done — no direct code dependency) · **Next:** TASK-482 (backend-developer, product
+sales-trend endpoint, same 3 files) — must start only after this task's edits are complete;
+TASK-483 (frontend-developer, category/losses UI) unblocked
+Log: `.claude/logs/tasks/481_2026-08-07_category-losses-drilldown_backend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. Two new `AnalyticsController.cs`
+GET actions, both behind the existing class-level `AnalyticsViewOrCapability` policy: **A**
+`by-category/products` — new `GetCategoryProductBreakdownAsync` (repo) merges `GetByCategoryAsync`'s
+stock rollup + `GetPosTopProductsAsync`'s sales rollup, grouped by `ProductId` within one category
+(`category_id` null = uncategorized bucket, not "all"); controller resolves `includeMargin` via
+`AnalyticsAuthorization.CanViewMargin(User)` and passes the bool down, service/repo stay
+authorization-agnostic; margin null vs. `0` kept distinct for "not authorized" vs. "no
+`PricePurchase` on file". **B** `losses/by-product` — new `GetLossesByProductAsync` (repo), one
+endpoint serves both by-store and by-reason drill-downs via independent AND-filters; **no margin
+gate** (ADR-027 §1 — `LossAmount` already shown in aggregate to every store_manager+); added
+`reason == "other"` matching `Reason == null OR "other"` to mirror `GetWriteOffAnalyticsAsync`'s own
+display-bucket convention in the same file (undocumented in the brief, added to avoid a silent
+empty-result drill-down). New DTOs in `AnalyticsDtos.cs`
+(`CategoryProductBreakdownDto`/`CategoryProductRowDto`, `LossesByProductDto`/`LossByProductRowDto`),
+thin service pass-throughs. 6 new tests in `PosAnalyticsServiceTests.cs` (only existing
+`Analytics/`-folder test file) — delegation shape for both endpoints, null-category-id handling,
+store/reason filter forwarding, and the key test: constructs store_manager/network_manager
+`ClaimsPrincipal`s the same way `AnalyticsAuthorizationTests` does, resolves `CanViewMargin` for
+each, and confirms margin fields come back null/populated accordingly on endpoint A while endpoint
+B's shape has no role-dependent path at all. `dotnet build`/`dotnet test` both clean (1329/1329 =
+1323 baseline + 6 new). No `PosAnalyticsDtos.cs`, `pos/products/{id}/trend` endpoint (TASK-482), or
+`frontend/` touched.
+
+## TASK-480 — Backend: margin authorization primitive (interactive analytics + margin plan)
+**Status:** done · **Agent:** backend-developer · **Depends:** none (TASK-479's index has no code
+overlap) · **Next:** TASK-481 (backend-developer, category/losses-by-product endpoints), TASK-482
+(backend-developer, product trend endpoint) — both now unblocked, wire this check into real DTOs
+Log: `.claude/logs/tasks/480_2026-08-07_margin-authorization_backend-developer.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. New
+`AnalyticsAuthorization.CanViewMargin` (`backend/ShelfGuard.Infrastructure/Authorization/`) —
+network_manager+ (`AppPolicies.AtLeastNetworkManagerRoles`, confirmed pre-existing, not added) OR
+new `TenantRoleCapabilities.AnalyticsViewMargin` (`analytics.view_margin`) capability; same
+imperative in-body-check shape as `MarketingAnalyticsAuthorization.CanExportPii`. New
+`AnalyticsAuthorizationTests.cs` (9 facts). `.claude/docs/decisions.md` gained `ADR-027`: margin
+cost-source decision (`Item.PricePurchase` retroactive, not a real batch-cost snapshot — reasoning
++ mandatory "оцінна маржа" UI label + deferred `CostAtSale` fast-follow) and backlog notes for
+cashier-trend drill-down + POS payment-type filtering (both deferred, not this phase). `dotnet
+build`/`dotnet test` both clean (1323/1323 = 1314 baseline + 9 new). No `AnalyticsController.cs`/
+`AnalyticsService.cs`/`AnalyticsRepository.cs`/DTOs/`frontend/` touched (that's TASK-481/482/483+).
+
+## TASK-479 — DB: `pos_transaction_items` product-covering index (interactive analytics + margin plan)
+**Status:** done · **Agent:** database-engineer · **Depends:** none · **Next:** TASK-480
+(backend-developer, `AnalyticsAuthorization.CanViewMargin`) — no dependency on this task, can start
+anytime; TASK-482 (backend-developer, product trend endpoint) depends on this task's index
+Log: `.claude/logs/tasks/479_2026-08-07_pos-product-index_database-engineer.md`
+Plan: `C:\Users\stass\.claude\plans\iterative-purring-sifakis.md`. Added
+`idx_pos_transaction_items_product_covering` (`ProductId`, `TransactionId`) INCLUDE (`Quantity`,
+`PriceFinal`) — migration `AddPosTransactionItemProductCoveringIndex`, generated via `dotnet ef
+migrations add`, live-verified on local dev. Same migration drops the now-redundant plain
+`IX_pos_transaction_items_ProductId` (EF's own FK-index convention generated the drop automatically
+once `ProductId` became the new composite index's leading column — mirrors the
+`AddPerformanceIndexes` precedent for the old plain `TransactionId` index). Confirmed safe via
+codebase grep (no query path filters `pos_transaction_items` by `ProductId` alone without a
+`TransactionId`/date join) and confirmed the FK-RESTRICT delete-check use case remains served
+(`ProductId` still leads the new index). `database-schema.md` updated. `dotnet build`/`dotnet test`
+both clean (1314/1314). No C# app/controller code touched (that's TASK-480/481/482).
+
+## TASK-485 — Frontend: analytics quick-win clickability (ExpiryDonut + POS revenue-trend day drill-down)
+**Status:** done · **Agent:** frontend-developer · **Depends:** none (zero backend deps; part of
+the interactive-analytics plan `iterative-purring-sifakis.md`, ran parallel to TASK-479..484) ·
+**Next:** TASK-486 (qa-tester) covers live E2E for this together with TASK-483/484
+Log: `.claude/logs/tasks/485_2026-08-07_pos-quick-win-clickability_frontend-developer.md`
+`ExpiryDonut` gained `onSliceClick?`, wired on `/analytics` to the same `router.push('/stock?status=...')`
+the MetricCards already do. `PosRevenueTrendChart` gained `onDayClick?`/`selectedDay?` (click →
+resolve nearest point's date, cursor:pointer, hint line mirroring `SegmentGrid`'s pattern). New
+`PosDayDetailPanel.tsx` — pure composition of the existing `PosSummaryCards`/`PosTopProductsTable`/
+`PosCashierStatsTable` via their existing hooks called with `from=to=<day>`, no new hook/endpoint.
+Wired into `/analytics/pos` with toggle-on-reselect state, mirroring `marketing-analytics/page.tsx`'s
+`handleSelectSegment`. **Notable deviation:** the plan brief's recharts click snippet
+(`activePayload`) is recharts@2 API — this repo runs recharts 3.8.1, which dropped `activePayload`
+from the click callback entirely (verified by reading the installed package's source, not assumed).
+Used the real 3.x mechanism instead (`activeTooltipIndex` → resolve against the chart's own data
+array; Pie-level `onClick`, not `Cell onClick`, for `ExpiryDonut`) — same UX/behavior, correct for
+what's actually installed. Full detail + why in the task log. `tsc --noEmit` and `npm run lint`
+both clean. Live browser E2E not done — no local backend/DB/seed data available in this session
+(only Postgres+worker containers were up); deferred to TASK-486 rather than faked.
+
 ## TASK-478 — Backend: fix Фаза 4 QA findings (phone matching + export truncation)
 **Status:** done · **Agent:** backend-developer · **Depends:** TASK-476 (QA findings) ·
 **Next:** none blocking — KI-030 (TenantRole capabilities never reach the JWT, the 3rd TASK-476

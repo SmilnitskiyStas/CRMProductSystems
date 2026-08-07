@@ -25,6 +25,13 @@ interface Props {
   /** Start date (yyyy-mm-dd) of the current range — required to align with `comparison` by offset. */
   from?: string;
   comparison?: ComparisonSeries;
+  /** Called with a point's `date` (yyyy-mm-dd) when the user clicks near it on the chart. Only
+   * fires for current-period points — an offset that only has comparison-period data (sparse
+   * series) has no `date` and is silently ignored. */
+  onDayClick?: (date: string) => void;
+  /** Currently selected day, if any — hides the "click to see details" hint once set (mirrors
+   * SegmentGrid's `selectedKey` prop/hint pattern). */
+  selectedDay?: string | null;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -37,7 +44,7 @@ function formatDate(dateStr: string, intlLocale: string): string {
   return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString(intlLocale, { day: "numeric", month: "short" });
 }
 
-export function PosRevenueTrendChart({ data, from, comparison }: Props) {
+export function PosRevenueTrendChart({ data, from, comparison, onDayClick, selectedDay }: Props) {
   const t = useTranslations("Dashboard.analytics.pos.revenueTrend");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
@@ -125,7 +132,25 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
         {t("title")}
       </div>
       <ResponsiveContainer width="100%" height={260}>
-        <AreaChart data={chartData} margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+        <AreaChart
+          data={chartData}
+          margin={{ left: 8, right: 16, top: 4, bottom: 4 }}
+          style={onDayClick ? { cursor: "pointer" } : undefined}
+          onClick={
+            onDayClick
+              ? (state) => {
+                  // Recharts (3.x) no longer hands the click handler an `activePayload` (that
+                  // was recharts@2's API) — it gives back `activeTooltipIndex`, the string index
+                  // of whichever point is currently active, which we resolve against our own
+                  // `chartData` array instead.
+                  const idx = state?.activeTooltipIndex;
+                  const i = idx == null ? NaN : Number(idx);
+                  const point = Number.isFinite(i) ? chartData[i] : undefined;
+                  if (point?.date) onDayClick(point.date);
+                }
+              : undefined
+          }
+        >
           <defs>
             <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
@@ -192,6 +217,9 @@ export function PosRevenueTrendChart({ data, from, comparison }: Props) {
           )}
         </AreaChart>
       </ResponsiveContainer>
+      {onDayClick && !selectedDay && (
+        <p style={{ color: "#4B5563", fontSize: 12, marginTop: 14, marginBottom: 0 }}>{t("hint")}</p>
+      )}
     </div>
   );
 }

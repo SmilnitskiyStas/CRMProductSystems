@@ -152,6 +152,51 @@ export interface PosCashierStatsDto {
   cashiers: PosCashierStat[];
 }
 
+// ── Category × product breakdown (interactive analytics + margin plan, TASK-483) ───────────
+// MarginAmount/MarginPercent are null both when the caller can't see margin (ADR-027 —
+// AnalyticsAuthorization.CanViewMargin resolved false server-side) and when the product itself
+// has no Item.PricePurchase on file — the UI never needs to tell these two cases apart (both
+// render as an absent/em-dash figure), it only needs to gate rendering of the columns entirely
+// on canViewAnalyticsMargin (frontend/lib/roles.ts), never on whether these fields happen to be
+// null for a given row.
+
+export interface CategoryProductRowDto {
+  productId: string;
+  productName: string;
+  safe: number;
+  warning: number;
+  critical: number;
+  expired: number;
+  totalQuantity: number;
+  salesRevenue: number;
+  unitsSold: number;
+  marginAmount: number | null;
+  marginPercent: number | null;
+}
+
+export interface CategoryProductBreakdownDto {
+  categoryId: string | null;
+  categoryName: string;
+  products: CategoryProductRowDto[];
+}
+
+// ── Losses × product breakdown (interactive analytics + margin plan, TASK-483) ─────────────
+// Serves BOTH the losses-by-store and losses-by-reason drill-downs (independent optional
+// AND-filters) — no margin fields at all on this DTO (ADR-027 §1: losses aren't margin-gated).
+
+export interface LossByProductRowDto {
+  productId: string;
+  productName: string;
+  quantity: number;
+  lossAmount: number;
+  sharePercent: number;
+}
+
+export interface LossesByProductDto {
+  totalLoss: number;
+  products: LossByProductRowDto[];
+}
+
 // ── POS Analytics — period comparison (ADR-016) ─────────────────────────────
 
 export interface PosAnalyticsSummaryCompareDto {
@@ -170,4 +215,28 @@ export interface PosRevenueTrendCompareDto {
   to: string;
   compareFrom: string;
   compareTo: string;
+}
+
+// ── Single-product sales trend (interactive analytics + margin plan, TASK-484) ─────────────
+// Row-click drill-down from PosTopProductsTable, rendered inline via the extended
+// ProductAnalyticsTab (frontend/features/inventory/components/ProductAnalyticsTab.tsx). No
+// compare-mode variant — this is a snapshot trend off a table row, not a page-level KPI trend.
+// marginAmount is null both when the caller can't see margin (ADR-027 — server-side
+// AnalyticsAuthorization.CanViewMargin resolved false) and when the product itself has no
+// Item.PricePurchase on file — same "don't distinguish, just gate on canViewAnalyticsMargin"
+// rule as CategoryProductRowDto above.
+
+export interface ProductSalesTrendPointDto {
+  date: string;
+  revenue: number;
+  quantity: number;
+  transactionCount: number;
+  marginAmount: number | null;
+}
+
+export interface ProductSalesTrendDto {
+  productId: string;
+  productName: string;
+  points: ProductSalesTrendPointDto[];
+  groupBy: "day" | "week";
 }

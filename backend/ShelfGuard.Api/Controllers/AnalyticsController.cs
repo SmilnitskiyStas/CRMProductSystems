@@ -135,6 +135,28 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
+    // TASK-481: category drill-down — products within one category (or the "uncategorized"
+    // bucket when category_id is omitted), stock rollup + sales rollup + margin (ADR-027).
+    [HttpGet("by-category/products")]
+    [ProducesResponseType(typeof(CategoryProductBreakdownDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetByCategoryProducts(
+        [FromQuery] Guid? category_id,
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var includeMargin = AnalyticsAuthorization.CanViewMargin(User);
+
+        var result = await _analytics.GetCategoryProductBreakdownAsync(
+            tenantId, store_id, category_id, resolvedFrom, resolvedTo, includeMargin, ct);
+        return Ok(result);
+    }
+
     [HttpGet("losses")]
     [ProducesResponseType(typeof(LossesDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(LossesComparisonDto), StatusCodes.Status200OK)]
@@ -160,6 +182,27 @@ public sealed class AnalyticsController : ControllerBase
         var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
         var comparison = await _analytics.GetLossesComparisonAsync(tenantId, store_id, resolvedFrom, resolvedTo, cFrom, cTo, ct);
         return Ok(comparison);
+    }
+
+    // TASK-481: losses drill-down by product — a single endpoint serves both the by-store and
+    // by-reason drill-downs via independent optional AND-filters. No margin gate: LossAmount is
+    // already shown in aggregate to every store_manager+ caller today (ADR-027 §1).
+    [HttpGet("losses/by-product")]
+    [ProducesResponseType(typeof(LossesByProductDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetLossesByProduct(
+        [FromQuery] Guid? store_id,
+        [FromQuery] string? reason,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+
+        var result = await _analytics.GetLossesByProductAsync(tenantId, store_id, reason, resolvedFrom, resolvedTo, ct);
+        return Ok(result);
     }
 
     // ── POS analytics ─────────────────────────────────────────────────────
@@ -254,6 +297,33 @@ public sealed class AnalyticsController : ControllerBase
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
         var result = await _analytics.GetPosCashierStatsAsync(tenantId, store_id, resolvedFrom, resolvedTo, ct);
         return Ok(result);
+    }
+
+    // TASK-482: single-product sales trend — row-click drill-down from pos/top-products. No
+    // compare-mode variant (a row-click drill-down isn't a page-level KPI trend concept, unlike
+    // pos/revenue-trend above). 404s when productId doesn't resolve to a real Item in the
+    // caller's tenant scope (mirrors ItemsController.GetById's nullable-DTO -> NotFound() convention).
+    [HttpGet("pos/products/{productId:guid}/trend")]
+    [ProducesResponseType(typeof(ProductSalesTrendDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetProductSalesTrend(
+        Guid productId,
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] string group_by = "day",
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var includeMargin = AnalyticsAuthorization.CanViewMargin(User);
+
+        var result = await _analytics.GetProductSalesTrendAsync(
+            tenantId, store_id, productId, resolvedFrom, resolvedTo, group_by, includeMargin, ct);
+
+        return result is null ? NotFound() : Ok(result);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

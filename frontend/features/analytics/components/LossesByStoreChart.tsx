@@ -20,11 +20,14 @@ interface StoreStat {
 
 interface Props {
   data: StoreStat[];
+  onStoreClick?: (storeId: string) => void;
+  /** undefined = no selection (original per-store color palette stays at its base opacity). */
+  selectedStoreId?: string;
 }
 
 const STORE_COLORS = ["#F87171", "#FB923C", "#FBBF24", "#A78BFA", "#60A5FA"];
 
-export function LossesByStoreChart({ data }: Props) {
+export function LossesByStoreChart({ data, onStoreClick, selectedStoreId }: Props) {
   const t = useTranslations("Dashboard.analytics.lossesByStoreChart");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
@@ -34,6 +37,7 @@ export function LossesByStoreChart({ data }: Props) {
     .slice()
     .sort((a, b) => b.totalLoss - a.totalLoss)
     .map((s) => ({
+      storeId: s.storeId,
       name: s.storeName,
       loss: s.totalLoss,
       count: s.writeOffCount,
@@ -82,9 +86,19 @@ export function LossesByStoreChart({ data }: Props) {
             ]}
             cursor={{ fill: "rgba(255,255,255,0.03)" }}
           />
-          <Bar dataKey="loss" radius={[4, 4, 0, 0]} maxBarSize={48}>
-            {chartData.map((_, i) => (
-              <Cell key={i} fill={STORE_COLORS[i % STORE_COLORS.length]} fillOpacity={0.85} />
+          <Bar
+            dataKey="loss"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={48}
+            onClick={onStoreClick ? (entry) => onStoreClick(entry.payload.storeId as string) : undefined}
+            style={onStoreClick ? { cursor: "pointer" } : undefined}
+          >
+            {chartData.map((d, i) => (
+              <Cell
+                key={i}
+                fill={STORE_COLORS[i % STORE_COLORS.length]}
+                fillOpacity={selectedStoreId === undefined ? 0.85 : selectedStoreId === d.storeId ? 1 : 0.25}
+              />
             ))}
           </Bar>
         </BarChart>

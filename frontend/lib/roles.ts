@@ -148,6 +148,25 @@ export function canExportMarketingAnalyticsPii(
 }
 
 /**
+ * True when the current user can see margin/profitability figures on the analytics pages
+ * (`/analytics` category breakdown, `/analytics/pos` product trend) — mirrors backend
+ * `AnalyticsAuthorization.CanViewMargin`: network_manager+ always, or any role with the
+ * `analytics.view_margin` TenantRole capability override (ADR-020/ADR-027). One tier above
+ * canExportMarketingAnalyticsPii's store_manager+ floor — margin figures are derived from
+ * supplier purchase prices (`Item.PricePurchase`), a narrower/higher-risk sensitivity than RFM
+ * PII. Per ADR-027 the server nulls `marginAmount`/`marginPercent` for a caller who lacks this
+ * rather than 403ing the whole response — the UI uses this to keep the margin columns/panels
+ * entirely out of the DOM, not just hide/gray them.
+ */
+export function canViewAnalyticsMargin(
+  role: string | undefined,
+  permissions?: Record<string, boolean> | null,
+): boolean {
+  if (hasRole(role, AT_LEAST_NETWORK_MANAGER)) return true;
+  return permissions?.["analytics.view_margin"] === true;
+}
+
+/**
  * Supplier cabinet only (v4.1, ADR-016). supplier_admin is deliberately NOT part
  * of any tenant-staff set (stock/pos/warehouse/…) — the backend returns 403 on
  * all tenant-staff endpoints for this role. Mirror that here: the only pages a

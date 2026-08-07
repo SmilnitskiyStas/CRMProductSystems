@@ -8,6 +8,8 @@ import type {
   CategoryAnalyticsDto,
   LossesDto,
   LossesCompareDto,
+  CategoryProductBreakdownDto,
+  LossesByProductDto,
 } from "../types";
 
 interface CompareParams {
@@ -50,6 +52,45 @@ function getLosses(params?: WriteOffParams & CompareParams): Promise<LossesDto |
   return api.get(`/api/analytics/losses${buildCompareQs(params)}`);
 }
 
+// ── Category × product breakdown / losses × product (TASK-483) ─────────────
+
+interface CategoryProductBreakdownParams {
+  /** null = the "uncategorized" bucket (matches CategoryProductBreakdownDto's own convention —
+   * omitted from the querystring is how the backend's `Guid? category_id` reads "uncategorized",
+   * same as leaving it out entirely). Only a real id is ever put on the wire. */
+  category_id?: string | null;
+  store_id?: string;
+  from?: string;
+  to?: string;
+}
+
+interface LossesByProductParams {
+  store_id?: string;
+  reason?: string;
+  from?: string;
+  to?: string;
+}
+
+function getCategoryProductBreakdown(params?: CategoryProductBreakdownParams): Promise<CategoryProductBreakdownDto> {
+  const qs = new URLSearchParams();
+  if (params?.category_id) qs.set("category_id", params.category_id);
+  if (params?.store_id) qs.set("store_id", params.store_id);
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  const q = qs.toString();
+  return api.get(`/api/analytics/by-category/products${q ? `?${q}` : ""}`);
+}
+
+function getLossesByProduct(params?: LossesByProductParams): Promise<LossesByProductDto> {
+  const qs = new URLSearchParams();
+  if (params?.store_id) qs.set("store_id", params.store_id);
+  if (params?.reason) qs.set("reason", params.reason);
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  const q = qs.toString();
+  return api.get(`/api/analytics/losses/by-product${q ? `?${q}` : ""}`);
+}
+
 export const analyticsApi = {
   getExpirySummary: (params?: { store_id?: string; network?: boolean }) => {
     const qs = new URLSearchParams();
@@ -82,4 +123,7 @@ export const analyticsApi = {
   },
 
   getLosses,
+
+  getCategoryProductBreakdown,
+  getLossesByProduct,
 };
