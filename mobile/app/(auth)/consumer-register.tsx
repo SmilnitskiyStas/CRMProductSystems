@@ -11,32 +11,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useRouter } from 'expo-router';
 import { useConsumerRegister } from '@/features/auth/hooks/useConsumerAuth';
-
-// Mirrors backend ShelfGuard.Application.Common.PasswordValidator (MinLength=12, needs a
-// letter + a digit) so the common case fails fast client-side; the common-password list and
-// email-substring check remain server-authoritative and surface via the raw 400 error below.
-const schema = z.object({
-  fullName: z.string().trim().min(1, "Введіть ім'я та прізвище"),
-  phone: z.string().min(1, 'Введіть номер телефону'),
-  password: z
-    .string()
-    .min(12, 'Щонайменше 12 символів')
-    .refine((v) => /[a-zA-Z]/.test(v), 'Потрібна хоча б одна літера')
-    .refine((v) => /[0-9]/.test(v), 'Потрібна хоча б одна цифра'),
-  email: z.union([z.string().email('Невірний email'), z.literal('')]).optional(),
-});
-
-type FormData = z.infer<typeof schema>;
+import {
+  consumerRegisterSchema,
+  type ConsumerRegisterFormData,
+} from '@/features/auth/validation';
 
 export default function ConsumerRegisterScreen() {
   const router = useRouter();
   const { mutate, isPending, error } = useConsumerRegister();
 
-  const { control, handleSubmit, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+  const { control, handleSubmit, formState: { errors } } = useForm<ConsumerRegisterFormData>({
+    resolver: zodResolver(consumerRegisterSchema),
+    defaultValues: { fullName: '', phone: '', email: '', password: '' },
   });
 
   const axiosErr = error as { response?: { status?: number; data?: { error?: string } } } | null;
@@ -49,7 +37,7 @@ export default function ConsumerRegisterScreen() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled" className="px-6">
           <View className="mb-8">
             <Text className="text-3xl font-bold text-gray-900">Реєстрація</Text>
-            <Text className="text-base text-gray-500 mt-2">Створіть акаунт покупця</Text>
+            <Text className="text-base text-gray-500 mt-2">Створіть свій акаунт ShelfGuard</Text>
           </View>
 
           <View className="gap-4">

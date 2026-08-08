@@ -63,6 +63,23 @@ public sealed class ConsumerAuthServiceTests
     }
 
     [Fact]
+    public async Task RegisterAsync_duplicate_email_is_rejected_case_insensitively()
+    {
+        _accounts.GetByPhoneAsync("+380501234567", default).ReturnsNull();
+        _accounts.GetByEmailAsync("person@example.com", default).Returns(new ConsumerAccount
+        {
+            Phone = "+380671234567", Email = "person@example.com", FullName = "Existing", PasswordHash = "hash",
+        });
+
+        var (response, error) = await _sut.RegisterAsync(new ConsumerRegisterRequest(
+            "0501234567", "StrongPassw0rd!", "Person", " Person@Example.com "));
+
+        Assert.Null(response);
+        Assert.Contains("email", error, StringComparison.OrdinalIgnoreCase);
+        await _accounts.DidNotReceive().AddAsync(Arg.Any<ConsumerAccount>(), default);
+    }
+
+    [Fact]
     public async Task RegisterAsync_weak_password_returns_error()
     {
         var (response, error) = await _sut.RegisterAsync(

@@ -18,6 +18,13 @@ public interface IAuthService
     Task RevokeAsync(string rawRefreshToken, CancellationToken ct = default);
     Task<AuthUserDto?> GetCurrentUserAsync(Guid userId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Issues a staff session after a separate trusted identity flow has authenticated an
+    /// explicitly linked account. Callers must establish the contact link before invoking it.
+    /// </summary>
+    Task<LoginOutcome> IssueLinkedMobileSessionAsync(
+        Guid userId, string? ipAddress = null, CancellationToken ct = default);
+
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
 
     /// <summary>

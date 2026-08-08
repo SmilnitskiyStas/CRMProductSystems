@@ -5,6 +5,9 @@ export interface AuthUser {
   role: string;
   tenantId: string | null;
   locationId: string | null;
+  permissions: Record<string, boolean>;
+  capabilities: string[];
+  tabs: string[];
 }
 
 export interface LoginRequest {
@@ -12,9 +15,34 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface LoginResponse {
+export interface LoginSuccessResponse {
   accessToken: string;
   user: AuthUser;
+}
+
+export interface TwoFactorChallengeResponse {
+  requiresTwoFactor: true;
+  challengeToken: string;
+  /**
+   * TASK-497: set whenever the challenge was reached via the consumer/mobile-auth path —
+   * the person already proved their personal password before the 2FA branch, so the app
+   * stores this immediately and lets them into personal/loyalty mode while the workspace
+   * 2FA step is still pending. Absent only for the legacy staff-only-fallback-with-2FA case.
+   */
+  personalAccessToken?: string | null;
+}
+
+export type LoginResponse = LoginSuccessResponse | TwoFactorChallengeResponse;
+
+export interface VerifyTwoFactorRequest {
+  challengeToken: string;
+  code: string;
+}
+
+export function isTwoFactorChallenge(
+  response: LoginResponse
+): response is TwoFactorChallengeResponse {
+  return 'requiresTwoFactor' in response && response.requiresTwoFactor;
 }
 
 // ── Consumer (loyalty wallet) session — TASK-405/407 ────────────────────────
@@ -35,11 +63,6 @@ export interface ConsumerUser {
   role: 'consumer';
 }
 
-export interface ConsumerLoginRequest {
-  phone: string;
-  password: string;
-}
-
 export interface ConsumerRegisterRequest {
   phone: string;
   password: string;
@@ -47,7 +70,35 @@ export interface ConsumerRegisterRequest {
   email?: string;
 }
 
-export interface ConsumerAuthResult {
-  accessToken: string;
-  user: ConsumerUser;
+export interface MobileLoginRequest {
+  identifier: string;
+  password: string;
 }
+
+// TASK-497: an employee is first a normal loyalty-program participant (ConsumerAccount)
+// who *additionally* gets workspace access when linked to an active staff User. Both
+// identities are usable at once, backed by two separate JWTs the app holds simultaneously.
+export interface MobileLoginSuccess {
+  /** Consumer/loyalty JWT — null only in the legacy staff-only fallback (no personal
+   * ConsumerAccount exists yet for this identifier at all). */
+  personalAccessToken: string | null;
+  /** Staff/tenant JWT — null for a plain consumer with no linked, active staff User. */
+  workspaceAccessToken: string | null;
+  user: {
+    id: string;
+    fullName: string;
+    email: string | null;
+    phone: string | null;
+    tenantId: string | null;
+    storeId: string | null;
+  };
+  access: {
+    canAccessWorkspace: boolean;
+    role: string;
+    permissions: Record<string, boolean>;
+    capabilities: string[];
+    tabs: string[];
+  };
+}
+
+export type MobileLoginResponse = MobileLoginSuccess | TwoFactorChallengeResponse;

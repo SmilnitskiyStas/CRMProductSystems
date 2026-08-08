@@ -1,17 +1,17 @@
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { mobileRegister } from '../api/mobileAuthApi';
+import { mobileLogin } from '../api/mobileAuthApi';
 import { useAuthStore } from '../store';
 
-export function useConsumerRegister() {
+export function useMobileLogin() {
   const router = useRouter();
-  const setWorkspaceAuth = useAuthStore((s) => s.setWorkspaceAuth);
-  const setPersonalAuth = useAuthStore((s) => s.setPersonalAuth);
-  const setPersonalToken = useAuthStore((s) => s.setPersonalToken);
-  const setTwoFactorChallenge = useAuthStore((s) => s.setTwoFactorChallenge);
+  const setWorkspaceAuth = useAuthStore((state) => state.setWorkspaceAuth);
+  const setPersonalAuth = useAuthStore((state) => state.setPersonalAuth);
+  const setPersonalToken = useAuthStore((state) => state.setPersonalToken);
+  const setTwoFactorChallenge = useAuthStore((state) => state.setTwoFactorChallenge);
 
   return useMutation({
-    mutationFn: mobileRegister,
+    mutationFn: mobileLogin,
     onSuccess: async (result, variables) => {
       if ('requiresTwoFactor' in result) {
         // TASK-497: the person already proved their personal password before the 2FA
@@ -20,7 +20,7 @@ export function useConsumerRegister() {
         if (result.personalAccessToken) {
           await setPersonalToken(result.personalAccessToken);
         }
-        setTwoFactorChallenge(result.challengeToken, variables.email ?? variables.phone);
+        setTwoFactorChallenge(result.challengeToken, variables.identifier);
         router.push('/(auth)/two-factor');
         return;
       }
@@ -29,7 +29,7 @@ export function useConsumerRegister() {
       if (result.workspaceAccessToken) {
         await setWorkspaceAuth(result.workspaceAccessToken, {
           id: result.user.id,
-          email: result.user.email ?? variables.email ?? '',
+          email: result.user.email ?? variables.identifier,
           fullName: result.user.fullName,
           role: result.access.role,
           tenantId: result.user.tenantId,
@@ -43,10 +43,11 @@ export function useConsumerRegister() {
         await setPersonalAuth(result.personalAccessToken, {
           id: result.user.id,
           fullName: result.user.fullName,
-          phone: result.user.phone ?? variables.phone,
+          phone: result.user.phone ?? variables.identifier,
           role: 'consumer',
         });
       }
+
       router.replace('/(personal)');
     },
   });

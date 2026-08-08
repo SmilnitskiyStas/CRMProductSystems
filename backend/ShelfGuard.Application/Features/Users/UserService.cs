@@ -302,7 +302,19 @@ public sealed class UserService : IUserService
             }
         }
 
-        target.UpdateProfile(request.FullName, request.Phone);
+        var normalizedPhone = string.IsNullOrWhiteSpace(request.Phone)
+            ? null
+            : PhoneNormalizer.Normalize(request.Phone);
+        if (!string.IsNullOrWhiteSpace(request.Phone) && normalizedPhone is null)
+            return (null, "Invalid phone number. Expected a Ukrainian mobile number.");
+        if (normalizedPhone is not null)
+        {
+            var phoneOwner = await _users.GetByPhoneAsync(normalizedPhone, ct);
+            if (phoneOwner is not null && phoneOwner.Id != target.Id)
+                return (null, "This phone number is already linked to another user.");
+        }
+
+        target.UpdateProfile(request.FullName, normalizedPhone);
         target.SetRole(request.Role);
         target.SetStore(request.StoreId);
         target.SetLegalEntity(request.LegalEntityId);
@@ -379,7 +391,19 @@ public sealed class UserService : IUserService
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null) return (null, "User not found.");
 
-        user.UpdateProfile(request.FullName.Trim(), request.Phone?.Trim());
+        var normalizedPhone = string.IsNullOrWhiteSpace(request.Phone)
+            ? null
+            : PhoneNormalizer.Normalize(request.Phone);
+        if (!string.IsNullOrWhiteSpace(request.Phone) && normalizedPhone is null)
+            return (null, "Invalid phone number. Expected a Ukrainian mobile number.");
+        if (normalizedPhone is not null)
+        {
+            var phoneOwner = await _users.GetByPhoneAsync(normalizedPhone, ct);
+            if (phoneOwner is not null && phoneOwner.Id != user.Id)
+                return (null, "This phone number is already linked to another user.");
+        }
+
+        user.UpdateProfile(request.FullName.Trim(), normalizedPhone);
         if (request.PreferredLocale is not null)
             user.SetPreferredLocale(request.PreferredLocale);
         _users.Update(user);

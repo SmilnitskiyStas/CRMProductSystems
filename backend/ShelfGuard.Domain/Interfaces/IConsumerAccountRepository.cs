@@ -13,6 +13,7 @@ public interface IConsumerAccountRepository
 
     /// <summary>Phone must already be normalized (+380XXXXXXXXX) — globally unique lookup.</summary>
     Task<ConsumerAccount?> GetByPhoneAsync(string phone, CancellationToken ct = default);
+    Task<ConsumerAccount?> GetByEmailAsync(string email, CancellationToken ct = default);
 
     Task AddAsync(ConsumerAccount account, CancellationToken ct = default);
     void Update(ConsumerAccount account);

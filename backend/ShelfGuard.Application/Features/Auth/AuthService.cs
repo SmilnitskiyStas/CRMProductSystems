@@ -201,6 +201,19 @@ public sealed class AuthService : IAuthService
         return ToDto(user, effectivePermissions, effectiveCapabilities, effectiveTabs);
     }
 
+    public async Task<LoginOutcome> IssueLinkedMobileSessionAsync(
+        Guid userId, string? ipAddress = null, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(userId, ct);
+        if (user is null || !user.IsActive)
+            return new LoginOutcome(null, null, GenericLoginError);
+
+        if (user.TotpEnabled)
+            return new LoginOutcome(null, _jwt.GenerateTwoFactorChallengeToken(user.Id), null);
+
+        return new LoginOutcome(await IssueTokensAsync(user, ipAddress, ct), null, null);
+    }
+
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
 
     public async Task<(LoginResponse? Response, string? Error)> VerifyTwoFactorAsync(

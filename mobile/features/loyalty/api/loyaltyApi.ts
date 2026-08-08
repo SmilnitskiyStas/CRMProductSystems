@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api-client';
+import { apiClient, personalApiClient } from '@/lib/api-client';
 import type {
   LoyaltyCode,
   LoyaltyLedgerEntry,
@@ -8,15 +8,16 @@ import type {
   ResolveLoyaltyCodeResult,
 } from '../types';
 
-// ─── Consumer wallet (consumer JWT — ConsumerLoyaltyController, /api/consumer/loyalty) ──────
+// ─── Consumer wallet (consumer JWT via personalApiClient — ConsumerLoyaltyController,
+// /api/consumer/loyalty) — TASK-497: never the workspace-scoped apiClient. ──────────────────
 
 export async function getMemberships(): Promise<LoyaltyMembershipSummary[]> {
-  const { data } = await apiClient.get<LoyaltyMembershipSummary[]>('/consumer/loyalty/memberships');
+  const { data } = await personalApiClient.get<LoyaltyMembershipSummary[]>('/consumer/loyalty/memberships');
   return data;
 }
 
 export async function getLoyaltyCode(tenantId: string): Promise<LoyaltyCode> {
-  const { data } = await apiClient.get<LoyaltyCode>(`/consumer/loyalty/${tenantId}/code`);
+  const { data } = await personalApiClient.get<LoyaltyCode>(`/consumer/loyalty/${tenantId}/code`);
   return data;
 }
 
@@ -25,7 +26,7 @@ export async function getLoyaltyHistory(
   page = 1,
   pageSize = 50
 ): Promise<PagedResult<LoyaltyLedgerEntry>> {
-  const { data } = await apiClient.get<PagedResult<LoyaltyLedgerEntry>>(
+  const { data } = await personalApiClient.get<PagedResult<LoyaltyLedgerEntry>>(
     `/consumer/loyalty/${tenantId}/history`,
     { params: { page, pageSize } }
   );
@@ -35,11 +36,11 @@ export async function getLoyaltyHistory(
 /**
  * No discovery/browse endpoint exists for "which tenants run a loyalty program" — this is
  * meant to be called with a tenantId the consumer already knows (e.g. told to them in-store).
- * See mobile/app/(consumer)/wallet.tsx's join form for the (intentionally minimal, flagged
+ * See mobile/app/(personal)/wallet.tsx's join form for the (intentionally minimal, flagged
  * for a future UX pass) manual entry point.
  */
 export async function joinTenantProgram(tenantId: string): Promise<LoyaltyMembershipSummary> {
-  const { data } = await apiClient.post<LoyaltyMembershipSummary>(`/consumer/loyalty/${tenantId}/join`);
+  const { data } = await personalApiClient.post<LoyaltyMembershipSummary>(`/consumer/loyalty/${tenantId}/join`);
   return data;
 }
 

@@ -51,7 +51,7 @@ export function useAutoSelectMembership(
  * Polls the rotating QR/code. `enabled` must reflect BOTH navigation focus (this tab, not
  * just the app) and OS-level foreground state — the code is a security-sensitive rotating
  * secret and must not keep refreshing off-screen or while backgrounded (see
- * mobile/app/(consumer)/wallet.tsx, which combines useFocusEffect + AppState into this flag).
+ * mobile/app/(personal)/wallet.tsx, which combines useFocusEffect + AppState into this flag).
  */
 export function useLoyaltyCode(tenantId: string | null, enabled: boolean) {
   return useQuery({

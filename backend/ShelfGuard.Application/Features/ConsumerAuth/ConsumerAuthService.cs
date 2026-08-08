@@ -60,12 +60,18 @@ public sealed class ConsumerAuthService : IConsumerAuthService
         if (existing is not null)
             return (null, "An account with this phone number already exists.");
 
+        var email = string.IsNullOrWhiteSpace(request.Email)
+            ? null
+            : request.Email.Trim().ToLowerInvariant();
+        if (email is not null && await _accounts.GetByEmailAsync(email, ct) is not null)
+            return (null, "An account with this email already exists.");
+
         var account = new ConsumerAccount
         {
             Phone = phone,
             PasswordHash = _hasher.Hash(request.Password),
             FullName = request.FullName.Trim(),
-            Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim(),
+            Email = email,
         };
 
         await _accounts.AddAsync(account, ct);

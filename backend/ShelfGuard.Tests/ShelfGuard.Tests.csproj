@@ -19,6 +19,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ShelfGuard.Api\ShelfGuard.Api.csproj" />
     <ProjectReference Include="..\ShelfGuard.Application\ShelfGuard.Application.csproj" />
     <ProjectReference Include="..\ShelfGuard.Domain\ShelfGuard.Domain.csproj" />
     <ProjectReference Include="..\ShelfGuard.Infrastructure\ShelfGuard.Infrastructure.csproj" />
