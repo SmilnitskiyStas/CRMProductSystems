@@ -105,6 +105,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: mobile/package-lock.json
 
+      # mobile/package-lock.json is regenerated locally with npm >=11; npm 10.x
+      # (bundled with both Node 20.x and 22.x) can hard-fail npm ci's sync check
+      # on it, same root cause as frontend-ci's npm@11 step above.
+      - name: Ensure npm >= 11 (required for lockfile sync check)
+        run: npm install -g npm@11
+
       - name: Install dependencies
         run: npm ci
         working-directory: mobile
