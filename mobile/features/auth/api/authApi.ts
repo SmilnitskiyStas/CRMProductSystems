@@ -1,11 +1,15 @@
 import { apiClient } from '@/lib/api-client';
-import type { AuthUser, LoginRequest, LoginResponse } from '../types';
+import type {
+  AuthUser,
+  LoginRequest,
+  LoginResponse,
+  LoginSuccessResponse,
+  VerifyTwoFactorRequest,
+} from '../types';
 
 /**
- * Wire shape of `AuthUserDto` (backend `Features/Auth/Dtos/AuthDtos.cs`). The
- * assigned-store/location field is still named `StoreId` on the backend `User`
- * entity (never renamed in the v4 Store→Location pass, unlike product_stock etc.)
- * so it serializes as `storeId`, not `locationId`.
+ * Wire shape of AuthUserDto. The assigned location is still serialized as
+ * storeId by the backend, so the mobile boundary maps it to locationId.
  */
 interface AuthUserWire {
   id: string;
@@ -14,13 +18,16 @@ interface AuthUserWire {
   role: string;
   tenantId: string | null;
   storeId: string | null;
+  permissions?: Record<string, boolean> | null;
+  capabilities?: string[] | null;
+  tabs?: string[] | null;
 }
 
-/** Raw `/auth/login` response — 2FA-enabled accounts return `requiresTwoFactor` instead. */
 interface LoginWireResponse {
   accessToken?: string;
   user?: AuthUserWire;
   requiresTwoFactor?: boolean;
+  challengeToken?: string;
 }
 
 function mapAuthUser(wire: AuthUserWire): AuthUser {
@@ -31,19 +38,33 @@ function mapAuthUser(wire: AuthUserWire): AuthUser {
     role: wire.role,
     tenantId: wire.tenantId,
     locationId: wire.storeId,
+    permissions: wire.permissions ?? {},
+    capabilities: wire.capabilities ?? [],
+    tabs: wire.tabs ?? [],
   };
 }
 
 export async function login(body: LoginRequest): Promise<LoginResponse> {
   const { data } = await apiClient.post<LoginWireResponse>('/auth/login', body);
 
-  // 2FA-enabled accounts get {requiresTwoFactor, challengeToken} with no tokens yet.
-  // Mobile has no 2FA step UI (TASK-330/331 only built it for web) — fail loudly
-  // instead of silently calling setAuth(undefined, undefined) and navigating in.
-  if (data.requiresTwoFactor || !data.accessToken || !data.user) {
-    throw new Error('TWO_FACTOR_REQUIRED');
+  if (data.requiresTwoFactor) {
+    if (!data.challengeToken) throw new Error('INVALID_TWO_FACTOR_CHALLENGE');
+    return { requiresTwoFactor: true, challengeToken: data.challengeToken };
   }
 
+  if (!data.accessToken || !data.user) throw new Error('INVALID_LOGIN_RESPONSE');
+  return { accessToken: data.accessToken, user: mapAuthUser(data.user) };
+}
+
+export async function verifyTwoFactor(
+  body: VerifyTwoFactorRequest
+): Promise<LoginSuccessResponse> {
+  const { data } = await apiClient.post<{
+    accessToken?: string;
+    user?: AuthUserWire;
+  }>('/auth/2fa/verify', body);
+
+  if (!data.accessToken || !data.user) throw new Error('INVALID_TWO_FACTOR_RESPONSE');
   return { accessToken: data.accessToken, user: mapAuthUser(data.user) };
 }
 
@@ -52,6 +73,8 @@ export async function logout(): Promise<void> {
 }
 
 export async function getMe(): Promise<AuthUser> {
-  const { data } = await apiClient.get<AuthUserWire>('/auth/me');
+  // Cold bootstrap must reach the retryable offline state promptly instead of
+  // leaving route guards on an unbounded/textless loading screen.
+  const { data } = await apiClient.get<AuthUserWire>('/auth/me', { timeout: 15_000 });
   return mapAuthUser(data);
 }
