@@ -585,6 +585,10 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("LockoutUntil")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LoyaltyTotpSecret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");

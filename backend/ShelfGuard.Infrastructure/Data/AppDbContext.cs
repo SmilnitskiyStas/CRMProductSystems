@@ -2080,6 +2080,7 @@ public sealed class AppDbContext : DbContext
             e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(a => a.Phone).HasColumnType("text").IsRequired();
             e.Property(a => a.PasswordHash).HasColumnType("text").IsRequired();
+            e.Property(a => a.LoyaltyTotpSecret).HasColumnType("text").IsRequired();
             e.Property(a => a.FullName).HasColumnType("text").IsRequired();
             e.Property(a => a.Email).HasColumnType("text");
             e.Property(a => a.FailedLoginAttempts).HasDefaultValue(0);

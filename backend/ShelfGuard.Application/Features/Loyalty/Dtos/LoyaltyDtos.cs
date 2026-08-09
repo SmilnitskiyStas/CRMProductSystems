@@ -41,6 +41,20 @@ public sealed record ManualLoyaltyAdjustRequest(
     decimal Amount,
     string? Note);
 
+/// <summary>TASK-498: request body for POST /api/loyalty/resolve-or-create-by-phone.</summary>
+public sealed record ResolveOrCreateMembershipByPhoneRequest(string Phone);
+
+/// <summary>
+/// TASK-498: result of a staff-triggered phone lookup at the register. Deliberately omits
+/// the consumer's phone/email — the caller already has the phone it searched with, no need to
+/// echo more identity data back than the UI needs to display.
+/// </summary>
+public sealed record LoyaltyMembershipLookupResult(
+    Guid MembershipId,
+    decimal Balance,
+    bool IsNewMembership,
+    string ConsumerFullName);
+
 public sealed record LoyaltyProgramSettingsDto(
     bool IsEnabled,
     decimal AccrualRatePercent,

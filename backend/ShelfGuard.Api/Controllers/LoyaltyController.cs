@@ -43,6 +43,42 @@ public sealed class LoyaltyController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// TASK-498: staff types a phone at the register (POS "no QR" fallback) instead of the
+    /// consumer manually selecting/typing a store's GUID. Resolves the ConsumerAccount for that
+    /// phone and idempotently gets-or-creates its LoyaltyMembership at the caller's own tenant.
+    /// Always 200 — "found: false" is the normal/expected shape for a phone that doesn't belong
+    /// to any mobile-app account, or when this tenant's loyalty module isn't enabled; only a
+    /// structurally-unparseable phone is a real (400) error.
+    /// </summary>
+    [HttpPost("resolve-or-create-by-phone")]
+    [Authorize(Policy = AppPolicies.CanAccessPos)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResolveOrCreateByPhone(
+        [FromBody] ResolveOrCreateMembershipByPhoneRequest request, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (result, error, statusCode) = await _loyalty.ResolveOrCreateMembershipByPhoneAsync(
+            tenantId.Value, request.Phone, ct);
+        if (error is not null)
+            return StatusCode(statusCode ?? 400, new { error });
+
+        if (result is null)
+            return Ok(new { found = false });
+
+        return Ok(new
+        {
+            found = true,
+            membershipId = result.MembershipId,
+            balance = result.Balance,
+            isNewMembership = result.IsNewMembership,
+            consumerFullName = result.ConsumerFullName,
+        });
+    }
+
     /// <summary>Manual ledger correction — store_manager and above.</summary>
     [HttpPost("manual-adjust")]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]

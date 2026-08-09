@@ -43,13 +43,13 @@ public sealed class ConsumerLoyaltyController : ControllerBase
         return Ok(memberships);
     }
 
-    [HttpGet("{tenantId:guid}/code")]
-    public async Task<IActionResult> GetCode(Guid tenantId, CancellationToken ct)
+    [HttpGet("code")]
+    public async Task<IActionResult> GetCode(CancellationToken ct)
     {
         var consumerId = ResolveConsumerAccountId();
         if (consumerId is null) return Forbid();
 
-        var (code, error, statusCode) = await _loyalty.GetCurrentCodeAsync(consumerId.Value, tenantId, ct);
+        var (code, error, statusCode) = await _loyalty.GetConsumerCodeAsync(consumerId.Value, ct);
         if (error is not null)
             return StatusCode(statusCode ?? 400, new { error });
 

@@ -20,6 +20,8 @@ public sealed class ConsumerAccount
     /// </summary>
     public string Phone { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+    /// <summary>Secret for the cross-tenant rotating checkout identifier.</summary>
+    public string LoyaltyTotpSecret { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Email { get; set; }
 

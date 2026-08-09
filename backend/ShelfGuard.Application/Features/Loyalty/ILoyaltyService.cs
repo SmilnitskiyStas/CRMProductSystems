@@ -25,8 +25,8 @@ public interface ILoyaltyService
         Guid consumerAccountId, CancellationToken ct = default);
 
     /// <summary>404 when the consumer has no membership at this tenant.</summary>
-    Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetCurrentCodeAsync(
-        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default);
+    Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetConsumerCodeAsync(
+        Guid consumerAccountId, CancellationToken ct = default);
 
     /// <summary>404 when the consumer has no membership at this tenant.</summary>
     Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
@@ -58,6 +58,17 @@ public interface ILoyaltyService
     /// </summary>
     Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> JoinAsStaffAsync(
         Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-498: resolves the ConsumerAccount for a phone typed at the register and
+    /// idempotently gets-or-creates its LoyaltyMembership at <paramref name="tenantId"/> — no
+    /// manual store selection by the consumer. Error non-null is a genuine client error
+    /// (currently only an unparseable phone, 400). A null Result with a null Error means "not
+    /// applicable" (module disabled, no matching/active ConsumerAccount) — a normal outcome the
+    /// caller should treat as "fall back to a plain customer", not a failure.
+    /// </summary>
+    Task<(LoyaltyMembershipLookupResult? Result, string? Error, int? StatusCode)> ResolveOrCreateMembershipByPhoneAsync(
+        Guid tenantId, string phone, CancellationToken ct = default);
 
     // ── Settings (enterprise_admin) ───────────────────────────────────────────
 

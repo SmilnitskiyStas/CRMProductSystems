@@ -195,39 +195,42 @@ public sealed class LoyaltyServiceTests
             Arg.Is<LoyaltyMembership>(m => m.CustomerId == existingCustomer.Id), default);
     }
 
-    // ── GetCurrentCodeAsync ────────────────────────────────────────────────
+    // ── GetConsumerCodeAsync ───────────────────────────────────────────────
+    // NOTE: pre-existing test breakage fixed incidentally while implementing TASK-498 — an
+    // uncommitted, unrelated WIP change (visible via `git diff HEAD`) renamed
+    // LoyaltyService.GetCurrentCodeAsync(consumerId, tenantId) to the current
+    // GetConsumerCodeAsync(consumerId) — a cross-tenant consumer code keyed off
+    // ConsumerAccount.LoyaltyTotpSecret instead of a per-membership TotpSecret — without
+    // updating these two tests, which left ShelfGuard.Tests failing to compile at all. Not part
+    // of TASK-498's scope; fixed only so `dotnet build`/`dotnet test` could run to verify this
+    // task's own changes.
 
     [Fact]
-    public async Task GetCurrentCodeAsync_not_a_member_returns_404()
+    public async Task GetConsumerCodeAsync_unknown_consumer_returns_404()
     {
         var consumerId = Guid.NewGuid();
-        var tenantId = Guid.NewGuid();
-        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+        _consumerAccounts.GetByIdAsync(consumerId, default).ReturnsNull();
 
-        var (code, error, statusCode) = await _sut.GetCurrentCodeAsync(consumerId, tenantId);
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId);
 
         Assert.Null(code);
         Assert.Equal(404, statusCode);
     }
 
     [Fact]
-    public async Task GetCurrentCodeAsync_member_returns_qr_payload_and_balance()
+    public async Task GetConsumerCodeAsync_active_consumer_returns_code_payload()
     {
         var consumerId = Guid.NewGuid();
-        var tenantId = Guid.NewGuid();
-        var membershipId = Guid.NewGuid();
-        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(
-            new LoyaltyMembership { Id = membershipId, TenantId = tenantId, TotpSecret = "SECRET", Balance = 33m });
+        _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
+            new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
         _totp.GenerateCode("SECRET").Returns("654321");
-        _loyalty.GetSettingsAsync(tenantId, default).ReturnsNull();
 
-        var (code, error, statusCode) = await _sut.GetCurrentCodeAsync(consumerId, tenantId);
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId);
 
         Assert.Null(error);
         Assert.NotNull(code);
-        Assert.Equal($"SGLOY1.{membershipId}.654321", code.Code);
-        Assert.Equal(33m, code.Balance);
-        Assert.Equal(30, code.ExpiresInSeconds); // no saved settings -> entity default
+        Assert.Equal($"SGCUS1.{consumerId}.654321", code.Code);
+        Assert.Equal(30, code.ExpiresInSeconds);
     }
 
     // ── ResolveCodeAsync ───────────────────────────────────────────────────
@@ -499,6 +502,125 @@ public sealed class LoyaltyServiceTests
             Arg.Is<ConsumerAccount>(a => a.Phone == "+380501234567"), default);
         await _loyalty.Received(1).AddMembershipAsync(
             Arg.Is<LoyaltyMembership>(m => m.LinkedUserId == userId && m.TenantId == tenantId), default);
+    }
+
+    // ── ResolveOrCreateMembershipByPhoneAsync (TASK-498) ──────────────────
+
+    [Fact]
+    public async Task ResolveOrCreateMembershipByPhoneAsync_new_consumer_creates_membership()
+    {
+        var tenantId = Guid.NewGuid();
+        var consumerId = Guid.NewGuid();
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _consumerAccounts.GetByPhoneAsync("+380501234567", default)
+            .Returns(new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "Ірина Петренко", IsActive = true });
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+        _customers.FindByPhoneAsync("+380501234567", tenantId, default).ReturnsNull();
+        _totp.GenerateSecret().Returns("SECRET");
+
+        var (result, error, statusCode) = await _sut.ResolveOrCreateMembershipByPhoneAsync(tenantId, "0501234567");
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.True(result.IsNewMembership);
+        Assert.Equal(0m, result.Balance);
+        Assert.Equal("Ірина Петренко", result.ConsumerFullName);
+        await _loyalty.Received(1).AddMembershipAsync(
+            Arg.Is<LoyaltyMembership>(m => m.TenantId == tenantId && m.ConsumerAccountId == consumerId), default);
+        await _loyalty.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task ResolveOrCreateMembershipByPhoneAsync_existing_membership_returns_idempotently_and_keeps_balance()
+    {
+        var tenantId = Guid.NewGuid();
+        var consumerId = Guid.NewGuid();
+        var membershipId = Guid.NewGuid();
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _consumerAccounts.GetByPhoneAsync("+380501234567", default)
+            .Returns(new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "Ірина", IsActive = true });
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default)
+            .Returns(new LoyaltyMembership { Id = membershipId, TenantId = tenantId, ConsumerAccountId = consumerId, Balance = 77m });
+
+        var (result, error, statusCode) = await _sut.ResolveOrCreateMembershipByPhoneAsync(tenantId, "0501234567");
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.False(result.IsNewMembership);
+        Assert.Equal(77m, result.Balance);
+        Assert.Equal(membershipId, result.MembershipId);
+        await _loyalty.DidNotReceive().AddMembershipAsync(Arg.Any<LoyaltyMembership>(), default);
+    }
+
+    /// <summary>Proves multi-tenant membership independence: a membership at a different tenant
+    /// must not block (or be reused for) a brand-new membership at this tenant.</summary>
+    [Fact]
+    public async Task ResolveOrCreateMembershipByPhoneAsync_membership_at_another_tenant_only_still_creates_new_one_here()
+    {
+        var tenantId = Guid.NewGuid();
+        var otherTenantId = Guid.NewGuid();
+        var consumerId = Guid.NewGuid();
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _consumerAccounts.GetByPhoneAsync("+380501234567", default)
+            .Returns(new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "Ірина", IsActive = true });
+        _loyalty.GetMembershipByTenantConsumerAsync(otherTenantId, consumerId, default)
+            .Returns(new LoyaltyMembership { TenantId = otherTenantId, ConsumerAccountId = consumerId, Balance = 500m });
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+        _customers.FindByPhoneAsync("+380501234567", tenantId, default).ReturnsNull();
+        _totp.GenerateSecret().Returns("SECRET");
+
+        var (result, error, statusCode) = await _sut.ResolveOrCreateMembershipByPhoneAsync(tenantId, "0501234567");
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.True(result.IsNewMembership);
+        Assert.Equal(0m, result.Balance); // independent of the other tenant's 500m balance
+        await _loyalty.Received(1).AddMembershipAsync(
+            Arg.Is<LoyaltyMembership>(m => m.TenantId == tenantId && m.ConsumerAccountId == consumerId), default);
+    }
+
+    [Fact]
+    public async Task ResolveOrCreateMembershipByPhoneAsync_no_matching_consumer_returns_null_result_without_error()
+    {
+        var tenantId = Guid.NewGuid();
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _consumerAccounts.GetByPhoneAsync("+380501234567", default).ReturnsNull();
+
+        var (result, error, statusCode) = await _sut.ResolveOrCreateMembershipByPhoneAsync(tenantId, "0501234567");
+
+        Assert.Null(result);
+        Assert.Null(error);
+        await _loyalty.DidNotReceive().AddMembershipAsync(Arg.Any<LoyaltyMembership>(), default);
+    }
+
+    [Fact]
+    public async Task ResolveOrCreateMembershipByPhoneAsync_module_disabled_returns_null_result_without_error_or_lookup()
+    {
+        var tenantId = Guid.NewGuid();
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant()); // no modules
+
+        var (result, error, statusCode) = await _sut.ResolveOrCreateMembershipByPhoneAsync(tenantId, "0501234567");
+
+        Assert.Null(result);
+        Assert.Null(error);
+        await _consumerAccounts.DidNotReceive().GetByPhoneAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _loyalty.DidNotReceive().AddMembershipAsync(Arg.Any<LoyaltyMembership>(), default);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("123")]
+    [InlineData("not-a-phone")]
+    public async Task ResolveOrCreateMembershipByPhoneAsync_invalid_phone_returns_400_error(string rawPhone)
+    {
+        var tenantId = Guid.NewGuid();
+
+        var (result, error, statusCode) = await _sut.ResolveOrCreateMembershipByPhoneAsync(tenantId, rawPhone);
+
+        Assert.Null(result);
+        Assert.NotNull(error);
+        Assert.Equal(400, statusCode);
+        await _tenants.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     // ── GetMyMembershipAsync ───────────────────────────────────────────────

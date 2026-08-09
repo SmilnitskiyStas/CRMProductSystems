@@ -15,7 +15,7 @@ namespace ShelfGuard.Application.Features.Loyalty;
 /// </summary>
 public sealed class LoyaltyService : ILoyaltyService
 {
-    private const string QrPrefix = "SGLOY1";
+    private const string ConsumerCodePrefix = "SGCUS1";
 
     // TASK-405: same shape as AuthService's TASK-329 constants, applied to resolve-code
     // instead of login (LoyaltyMembership has no FailedLoginAttempts/LockoutUntil columns —
@@ -91,29 +91,62 @@ public sealed class LoyaltyService : ILoyaltyService
         // would already succeed without this (consumer_self_access covers it independently),
         // but keeping both writes in the same overridden transaction is simpler to reason about
         // and makes the two rows atomic — either both are created or neither is.
-        var membership = await _tenantScope.ExecuteAsync(tenantId, async () =>
-        {
-            var customer = await FindOrCreateCustomerAsync(tenantId, consumer.Phone, consumer.FullName, ct);
-
-            var newMembership = new LoyaltyMembership
-            {
-                TenantId = tenantId,
-                ConsumerAccountId = consumerAccountId,
-                CustomerId = customer.Id,
-                TotpSecret = _totp.GenerateSecret(),
-                Balance = 0m,
-                Status = LoyaltyMembershipStatus.Active,
-            };
-
-            await _loyalty.AddMembershipAsync(newMembership, ct);
-            await _loyalty.SaveChangesAsync(ct);
-            return newMembership;
-        }, ct);
+        var membership = await _tenantScope.ExecuteAsync(
+            tenantId,
+            () => CreateMembershipCoreAsync(tenantId, consumerAccountId, consumer.Phone, consumer.FullName, ct),
+            ct);
 
         _logger.LogInformation(
             "Consumer {ConsumerId} joined loyalty program for tenant {TenantId}.", consumerAccountId, tenantId);
 
         return (ToSummaryDto(membership, tenant.Name), null, null);
+    }
+
+    /// <summary>
+    /// TASK-498: staff-facing counterpart to <see cref="JoinAsync"/> — resolves the
+    /// ConsumerAccount for a phone number typed at the register and idempotently gets-or-creates
+    /// its LoyaltyMembership at <paramref name="tenantId"/>, with no manual store selection by
+    /// the consumer. Runs entirely inside the caller's existing (staff JWT) tenant RLS context —
+    /// no <see cref="ITenantSessionOverride"/> is used or needed here, unlike JoinAsync's
+    /// consumer-session call site, because a staff request already carries a real app.tenant_id
+    /// set by TenantConnectionInterceptor for the whole request.
+    ///
+    /// Return-shape convention (deliberately NOT the same as this file's other tuples): Error
+    /// non-null means a genuine client error (currently only an unparseable phone, 400). A null
+    /// Result with a null Error means "not applicable" — module disabled, or the phone doesn't
+    /// belong to any ConsumerAccount, or that account is inactive — which is a normal, expected
+    /// outcome for POS (fall back to a plain CRM customer), not a failure to surface to staff.
+    /// </summary>
+    public async Task<(LoyaltyMembershipLookupResult? Result, string? Error, int? StatusCode)> ResolveOrCreateMembershipByPhoneAsync(
+        Guid tenantId, string phone, CancellationToken ct = default)
+    {
+        var normalized = PhoneNormalizer.Normalize(phone);
+        if (normalized is null)
+            return (null, "Invalid phone number.", 400);
+
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        if (tenant is null || !tenant.HasModule("loyalty"))
+            return (null, null, null); // not applicable — POS falls back to a plain customer
+
+        var consumer = await _consumerAccounts.GetByPhoneAsync(normalized, ct);
+        if (consumer is null || !consumer.IsActive)
+            return (null, null, null); // no (active) mobile-app account for this phone
+
+        var existing = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumer.Id, ct);
+        if (existing is not null)
+        {
+            return (
+                new LoyaltyMembershipLookupResult(existing.Id, existing.Balance, false, consumer.FullName),
+                null, null);
+        }
+
+        var membership = await CreateMembershipCoreAsync(tenantId, consumer.Id, consumer.Phone, consumer.FullName, ct);
+
+        _logger.LogInformation(
+            "Consumer {ConsumerId} auto-enrolled in loyalty program for tenant {TenantId} via staff phone lookup.",
+            consumer.Id, tenantId);
+
+        return (new LoyaltyMembershipLookupResult(membership.Id, membership.Balance, true, consumer.FullName), null, null);
     }
 
     public async Task<IReadOnlyList<LoyaltyMembershipSummaryDto>> GetMembershipsForConsumerAsync(
@@ -123,21 +156,29 @@ public sealed class LoyaltyService : ILoyaltyService
         return memberships.Select(m => ToSummaryDto(m, m.Tenant?.Name ?? "—")).ToList();
     }
 
-    public async Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetCurrentCodeAsync(
-        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default)
+    public async Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetConsumerCodeAsync(
+        Guid consumerAccountId, CancellationToken ct = default)
     {
-        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
-        if (membership is null)
-            return (null, "You are not a member of this loyalty program.", 404);
+        var consumer = await _consumerAccounts.GetByIdAsync(consumerAccountId, ct);
+        if (consumer is null || !consumer.IsActive)
+            return (null, "Consumer account not found.", 404);
 
-        var settings = await _loyalty.GetSettingsAsync(tenantId, ct);
-        var ttl = settings?.CodeTtlSeconds ?? new LoyaltyProgramSettings().CodeTtlSeconds;
+        if (string.IsNullOrWhiteSpace(consumer.LoyaltyTotpSecret))
+        {
+            consumer.LoyaltyTotpSecret = _totp.GenerateSecret();
+            _consumerAccounts.Update(consumer);
+            await _consumerAccounts.SaveChangesAsync(ct);
+        }
 
-        var code = _totp.GenerateCode(membership.TotpSecret);
-        var payload = $"{QrPrefix}.{membership.Id}.{code}";
-
-        return (new LoyaltyCodeDto(payload, membership.Balance, ttl), null, null);
+        var code = _totp.GenerateCode(consumer.LoyaltyTotpSecret);
+        var payload = $"{ConsumerCodePrefix}.{consumer.Id}.{code}";
+        return (new LoyaltyCodeDto(payload, 0m, 30), null, null);
     }
+
+    [Obsolete("Use GetConsumerCodeAsync; checkout codes are no longer tenant-specific.")]
+    public Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetCurrentCodeAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default) =>
+        GetConsumerCodeAsync(consumerAccountId, ct);
 
     public async Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
         Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default)
@@ -167,38 +208,53 @@ public sealed class LoyaltyService : ILoyaltyService
     public async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveCodeAsync(
         Guid tenantId, Guid staffUserId, string scannedValue, CancellationToken ct = default)
     {
-        if (!TryParsePayload(scannedValue, out var membershipId, out var code))
+        // Transitional support for already-issued membership codes while clients roll out.
+        if (scannedValue?.StartsWith("SGLOY1.", StringComparison.Ordinal) == true)
+            return await ResolveLegacyMembershipCodeAsync(tenantId, staffUserId, scannedValue, ct);
+
+        if (!TryParsePayload(scannedValue, out var consumerId, out var code))
             return (null, "Malformed loyalty code.", 400);
 
-        if (_attempts.IsLockedOut(membershipId))
+        if (_attempts.IsLockedOut(consumerId))
             return (null,
                 "Too many failed attempts for this code. Ask the customer to refresh their QR and try again shortly.",
                 429);
 
-        var membership = await _loyalty.GetMembershipByIdAsync(membershipId, tenantId, ct);
+        var consumer = await _consumerAccounts.GetByIdAsync(consumerId, ct);
+        if (consumer is null || !consumer.IsActive || string.IsNullOrWhiteSpace(consumer.LoyaltyTotpSecret))
+        {
+            var justLockedOut = _attempts.RegisterFailure(consumerId, ResolveMaxFailedAttempts, ResolveLockoutDuration);
+            await LogResolveFailureAsync(tenantId, staffUserId, consumerId, justLockedOut, ct);
+            return (null, GenericResolveError, 400);
+        }
+
+        var timestep = _totp.VerifyCode(consumer.LoyaltyTotpSecret, code);
+        if (timestep is null)
+        {
+            var justLockedOut = _attempts.RegisterFailure(consumerId, ResolveMaxFailedAttempts, ResolveLockoutDuration);
+            await LogResolveFailureAsync(tenantId, staffUserId, consumerId, justLockedOut, ct);
+            return (null, GenericResolveError, 400);
+        }
+
+        // The register supplies the store context. First scan automatically creates the
+        // tenant membership and CRM customer, so the consumer never chooses a store.
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, ct);
         if (membership is null)
         {
-            var justLockedOut = _attempts.RegisterFailure(membershipId, ResolveMaxFailedAttempts, ResolveLockoutDuration);
-            await LogResolveFailureAsync(tenantId, staffUserId, membershipId, justLockedOut, ct);
-            return (null, GenericResolveError, 400);
+            var (joined, joinError, joinStatus) = await JoinAsync(consumerId, tenantId, ct);
+            if (joinError is not null || joined is null) return (null, joinError, joinStatus);
+            membership = await _loyalty.GetMembershipByIdAsync(joined.MembershipId, tenantId, ct);
+            if (membership is null) return (null, "Could not create loyalty membership.", 500);
         }
 
         if (membership.Status != LoyaltyMembershipStatus.Active)
             return (null, "This loyalty membership is blocked.", 400);
 
-        var timestep = _totp.VerifyCode(membership.TotpSecret, code);
-        if (timestep is null)
-        {
-            var justLockedOut = _attempts.RegisterFailure(membershipId, ResolveMaxFailedAttempts, ResolveLockoutDuration);
-            await LogResolveFailureAsync(tenantId, staffUserId, membershipId, justLockedOut, ct);
-            return (null, GenericResolveError, 400);
-        }
-
         var claimed = await _loyalty.TryClaimTimestepAsync(membership.Id, tenantId, timestep.Value, ct);
         if (!claimed)
             return (null, "This code was already used. Ask the customer to refresh their QR code and scan again.", 409);
 
-        _attempts.Reset(membershipId);
+        _attempts.Reset(consumerId);
 
         string? customerName = null;
         if (membership.CustomerId.HasValue)
@@ -207,11 +263,51 @@ public sealed class LoyaltyService : ILoyaltyService
             customerName = customer?.Name;
         }
 
-        var consumer = await _consumerAccounts.GetByIdAsync(membership.ConsumerAccountId, ct);
-        var maskedPhone = consumer is null ? null : MaskPhone(consumer.Phone);
+        var maskedPhone = MaskPhone(consumer.Phone);
 
         return (new ResolveLoyaltyCodeResult(
             membership.Id, membership.CustomerId, customerName, maskedPhone, membership.Balance), null, null);
+    }
+
+    private async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)>
+        ResolveLegacyMembershipCodeAsync(Guid tenantId, Guid staffUserId, string scannedValue, CancellationToken ct)
+    {
+        var parts = scannedValue.Trim().Split('.');
+        if (parts.Length != 3 || !Guid.TryParse(parts[1], out var membershipId))
+            return (null, "Malformed loyalty code.", 400);
+
+        if (_attempts.IsLockedOut(membershipId))
+            return (null, "Too many failed attempts for this code. Ask the customer to refresh their QR and try again shortly.", 429);
+
+        var membership = await _loyalty.GetMembershipByIdAsync(membershipId, tenantId, ct);
+        if (membership is null)
+        {
+            var locked = _attempts.RegisterFailure(membershipId, ResolveMaxFailedAttempts, ResolveLockoutDuration);
+            await LogResolveFailureAsync(tenantId, staffUserId, membershipId, locked, ct);
+            return (null, GenericResolveError, 400);
+        }
+
+        if (membership.Status != LoyaltyMembershipStatus.Active)
+            return (null, "This loyalty membership is blocked.", 400);
+
+        var timestep = _totp.VerifyCode(membership.TotpSecret, parts[2].Trim());
+        if (timestep is null)
+        {
+            var locked = _attempts.RegisterFailure(membershipId, ResolveMaxFailedAttempts, ResolveLockoutDuration);
+            await LogResolveFailureAsync(tenantId, staffUserId, membershipId, locked, ct);
+            return (null, GenericResolveError, 400);
+        }
+
+        if (!await _loyalty.TryClaimTimestepAsync(membership.Id, tenantId, timestep.Value, ct))
+            return (null, "This code was already used. Ask the customer to refresh their QR code and scan again.", 409);
+
+        _attempts.Reset(membershipId);
+        var customer = membership.CustomerId.HasValue
+            ? await _customers.GetByIdAsync(membership.CustomerId.Value, tenantId, ct)
+            : null;
+        var consumer = await _consumerAccounts.GetByIdAsync(membership.ConsumerAccountId, ct);
+        return (new ResolveLoyaltyCodeResult(membership.Id, membership.CustomerId, customer?.Name,
+            consumer is null ? null : MaskPhone(consumer.Phone), membership.Balance), null, null);
     }
 
     public async Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> ManualAdjustAsync(
@@ -403,6 +499,35 @@ public sealed class LoyaltyService : ILoyaltyService
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// TASK-498 refactor: the actual LoyaltyMembership creation body shared by
+    /// <see cref="JoinAsync"/> (consumer session, wrapped by the caller in
+    /// <see cref="ITenantSessionOverride"/>) and <see cref="ResolveOrCreateMembershipByPhoneAsync"/>
+    /// (staff session, runs directly in the caller's own tenant RLS context). Does NOT check for
+    /// an existing membership — every call site is responsible for that idempotency check itself
+    /// first, since the right way to read "does this pair already have a membership" differs by
+    /// call site (ambient session vs. already-tenant-scoped session).
+    /// </summary>
+    private async Task<LoyaltyMembership> CreateMembershipCoreAsync(
+        Guid tenantId, Guid consumerAccountId, string phone, string fullName, CancellationToken ct)
+    {
+        var customer = await FindOrCreateCustomerAsync(tenantId, phone, fullName, ct);
+
+        var membership = new LoyaltyMembership
+        {
+            TenantId = tenantId,
+            ConsumerAccountId = consumerAccountId,
+            CustomerId = customer.Id,
+            TotpSecret = _totp.GenerateSecret(),
+            Balance = 0m,
+            Status = LoyaltyMembershipStatus.Active,
+        };
+
+        await _loyalty.AddMembershipAsync(membership, ct);
+        await _loyalty.SaveChangesAsync(ct);
+        return membership;
+    }
+
     private async Task<Customer> FindOrCreateCustomerAsync(
         Guid tenantId, string phone, string name, CancellationToken ct)
     {
@@ -443,7 +568,7 @@ public sealed class LoyaltyService : ILoyaltyService
 
         var parts = scanned.Trim().Split('.');
         if (parts.Length != 3) return false;
-        if (!string.Equals(parts[0], QrPrefix, StringComparison.Ordinal)) return false;
+        if (!string.Equals(parts[0], ConsumerCodePrefix, StringComparison.Ordinal)) return false;
         if (!Guid.TryParse(parts[1], out membershipId)) return false;
 
         code = parts[2].Trim();
