@@ -157,11 +157,31 @@ public sealed class LoyaltyService : ILoyaltyService
     }
 
     public async Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetConsumerCodeAsync(
-        Guid consumerAccountId, CancellationToken ct = default)
+        Guid consumerAccountId, Guid? tenantId = null, CancellationToken ct = default)
     {
         var consumer = await _consumerAccounts.GetByIdAsync(consumerAccountId, ct);
         if (consumer is null || !consumer.IsActive)
             return (null, "Consumer account not found.", 404);
+
+        string displayFormat;
+        if (tenantId is not null)
+        {
+            var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId.Value, consumerAccountId, ct);
+            if (membership is null)
+                return (null, "You are not a member of this network.", 403);
+
+            displayFormat = await ResolveCustomerCodeFormatAsync(tenantId.Value, ct);
+        }
+        else
+        {
+            var memberships = await _loyalty.GetMembershipsForConsumerAsync(consumerAccountId, ct);
+            if (memberships.Count >= 2)
+                return (null, "network_selection_required", 409);
+
+            displayFormat = memberships.Count == 1
+                ? await ResolveCustomerCodeFormatAsync(memberships[0].TenantId, ct)
+                : "barcode"; // 0 memberships — system default, no network context exists yet
+        }
 
         if (string.IsNullOrWhiteSpace(consumer.LoyaltyTotpSecret))
         {
@@ -172,13 +192,32 @@ public sealed class LoyaltyService : ILoyaltyService
 
         var code = _totp.GenerateCode(consumer.LoyaltyTotpSecret);
         var payload = $"{ConsumerCodePrefix}.{consumer.Id}.{code}";
-        return (new LoyaltyCodeDto(payload, 0m, 30), null, null);
+        return (new LoyaltyCodeDto(payload, displayFormat, 0m, 30), null, null);
+    }
+
+    /// <summary>
+    /// TASK-499: reads <see cref="LoyaltyProgramSettings.CustomerCodeFormat"/> for
+    /// <paramref name="tenantId"/>, or "barcode" when the tenant has never saved a settings
+    /// row. Runs through <see cref="ITenantSessionOverride"/> because
+    /// <c>loyalty_program_settings</c> carries only the canonical tenant_isolation RLS
+    /// policy — no consumer_self_access policy exists for it (unlike loyalty_memberships), so
+    /// a consumer session's ambient (null) app.tenant_id would otherwise see no row at all.
+    /// <paramref name="tenantId"/> must already be a value the caller trusts for this
+    /// operation — both call sites above pass in a tenant the consumer is proven (by an
+    /// already-checked LoyaltyMembership row) to belong to, satisfying
+    /// ITenantSessionOverride's security contract.
+    /// </summary>
+    private async Task<string> ResolveCustomerCodeFormatAsync(Guid tenantId, CancellationToken ct)
+    {
+        var settings = await _tenantScope.ExecuteAsync(
+            tenantId, () => _loyalty.GetSettingsAsync(tenantId, ct), ct);
+        return settings?.CustomerCodeFormat ?? "barcode";
     }
 
     [Obsolete("Use GetConsumerCodeAsync; checkout codes are no longer tenant-specific.")]
     public Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetCurrentCodeAsync(
         Guid consumerAccountId, Guid tenantId, CancellationToken ct = default) =>
-        GetConsumerCodeAsync(consumerAccountId, ct);
+        GetConsumerCodeAsync(consumerAccountId, tenantId, ct);
 
     public async Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
         Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default)
@@ -479,6 +518,8 @@ public sealed class LoyaltyService : ILoyaltyService
             return (null, "MinRedemptionBalance cannot be negative.");
         if (request.CodeTtlSeconds is < 5 or > 300)
             return (null, "CodeTtlSeconds must be between 5 and 300.");
+        if (request.CustomerCodeFormat is not ("qr" or "barcode"))
+            return (null, "CustomerCodeFormat must be 'qr' or 'barcode'.");
 
         var settings = await _loyalty.GetSettingsAsync(tenantId, ct);
         if (settings is null)
@@ -586,6 +627,7 @@ public sealed class LoyaltyService : ILoyaltyService
         settings.RedemptionCapPercent = request.RedemptionCapPercent;
         settings.MinRedemptionBalance = request.MinRedemptionBalance;
         settings.CodeTtlSeconds = request.CodeTtlSeconds;
+        settings.CustomerCodeFormat = request.CustomerCodeFormat;
         settings.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -597,5 +639,5 @@ public sealed class LoyaltyService : ILoyaltyService
 
     private static LoyaltyProgramSettingsDto ToSettingsDto(LoyaltyProgramSettings s, bool isNew = false) => new(
         s.IsEnabled, s.AccrualRatePercent, s.RedemptionCapPercent, s.MinRedemptionBalance, s.CodeTtlSeconds,
-        isNew ? null : s.UpdatedAt);
+        s.CustomerCodeFormat, isNew ? null : s.UpdatedAt);
 }

@@ -21,6 +21,13 @@ public sealed class LoyaltyProgramSettings
     public decimal MinRedemptionBalance { get; set; }
     /// <summary>How long a "live" QR/barcode TOTP code stays valid before rotating.</summary>
     public int CodeTtlSeconds { get; set; } = 30;
+    /// <summary>
+    /// How this tenant's consumers should render their universal checkout code (TASK-499):
+    /// exactly <c>"qr"</c> or <c>"barcode"</c> (Code 128). String-typed rather than a C# enum
+    /// since it round-trips through JSON/SQL as a plain value. Chosen per store network
+    /// (Tenant), never per individual store.
+    /// </summary>
+    public string CustomerCodeFormat { get; set; } = "barcode";
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Tenant? Tenant { get; init; }

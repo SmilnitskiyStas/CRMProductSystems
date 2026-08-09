@@ -43,6 +43,14 @@ public sealed class LoyaltyServiceTests
         _tenantScope.ExecuteAsync(
                 Arg.Any<Guid>(), Arg.Any<Func<Task<LoyaltyMembership>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<LoyaltyMembership>>>()());
+
+        // TASK-499: GetConsumerCodeAsync's format-resolution helper also runs through
+        // ITenantSessionOverride (loyalty_program_settings has no consumer_self_access RLS
+        // policy) — same pure pass-through as the LoyaltyMembership setup above, just for the
+        // LoyaltyProgramSettings? closed generic instead.
+        _tenantScope.ExecuteAsync(
+                Arg.Any<Guid>(), Arg.Any<Func<Task<LoyaltyProgramSettings?>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<LoyaltyProgramSettings?>>>()());
     }
 
     private static Tenant MakeTenant(params string[] modules)
@@ -223,6 +231,7 @@ public sealed class LoyaltyServiceTests
         var consumerId = Guid.NewGuid();
         _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
             new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns(new List<LoyaltyMembership>());
         _totp.GenerateCode("SECRET").Returns("654321");
 
         var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId);
@@ -231,6 +240,114 @@ public sealed class LoyaltyServiceTests
         Assert.NotNull(code);
         Assert.Equal($"SGCUS1.{consumerId}.654321", code.Code);
         Assert.Equal(30, code.ExpiresInSeconds);
+    }
+
+    // ── GetConsumerCodeAsync — TASK-499 DisplayFormat resolution ────────────
+
+    [Fact]
+    public async Task GetConsumerCodeAsync_no_tenantId_zero_memberships_returns_barcode_default()
+    {
+        var consumerId = Guid.NewGuid();
+        _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
+            new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns(new List<LoyaltyMembership>());
+
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId);
+
+        Assert.Null(error);
+        Assert.NotNull(code);
+        Assert.Equal("barcode", code.DisplayFormat);
+    }
+
+    [Fact]
+    public async Task GetConsumerCodeAsync_no_tenantId_one_membership_returns_that_tenants_saved_format()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
+            new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns(
+            new List<LoyaltyMembership> { new() { TenantId = tenantId, ConsumerAccountId = consumerId } });
+        _loyalty.GetSettingsAsync(tenantId, default).Returns(
+            new LoyaltyProgramSettings { TenantId = tenantId, CustomerCodeFormat = "qr" });
+
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId);
+
+        Assert.Null(error);
+        Assert.Equal("qr", code!.DisplayFormat);
+    }
+
+    [Fact]
+    public async Task GetConsumerCodeAsync_no_tenantId_one_membership_no_saved_settings_returns_barcode()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
+            new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns(
+            new List<LoyaltyMembership> { new() { TenantId = tenantId, ConsumerAccountId = consumerId } });
+        _loyalty.GetSettingsAsync(tenantId, default).ReturnsNull();
+
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId);
+
+        Assert.Null(error);
+        Assert.Equal("barcode", code!.DisplayFormat);
+    }
+
+    [Fact]
+    public async Task GetConsumerCodeAsync_no_tenantId_multiple_memberships_returns_409_ambiguous()
+    {
+        var consumerId = Guid.NewGuid();
+        _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
+            new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns(new List<LoyaltyMembership>
+        {
+            new() { TenantId = Guid.NewGuid(), ConsumerAccountId = consumerId },
+            new() { TenantId = Guid.NewGuid(), ConsumerAccountId = consumerId },
+        });
+
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId);
+
+        Assert.Null(code);
+        Assert.Equal("network_selection_required", error);
+        Assert.Equal(409, statusCode);
+    }
+
+    [Fact]
+    public async Task GetConsumerCodeAsync_explicit_tenantId_not_a_member_returns_403()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
+            new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId, tenantId);
+
+        Assert.Null(code);
+        Assert.Equal(403, statusCode);
+        await _loyalty.DidNotReceive().GetMembershipsForConsumerAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetConsumerCodeAsync_explicit_tenantId_member_returns_that_tenants_format_bypassing_ambiguity_check()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _consumerAccounts.GetByIdAsync(consumerId, default).Returns(
+            new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "X", IsActive = true, LoyaltyTotpSecret = "SECRET" });
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default)
+            .Returns(new LoyaltyMembership { TenantId = tenantId, ConsumerAccountId = consumerId });
+        _loyalty.GetSettingsAsync(tenantId, default).Returns(
+            new LoyaltyProgramSettings { TenantId = tenantId, CustomerCodeFormat = "qr" });
+
+        // Consumer also has other memberships elsewhere — must NOT trigger the 2+ ambiguity
+        // check, since an explicit tenantId always bypasses it.
+        var (code, error, statusCode) = await _sut.GetConsumerCodeAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.Equal("qr", code!.DisplayFormat);
+        await _loyalty.DidNotReceive().GetMembershipsForConsumerAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     // ── ResolveCodeAsync ───────────────────────────────────────────────────
@@ -650,6 +767,7 @@ public sealed class LoyaltyServiceTests
         Assert.True(dto.IsEnabled);
         Assert.Equal(3.0m, dto.AccrualRatePercent);
         Assert.Equal(50.0m, dto.RedemptionCapPercent);
+        Assert.Equal("barcode", dto.CustomerCodeFormat);
         Assert.Null(dto.UpdatedAt);
     }
 
@@ -662,7 +780,21 @@ public sealed class LoyaltyServiceTests
         decimal accrual, decimal cap, decimal minBalance, int ttl)
     {
         var (dto, error) = await _sut.UpsertSettingsAsync(
-            Guid.NewGuid(), new UpsertLoyaltyProgramSettingsRequest(true, accrual, cap, minBalance, ttl));
+            Guid.NewGuid(), new UpsertLoyaltyProgramSettingsRequest(true, accrual, cap, minBalance, ttl, "barcode"));
+
+        Assert.Null(dto);
+        Assert.NotNull(error);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("QR")]           // case-sensitive — must not silently accept
+    [InlineData("qrcode")]
+    public async Task UpsertSettingsAsync_unrecognized_customerCodeFormat_returns_error(string? format)
+    {
+        var (dto, error) = await _sut.UpsertSettingsAsync(
+            Guid.NewGuid(), new UpsertLoyaltyProgramSettingsRequest(true, 3m, 50m, 0m, 30, format!));
 
         Assert.Null(dto);
         Assert.NotNull(error);
@@ -675,11 +807,12 @@ public sealed class LoyaltyServiceTests
         _loyalty.GetSettingsAsync(tenantId, default).ReturnsNull();
 
         var (dto, error) = await _sut.UpsertSettingsAsync(
-            tenantId, new UpsertLoyaltyProgramSettingsRequest(true, 5m, 40m, 10m, 25));
+            tenantId, new UpsertLoyaltyProgramSettingsRequest(true, 5m, 40m, 10m, 25, "qr"));
 
         Assert.Null(error);
         Assert.NotNull(dto);
         Assert.Equal(5m, dto.AccrualRatePercent);
+        Assert.Equal("qr", dto.CustomerCodeFormat);
         await _loyalty.Received(1).AddSettingsAsync(Arg.Any<LoyaltyProgramSettings>(), default);
         _loyalty.DidNotReceive().UpdateSettings(Arg.Any<LoyaltyProgramSettings>());
     }
@@ -692,13 +825,31 @@ public sealed class LoyaltyServiceTests
         _loyalty.GetSettingsAsync(tenantId, default).Returns(existing);
 
         var (dto, error) = await _sut.UpsertSettingsAsync(
-            tenantId, new UpsertLoyaltyProgramSettingsRequest(false, 7m, 60m, 5m, 45));
+            tenantId, new UpsertLoyaltyProgramSettingsRequest(false, 7m, 60m, 5m, 45, "barcode"));
 
         Assert.Null(error);
         Assert.NotNull(dto);
         Assert.False(dto.IsEnabled);
         Assert.Equal(7m, dto.AccrualRatePercent);
+        Assert.Equal("barcode", dto.CustomerCodeFormat);
         await _loyalty.DidNotReceive().AddSettingsAsync(Arg.Any<LoyaltyProgramSettings>(), default);
         _loyalty.Received(1).UpdateSettings(existing);
+    }
+
+    [Theory]
+    [InlineData("qr")]
+    [InlineData("barcode")]
+    public async Task UpsertSettingsAsync_round_trips_customerCodeFormat(string format)
+    {
+        var tenantId = Guid.NewGuid();
+        var existing = new LoyaltyProgramSettings { TenantId = tenantId };
+        _loyalty.GetSettingsAsync(tenantId, default).Returns(existing);
+
+        var (dto, error) = await _sut.UpsertSettingsAsync(
+            tenantId, new UpsertLoyaltyProgramSettingsRequest(true, 3m, 50m, 0m, 30, format));
+
+        Assert.Null(error);
+        Assert.Equal(format, dto!.CustomerCodeFormat);
+        Assert.Equal(format, existing.CustomerCodeFormat);
     }
 }

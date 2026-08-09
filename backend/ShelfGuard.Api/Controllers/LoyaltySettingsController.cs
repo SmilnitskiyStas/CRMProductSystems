@@ -9,8 +9,8 @@ namespace ShelfGuard.Api.Controllers;
 /// <summary>
 /// Per-tenant loyalty program configuration (Loyalty Фаза 0, TASK-405) — one row per tenant,
 /// same upsert shape as PrroSettingsController. GET returns proposed defaults
-/// (3%/50%/0/30s, enabled) when the tenant has never saved a row, so the Settings page has
-/// something sensible to show before first save.
+/// (3%/50%/0/30s/barcode, enabled) when the tenant has never saved a row, so the Settings page
+/// has something sensible to show before first save.
 /// </summary>
 [ApiController]
 [Route("api/settings/loyalty")]

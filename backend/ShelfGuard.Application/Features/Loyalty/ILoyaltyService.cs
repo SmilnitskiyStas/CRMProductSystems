@@ -24,9 +24,20 @@ public interface ILoyaltyService
     Task<IReadOnlyList<LoyaltyMembershipSummaryDto>> GetMembershipsForConsumerAsync(
         Guid consumerAccountId, CancellationToken ct = default);
 
-    /// <summary>404 when the consumer has no membership at this tenant.</summary>
+    /// <summary>
+    /// TASK-499: <paramref name="tenantId"/> is optional and resolves which tenant's
+    /// <c>CustomerCodeFormat</c> becomes the response's <c>DisplayFormat</c>:
+    /// <list type="bullet">
+    /// <item>Provided — must be a tenant the consumer has a membership at, else 403.</item>
+    /// <item>Omitted, 0 memberships — "barcode" (system default; no network context yet).</item>
+    /// <item>Omitted, exactly 1 membership — that membership's tenant format.</item>
+    /// <item>Omitted, 2+ memberships — ambiguous, 409 ("network_selection_required").</item>
+    /// </list>
+    /// Status codes: 404 consumer account not found, 403 not a member of the given tenant's
+    /// network, 409 ambiguous network with no explicit <paramref name="tenantId"/>.
+    /// </summary>
     Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetConsumerCodeAsync(
-        Guid consumerAccountId, CancellationToken ct = default);
+        Guid consumerAccountId, Guid? tenantId = null, CancellationToken ct = default);
 
     /// <summary>404 when the consumer has no membership at this tenant.</summary>
     Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
@@ -72,7 +83,7 @@ public interface ILoyaltyService
 
     // ── Settings (enterprise_admin) ───────────────────────────────────────────
 
-    /// <summary>Returns proposed defaults (3%/50%/0/30s, enabled) when the tenant has never saved a row.</summary>
+    /// <summary>Returns proposed defaults (3%/50%/0/30s/barcode, enabled) when the tenant has never saved a row.</summary>
     Task<LoyaltyProgramSettingsDto> GetSettingsAsync(Guid tenantId, CancellationToken ct = default);
 
     Task<(LoyaltyProgramSettingsDto? Settings, string? Error)> UpsertSettingsAsync(

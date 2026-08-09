@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Loyalty;
+using ShelfGuard.Application.Features.Loyalty.Dtos;
 
 namespace ShelfGuard.Api.Controllers;
 
@@ -43,13 +44,22 @@ public sealed class ConsumerLoyaltyController : ControllerBase
         return Ok(memberships);
     }
 
+    /// <summary>
+    /// TASK-499: <paramref name="tenantId"/> is optional — omit it to let the service infer the
+    /// network from the consumer's memberships (0 → system default "barcode", 1 → that
+    /// network's format, 2+ → 409 requiring the client to pass an explicit tenantId).
+    /// </summary>
     [HttpGet("code")]
-    public async Task<IActionResult> GetCode(CancellationToken ct)
+    [ProducesResponseType(typeof(LoyaltyCodeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> GetCode([FromQuery] Guid? tenantId, CancellationToken ct)
     {
         var consumerId = ResolveConsumerAccountId();
         if (consumerId is null) return Forbid();
 
-        var (code, error, statusCode) = await _loyalty.GetConsumerCodeAsync(consumerId.Value, ct);
+        var (code, error, statusCode) = await _loyalty.GetConsumerCodeAsync(consumerId.Value, tenantId, ct);
         if (error is not null)
             return StatusCode(statusCode ?? 400, new { error });
 

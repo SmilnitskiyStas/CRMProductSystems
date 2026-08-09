@@ -10,9 +10,15 @@ public sealed record LoyaltyMembershipSummaryDto(
     string Status,
     DateTimeOffset JoinedAt);
 
-/// <summary>The rotating QR/barcode payload. Never carries the TOTP secret itself.</summary>
+/// <summary>
+/// The rotating QR/barcode payload. Never carries the TOTP secret itself.
+/// <paramref name="DisplayFormat"/> (TASK-499) is exactly "qr" or "barcode" — which tenant's
+/// setting it reflects depends on how many loyalty networks this consumer belongs to; see
+/// <see cref="ILoyaltyService.GetConsumerCodeAsync"/>.
+/// </summary>
 public sealed record LoyaltyCodeDto(
     string Code,
+    string DisplayFormat,
     decimal Balance,
     int ExpiresInSeconds);
 
@@ -61,6 +67,8 @@ public sealed record LoyaltyProgramSettingsDto(
     decimal RedemptionCapPercent,
     decimal MinRedemptionBalance,
     int CodeTtlSeconds,
+    /// <summary>TASK-499: "qr" or "barcode" — how this tenant's consumers render their code.</summary>
+    string CustomerCodeFormat,
     DateTimeOffset? UpdatedAt);
 
 public sealed record UpsertLoyaltyProgramSettingsRequest(
@@ -68,4 +76,10 @@ public sealed record UpsertLoyaltyProgramSettingsRequest(
     decimal AccrualRatePercent,
     decimal RedemptionCapPercent,
     decimal MinRedemptionBalance,
-    int CodeTtlSeconds);
+    int CodeTtlSeconds,
+    /// <summary>
+    /// TASK-499: must be exactly "qr" or "barcode" — this request has no partial-update
+    /// semantics (every field is always fully overwritten), so null/empty is rejected the same
+    /// as any other unrecognized value, not treated as "leave unchanged".
+    /// </summary>
+    string CustomerCodeFormat);

@@ -2179,6 +2179,7 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.RedemptionCapPercent).HasColumnType("decimal(5,2)").HasDefaultValue(50.0m);
             e.Property(s => s.MinRedemptionBalance).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
             e.Property(s => s.CodeTtlSeconds).HasDefaultValue(30);
+            e.Property(s => s.CustomerCodeFormat).HasColumnType("varchar(20)").HasDefaultValue("barcode");
             e.Property(s => s.UpdatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(s => s.TenantId)
              .IsUnique()
