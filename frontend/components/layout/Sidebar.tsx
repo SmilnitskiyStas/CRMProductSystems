@@ -43,6 +43,7 @@ import {
   Megaphone,
   Target,
   LineChart,
+  Smartphone,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -203,6 +204,18 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
       { href: "/marketing-analytics/price-segments", label: t("marketingAnalytics.priceSegments"), icon: <TrendingUp size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
       { href: "/marketing-analytics/audience-builder", label: t("marketingAnalytics.audienceBuilder"), icon: <Target size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
       { href: "/marketing-analytics/post-campaign", label: t("marketingAnalytics.postCampaign"), icon: <LineChart size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
+    ],
+  },
+  {
+    // TASK-500: standalone "Consumer App" management area — starts with the loyalty/bonus
+    // program settings page, deliberately scoped to grow further sections (news, promos, etc.)
+    // on the SAME page later, not as new sidebar items. No moduleKey: LoyaltySettingsController
+    // itself has no [RequireModule] guard, so this isn't module-gated either.
+    key: "consumer_app",
+    label: t("consumerApp.label"),
+    icon: <Smartphone size={18} />,
+    items: [
+      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
     ],
   },
   {

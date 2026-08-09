@@ -336,6 +336,10 @@
           "audienceBuilder": "Audience Builder",
           "postCampaign": "Post-Campaign"
         },
+        "consumerApp": {
+          "label": "Consumer App",
+          "bonusProgram": "Bonus Program"
+        },
         "workforce": {
           "label": "Staff",
           "users": "Staff",
@@ -4198,6 +4202,40 @@
       "badge": {
         "archivedTitle": "Template archived",
         "archivedSuffix": " (archived)"
+      }
+    },
+    "consumerApp": {
+      "page": {
+        "title": "Consumer App",
+        "subtitle": "Manage the bonus program and other consumer-facing mobile app features"
+      },
+      "bonusProgram": {
+        "title": "Bonus Program",
+        "subtitle": "Accrual and redemption rules, customer card format",
+        "loading": "Loading…",
+        "loadError": "Failed to load bonus program settings",
+        "enabledLabel": "Bonus program active",
+        "enabledHint": "Enables bonus accrual and redemption at checkout for this network.",
+        "accrualRateLabel": "Accrual rate, %",
+        "accrualRateHint": "Percentage of the receipt total accrued to the customer as bonus points.",
+        "redemptionCapLabel": "Redemption cap, %",
+        "redemptionCapHint": "Maximum share of the receipt total that can be paid with bonus points.",
+        "minRedemptionBalanceLabel": "Minimum balance to redeem",
+        "minRedemptionBalanceHint": "Redemption is only available when the customer's balance is at or above this value.",
+        "codeTtlLabel": "Code lifetime, sec",
+        "codeTtlHint": "How often the customer's QR code or barcode automatically rotates (5-300 s).",
+        "codeFormatLabel": "Customer card format",
+        "codeFormatQr": "QR code",
+        "codeFormatBarcode": "Code 128 barcode",
+        "codeFormatHint": "This format will be used across every store in the network.",
+        "percentRangeError": "Enter a number between 0 and 100",
+        "nonNegativeError": "Enter a non-negative number",
+        "ttlRangeError": "Enter a whole number between 5 and 300",
+        "saveButton": "Save",
+        "savingButton": "Saving…",
+        "saveSuccess": "Bonus program settings saved",
+        "saveError": "Failed to save settings",
+        "lastUpdatedPrefix": "Updated:"
       }
     },
     "legalEntities": {
