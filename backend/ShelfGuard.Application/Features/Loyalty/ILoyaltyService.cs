@@ -24,6 +24,8 @@ public interface ILoyaltyService
     Task<IReadOnlyList<LoyaltyMembershipSummaryDto>> GetMembershipsForConsumerAsync(
         Guid consumerAccountId, CancellationToken ct = default);
 
+    Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetAvailableNetworksAsync(CancellationToken ct = default);
+
     /// <summary>
     /// TASK-499: <paramref name="tenantId"/> is optional and resolves which tenant's
     /// <c>CustomerCodeFormat</c> becomes the response's <c>DisplayFormat</c>:

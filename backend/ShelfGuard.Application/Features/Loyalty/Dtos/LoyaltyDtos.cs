@@ -10,6 +10,9 @@ public sealed record LoyaltyMembershipSummaryDto(
     string Status,
     DateTimeOffset JoinedAt);
 
+/// <summary>Public consumer catalogue item; exposes no tenant configuration or internal data.</summary>
+public sealed record LoyaltyNetworkSummaryDto(Guid TenantId, string TenantName);
+
 /// <summary>
 /// The rotating QR/barcode payload. Never carries the TOTP secret itself.
 /// <paramref name="DisplayFormat"/> (TASK-499) is exactly "qr" or "barcode" — which tenant's

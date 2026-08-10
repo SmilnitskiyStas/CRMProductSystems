@@ -44,6 +44,14 @@ public sealed class ConsumerLoyaltyController : ControllerBase
         return Ok(memberships);
     }
 
+    [HttpGet("networks")]
+    [ProducesResponseType(typeof(IReadOnlyList<LoyaltyNetworkSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetNetworks(CancellationToken ct)
+    {
+        if (ResolveConsumerAccountId() is null) return Forbid();
+        return Ok(await _loyalty.GetAvailableNetworksAsync(ct));
+    }
+
     /// <summary>
     /// TASK-499: <paramref name="tenantId"/> is optional — omit it to let the service infer the
     /// network from the consumer's memberships (0 → system default "barcode", 1 → that

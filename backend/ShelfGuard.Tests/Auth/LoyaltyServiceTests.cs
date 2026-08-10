@@ -757,6 +757,28 @@ public sealed class LoyaltyServiceTests
     // ── Settings ───────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task GetAvailableNetworksAsync_returns_only_active_enabled_loyalty_networks()
+    {
+        var available = MakeTenant("loyalty");
+        var disabled = Tenant.Create("Disabled", "disabled");
+        disabled.UpdateModules(["loyalty"]);
+        var noModule = Tenant.Create("No loyalty", "no-loyalty");
+        var inactive = Tenant.Create("Inactive", "inactive");
+        inactive.UpdateModules(["loyalty"]);
+        inactive.Deactivate();
+        _tenants.GetAllAsync(default).Returns([available, disabled, noModule, inactive]);
+        _loyalty.GetSettingsAsync(available.Id, default).ReturnsNull();
+        _loyalty.GetSettingsAsync(disabled.Id, default)
+            .Returns(new LoyaltyProgramSettings { TenantId = disabled.Id, IsEnabled = false });
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        var network = Assert.Single(result);
+        Assert.Equal(available.Id, network.TenantId);
+        Assert.Equal(available.Name, network.TenantName);
+    }
+
+    [Fact]
     public async Task GetSettingsAsync_no_saved_row_returns_defaults_with_null_updatedAt()
     {
         var tenantId = Guid.NewGuid();

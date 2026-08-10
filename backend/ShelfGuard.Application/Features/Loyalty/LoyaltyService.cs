@@ -156,6 +156,21 @@ public sealed class LoyaltyService : ILoyaltyService
         return memberships.Select(m => ToSummaryDto(m, m.Tenant?.Name ?? "—")).ToList();
     }
 
+    public async Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetAvailableNetworksAsync(
+        CancellationToken ct = default)
+    {
+        var tenants = await _tenants.GetAllAsync(ct);
+        var result = new List<LoyaltyNetworkSummaryDto>();
+        foreach (var tenant in tenants.Where(t => t.IsActive && t.HasModule("loyalty")))
+        {
+            var settings = await _tenantScope.ExecuteAsync(
+                tenant.Id, () => _loyalty.GetSettingsAsync(tenant.Id, ct), ct);
+            if (settings?.IsEnabled == false) continue;
+            result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name));
+        }
+        return result;
+    }
+
     public async Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetConsumerCodeAsync(
         Guid consumerAccountId, Guid? tenantId = null, CancellationToken ct = default)
     {
