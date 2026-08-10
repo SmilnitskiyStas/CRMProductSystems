@@ -10,8 +10,15 @@ public sealed record LoyaltyMembershipSummaryDto(
     string Status,
     DateTimeOffset JoinedAt);
 
-/// <summary>Public consumer catalogue item; exposes no tenant configuration or internal data.</summary>
-public sealed record LoyaltyNetworkSummaryDto(Guid TenantId, string TenantName);
+/// <summary>
+/// Public consumer catalogue item; exposes no tenant configuration or internal data.
+/// <paramref name="StoreNames"/> (TASK-501) lists the tenant's active, shoppable store
+/// locations (see <see cref="LoyaltyService"/>'s location-type filter) so a consumer can
+/// recognize the network by the physical stores they actually shop at — informational only,
+/// membership stays one-per-tenant, never one-per-store. Alphabetically sorted; empty (not
+/// omitted, and never null) when the tenant currently has zero qualifying stores.
+/// </summary>
+public sealed record LoyaltyNetworkSummaryDto(Guid TenantId, string TenantName, IReadOnlyList<string> StoreNames);
 
 /// <summary>
 /// The rotating QR/barcode payload. Never carries the TOTP secret itself.

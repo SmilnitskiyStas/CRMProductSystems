@@ -19,6 +19,7 @@ public sealed class LoyaltyServiceTests
     private readonly ITenantRepository _tenants = Substitute.For<ITenantRepository>();
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
     private readonly IConsumerAccountRepository _consumerAccounts = Substitute.For<IConsumerAccountRepository>();
+    private readonly ILocationRepository _locations = Substitute.For<ILocationRepository>();
     private readonly IPasswordHasher _hasher = Substitute.For<IPasswordHasher>();
     private readonly ITotpService _totp = Substitute.For<ITotpService>();
     private readonly IResolveCodeAttemptTracker _attempts = Substitute.For<IResolveCodeAttemptTracker>();
@@ -29,8 +30,8 @@ public sealed class LoyaltyServiceTests
     public LoyaltyServiceTests()
     {
         _sut = new LoyaltyService(
-            _loyalty, _customers, _tenants, _users, _consumerAccounts, _hasher, _totp, _attempts,
-            _activityLogs, _tenantScope, NullLogger<LoyaltyService>.Instance);
+            _loyalty, _customers, _tenants, _users, _consumerAccounts, _locations, _hasher, _totp,
+            _attempts, _activityLogs, _tenantScope, NullLogger<LoyaltyService>.Instance);
 
         _customers.CreateAsync(Arg.Any<Customer>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(ci.Arg<Customer>()));
@@ -51,6 +52,20 @@ public sealed class LoyaltyServiceTests
         _tenantScope.ExecuteAsync(
                 Arg.Any<Guid>(), Arg.Any<Func<Task<LoyaltyProgramSettings?>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<LoyaltyProgramSettings?>>>()());
+
+        // TASK-501: GetAvailableNetworksAsync's combined settings+store-names read is its own
+        // closed generic (a value tuple) — same pure pass-through pattern as the two setups
+        // above, just for that tuple's Task<T> instead.
+        _tenantScope.ExecuteAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<Func<Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<string> StoreNames)>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(ci => ci
+                .Arg<Func<Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<string> StoreNames)>>>()());
+
+        // Default: no locations for any tenant unless a test overrides it — keeps
+        // GetAvailableNetworksAsync's StoreNames empty-but-non-null by default.
+        _locations.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Location>());
     }
 
     private static Tenant MakeTenant(params string[] modules)
@@ -776,6 +791,85 @@ public sealed class LoyaltyServiceTests
         var network = Assert.Single(result);
         Assert.Equal(available.Id, network.TenantId);
         Assert.Equal(available.Name, network.TenantName);
+        // No locations stubbed for this tenant (constructor default: empty list) — a
+        // zero-store tenant must still appear, with an empty (not null) StoreNames.
+        Assert.Empty(network.StoreNames);
+    }
+
+    // ── GetAvailableNetworksAsync — TASK-501 StoreNames ─────────────────────
+
+    private static Location MakeLocation(Guid tenantId, string name, bool isActive = true, string type = "retail_store") =>
+        new() { TenantId = tenantId, Name = name, IsActive = isActive, Type = type };
+
+    [Fact]
+    public async Task GetAvailableNetworksAsync_includes_active_shoppable_store_names_sorted_alphabetically()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([tenant]);
+        _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
+        _locations.GetAllAsync(default).Returns(new List<Location>
+        {
+            MakeLocation(tenant.Id, "Магазин №1 - Центральний"),
+            MakeLocation(tenant.Id, "М3"),
+        });
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        var network = Assert.Single(result);
+        Assert.Equal(new[] { "М3", "Магазин №1 - Центральний" }, network.StoreNames);
+    }
+
+    [Fact]
+    public async Task GetAvailableNetworksAsync_excludes_inactive_stores()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([tenant]);
+        _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
+        _locations.GetAllAsync(default).Returns(new List<Location>
+        {
+            MakeLocation(tenant.Id, "Active Store"),
+            MakeLocation(tenant.Id, "Closed Down", isActive: false),
+        });
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        var network = Assert.Single(result);
+        Assert.Equal(new[] { "Active Store" }, network.StoreNames);
+    }
+
+    [Fact]
+    public async Task GetAvailableNetworksAsync_excludes_non_shoppable_location_types()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([tenant]);
+        _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
+        _locations.GetAllAsync(default).Returns(new List<Location>
+        {
+            MakeLocation(tenant.Id, "Front Store"),
+            MakeLocation(tenant.Id, "Main Warehouse", type: "warehouse"),
+            MakeLocation(tenant.Id, "HQ Office", type: "office"),
+        });
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        var network = Assert.Single(result);
+        Assert.Equal(new[] { "Front Store" }, network.StoreNames);
+    }
+
+    [Fact]
+    public async Task GetAvailableNetworksAsync_zero_stores_still_includes_tenant_with_empty_storeNames()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([tenant]);
+        _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
+        _locations.GetAllAsync(default).Returns(new List<Location>());
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        var network = Assert.Single(result);
+        Assert.Equal(tenant.Id, network.TenantId);
+        Assert.NotNull(network.StoreNames);
+        Assert.Empty(network.StoreNames);
     }
 
     [Fact]

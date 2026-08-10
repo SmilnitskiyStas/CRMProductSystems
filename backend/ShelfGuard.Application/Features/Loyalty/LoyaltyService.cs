@@ -29,6 +29,7 @@ public sealed class LoyaltyService : ILoyaltyService
     private readonly ITenantRepository _tenants;
     private readonly IUserRepository _users;
     private readonly IConsumerAccountRepository _consumerAccounts;
+    private readonly ILocationRepository _locations;
     private readonly IPasswordHasher _hasher;
     private readonly ITotpService _totp;
     private readonly IResolveCodeAttemptTracker _attempts;
@@ -42,6 +43,7 @@ public sealed class LoyaltyService : ILoyaltyService
         ITenantRepository tenants,
         IUserRepository users,
         IConsumerAccountRepository consumerAccounts,
+        ILocationRepository locations,
         IPasswordHasher hasher,
         ITotpService totp,
         IResolveCodeAttemptTracker attempts,
@@ -54,6 +56,7 @@ public sealed class LoyaltyService : ILoyaltyService
         _tenants = tenants;
         _users = users;
         _consumerAccounts = consumerAccounts;
+        _locations = locations;
         _hasher = hasher;
         _totp = totp;
         _attempts = attempts;
@@ -163,13 +166,57 @@ public sealed class LoyaltyService : ILoyaltyService
         var result = new List<LoyaltyNetworkSummaryDto>();
         foreach (var tenant in tenants.Where(t => t.IsActive && t.HasModule("loyalty")))
         {
-            var settings = await _tenantScope.ExecuteAsync(
-                tenant.Id, () => _loyalty.GetSettingsAsync(tenant.Id, ct), ct);
+            var (settings, storeNames) = await _tenantScope.ExecuteAsync(
+                tenant.Id, () => LoadNetworkDetailsAsync(tenant.Id, ct), ct);
             if (settings?.IsEnabled == false) continue;
-            result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name));
+            result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name, storeNames));
         }
         return result;
     }
+
+    /// <summary>
+    /// TASK-501: reads this tenant's loyalty settings and its shoppable store names together,
+    /// inside the single <see cref="ITenantSessionOverride"/> block <see
+    /// cref="GetAvailableNetworksAsync"/> already opens per tenant — combining both reads keeps
+    /// it to one override per tenant instead of two. <see cref="ILocationRepository.GetAllAsync"/>
+    /// takes no tenant parameter (RLS-scoped to whatever app.tenant_id the override set), same
+    /// contract as <see cref="ILoyaltyRepository.GetSettingsAsync"/> right above it.
+    /// </summary>
+    private async Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<string> StoreNames)> LoadNetworkDetailsAsync(
+        Guid tenantId, CancellationToken ct)
+    {
+        var settings = await _loyalty.GetSettingsAsync(tenantId, ct);
+
+        var locations = await _locations.GetAllAsync(ct);
+        var storeNames = locations
+            .Where(l => l.IsActive && IsShoppableStoreType(l.Type))
+            .Select(l => l.Name)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return (settings, storeNames);
+    }
+
+    /// <summary>
+    /// TASK-501: which <see cref="Location.Type"/> values count as an actual walk-in/shoppable
+    /// store for the consumer-facing loyalty network picker (as opposed to a warehouse or
+    /// back-office the consumer would never visit). NOTE despite the name: Location's separate
+    /// <c>LocationType</c> column (default "retail_store") is dead — nothing in Application ever
+    /// reads or writes it; every location's real, populated type lives in <c>Type</c>
+    /// (LocationService's <c>CreateLocationRequest.LocationType</c>/<c>UpdateLocationRequest
+    /// .LocationType</c> DTO fields are assigned onto entity <c>Type</c>, not entity
+    /// <c>LocationType</c> — see LocationService.CreateAsync/UpdateAsync). This is deliberately
+    /// an exclude-list against LocationService.IsValidLocationType's full type set rather than an
+    /// include-list, so a new customer-facing type added there later shows up here automatically
+    /// instead of silently vanishing from the picker.
+    /// </summary>
+    private static readonly IReadOnlySet<string> NonShoppableLocationTypes = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase)
+    {
+        "warehouse", "central_warehouse", "distribution", "office", "production",
+    };
+
+    private static bool IsShoppableStoreType(string type) => !NonShoppableLocationTypes.Contains(type);
 
     public async Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetConsumerCodeAsync(
         Guid consumerAccountId, Guid? tenantId = null, CancellationToken ct = default)

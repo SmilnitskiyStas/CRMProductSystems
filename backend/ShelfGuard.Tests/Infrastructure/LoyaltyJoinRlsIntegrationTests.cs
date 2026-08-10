@@ -313,6 +313,7 @@ public sealed class LoyaltyJoinRlsIntegrationTests : IAsyncLifetime
         new TenantRepository(db),
         Substitute.For<IUserRepository>(),
         new ConsumerAccountRepository(db),
+        new LocationRepository(db),
         Substitute.For<IPasswordHasher>(),
         BuildTotpStub(),
         Substitute.For<IResolveCodeAttemptTracker>(),
