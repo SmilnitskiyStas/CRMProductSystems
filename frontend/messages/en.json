@@ -337,7 +337,7 @@
           "postCampaign": "Post-Campaign"
         },
         "consumerApp": {
-          "label": "Consumer App",
+          "label": "App",
           "bonusProgram": "Bonus Program"
         },
         "workforce": {
@@ -4206,7 +4206,7 @@
     },
     "consumerApp": {
       "page": {
-        "title": "Consumer App",
+        "title": "App",
         "subtitle": "Manage the bonus program and other consumer-facing mobile app features"
       },
       "bonusProgram": {
