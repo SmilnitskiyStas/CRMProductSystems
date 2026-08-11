@@ -4,6 +4,7 @@ using ShelfGuard.Application.Features.MarketingAnalytics;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Infrastructure.Data;
 using ShelfGuard.Infrastructure.Data.Repositories;
+using ShelfGuard.Infrastructure.Services;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -43,11 +44,13 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
 
     private Guid _tenantId;
     private Guid _locationId;
+    private Guid _locationId2, _locationId3; // TASK-502: store-migration fixture, 2 extra stores
     private Guid _bananaItemId1;
     private Guid _bananaItemId2; // same Name, different Id — proves name-based grouping
     private Guid _yogurtItemId;
     private Guid _packagingItemId;
     private Guid _customerA, _customerB, _customerC, _customerD;
+    private Guid _customerE, _customerF; // TASK-502: store-migration fixture
 
     public MarketingAnalyticsRepositoryIntegrationTests(ITestOutputHelper output) => _output = output;
 
@@ -77,7 +80,11 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         _tenantId = tenant.Id;
 
         var location = new Location { TenantId = _tenantId, Name = "Test Store" };
+        var location2 = new Location { TenantId = _tenantId, Name = "Store B" };
+        var location3 = new Location { TenantId = _tenantId, Name = "Store C" };
         _locationId = location.Id;
+        _locationId2 = location2.Id;
+        _locationId3 = location3.Id;
 
         var banana1 = new Item { TenantId = _tenantId, Name = "Банан", ItemType = "product" };
         var banana2 = new Item { TenantId = _tenantId, Name = "Банан", ItemType = "product" }; // dup by name, different Id
@@ -92,15 +99,19 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         var custB = new Customer { TenantId = _tenantId, Name = "Одноразовий" };
         var custC = new Customer { TenantId = _tenantId, Name = "Змішаний", Phone = "+380671234567" };
         var custD = new Customer { TenantId = _tenantId, Name = "БезПокупок" };
+        var custE = new Customer { TenantId = _tenantId, Name = "ОдинЗаклад" };
+        var custF = new Customer { TenantId = _tenantId, Name = "ТриЗаклади" };
         _customerA = custA.Id;
         _customerB = custB.Id;
         _customerC = custC.Id;
         _customerD = custD.Id;
+        _customerE = custE.Id;
+        _customerF = custF.Id;
 
         db.Tenants.Add(tenant);
-        db.Locations.Add(location);
+        db.Locations.AddRange(location, location2, location3);
         db.Items.AddRange(banana1, banana2, yogurt, packaging);
-        db.Customers.AddRange(custA, custB, custC, custD);
+        db.Customers.AddRange(custA, custB, custC, custD, custE, custF);
         await db.SaveChangesAsync();
 
         var transactions = new List<PosTransaction>();
@@ -108,12 +119,12 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         var receiptSeq = 0;
         string NextReceipt() => $"RFM-{++receiptSeq:0000}";
 
-        void AddReceipt(Guid customerId, DateTime createdAtUtc, decimal totalAmount, IReadOnlyList<Guid> productIds)
+        void AddReceipt(Guid customerId, DateTime createdAtUtc, decimal totalAmount, IReadOnlyList<Guid> productIds, Guid? storeId = null)
         {
             var tx = new PosTransaction
             {
                 TenantId = _tenantId,
-                StoreId = _locationId,
+                StoreId = storeId ?? _locationId,
                 CustomerId = customerId,
                 ReceiptNumber = NextReceipt(),
                 TotalAmount = totalAmount,
@@ -158,6 +169,19 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
 
         // CustomerD gets no transactions at all (the "no purchase" case).
 
+        // ── Store migration fixture (TASK-502) ──────────────────────────────────────────────
+        // CustomerE: 2 receipts in-period, both at the SAME store — must be excluded from
+        // migration flows/customers entirely (not a migration).
+        AddReceipt(_customerE, now.AddDays(-15), 100m, [], _locationId);
+        AddReceipt(_customerE, now.AddDays(-5), 150m, [], _locationId);
+
+        // CustomerF: 3 receipts in-period across 3 DISTINCT stores in chronological order —
+        // first-in-period is _locationId, middle is _locationId2 (must be ignored entirely),
+        // last-in-period is _locationId3. Migration must resolve from=_locationId, to=_locationId3.
+        AddReceipt(_customerF, now.AddDays(-20), 200m, [], _locationId);
+        AddReceipt(_customerF, now.AddDays(-10), 300m, [], _locationId2);
+        AddReceipt(_customerF, now.AddDays(-3), 400m, [], _locationId3);
+
         db.PosTransactions.AddRange(transactions);
         db.PosTransactionItems.AddRange(items);
         await db.SaveChangesAsync();
@@ -182,7 +206,7 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var rows = await repo.GetScoredCustomersAsync(_tenantId, null, today.AddDays(-30), today);
@@ -224,12 +248,14 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
 
         var counts = await repo.GetCustomerBaseCountsAsync(_tenantId, null);
 
-        Assert.Equal(4, counts.RegisteredCount); // A, B, C, D
-        Assert.Equal(3, counts.EverPurchasedCount); // A, B, C — D never purchased
+        // TASK-502 added CustomerE/F to the shared fixture (store-migration tests) — both have
+        // receipts, so they count toward EverPurchasedCount same as A/B/C; only D never purchased.
+        Assert.Equal(6, counts.RegisteredCount); // A, B, C, D, E, F
+        Assert.Equal(5, counts.EverPurchasedCount); // A, B, C, E, F — D never purchased
     }
 
     [Fact]
@@ -238,7 +264,7 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         // Wide window + both customers as "the segment" — proves the two differently-Id'd
@@ -261,7 +287,7 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
 
         // CustomerC's lifetime total is 80 (400 days ago) + 300 (5 days ago) = 380, even though
         // GetLtvAsync takes no date-range parameter at all — the method signature itself proves
@@ -278,7 +304,7 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var segmentIds = new[] { _customerA };
@@ -305,7 +331,7 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         // Isolate the single timezone-probe receipt (2026-06-15 22:00 UTC) via a tight window
@@ -336,7 +362,7 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var segmentIds = new[] { _customerA, _customerC };
 
@@ -355,7 +381,7 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         await using var db = NewContext();
-        var repo = new MarketingAnalyticsRepository(db);
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
 
         var rows = await repo.GetExportCustomersAsync(_tenantId, [_customerA, _customerC]);
 
@@ -363,6 +389,81 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         Assert.Contains(rows, r => r.CustomerId == _customerA && r.Name == "Активний");
         var cRow = rows.Single(r => r.CustomerId == _customerC);
         Assert.Equal("+380671234567", cRow.Phone);
+    }
+
+    [Fact]
+    public async Task GetStoreMigrationFlowsAsync_and_CustomersAsync_exclude_single_store_customer_and_resolve_first_last_ignoring_middle_store()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = today.AddDays(-30);
+
+        var flows = await repo.GetStoreMigrationFlowsAsync(_tenantId, null, from, today);
+        var customers = await repo.GetStoreMigrationCustomersAsync(_tenantId, null, from, today, limit: 100);
+
+        // CustomerE never appears — both of its in-period receipts share the same store.
+        Assert.DoesNotContain(customers, c => c.CustomerId == _customerE);
+
+        // CustomerF resolves from=_locationId (earliest in-period receipt) to=_locationId3
+        // (latest in-period receipt), ignoring the middle _locationId2 receipt entirely.
+        var fRow = customers.Single(c => c.CustomerId == _customerF);
+        Assert.Equal(_locationId, fRow.FromStoreId);
+        Assert.Equal(_locationId3, fRow.ToStoreId);
+        Assert.Equal(today.AddDays(-20), fRow.FromDate);
+        Assert.Equal(today.AddDays(-3), fRow.ToDate);
+        // All 3 in-period receipts count toward the aggregate, not just first/last.
+        Assert.Equal(3, fRow.TransactionCountInPeriod);
+        Assert.Equal(900m, fRow.RevenueInPeriod); // 200 + 300 + 400
+
+        var flowCell = flows.Single(f => f.FromStoreId == _locationId && f.ToStoreId == _locationId3);
+        Assert.Equal(1, flowCell.CustomerCount);
+        Assert.Equal(900m, flowCell.Revenue);
+    }
+
+    [Fact]
+    public async Task GetStoreMigrationFlowsAsync_store_filter_matches_on_either_from_or_to_store_but_not_the_ignored_middle_store()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = today.AddDays(-30);
+
+        // Filtering to only the FROM store still surfaces the migration.
+        var fromOnly = await repo.GetStoreMigrationFlowsAsync(_tenantId, [_locationId], from, today);
+        Assert.Contains(fromOnly, f => f.FromStoreId == _locationId && f.ToStoreId == _locationId3);
+
+        // Filtering to only the TO store still surfaces the same migration.
+        var toOnly = await repo.GetStoreMigrationFlowsAsync(_tenantId, [_locationId3], from, today);
+        Assert.Contains(toOnly, f => f.FromStoreId == _locationId && f.ToStoreId == _locationId3);
+
+        // Filtering to the ignored MIDDLE store (never first-in-period or last-in-period for
+        // anyone in the fixture) excludes CustomerF's migration entirely.
+        var middleOnly = await repo.GetStoreMigrationFlowsAsync(_tenantId, [_locationId2], from, today);
+        Assert.DoesNotContain(middleOnly, f => f.FromStoreId == _locationId && f.ToStoreId == _locationId3);
+    }
+
+    [Fact]
+    public async Task GetActivePeriodCustomerCountAsync_counts_distinct_customers_with_a_receipt_in_the_window()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new MarketingAnalyticsRepository(db, new AnalyticsRlsOverride(db));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Narrow window covering only CustomerE's and CustomerF's receipts (days -20..-3) —
+        // A/B/C/D's receipts fall outside it (A's are within -1..-5, still inside; excluded via
+        // a store filter instead to keep this assertion unambiguous).
+        var count = await repo.GetActivePeriodCustomerCountAsync(
+            _tenantId, [_locationId2, _locationId3], today.AddDays(-30), today);
+
+        // Only CustomerF has a receipt at _locationId2 or _locationId3 in this fixture.
+        Assert.Equal(1, count);
     }
 
     // STATIC and shared across every test method (xUnit creates one class instance per [Fact],

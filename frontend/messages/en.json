@@ -1746,6 +1746,44 @@
         "productBuyersButton": "Buyers to file",
         "pairBuyersButton": "Both buyers → file",
         "unmaskPiiLabel": "Show full phone number"
+      },
+      "storeMigration": {
+        "title": "Customer migration between stores",
+        "singleStoreNotice": "This analysis is available for networks with multiple stores.",
+        "noData": "No data",
+        "kpi": {
+          "migrated": "Migrated",
+          "migratedShare": "Share of active customers",
+          "migratedShareSub": "of {count} active customers",
+          "bestGain": "Biggest gain",
+          "worstLoss": "Biggest loss",
+          "netCustomers": "{net} customers"
+        },
+        "matrix": {
+          "title": "Store transition matrix",
+          "subtitle": "Rows — store of the first purchase in the period, columns — store of the last purchase",
+          "cornerLabel": "From \\ To",
+          "empty": "No migrations between stores found in this period",
+          "revenueTooltip": "{count} customers · {revenue} revenue"
+        },
+        "customerTable": {
+          "title": "Migrated customers",
+          "empty": "No migrations between stores found in this period",
+          "loading": "Loading…",
+          "truncatedNote": "Showing the first {limit} — use the export for the full list",
+          "headerName": "Customer",
+          "headerPhone": "Phone",
+          "headerEmail": "Email",
+          "headerFrom": "Store (first purchase)",
+          "headerTo": "Store (last purchase)",
+          "headerChecks": "Receipts",
+          "headerRevenue": "Revenue",
+          "exportButton": "Export to Excel",
+          "downloading": "Downloading…",
+          "unmaskPiiLabel": "Show full phone number and email",
+          "successToast": "Export ready — check your downloads",
+          "errorToast": "Export failed: {message}"
+        }
       }
     },
     "priceSegments": {

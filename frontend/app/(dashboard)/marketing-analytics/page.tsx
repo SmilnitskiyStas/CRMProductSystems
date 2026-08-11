@@ -13,6 +13,7 @@ import { useMarketingAnalyticsOverview } from "@/features/marketing-analytics/ho
 import { PeriodStoreFilterBar } from "@/features/marketing-analytics/components/PeriodStoreFilterBar";
 import { SegmentGrid } from "@/features/marketing-analytics/components/SegmentGrid";
 import { SegmentDetailPanel } from "@/features/marketing-analytics/components/SegmentDetail/SegmentDetailPanel";
+import { StoreMigrationSection } from "@/features/marketing-analytics/components/StoreMigration/StoreMigrationSection";
 import type {
   MarketingAnalyticsFilters,
   MarketingAnalyticsPeriodPreset,
@@ -211,6 +212,8 @@ export default function MarketingAnalyticsPage() {
           onClose={() => setSelectedSegment(null)}
         />
       )}
+
+      <StoreMigrationSection filters={filters} enabled={enabled} />
     </div>
   );
 }

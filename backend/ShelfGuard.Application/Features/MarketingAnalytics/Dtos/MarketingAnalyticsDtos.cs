@@ -131,6 +131,68 @@ public sealed record ExplainRfmSegmentResultDto(
     string Model,
     int TokensUsed);
 
+// ── Store migration (TASK-502, plan "flickering-moseying-fountain"): first-store→last-store ───
+// per customer within [from,to] — a customer "migrates" when the store of their earliest
+// transaction in the period differs from the store of their latest one. Single-window
+// definition only (no before/after two-period comparison, no intermediate-hop tracking) —
+// confirmed with the user during planning. Entirely additive: no existing RFM behavior changes.
+
+/// <summary>GET /api/marketing-analytics/store-migration. <c>MigratedCustomerCount</c> is the
+/// sum of every <see cref="StoreMigrationFlowDto.CustomerCount"/> in <c>Flows</c> (each migrated
+/// customer contributes to exactly one from→to cell, so the sum double-counts nobody).
+/// <c>ActiveCustomerCount</c> is customers with >=1 non-failed transaction in the period (store
+/// filter applied) — NOT lifetime, unlike <see cref="RfmCustomerBaseCountsRow.EverPurchasedCount"/>.</summary>
+public sealed record StoreMigrationOverviewDto(
+    int ActiveCustomerCount,
+    int MigratedCustomerCount,
+    decimal MigratedSharePercent,
+    IReadOnlyList<StoreMigrationFlowDto> Flows,
+    IReadOnlyList<StoreNetFlowDto> NetFlowByStore,
+    DateOnly PeriodFrom,
+    DateOnly PeriodTo);
+
+/// <summary>One non-zero cell of the from-store × to-store migration matrix. <c>Revenue</c> is
+/// the sum of period revenue (all in-window receipts, not just first/last) for the customers in
+/// this exact from→to cell.</summary>
+public sealed record StoreMigrationFlowDto(
+    Guid FromStoreId,
+    string FromStoreName,
+    Guid ToStoreId,
+    string ToStoreName,
+    int CustomerCount,
+    decimal Revenue);
+
+/// <summary>Per-store net customer flow, derived in the service (no separate query) from the
+/// flow list: <c>Gained</c> = customers whose last-in-period store is this one, <c>Lost</c> =
+/// customers whose first-in-period store is this one, <c>Net</c> = Gained - Lost.</summary>
+public sealed record StoreNetFlowDto(Guid StoreId, string StoreName, int Gained, int Lost, int Net);
+
+/// <summary>One migrated customer's drill-down row — same shape serves both the on-screen table
+/// (PII always masked, small <c>limit</c>) and the Excel export (PII masked unless
+/// <c>UnmaskPii</c>+capability, larger <c>limit</c>).</summary>
+public sealed record StoreMigrationCustomerRowDto(
+    Guid CustomerId,
+    string Name,
+    string? Phone,
+    string? Email,
+    Guid FromStoreId,
+    string FromStoreName,
+    DateOnly FromDate,
+    Guid ToStoreId,
+    string ToStoreName,
+    DateOnly ToDate,
+    int TransactionCountInPeriod,
+    decimal RevenueInPeriod);
+
+/// <summary>POST /api/marketing-analytics/exports/store-migration. Same shape as
+/// <see cref="ExportRfmFilterRequest"/> minus <c>Key</c> — this export has no RFM segment
+/// concept.</summary>
+public sealed record ExportStoreMigrationRequest(
+    IReadOnlyList<Guid>? StoreIds,
+    DateOnly From,
+    DateOnly To,
+    bool UnmaskPii);
+
 // ── Exports ──────────────────────────────────────────────────────────────────────────────────
 
 /// <summary>

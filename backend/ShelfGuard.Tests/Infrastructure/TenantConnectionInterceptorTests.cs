@@ -59,6 +59,28 @@ public sealed class TenantConnectionInterceptorTests
         Assert.DoesNotContain("app.role", sql);
     }
 
+    /// <summary>
+    /// TASK-508/KI-033 (ADR-028): 'marketing_analytics_bypass' is a value pos_transactions'
+    /// store_scope RESTRICTIVE policy recognizes, but it must be UNREACHABLE from any JWT role
+    /// claim — it may only ever be set by AnalyticsRlsOverride's own hardcoded SET LOCAL string,
+    /// scoped to one MarketingAnalyticsRepository method's transaction. If it were ever added to
+    /// ValidRoles, a crafted/compromised JWT role claim could self-grant the same bypass any
+    /// real user could never legitimately hold. Same shape as
+    /// BuildSetSql_sets_null_uuid_and_omits_unknown_role above — asserting the general
+    /// unknown-role behavior isn't enough on its own here, since this specific string is
+    /// meaningful to a real RLS policy (unlike an arbitrary unknown role) and deserves its own
+    /// explicit regression guard.
+    /// </summary>
+    [Fact]
+    public void BuildSetSql_rejects_marketing_analytics_bypass_as_a_role_claim()
+    {
+        var sql = TenantConnectionInterceptor.BuildSetSql(null, "marketing_analytics_bypass");
+
+        Assert.NotNull(sql);
+        Assert.Contains($"SET app.tenant_id = '{NullUuid}'", sql);
+        Assert.DoesNotContain("app.role", sql);
+    }
+
     [Fact]
     public void BuildSetSql_uses_null_uuid_when_tenant_id_is_not_a_guid()
     {

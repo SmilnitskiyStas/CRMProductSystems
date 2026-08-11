@@ -1,7 +1,209 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-07
+**Updated:** 2026-08-11
+
+## ADR-028: KI-033 fix — `IAnalyticsRlsOverride` + a dedicated `marketing_analytics_bypass` role value, narrowing `pos_transactions.store_scope` for one already-authorized read path
+Date: 2026-08-11
+Status: accepted — implemented and verified (TASK-509 implementation, TASK-510 security review:
+SHIP/0 blocking findings, TASK-511 independent QA re-verification: byte-identical to the
+RLS-exempt baseline for the originally-affected account; all 2026-08-11). See KI-033 in
+`known-issues.md` for the closed-out status and the network_manager/KI-031 side-effect nuance.
+
+Context: KI-033 (`.claude/docs/known-issues.md`, found by TASK-504 QA of the store-migration
+feature, full repro in `.claude/logs/handoffs/504-to-backend_qa-tester.md`). `pos_transactions`'
+RESTRICTIVE `store_scope` policy (`20260719193545_AddLocationStoreScopeRlsPolicies.cs`, ADR-022
+Stage 3) only admits a row when the caller's role is in `('provider', 'provider_admin', 'worker',
+'enterprise_admin')` OR the caller has a `user_locations` grant for that row's `LocationId`. This
+is *correct* for every store-scoped operational table/read path — ADR-022's whole point was giving
+`store_manager`/`network_manager` "only your own store" visibility on 9 tables. It is *wrong* for
+`MarketingAnalyticsRepository` specifically: every RFM/store-migration query's entire premise is a
+tenant-wide comparison (e.g. "did this customer's first/last purchase move between stores"), so
+scoping it to the caller's granted subset doesn't just undercount — for store-migration it
+silently **reclassifies** a genuinely-migrated customer as "not migrated" when their true
+first/last transaction sits at a store the caller isn't granted (live-reproduced, see the handoff
+above). This is debt the whole `MarketingAnalyticsController` already had (confirmed on the
+pre-existing RFM overview endpoint too, not just the new store-migration one) — any caller whose
+role isn't in that bypass list (i.e. `store_manager`/`network_manager`, this module's actual
+target users; the frontend already trusts `store_manager`+ to export unmasked PII from it) gets
+confidently wrong analytics with no partial-data signal anywhere in the response.
+
+Every entry point into `MarketingAnalyticsController` already requires BOTH
+`[Authorize(Policy = AppPolicies.MarketingAnalyticsViewOrCapability)]` AND
+`[RequireModule("marketing_analytics")]` before any repository call happens, and every query is
+already hard-scoped to the caller's own JWT `tenant_id` (never externally supplied). By the time
+`MarketingAnalyticsRepository` runs, the caller is already confirmed authorized to view
+network-wide marketing analytics for their own tenant — `store_scope`'s per-store narrowing is the
+only thing left disagreeing with that. `tenant_isolation` is untouched by this decision and
+continues to enforce tenant boundaries exactly as before.
+
+Decision:
+
+1. **Mechanism: a new dedicated RLS bypass role-value (`'marketing_analytics_bypass'`), not
+   reuse of `'enterprise_admin'`.** Both were evaluated. Reuse (`SET LOCAL app.role =
+   'enterprise_admin'` for the query) would need zero migration, since `enterprise_admin` is
+   already in `store_scope`'s IN-list. Checked directly whether this is actually safe: grepped
+   every `CREATE POLICY` in `backend/ShelfGuard.Infrastructure/Migrations` referencing
+   `app.role` against all 5 tables `MarketingAnalyticsRepository` touches (`pos_transactions`,
+   `pos_transaction_items`, `items`, `customers`, `locations`). Each carries only the canonical
+   triad (`tenant_isolation` keyed on `app.tenant_id` only, `provider_bypass` keyed on
+   `app.role = 'provider'`, `worker_bypass` keyed on `app.role = 'worker'`) plus, on
+   `pos_transactions` only, `store_scope` itself. `enterprise_admin` as an `app.role` value
+   appears **nowhere else** in the schema's RLS policies — reuse would today be safe on exactly
+   these 5 tables. Rejected anyway, for reasons beyond today's snapshot:
+   - **Future-policy risk.** `enterprise_admin` is a real, live-growing role that new bypass
+     grants get added to over time (see `provider_admin`'s own addition to `store_scope`, flagged
+     mid-migration as "not in the original brief"). A future policy added to `customers`/`items`/
+     `locations`/anything else keyed on `app.role = 'enterprise_admin'` would silently widen this
+     override's reach with nobody noticing, because nothing about the override's own code would
+     change — the whole point of a narrow security-contract primitive is that its blast radius is
+     legible by reading its own definition, not by re-auditing the entire schema every time a new
+     migration ships.
+   - **Misattribution.** If anything ever logs/audits `current_setting('app.role')` (nothing does
+     today — checked, no trigger or app-layer code reads `app.role` outside RLS `USING` clauses
+     and `TenantConnectionInterceptor`), a `store_manager`'s marketing-analytics query would
+     falsely claim to be `enterprise_admin` mid-transaction. A dedicated sentinel value that no
+     real user is ever assigned is unambiguous in any such trail, present or future.
+   - Matches this codebase's own established posture: `store_scope`'s own migration doc comment
+     already treats "which role strings get bypass on which table" as something to flag and
+     justify explicitly, never to reuse implicitly for a new purpose.
+
+   `'marketing_analytics_bypass'` (not the brief's suggested generic `'analytics_bypass'` —
+   this codebase has a separate, unrelated `AnalyticsController`/`analytics.view_margin` module,
+   ADR-027; a module-qualified name avoids future confusion between the two). It is added ONLY to
+   `store_scope`'s IN-list on `pos_transactions` (the only one of `store_scope`'s 9 governed
+   tables `MarketingAnalyticsRepository` ever queries — `product_stock`, `daily_sales`,
+   `pos_shifts`, `write_offs`, `discounts`, `stock_receipts`, `stock_movements`,
+   `stock_transfers` are untouched, in policy and in migration scope). It must never be added to
+   `TenantConnectionInterceptor.ValidRoles` (so a crafted/stale JWT role claim can never set it)
+   and never assigned as a real `User.Role`/`TenantRole` — `UserService.ValidRoles` stays exactly
+   as-is, no new entry.
+
+2. **New interface, not an extension of `ITenantSessionOverride`.** `ITenantSessionOverride`
+   (TASK-417) overrides *which tenant* an operation runs as, for session shapes that structurally
+   never carry `app.tenant_id` at all — its security contract requires the caller to pass in an
+   already-validated `tenantId` as a business-trust decision made by the calling code. This
+   problem is different in kind: `app.tenant_id` is untouched and correct for every
+   `MarketingAnalyticsRepository` caller already (an ordinary staff JWT request); only `app.role`
+   needs to change, and the trust boundary is not per-call at all — it was already fully
+   established once, at the controller's `[Authorize]`/`[RequireModule]` gate, before the
+   repository is ever reached. That means the new primitive needs **no parameter** (unlike
+   `ExecuteAsync(Guid tenantId, ...)`), which would be an awkward, easy-to-misuse fit bolted onto
+   `ITenantSessionOverride`'s shape. Two distinct interfaces, same `SET LOCAL` + explicit-
+   transaction mechanism:
+
+   ```csharp
+   // ShelfGuard.Application/Services/IAnalyticsRlsOverride.cs
+   namespace ShelfGuard.Application.Services;
+
+   /// <summary>
+   /// Lets MarketingAnalyticsRepository's queries run under a session role that
+   /// store_scope's RESTRICTIVE policy on pos_transactions recognizes as exempt, for the
+   /// duration of one repository method only (TASK-508/KI-033).
+   ///
+   /// SECURITY CONTRACT — read before adding a new call site: this is NOT a general-purpose
+   /// "bypass RLS" escape hatch. It may ONLY be called from inside
+   /// ShelfGuard.Infrastructure.Data.Repositories.MarketingAnalyticsRepository. The trust
+   /// boundary it relies on is established once, upstream, before any repository method
+   /// runs: every MarketingAnalyticsController action requires BOTH
+   /// [Authorize(Policy = AppPolicies.MarketingAnalyticsViewOrCapability)] AND
+   /// [RequireModule("marketing_analytics")], and every repository query is already scoped
+   /// to the caller's own JWT tenant_id (tenant_isolation is untouched by this override —
+   /// it changes app.role only, never app.tenant_id). A future call site outside that
+   /// repository has NOT inherited that trust boundary just by being in the same codebase —
+   /// do not reuse this for any other repository or table without re-deriving the same
+   /// argument from scratch and updating this contract.
+   ///
+   /// Implemented with Postgres SET LOCAL app.role = 'marketing_analytics_bypass' inside an
+   /// explicit transaction — reverts automatically on commit or rollback, so it can never
+   /// leak into a query that runs after this call returns or into a later request reusing
+   /// the same pooled connection. 'marketing_analytics_bypass' is a value store_scope's own
+   /// bypass IN-list recognizes; it is not a real role, is never in
+   /// TenantConnectionInterceptor.ValidRoles, and is never assignable to any User/TenantRole
+   /// — its only reason to exist is this one bypass check.
+   /// </summary>
+   public interface IAnalyticsRlsOverride
+   {
+       Task<T> ExecuteAsync<T>(Func<Task<T>> action, CancellationToken ct = default);
+   }
+   ```
+
+   Implementation (`ShelfGuard.Infrastructure/Services/AnalyticsRlsOverride.cs`) mirrors
+   `TenantSessionOverride` exactly: `BeginTransactionAsync` → `SET LOCAL app.role =
+   'marketing_analytics_bypass'` (fixed string literal, never interpolated from any input —
+   there is no parameter to inject) → run `action()` → `CommitAsync`. `await using` on the
+   transaction guarantees rollback-reverts-the-SET-LOCAL on any exception from `action`.
+
+3. **Scope: every method of `MarketingAnalyticsRepository`, wrapped inside the repository
+   itself — not per service-layer call site.** Confirmed this belongs to the whole class, not
+   just the 3 store-migration methods: the same `pos_transactions`-tenant-wide-vs-scoped
+   mismatch already existed on the pre-existing RFM overview endpoint (shipped TASK-406/409),
+   store-migration just made the consequence more visible (misclassification, not just
+   undercounting). Read every method in `IMarketingAnalyticsRepository`
+   (`GetScoredCustomersAsync`, `GetCustomerBaseCountsAsync`, `GetTopProductsAsync`,
+   `GetBehaviorAsync`, `GetLtvAsync`, `GetAffinityAsync`, `GetBasketAsync`,
+   `GetExportCustomersAsync`, `GetProductBuyerCustomerIdsAsync`,
+   `GetProductPairBuyerCustomerIdsAsync`, `GetActivePeriodCustomerCountAsync`,
+   `GetStoreMigrationFlowsAsync`, `GetStoreMigrationCustomersAsync`) — all but
+   `GetExportCustomersAsync` query `pos_transactions` (directly or via `pos_transaction_items`
+   join) and are affected; `GetExportCustomersAsync` only queries `customers` (no `store_scope`
+   policy exists on that table at all) and is already unaffected, but gets wrapped too anyway —
+   uniform "every method in this repository always runs through the override" is a simpler rule
+   than carrying an exception, and wrapping a query the override doesn't change is harmless.
+
+   Chose the repository layer over the service layer (contrast: `ITenantSessionOverride`'s
+   established call-site convention wraps at the Application/service layer, e.g.
+   `LoyaltyService.JoinAsync`) because this is structurally a different kind of decision: there
+   is no per-call trust value for a service method to vouch for (point 2 above) — the override
+   applies unconditionally to every query this one repository ever issues, which is a
+   repository-level invariant, not a business decision `MarketingAnalyticsService`'s ~11 methods
+   (some calling into 2-4 repository methods each, e.g. `GetSegmentDetailAsync`) would each need
+   to remember to opt into correctly. Wrapping in the repository guarantees full coverage by
+   construction — including any future method added to this repository — with zero risk of a
+   forgotten call site. Each method wraps its own existing body (including methods that already
+   issue multiple sequential `SqlQueryRaw` calls, e.g. `GetBehaviorAsync`'s three queries) in one
+   `_analyticsRlsOverride.ExecuteAsync(...)` call — one short-lived transaction per repository
+   method call, not one shared transaction across a whole HTTP request. `MarketingAnalyticsService.
+   ExplainSegmentAsync`'s Claude "explain more" call (`IMarketingAdvisor`, external HTTP) must stay
+   entirely outside any such transaction regardless of layer — the repository-level wrap satisfies
+   this automatically, since the override only ever wraps a single repository method's own DB
+   work, never anything the service layer does around it.
+
+4. **`pos_transactions.store_scope` migration**: `ALTER POLICY store_scope ON pos_transactions`
+   (or `DROP POLICY` + `CREATE POLICY`, matching this codebase's existing convention for policy
+   edits, e.g. `V4LocationsRename`'s `location_zones` policy update) so its `USING` clause reads:
+   `current_setting('app.role', true) IN ('provider', 'provider_admin', 'worker',
+   'enterprise_admin', 'marketing_analytics_bypass')` — the rest of the clause (the
+   `user_locations` EXISTS fallback) is unchanged. No other table's `store_scope` policy changes.
+
+Consequences:
++ Fixes KI-033 for the whole `MarketingAnalyticsController` (RFM overview + store-migration, and
+  any future action added to this repository) with one small migration and a mechanical,
+  low-risk repository change — no controller/service/DTO changes needed
++ Auditable: a query issued under this override is unambiguously labelled
+  `marketing_analytics_bypass` in `current_setting('app.role')`, never a false claim of being a
+  real elevated role
++ `ADR-022`'s store-scope design for every OTHER `pos_transactions` read path (POS shift reports,
+  receipts, etc.) and for the other 8 `store_scope`-governed tables is completely untouched —
+  this narrows nothing else, widens nothing else
++ No service-layer discipline required going forward — every current and future
+  `MarketingAnalyticsRepository` method is correct by construction, not by convention
+- One new interface + implementation + one migration (TASK-509, not built here)
+- `MarketingAnalyticsService` methods that call several repository methods per request now open
+  several short-lived transactions instead of one combined one (contrast
+  `LoyaltyService.LoadNetworkDetailsAsync`'s "batch multiple reads into one override block"
+  precedent) — accepted: every `MarketingAnalyticsRepository` method is already a self-contained,
+  read-only, order-independent unit (the module's own design already recomputes R/F/M scoring
+  fresh on every call, no cross-call consistency requirement), so the extra `BEGIN`/`SET
+  LOCAL`/`COMMIT` round trips are pure overhead, not a correctness risk, on a non-hot-path
+  analytics surface
+- `'marketing_analytics_bypass'` is one more string a future reader of `store_scope` needs to
+  recognize as "not a real role" — mitigated by the migration's own doc comment and this ADR
+
+Supersedes: nothing. Narrows ADR-022 Stage 3's `store_scope` policy with one additive, single-
+table bypass value for one specific, already-authorized read path; does not reopen or relitigate
+the `store_manager`/`network_manager` exclusion ADR-022 made for every other `pos_transactions`
+(or any of the other 8 tables') read path, which is unchanged and correct as designed.
 
 ## ADR-027: Analytics margin — `Item.PricePurchase` as retroactive cost source, network_manager+ authorization floor, deferred cashier/payment-type drill-downs
 Date: 2026-08-07

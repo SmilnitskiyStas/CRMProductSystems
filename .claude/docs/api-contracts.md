@@ -1237,3 +1237,82 @@ contract as every sibling phase's exports, and both pass every cell through the 
 `ExcelExportService`/`SanitizeForSpreadsheet` formula-injection guard as every other export in this
 codebase (TASK-414) — confirmed to cover raw uploaded token text too, not just resolved customer
 names (TASK-474 item 2).
+
+---
+
+### Store Migration (`/api/marketing-analytics/store-migration`, TASK-501/504)
+
+Same class-level gate as the rest of this controller — `[Authorize(Policy =
+MarketingAnalyticsViewOrCapability)]` + `[RequireModule("marketing_analytics")]`, no new module
+key. Same shared filter query params as `/overview` above (`period`/`from`/`to`/`storeIds`,
+`storeIds` repeated, empty = all stores). All responses camelCase.
+
+```
+GET  /api/marketing-analytics/store-migration            -> StoreMigrationOverviewDto
+GET  /api/marketing-analytics/store-migration/customers  -> StoreMigrationCustomerRowDto[]
+POST /api/marketing-analytics/exports/store-migration    -> .xlsx
+```
+
+**Migration definition**: within `[from, to]`, a customer "migrated" if their earliest
+transaction's store differs from their latest transaction's store — first→last only, not every
+hop in between (a customer who visited store A→B→A in the period shows as "not migrated," not as
+two flows). **Store filter semantics differ from every other GET in this file**: a flow/customer
+row matches the selected `storeIds` if EITHER the from-store or the to-store is in the list (OR,
+not AND) — selecting just one store surfaces both "customers who left this store" and "customers
+who arrived at this store."
+
+#### `GET /store-migration` → `StoreMigrationOverviewDto`
+```ts
+{
+  activeCustomerCount: number;      // customers with >=1 receipt in the period (store filter applied)
+  migratedCustomerCount: number;    // sum of flows[].customerCount
+  migratedSharePercent: number;     // migratedCustomerCount / activeCustomerCount * 100, 0 if activeCustomerCount=0
+  flows: { fromStoreId: string; fromStoreName: string; toStoreId: string; toStoreName: string;
+           customerCount: number; revenue: number }[];      // non-zero matrix cells only
+  netFlowByStore: { storeId: string; storeName: string; gained: number; lost: number; net: number }[];
+  periodFrom: string; periodTo: string;    // "YYYY-MM-DD"
+}
+```
+No `filtersHash`/`calculatedAt` (unlike the RFM overview/segment DTOs above) — this DTO
+deliberately omits them.
+
+#### `GET /store-migration/customers` → `StoreMigrationCustomerRowDto[]`
+Not in the original plan — added because the repository/service layer both needed a
+customer-drill-down query anyway (on-screen small limit + export large limit), following this
+controller's existing pattern of separate drill-down GETs (e.g.
+`segments/{key}/products/{productName}/affinity`). Same query params as the overview GET above,
+plus `limit` (int, default 100, max 500 — an out-of-range value silently falls back to 100, never
+`400`). Ordered most-recent-migration-first.
+```ts
+{
+  customerId: string; name: string; phone: string | null; email: string | null;
+  fromStoreId: string; fromStoreName: string; fromDate: string;     // "YYYY-MM-DD"
+  toStoreId: string; toStoreName: string; toDate: string;
+  transactionCountInPeriod: number; revenueInPeriod: number;
+}[]
+```
+`phone`/`email` are **always masked** here — there is no unmask query param on this endpoint,
+unlike other on-screen tables in this module where masking depends on `CanExportPii`. Unmasked
+data is only ever available via the export below.
+
+#### `POST /exports/store-migration` → raw `.xlsx`
+```
+Body: { storeIds: string[] | null; from: string; to: string; unmaskPii: boolean }
+```
+No `key` field — unlike the other 3 exports on this controller, this one has no RFM-segment
+concept. Same response shape as every other export (raw bytes, `Content-Disposition` filename
+`store_migration_<timestamp>.xlsx`). `unmaskPii: true` is honored only if the caller passes
+`MarketingAnalyticsAuthorization.CanExportPii` server-side — same gate as the other 3 exports, no
+new capability introduced. Columns (in order): Ім'я, Телефон, Email, Заклад (перша покупка), Дата
+першої покупки, Заклад (остання покупка), Дата останньої покупки, К-сть чеків, Сума.
+
+Both GETs return `200` with empty/zeroed data for a tenant/period with no migrations — never
+`404` (same "empty state is still a valid DTO" convention as the rest of this file). Single-store
+tenants always get `flows: [], netFlowByStore: [], migratedCustomerCount: 0` (no cross-store data
+to detect).
+
+**⚠️ Known data-correctness gap for non-exempt roles (store_manager/network_manager) — see
+`known-issues.md` KI-033.** The `pos_transactions` `store_scope` RLS policy silently narrows what
+these endpoints (and the pre-existing `/overview`) can see to the caller's own granted locations,
+which for store-migration can flip a genuinely-migrated customer to "not migrated," not just
+undercount revenue.

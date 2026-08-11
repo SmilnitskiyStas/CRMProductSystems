@@ -1562,6 +1562,32 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(t => t.CustomerId)
              .HasDatabaseName("idx_pos_tx_customer")
              .HasFilter("\"CustomerId\" IS NOT NULL");
+            // Store-migration analytics (RFM dashboard, TASK-501): per-customer first/last
+            // transaction lookup within a tenant+date window via
+            // DISTINCT ON ("CustomerId") ... WHERE "TenantId" = ? AND "CreatedAt" BETWEEN ? AND ?
+            // ORDER BY "CustomerId", "CreatedAt" [DESC]. Neither existing index above has
+            // CustomerId as a usable index condition together with TenantId, so this pattern
+            // would otherwise force a scan of the tenant's *entire* transaction history (no
+            // index lets CreatedAt narrow the scan without an unconstrained column in between)
+            // followed by an explicit in-memory sort. Partial predicate mirrors the two
+            // conditions already precedented individually on this table (idx_pos_tx_customer's
+            // CustomerId IS NOT NULL, idx_pos_transactions_excl_failed's Status filter) so both
+            // are satisfied by the index itself, no heap fetch needed to evaluate them.
+            // LocationId (StoreId) travels via INCLUDE so the from/to store is available without
+            // a heap fetch either. Ascending CreatedAt serves the "first transaction" query via
+            // a pure ordered Index Scan (no sort); the "last transaction" (DESC) query still
+            // benefits — Postgres's Incremental Sort (PG13+) exploits the CustomerId ordering
+            // already provided by the index, sorting only within each customer's small group
+            // instead of the whole tenant-period result set.
+            // Kept CustomerId as 2nd key (not leading) intentionally — unlike the analogous
+            // TASK-479 product-covering index, dropping the plain idx_pos_tx_customer here would
+            // regress the Customer→PosTransaction OnDelete(SetNull) FK action (Customer delete
+            // issues an update filtered by CustomerId alone, no TenantId in scope) to a full
+            // table scan, so both indexes stay.
+            e.HasIndex(t => new { t.TenantId, t.CustomerId, t.CreatedAt })
+             .HasDatabaseName("idx_pos_tx_customer_migration")
+             .HasFilter("\"CustomerId\" IS NOT NULL AND \"Status\" <> 'fiscalization_failed'")
+             .IncludeProperties(t => new { t.StoreId });
         });
 
         // ── WorkSchedule (Workforce) ─────────────────────────────────────────

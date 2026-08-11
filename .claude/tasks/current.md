@@ -3,6 +3,262 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-505 — Docs: store-migration API contracts + known-issues entry
+**Status:** done · **Agent:** documentation-writer
+Log: `.claude/logs/tasks/505_2026-08-10_store-migration-docs_documentation-writer.md`
+Renumbered from the plan's TASK-483. Added a "Store Migration" section to
+`.claude/docs/api-contracts.md` (after the Post-Campaign Analysis section) documenting the 3 new
+endpoints from TASK-502/503: `GET store-migration`, `GET store-migration/customers` (not in the
+original plan, added mid-round per the 502→503 handoff), `POST exports/store-migration` — DTO
+shapes, the first→last (not every-hop) migration definition, and the OR-semantics store filter
+(from-store OR to-store, unlike the AND-style filter elsewhere on this controller). Added
+**KI-033** to `.claude/docs/known-issues.md` for the RLS bug TASK-504 found (`store_scope` policy
+silently corrupts marketing-analytics results, including reclassifying migrated customers, for
+store_manager/network_manager) — status `open, needs architecture decision`, 3 lettered options
+per the QA handoff (RLS bypass / explicit partial-data signal / hybrid), explicitly distinguished
+from KI-031. No code touched, docs only. Read-back confirmed no duplicate KI numbers, formatting
+matches sibling sections.
+
+## TASK-504 — QA: store-migration feature end-to-end (real cross-store data)
+**Status:** done · **Agent:** qa-tester
+Log: `.claude/logs/tasks/504_2026-08-10_store-migration-qa_qa-tester.md`
+Handoff: `.claude/logs/handoffs/504-to-backend_qa-tester.md`
+Seeded real cross-store test data into tenant "Свіжий Кут" (2 new locations, 11+3
+`pos_transactions`, 1 dedicated A→B→A edge-case customer, 2 emails, `user_locations` grants) —
+prior handoffs only saw the empty state. Verified with populated data: matrix dynamic axis
+(excludes stores with no cross-traffic), KPI math (migrated count/%/best-gain/worst-loss)
+hand-checked against raw API JSON, customer table masking, store-filter OR-semantics (single
+store shows both directions), A→B→A "not migrated" rule, Excel export (masked default +
+unmasked for store_manager+), period/store filter atomic refetch. `dotnet test
+--filter MarketingAnalytics`: 250/250 green. `npx tsc --noEmit`: clean.
+**Bug found (high severity, pre-existing root cause):** `pos_transactions`' RESTRICTIVE
+`store_scope` RLS policy silently corrupts store-migration results for any caller who isn't
+provider/provider_admin/worker/enterprise_admin — a normally-scoped store_manager gets flows
+that vanish entirely (real migrations reclassified as "not migrated") and undercounted
+revenue/receipt-counts on the flows that do show, no partial-data indication. Confirmed the
+aggregation logic itself is correct (matches enterprise_admin/raw-SQL exactly once RLS grants
+are widened) — this is purely an RLS-visibility bug. Distinct from the already-tracked KI-031
+(network_manager zero grants); affects the realistic production shape of store_manager. Full
+repro + suggested directions in the handoff — needs a backend/architecture decision, routed
+there rather than fixed inline (QA task, no code changes made). Also flagged: pre-existing RFM
+overview endpoint has the same root-cause issue (smaller/wrong totals, not a reclassification).
+Single-store-tenant empty-state guard still unverified (no usable single-store tenant in dev
+DB) — same gap the frontend handoff already flagged, low risk by code inspection.
+
+## TASK-506 — Backend: loyalty network picker — store names per tenant
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/506_2026-08-10_loyalty-network-store-names_backend-developer.md`
+Renumbered from the brief's TASK-501 — that ID landed first under TASK-501/502/503/505 (this
+sprint's concurrent store-migration workstream); actual max at start was 505. `GET
+/api/consumer/loyalty/networks` (`LoyaltyService.GetAvailableNetworksAsync`) now returns each
+qualifying tenant's active, shoppable store names alongside `tenantId`/`tenantName` — informational
+only, membership stays one-per-tenant (confirmed with product owner, no per-store join). New
+`LoyaltyNetworkSummaryDto.StoreNames` (`IReadOnlyList<string>`, always `[]` not null/omitted for a
+zero-store tenant). Injected `ILocationRepository` (already DI-registered) into `LoyaltyService`;
+reads settings + locations together inside the existing per-tenant `ITenantSessionOverride` block.
+Filter: `IsActive` + `Type` not in `{warehouse, central_warehouse, distribution, office,
+production}` — investigated first and found entity `Location.LocationType` is dead/unused despite
+its name; the DTO field also named "LocationType" actually maps onto entity `Type`, which is the
+real populated field (see `LocationService.IsValidLocationType` for its full value set). Sorted
+alphabetically for stable ordering. `dotnet build`: 0 errors. `dotnet test`: 1387/1387 pass (also
+fixed `LoyaltyJoinRlsIntegrationTests.BuildLoyaltyService`'s direct constructor call for the new
+dependency, using the real `LocationRepository`). `docker build -f backend/Dockerfile backend`
+succeeded. Nothing staged/committed — user reviews and deploys. Out of scope (per brief): mobile/
+frontend consumption of the new field, and `JoinAsync`/`ResolveCodeAsync`/`GetConsumerCodeAsync`
+untouched.
+
+## TASK-507 — Backend: loyalty network stores restructure + consumer preferred-store
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/507_2026-08-10_loyalty-preferred-store_backend-developer.md`
+Follow-up to TASK-506. `LoyaltyNetworkSummaryDto.StoreNames: string[]` replaced with
+`Stores: LoyaltyNetworkStoreDto[]` (`{storeId, storeName, address}`) on `GET
+/api/consumer/loyalty/networks` — same filter/sort, now with an ID mobile can reference. New,
+explicitly separate "preferred store" concept — NOT a membership/join change (still one
+`LoyaltyMembership` per tenant/consumer): `LoyaltyMembership.PreferredStoreId` (nullable Guid,
+SetNull FK, same convention as `CustomerId`/`LinkedUserId`), migration
+`20260811054559_AddLoyaltyMembershipPreferredStore` (applied to local dev Postgres), new `PUT
+/api/consumer/loyalty/preferred-store` (`{tenantId, storeId}` → 403 no membership / 400 invalid
+store / 200 updated membership), and `GET /consumer/loyalty/memberships` now resolves
+`PreferredStoreId`/`PreferredStoreName`/`PreferredStoreAddress` (all null together if unset or
+stale — never errors). `dotnet build`: 0 errors. `dotnet test`: 1397/1397 pass (1387 baseline +
+10 new). `docker build -f backend/Dockerfile backend` succeeded. Nothing staged/committed. Out
+of scope (per brief): mobile/frontend consumption, and `JoinAsync`/`ResolveCodeAsync`/
+`GetConsumerCodeAsync`/`ResolveOrCreateMembershipByPhoneAsync` untouched.
+
+## TASK-503 — Frontend: store-migration section on RFM dashboard
+**Status:** done · **Agent:** frontend-developer
+Log: `.claude/logs/tasks/503_2026-08-10_store-migration-frontend_frontend-developer.md`
+Handoff: `.claude/logs/handoffs/503-to-504_frontend-developer.md`
+Plan: `flickering-moseying-fountain.md`. New "Міграція покупців між закладами" section on
+`/marketing-analytics`, always rendered below `SegmentDetailPanel`, driven by the page's
+existing period/store `filters`/`enabled` state — no new filter UI. Types added to the root
+`marketing-analytics/types.ts` (page-section, not a separate route like post-campaign/
+price-segments/audience-builder, so no sibling types file). New API functions
+(`getStoreMigration`, `getStoreMigrationCustomers`, `exportStoreMigration`) and hooks
+(`useStoreMigration`, `useStoreMigrationCustomers`, `useExportStoreMigration`) follow the
+existing `buildFilterQs`/React-Query-key-is-the-filter-object conventions exactly. New
+`components/StoreMigration/` folder: `StoreMigrationSection.tsx` (KPI row + empty-state guard
+for `useStores().length <= 1`), `StoreMigrationMatrix.tsx` (from×to table with a DYNAMIC axis
+built from the stores actually present in `flows`, not the full tenant store list), `
+StoreMigrationCustomerTable.tsx` (masked-PII drill-down list + export button/unmask-toggle,
+since the unmask capability only ever applies to the export, never the on-screen list). i18n
+keys added under `Dashboard.marketingAnalytics.storeMigration.*` in both `uk.json`/`en.json`.
+Deviation: `KpiCard` reused as a locally-duplicated component (same shape as the one inline in
+`page.tsx`) rather than imported across the app/→feature boundary — matches this codebase's
+existing per-file `KpiCard` convention (`price-segments/page.tsx`, `FrequencyKpiCards.tsx`,
+`AllTimeKpiCards.tsx` all do the same). `npx tsc --noEmit`: 0 errors. Manual verification: ran
+backend+frontend locally against real Postgres, confirmed all 3 endpoints fire with correct
+params on load and on filter change, both locales render correctly, export button downloads a
+file (200 response). **Not verified: populated matrix/table visuals** — local test tenant had
+no actual cross-store migration data (always `flows: []`); empty-state rendering confirmed
+instead. Flagged for QA (TASK-504) as the top thing to check with real/seeded data.
+
+## TASK-502 — Backend: store-migration feature on RFM dashboard (DTOs/repo/service/controller)
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/502_2026-08-10_store-migration-backend_backend-developer.md`
+Handoff: `.claude/logs/handoffs/502-to-503_backend-developer.md`
+Plan: `flickering-moseying-fountain.md` (renumbered from the plan's "TASK-480" — collided with
+2026-08-07 work; see TASK-501's log). New, additive "customer store migration" feature: per
+customer, first-store vs. last-store within a period; detects the customer as "migrated" if they
+differ. Built on TASK-501's `idx_pos_tx_customer_migration` index
+(`DISTINCT ON (cust_id) ... ORDER BY cust_id, created_at [ASC/DESC]`). New DTOs
+(`StoreMigrationOverviewDto`, `StoreMigrationFlowDto`, `StoreNetFlowDto`,
+`StoreMigrationCustomerRowDto`, `ExportStoreMigrationRequest`), repo methods
+(`GetStoreMigrationFlowsAsync`, `GetStoreMigrationCustomersAsync`, plus
+`GetActivePeriodCustomerCountAsync` — new, needed for the KPI %, not named in the brief),
+service (`GetStoreMigrationAsync`, `GetStoreMigrationCustomersAsync`, `ExportStoreMigrationAsync`
++ `BuildStoreMigrationExcel`), controller: `GET store-migration`, `GET
+store-migration/customers` (**added beyond the brief's literal 2-endpoint list** — the on-screen
+drill-down table had no wired data source otherwise; PII always masked there, no unmask option),
+`POST exports/store-migration` (masked-by-default, unmask gated by existing
+`MarketingAnalyticsAuthorization.CanExportPii`). Store filter = from-OR-to store match. `dotnet
+build`: 0 errors/warnings. `dotnet test --filter "FullyQualifiedName~MarketingAnalytics"`:
+250/250 pass (live Postgres on 5435 was reachable, migration applied, integration tests actually
+ran, not skipped) — includes new repo integration tests (single-store exclusion, 3-store
+first/last resolution ignoring the middle store, from-only/to-only store filter) and new service
+unit tests (net-flow derivation, zero-active-customers guard, masking). Fixed one pre-existing
+test whose fixture-wide customer counts shifted after adding 2 new fixture customers. Frontend
+(TASK-503) and docs (TASK-505) not touched — out of scope per brief.
+
+## TASK-499 — Backend: per-tenant customer code display format (QR vs. barcode)
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/499_2026-08-09_loyalty-customer-code-format_backend-developer.md`
+Product decision: a store network (`Tenant`), never an individual store, chooses whether its
+customers' universal checkout code renders as QR or Code 128 barcode — `LoyaltyProgramSettings.
+CustomerCodeFormat` (string, "qr"|"barcode", default "barcode"), threaded through
+`GetSettingsAsync`/`UpsertSettingsAsync` (400 on any other value, including null/empty) and into
+`LoyaltyProgramSettingsDto`. `GetConsumerCodeAsync` gained an optional `tenantId` param to resolve
+`LoyaltyCodeDto.DisplayFormat`: explicit tenantId → 403 if not a member there, else that tenant's
+format; omitted → 0 memberships = "barcode" default, 1 membership = that tenant's format, 2+ =
+409 `network_selection_required`. `GET /api/consumer/loyalty/code?tenantId=` (new optional query
+param) wired through in `ConsumerLoyaltyController`. Reads `loyalty_program_settings` from a
+consumer session via `ITenantSessionOverride` (that table has no `consumer_self_access` RLS
+policy, only the canonical tenant triad). Migration `20260809180100_AddLoyaltyCustomerCodeFormat`
+(scaffolded with `dotnet ef migrations add`, then renamed forward past
+`20260809180000_AddConsumerLoyaltyCodeSecret` — the real UTC clock was earlier than that
+hand-authored migration's timestamp) applied cleanly to local dev Postgres. `dotnet build`: 0
+errors. Full `dotnet test`: 1375/1375 pass (1363 baseline + 12 new cases, 0 regressions),
+including all Loyalty *integration* tests live against Postgres. `docker build -f backend/
+Dockerfile backend`: succeeds. Nothing staged/committed. Legacy `SGLOY1.` code resolution
+(`ResolveCodeAsync`) untouched, confirmed still passing.
+
+## TASK-498 — Backend: auto-create loyalty membership by phone at POS (no manual store selection)
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/498_2026-08-09_loyalty-auto-membership-by-phone_backend-developer.md`
+Product decision: removes the only path that required a consumer to manually type a tenant GUID
+to join a store's loyalty program. Staff-facing `POST /api/loyalty/resolve-or-create-by-phone`
+(same `CanAccessPos` policy as `resolve-code`) normalizes a phone typed at the register, looks up
+its `ConsumerAccount`, and idempotently gets-or-creates the `LoyaltyMembership` at the cashier's
+own tenant — runs entirely inside the staff request's existing RLS tenant context, no
+`ITenantSessionOverride` needed (unlike the consumer-session `JoinAsync`). Extracted
+`JoinAsync`'s membership-creation body into a shared private `CreateMembershipCoreAsync`,
+reused by the new `LoyaltyService.ResolveOrCreateMembershipByPhoneAsync`; `JoinAsync`'s external
+behavior/signature unchanged. `dotnet build`: 0 errors. `LoyaltyServiceTests`: 39/39 pass
+(includes 8 new TASK-498 cases + 2 pre-existing tests fixed — see below). Nothing staged/committed
+(reviewed by product owner first).
+Found (not fixed, out of scope): the working tree already carried unrelated, uncommitted WIP
+(visible via `git diff HEAD`, predates this session) redesigning the consumer QR/checkout code
+to be cross-tenant (`GetCurrentCodeAsync`→`GetConsumerCodeAsync`, new `ConsumerAccount.
+LoyaltyTotpSecret` column, `ResolveCodeAsync`'s "SGLOY1." legacy branch) — explicitly out of scope
+per this task's brief. Its test file was stale (2 broken compile refs), fixed only to unblock
+`dotnet build`. Its EF migration was never added, so all 8 Loyalty *integration* tests
+(`LoyaltyRepositoryIntegrationTests`, `LoyaltyJoinRlsIntegrationTests`,
+`LoyaltyConcurrencySalesIntegrationTests`) fail against the real test DB with `column
+"LoyaltyTotpSecret" of relation "consumer_accounts" does not exist` — pre-existing, unrelated to
+TASK-498, needs its own migration before that other work can land.
+
+## TASK-500 — Frontend: standalone Consumer App page with loyalty settings + `customerCodeFormat`
+**Status:** done · **Agent:** frontend-developer
+Log: `.claude/logs/tasks/500_2026-08-09_loyalty-customer-code-format-web_frontend-developer.md`
+Initially blocked (no existing page consumed `GET/PUT /api/settings/loyalty` — see log for
+detail); product owner resolved scope: a new standalone page (not a Settings tab/modal),
+`frontend/app/(dashboard)/consumer-app/page.tsx`, deliberately scoped to grow more sections later
+(loyalty only today, no placeholder scaffolding). New feature `frontend/features/consumer-app/`
+builds the first-ever UI for all 5 pre-existing `LoyaltyProgramSettingsDto` fields
+(enabled/accrual %/redemption cap %/min redemption balance/code TTL) plus the new
+`customerCodeFormat` ("qr"/"barcode", TASK-499's finalized backend contract) in one
+`BonusProgramSection` form, following `PrroConfigModal`'s conventions (closest existing analog,
+same backend upsert shape per its own doc comment). Gated `AT_LEAST_ENTERPRISE_ADMIN`, new
+Sidebar nav group (`consumer_app`), i18n added to both `uk.json`/`en.json`. `npx tsc --noEmit`
+and `npm run lint`: both clean. Dev-server smoke check (`preview_start`, no backend available
+locally): `/consumer-app` compiles and serves 200, no errors from new code. Save-payload and
+round-trip-read paths verified by direct code trace (full live round-trip needs TASK-499's
+backend deployed, out of reach from this task alone, as anticipated in the brief). Nothing
+staged/committed.
+
+## TASK-497 — Mobile: dual-token session model, wallet/history restoration, dead-code cleanup
+**Status:** done · **Agent:** mobile-developer · **Depends:** TASK-496 (parallel, same working
+tree) — handoff `.claude/logs/handoffs/496-to-mobile-developer.md` matched with zero deviations
+Log: `.claude/logs/tasks/497_2026-08-08_unified-auth-wallet-cleanup_mobile-developer.md`
+Consumed TASK-496's dual-token `MobileLoginResponse`. Store now holds `personalAccessToken`/
+`workspaceAccessToken` (was single `accessToken`), both persisted+restored; two axios clients
+(`apiClient` workspace-scoped, new `personalApiClient` consumer-scoped, no refresh — backend
+issues no consumer refresh token) structurally guarantee token scoping per-module. Fixed 4
+audited issues: (1) restored wallet/history screens into `(personal)/` (gated on
+`personalAccessToken` presence, visible to both plain consumer and linked staff), deleted
+`app/(consumer)/` entirely; (2) deleted `(auth)/login.tsx` outright (file-level, not just
+Stack removal) — old staff-only login now truly unreachable; (3) added `/mobile-auth/{login,
+register}` to `isPublicAuthRequest()` allowlist so their 401s don't trigger `/auth/refresh`;
+(4) deleted dead consumer-login-path code (`useConsumerLogin`, `consumerAuthApi.ts`,
+`consumerLoginSchema`). `useVerifyTwoFactor` now merges into `workspaceAccessToken` via
+`setWorkspaceAuth` instead of clobbering the session. Self-review caught and fixed a bug: the
+`(auth)` layout's authenticated-redirect guard would have bounced users away from the
+two-factor screen the instant a mid-challenge `personalAccessToken` landed — added a
+`!twoFactorChallenge` exception. `npx tsc --noEmit`: clean. `npx jest --runInBand`: 30/30
+suites, 151/151 tests pass. Left `useLogin()`/`staffLoginSchema` orphaned-but-uncleaned
+(out of the explicit dead-code scope) — flagged in the task log for a follow-up pass. No
+`backend/` files touched.
+
+## TASK-496 — Backend: dual-token mobile-auth response (personal + workspace JWT)
+**Status:** done · **Agent:** backend-developer · **Depends:** the codex-built `mobile-auth`
+endpoints (unified `POST /api/mobile-auth/{login,register}`, pre-existing) · **Next:**
+mobile-developer (parallel, same working tree) consumes the new two-token shape — handoff at
+`.claude/logs/handoffs/496-to-mobile-developer.md`
+Log: `.claude/logs/tasks/496_2026-08-08_dual-token-mobile-auth_backend-developer.md`
+Product decision: an employee is first a loyalty-program consumer (personal `ConsumerAccount`)
+who additionally gets workspace access when linked to an active staff `User` — both identities
+must be usable at once, so `MobileLoginResponse.AccessToken` (single token) is replaced with
+`PersonalAccessToken`/`WorkspaceAccessToken` (both nullable). `MobileAuthDtos.cs` gained
+`MobileLoginResponseFactory.ForLinkedStaff(personalToken, workspaceToken, user)` — reuses
+`ForStaff`'s effective role/permissions/capabilities/tabs via a record `with` expression rather
+than duplicating them. `MobileAuthController.Login`/`Register` updated for all 4 branches:
+(1) consumer-only → `personalAccessToken` set, `workspaceAccessToken: null`; (2) consumer linked
+to active staff, no 2FA → both tokens combined via `ForLinkedStaff`, reusing `consumer.AccessToken`
+already in scope (no second consumer JWT minted); (3) consumer linked to staff requiring 2FA →
+`{ requiresTwoFactor, challengeToken, personalAccessToken }` (new field on this branch only — lets
+the client show loyalty/personal features while the second factor is pending); (4) legacy
+staff-only fallback (no `ConsumerAccount` at all) → unchanged shape, `personalAccessToken: null`,
+its own 2FA challenge stays exactly `{ requiresTwoFactor, challengeToken }` (no personal-token
+field, nothing to expose). Also added the missing `[ProducesResponseType(typeof(object), 200)]`
+on `Register` (had it on `Login` already, not on `Register`'s challenge branch). `AuthController`
+`/api/auth/2fa/verify` untouched (out of scope, separate legacy staff-only endpoint, mobile client
+stores its `{ accessToken, user }` result as `workspaceAccessToken` on its own side).
+`dotnet build`: 0 errors. `dotnet test --filter "FullyQualifiedName~MobileAuth"`: 7/7 pass.
+`dotnet test --filter "FullyQualifiedName~MobileLoginResponseFactoryTests"`: 3/3 pass (not matched
+by the first filter — class name doesn't contain the substring "MobileAuth"). `dotnet test --filter
+"FullyQualifiedName~ConsumerAuthService"`: 12/12 pass, unaffected. camelCase confirmed — no
+`AddJsonOptions` in `Program.cs`, ASP.NET Core default policy applies.
+
 ## TASK-495 — QA: live E2E for analytics follow-up batch (TASK-488..494)
 **Status:** done — **verdict: SHIP** · **Agent:** qa-tester · **Depends:** TASK-488..494 (all done) ·
 **Next:** none blocking — batch complete, F1 below is the only open, non-blocking item
@@ -759,7 +1015,6 @@ only — no controller/service/frontend code (that's TASK-472). `.claude/docs/da
 not updated, same precedent TASK-404/TASK-419 both set (documentation-writer's job once Фаза 4
 ships in full). Not committed.
 
-
 ## TASK-470 — Docs: mark TASK-467's 2 MEDIUM findings as resolved (ADR-026 §4, TASK-467 entry)
 
 **Status:** done · **Agent:** documentation-writer · **Depends:** TASK-469 · **Next:** none
@@ -958,7 +1213,6 @@ so `dotnet ef` tooling had a compiling `ShelfGuard.Api` startup graph to build a
 on that file is zero (confirmed via `git diff`/`git status`), nothing about the redesign itself was
 implemented there. `dotnet build`/`dotnet test` will not go green again until TASK-465 lands.
 
-
 ## TASK-460 — Backend: security remediation of TASK-458's forgot/reset-password findings
 
 **Status:** done — build 0/0, tests 1221/1221 (was 1220, +1), worker `tsc --noEmit` clean · **Agent:**
@@ -1114,7 +1368,7 @@ Postgres (no soft-skip). No `AuthController`/`AuthService` changes — that's TA
 
 ## TASK-435 — Mobile: real-device baseline QA
 
-**Status:** paused_user_request / partial acceptance · **Agent:** qa-tester (Codex) · **Updated:** 2026-07-29
+**Status:** in_progress / partial acceptance · **Agent:** qa-tester (Codex) · **Updated:** 2026-08-01
 
 Fresh current-source debug APK was built and installed on realme RMX2063, Android 11 / API 30,
 serial `13cb6660`, against `https://api.agrusystems.pp.ua:10054/api`. Native cold start passes,
@@ -1204,6 +1458,42 @@ Testing is explicitly paused by user request. Durable handoff:
 `.claude/logs/reviews/2026-07-29_TASK-435-mobile-device-qa-pause-handoff.md`.
 Remaining work: live TOTP, seeded active POS shift, controlled offline-cold bootstrap, receipt
 contract, and write-off/production fixtures.
+
+Testing resumed by user request on 2026-08-01. Controlled TASK-437 offline cold bootstrap now
+passes: the session is retained behind an offline Retry screen, private UI is withheld, and the
+same manager dashboard returns after proven API readiness. Connectivity was restored exactly.
+Remaining work: live TOTP, seeded active POS shift, receipt contract, and write-off/production
+fixtures.
+
+Live TOTP was not attempted because no current six-digit authenticator value was supplied. Manager
+POS was rechecked read-only and still shows `Зміна не відкрита`; no shift or POS mutation
+was created.
+
+TASK-444 prerequisites were inspected read-only. Write-off draft coverage requires scanning a real
+product; production fails closed because the tenant module is disabled. No product, draft, or
+business mutation was created.
+
+End state: Metro 8082 stopped after its bounded run. ADB became unresponsive during a second
+write-off reproduction attempt, so the task-owned reverse could not be queried/removed. Reconnect
+or unlock the phone, then remove only `tcp:8082` if still present. TASK-435 remains partial/open;
+see `.claude/logs/reviews/2026-08-01_TASK-435-device-qa-resume.md`.
+
+After ADB recovery, read-only manager regression passed for dashboard plus empty-state stock,
+receipts, customers, Service Desk, schedules, and idle AI assistant. Detail coverage was unavailable
+because the lists are empty. Marketplace opening and notifications remain incomplete; auto-service
+is unavailable in the current module context. No mutation occurred.
+
+Marketplace list and existing supplier detail now pass. Notifications pagination/refresh remains
+incomplete because the attempted control opened SDK development-client tools; no notification state
+was changed.
+
+Closing the tools overlay and using the authorized static notifications route passes list and
+unread-count rendering. Pagination/refresh and exact Back confirmation remain incomplete; no item
+or mark-all action was tapped.
+
+Final cleanup: Metro PID 40052 is stopped and port 8082 has no listener. ADB timed out during
+reverse removal; reconnect/unlock and remove only `tcp:8082` if still listed. Last verified phone
+connectivity was Wi-Fi ON/mobile data OFF.
 
 ## TASK-443 — Mobile: durable POS cart and network recovery
 
@@ -4009,3 +4299,108 @@ Tests: 13/13 pass.
 
 - **TASK-003b** — Migrate catalog API from POC `Products` → `catalog_products`
   - Low priority until stock API is built
+# TASK-446 — Mobile design-system foundation
+
+**Status:** partial_device_pass / accessibility-and-login-smoke pending · **Agent:** mobile-developer + qa-tester · **Updated:** 2026-08-01
+
+Shared tokens and all roadmap primitives are implemented and documented. Staff login, dashboard,
+and customers list are converted as the low-risk device-tested reference set. Business behavior,
+guards, session handling, and API/query behavior remain unchanged. TypeScript, lint (0 errors),
+21 suites / 96 tests, and Android export pass. Device visual/accessibility regression remains.
+
+Device attempt prewarmed and loaded the current bundle without css-interop/navigation regression,
+but the phone could not reach the API even after Wi-Fi off/on recovery. The retained session was
+not destroyed. Finish login/dashboard/customers, font-scale, keyboard, and accessibility smoke
+after device routing recovers.
+
+Owned Metro is stopped and 8082 has no listener. ADB timed out during final cleanup verification;
+after reconnect, verify font scale `0.9` and remove only reverse `tcp:8082` if still present.
+
+Continuation: dashboard and Customers pass current-source Android smoke (safe area, labels/touch
+bounds, empty/search/clear, Back, no css-interop regression). Converted staff-login keyboard,
+validation, and logout/login remain pending after Metro/ADB became uncontrollable on launch.
+Large-font is blocked by realme `WRITE_SETTINGS`; TalkBack was not run. No logout, credential
+submission, app-data clearing, or business mutation occurred; the manager session was retained.
+
+## TASK-461 — Allowlisted mobile query-cache foundation
+
+**Status:** review_pending_device · **Agent:** mobile-developer · **Updated:** 2026-08-01 · **Next:** TASK-462
+
+ADR-025's versioned tenant+user persisted read cache is implemented for explicit schedule,
+marketplace-supplier and recipe summary query families. All other queries are denied by default;
+mutations remain online-only. TypeScript, lint (0 errors), 24 suites / 108 tests and Android export
+pass. TASK-462 owns stale/offline screen UX; TASK-463 owns Android+iOS device/security acceptance.
+
+## TASK-445 — Mobile offline architecture decision
+
+**Status:** done · **Agent:** project-architect · **Updated:** 2026-08-01 · **Next:** TASK-461
+
+ADR-025 records the final product boundary: Android+iOS phones, portrait-only, production API for
+preview, durable drafts plus limited owner-namespaced cached reads, and online-only business submits.
+No generic mutation queue or full offline POS is authorized. Implementation is decomposed into
+TASK-461 (cache foundation), TASK-462 (offline-read UX), and TASK-463 (cross-platform security/QA).
+Log: `.claude/logs/tasks/445_2026-08-01_mobile-offline-architecture_project-architect.md`.
+
+## TASK-440 — EAS environments and release configuration
+
+**Status:** review / blocked_credentials_assets_builds · **Agent:** devops-engineer · **Updated:** 2026-08-01
+
+Android+iOS phone/portrait EAS profiles, isolated update channels, production API binding,
+runtime/version policy, identifiers, and least-privilege camera/microphone configuration are ready.
+Automated config/type/lint/test/export checks pass (Expo Doctor 20/21 only until tracked generated
+`.expo/README.md` deletion is committed). Release build/install closure requires approved branded
+assets, Apple/Google credentials/accounts, and authorization to run remote builds.
+Log: `.claude/logs/tasks/440_2026-08-01_eas-release-configuration_devops-engineer.md`.
+# TASK-462 — Limited offline-read UX rollout
+
+**Status:** review_pending_device · **Agent:** mobile-developer · **Updated:** 2026-08-01 · **Next:** TASK-463
+
+Shared Ukrainian offline/current/stale/refresh/no-data status UX is implemented for only schedules,
+marketplace suppliers and production recipes. Cached results remain explicitly marked after failed
+refresh and every cached state shows last server update. No mutation/cache allowlist expansion.
+TypeScript, lint (0 errors), 26 suites / 118 tests and Android export pass. Cross-platform device,
+privacy, process-death and storage acceptance is handed to TASK-463.
+
+# TASK-463 — Cross-platform offline security and device acceptance
+
+**Status:** fix_ready_for_device_retest / ios_device_build_pending · **Agent:** mobile-developer + security-reviewer + qa-tester · **Updated:** 2026-08-01
+
+The HIGH offline process-death defect is fixed in source with a minimal protected snapshot and exact
+allowlisted-route shell. Offline screens suppress requests/search/details/mutations; reconnect must
+pass `/auth/me` and module loading. TypeScript, lint (0 errors), and 29/29 suites, 136/136 tests pass.
+Device/build work is paused by user request; Android retest and iOS acceptance remain.
+
+Android code/config security review is clear after exact allowlisting, retention/size/cleanup,
+online-only POS and backup/permission hardening. TypeScript, lint (0 errors), 28 suites / 126 tests,
+prebuild/config and Android export pass. Physical Android QA remains. iOS backup, Keychain,
+process-death and transfer acceptance remains blocked without an iOS build/device.
+
+Android physical attempt could not reach current-source UI: the retained July 29 APK predates
+TASK-461..463, Metro manifest returned HTTP 500 `UnexpectedServerError`, and current `assembleDebug`
+failed on locked generated resources plus a missing react-native-worklets CMake reply. No device
+cache/owner/POS result is claimed. See `2026-08-01_TASK-463-android-device-qa.md`.
+
+DevOps subsequently installed the fresh APK successfully. Targeted Metro cache recovery reached
+running state, but the fresh dev client still fails before JS UI with `Failed to download remote
+update` / manifest `UnexpectedServerError`; logcat shows missing
+`expo.modules.splashscreen.SplashScreenManager`. Android acceptance now waits on this mobile runtime
+defect, not build recovery.
+
+**Build recovery:** the exact generated Android/worklets caches were cleared after stopping the
+workspace Gradle daemon. The original lock and missing-CMake failures did not recur, but clean
+multi-ABI native compilation exceeded the bounded ~9-minute window and produced no APK before
+controlled termination. TASK-463 remains blocked_current_source_build_runtime; no install or QA
+result is claimed. Log: `440_2026-08-01_android-build-recovery_devops-engineer.md`.
+
+**Final build recovery:** incremental `assembleDebug` PASS in 497s; fresh current-source APK was
+hashed and installed via `adb --no-streaming -r`, retaining firstInstallTime/app data and updating
+lastUpdateTime to `2026-08-01 20:47:06`. Packaged Android backup exclusions and no-audio permission
+policy pass. Build blocker is cleared; TASK-463 now returns to Android QA, while iOS stays blocked.
+
+**Mobile runtime fix:** `expo-dev-launcher@56.0.25` requires
+`expo.modules.splashscreen.SplashScreenManager`, but `expo-splash-screen` was absent from direct
+dependencies and native autolinking. Added the SDK-aligned `expo-splash-screen~56.0.14` package and
+config plugin, plus a regression test. Prebuild/autolinking, TypeScript, Android export, 28 suites /
+128 tests and a fresh `assembleDebug` pass. APK replacement preserved app data; native cold launch
+has no missing-class, manifest-parser or fatal exception. Metro did not bind during the bounded
+post-build attempt, so current-source JS/UI smoke remains QA-owned rather than inferred.

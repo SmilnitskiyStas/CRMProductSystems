@@ -242,6 +242,14 @@ public static class DependencyInjection
         services.AddScoped<Application.Services.ITenantSessionOverride,
             Services.TenantSessionOverride>();
 
+        // TASK-508/KI-033 (ADR-028): lets MarketingAnalyticsRepository's queries run under a
+        // session role that store_scope's RESTRICTIVE policy on pos_transactions recognizes as
+        // exempt, for the duration of one repository method only — see
+        // IAnalyticsRlsOverride's doc for the security contract. Scoped, same as
+        // ITenantSessionOverride above — wraps the request-scoped AppDbContext.
+        services.AddScoped<Application.Services.IAnalyticsRlsOverride,
+            Services.AnalyticsRlsOverride>();
+
         // TASK-406 - Marketing analytics Фаза 1 (RFM engine + dashboard)
         services.AddScoped<Application.Features.MarketingAnalytics.IMarketingAnalyticsRepository,
             Data.Repositories.MarketingAnalyticsRepository>();

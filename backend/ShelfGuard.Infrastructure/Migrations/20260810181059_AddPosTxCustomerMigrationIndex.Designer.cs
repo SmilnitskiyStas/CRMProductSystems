@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ShelfGuard.Infrastructure.Data;
@@ -12,9 +13,11 @@ using ShelfGuard.Infrastructure.Data;
 namespace ShelfGuard.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260810181059_AddPosTxCustomerMigrationIndex")]
+    partial class AddPosTxCustomerMigrationIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1479,9 +1482,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid?>("LinkedUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("PreferredStoreId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1509,8 +1509,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("LinkedUserId");
-
-                    b.HasIndex("PreferredStoreId");
 
                     b.HasIndex("TenantId")
                         .HasDatabaseName("idx_loyalty_memberships_tenant");
@@ -5406,11 +5404,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasOne("ShelfGuard.Domain.Entities.User", "LinkedUser")
                         .WithMany()
                         .HasForeignKey("LinkedUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ShelfGuard.Domain.Entities.Location", null)
-                        .WithMany()
-                        .HasForeignKey("PreferredStoreId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")

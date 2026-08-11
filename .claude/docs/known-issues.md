@@ -1,9 +1,98 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-08-07
+**Updated:** 2026-08-11
 
 ## Active Issues
+
+### KI-033: `pos_transactions` `store_scope` RLS policy silently corrupts marketing-analytics results (store-migration + RFM overview) for store_manager/network_manager ✅ resolved (2026-08-11, TASK-508..511)
+Severity: high (silent wrong data, not a crash/403 — the policy behaves exactly as designed for
+most RLS-scoped queries in this app, but marketing-analytics' whole premise is a tenant-wide
+comparison, so scoping it produces confidently wrong business math with no partial-data signal
+anywhere in the response)
+Status: ✅ resolved (2026-08-11) — found 2026-08-10 (TASK-504, QA of the store-migration
+feature, TASK-501..503); fixed via TASK-508 (design, ADR-028) → TASK-509 (implementation) →
+TASK-510 (security review, clean) → TASK-511 (independent QA re-verification, byte-identical
+results for the originally-affected account).
+Description: Tenant `8abfbbb5-3190-4de9-9f91-f4de59101bca` ("Свіжий Кут"), 4 locations.
+`manager@demo.local` (store_manager) has `user_locations` grants for only 2 of them (the tenant's
+original 2). Calling `GET /api/marketing-analytics/store-migration` (period=6m, no store filter)
+as `ea@demo.local` (enterprise_admin, RLS-exempt) returns 3 flows, `migratedCustomerCount: 3`,
+matching raw-SQL ground truth exactly. The same call as `manager@demo.local` (store_manager,
+scoped to 2/4 locations) returns only 2 flows, `migratedCustomerCount: 2` — the
+"Троєщина→Подільський" flow (customer "Loyal One") doesn't just disappear, it gets
+**reclassified**: that customer's true earliest transaction was at a store `manager@demo.local`
+isn't granted, so their *visible* earliest transaction shifts to a store that's also their latest
+→ looks like "not migrated" when they truly migrated. The remaining visible flow
+("Центральний→Подільський", customer "Champion Two") has its revenue/receipt count silently
+undercounted (3004.25/21 receipts vs. the true 3124.25/22 — exactly the one transaction at the
+ungranted location). No indication anywhere in the response that the data is partial. Confirmed
+the aggregation logic itself is correct: after granting `manager@demo.local` the 2 missing
+`user_locations` rows (SQL only, no code change), the store_manager's response became
+byte-identical to enterprise_admin's. Also reproduces on the pre-existing RFM overview endpoint
+(`GET /api/marketing-analytics/overview`, shipped TASK-406/409): store_manager's `periodRevenue`
+was understated by exactly the transactions at the 2 ungranted locations — so this is debt the
+whole `MarketingAnalyticsController` already had; store-migration is just the first place where
+the consequence is an outright wrong classification instead of "just" a smaller total. Full repro
+and evidence: `.claude/logs/tasks/504_2026-08-10_store-migration-qa_qa-tester.md`.
+Root cause: `pos_transactions`' RESTRICTIVE `store_scope` policy (migration
+`20260719193545_AddLocationStoreScopeRlsPolicies.cs`, TASK-393 decision) only admits rows whose
+`LocationId` is in the caller's `user_locations`, unless the caller's role is
+`provider`/`provider_admin`/`worker`/`enterprise_admin`. `network_manager` and `store_manager` are
+NOT in that bypass list. The new store-migration repository methods
+(`MarketingAnalyticsRepository.GetStoreMigrationFlowsAsync`/`GetStoreMigrationCustomersAsync`) run
+through the caller's own RLS session like any other query on this connection, so they inherit this
+scoping. Not the same issue as KI-031: KI-031 is `netmgr@demo.local` having **zero**
+`user_locations` grants (a seed-data completeness gap for an under-seeded demo account). This is
+different and more serious — it reproduces for any *normally provisioned* store_manager scoped to
+their real subset of stores (the expected shape of that role), and for store-migration it's not
+just undercounting, it silently changes a customer's migration classification. The frontend
+already treats store_manager as a fully trusted user of this exact feature
+(`canExportMarketingAnalyticsPii` lets store_manager+ export unmasked PII from it), so shipping
+this as-is means the most commonly deployed privileged role for marketing-analytics gets
+confidently wrong analytics with no error and no "partial data" signal.
+Resolution (applied 2026-08-11): implemented option (a) from the original write-up above — the
+marketing-analytics repository queries now run under a bypass role for this specific read path —
+via a new dedicated RLS bypass role-value, `'marketing_analytics_bypass'`, added to
+`pos_transactions`' `store_scope` policy IN-list (migration
+`20260811110212_AddMarketingAnalyticsBypassToPosTransactionsStoreScope.cs`), activated only from
+inside `MarketingAnalyticsRepository` via a new `IAnalyticsRlsOverride` primitive (`SET LOCAL
+app.role = 'marketing_analytics_bypass'` inside a short-lived explicit transaction, one per
+repository method call, mirroring `ITenantSessionOverride`). Full design reasoning — including why
+a dedicated role value was chosen over reusing `enterprise_admin`, and why the override lives at
+the repository layer rather than per service call site — is in **ADR-028**
+(`.claude/docs/decisions.md`), not repeated here.
+
+**Important nuance:** the fix is not conditioned on the caller's specific role — it applies
+uniformly to every caller who passes `MarketingAnalyticsController`'s existing
+`[Authorize(Policy = MarketingAnalyticsViewOrCapability)]` + `[RequireModule("marketing_analytics")]`
+gates, because the trust boundary was already established once at the controller, not re-decided
+per role inside the repository. One accurate, useful side effect of this: `network_manager`
+accounts (the ones affected by the separate, still-open **KI-031** — zero `user_locations` grants)
+now also get full, correct marketing-analytics data as an incidental consequence — TASK-511
+live-confirmed `netmgr@demo.local` went from 0 rows to byte-identical-with-`ea@demo.local` on every
+marketing-analytics endpoint. This is **not** "KI-033 fixed KI-031" — they are separate issues.
+KI-031 itself (network_manager getting zero data tenant-wide on every *other* RLS-scoped module,
+e.g. `/api/stock`) remains open and unaffected outside marketing-analytics; marketing-analytics
+specifically is simply no longer affected by KI-031's symptom either, as a bonus of this fix.
+
+Verification chain: TASK-509 (backend-developer) implemented the migration + `IAnalyticsRlsOverride`/
+`AnalyticsRlsOverride`, wrapped all 13 `MarketingAnalyticsRepository` methods — `dotnet build` clean,
+`dotnet test` 1400/1400. TASK-510 (security-reviewer) independently re-derived every claim from
+source (blast radius across all 36 migrations referencing `app.role`, reachability, transaction-
+scoping/rollback guarantee, call-site containment, controller trust-boundary, `tenant_isolation`
+independence) — verdict **SHIP**, 0 blocking findings. TASK-511 (qa-tester) independently re-ran the
+original TASK-504 repro against the real under-scoped `manager@demo.local` state (found and
+corrected a setup drift first — `user_locations` had not actually been restored to the true 2/4
+state, see task log) plus the drill-down/export endpoints and a live UI check: byte-identical to
+`ea@demo.local` on `/store-migration` (6m/3m), `/overview`, `/store-migration/customers`, the
+OR-semantics filter, and both masked/unmasked exports; cross-tenant isolation independently
+re-verified at the Postgres level (not just cited from TASK-510); full regression pass (`dotnet test`
+1400/1400, `tsc --noEmit` clean, 40–84ms latency, no concern). Full detail:
+`.claude/logs/tasks/508_2026-08-10_ki033-fix-design_project-architect.md`,
+`509_2026-08-11_ki033-fix-implementation_backend-developer.md`,
+`510_2026-08-11_ki033-fix-security-review_security-reviewer.md`,
+`511_2026-08-11_ki033-reverify_qa-tester.md`.
 
 ### KI-032: Dev/demo tenant has zero ADU-eligible products — `POST /api/adu/recalculate` always processes 0, blocks live QA of any ADU-dependent feature
 Severity: low (dev/demo seed-data completeness gap only — not a bug in the ADU engine or in any
@@ -360,7 +449,7 @@ Rule: **При кожному новому полі `List<T>` / JSONB** — пе
 
 ### KI-022: Mobile app has no offline support
 Severity: medium-high (POS register / warehouse scanning routinely run on unstable wifi/cellular)
-Status: open
+Status: resolved in code for existing mobile forms (2026-07-29, TASK-443/TASK-444); device acceptance pending
 Description: no `NetInfo`, no offline queue, no local draft persistence anywhere in `mobile/` —
 confirmed via `grep -ri "netinfo|offline|asyncstorage"`, zero matches, and `package.json` has
 neither `@react-native-community/netinfo` nor `@react-native-async-storage/async-storage`. Every
@@ -368,28 +457,35 @@ mutation (POS sale, write-off, transfer, stock scan) requires a live connection 
 submit; a dropped connection mid-action surfaces as a generic Axios error with no retry/resume,
 and the in-progress draft (cart, scanned items) is not persisted anywhere durable — only in
 React state, lost on any screen unmount/crash.
-Resolution: not attempted — offline-first (local queue + optimistic UI + conflict resolution,
+Resolution: TASK-443 added owner-scoped/versioned durable POS drafts, network status, single-flight
+submit, and fail-closed ambiguous-timeout/conflict handling. It intentionally does not add an
+offline mutation queue: `POST /api/pos/sales` has no idempotency/reconciliation key, so ambiguous
+timeouts require shift reconciliation and explicit discard. Warehouse/production drafts and the
+broader offline-first work remain open. Original design context: local queue + optimistic UI,
 likely `@tanstack/query-async-storage-persister` + a `NetInfo`-driven `onlineManager`) is a
 substantial dedicated effort, out of scope for a pre-launch audit pass. The POS concurrency
-work from Block 6 (optimistic locking, 409 on double-sell) at least makes *retrying* a failed
+TASK-444 added the same owner-scoped/versioned durable protection to the existing mobile
+write-off, transfer, and production-order forms, with stock/reference revalidation, explicit
+discard, offline guards, and retained conflict/uncertain states. Mobile currently has no
+receipt-create form or approved create DTO (only processing an existing receipt), so that
+product/API contract gap is tracked in the TASK-444 handoff. Android force-close restoration
+still awaits TASK-435. The POS concurrency work from Block 6 (optimistic locking, 409 on double-sell) at least makes *retrying* a failed
 sale safe — it just isn't automatic. Needs a product decision on priority before scheduling.
 
-### KI-023: Mobile login silently mishandled 2FA-enabled accounts — now fails loudly, full 2FA UI still missing
+### KI-023: Mobile login silently mishandled 2FA-enabled accounts — implementation resolved, device verification pending
 Severity: medium
-Status: partially fixed (2026-07-15, Block 14 mobile audit)
+Status: resolved in code (2026-07-29, TASK-438); live device acceptance pending
 Description: TASK-330/331 added opt-in TOTP 2FA on web. `POST /api/auth/login` returns
 `{requiresTwoFactor: true, challengeToken}` (no tokens) for 2FA-enabled accounts, but mobile's
 `login()` blindly destructured `{accessToken, user}` from every response — a 2FA-enabled user
 logging in via mobile got `setAuth(undefined, undefined)` and was silently navigated into the
 app with a broken token, no visible error.
-Resolution (this block): `mobile/features/auth/api/authApi.ts::login()` now detects
-`requiresTwoFactor`/a missing `accessToken`/`user` and throws `Error('TWO_FACTOR_REQUIRED')`;
-`(auth)/login.tsx` shows a clear Ukrainian message instead of silently proceeding. This makes
-the failure honest, it does not add the missing capability.
-Still open: mobile has no 2FA input screen at all (no TOTP code entry, no recovery-code
-fallback) — a tenant user who opts into 2FA from web cannot log in on mobile until they disable
-it again. Needs a product decision: build a mobile 2FA step (mirrors web's TASK-331 UX), or
-document 2FA as web-only for now.
+Resolution: TASK-438 implements the existing challenge contract in mobile. Password login now
+routes 2FA-enabled staff to a dedicated TOTP/recovery-code screen, verifies through
+`POST /api/auth/2fa/verify`, stores the challenge only in memory, and clears it when leaving the
+flow. Invalid verification `401` responses are excluded from authenticated refresh handling.
+Automated contract/state/security checks pass. A live Android sign-in with real TOTP and recovery
+codes remains part of blocked TASK-435 device QA; do not mark final acceptance complete until then.
 
 ### KI-024: Every role-based UI gate in the mobile app used non-existent PascalCase role names ✅ resolved (2026-07-15, Block 14 mobile audit)
 Severity: was critical

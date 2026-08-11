@@ -39,6 +39,8 @@ public sealed class MarketingAnalyticsController : ControllerBase
 {
     private const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private const int DefaultCrossSellLimit = 10;
+    private const int DefaultStoreMigrationCustomerLimit = 100;
+    private const int MaxStoreMigrationCustomerLimit = 500;
 
     private readonly IMarketingAnalyticsService _service;
 
@@ -152,6 +154,65 @@ public sealed class MarketingAnalyticsController : ControllerBase
         }
     }
 
+    // ── Store migration (TASK-502) ────────────────────────────────────────────
+    // Same query-param shape as every GET above. Two GETs (overview + customer drill-down) plus
+    // one export — the customer drill-down endpoint isn't in the original 2-endpoint brief for
+    // this task, but the repository/service layer explicitly builds
+    // GetStoreMigrationCustomersAsync for "both on-screen and export" use, and the feature's own
+    // goal ("drill-down customer list") requires an on-screen data source for it — added as the
+    // objective completion of what the lower layers already expose. See task log for TASK-502.
+
+    [HttpGet("store-migration")]
+    [ProducesResponseType(typeof(StoreMigrationOverviewDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetStoreMigration(
+        [FromQuery] string? period,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] Guid[]? storeIds,
+        CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolvePeriod(period, from, to);
+        var result = await _service.GetStoreMigrationAsync(tenantId.Value, storeIds, resolvedFrom, resolvedTo, ct);
+        return Ok(result);
+    }
+
+    /// <summary>On-screen drill-down list for the store-migration matrix — PII always masked
+    /// (unmasking is only ever available through the audited Excel export below).</summary>
+    [HttpGet("store-migration/customers")]
+    [ProducesResponseType(typeof(IReadOnlyList<StoreMigrationCustomerRowDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetStoreMigrationCustomers(
+        [FromQuery] string? period,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] Guid[]? storeIds,
+        [FromQuery] int limit,
+        CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (resolvedFrom, resolvedTo) = ResolvePeriod(period, from, to);
+        var result = await _service.GetStoreMigrationCustomersAsync(
+            tenantId.Value, storeIds, resolvedFrom, resolvedTo, ClampStoreMigrationCustomerLimit(limit), ct);
+        return Ok(result);
+    }
+
+    [HttpPost("exports/store-migration")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportStoreMigration([FromBody] ExportStoreMigrationRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        var userId = ResolveUserId();
+        if (tenantId is null || userId is null) return Forbid();
+
+        var effective = request with { UnmaskPii = request.UnmaskPii && MarketingAnalyticsAuthorization.CanExportPii(User) };
+        var result = await _service.ExportStoreMigrationAsync(tenantId.Value, userId.Value, effective, ct);
+        return File(result.FileBytes, ExcelContentType, result.FileName);
+    }
+
     // ── Exports ──────────────────────────────────────────────────────────────
 
     [HttpPost("exports/segment")]
@@ -217,6 +278,9 @@ public sealed class MarketingAnalyticsController : ControllerBase
     }
 
     private static int ClampLimit(int limit) => limit is < 1 or > 50 ? DefaultCrossSellLimit : limit;
+
+    private static int ClampStoreMigrationCustomerLimit(int limit) =>
+        limit is < 1 or > MaxStoreMigrationCustomerLimit ? DefaultStoreMigrationCustomerLimit : limit;
 
     private Guid? ResolveTenantId()
     {

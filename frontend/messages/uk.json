@@ -1746,6 +1746,44 @@
         "productBuyersButton": "Покупці у файл",
         "pairBuyersButton": "Покупці обох → файл",
         "unmaskPiiLabel": "Показати повний номер телефону"
+      },
+      "storeMigration": {
+        "title": "Міграція покупців між закладами",
+        "singleStoreNotice": "Ця аналітика доступна для мереж із кількома закладами.",
+        "noData": "Немає даних",
+        "kpi": {
+          "migrated": "Мігрували",
+          "migratedShare": "Частка від активних",
+          "migratedShareSub": "з {count} активних покупців",
+          "bestGain": "Найбільший приріст",
+          "worstLoss": "Найбільша втрата",
+          "netCustomers": "{net} покупців"
+        },
+        "matrix": {
+          "title": "Матриця переходів між закладами",
+          "subtitle": "Рядки — заклад першої покупки в періоді, стовпці — заклад останньої покупки",
+          "cornerLabel": "Звідки \\ Куди",
+          "empty": "У цьому періоді міграцій між закладами не виявлено",
+          "revenueTooltip": "{count} покупців · {revenue} ₴ обороту"
+        },
+        "customerTable": {
+          "title": "Покупці, що мігрували",
+          "empty": "У цьому періоді міграцій між закладами не виявлено",
+          "loading": "Завантаження…",
+          "truncatedNote": "Показано перші {limit} — для повного списку скористайтесь експортом",
+          "headerName": "Клієнт",
+          "headerPhone": "Телефон",
+          "headerEmail": "Email",
+          "headerFrom": "Заклад (перша покупка)",
+          "headerTo": "Заклад (остання покупка)",
+          "headerChecks": "К-сть чеків",
+          "headerRevenue": "Сума, ₴",
+          "exportButton": "Вивантажити Excel",
+          "downloading": "Завантаження…",
+          "unmaskPiiLabel": "Показати повний номер телефону та email",
+          "successToast": "Файл готовий — перевірте завантаження",
+          "errorToast": "Помилка експорту: {message}"
+        }
       }
     },
     "priceSegments": {

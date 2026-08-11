@@ -169,6 +169,120 @@ public sealed class MarketingAnalyticsServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    // ── Store migration (TASK-502) ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetStoreMigrationAsync_derives_net_flow_and_migrated_share_percent_from_the_flow_list()
+    {
+        var storeA = Guid.NewGuid();
+        var storeB = Guid.NewGuid();
+        var storeC = Guid.NewGuid();
+
+        _repo.GetStoreMigrationFlowsAsync(TenantId, null, From, To, Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new StoreMigrationFlowRow(storeA, "A", storeB, "B", CustomerCount: 3, Revenue: 300m),
+                new StoreMigrationFlowRow(storeB, "B", storeC, "C", CustomerCount: 2, Revenue: 200m),
+                new StoreMigrationFlowRow(storeC, "C", storeA, "A", CustomerCount: 1, Revenue: 100m),
+            ]);
+        _repo.GetActivePeriodCustomerCountAsync(TenantId, null, From, To, Arg.Any<CancellationToken>())
+            .Returns(20);
+
+        var result = await _sut.GetStoreMigrationAsync(TenantId, null, From, To);
+
+        Assert.Equal(20, result.ActiveCustomerCount);
+        Assert.Equal(6, result.MigratedCustomerCount); // 3 + 2 + 1, one flow cell per migrated customer
+        Assert.Equal(30m, result.MigratedSharePercent); // 6 of 20
+        Assert.Equal(From, result.PeriodFrom);
+        Assert.Equal(To, result.PeriodTo);
+        Assert.Equal(3, result.Flows.Count);
+
+        var netA = result.NetFlowByStore.Single(n => n.StoreId == storeA);
+        Assert.Equal(1, netA.Gained); // C→A
+        Assert.Equal(3, netA.Lost);   // A→B
+        Assert.Equal(-2, netA.Net);
+
+        var netB = result.NetFlowByStore.Single(n => n.StoreId == storeB);
+        Assert.Equal(3, netB.Gained); // A→B
+        Assert.Equal(2, netB.Lost);   // B→C
+        Assert.Equal(1, netB.Net);
+
+        var netC = result.NetFlowByStore.Single(n => n.StoreId == storeC);
+        Assert.Equal(2, netC.Gained); // B→C
+        Assert.Equal(1, netC.Lost);   // C→A
+        Assert.Equal(1, netC.Net);
+    }
+
+    [Fact]
+    public async Task GetStoreMigrationAsync_handles_zero_active_customers_without_dividing_by_zero()
+    {
+        _repo.GetStoreMigrationFlowsAsync(TenantId, null, From, To, Arg.Any<CancellationToken>()).Returns([]);
+        _repo.GetActivePeriodCustomerCountAsync(TenantId, null, From, To, Arg.Any<CancellationToken>()).Returns(0);
+
+        var result = await _sut.GetStoreMigrationAsync(TenantId, null, From, To);
+
+        Assert.Equal(0, result.ActiveCustomerCount);
+        Assert.Equal(0, result.MigratedCustomerCount);
+        Assert.Equal(0m, result.MigratedSharePercent);
+        Assert.Empty(result.Flows);
+        Assert.Empty(result.NetFlowByStore);
+    }
+
+    [Fact]
+    public async Task GetStoreMigrationCustomersAsync_always_masks_pii_with_no_unmask_option()
+    {
+        var customerId = Guid.NewGuid();
+        var fromStore = Guid.NewGuid();
+        var toStore = Guid.NewGuid();
+        _repo.GetStoreMigrationCustomersAsync(TenantId, null, From, To, 100, Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new StoreMigrationCustomerRow(
+                    customerId, "Іван Тест", "+380671234567", "ivan@test.com",
+                    fromStore, "A", From.AddDays(1), toStore, "B", To.AddDays(-1), 4, 500m),
+            ]);
+
+        var rows = await _sut.GetStoreMigrationCustomersAsync(TenantId, null, From, To, 100);
+
+        var row = Assert.Single(rows);
+        Assert.Equal("+380 67 *** ** 67", row.Phone);
+        Assert.Equal("i***@test.com", row.Email);
+        Assert.Equal("Іван Тест", row.Name); // name itself is never masked
+    }
+
+    [Fact]
+    public async Task ExportStoreMigrationAsync_masks_by_default_unmasks_when_requested_and_logs_the_export()
+    {
+        var customerId = Guid.NewGuid();
+        var fromStore = Guid.NewGuid();
+        var toStore = Guid.NewGuid();
+        _repo.GetStoreMigrationCustomersAsync(TenantId, null, From, To, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new StoreMigrationCustomerRow(
+                    customerId, "Іван Тест", "+380671234567", "ivan@test.com",
+                    fromStore, "A", From.AddDays(1), toStore, "B", To.AddDays(-1), 4, 500m),
+            ]);
+
+        var userId = Guid.NewGuid();
+
+        await _sut.ExportStoreMigrationAsync(TenantId, userId, new ExportStoreMigrationRequest(null, From, To, UnmaskPii: false));
+        var maskedCall = _excel.ReceivedCalls().Last();
+        var maskedRequest = (ExcelExportRequest)maskedCall.GetArguments()[0]!;
+        Assert.Equal("+380 67 *** ** 67", maskedRequest.Rows[0][1]);
+        Assert.Equal("i***@test.com", maskedRequest.Rows[0][2]);
+
+        await _sut.ExportStoreMigrationAsync(TenantId, userId, new ExportStoreMigrationRequest(null, From, To, UnmaskPii: true));
+        var unmaskedCall = _excel.ReceivedCalls().Last();
+        var unmaskedRequest = (ExcelExportRequest)unmaskedCall.GetArguments()[0]!;
+        Assert.Equal("+380671234567", unmaskedRequest.Rows[0][1]);
+        Assert.Equal("ivan@test.com", unmaskedRequest.Rows[0][2]);
+
+        await _activityLogs.Received(2).LogAsync(
+            Arg.Is<ActivityLog>(a => a.TenantId == TenantId && a.UserId == userId && a.Action == "marketing_analytics.export_store_migration"),
+            Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task ExplainSegmentAsync_feeds_the_advisor_the_same_kpis_and_template_text_as_the_detail_dto()
     {

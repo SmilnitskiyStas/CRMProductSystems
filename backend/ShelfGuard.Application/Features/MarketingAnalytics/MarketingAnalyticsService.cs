@@ -197,6 +197,106 @@ public sealed class MarketingAnalyticsService : IMarketingAnalyticsService
         return result;
     }
 
+    // ── Store migration (TASK-502) ───────────────────────────────────────────────────────────
+
+    public async Task<StoreMigrationOverviewDto> GetStoreMigrationAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var flowRows = await _repo.GetStoreMigrationFlowsAsync(tenantId, storeIds, from, to, ct);
+        var activeCount = await _repo.GetActivePeriodCustomerCountAsync(tenantId, storeIds, from, to, ct);
+
+        var flows = flowRows
+            .Select(f => new StoreMigrationFlowDto(f.FromStoreId, f.FromStoreName, f.ToStoreId, f.ToStoreName, f.CustomerCount, f.Revenue))
+            .ToList();
+
+        // Each migrated customer contributes to exactly one from→to cell (their unique
+        // first-store/last-store pair for the period), so summing CustomerCount across every
+        // cell double-counts nobody.
+        var migratedCount = flows.Sum(f => f.CustomerCount);
+
+        var netFlowByStore = flows
+            .SelectMany(f => new[] { (StoreId: f.FromStoreId, Name: f.FromStoreName), (StoreId: f.ToStoreId, Name: f.ToStoreName) })
+            .GroupBy(s => s.StoreId)
+            .Select(g =>
+            {
+                var name = g.First().Name;
+                var gained = flows.Where(f => f.ToStoreId == g.Key).Sum(f => f.CustomerCount);
+                var lost = flows.Where(f => f.FromStoreId == g.Key).Sum(f => f.CustomerCount);
+                return new StoreNetFlowDto(g.Key, name, gained, lost, gained - lost);
+            })
+            .OrderByDescending(n => n.Net)
+            .ToList();
+
+        return new StoreMigrationOverviewDto(
+            activeCount,
+            migratedCount,
+            SharePercent(migratedCount, activeCount),
+            flows,
+            netFlowByStore,
+            from,
+            to);
+    }
+
+    public async Task<IReadOnlyList<StoreMigrationCustomerRowDto>> GetStoreMigrationCustomersAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)
+    {
+        var rows = await _repo.GetStoreMigrationCustomersAsync(tenantId, storeIds, from, to, limit, ct);
+
+        // On-screen table is masked-by-default with no unmask escape hatch — unmasking only
+        // ever happens through the audited, capability-gated Excel export below.
+        return rows
+            .Select(r => new StoreMigrationCustomerRowDto(
+                r.CustomerId, r.Name, PiiMasking.MaskPhone(r.Phone), PiiMasking.MaskEmail(r.Email),
+                r.FromStoreId, r.FromStoreName, r.FromDate, r.ToStoreId, r.ToStoreName, r.ToDate,
+                r.TransactionCountInPeriod, r.RevenueInPeriod))
+            .ToList();
+    }
+
+    public async Task<RfmExportResult> ExportStoreMigrationAsync(
+        Guid tenantId, Guid userId, ExportStoreMigrationRequest request, CancellationToken ct = default)
+    {
+        var rows = await _repo.GetStoreMigrationCustomersAsync(
+            tenantId, request.StoreIds, request.From, request.To, DefaultExportMaxRows, ct);
+
+        var result = BuildStoreMigrationExcel(rows, request.UnmaskPii);
+
+        await LogExportAsync(
+            tenantId, userId, "marketing_analytics.export_store_migration",
+            request.From, request.To, request.StoreIds, result, request.UnmaskPii, ct);
+
+        return result;
+    }
+
+    private RfmExportResult BuildStoreMigrationExcel(IReadOnlyList<StoreMigrationCustomerRow> customers, bool unmaskPii)
+    {
+        string[] headers =
+        [
+            "Ім'я", "Телефон", "Email",
+            "Заклад (перша покупка)", "Дата першої покупки",
+            "Заклад (остання покупка)", "Дата останньої покупки",
+            "К-сть чеків", "Сума",
+        ];
+
+        var rows = customers
+            .Select(c => (IReadOnlyList<object?>)new object?[]
+            {
+                c.Name,
+                unmaskPii ? c.Phone : PiiMasking.MaskPhone(c.Phone),
+                unmaskPii ? c.Email : PiiMasking.MaskEmail(c.Email),
+                c.FromStoreName,
+                c.FromDate.ToString("yyyy-MM-dd"),
+                c.ToStoreName,
+                c.ToDate.ToString("yyyy-MM-dd"),
+                c.TransactionCountInPeriod,
+                c.RevenueInPeriod,
+            })
+            .ToList();
+
+        var excelResult = _excel.Export(new ExcelExportRequest("Міграція", headers, rows, DefaultExportMaxRows));
+        var fileName = $"store_migration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx";
+        return new RfmExportResult(excelResult.FileBytes, fileName, excelResult.RowCount, excelResult.Truncated);
+    }
+
     // ── shared internals ─────────────────────────────────────────────────────
 
     private sealed record ClassifiedPopulation(
@@ -341,6 +441,30 @@ public sealed class MarketingAnalyticsService : IMarketingAnalyticsService
         var storesLabel = storeIds is { Count: > 0 } ? string.Join(",", storeIds) : "all";
         var meta =
             $"segment={key}; from={from:yyyy-MM-dd}; to={to:yyyy-MM-dd}; stores={storesLabel}; " +
+            $"rows={result.RowCount}; truncated={result.Truncated}; piiMasked={!unmaskedPii}" +
+            (extraMeta is null ? string.Empty : $"; {extraMeta}");
+
+        await _activityLogs.LogAsync(new ActivityLog
+        {
+            TenantId = tenantId,
+            UserId = userId,
+            Action = action,
+            EntityType = "marketing_analytics_export",
+            Meta = meta,
+        }, ct);
+        await _activityLogs.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Overload for exports with no RFM segment concept (store migration) — same audit
+    /// shape as the segment-keyed overload above, minus the <c>segment=</c> meta field.</summary>
+    private async Task LogExportAsync(
+        Guid tenantId, Guid userId, string action, DateOnly from, DateOnly to,
+        IReadOnlyList<Guid>? storeIds, RfmExportResult result, bool unmaskedPii, CancellationToken ct,
+        string? extraMeta = null)
+    {
+        var storesLabel = storeIds is { Count: > 0 } ? string.Join(",", storeIds) : "all";
+        var meta =
+            $"from={from:yyyy-MM-dd}; to={to:yyyy-MM-dd}; stores={storesLabel}; " +
             $"rows={result.RowCount}; truncated={result.Truncated}; piiMasked={!unmaskedPii}" +
             (extraMeta is null ? string.Empty : $"; {extraMeta}");
 

@@ -8,6 +8,7 @@ import type {
   SegmentExportRequest,
   ProductBuyersExportRequest,
   ProductPairBuyersExportRequest,
+  ExportStoreMigrationRequest,
 } from "../types";
 
 const KEY = "marketing-analytics";
@@ -87,5 +88,29 @@ export function useExportProductBuyers() {
 export function useExportProductPairBuyers() {
   return useMutation({
     mutationFn: (body: ProductPairBuyersExportRequest) => marketingAnalyticsApi.exportProductPairBuyers(body),
+  });
+}
+
+// ── Store migration (TASK-503) ────────────────────────────────────────────────────────────
+
+export function useStoreMigration(filters: MarketingAnalyticsFilters, enabled = true) {
+  return useQuery({
+    queryKey: [KEY, "store-migration", filters],
+    queryFn: () => marketingAnalyticsApi.getStoreMigration(filters),
+    enabled,
+  });
+}
+
+export function useStoreMigrationCustomers(filters: MarketingAnalyticsFilters, limit = 100, enabled = true) {
+  return useQuery({
+    queryKey: [KEY, "store-migration-customers", filters, limit],
+    queryFn: () => marketingAnalyticsApi.getStoreMigrationCustomers(filters, limit),
+    enabled,
+  });
+}
+
+export function useExportStoreMigration() {
+  return useMutation({
+    mutationFn: (body: ExportStoreMigrationRequest) => marketingAnalyticsApi.exportStoreMigration(body),
   });
 }

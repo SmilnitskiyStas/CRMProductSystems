@@ -48,4 +48,19 @@ public interface IMarketingAnalyticsService
     Task<RfmExportResult> ExportProductBuyersAsync(Guid tenantId, Guid userId, ExportRfmProductRequest request, CancellationToken ct = default);
 
     Task<RfmExportResult> ExportProductPairBuyersAsync(Guid tenantId, Guid userId, ExportRfmProductPairRequest request, CancellationToken ct = default);
+
+    // ── Store migration (TASK-502) ───────────────────────────────────────────────────────────
+
+    /// <summary>Aggregated matrix + net-flow + KPI counts. Never null/404, same "empty is still
+    /// a valid zeroed DTO" convention as <see cref="GetSegmentDetailAsync"/>.</summary>
+    Task<StoreMigrationOverviewDto> GetStoreMigrationAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>Per-customer drill-down rows for the on-screen table — PII always masked (no
+    /// unmask option here; unmasking only ever happens through the audited Excel export below).
+    /// <paramref name="limit"/> is caller-clamped (small, on-screen size).</summary>
+    Task<IReadOnlyList<StoreMigrationCustomerRowDto>> GetStoreMigrationCustomersAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, int limit, CancellationToken ct = default);
+
+    Task<RfmExportResult> ExportStoreMigrationAsync(Guid tenantId, Guid userId, ExportStoreMigrationRequest request, CancellationToken ct = default);
 }

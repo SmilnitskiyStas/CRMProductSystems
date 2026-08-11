@@ -308,6 +308,87 @@ public sealed class StoreScopeRlsIntegrationTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// TASK-508/KI-033 (ADR-028): 'marketing_analytics_bypass' is a fifth bypass value added to
+    /// pos_transactions' store_scope policy only (20260811110212_
+    /// AddMarketingAnalyticsBypassToPosTransactionsStoreScope) — no real JWT role claim can ever
+    /// produce it (see TenantConnectionInterceptorTests' companion assertion), it is set only by
+    /// AnalyticsRlsOverride's own hardcoded SET LOCAL string. This test sets it directly, the
+    /// same way the existing bypass-role tests above do, to prove a pos_transactions row that a
+    /// user_locations-scoped session cannot see becomes visible under the bypass — without
+    /// touching product_stock or any of the other 8 store_scope-governed tables, which
+    /// deliberately do NOT get this bypass value.
+    /// </summary>
+    [Fact]
+    public async Task MarketingAnalyticsBypassRole_SeesAllLocationsPosTransactions_EvenWithoutAnyUserLocationsRow()
+    {
+        if (!_dbAvailable) return; // soft-skip, see class remarks
+
+        var f = await SeedScenarioAsync();
+        try
+        {
+            await ExecAsync(
+                "INSERT INTO pos_transactions (\"Id\", \"TenantId\", \"LocationId\", \"ReceiptNumber\", \"TotalAmount\", \"TaxAmount\", \"Status\", \"CreatedAt\") VALUES " +
+                "(gen_random_uuid(), @t, @x, 'RLS-BYPASS-X', 10, 0, 'completed', now()), " +
+                "(gen_random_uuid(), @t, @y, 'RLS-BYPASS-Y', 20, 0, 'completed', now());",
+                ("t", f.TenantId), ("x", f.LocationX), ("y", f.LocationY));
+
+            await ExecAsync("SET ROLE rls_audit_test_role;");
+            // Deliberately use the unassigned manager's id — zero user_locations rows for it —
+            // to prove the bypass branch, not a coincidental EXISTS match, is what's firing.
+            await ExecAsync(
+                $"SET app.tenant_id = '{f.TenantId:D}'; SET app.role = 'marketing_analytics_bypass'; " +
+                $"SET app.user_id = '{f.ManagerNoneUserId:D}';");
+
+            var visible = await ScalarAsync(
+                "SELECT count(*) FROM pos_transactions WHERE \"TenantId\" = @t;", ("t", f.TenantId));
+            Assert.Equal(2L, visible);
+        }
+        finally
+        {
+            await ExecAsync("RESET ROLE;");
+            await ExecAsync("DELETE FROM pos_transactions WHERE \"TenantId\" = @t;", ("t", f.TenantId));
+            await CleanupAsync(f);
+        }
+    }
+
+    /// <summary>
+    /// Same fixture/manager as above, but WITHOUT the bypass role set — a plain store_manager
+    /// scoped only to LocationX must still see zero of the two seeded pos_transactions rows
+    /// (LocationX/LocationY are not among their user_locations rows), confirming
+    /// 'marketing_analytics_bypass' — not some accidental widening of store_scope itself — is
+    /// what made the row visible above.
+    /// </summary>
+    [Fact]
+    public async Task ScopedRole_WithoutBypass_CannotSeePosTransactions_OutsideOwnLocation()
+    {
+        if (!_dbAvailable) return; // soft-skip, see class remarks
+
+        var f = await SeedScenarioAsync();
+        try
+        {
+            await ExecAsync(
+                "INSERT INTO pos_transactions (\"Id\", \"TenantId\", \"LocationId\", \"ReceiptNumber\", \"TotalAmount\", \"TaxAmount\", \"Status\", \"CreatedAt\") VALUES " +
+                "(gen_random_uuid(), @t, @y, 'RLS-NOBYPASS-Y', 20, 0, 'completed', now());",
+                ("t", f.TenantId), ("y", f.LocationY));
+
+            await ExecAsync("SET ROLE rls_audit_test_role;");
+            await ExecAsync(
+                $"SET app.tenant_id = '{f.TenantId:D}'; SET app.role = 'store_manager'; " +
+                $"SET app.user_id = '{f.ManagerXUserId:D}';");
+
+            var visible = await ScalarAsync(
+                "SELECT count(*) FROM pos_transactions WHERE \"TenantId\" = @t;", ("t", f.TenantId));
+            Assert.Equal(0L, visible);
+        }
+        finally
+        {
+            await ExecAsync("RESET ROLE;");
+            await ExecAsync("DELETE FROM pos_transactions WHERE \"TenantId\" = @t;", ("t", f.TenantId));
+            await CleanupAsync(f);
+        }
+    }
+
     // ── Shared fixture setup ────────────────────────────────────────────────────
 
     private sealed record Scenario(

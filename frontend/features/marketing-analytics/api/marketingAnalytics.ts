@@ -11,6 +11,9 @@ import type {
   SegmentExportRequest,
   ProductBuyersExportRequest,
   ProductPairBuyersExportRequest,
+  StoreMigrationOverviewDto,
+  StoreMigrationCustomerRowDto,
+  ExportStoreMigrationRequest,
 } from "../types";
 
 /**
@@ -94,4 +97,16 @@ export const marketingAnalyticsApi = {
       body,
       `rfm_${body.key}_pair_${slug(body.productName)}_${slug(body.pairedProductName)}_${timestamp()}.xlsx`,
     ),
+
+  // ── Store migration (TASK-503) ──────────────────────────────────────────────────────
+  getStoreMigration: (filters: MarketingAnalyticsFilters) =>
+    api.get<StoreMigrationOverviewDto>(`/api/marketing-analytics/store-migration${buildFilterQs(filters)}`),
+
+  getStoreMigrationCustomers: (filters: MarketingAnalyticsFilters, limit = 100) =>
+    api.get<StoreMigrationCustomerRowDto[]>(
+      `/api/marketing-analytics/store-migration/customers${buildFilterQs(filters, { limit })}`,
+    ),
+
+  exportStoreMigration: (body: ExportStoreMigrationRequest) =>
+    downloadFilePost("/api/marketing-analytics/exports/store-migration", body, `store_migration_${timestamp()}.xlsx`),
 };

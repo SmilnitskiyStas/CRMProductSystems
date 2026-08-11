@@ -57,6 +57,19 @@ public sealed record RfmExportCustomerRow(
 /// the repository (callers get a plain <c>IReadOnlyList&lt;Guid&gt;</c>).</summary>
 public sealed record RfmCustomerIdRow(Guid CustomerId);
 
+// ── Store migration (TASK-502) raw rows — 1:1 with the matching Dtos/*Dto shape, kept as
+// separate Row types for the same reason as every row above: the repository only ever hands
+// back SQL-computed facts, never the wire-facing Dto, even when the shapes are identical today.
+
+public sealed record StoreMigrationFlowRow(
+    Guid FromStoreId, string FromStoreName, Guid ToStoreId, string ToStoreName, int CustomerCount, decimal Revenue);
+
+public sealed record StoreMigrationCustomerRow(
+    Guid CustomerId, string Name, string? Phone, string? Email,
+    Guid FromStoreId, string FromStoreName, DateOnly FromDate,
+    Guid ToStoreId, string ToStoreName, DateOnly ToDate,
+    int TransactionCountInPeriod, decimal RevenueInPeriod);
+
 /// <summary>
 /// Raw-SQL data access for RFM scoring and its derived views (TASK-406, plan §"R/F/M-скоринг").
 /// First use of <c>Database.SqlQueryRaw&lt;T&gt;</c> in this codebase — <c>NTILE(5)</c> has no
@@ -115,4 +128,26 @@ public interface IMarketingAnalyticsRepository
     Task<IReadOnlyList<Guid>> GetProductPairBuyerCustomerIdsAsync(
         Guid tenantId, IReadOnlyList<Guid> segmentCustomerIds, IReadOnlyList<Guid>? storeIds,
         DateOnly from, DateOnly to, string productName, string pairedProductName, CancellationToken ct = default);
+
+    // ── Store migration (TASK-502) ───────────────────────────────────────────────────────────
+
+    /// <summary>Customers with >=1 non-failed transaction in [from,to] (store filter applied) —
+    /// PERIOD-scoped, unlike <see cref="GetCustomerBaseCountsAsync"/>'s lifetime
+    /// <c>EverPurchasedCount</c>. Feeds <c>StoreMigrationOverviewDto.ActiveCustomerCount</c>.</summary>
+    Task<int> GetActivePeriodCustomerCountAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>Aggregated from-store→to-store matrix (non-zero cells only) for customers whose
+    /// first and last transaction in [from,to] were at different stores. A cell matches the
+    /// store filter if EITHER its from-store or its to-store is in <paramref name="storeIds"/>
+    /// (empty = all stores).</summary>
+    Task<IReadOnlyList<StoreMigrationFlowRow>> GetStoreMigrationFlowsAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>Per-customer drill-down rows for the same migrated population as
+    /// <see cref="GetStoreMigrationFlowsAsync"/>, ordered most-recent-migration-first and capped
+    /// at <paramref name="limit"/> — the caller passes a small limit for the on-screen table and
+    /// a large one (export row cap) for the Excel export.</summary>
+    Task<IReadOnlyList<StoreMigrationCustomerRow>> GetStoreMigrationCustomersAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, int limit, CancellationToken ct = default);
 }

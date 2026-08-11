@@ -243,3 +243,80 @@ export interface ProductPairBuyersExportRequest extends MarketingAnalyticsExport
   productName: string;
   pairedProductName: string;
 }
+
+// ── Store migration (TASK-503) ──────────────────────────────────────────────────────────
+//
+// Source of truth: `.claude/logs/handoffs/502-to-503_backend-developer.md` — a page-SECTION
+// on this same dashboard (not a separate route like post-campaign/price-segments/
+// audience-builder), so its types live here in the shared root file rather than a sibling
+// `store-migration/types.ts`. Reuses `MarketingAnalyticsFilters` as-is for the two GETs below.
+//
+// Migration definition: within the selected [from,to], a customer "migrated" if their
+// earliest transaction's store differs from their latest transaction's store. Stores visited
+// in between are not tracked as separate hops. Store filter is OR semantics (matches if
+// EITHER the from-store or the to-store is selected), unlike the AND-style inclusion filter
+// used everywhere else on this page.
+
+// ── GET /api/marketing-analytics/store-migration ────────────────────────────────────────
+
+export interface StoreMigrationFlowDto {
+  fromStoreId: string;
+  fromStoreName: string;
+  toStoreId: string;
+  toStoreName: string;
+  customerCount: number;
+  revenue: number;
+}
+
+export interface StoreNetFlowDto {
+  storeId: string;
+  storeName: string;
+  gained: number;
+  lost: number;
+  net: number;
+}
+
+export interface StoreMigrationOverviewDto {
+  activeCustomerCount: number;
+  migratedCustomerCount: number;
+  migratedSharePercent: number;
+  /** Non-zero matrix cells only. */
+  flows: StoreMigrationFlowDto[];
+  netFlowByStore: StoreNetFlowDto[];
+  periodFrom: string;
+  periodTo: string;
+}
+
+// ── GET /api/marketing-analytics/store-migration/customers ──────────────────────────────
+//
+// A 3rd endpoint not in the original plan doc — added by the backend for the on-screen
+// drill-down list (the export endpoint alone can't serve on-screen data). Phone/email are
+// ALWAYS masked server-side here — there is no unmask query param on this endpoint, unlike
+// the export POST below. Never build a client-side "show unmasked" toggle against this call.
+
+export interface StoreMigrationCustomerRowDto {
+  customerId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  fromStoreId: string;
+  fromStoreName: string;
+  fromDate: string;
+  toStoreId: string;
+  toStoreName: string;
+  toDate: string;
+  transactionCountInPeriod: number;
+  revenueInPeriod: number;
+}
+
+// ── POST /api/marketing-analytics/exports/store-migration ───────────────────────────────
+//
+// No `key` field (unlike `MarketingAnalyticsExportBaseRequest`) — this export has no RFM
+// segment concept, so it's its own request shape rather than extending the base one.
+
+export interface ExportStoreMigrationRequest {
+  storeIds: string[] | null;
+  from: string;
+  to: string;
+  unmaskPii: boolean;
+}
