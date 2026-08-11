@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ShelfGuard.Infrastructure.Data;
@@ -12,9 +13,11 @@ using ShelfGuard.Infrastructure.Data;
 namespace ShelfGuard.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260811054559_AddLoyaltyMembershipPreferredStore")]
+    partial class AddLoyaltyMembershipPreferredStore
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1943,6 +1946,12 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "ReceiptNumber")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "CustomerId", "CreatedAt")
+                        .HasDatabaseName("idx_pos_tx_customer_migration")
+                        .HasFilter("\"CustomerId\" IS NOT NULL AND \"Status\" <> 'fiscalization_failed'");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("TenantId", "CustomerId", "CreatedAt"), new[] { "StoreId" });
 
                     b.HasIndex("TenantId", "StoreId", "CreatedAt")
                         .IsDescending(false, false, true)

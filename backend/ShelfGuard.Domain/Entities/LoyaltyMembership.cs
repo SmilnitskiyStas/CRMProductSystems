@@ -24,6 +24,14 @@ public sealed class LoyaltyMembership
     public Guid? CustomerId { get; set; }
     /// <summary>Staff member's own User row, when this membership is their "join my employer's program" case. Nullable/SetNull.</summary>
     public Guid? LinkedUserId { get; set; }
+    /// <summary>
+    /// TASK-507: which store within this already-joined network the consumer primarily shops
+    /// at — an additional, optional preference, NOT a change to membership/join semantics
+    /// (membership stays exactly one per (tenant, consumer), never per store; see class doc).
+    /// Set via <see cref="LoyaltyService"/>'s dedicated preferred-store endpoint, not join.
+    /// Nullable/SetNull, same convention as <see cref="CustomerId"/>/<see cref="LinkedUserId"/>.
+    /// </summary>
+    public Guid? PreferredStoreId { get; set; }
 
     /// <summary>Base32 TOTP secret backing the "live" QR/barcode. Never leaves the server.</summary>
     public string TotpSecret { get; set; } = string.Empty;

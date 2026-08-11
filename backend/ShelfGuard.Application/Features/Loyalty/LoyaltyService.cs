@@ -156,7 +156,31 @@ public sealed class LoyaltyService : ILoyaltyService
         Guid consumerAccountId, CancellationToken ct = default)
     {
         var memberships = await _loyalty.GetMembershipsForConsumerAsync(consumerAccountId, ct);
-        return memberships.Select(m => ToSummaryDto(m, m.Tenant?.Name ?? "—")).ToList();
+        var result = new List<LoyaltyMembershipSummaryDto>(memberships.Count);
+        foreach (var m in memberships)
+        {
+            var preferredStore = await ResolvePreferredStoreAsync(m, ct);
+            result.Add(ToSummaryDto(m, m.Tenant?.Name ?? "—", preferredStore));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// TASK-507: resolves <paramref name="m"/>'s <see cref="LoyaltyMembership.PreferredStoreId"/>
+    /// to its <see cref="Location"/>, or null when unset, inactive, or since removed — never
+    /// throws on a stale reference (see <see cref="LoyaltyMembershipSummaryDto"/> doc). Runs
+    /// through <see cref="ITenantSessionOverride"/> for the same reason as
+    /// <see cref="ResolveCustomerCodeFormatAsync"/> above: "locations" carries only the
+    /// canonical tenant_isolation RLS policy, no consumer_self_access exemption, so a consumer
+    /// session's ambient (null) app.tenant_id would otherwise see nothing.
+    /// </summary>
+    private async Task<Location?> ResolvePreferredStoreAsync(LoyaltyMembership m, CancellationToken ct)
+    {
+        if (m.PreferredStoreId is null) return null;
+
+        var location = await _tenantScope.ExecuteAsync(
+            m.TenantId, () => _locations.GetByIdAsync(m.PreferredStoreId.Value, ct), ct);
+        return location is { IsActive: true } && location.TenantId == m.TenantId ? location : null;
     }
 
     public async Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetAvailableNetworksAsync(
@@ -166,35 +190,38 @@ public sealed class LoyaltyService : ILoyaltyService
         var result = new List<LoyaltyNetworkSummaryDto>();
         foreach (var tenant in tenants.Where(t => t.IsActive && t.HasModule("loyalty")))
         {
-            var (settings, storeNames) = await _tenantScope.ExecuteAsync(
+            var (settings, stores) = await _tenantScope.ExecuteAsync(
                 tenant.Id, () => LoadNetworkDetailsAsync(tenant.Id, ct), ct);
             if (settings?.IsEnabled == false) continue;
-            result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name, storeNames));
+            result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name, stores));
         }
         return result;
     }
 
     /// <summary>
-    /// TASK-501: reads this tenant's loyalty settings and its shoppable store names together,
+    /// TASK-501: reads this tenant's loyalty settings and its shoppable stores together,
     /// inside the single <see cref="ITenantSessionOverride"/> block <see
     /// cref="GetAvailableNetworksAsync"/> already opens per tenant — combining both reads keeps
     /// it to one override per tenant instead of two. <see cref="ILocationRepository.GetAllAsync"/>
     /// takes no tenant parameter (RLS-scoped to whatever app.tenant_id the override set), same
     /// contract as <see cref="ILoyaltyRepository.GetSettingsAsync"/> right above it.
+    /// TASK-507: projects the full <see cref="LoyaltyNetworkStoreDto"/> (with <c>StoreId</c>)
+    /// instead of just the name, so a consumer can reference a specific store when setting a
+    /// preferred store — same filter/sort as before, sorted by <c>StoreName</c>.
     /// </summary>
-    private async Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<string> StoreNames)> LoadNetworkDetailsAsync(
+    private async Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<LoyaltyNetworkStoreDto> Stores)> LoadNetworkDetailsAsync(
         Guid tenantId, CancellationToken ct)
     {
         var settings = await _loyalty.GetSettingsAsync(tenantId, ct);
 
         var locations = await _locations.GetAllAsync(ct);
-        var storeNames = locations
+        var stores = locations
             .Where(l => l.IsActive && IsShoppableStoreType(l.Type))
-            .Select(l => l.Name)
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(l => new LoyaltyNetworkStoreDto(l.Id, l.Name, l.Address))
             .ToList();
 
-        return (settings, storeNames);
+        return (settings, stores);
     }
 
     /// <summary>
@@ -255,6 +282,47 @@ public sealed class LoyaltyService : ILoyaltyService
         var code = _totp.GenerateCode(consumer.LoyaltyTotpSecret);
         var payload = $"{ConsumerCodePrefix}.{consumer.Id}.{code}";
         return (new LoyaltyCodeDto(payload, displayFormat, 0m, 30), null, null);
+    }
+
+    /// <summary>
+    /// TASK-507: sets which store within an already-joined network the consumer primarily
+    /// shops at. Deliberately does NOT create a membership — no membership at
+    /// <paramref name="tenantId"/> is a 403, full stop, no implicit join (join stays a
+    /// separate, explicit step via <see cref="JoinAsync"/>). Runs entirely inside a single
+    /// <see cref="ITenantSessionOverride"/> block — same pattern as <see cref="JoinAsync"/>'s
+    /// consumer-session call site — since this is a staff-equivalent consumer context with no
+    /// real tenant claim, and the store-validity check needs to read "locations", which (like
+    /// "customers") has no consumer_self_access RLS policy.
+    /// </summary>
+    public async Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> SetPreferredStoreAsync(
+        Guid consumerAccountId, Guid tenantId, Guid storeId, CancellationToken ct = default)
+    {
+        var (membership, location, error, statusCode) = await _tenantScope.ExecuteAsync(
+            tenantId, () => SetPreferredStoreCoreAsync(consumerAccountId, tenantId, storeId, ct), ct);
+
+        if (error is not null || membership is null)
+            return (null, error, statusCode);
+
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        return (ToSummaryDto(membership, tenant?.Name ?? "—", location), null, null);
+    }
+
+    private async Task<(LoyaltyMembership? Membership, Location? Location, string? Error, int? StatusCode)>
+        SetPreferredStoreCoreAsync(Guid consumerAccountId, Guid tenantId, Guid storeId, CancellationToken ct)
+    {
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null)
+            return (null, null, "You are not a member of this network.", 403);
+
+        var location = await _locations.GetByIdAsync(storeId, ct);
+        if (location is null || location.TenantId != tenantId || !location.IsActive || !IsShoppableStoreType(location.Type))
+            return (null, null, "Invalid store for this network.", 400);
+
+        membership.PreferredStoreId = storeId;
+        _loyalty.UpdateMembership(membership);
+        await _loyalty.SaveChangesAsync(ct);
+
+        return (membership, location, null, null);
     }
 
     /// <summary>
@@ -693,8 +761,18 @@ public sealed class LoyaltyService : ILoyaltyService
         settings.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    private static LoyaltyMembershipSummaryDto ToSummaryDto(LoyaltyMembership m, string tenantName) => new(
-        m.Id, m.TenantId, tenantName, m.Balance, m.Status, m.JoinedAt);
+    /// <summary>
+    /// TASK-507: <paramref name="preferredStore"/> is the already-resolved
+    /// <see cref="Location"/> for <c>m.PreferredStoreId</c>, or null when there isn't one to
+    /// resolve (unset) or the caller didn't need/have one on hand (e.g. staff-facing call
+    /// sites in this file that don't resolve it) — <c>PreferredStoreId</c> itself always comes
+    /// straight from the entity either way; only the two display-convenience name/address
+    /// fields depend on this parameter.
+    /// </summary>
+    private static LoyaltyMembershipSummaryDto ToSummaryDto(
+        LoyaltyMembership m, string tenantName, Location? preferredStore = null) => new(
+        m.Id, m.TenantId, tenantName, m.Balance, m.Status, m.JoinedAt,
+        m.PreferredStoreId, preferredStore?.Name, preferredStore?.Address);
 
     private static LoyaltyLedgerEntryDto ToLedgerDto(LoyaltyLedgerEntry e) => new(
         e.Id, e.EntryType, e.Amount, e.BalanceAfter, e.Note, e.CreatedAt);

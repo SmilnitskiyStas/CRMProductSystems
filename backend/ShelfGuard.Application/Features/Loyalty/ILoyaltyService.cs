@@ -41,6 +41,17 @@ public interface ILoyaltyService
     Task<(LoyaltyCodeDto? Code, string? Error, int? StatusCode)> GetConsumerCodeAsync(
         Guid consumerAccountId, Guid? tenantId = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-507: sets which store within an already-joined network the consumer primarily
+    /// shops at. Deliberately does NOT create a membership — join stays a separate, explicit
+    /// step. Status codes: 403 the consumer has no <see cref="LoyaltyMembership"/> at
+    /// <paramref name="tenantId"/>, 400 <paramref name="storeId"/> doesn't resolve to an
+    /// active, shoppable <see cref="ShelfGuard.Domain.Entities.Location"/> belonging to that
+    /// same tenant.
+    /// </summary>
+    Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> SetPreferredStoreAsync(
+        Guid consumerAccountId, Guid tenantId, Guid storeId, CancellationToken ct = default);
+
     /// <summary>404 when the consumer has no membership at this tenant.</summary>
     Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
         Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default);

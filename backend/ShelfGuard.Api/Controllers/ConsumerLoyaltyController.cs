@@ -74,6 +74,28 @@ public sealed class ConsumerLoyaltyController : ControllerBase
         return Ok(code);
     }
 
+    /// <summary>
+    /// TASK-507: which store within an already-joined network the consumer primarily shops at
+    /// — a separate, additional preference from membership itself (never creates one; no
+    /// membership at the given tenantId is a 403, not an implicit join).
+    /// </summary>
+    [HttpPut("preferred-store")]
+    [ProducesResponseType(typeof(LoyaltyMembershipSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> SetPreferredStore([FromBody] SetPreferredStoreRequest request, CancellationToken ct)
+    {
+        var consumerId = ResolveConsumerAccountId();
+        if (consumerId is null) return Forbid();
+
+        var (membership, error, statusCode) = await _loyalty.SetPreferredStoreAsync(
+            consumerId.Value, request.TenantId, request.StoreId, ct);
+        if (error is not null)
+            return StatusCode(statusCode ?? 400, new { error });
+
+        return Ok(membership);
+    }
+
     [HttpGet("{tenantId:guid}/history")]
     public async Task<IActionResult> GetHistory(
         Guid tenantId, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)

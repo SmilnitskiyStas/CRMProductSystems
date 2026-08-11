@@ -2130,6 +2130,12 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(m => m.CustomerId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasOne(m => m.LinkedUser).WithMany()
              .HasForeignKey(m => m.LinkedUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // TASK-507: same nullable-reference convention as Customer/LinkedUser above (FK +
+            // SetNull + IsRequired(false)) — no navigation property needed since LoyaltyService
+            // resolves the Location itself (via ITenantSessionOverride, same as its other
+            // cross-tenant consumer-session reads), not through EF Include.
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(m => m.PreferredStoreId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasMany(m => m.LedgerEntries).WithOne(l => l.Membership)
              .HasForeignKey(l => l.MembershipId).OnDelete(DeleteBehavior.Restrict);
         });

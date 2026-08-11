@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -53,18 +54,34 @@ public sealed class LoyaltyServiceTests
                 Arg.Any<Guid>(), Arg.Any<Func<Task<LoyaltyProgramSettings?>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<LoyaltyProgramSettings?>>>()());
 
-        // TASK-501: GetAvailableNetworksAsync's combined settings+store-names read is its own
+        // TASK-501/507: GetAvailableNetworksAsync's combined settings+stores read is its own
         // closed generic (a value tuple) — same pure pass-through pattern as the two setups
         // above, just for that tuple's Task<T> instead.
         _tenantScope.ExecuteAsync(
                 Arg.Any<Guid>(),
-                Arg.Any<Func<Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<string> StoreNames)>>>(),
+                Arg.Any<Func<Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<LoyaltyNetworkStoreDto> Stores)>>>(),
                 Arg.Any<CancellationToken>())
             .Returns(ci => ci
-                .Arg<Func<Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<string> StoreNames)>>>()());
+                .Arg<Func<Task<(LoyaltyProgramSettings? Settings, IReadOnlyList<LoyaltyNetworkStoreDto> Stores)>>>()());
+
+        // TASK-507: GetMembershipsForConsumerAsync's per-membership preferred-store resolution
+        // and SetPreferredStoreAsync both run through this same override — pure pass-through
+        // for the Location? closed generic.
+        _tenantScope.ExecuteAsync(
+                Arg.Any<Guid>(), Arg.Any<Func<Task<Location?>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<Location?>>>()());
+
+        // TASK-507: SetPreferredStoreAsync's combined membership-check+store-validate+write
+        // read is its own closed generic (a 4-tuple) — same pure pass-through pattern.
+        _tenantScope.ExecuteAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<Func<Task<(LoyaltyMembership? Membership, Location? Location, string? Error, int? StatusCode)>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(ci => ci
+                .Arg<Func<Task<(LoyaltyMembership? Membership, Location? Location, string? Error, int? StatusCode)>>>()());
 
         // Default: no locations for any tenant unless a test overrides it — keeps
-        // GetAvailableNetworksAsync's StoreNames empty-but-non-null by default.
+        // GetAvailableNetworksAsync's Stores empty-but-non-null by default.
         _locations.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Location>());
     }
 
@@ -363,6 +380,218 @@ public sealed class LoyaltyServiceTests
         Assert.Null(error);
         Assert.Equal("qr", code!.DisplayFormat);
         await _loyalty.DidNotReceive().GetMembershipsForConsumerAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── GetMembershipsForConsumerAsync — TASK-507 preferred store resolution ─
+
+    [Fact]
+    public async Task GetMembershipsForConsumerAsync_resolves_preferred_store_name_and_address()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var membership = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = storeId,
+        };
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns([membership]);
+        _locations.GetByIdAsync(storeId, default).Returns(
+            new Location { Id = storeId, TenantId = tenantId, Name = "М3", Address = "вул. Шевченка, 10", IsActive = true });
+
+        var result = await _sut.GetMembershipsForConsumerAsync(consumerId);
+
+        var dto = Assert.Single(result);
+        Assert.Equal(storeId, dto.PreferredStoreId);
+        Assert.Equal("М3", dto.PreferredStoreName);
+        Assert.Equal("вул. Шевченка, 10", dto.PreferredStoreAddress);
+    }
+
+    [Fact]
+    public async Task GetMembershipsForConsumerAsync_no_preferred_store_returns_null_names_without_lookup()
+    {
+        var consumerId = Guid.NewGuid();
+        var membership = new LoyaltyMembership
+        {
+            TenantId = Guid.NewGuid(), ConsumerAccountId = consumerId, PreferredStoreId = null,
+        };
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns([membership]);
+
+        var result = await _sut.GetMembershipsForConsumerAsync(consumerId);
+
+        var dto = Assert.Single(result);
+        Assert.Null(dto.PreferredStoreId);
+        Assert.Null(dto.PreferredStoreName);
+        Assert.Null(dto.PreferredStoreAddress);
+        await _locations.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetMembershipsForConsumerAsync_stale_preferred_store_returns_null_names_without_throwing()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var membership = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = storeId,
+        };
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns([membership]);
+        // Store since removed — GetByIdAsync returns null (default NSubstitute behavior).
+
+        var result = await _sut.GetMembershipsForConsumerAsync(consumerId);
+
+        var dto = Assert.Single(result);
+        Assert.Equal(storeId, dto.PreferredStoreId); // raw reference is preserved
+        Assert.Null(dto.PreferredStoreName);
+        Assert.Null(dto.PreferredStoreAddress);
+    }
+
+    [Fact]
+    public async Task GetMembershipsForConsumerAsync_inactive_preferred_store_returns_null_names()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var membership = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = storeId,
+        };
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns([membership]);
+        _locations.GetByIdAsync(storeId, default).Returns(
+            new Location { Id = storeId, TenantId = tenantId, Name = "Closed Down", IsActive = false });
+
+        var result = await _sut.GetMembershipsForConsumerAsync(consumerId);
+
+        var dto = Assert.Single(result);
+        Assert.Null(dto.PreferredStoreName);
+        Assert.Null(dto.PreferredStoreAddress);
+    }
+
+    // ── SetPreferredStoreAsync (TASK-507) ─────────────────────────────────
+
+    [Fact]
+    public async Task SetPreferredStoreAsync_no_membership_at_tenant_returns_403_without_mutation()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+
+        var (membership, error, statusCode) = await _sut.SetPreferredStoreAsync(consumerId, tenantId, storeId);
+
+        Assert.Null(membership);
+        Assert.Equal("You are not a member of this network.", error);
+        Assert.Equal(403, statusCode);
+        await _locations.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
+    }
+
+    [Fact]
+    public async Task SetPreferredStoreAsync_store_belongs_to_different_tenant_returns_400_without_mutation()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var otherTenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var existing = new LoyaltyMembership { TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = null };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+        _locations.GetByIdAsync(storeId, default).Returns(
+            new Location { Id = storeId, TenantId = otherTenantId, Name = "Someone Else's Store", IsActive = true });
+
+        var (membership, error, statusCode) = await _sut.SetPreferredStoreAsync(consumerId, tenantId, storeId);
+
+        Assert.Null(membership);
+        Assert.Equal("Invalid store for this network.", error);
+        Assert.Equal(400, statusCode);
+        Assert.Null(existing.PreferredStoreId);
+        _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
+    }
+
+    [Fact]
+    public async Task SetPreferredStoreAsync_inactive_store_returns_400_without_mutation()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var existing = new LoyaltyMembership { TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = null };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+        _locations.GetByIdAsync(storeId, default).Returns(
+            new Location { Id = storeId, TenantId = tenantId, Name = "Closed Down", IsActive = false });
+
+        var (membership, error, statusCode) = await _sut.SetPreferredStoreAsync(consumerId, tenantId, storeId);
+
+        Assert.Null(membership);
+        Assert.Equal("Invalid store for this network.", error);
+        Assert.Equal(400, statusCode);
+        Assert.Null(existing.PreferredStoreId);
+        _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
+    }
+
+    [Fact]
+    public async Task SetPreferredStoreAsync_non_shoppable_store_type_returns_400_without_mutation()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var existing = new LoyaltyMembership { TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = null };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+        _locations.GetByIdAsync(storeId, default).Returns(
+            new Location { Id = storeId, TenantId = tenantId, Name = "Main Warehouse", Type = "warehouse", IsActive = true });
+
+        var (membership, error, statusCode) = await _sut.SetPreferredStoreAsync(consumerId, tenantId, storeId);
+
+        Assert.Null(membership);
+        Assert.Equal("Invalid store for this network.", error);
+        Assert.Equal(400, statusCode);
+        Assert.Null(existing.PreferredStoreId);
+        _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
+    }
+
+    [Fact]
+    public async Task SetPreferredStoreAsync_valid_store_persists_and_returns_200_with_resolved_fields()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var existing = new LoyaltyMembership { TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = null };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+        _locations.GetByIdAsync(storeId, default).Returns(
+            new Location { Id = storeId, TenantId = tenantId, Name = "М3", Address = "вул. Шевченка, 10", IsActive = true });
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+
+        var (membership, error, statusCode) = await _sut.SetPreferredStoreAsync(consumerId, tenantId, storeId);
+
+        Assert.Null(error);
+        Assert.NotNull(membership);
+        Assert.Equal(storeId, membership.PreferredStoreId);
+        Assert.Equal("М3", membership.PreferredStoreName);
+        Assert.Equal("вул. Шевченка, 10", membership.PreferredStoreAddress);
+        Assert.Equal(storeId, existing.PreferredStoreId);
+        _loyalty.Received(1).UpdateMembership(existing);
+        await _loyalty.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task SetPreferredStoreAsync_setting_again_to_a_different_store_overwrites_not_additive()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var firstStoreId = Guid.NewGuid();
+        var secondStoreId = Guid.NewGuid();
+        var existing = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, PreferredStoreId = firstStoreId,
+        };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+        _locations.GetByIdAsync(secondStoreId, default).Returns(
+            new Location { Id = secondStoreId, TenantId = tenantId, Name = "Другий магазин", IsActive = true });
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+
+        var (membership, error, statusCode) = await _sut.SetPreferredStoreAsync(consumerId, tenantId, secondStoreId);
+
+        Assert.Null(error);
+        Assert.Equal(secondStoreId, membership!.PreferredStoreId);
+        Assert.Equal(secondStoreId, existing.PreferredStoreId);
     }
 
     // ── ResolveCodeAsync ───────────────────────────────────────────────────
@@ -792,31 +1021,36 @@ public sealed class LoyaltyServiceTests
         Assert.Equal(available.Id, network.TenantId);
         Assert.Equal(available.Name, network.TenantName);
         // No locations stubbed for this tenant (constructor default: empty list) — a
-        // zero-store tenant must still appear, with an empty (not null) StoreNames.
-        Assert.Empty(network.StoreNames);
+        // zero-store tenant must still appear, with an empty (not null) Stores.
+        Assert.Empty(network.Stores);
     }
 
-    // ── GetAvailableNetworksAsync — TASK-501 StoreNames ─────────────────────
+    // ── GetAvailableNetworksAsync — TASK-501/507 Stores ─────────────────────
 
-    private static Location MakeLocation(Guid tenantId, string name, bool isActive = true, string type = "retail_store") =>
-        new() { TenantId = tenantId, Name = name, IsActive = isActive, Type = type };
+    private static Location MakeLocation(
+        Guid tenantId, string name, bool isActive = true, string type = "retail_store", string? address = null) =>
+        new() { TenantId = tenantId, Name = name, IsActive = isActive, Type = type, Address = address };
 
     [Fact]
-    public async Task GetAvailableNetworksAsync_includes_active_shoppable_store_names_sorted_alphabetically()
+    public async Task GetAvailableNetworksAsync_includes_active_shoppable_stores_sorted_alphabetically_with_id_and_address()
     {
         var tenant = MakeTenant("loyalty");
         _tenants.GetAllAsync(default).Returns([tenant]);
         _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
-        _locations.GetAllAsync(default).Returns(new List<Location>
-        {
-            MakeLocation(tenant.Id, "Магазин №1 - Центральний"),
-            MakeLocation(tenant.Id, "М3"),
-        });
+        var store1 = MakeLocation(tenant.Id, "Магазин №1 - Центральний", address: "вул. Хрещатик, 1");
+        var store2 = MakeLocation(tenant.Id, "М3", address: "вул. Шевченка, 10");
+        _locations.GetAllAsync(default).Returns(new List<Location> { store1, store2 });
 
         var result = await _sut.GetAvailableNetworksAsync();
 
         var network = Assert.Single(result);
-        Assert.Equal(new[] { "М3", "Магазин №1 - Центральний" }, network.StoreNames);
+        Assert.Equal(
+            new[]
+            {
+                new LoyaltyNetworkStoreDto(store2.Id, "М3", "вул. Шевченка, 10"),
+                new LoyaltyNetworkStoreDto(store1.Id, "Магазин №1 - Центральний", "вул. Хрещатик, 1"),
+            },
+            network.Stores);
     }
 
     [Fact]
@@ -834,7 +1068,7 @@ public sealed class LoyaltyServiceTests
         var result = await _sut.GetAvailableNetworksAsync();
 
         var network = Assert.Single(result);
-        Assert.Equal(new[] { "Active Store" }, network.StoreNames);
+        Assert.Equal(new[] { "Active Store" }, network.Stores.Select(s => s.StoreName));
     }
 
     [Fact]
@@ -853,11 +1087,11 @@ public sealed class LoyaltyServiceTests
         var result = await _sut.GetAvailableNetworksAsync();
 
         var network = Assert.Single(result);
-        Assert.Equal(new[] { "Front Store" }, network.StoreNames);
+        Assert.Equal(new[] { "Front Store" }, network.Stores.Select(s => s.StoreName));
     }
 
     [Fact]
-    public async Task GetAvailableNetworksAsync_zero_stores_still_includes_tenant_with_empty_storeNames()
+    public async Task GetAvailableNetworksAsync_zero_stores_still_includes_tenant_with_empty_stores()
     {
         var tenant = MakeTenant("loyalty");
         _tenants.GetAllAsync(default).Returns([tenant]);
@@ -868,8 +1102,8 @@ public sealed class LoyaltyServiceTests
 
         var network = Assert.Single(result);
         Assert.Equal(tenant.Id, network.TenantId);
-        Assert.NotNull(network.StoreNames);
-        Assert.Empty(network.StoreNames);
+        Assert.NotNull(network.Stores);
+        Assert.Empty(network.Stores);
     }
 
     [Fact]
