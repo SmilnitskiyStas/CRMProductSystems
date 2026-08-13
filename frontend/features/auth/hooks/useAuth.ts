@@ -32,8 +32,9 @@ function useCompleteLogin() {
     // the new user — prevents cross-tenant data leakage via React Query cache.
     queryClient.clear();
     // Reset persisted store selection — the new tenant may not have the
-    // same stores, and a stale selectedStoreId would point to a wrong tenant.
-    useStoreContext.setState({ selectedStoreId: null });
+    // same stores, and a stale selection would point to a wrong tenant. Also resets
+    // `initialized` so StoreSelector redoes its one-time default-store resolution after login.
+    useStoreContext.setState({ selectedStoreIds: [], initialized: false });
     queryClient.setQueryData(ME_KEY, data.user);
     const role = data.user.role as AppRole;
     // supplier_admin has no dashboard — land directly in the cabinet (v4.1, ADR-016)
@@ -98,7 +99,7 @@ export function useLogout() {
       clearToken();
       clearStoredUser();
       queryClient.clear();
-      useStoreContext.setState({ selectedStoreId: null });
+      useStoreContext.setState({ selectedStoreIds: [], initialized: false });
       router.push("/login");
     },
   });

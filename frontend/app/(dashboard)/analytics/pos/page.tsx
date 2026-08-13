@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import {
   usePosSummary,
   usePosSummaryCompare,
@@ -110,17 +110,17 @@ export default function PosAnalyticsPage() {
   const tCommon = useTranslations("Common");
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
 
   const [from, setFrom] = useState<string>(defaultFrom);
   const [to, setTo] = useState<string>(defaultTo);
   const [storeId, setStoreId] = useState<string>("");
 
   // Local dropdown wins once the user picks a store here; until then, fall back to the header's
-  // globally selected store (TASK-514 — same fallback pattern as stock/page.tsx's
+  // globally selected store (TASK-514/TASK-515 — same fallback pattern as stock/page.tsx's
   // effectiveStoreId). The local <select> itself is unchanged and its "" = "all stores" option
   // stays a deliberate per-page override of the header's selection.
-  const effectiveStoreId = storeId || selectedStoreId || undefined;
+  const effectiveStoreId = storeId || primaryStoreId || undefined;
   const [groupBy, setGroupBy] = useState<"day" | "week">("day");
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [compareRange, setCompareRange] = useState<SimpleDateRange | undefined>(undefined);

@@ -11,18 +11,33 @@ export function StoreSelector() {
   const t = useTranslations("Dashboard.storeSelector");
   const { data: stores = [] } = useStores();
   const { data: user } = useMe();
-  const { selectedStoreId, setSelectedStoreId } = useStoreContext();
+  const { selectedStoreIds, setSelectedStoreIds, initialized, setInitialized } = useStoreContext();
   const [open, setOpen] = useState(false);
+  const [draftStoreIds, setDraftStoreIds] = useState<string[]>(selectedStoreIds);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Initialize: prefer user.storeId, then persisted selection, then first store
+  // Resolve the one-time default (prefer user.storeId, else first store) exactly like before —
+  // but only once, ever. After that, an explicit "all stores" (empty array) selection is left
+  // alone instead of being clobbered back to a single store on every stores refetch.
   useEffect(() => {
     if (stores.length === 0) return;
-    const preferred = user?.storeId ?? selectedStoreId;
-    const valid = stores.find((s) => s.id === preferred);
-    setSelectedStoreId(valid?.id ?? stores[0].id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stores, user?.storeId]);
+    if (!initialized) {
+      const preferred = user?.storeId;
+      const valid = stores.some((s) => s.id === preferred) ? preferred! : stores[0].id;
+      setSelectedStoreIds([valid]);
+      setInitialized(true);
+      return;
+    }
+    if (selectedStoreIds.length === 0) return; // explicit "all stores" — leave alone
+    const pruned = selectedStoreIds.filter((id) => stores.some((s) => s.id === id));
+    if (pruned.length !== selectedStoreIds.length) setSelectedStoreIds(pruned);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stores, user?.storeId, initialized]);
+
+  // Sync the draft selection whenever the popover opens.
+  useEffect(() => {
+    if (open) setDraftStoreIds(selectedStoreIds);
+  }, [open, selectedStoreIds]);
 
   // Close on outside click
   useEffect(() => {
@@ -35,7 +50,25 @@ export function StoreSelector() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const selectedStore = stores.find((s) => s.id === selectedStoreId) ?? stores[0];
+  function toggleDraftStore(id: string) {
+    setDraftStoreIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function selectAllStores() {
+    setDraftStoreIds([]);
+  }
+
+  function applyStores() {
+    setSelectedStoreIds([...draftStoreIds].sort());
+    setOpen(false);
+  }
+
+  const label =
+    selectedStoreIds.length === 0
+      ? t("allStores")
+      : selectedStoreIds.length === 1
+      ? stores.find((s) => s.id === selectedStoreIds[0])?.name ?? t("storesCount", { count: 1 })
+      : t("storesCount", { count: selectedStoreIds.length });
 
   if (stores.length === 0) return null;
 
@@ -64,7 +97,7 @@ export function StoreSelector() {
       >
         <Store size={14} color="#6B7280" />
         <span style={{ fontSize: 13, fontWeight: 600, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {selectedStore?.name ?? t("fallbackName")}
+          {label}
         </span>
         <ChevronDown
           size={13}
@@ -79,7 +112,7 @@ export function StoreSelector() {
             position: "absolute",
             top: "calc(100% + 6px)",
             left: 0,
-            minWidth: 220,
+            minWidth: 240,
             background: "#0D1117",
             border: "1px solid #1F2937",
             borderRadius: 10,
@@ -94,44 +127,65 @@ export function StoreSelector() {
             </span>
           </div>
           <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "9px 12px",
+                borderBottom: "1px solid #111827",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={draftStoreIds.length === 0}
+                onChange={selectAllStores}
+                style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }}
+              />
+              <span
+                style={{
+                  color: draftStoreIds.length === 0 ? "#E8EDF5" : "#9CA3AF",
+                  fontSize: 13,
+                  fontWeight: draftStoreIds.length === 0 ? 600 : 400,
+                }}
+              >
+                {t("selectAllStores")}
+              </span>
+            </label>
             {stores.map((store) => {
-              const active = store.id === selectedStoreId;
+              const checked = draftStoreIds.includes(store.id);
               return (
-                <button
+                <label
                   key={store.id}
-                  onClick={() => { setSelectedStoreId(store.id); setOpen(false); }}
                   style={{
-                    width: "100%",
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
                     padding: "9px 12px",
-                    background: active ? "#161B26" : "transparent",
-                    border: "none",
                     borderBottom: "1px solid #111827",
                     cursor: "pointer",
-                    textAlign: "left",
                     transition: "background 0.1s",
                   }}
-                  onMouseEnter={(e) => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = "#0F1623";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
-                  }}
                 >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleDraftStore(store.id)}
+                    style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                  />
                   <div style={{
                     width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                    background: active ? "#1D3461" : "#161B26",
-                    border: `1px solid ${active ? "#3B82F640" : "#1F2937"}`,
+                    background: checked ? "#1D3461" : "#161B26",
+                    border: `1px solid ${checked ? "#3B82F640" : "#1F2937"}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    <Store size={13} color={active ? "#60A5FA" : "#4B5563"} />
+                    <Store size={13} color={checked ? "#60A5FA" : "#4B5563"} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      color: active ? "#E8EDF5" : "#9CA3AF",
-                      fontSize: 13, fontWeight: active ? 600 : 400,
+                      color: checked ? "#E8EDF5" : "#9CA3AF",
+                      fontSize: 13, fontWeight: checked ? 600 : 400,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>
                       {store.name}
@@ -142,10 +196,28 @@ export function StoreSelector() {
                       </div>
                     )}
                   </div>
-                  {active && <Check size={14} color="#3B82F6" style={{ flexShrink: 0 }} />}
-                </button>
+                  {checked && <Check size={14} color="#3B82F6" style={{ flexShrink: 0 }} />}
+                </label>
               );
             })}
+          </div>
+          <div style={{ padding: 10, borderTop: "1px solid #1F2937" }}>
+            <button
+              onClick={applyStores}
+              style={{
+                width: "100%",
+                background: "#1D3461",
+                border: "1px solid #3B82F6",
+                borderRadius: 7,
+                color: "#93C5FD",
+                fontSize: 12,
+                fontWeight: 600,
+                padding: "8px 0",
+                cursor: "pointer",
+              }}
+            >
+              {t("doneButton")}
+            </button>
           </div>
         </div>
       )}

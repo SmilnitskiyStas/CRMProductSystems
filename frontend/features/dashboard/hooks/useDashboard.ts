@@ -1,52 +1,52 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { dashboardApi } from "../api/dashboard";
 
 export function useDashboardStats() {
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
   return useQuery({
-    queryKey: ["dashboard", "stats", selectedStoreId] as const,
-    queryFn: () => dashboardApi.getStats(selectedStoreId),
+    queryKey: ["dashboard", "stats", primaryStoreId] as const,
+    queryFn: () => dashboardApi.getStats(primaryStoreId ?? null),
     staleTime: 60_000,
   });
 }
 
 export function useAttentionItems() {
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
   return useQuery({
-    queryKey: ["dashboard", "attention", selectedStoreId] as const,
-    queryFn: () => dashboardApi.getAttentionItems(selectedStoreId),
+    queryKey: ["dashboard", "attention", primaryStoreId] as const,
+    queryFn: () => dashboardApi.getAttentionItems(primaryStoreId ?? null),
     staleTime: 60_000,
   });
 }
 
 export function useStoreZones() {
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
   return useQuery({
-    queryKey: ["dashboard", "zones", selectedStoreId] as const,
-    queryFn: () => dashboardApi.getStoreZones(selectedStoreId),
+    queryKey: ["dashboard", "zones", primaryStoreId] as const,
+    queryFn: () => dashboardApi.getStoreZones(primaryStoreId ?? null),
     staleTime: 5 * 60_000,
   });
 }
 
 /** Period-over-period comparison for the expiry status cards (ADR-016). */
 export function useExpirySummaryCompare(compareWeeksAgo = 1) {
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
   return useQuery({
-    queryKey: ["dashboard", "expiry-compare", selectedStoreId, compareWeeksAgo] as const,
-    queryFn: () => dashboardApi.getExpirySummaryCompare(selectedStoreId, compareWeeksAgo),
+    queryKey: ["dashboard", "expiry-compare", primaryStoreId, compareWeeksAgo] as const,
+    queryFn: () => dashboardApi.getExpirySummaryCompare(primaryStoreId ?? null, compareWeeksAgo),
     staleTime: 5 * 60_000,
   });
 }
 
 /** Weekly KPI cards (sales/revenue/write-off loss, last 7d vs prior 7d). */
 export function useWeeklyKpi() {
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
   return useQuery({
-    queryKey: ["dashboard", "weekly-kpi", selectedStoreId] as const,
-    queryFn: () => dashboardApi.getWeeklyKpi(selectedStoreId),
+    queryKey: ["dashboard", "weekly-kpi", primaryStoreId] as const,
+    queryFn: () => dashboardApi.getWeeklyKpi(primaryStoreId ?? null),
     staleTime: 60_000,
   });
 }

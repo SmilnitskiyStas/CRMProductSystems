@@ -8,6 +8,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole, canExportMarketingAnalyticsPii } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { usePostCampaignStore } from "@/features/marketing-analytics/post-campaign/store/usePostCampaignStore";
 import {
@@ -43,7 +44,8 @@ const sectionTitle: React.CSSProperties = { color: "#E8EDF5", fontSize: 15, font
  * list → pick equal before/after windows → "Аналізувати сегмент" → 3 report tabs + a full customer
  * table, per `docs/uployal/AUDIENCE_ANALYSIS.md`. Filter/segment-tracking state is split the same
  * way audience-builder's page splits its own:
- *  - store selection: page-local `useState`, same convention every phase uses.
+ *  - store selection: the header's global multi-select StoreSelector (`useStoreContext`),
+ *    same as every sibling phase (TASK-515).
  *  - import draft / which segment's report is showing / after-period: `usePostCampaignStore`
  *    (Zustand) — see that store's own doc comment for why (mirrors `isBuilt`'s draft-vs-committed
  *    shape, extended to track TWO segment ids for the source doc's §7 draft-vs-analyzed rule).
@@ -65,9 +67,9 @@ export default function PostCampaignPage() {
   const canExportPii = canExportMarketingAnalyticsPii(me?.role, me?.permissions);
   const enabled = access === true && moduleActive;
 
-  // ── Store filter — page-local, deliberately NOT in the Zustand store (same convention as
-  // every sibling phase's own period/store filter bar). ─────────────────────────────────────
-  const [storeIds, setStoreIds] = useState<string[]>([]);
+  // ── Store filter — reads the header's global multi-select StoreSelector (TASK-515), same
+  // as every sibling phase now does. ─────────────────────────────────────────────────────────
+  const { selectedStoreIds: storeIds } = useStoreContext();
 
   // ── Segment tracking + import draft + after-period (Zustand) ────────────────────────────────
   const importResult = usePostCampaignStore((s) => s.importResult);
@@ -218,8 +220,6 @@ export default function PostCampaignPage() {
         afterStart={afterStart}
         afterEnd={afterEnd}
         onRangeChange={setAfterRange}
-        storeIds={storeIds}
-        onStoreIdsChange={setStoreIds}
         beforeWindow={beforeWindow}
         canAnalyze={!!draftSegmentId && afterStart <= afterEnd}
         isAnalyzing={isAnalyzing}

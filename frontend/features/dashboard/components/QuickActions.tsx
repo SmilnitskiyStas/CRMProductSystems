@@ -9,13 +9,14 @@ import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
 import { useVerifyStock, useStockById } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { DetailDrawer, DrawerField, DrawerSection, DrawerGrid } from "@/components/ui/DetailDrawer";
-import type { AttentionItem } from "../types";
+import type { AttentionItem, DashboardStats } from "../types";
 
 interface Props {
   items: AttentionItem[] | undefined;
   isLoading: boolean;
+  stats: DashboardStats | undefined;
 }
 
 // ── Modal shell ───────────────────────────────────────────────────────────────
@@ -584,9 +585,9 @@ function ItemDetailDrawer({
 
 type ActiveModal = "critical" | "writeoff" | "order" | null;
 
-export function QuickActions({ items = [], isLoading }: Props) {
+export function QuickActions({ items = [], isLoading, stats }: Props) {
   const { data: user } = useMe();
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
   const t = useTranslations("Dashboard.dashboard.quickActions");
   const tCommon = useTranslations("Common");
   const [modal, setModal] = useState<ActiveModal>(null);
@@ -596,7 +597,12 @@ export function QuickActions({ items = [], isLoading }: Props) {
   const criticalItems = items.filter((i) => i.status === "critical" || i.status === "expired");
   const expiredItems = items.filter((i) => i.status === "expired");
   const topCritical = criticalItems.slice(0, 5);
-  const storeId = user?.storeId ?? selectedStoreId ?? "";
+  // Badge counts use the accurate store-wide stats (same source as the dashboard's
+  // top cards) — `items` is capped at pageSize=200 and sorted by urgency, so once
+  // critical+expired alone exceed the cap, counting within `items` undercounts.
+  const criticalBadgeCount = stats ? stats.critical + stats.expired : criticalItems.length;
+  const expiredBadgeCount = stats ? stats.expired : expiredItems.length;
+  const storeId = user?.storeId ?? primaryStoreId ?? "";
 
   function openWriteOff(forItems: AttentionItem[]) {
     setWriteOffItems(forItems);
@@ -622,14 +628,14 @@ export function QuickActions({ items = [], isLoading }: Props) {
             <ActionButton
               label={t("checkCritical")}
               accent="#ef4444"
-              badge={criticalItems.length > 0 ? criticalItems.length : undefined}
+              badge={criticalBadgeCount > 0 ? criticalBadgeCount : undefined}
               icon={<AlertTriangle size={14} />}
               onClick={() => setModal("critical")}
             />
             <ActionButton
               label={t("writeOffExpired")}
               accent="#6B7280"
-              badge={expiredItems.length > 0 ? expiredItems.length : undefined}
+              badge={expiredBadgeCount > 0 ? expiredBadgeCount : undefined}
               icon={<Trash2 size={14} />}
               onClick={() => openWriteOff(expiredItems)}
               disabled={!storeId}

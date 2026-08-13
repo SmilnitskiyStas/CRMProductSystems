@@ -8,6 +8,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole, canExportMarketingAnalyticsPii } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import {
   usePriceSegmentsOverview,
@@ -97,7 +98,7 @@ export default function PriceSegmentsPage() {
   const [period, setPeriod] = useState<PriceSegmentsPeriodPreset>("30");
   const [customFrom, setCustomFrom] = useState<string>(defaultCustomFrom);
   const [customTo, setCustomTo] = useState<string>(defaultCustomTo);
-  const [storeIds, setStoreIds] = useState<string[]>([]);
+  const { selectedStoreIds: storeIds } = useStoreContext();
 
   // The one filter object every Comparison/Frequency query keys off of — any change here is a
   // brand-new React Query key, so a filter switch never shows a mix of old and new numbers.
@@ -291,8 +292,6 @@ export default function PriceSegmentsPage() {
           setCustomFrom(from);
           setCustomTo(to);
         }}
-        storeIds={storeIds}
-        onStoreIdsChange={setStoreIds}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
         hidePeriod={mode === "allTime"}

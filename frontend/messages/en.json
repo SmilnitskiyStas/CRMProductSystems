@@ -387,7 +387,11 @@
     },
     "storeSelector": {
       "fallbackName": "Store",
-      "choose": "Select store"
+      "choose": "Select store",
+      "allStores": "All stores",
+      "storesCount": "{count} stores",
+      "selectAllStores": "All stores",
+      "doneButton": "Done"
     },
     "supportChat": {
       "noMessages": "No messages yet",

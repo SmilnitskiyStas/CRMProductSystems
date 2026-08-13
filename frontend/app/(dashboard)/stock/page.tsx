@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useStock, useVerifyStock } from "@/features/shelf/hooks/useStock";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
 import { StockTable } from "@/features/shelf/components/StockTable";
@@ -24,7 +24,7 @@ interface Filters {
 function StockPageContent() {
   const t = useTranslations("Dashboard.stock");
   const searchParams = useSearchParams();
-  const { selectedStoreId } = useStoreContext();
+  const primaryStoreId = usePrimaryStoreId();
   const [filters, setFilters] = useState<Filters>({
     status: searchParams.get("status") ?? "",
     search: "",
@@ -36,7 +36,7 @@ function StockPageContent() {
 
   // If the user hasn't explicitly picked a store filter, fall back to the store
   // selected in the header StoreSelector so stock changes when the user switches stores.
-  const effectiveStoreId = filters.store_id || selectedStoreId || undefined;
+  const effectiveStoreId = filters.store_id || primaryStoreId || undefined;
 
   const { data: batches = [], isLoading } = useStock({
     status: filters.status || undefined,

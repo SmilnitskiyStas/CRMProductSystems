@@ -8,6 +8,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useMarketingAnalyticsOverview } from "@/features/marketing-analytics/hooks/useMarketingAnalytics";
 import { PeriodStoreFilterBar } from "@/features/marketing-analytics/components/PeriodStoreFilterBar";
@@ -83,7 +84,7 @@ export default function MarketingAnalyticsPage() {
   const [period, setPeriod] = useState<MarketingAnalyticsPeriodPreset>("6m");
   const [customFrom, setCustomFrom] = useState<string>(defaultCustomFrom);
   const [customTo, setCustomTo] = useState<string>(defaultCustomTo);
-  const [storeIds, setStoreIds] = useState<string[]>([]);
+  const { selectedStoreIds: storeIds } = useStoreContext();
   const [selectedSegment, setSelectedSegment] = useState<RfmSegmentKey | null>(null);
 
   // The one filter object every query in this feature keys off of (per the brief) — any
@@ -159,8 +160,6 @@ export default function MarketingAnalyticsPage() {
           setCustomFrom(from);
           setCustomTo(to);
         }}
-        storeIds={storeIds}
-        onStoreIdsChange={setStoreIds}
         onRefresh={handleRefresh}
         isRefreshing={isFetching}
       />

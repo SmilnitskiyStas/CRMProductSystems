@@ -387,7 +387,11 @@
     },
     "storeSelector": {
       "fallbackName": "Магазин",
-      "choose": "Оберіть магазин"
+      "choose": "Оберіть магазин",
+      "allStores": "Усі магазини",
+      "storesCount": "{count} магазинів",
+      "selectAllStores": "Усі магазини",
+      "doneButton": "Готово"
     },
     "supportChat": {
       "noMessages": "Повідомлень ще немає",

@@ -7,6 +7,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole, canExportMarketingAnalyticsPii } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useAudienceBuilderStore } from "@/features/marketing-analytics/audience-builder/store/useAudienceBuilderStore";
 import {
@@ -57,7 +58,9 @@ const sectionTitle: React.CSSProperties = { color: "#E8EDF5", fontSize: 15, font
  * optional thresholds → "Сформувати список" → three result tabs (Покупці товару / Конкурентна
  * аудиторія / Знайдені товари). Unlike Фаза 1/2's dashboards, this page's filter state is split
  * across TWO owners on purpose:
- *  - period (from/to) + store selection: page-local `useState`, same convention Фаза 1/2 use.
+ *  - period (from/to): page-local `useState`, same convention Фаза 1/2 use. Store selection now
+ *    reads the header's global multi-select StoreSelector (`useStoreContext`) instead of a
+ *    page-local picker (TASK-515).
  *  - terms/mode/thresholds/exclusions/competitor state: the `useAudienceBuilderStore` Zustand
  *    store, written to directly by the leaf control components (TermChips, ThresholdInputs,
  *    MatchedItemsTable's checkboxes, CompetitorTermInput, HorizonToggle) — see that store's own
@@ -80,11 +83,11 @@ export default function AudienceBuilderPage() {
   const moduleActive = !modulesData || modulesData.modules.includes("marketing_analytics");
   const canExportPii = canExportMarketingAnalyticsPii(me?.role, me?.permissions);
 
-  // ── Period + store filter — page-local, deliberately NOT in the Zustand store (see
-  // AudiencePeriodBar's doc comment). ─────────────────────────────────────────────────────────
+  // ── Period filter — page-local, deliberately NOT in the Zustand store (see AudiencePeriodBar's
+  // doc comment). Store filter comes from the header's global StoreSelector (TASK-515). ────────
   const [from, setFrom] = useState<string>(defaultFrom);
   const [to, setTo] = useState<string>(defaultTo);
-  const [storeIds, setStoreIds] = useState<string[]>([]);
+  const { selectedStoreIds: storeIds } = useStoreContext();
 
   // ── Builder state (Zustand) ─────────────────────────────────────────────────────────────────
   const terms = useAudienceBuilderStore((s) => s.terms);
@@ -268,8 +271,6 @@ export default function AudienceBuilderPage() {
           setFrom(f);
           setTo(tt);
         }}
-        storeIds={storeIds}
-        onStoreIdsChange={setStoreIds}
       />
 
       <section style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>

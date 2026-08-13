@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, Store, Check, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
-import { useStores } from "@/features/stores/hooks/useStores";
 
 interface BeforeWindow {
   start: string;
@@ -15,8 +13,6 @@ interface Props {
   afterStart: string;
   afterEnd: string;
   onRangeChange: (start: string, end: string) => void;
-  storeIds: string[];
-  onStoreIdsChange: (ids: string[]) => void;
   /** Auto-computed before-window, echoed back by the server on the last analyze/summary call —
    * source doc §10 explicitly wants the user to SEE the derived window, not just trust it silently. */
   beforeWindow: BeforeWindow | null;
@@ -63,17 +59,15 @@ function lastMonthRange(): [string, string] {
 }
 
 /**
- * After-window date range + quick presets + store filter + the Analyze/Refresh trigger (source doc
- * §10). Not a reuse of `audience-builder/components/AudiencePeriodBar.tsx` — same "each phase
- * re-implements its own filter bar" precedent that component's own doc comment documents (it also
- * lacks quick presets and the analyze/before-window pieces this feature needs).
+ * After-window date range + quick presets + the Analyze/Refresh trigger (source doc §10). No
+ * longer renders its own store picker — the header's global StoreSelector (`useStoreContext`) now
+ * supports picking one/several/all stores, so the page reads `storeIds` from there directly for
+ * its query filters instead of this component owning a duplicate multi-select (TASK-515).
  */
 export function AfterPeriodBar({
   afterStart,
   afterEnd,
   onRangeChange,
-  storeIds,
-  onStoreIdsChange,
   beforeWindow,
   canAnalyze,
   isAnalyzing,
@@ -81,38 +75,6 @@ export function AfterPeriodBar({
   onAnalyzeClick,
 }: Props) {
   const t = useTranslations("Dashboard.postCampaign.afterPeriodBar");
-  const { data: stores = [] } = useStores();
-
-  const [storesOpen, setStoresOpen] = useState(false);
-  const [draftStoreIds, setDraftStoreIds] = useState<string[]>(storeIds);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (storesOpen) setDraftStoreIds(storeIds);
-  }, [storesOpen, storeIds]);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setStoresOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  function toggleDraftStore(id: string) {
-    setDraftStoreIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-  function applyStores() {
-    onStoreIdsChange([...draftStoreIds].sort());
-    setStoresOpen(false);
-  }
-
-  const storesLabel =
-    storeIds.length === 0
-      ? t("allStores")
-      : storeIds.length === 1
-        ? (stores.find((s) => s.id === storeIds[0])?.name ?? t("storesCount", { count: 1 }))
-        : t("storesCount", { count: storeIds.length });
 
   const presets: { key: string; range: () => [string, string] }[] = [
     { key: "last7", range: () => [daysAgo(6), todayStr()] },
@@ -132,90 +94,6 @@ export function AfterPeriodBar({
         <div>
           <label style={labelStyle}>{t("toLabel")}</label>
           <input type="date" value={afterEnd} min={afterStart || undefined} onChange={(e) => e.target.value && onRangeChange(afterStart, e.target.value)} style={inputStyle} />
-        </div>
-
-        <div ref={ref} style={{ position: "relative" }}>
-          <label style={labelStyle}>{t("storesLabel")}</label>
-          <button
-            type="button"
-            onClick={() => setStoresOpen((v) => !v)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              background: storesOpen ? "#161B26" : "#0D1117",
-              border: `1px solid ${storesOpen ? "#374151" : "#1F2937"}`,
-              borderRadius: 6,
-              padding: "7px 10px",
-              cursor: "pointer",
-              color: "#E8EDF5",
-            }}
-          >
-            <Store size={13} color="#6B7280" />
-            <span style={{ fontSize: 13, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{storesLabel}</span>
-            <ChevronDown size={13} color="#6B7280" style={{ transform: storesOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-          </button>
-
-          {storesOpen && (
-            <div
-              style={{
-                position: "absolute",
-                top: "calc(100% + 6px)",
-                left: 0,
-                minWidth: 260,
-                background: "#0D1117",
-                border: "1px solid #1F2937",
-                borderRadius: 10,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                zIndex: 200,
-                overflow: "hidden",
-              }}
-            >
-              <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderBottom: "1px solid #111827", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={draftStoreIds.length === 0}
-                    onChange={() => setDraftStoreIds([])}
-                    style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }}
-                  />
-                  <span style={{ color: draftStoreIds.length === 0 ? "#E8EDF5" : "#9CA3AF", fontSize: 13, fontWeight: draftStoreIds.length === 0 ? 600 : 400 }}>
-                    {t("selectAllStores")}
-                  </span>
-                </label>
-                {stores.map((s) => {
-                  const checked = draftStoreIds.includes(s.id);
-                  return (
-                    <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderBottom: "1px solid #111827", cursor: "pointer" }}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleDraftStore(s.id)} style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }} />
-                      <span
-                        style={{
-                          color: checked ? "#E8EDF5" : "#9CA3AF",
-                          fontSize: 13,
-                          fontWeight: checked ? 600 : 400,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {s.name}
-                      </span>
-                      {checked && <Check size={13} color="#3B82F6" style={{ marginLeft: "auto", flexShrink: 0 }} />}
-                    </label>
-                  );
-                })}
-              </div>
-              <div style={{ padding: 10, borderTop: "1px solid #1F2937" }}>
-                <button
-                  type="button"
-                  onClick={applyStores}
-                  style={{ width: "100%", background: "#1D3461", border: "1px solid #3B82F6", borderRadius: 7, color: "#93C5FD", fontSize: 12, fontWeight: 600, padding: "8px 0", cursor: "pointer" }}
-                >
-                  {t("doneButton")}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         <Btn
