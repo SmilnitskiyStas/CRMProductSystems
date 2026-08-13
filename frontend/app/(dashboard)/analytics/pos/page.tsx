@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
+import { useStoreContext } from "@/lib/useStoreContext";
 import {
   usePosSummary,
   usePosSummaryCompare,
@@ -109,10 +110,17 @@ export default function PosAnalyticsPage() {
   const tCommon = useTranslations("Common");
   const { data: me } = useMe();
   const access = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
+  const { selectedStoreId } = useStoreContext();
 
   const [from, setFrom] = useState<string>(defaultFrom);
   const [to, setTo] = useState<string>(defaultTo);
   const [storeId, setStoreId] = useState<string>("");
+
+  // Local dropdown wins once the user picks a store here; until then, fall back to the header's
+  // globally selected store (TASK-514 — same fallback pattern as stock/page.tsx's
+  // effectiveStoreId). The local <select> itself is unchanged and its "" = "all stores" option
+  // stays a deliberate per-page override of the header's selection.
+  const effectiveStoreId = storeId || selectedStoreId || undefined;
   const [groupBy, setGroupBy] = useState<"day" | "week">("day");
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [compareRange, setCompareRange] = useState<SimpleDateRange | undefined>(undefined);
@@ -127,8 +135,8 @@ export default function PosAnalyticsPage() {
   const { data: stores } = useStores();
 
   const params = useMemo(
-    () => ({ from, to, store_id: storeId || undefined }),
-    [from, to, storeId],
+    () => ({ from, to, store_id: effectiveStoreId }),
+    [from, to, effectiveStoreId],
   );
 
   const compareFrom = compareRange ? toDateInputValue(compareRange.from) : undefined;
@@ -138,11 +146,11 @@ export default function PosAnalyticsPage() {
   const compareActive = enabled && compareEnabled && !!compareRange;
 
   const { data: summary, isLoading: summaryLoading } = usePosSummary(
-    { from, to, store_id: storeId || undefined },
+    { from, to, store_id: effectiveStoreId },
     enabled && !compareEnabled,
   );
   const { data: summaryCompare, isLoading: summaryCompareLoading } = usePosSummaryCompare(
-    { from, to, store_id: storeId || undefined, compareFrom, compareTo },
+    { from, to, store_id: effectiveStoreId, compareFrom, compareTo },
     compareActive,
   );
   const { data: trend, isLoading: trendLoading } = usePosRevenueTrend(
@@ -162,7 +170,7 @@ export default function PosAnalyticsPage() {
     enabled,
   );
   const { data: cashiers, isLoading: cashiersLoading } = usePosCashiers(
-    { from, to, store_id: storeId || undefined },
+    { from, to, store_id: effectiveStoreId },
     enabled,
   );
 
@@ -303,7 +311,7 @@ export default function PosAnalyticsPage() {
       {selectedDay && (
         <PosDayDetailPanel
           date={selectedDay}
-          storeId={storeId || undefined}
+          storeId={effectiveStoreId}
           onClose={() => setSelectedDay(null)}
         />
       )}
@@ -353,7 +361,7 @@ export default function PosAnalyticsPage() {
         <ProductTrendPanel
           productId={selectedProduct.id}
           productName={selectedProduct.name}
-          storeId={storeId || undefined}
+          storeId={effectiveStoreId}
           onClose={() => setSelectedProduct(null)}
         />
       )}

@@ -31,6 +31,9 @@ interface Props {
    * of its own and never reads the page's compare-toggle state. */
   from: string;
   to: string;
+  /** Scopes the breakdown to one store; omitted (undefined) means network-wide, aggregated across
+   * every store — same convention as every other store_id passed through this feature. */
+  storeId?: string;
   onClose: () => void;
   /** TASK-488: row-click drill-down — opens ProductTrendPanel (the same panel PosTopProductsTable
    * already opens on /analytics/pos) for the clicked product. Omitted means the product name
@@ -108,7 +111,7 @@ function daysOfStockColor(v: number | null): string {
  * one category in a single response, unlike the server-paginated price-segments tables this
  * reuses SortableHeader/TablePaginationFooter from).
  */
-export function CategoryDetailPanel({ categoryId, from, to, onClose, onProductClick }: Props) {
+export function CategoryDetailPanel({ categoryId, from, to, storeId, onClose, onProductClick }: Props) {
   const t = useTranslations("Dashboard.analytics.categoryDetailPanel");
   const tStatus = useTranslations("Dashboard.analytics.status");
   const tCommon = useTranslations("Common");
@@ -118,7 +121,7 @@ export function CategoryDetailPanel({ categoryId, from, to, onClose, onProductCl
   const { data: me } = useMe();
   const canViewMargin = canViewAnalyticsMargin(me?.role, me?.permissions);
 
-  const { data, isLoading } = useCategoryProductBreakdown({ category_id: categoryId, from, to });
+  const { data, isLoading } = useCategoryProductBreakdown({ category_id: categoryId, from, to, store_id: storeId });
 
   const [sortKey, setSortKey] = useState<SortKey>("salesRevenue");
   const [sortDescending, setSortDescending] = useState(true);

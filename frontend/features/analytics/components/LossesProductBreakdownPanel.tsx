@@ -18,8 +18,13 @@ interface Props {
    * immediately so the header doesn't flash empty while this panel's own fetch is in flight;
    * overridden by the fetch's own `totalLoss` once it resolves (the two should always agree). */
   totalLoss: number;
-  /** Exactly one of storeId/reason is set per instance — same `losses/by-product` endpoint
-   * serves both the losses-by-store and losses-by-reason drill-downs via independent filters. */
+  /** storeId and reason are independent filters on the same `losses/by-product` endpoint (backend
+   * applies both together when both are set — see PosAnalyticsServiceTests's
+   * GetLossesByProductAsync_store_and_reason_filters_are_forwarded_unchanged). The losses-by-store
+   * drill-down sets only storeId (from the clicked row, overriding any page-wide store filter for
+   * that one store's data). The losses-by-reason and by-day drill-downs pass the page's current
+   * header-selected store (if any) as storeId alongside reason/from-to, so this panel stays scoped
+   * to whatever store the rest of /analytics is currently showing. */
   storeId?: string;
   reason?: string;
   /** Current (never compare-period) range — snapshot detail view, not a trend. */

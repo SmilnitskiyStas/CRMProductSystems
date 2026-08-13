@@ -23,10 +23,12 @@ interface Props {
    * filter.
    *
    * Used locally in THIS component instead (TASK-494) to compute daysOfStockRemaining — see
-   * below. When undefined (network-wide context — today this is always the case on /analytics,
-   * which has no page-wide store filter; /analytics/pos does have one and passes it), no ADU/
-   * stock fetch happens at all and no days-of-stock card renders on the tab, matching
-   * ProductAnalyticsTab's own "absent, not empty" contract for that prop.
+   * below. When undefined (network-wide context — no store selected in the header, or none picked
+   * on /analytics/pos's own local dropdown), no ADU/stock fetch happens at all and no
+   * days-of-stock card renders on the tab, matching ProductAnalyticsTab's own "absent, not empty"
+   * contract for that prop. Both /analytics (TASK-514, via the header's global store selector) and
+   * /analytics/pos (TASK-484, via its own local dropdown, falling back to the header's selection —
+   * TASK-514) thread their current store filter through here.
    */
   storeId?: string;
   onClose: () => void;
