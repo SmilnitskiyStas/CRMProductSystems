@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Save } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { FloorPlanCanvas } from "@/features/locations/components/FloorPlanCanvas";
 import { FloorPlanSidePanel } from "@/features/locations/components/FloorPlanSidePanel";
@@ -21,6 +21,7 @@ const DEFAULT_H = 100;
 
 export default function FloorPlanPage() {
   const t = useTranslations("Dashboard.locations.floorPlanPage");
+  const tFloorPlan = useTranslations("Dashboard.locations.floorPlan");
   const tTypes = useTranslations("Dashboard.locations.types");
   const tCommon = useTranslations("Common");
   const params = useParams<{ id: string }>();
@@ -161,6 +162,26 @@ export default function FloorPlanPage() {
             </select>
           )}
           <button
+            onClick={() => setPanelCollapsed((v) => !v)}
+            title={panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#161B26",
+              border: "1px solid #1F2937",
+              color: "#9CA3AF",
+              borderRadius: 8,
+              padding: "9px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {panelCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
+            {panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
+          </button>
+          <button
             onClick={handleSave}
             disabled={!dirty || updateFloorPlan.isPending}
             style={{
@@ -206,8 +227,6 @@ export default function FloorPlanPage() {
             onSelect={setSelectedZoneId}
             onMove={handleMove}
             onResize={handleResize}
-            panelCollapsed={panelCollapsed}
-            onTogglePanel={() => setPanelCollapsed((v) => !v)}
           />
           {!panelCollapsed && (
             <FloorPlanSidePanel

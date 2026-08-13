@@ -11,13 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { createSnapModifier } from "@dnd-kit/modifiers";
-import {
-  Maximize2,
-  PanelRightClose,
-  PanelRightOpen,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
+import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import type {
   FloorPlanLayout,
   FloorPlanZonePlacement,
@@ -74,8 +68,6 @@ interface CanvasProps {
   onSelect: (zoneId: string | null) => void;
   onMove: (zoneId: string, x: number, y: number) => void;
   onResize: (zoneId: string, w: number, h: number) => void;
-  panelCollapsed: boolean;
-  onTogglePanel: () => void;
 }
 
 export function FloorPlanCanvas({
@@ -86,8 +78,6 @@ export function FloorPlanCanvas({
   onSelect,
   onMove,
   onResize,
-  panelCollapsed,
-  onTogglePanel,
 }: CanvasProps) {
   const t = useTranslations("Dashboard.locations.floorPlan");
   const sensors = useSensors(
@@ -257,30 +247,6 @@ export function FloorPlanCanvas({
           <Maximize2 size={15} />
         </ToolbarButton>
       </div>
-
-      {/* Panel toggle */}
-      <button
-        onClick={onTogglePanel}
-        title={panelCollapsed ? t("showPanel") : t("hidePanel")}
-        style={{
-          position: "absolute",
-          top: 12,
-          right: 12,
-          zIndex: 300,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 30,
-          height: 30,
-          background: "#161B26",
-          border: "1px solid #1F2937",
-          color: "#9CA3AF",
-          borderRadius: 8,
-          cursor: "pointer",
-        }}
-      >
-        {panelCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
-      </button>
     </div>
   );
 }
