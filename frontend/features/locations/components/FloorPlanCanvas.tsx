@@ -133,7 +133,7 @@ export function FloorPlanCanvas({
   const zoneById = new Map(zones.map((z) => [z.id, z]));
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", minWidth: 0 }}>
       <div
         ref={wrapperRef}
         onWheel={handleWheel}
