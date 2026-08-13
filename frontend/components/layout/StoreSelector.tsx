@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, Store, Check } from "lucide-react";
+import { ChevronDown, Store } from "lucide-react";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useStoreContext } from "@/lib/useStoreContext";
@@ -198,7 +198,6 @@ export function StoreSelector() {
                       </div>
                     )}
                   </div>
-                  {checked && <Check size={14} color="#3B82F6" style={{ flexShrink: 0 }} />}
                 </label>
               );
             })}
