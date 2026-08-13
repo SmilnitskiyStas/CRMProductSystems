@@ -317,7 +317,7 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
     // ── Staff management (self-service) ──────────────────────────────────────
 
     public Task<IReadOnlyList<UserDto>> GetStaffAsync(Guid tenantId, CancellationToken ct = default) =>
-        _users.GetAllAsync(tenantId, ct);
+        _users.GetAllAsync(tenantId, ct: ct);
 
     public async Task<(UserDto? User, string? Error)> InviteStaffAsync(
         Guid tenantId, Guid actingUserId, CabinetInviteStaffDto request, string inviterName, CancellationToken ct = default)

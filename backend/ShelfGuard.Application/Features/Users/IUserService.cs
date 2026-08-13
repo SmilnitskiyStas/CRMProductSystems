@@ -4,7 +4,17 @@ namespace ShelfGuard.Application.Features.Users;
 
 public interface IUserService
 {
-    Task<IReadOnlyList<UserDto>> GetAllAsync(Guid tenantId, CancellationToken ct = default);
+    /// <summary>
+    /// Lists all users for the tenant. When <paramref name="storeIds"/> is null/empty, returns
+    /// everyone (unfiltered). When non-empty (TASK-517, header store selector), keeps a user if
+    /// EITHER their role is outside <c>LocationScopedRoles</c> (enterprise_admin etc. always
+    /// visible, unconditional bypass) OR they have at least one <c>user_locations</c> row whose
+    /// LocationId is in <paramref name="storeIds"/>. A location-scoped-role user with zero
+    /// user_locations rows is excluded once a specific-store filter is active. This filter never
+    /// changes <see cref="UserDto.NeedsLocationAssignment"/>'s meaning — that flag is always
+    /// computed against the user's FULL (unfiltered) location assignment.
+    /// </summary>
+    Task<IReadOnlyList<UserDto>> GetAllAsync(Guid tenantId, Guid[]? storeIds = null, CancellationToken ct = default);
     Task<(UserDto? User, string? Error)> GetByIdAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
 
     /// <summary>

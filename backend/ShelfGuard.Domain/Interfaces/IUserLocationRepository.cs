@@ -42,5 +42,16 @@ public interface IUserLocationRepository
     Task<IReadOnlyCollection<Guid>> GetUserIdsWithAnyLocationAsync(
         Guid tenantId, IReadOnlyCollection<Guid> userIds, CancellationToken ct = default);
 
+    /// <summary>
+    /// Batched existence check backing the users LIST endpoint's <c>storeIds</c> filter
+    /// (TASK-517): given a candidate set of user ids, returns the subset that has at least one
+    /// user_locations row whose LocationId is in <paramref name="locationIds"/> — same batching
+    /// rationale as <see cref="GetUserIdsWithAnyLocationAsync"/>, one extra location membership
+    /// constraint.
+    /// </summary>
+    Task<IReadOnlyCollection<Guid>> GetUserIdsWithLocationInAsync(
+        Guid tenantId, IReadOnlyCollection<Guid> userIds, IReadOnlyCollection<Guid> locationIds,
+        CancellationToken ct = default);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }

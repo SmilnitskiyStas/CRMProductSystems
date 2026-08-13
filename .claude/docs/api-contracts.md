@@ -213,7 +213,7 @@ full rationale, including the TASK-347 RoleRank re-check that applies regardless
 path let the caller in).
 
 ```
-GET    /api/users                                -> UserDto[]
+GET    /api/users?storeIds=uuid                  -> UserDto[]  (storeIds repeated, TASK-517)
 GET    /api/users/{id}                           -> UserDto | 404
 POST   /api/users/invite        InviteUserRequest -> 201 UserDto | 400 { error }
 PUT    /api/users/{id}          UpdateUserRequest -> UserDto | 400 { error } | 404
@@ -229,6 +229,17 @@ POST   /api/users/{id}/tenant-role        AssignTenantRoleRequest         -> 204
 PUT    /api/users/{id}/locations          UpdateUserLocationsRequest      -> 200 UserLocationsDto | 400 { error } | 404  (TASK-392b, ADR-022)
 GET    /api/users/{id}/locations                                         -> 200 UserLocationsDto | 404               (TASK-392b, ADR-022)
 ```
+
+**`GET /api/users` `storeIds` filter (TASK-517, header store selector).** Repeated query param
+(`?storeIds=uuid&storeIds=uuid`) — omitted/empty means "all stores" (unchanged behavior), same
+convention as `PriceSegmentsController`'s `storeIds`. When non-empty, a user is included if
+EITHER their role is outside `LocationScopedRoles` (`enterprise_admin` etc. — always visible,
+unconditional bypass) OR they have at least one `user_locations` row whose location is in
+`storeIds`. A `LocationScopedRoles` user with zero `user_locations` rows is excluded once a
+specific-store filter is active, but still shows under "all stores" — same user `UserDto.
+NeedsLocationAssignment` flags as needing setup. This filter never changes what
+`NeedsLocationAssignment` means: that flag always reflects the user's full, unfiltered
+assignment, not just locations among the currently filtered stores.
 
 #### UserDto
 ```json

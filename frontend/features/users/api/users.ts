@@ -12,9 +12,13 @@ import type {
 } from "../types";
 
 export const usersApi = {
-  /** GET /api/users — all users in tenant */
-  getAll(): Promise<UserDto[]> {
-    return api.get<UserDto[]>("/api/users");
+  /** GET /api/users — all users in tenant, optionally filtered by store (repeated ?storeIds=,
+   * omitted entirely when empty — matches priceSegmentsApi's serialization style). */
+  getAll(storeIds?: string[]): Promise<UserDto[]> {
+    const qs = new URLSearchParams();
+    for (const id of storeIds ?? []) qs.append("storeIds", id);
+    const s = qs.toString();
+    return api.get<UserDto[]>(`/api/users${s ? `?${s}` : ""}`);
   },
 
   /** GET /api/users/:id */

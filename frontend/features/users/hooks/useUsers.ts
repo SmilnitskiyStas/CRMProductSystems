@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usersApi } from "../api/users";
+import { useStoreContext } from "@/lib/useStoreContext";
 import type {
   ActivityLogDto,
   InviteUserRequest,
@@ -17,11 +18,17 @@ const userKey = (id: string) => ["users", id] as const;
 const activityKey = (id: string) => ["users", id, "activity"] as const;
 const grantsKey = (id: string) => ["users", id, "permission-grants"] as const;
 
-/** Fetch all users in the tenant */
+/** Fetch all users in the tenant, filtered by the global header store selector.
+ * NOTE: the optimistic `qc.setQueryData(USERS_KEY, ...)` calls below (useInviteUser,
+ * useUpdateUser, useDeactivateUser) only patch the `[]` (all-stores) cache entry — React
+ * Query matches keys by exact array equality, and this hook's key now includes
+ * `selectedStoreIds`. Acceptable known limitation: switching stores triggers a fresh
+ * fetch anyway, so stale optimistic data doesn't linger. */
 export function useUsers() {
+  const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
   return useQuery({
-    queryKey: USERS_KEY,
-    queryFn: usersApi.getAll,
+    queryKey: [...USERS_KEY, selectedStoreIds] as const,
+    queryFn: () => usersApi.getAll(selectedStoreIds),
     staleTime: 2 * 60_000,
   });
 }

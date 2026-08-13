@@ -39,16 +39,19 @@ public sealed class UsersController : ControllerBase
 
     public UsersController(IUserService users) => _users = users;
 
-    /// <summary>Returns all users for the current tenant.</summary>
+    /// <summary>
+    /// Returns all users for the current tenant. <c>storeIds</c> is a repeated query param
+    /// (header store selector, TASK-517) — omitted/empty means "all stores".
+    /// </summary>
     [HttpGet]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(IReadOnlyList<UserDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] Guid[]? storeIds, CancellationToken ct)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
-        var result = await _users.GetAllAsync(tenantId.Value, ct);
+        var result = await _users.GetAllAsync(tenantId.Value, storeIds, ct);
         return Ok(result);
     }
 

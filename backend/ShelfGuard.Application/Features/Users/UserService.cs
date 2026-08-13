@@ -134,7 +134,8 @@ public sealed class UserService : IUserService
 
     // ── List ─────────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<UserDto>> GetAllAsync(Guid tenantId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<UserDto>> GetAllAsync(
+        Guid tenantId, Guid[]? storeIds = null, CancellationToken ct = default)
     {
         var users = await _users.GetAllByTenantAsync(tenantId, ct);
 
@@ -147,11 +148,26 @@ public sealed class UserService : IUserService
             .Select(u => u.Id)
             .ToList();
 
+        // NeedsLocationAssignment always reflects the FULL (unfiltered) assignment — it means
+        // "this user has zero locations assigned anywhere", not "zero locations among the
+        // currently filtered stores". Computed unconditionally, regardless of storeIds below.
         var withLocation = candidateIds.Count == 0
             ? new HashSet<Guid>()
             : (await _userLocations.GetUserIdsWithAnyLocationAsync(tenantId, candidateIds, ct)).ToHashSet();
 
-        return users
+        // TASK-517: header store selector filter. Null/empty storeIds = "all stores" = unchanged
+        // behavior. Non-empty = keep non-location-scoped roles (always visible) plus
+        // location-scoped-role users with at least one user_locations row in storeIds.
+        IEnumerable<User> visible = users;
+        if (storeIds is { Length: > 0 })
+        {
+            var matching = candidateIds.Count == 0
+                ? new HashSet<Guid>()
+                : (await _userLocations.GetUserIdsWithLocationInAsync(tenantId, candidateIds, storeIds, ct)).ToHashSet();
+            visible = users.Where(u => !LocationScopedRoles.Contains(u.Role) || matching.Contains(u.Id));
+        }
+
+        return visible
             .Select(u => ToDto(u, LocationScopedRoles.Contains(u.Role) && !withLocation.Contains(u.Id)))
             .ToList();
     }

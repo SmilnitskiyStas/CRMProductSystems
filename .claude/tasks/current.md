@@ -3,6 +3,40 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-517 — Users list storeIds filter (header store selector)
+
+**Status:** done · **Agents:** backend-developer + frontend-developer (parallel, fixed contract)
+Renumbered from the brief's suggested TASK-508 — max in `.claude/logs/tasks/` at start was 516
+(TASK-508..516 already taken by concurrent KI-033 fix, pchilka import, store-selector/analytics
+frontend, floor-plan work).
+
+**Backend** (`.claude/logs/tasks/517_2026-08-13_users-store-filter_backend-developer.md`):
+`GET /api/users` gains an optional repeated `storeIds` query param (same convention as
+`PriceSegmentsController`) so the Users page can respect the header store selector.
+`IUserLocationRepository.GetUserIdsWithLocationInAsync` (new, batched) backs
+`UserService.GetAllAsync(tenantId, storeIds, ct)`: non-location-scoped roles (enterprise_admin
+etc.) always visible; location-scoped-role users need ≥1 `user_locations` row in `storeIds`.
+`NeedsLocationAssignment` unaffected — still computed from the full, unfiltered assignment.
+
+Fixed a positional-arg compile break at `SupplierCabinetService.GetStaffAsync` (now-earlier `ct`
+slot) and its test's NSubstitute setup. New tests: `UserServiceStoreFilterTests.cs` (5 cases).
+Docs: `.claude/docs/api-contracts.md` updated.
+
+Build clean, `dotnet test` full suite 1405/1405 passing.
+
+**Frontend** (`.claude/logs/tasks/517_2026-08-13_users-store-filter_frontend-developer.md`):
+`usersApi.getAll(storeIds?)` (repeated `?storeIds=`, same style as `priceSegmentsApi`) +
+`useUsers()` now reads `useStoreContext`'s `selectedStoreIds` and includes it in the React
+Query key. No page/component changes — all 8 `useUsers()` consumers (Users page, UsersList,
+TenantRolesTab, TicketDetail, NotificationFilterDrawer, WeekGrid, CreateWorkOrderModal) pick
+up the filter transparently. Known limitation: the 3 optimistic `setQueryData(USERS_KEY, ...)`
+calls (invite/update/deactivate) only patch the all-stores cache entry now — acceptable, a
+fresh fetch happens on store switch anyway.
+
+`npx tsc --noEmit` clean. Live-verified against the backend's running implementation:
+`GET /api/users?storeIds=<id>` with one store selected, plain `GET /api/users` on "All
+stores" — both 200 OK.
+
 ## TASK-505 — Docs: store-migration API contracts + known-issues entry
 **Status:** done · **Agent:** documentation-writer
 Log: `.claude/logs/tasks/505_2026-08-10_store-migration-docs_documentation-writer.md`
