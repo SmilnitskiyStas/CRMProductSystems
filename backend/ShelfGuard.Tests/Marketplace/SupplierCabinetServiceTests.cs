@@ -333,12 +333,12 @@ public sealed class SupplierCabinetServiceTests
     public async Task GetStaffAsync_DelegatesToUserServiceWithTenantId()
     {
         var users = new List<UserDto> { MakeUserDto() };
-        _userService.GetAllAsync(_tenantId, null, Arg.Any<CancellationToken>()).Returns(users);
+        _userService.GetAllAsync(_tenantId, null, null, Arg.Any<CancellationToken>()).Returns(users);
 
         var result = await _sut.GetStaffAsync(_tenantId);
 
         Assert.Same(users, result);
-        await _userService.Received(1).GetAllAsync(_tenantId, null, Arg.Any<CancellationToken>());
+        await _userService.Received(1).GetAllAsync(_tenantId, null, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]

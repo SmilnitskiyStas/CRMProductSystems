@@ -135,7 +135,7 @@ public sealed class UserService : IUserService
     // ── List ─────────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync(
-        Guid tenantId, Guid[]? storeIds = null, CancellationToken ct = default)
+        Guid tenantId, Guid[]? storeIds = null, Guid? actingUserId = null, CancellationToken ct = default)
     {
         var users = await _users.GetAllByTenantAsync(tenantId, ct);
 
@@ -150,20 +150,44 @@ public sealed class UserService : IUserService
 
         // NeedsLocationAssignment always reflects the FULL (unfiltered) assignment — it means
         // "this user has zero locations assigned anywhere", not "zero locations among the
-        // currently filtered stores". Computed unconditionally, regardless of storeIds below.
+        // currently filtered stores". Computed unconditionally, regardless of storeIds/
+        // actingUserId below.
         var withLocation = candidateIds.Count == 0
             ? new HashSet<Guid>()
             : (await _userLocations.GetUserIdsWithAnyLocationAsync(tenantId, candidateIds, ct)).ToHashSet();
 
-        // TASK-517: header store selector filter. Null/empty storeIds = "all stores" = unchanged
-        // behavior. Non-empty = keep non-location-scoped roles (always visible) plus
-        // location-scoped-role users with at least one user_locations row in storeIds.
-        IEnumerable<User> visible = users;
-        if (storeIds is { Length: > 0 })
+        // TASK-519 (security fix): a LocationScopedRoles acting caller (store_manager and the
+        // rest of the store-bound ranks) can never see beyond their OWN assigned stores,
+        // regardless of what storeIds they passed — including "all stores" (null/empty), which
+        // for a scoped caller means "my own stores", never "the whole tenant". This clamp is
+        // resolved BEFORE the TASK-517 storeIds filter below and forces that filter to run even
+        // when the clamp collapses to zero effective stores (fail closed, not "no filter").
+        var effectiveStoreIds = storeIds;
+        var applyLocationFilter = storeIds is { Length: > 0 };
+
+        if (actingUserId is { } actingId)
         {
-            var matching = candidateIds.Count == 0
+            var actingUser = users.FirstOrDefault(u => u.Id == actingId);
+            if (actingUser is not null && LocationScopedRoles.Contains(actingUser.Role))
+            {
+                var ownLocationIds = await _userLocations.GetLocationIdsForUserAsync(tenantId, actingId, ct);
+                effectiveStoreIds = storeIds is { Length: > 0 }
+                    ? storeIds.Intersect(ownLocationIds).ToArray()
+                    : ownLocationIds.ToArray();
+                applyLocationFilter = true; // even an empty clamp result must still filter (fail closed)
+            }
+        }
+
+        // TASK-517: header store selector filter. Null/empty effectiveStoreIds with no acting-
+        // caller clamp = "all stores" = unchanged behavior. Otherwise keep non-location-scoped
+        // roles (always visible) plus location-scoped-role users with at least one
+        // user_locations row in effectiveStoreIds.
+        IEnumerable<User> visible = users;
+        if (applyLocationFilter)
+        {
+            var matching = candidateIds.Count == 0 || effectiveStoreIds is not { Length: > 0 }
                 ? new HashSet<Guid>()
-                : (await _userLocations.GetUserIdsWithLocationInAsync(tenantId, candidateIds, storeIds, ct)).ToHashSet();
+                : (await _userLocations.GetUserIdsWithLocationInAsync(tenantId, candidateIds, effectiveStoreIds, ct)).ToHashSet();
             visible = users.Where(u => !LocationScopedRoles.Contains(u.Role) || matching.Contains(u.Id));
         }
 

@@ -41,7 +41,12 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>
     /// Returns all users for the current tenant. <c>storeIds</c> is a repeated query param
-    /// (header store selector, TASK-517) — omitted/empty means "all stores".
+    /// (header store selector, TASK-517) — omitted/empty means "all stores" for an
+    /// enterprise_admin/network_manager-exempt caller. TASK-519 (security fix): for an acting
+    /// caller whose own role is store-bound (network_manager, store_manager, merchandiser,
+    /// storekeeper, cashier, staff), the effective filter is always clamped to their own
+    /// <c>user_locations</c> assignment regardless of what <c>storeIds</c> they request — "all
+    /// stores" means "my own stores" for them, never the whole tenant.
     /// </summary>
     [HttpGet]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
@@ -51,7 +56,9 @@ public sealed class UsersController : ControllerBase
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
-        var result = await _users.GetAllAsync(tenantId.Value, storeIds, ct);
+        var actingUserId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var result = await _users.GetAllAsync(tenantId.Value, storeIds, actingUserId, ct);
         return Ok(result);
     }
 

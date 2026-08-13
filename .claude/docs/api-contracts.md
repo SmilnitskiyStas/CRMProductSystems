@@ -241,6 +241,20 @@ NeedsLocationAssignment` flags as needing setup. This filter never changes what
 `NeedsLocationAssignment` means: that flag always reflects the user's full, unfiltered
 assignment, not just locations among the currently filtered stores.
 
+**Caller-scoping clamp (TASK-519, security fix).** TASK-517's `storeIds` was originally trusted
+at face value with no check that the acting (JWT) caller was actually authorized to see those
+stores — `users` was deliberately excluded from ADR-022 Stage 3's RLS rollout, so nothing at the
+database layer compensated for that gap. `UsersController.GetAll` now passes the acting caller's
+own id into `UserService.GetAllAsync`. When that caller's own role is in `LocationScopedRoles`
+(`network_manager`, `store_manager`, `merchandiser`, `storekeeper`, `cashier`, `staff`), their
+effective `storeIds` is ALWAYS clamped to their own `user_locations` assignment, regardless of
+what they request: an explicit `storeIds` is intersected with their own stores; an
+omitted/empty `storeIds` ("all stores") is treated as "my own stores," never the whole tenant;
+and if the clamp collapses to zero effective stores (no assignment at all, or the entire request
+falls outside their scope), the response fails closed — zero `LocationScopedRoles` users, still
+including the always-visible non-scoped roles (e.g. `enterprise_admin`). A caller whose own role
+is outside `LocationScopedRoles` gets no new restriction.
+
 #### UserDto
 ```json
 {

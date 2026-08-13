@@ -13,8 +13,23 @@ public interface IUserService
     /// user_locations rows is excluded once a specific-store filter is active. This filter never
     /// changes <see cref="UserDto.NeedsLocationAssignment"/>'s meaning — that flag is always
     /// computed against the user's FULL (unfiltered) location assignment.
+    /// <para>
+    /// TASK-519 (security fix): <paramref name="actingUserId"/> is the authenticated caller
+    /// making the request. When omitted (<c>null</c>) — the only real caller today is
+    /// <c>SupplierCabinetService.GetStaffAsync</c>, a supplier-portal self-service listing
+    /// unrelated to store scoping — behavior is unchanged from above. When provided and the
+    /// acting user's own role is in <c>LocationScopedRoles</c>, their effective visibility is
+    /// ALWAYS clamped to their own <c>user_locations</c> assignment, regardless of
+    /// <paramref name="storeIds"/>: an explicit request is intersected with their own stores; an
+    /// omitted/empty request ("all stores") is treated as "my own stores", never "the whole
+    /// tenant"; and a caller with zero assigned stores (or whose entire request falls outside
+    /// their scope) fails closed to zero location-scoped-role users, still seeing only the
+    /// always-visible non-scoped roles. An acting user whose role is NOT in
+    /// <c>LocationScopedRoles</c> (e.g. <c>enterprise_admin</c>) gets no new restriction.
+    /// </para>
     /// </summary>
-    Task<IReadOnlyList<UserDto>> GetAllAsync(Guid tenantId, Guid[]? storeIds = null, CancellationToken ct = default);
+    Task<IReadOnlyList<UserDto>> GetAllAsync(
+        Guid tenantId, Guid[]? storeIds = null, Guid? actingUserId = null, CancellationToken ct = default);
     Task<(UserDto? User, string? Error)> GetByIdAsync(Guid tenantId, Guid userId, CancellationToken ct = default);
 
     /// <summary>

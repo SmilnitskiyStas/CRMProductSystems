@@ -127,32 +127,34 @@ export function StoreSelector() {
             </span>
           </div>
           <div style={{ maxHeight: 280, overflowY: "auto" }}>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "9px 12px",
-                borderBottom: "1px solid #111827",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={draftStoreIds.length === 0}
-                onChange={selectAllStores}
-                style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }}
-              />
-              <span
+            {stores.length > 1 && (
+              <label
                 style={{
-                  color: draftStoreIds.length === 0 ? "#E8EDF5" : "#9CA3AF",
-                  fontSize: 13,
-                  fontWeight: draftStoreIds.length === 0 ? 600 : 400,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "9px 12px",
+                  borderBottom: "1px solid #111827",
+                  cursor: "pointer",
                 }}
               >
-                {t("selectAllStores")}
-              </span>
-            </label>
+                <input
+                  type="checkbox"
+                  checked={draftStoreIds.length === 0}
+                  onChange={selectAllStores}
+                  style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }}
+                />
+                <span
+                  style={{
+                    color: draftStoreIds.length === 0 ? "#E8EDF5" : "#9CA3AF",
+                    fontSize: 13,
+                    fontWeight: draftStoreIds.length === 0 ? 600 : 400,
+                  }}
+                >
+                  {t("selectAllStores")}
+                </span>
+              </label>
+            )}
             {stores.map((store) => {
               const checked = draftStoreIds.includes(store.id);
               return (

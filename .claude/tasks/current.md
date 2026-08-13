@@ -3,6 +3,28 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-519 — Users list: close storeIds authorization gap (backend)
+
+**Status:** done · **Agent:** security-reviewer
+Log: `.claude/logs/tasks/519_2026-08-13_users-store-scope-auth-fix_security-reviewer.md`
+Renumbered from the brief's suggested TASK-518 — that id was claimed concurrently by
+frontend-developer's `StoreSelector.tsx` UX cleanup
+(`518_2026-08-13_hide-redundant-all-stores-toggle_frontend-developer.md`).
+
+TASK-517's `GET /api/users?storeIds=...` trusted the caller-supplied `storeIds` with no check
+that the acting caller was authorized to see those stores — `users` is excluded from ADR-022
+Stage 3 RLS, so any store-bound role (`store_manager` etc.) could select "all stores" and see
+every employee in the tenant, or request a store they weren't assigned to. Fixed:
+`UserService.GetAllAsync` gained an `actingUserId` parameter — when the acting caller's own
+role is in `LocationScopedRoles`, their effective `storeIds` is always clamped to their own
+`user_locations` (intersected if explicit, "my own stores" if omitted, fail-closed to zero
+location-scoped users if the clamp collapses to nothing). `UsersController.GetAll` now passes
+the JWT-resolved acting user id. `SupplierCabinetService.GetStaffAsync` unaffected
+(`actingUserId` defaults to null).
+
+New tests: `UserServiceStoreFilterTests.cs` +6 cases. Docs: `.claude/docs/api-contracts.md`
+updated. Build clean, `dotnet test` full suite 1411/1411 passing.
+
 ## TASK-517 — Users list storeIds filter (header store selector)
 
 **Status:** done · **Agents:** backend-developer + frontend-developer (parallel, fixed contract)
@@ -36,6 +58,24 @@ fresh fetch happens on store switch anyway.
 `npx tsc --noEmit` clean. Live-verified against the backend's running implementation:
 `GET /api/users?storeIds=<id>` with one store selected, plain `GET /api/users` on "All
 stores" — both 200 OK.
+
+## TASK-518 — Hide redundant "Select all stores" toggle for single-store users
+
+**Status:** done · **Agent:** frontend-developer
+Follow-up UX report on TASK-517: a store-scoped user narrowed to exactly one store still saw
+a separate "Select all stores" checkbox implying a broader choice distinct from their own
+store. Backend authorization half of the same report handled in parallel by security-reviewer.
+
+`frontend/components/layout/StoreSelector.tsx`: "Select all stores" checkbox row now wrapped
+in `{stores.length > 1 && (...)}`. 0-store early return and single-store's own row (existing
+`{stores.map(...)}`) untouched — pure conditional-render change, no state/logic changes.
+
+`npx tsc --noEmit` clean. Live-verified multi-store account (`ea@demo.local`, 4 stores) still
+shows "All stores" + all 4 rows. Single-store account not live-verified: while switching test
+accounts the agent logged the shared dev session out and then could not log back in — entering
+a password (even a local dev-seed one) is a hard-blocked action with no exceptions. Shared dev
+browser tab is left logged out; needs manual re-login before further browser verification.
+Full detail: `.claude/logs/tasks/518_2026-08-13_hide-redundant-all-stores-toggle_frontend-developer.md`.
 
 ## TASK-505 — Docs: store-migration API contracts + known-issues entry
 **Status:** done · **Agent:** documentation-writer
