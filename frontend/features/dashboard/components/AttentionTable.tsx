@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { BarChart2 } from "lucide-react";
-import type { AttentionItem, ItemStatus } from "../types";
+import type { AttentionItem, DashboardStats, ItemStatus } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 
 const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string }> = {
@@ -16,14 +16,15 @@ const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string }> = {
 
 const FILTER_VALUES: (ItemStatus | "all")[] = ["all", "expired", "critical", "warning"];
 
-const VISIBLE_ROWS = 5;
+const VISIBLE_ROWS = 10;
 
 interface Props {
   items: AttentionItem[] | undefined;
   isLoading: boolean;
+  stats: DashboardStats | undefined;
 }
 
-export function AttentionTable({ items = [], isLoading }: Props) {
+export function AttentionTable({ items = [], isLoading, stats }: Props) {
   const router = useRouter();
   const t = useTranslations("Dashboard.dashboard.attentionTable");
   const tStatus = useTranslations("Dashboard.dashboard.status");
@@ -46,11 +47,11 @@ export function AttentionTable({ items = [], isLoading }: Props) {
   ];
 
   return (
-    <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, overflow: "hidden" }}>
+    <div style={{ background: "#161B26", border: "1px solid #1F2937", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <div
         style={{
-          padding: "16px 20px",
+          padding: "12px 20px",
           borderBottom: "1px solid #1F2937",
           display: "flex",
           alignItems: "center",
@@ -65,8 +66,18 @@ export function AttentionTable({ items = [], isLoading }: Props) {
         <div style={{ display: "flex", gap: 6 }}>
           {FILTER_VALUES.map((value) => {
             const label = value === "all" ? t("filterAll") : tStatus(value);
-            const count =
-              value === "all" ? items.length : items.filter((i) => i.status === value).length;
+            // Badge counts come from the accurate store-wide stats (same source as the
+            // top stat cards), not from `items` — that list is capped at pageSize=200
+            // by the backend and sorted by urgency, so counting within it undercounts
+            // (or misses entirely) less-urgent statuses once expired+critical alone
+            // exceed the cap.
+            const count = stats
+              ? value === "all"
+                ? stats.warning + stats.critical + stats.expired
+                : stats[value]
+              : value === "all"
+                ? items.length
+                : items.filter((i) => i.status === value).length;
             const active = filter === value;
             return (
               <button
@@ -106,15 +117,15 @@ export function AttentionTable({ items = [], isLoading }: Props) {
 
       {/* Table */}
       {isLoading ? (
-        <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#4B5563", fontSize: 13 }}>
           {tCommon("loading")}
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ padding: 32, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#4B5563", fontSize: 13 }}>
           {t("empty")}
         </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto", flex: 1, display: "flex", flexDirection: "column" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1F2937" }}>
@@ -123,7 +134,7 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                     <th
                       key={h}
                       style={{
-                        padding: "10px 16px",
+                        padding: "7px 16px",
                         textAlign: "left",
                         color: "#4B5563",
                         fontSize: 11,
@@ -152,21 +163,21 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                     onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#1a1f2e")}
                     onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                   >
-                    <td style={{ padding: "12px 16px", color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
+                    <td style={{ padding: "8px 16px", color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
                       {item.name}
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#6B7280", fontSize: 12, fontFamily: "monospace" }}>
+                    <td style={{ padding: "8px 16px", color: "#6B7280", fontSize: 12, fontFamily: "monospace" }}>
                       {item.sku}
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#8A94A8", fontSize: 13 }}>
+                    <td style={{ padding: "8px 16px", color: "#8A94A8", fontSize: 13 }}>
                       {item.category}
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#8A94A8", fontSize: 13 }}>
+                    <td style={{ padding: "8px 16px", color: "#8A94A8", fontSize: 13 }}>
                       {item.zone}
                     </td>
                     <td
                       style={{
-                        padding: "12px 16px",
+                        padding: "8px 16px",
                         color: item.quantity === 0 ? "#EF4444" : "#E8EDF5",
                         fontSize: 13,
                         fontFamily: "monospace",
@@ -175,10 +186,10 @@ export function AttentionTable({ items = [], isLoading }: Props) {
                     >
                       {item.quantity}
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#6B7280", fontSize: 13, fontFamily: "monospace" }}>
+                    <td style={{ padding: "8px 16px", color: "#6B7280", fontSize: 13, fontFamily: "monospace" }}>
                       {item.reorderLevel}
                     </td>
-                    <td style={{ padding: "12px 16px" }}>
+                    <td style={{ padding: "8px 16px" }}>
                       <span
                         style={{
                           display: "inline-flex",
@@ -226,8 +237,9 @@ export function AttentionTable({ items = [], isLoading }: Props) {
           {filtered.length > VISIBLE_ROWS && (
             <div
               style={{
+                marginTop: "auto",
                 borderTop: "1px solid #1F2937",
-                padding: "10px 16px",
+                padding: "8px 16px",
                 display: "flex",
                 justifyContent: "center",
               }}

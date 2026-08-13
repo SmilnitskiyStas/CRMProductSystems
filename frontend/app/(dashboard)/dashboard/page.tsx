@@ -54,11 +54,10 @@ export default function DashboardPage() {
           display: "grid",
           gridTemplateColumns: "1fr 280px",
           gap: 20,
-          alignItems: "start",
         }}
       >
-        <AttentionTable items={attentionItems} isLoading={attentionLoading} />
-        <QuickActions items={attentionItems} isLoading={attentionLoading} />
+        <AttentionTable items={attentionItems} isLoading={attentionLoading} stats={stats} />
+        <QuickActions items={attentionItems} isLoading={attentionLoading} stats={stats} />
       </div>
 
       {/* Store map */}
