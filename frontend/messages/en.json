@@ -1128,7 +1128,12 @@
         "allZonesPlaced": "All zones are on the plan",
         "legendTitle": "Legend",
         "legendHint": "Zone color = the worst status of items inside it.",
-        "placedTitle": "Zones on the plan"
+        "placedTitle": "Zones on the plan",
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
+        "fitToView": "Fit to view",
+        "showPanel": "Show panel",
+        "hidePanel": "Hide panel"
       },
       "floorPlanPage": {
         "title": "Location Builder",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   DndContext,
@@ -11,6 +11,13 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { createSnapModifier } from "@dnd-kit/modifiers";
+import {
+  Maximize2,
+  PanelRightClose,
+  PanelRightOpen,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import type {
   FloorPlanLayout,
   FloorPlanZonePlacement,
@@ -18,6 +25,12 @@ import type {
   ZoneStatus,
   ZoneStatusCounts,
 } from "../types";
+
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+const WHEEL_ZOOM_SENSITIVITY = 0.001;
+const FIT_VIEW_PADDING = 0.92;
 
 // Labels moved to i18n messages under `Dashboard.locations.zoneStatus` (i18n Block 2b,
 // TASK-380) — render via `useTranslations("Dashboard.locations.zoneStatus")` keyed by the
@@ -61,6 +74,8 @@ interface CanvasProps {
   onSelect: (zoneId: string | null) => void;
   onMove: (zoneId: string, x: number, y: number) => void;
   onResize: (zoneId: string, w: number, h: number) => void;
+  panelCollapsed: boolean;
+  onTogglePanel: () => void;
 }
 
 export function FloorPlanCanvas({
@@ -71,84 +86,236 @@ export function FloorPlanCanvas({
   onSelect,
   onMove,
   onResize,
+  panelCollapsed,
+  onTogglePanel,
 }: CanvasProps) {
   const t = useTranslations("Dashboard.locations.floorPlan");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
   );
   const grid = layout.grid;
+  const [zoom, setZoom] = useState(1);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  const setZoomClamped = (z: number) => setZoom(Math.round(clampZoom(z) * 100) / 100);
+
+  function zoomIn() {
+    setZoomClamped(zoom + ZOOM_STEP);
+  }
+  function zoomOut() {
+    setZoomClamped(zoom - ZOOM_STEP);
+  }
+  function fitToView() {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const scaleX = el.clientWidth / layout.canvasW;
+    const scaleY = el.clientHeight / layout.canvasH;
+    setZoomClamped(Math.min(scaleX, scaleY) * FIT_VIEW_PADDING);
+    el.scrollTo(0, 0);
+  }
+  function handleWheel(e: React.WheelEvent) {
+    if (!e.ctrlKey) return; // plain scroll/pan must pass through untouched
+    e.preventDefault();
+    setZoomClamped(zoom - e.deltaY * WHEEL_ZOOM_SENSITIVITY);
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const placement = layout.zones.find((z) => z.zoneId === event.active.id);
     if (!placement) return;
-    const x = Math.max(0, placement.x + event.delta.x);
-    const y = Math.max(0, placement.y + event.delta.y);
+    const dx = event.delta.x / zoom;
+    const dy = event.delta.y / zoom;
+    const x = Math.max(0, placement.x + dx);
+    const y = Math.max(0, placement.y + dy);
     onMove(placement.zoneId, Math.round(x / grid) * grid, Math.round(y / grid) * grid);
   }
 
   const zoneById = new Map(zones.map((z) => [z.id, z]));
 
   return (
-    <div
-      style={{
-        height: 600,
-        overflow: "auto",
-        border: "1px solid #1F2937",
-        borderRadius: 12,
-        background: "#0B0E14",
-      }}
-    >
-      <DndContext
-        sensors={sensors}
-        modifiers={[createSnapModifier(grid)]}
-        onDragEnd={handleDragEnd}
+    <div style={{ position: "relative" }}>
+      <div
+        ref={wrapperRef}
+        onWheel={handleWheel}
+        style={{
+          height: 600,
+          overflow: "auto",
+          border: "1px solid #1F2937",
+          borderRadius: 12,
+          background: "#0B0E14",
+        }}
       >
-        <div
-          onClick={() => onSelect(null)}
-          style={{
-            position: "relative",
-            width: layout.canvasW,
-            height: layout.canvasH,
-            background: "#0B0E14",
-            backgroundImage:
-              "linear-gradient(#161B26 1px, transparent 1px), linear-gradient(90deg, #161B26 1px, transparent 1px)",
-            backgroundSize: `${grid}px ${grid}px`,
-          }}
+        <DndContext
+          sensors={sensors}
+          modifiers={[createSnapModifier(grid * zoom)]}
+          onDragEnd={handleDragEnd}
         >
-          {layout.zones.map((placement) => {
-            const zone = zoneById.get(placement.zoneId);
-            if (!zone) return null;
-            return (
-              <ZoneBox
-                key={placement.zoneId}
-                zone={zone}
-                placement={placement}
-                counts={counts?.get(placement.zoneId)}
-                grid={grid}
-                selected={selectedZoneId === placement.zoneId}
-                onSelect={onSelect}
-                onResize={onResize}
-              />
-            );
-          })}
-          {layout.zones.length === 0 && (
+          <div
+            style={{
+              width: layout.canvasW * zoom,
+              height: layout.canvasH * zoom,
+              position: "relative",
+            }}
+          >
             <div
+              onClick={() => onSelect(null)}
               style={{
                 position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#4B5563",
-                fontSize: 13,
+                top: 0,
+                left: 0,
+                width: layout.canvasW,
+                height: layout.canvasH,
+                transform: `scale(${zoom})`,
+                transformOrigin: "0 0",
+                background: "#0B0E14",
+                backgroundImage:
+                  "linear-gradient(#161B26 1px, transparent 1px), linear-gradient(90deg, #161B26 1px, transparent 1px)",
+                backgroundSize: `${grid}px ${grid}px`,
               }}
             >
-              {t("emptyCanvas")}
+              {layout.zones.map((placement) => {
+                const zone = zoneById.get(placement.zoneId);
+                if (!zone) return null;
+                return (
+                  <ZoneBox
+                    key={placement.zoneId}
+                    zone={zone}
+                    placement={placement}
+                    counts={counts?.get(placement.zoneId)}
+                    grid={grid}
+                    zoom={zoom}
+                    selected={selectedZoneId === placement.zoneId}
+                    onSelect={onSelect}
+                    onResize={onResize}
+                  />
+                );
+              })}
+              {layout.zones.length === 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#4B5563",
+                    fontSize: 13,
+                  }}
+                >
+                  {t("emptyCanvas")}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </DndContext>
+          </div>
+        </DndContext>
+      </div>
+
+      {/* Zoom toolbar */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 12,
+          right: 12,
+          zIndex: 300,
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          background: "#161B26",
+          border: "1px solid #1F2937",
+          borderRadius: 8,
+          padding: 4,
+        }}
+      >
+        <ToolbarButton
+          onClick={zoomOut}
+          disabled={zoom <= ZOOM_MIN}
+          title={t("zoomOut")}
+        >
+          <ZoomOut size={15} />
+        </ToolbarButton>
+        <span
+          style={{
+            color: "#9CA3AF",
+            fontSize: 12,
+            fontWeight: 600,
+            minWidth: 40,
+            textAlign: "center",
+            userSelect: "none",
+          }}
+        >
+          {Math.round(zoom * 100)}%
+        </span>
+        <ToolbarButton
+          onClick={zoomIn}
+          disabled={zoom >= ZOOM_MAX}
+          title={t("zoomIn")}
+        >
+          <ZoomIn size={15} />
+        </ToolbarButton>
+        <div style={{ width: 1, height: 20, background: "#1F2937", margin: "0 2px" }} />
+        <ToolbarButton onClick={fitToView} title={t("fitToView")}>
+          <Maximize2 size={15} />
+        </ToolbarButton>
+      </div>
+
+      {/* Panel toggle */}
+      <button
+        onClick={onTogglePanel}
+        title={panelCollapsed ? t("showPanel") : t("hidePanel")}
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          zIndex: 300,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 30,
+          height: 30,
+          background: "#161B26",
+          border: "1px solid #1F2937",
+          color: "#9CA3AF",
+          borderRadius: 8,
+          cursor: "pointer",
+        }}
+      >
+        {panelCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+      </button>
     </div>
+  );
+}
+
+function ToolbarButton({
+  onClick,
+  disabled,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 26,
+        height: 26,
+        background: "#0B0E14",
+        border: "1px solid #1F2937",
+        color: disabled ? "#374151" : "#9CA3AF",
+        borderRadius: 6,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -157,12 +324,13 @@ interface ZoneBoxProps {
   placement: FloorPlanZonePlacement;
   counts: ZoneStatusCounts | undefined;
   grid: number;
+  zoom: number;
   selected: boolean;
   onSelect: (zoneId: string) => void;
   onResize: (zoneId: string, w: number, h: number) => void;
 }
 
-function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }: ZoneBoxProps) {
+function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onResize }: ZoneBoxProps) {
   const t = useTranslations("Dashboard.locations.zoneStatus");
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: placement.zoneId,
@@ -184,8 +352,8 @@ function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }
     const startH = placement.h;
 
     function move(ev: PointerEvent) {
-      const w = Math.max(grid * 4, startW + ev.clientX - startX);
-      const h = Math.max(grid * 3, startH + ev.clientY - startY);
+      const w = Math.max(grid * 4, startW + (ev.clientX - startX) / zoom);
+      const h = Math.max(grid * 3, startH + (ev.clientY - startY) / zoom);
       onResize(placement.zoneId, Math.round(w / grid) * grid, Math.round(h / grid) * grid);
     }
     function up() {
@@ -213,7 +381,7 @@ function ZoneBox({ zone, placement, counts, grid, selected, onSelect, onResize }
         top: placement.y,
         width: placement.w,
         height: placement.h,
-        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
+        transform: transform ? `translate(${transform.x / zoom}px, ${transform.y / zoom}px)` : undefined,
         background: cfg.bg,
         border: `1px solid ${selected ? "#3B82F6" : cfg.border}`,
         boxShadow: selected ? "0 0 0 2px #3B82F655" : undefined,

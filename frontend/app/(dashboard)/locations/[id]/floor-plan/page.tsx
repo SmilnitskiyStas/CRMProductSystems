@@ -36,6 +36,7 @@ export default function FloorPlanPage() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [showZoneDialog, setShowZoneDialog] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   useEffect(() => {
     if (location) {
@@ -188,8 +189,16 @@ export default function FloorPlanPage() {
           {tCommon("loading")}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20, alignItems: "start" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: panelCollapsed ? "1fr" : "1fr 260px",
+            gap: 20,
+            alignItems: "start",
+          }}
+        >
           <FloorPlanCanvas
+            key={locationId}
             zones={zones}
             layout={layout}
             counts={counts}
@@ -197,18 +206,22 @@ export default function FloorPlanPage() {
             onSelect={setSelectedZoneId}
             onMove={handleMove}
             onResize={handleResize}
+            panelCollapsed={panelCollapsed}
+            onTogglePanel={() => setPanelCollapsed((v) => !v)}
           />
-          <FloorPlanSidePanel
-            zones={zones}
-            layout={layout}
-            counts={counts}
-            selectedZoneId={selectedZoneId}
-            onAdd={handleAdd}
-            onRemove={handleRemove}
-            onCreateZone={() => setShowZoneDialog(true)}
-            onOpenShelves={handleOpenShelves}
-            onResizeCanvas={handleResizeCanvas}
-          />
+          {!panelCollapsed && (
+            <FloorPlanSidePanel
+              zones={zones}
+              layout={layout}
+              counts={counts}
+              selectedZoneId={selectedZoneId}
+              onAdd={handleAdd}
+              onRemove={handleRemove}
+              onCreateZone={() => setShowZoneDialog(true)}
+              onOpenShelves={handleOpenShelves}
+              onResizeCanvas={handleResizeCanvas}
+            />
+          )}
         </div>
       )}
 

@@ -1128,7 +1128,12 @@
         "allZonesPlaced": "Усі зони на плані",
         "legendTitle": "Легенда",
         "legendHint": "Колір зони = найгірший статус товарів у ній.",
-        "placedTitle": "Зони на плані"
+        "placedTitle": "Зони на плані",
+        "zoomIn": "Збільшити",
+        "zoomOut": "Зменшити",
+        "fitToView": "Показати весь план",
+        "showPanel": "Показати панель",
+        "hidePanel": "Сховати панель"
       },
       "floorPlanPage": {
         "title": "Конструктор локації",
