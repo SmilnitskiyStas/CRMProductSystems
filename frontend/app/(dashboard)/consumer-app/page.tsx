@@ -5,6 +5,9 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
 import { BonusProgramSection } from "@/features/consumer-app/components/BonusProgramSection";
+import { BannersSection } from "@/features/consumer-app/components/BannersSection";
+import { PromoProductsSection } from "@/features/consumer-app/components/PromoProductsSection";
+import { CatalogSection } from "@/features/consumer-app/components/CatalogSection";
 
 /**
  * TASK-500: standalone "Consumer App" management page (product decision — deliberately its own
@@ -44,6 +47,9 @@ export default function ConsumerAppPage() {
       </div>
 
       <BonusProgramSection />
+      <BannersSection />
+      <PromoProductsSection />
+      <CatalogSection />
     </div>
   );
 }

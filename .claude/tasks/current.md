@@ -4478,3 +4478,76 @@ config plugin, plus a regression test. Prebuild/autolinking, TypeScript, Android
 128 tests and a fresh `assembleDebug` pass. APK replacement preserved app data; native cold launch
 has no missing-class, manifest-parser or fatal exception. Metro did not bind during the bounded
 post-build attempt, so current-source JS/UI smoke remains QA-owned rather than inferred.
+
+# TASK-520 — Consumer App: banner schema (Banner, BannerLocation, BannerProduct, BannerEvent)
+
+**Status:** done · **Agent:** database-engineer · **Updated:** 2026-08-14 · **Next:** TASK-521
+
+Schema-only slice of the Consumer App plan (`quirky-questing-hoare.md`). New `Banner`/
+`BannerLocation`/`BannerProduct`/`BannerEvent` entities (`Discount`-style private-setter+`Create()`
+for `Banner`, `UserLocation`-style for the 3 join/log tables), wired into `AppDbContext.cs`, migration
+`AddBannersSchema` applied and live-verified against the real non-superuser `shelfguard_app_dev` role:
+ownership, FORCE RLS + exactly 3 policies per table (tenant_isolation/provider_bypass/worker_bypass,
+no fail-open branch), cross-tenant isolation, fail-closed on reset session, provider/worker bypass,
+unique-constraint backstop, and cascade delete all confirmed. `dotnet build` 0 errors; `dotnet test`
+1411/1411 green (dynamic RLS audits in `RlsCrossTenantIntegrationTests.cs` picked up all 4 new tables
+automatically, no new xUnit file needed). TASK-521 (backend-developer, service/controller layer) was
+blocked on this task and can now proceed.
+Log: `.claude/logs/tasks/520_2026-08-14_banner-schema_database-engineer.md`.
+
+# TASK-521 — Consumer App: banner admin API + consumer content API
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-14 · **Next:** TASK-522
+
+Backend slice of the Consumer App plan (`quirky-questing-hoare.md`), blocked on TASK-520 (done).
+Admin banner CRUD (`BannersController`, `[Authorize(Policy = AtLeastEnterpriseAdmin)]`) — list/
+get/create/update (full replace incl. locationIds/productIds)/soft-delete (`SetActive(false)`,
+never hard)/image upload (byte-for-byte `ItemsController.UploadImage` pattern)/analytics
+(views/clicks/CTR). New public `ConsumerContentController` (`api/consumer/{tenantId}/...`,
+`[AllowAnonymous]`, works with zero `Authorization` header): active banners for a store
+(body/terms split into `string[]` server-side for the mobile contract), view/click event
+recording (`ConsumerAccountId` nullable), active promotions (pure read projection over the
+existing `Discount` — zero changes to `DiscountService`/`DiscountsController`), paginated
+catalog browse annotated with per-store availability. Tenant context for the anonymous/consumer
+reads reuses `ITenantSessionOverride` exactly as `ConsumerLoyaltyController`/`LoyaltyService`
+already do — no new mechanism. `dotnet build` 0 errors; `dotnet test` 1411/1411 green. Live
+sanity-checked against the real dev DB: anonymous GETs work with no auth header, admin-created
+banner correctly appears on the anonymous consumer feed with split body/terms, view/click →
+analytics roundtrip confirmed (1/1/ctr=1), cross-tenant isolation confirmed (wrong tenantId in
+route → empty list + 404 on view, never the other tenant's data), soft-delete confirmed
+(banner vanishes from consumer feed immediately, no hard delete). Test data cleaned up after.
+TASK-522 (frontend-developer, admin UI) unblocked. Mandatory mobile-developer handoff doc
+written with full API contract.
+Log: `.claude/logs/tasks/521_2026-08-14_banner-backend_backend-developer.md`.
+Handoff: `.claude/logs/handoffs/521-to-mobile-developer_consumer-content-api.md`.
+
+# TASK-522 — Consumer App: admin frontend (banners, promo products, catalog card)
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-14 · **Next:** none (closes
+the plan's backend+admin scope)
+
+Frontend slice of the Consumer App plan (`quirky-questing-hoare.md`), blocked on TASK-521 (done).
+Added `BannersSection`/`BannerForm`, `PromoProductsSection`, `CatalogSection` to
+`frontend/app/(dashboard)/consumer-app/page.tsx` under `BonusProgramSection`, following that
+section's exact structural/style conventions (`frontend/features/consumer-app/{api,hooks,
+components}`). Banners: full create/edit/soft-delete/image-upload/analytics against
+`BannersController`. Promo products: reuses the pre-existing `DiscountsController` as-is
+(`POST` reason=promo → immediate `PUT .../approve`, `PUT .../cancel` to remove — no new backend).
+Catalog: read-only status card, links to `/inventory` (no `/catalog` route exists — the plan named
+the wrong path; real catalog CRUD lives in `features/inventory`). `npx tsc --noEmit` and
+`npm run lint` both clean.
+Found and fixed 2 real bugs during live verification: (1) `BannerForm`/`PromoProductsSection`
+date inputs were sending bare `"YYYY-MM-DD"` to `timestamp with time zone` columns
+(`Banner.ValidFrom/ValidUntil`, `Discount.ValidUntil`), which Npgsql rejects as
+`DateTime.Kind=Unspecified` (500) — fixed by pinning to UTC midnight ISO before sending; (2) the
+promo-product discount-percent input had `min={0.01} step="0.1"` with default `"10"`, an HTML5
+step-mismatch that silently blocked native form submission — fixed to `min={0}` matching the
+rest of the codebase's percent-field convention. Both confirmed fixed live: banner created (2
+stores, 2 products, both dates, image uploaded and verified on disk + in the edit-form preview),
+analytics popover showed 0/0/0.0% right after creation, promo product added/removed against a
+real store with correct price-before/after, catalog card showed the real active-product count
+(50). Screenshot not captured — the Browser pane never composited frames this session (tooling
+limitation); verification instead used the accessibility tree, live network inspection, and
+direct DB checks. Test data (banner + its join rows) hard-deleted from the dev DB afterward, no
+residue.
+Log: `.claude/logs/tasks/522_2026-08-14_consumer-app-frontend_frontend-developer.md`.
