@@ -166,6 +166,13 @@ public sealed class AppDbContext : DbContext
     public DbSet<PostCampaignSegment> PostCampaignSegments => Set<PostCampaignSegment>();
     public DbSet<PostCampaignSegmentMember> PostCampaignSegmentMembers => Set<PostCampaignSegmentMember>();
 
+    // Consumer App — banners, promoted products, view/click log (TASK-520). Schema only;
+    // service/controller land in TASK-521.
+    public DbSet<Banner> Banners => Set<Banner>();
+    public DbSet<BannerLocation> BannerLocations => Set<BannerLocation>();
+    public DbSet<BannerProduct> BannerProducts => Set<BannerProduct>();
+    public DbSet<BannerEvent> BannerEvents => Set<BannerEvent>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -2305,6 +2312,108 @@ public sealed class AppDbContext : DbContext
             // die with their segment.
             e.HasOne(m => m.Customer).WithMany()
              .HasForeignKey(m => m.CustomerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── Banner (Consumer App plan, TASK-520) ──────────────────────────────
+        // Top-level tenant-scoped table — real Tenant FK (Restrict, same as Discount), optional
+        // Creator FK (SetNull, same as Discount.Creator). IsActive is a manual pause switch, not
+        // a workflow status — see class remarks for why "currently showing" is computed
+        // (IsCurrentlyActive) rather than stored.
+        builder.Entity<Banner>(e =>
+        {
+            e.ToTable("banners");
+            e.HasKey(b => b.Id);
+            e.Property(b => b.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(b => b.TenantId).IsRequired();
+            e.Property(b => b.Title).HasMaxLength(255).IsRequired();
+            e.Property(b => b.Eyebrow).HasMaxLength(255);
+            e.Property(b => b.Description).HasColumnType("text").IsRequired();
+            e.Property(b => b.Body).HasColumnType("text").IsRequired();
+            e.Property(b => b.Terms).HasColumnType("text").IsRequired();
+            e.Property(b => b.ImageUrl).HasColumnType("text");
+            e.Property(b => b.Icon).HasMaxLength(100).IsRequired();
+            e.Property(b => b.BackgroundColor).HasMaxLength(20).IsRequired();
+            e.Property(b => b.AccentColor).HasMaxLength(20).IsRequired();
+            e.Property(b => b.DetailMode).HasMaxLength(20).HasDefaultValue(BannerDetailMode.Internal);
+            e.Property(b => b.ExternalUrl).HasColumnType("text");
+            e.Property(b => b.ValidFrom).HasDefaultValueSql("NOW()");
+            e.Property(b => b.IsActive).HasDefaultValue(true);
+            e.Property(b => b.SortOrder).HasDefaultValue(0);
+            e.Property(b => b.CreatedAt).HasDefaultValueSql("NOW()");
+            // Consumer feed query: active banners for a tenant, ordered for display.
+            e.HasIndex(b => new { b.TenantId, b.IsActive, b.SortOrder })
+             .HasDatabaseName("idx_banners_tenant_active_sort");
+            e.HasOne(b => b.Tenant).WithMany()
+             .HasForeignKey(b => b.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(b => b.Creator).WithMany()
+             .HasForeignKey(b => b.CreatedBy).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ── BannerLocation (TASK-520) ──────────────────────────────────────────
+        // Many-to-many join, same config shape as UserLocation above — no navigation
+        // properties on either side, raw Guid FKs only.
+        builder.Entity<BannerLocation>(e =>
+        {
+            e.ToTable("banner_locations");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.BannerId).IsRequired();
+            e.Property(x => x.LocationId).IsRequired();
+            // Prevents duplicate grants for the same banner+location pair.
+            e.HasIndex(x => new { x.BannerId, x.LocationId })
+             .IsUnique()
+             .HasDatabaseName("uq_banner_locations_banner_location");
+            // Reverse lookup: which banners target location X.
+            e.HasIndex(x => new { x.TenantId, x.LocationId })
+             .HasDatabaseName("idx_banner_locations_tenant_location");
+            e.HasOne<Banner>().WithMany()
+             .HasForeignKey(x => x.BannerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── BannerProduct (TASK-520) ───────────────────────────────────────────
+        builder.Entity<BannerProduct>(e =>
+        {
+            e.ToTable("banner_products");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.BannerId).IsRequired();
+            e.Property(x => x.ItemId).IsRequired();
+            e.Property(x => x.SortOrder).HasDefaultValue(0);
+            // Prevents attaching the same product twice to one banner.
+            e.HasIndex(x => new { x.BannerId, x.ItemId })
+             .IsUnique()
+             .HasDatabaseName("uq_banner_products_banner_item");
+            e.HasIndex(x => new { x.TenantId, x.BannerId })
+             .HasDatabaseName("idx_banner_products_tenant_banner");
+            e.HasOne<Banner>().WithMany()
+             .HasForeignKey(x => x.BannerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Item>().WithMany()
+             .HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── BannerEvent (TASK-520) ─────────────────────────────────────────────
+        // Append-only view/click log. ConsumerAccountId is nullable/SetNull — anonymous
+        // consumer sessions are allowed and must not block the FK.
+        builder.Entity<BannerEvent>(e =>
+        {
+            e.ToTable("banner_events");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.BannerId).IsRequired();
+            e.Property(x => x.EventType).HasMaxLength(20).IsRequired();
+            e.Property(x => x.OccurredAt).HasDefaultValueSql("NOW()");
+            // Analytics read: COUNT(...) GROUP BY EventType for one banner within a tenant.
+            e.HasIndex(x => new { x.TenantId, x.BannerId, x.EventType })
+             .HasDatabaseName("idx_banner_events_tenant_banner_type");
+            e.HasOne<Banner>().WithMany()
+             .HasForeignKey(x => x.BannerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<ConsumerAccount>().WithMany()
+             .HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
     }
