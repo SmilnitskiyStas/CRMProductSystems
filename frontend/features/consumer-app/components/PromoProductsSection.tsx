@@ -4,9 +4,17 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Switch } from "@/components/ui/switch";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
-import { useCancelPromoProduct, useCreatePromoProduct, usePromoProducts } from "../hooks/usePromoProducts";
+import {
+  useCancelPromoProduct,
+  useCreatePromoProduct,
+  usePromoProducts,
+  usePublishPromoProduct,
+} from "../hooks/usePromoProducts";
+import { LifecycleTabs, type LifecycleTab } from "./LifecycleTabs";
+import type { DiscountStatus } from "../types";
 
 const cardStyle: React.CSSProperties = {
   background: "#0D1117",
@@ -47,11 +55,23 @@ const rowStyle: React.CSSProperties = {
   gap: 12,
 };
 
+/** DiscountStatus → LifecycleTab bucket (TASK-525). pending = draft (never approved),
+ * active = running, expired|cancelled = past — mirrors BannerLifecycleStatus's 3-bucket shape
+ * so both sections share the same LifecycleTabs component. */
+function tabOf(status: DiscountStatus): LifecycleTab {
+  if (status === "pending") return "draft";
+  if (status === "active") return "running";
+  return "past";
+}
+
 /**
  * TASK-522: "promo products" admin section. Reuses the pre-existing DiscountsController as-is
- * (reason="promo", auto-approved right after create — see useCreatePromoProduct) since no new
- * backend exists for this per the plan. Store-scoped: pick a store, see/manage its active
- * promo discounts.
+ * (reason="promo") since no new backend exists for this per the plan. Store-scoped: pick a
+ * store, see/manage its promo discounts.
+ *
+ * TASK-525: added the Активні/Минулі/Чернетки history tabs (bucketed from `status` — GET
+ * /api/discounts?storeId, no `status` filter, so one fetch covers the whole history) plus the
+ * "Опублікувати одразу" create-time toggle and a Чернетки-tab "Опублікувати" row action.
  */
 export function PromoProductsSection() {
   const t = useTranslations("Dashboard.consumerApp.promoProducts");
@@ -70,11 +90,27 @@ export function PromoProductsSection() {
   const { data: promos, isLoading, isError } = usePromoProducts(effectiveStoreId || null);
   const create = useCreatePromoProduct();
   const cancel = useCancelPromoProduct();
+  const publish = usePublishPromoProduct();
+
+  const [tab, setTab] = useState<LifecycleTab>("running");
+  const counts = useMemo(() => {
+    const c: Partial<Record<LifecycleTab, number>> = { running: 0, past: 0, draft: 0 };
+    for (const p of promos ?? []) {
+      const key = tabOf(p.status);
+      c[key] = (c[key] ?? 0) + 1;
+    }
+    return c;
+  }, [promos]);
+  const visiblePromos = useMemo(
+    () => (promos ?? []).filter((p) => tabOf(p.status) === tab),
+    [promos, tab],
+  );
 
   const [addOpen, setAddOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [discountPercent, setDiscountPercent] = useState("10");
   const [validUntil, setValidUntil] = useState("");
+  const [publishImmediately, setPublishImmediately] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const activeCatalogProducts = useMemo(
@@ -106,12 +142,16 @@ export function PromoProductsSection() {
         // input parses as DateTime.Kind=Unspecified, which Npgsql rejects (same issue fixed in
         // BannerForm's toUtcIso). Pin to UTC midnight.
         validUntil: validUntil ? `${validUntil}T00:00:00.000Z` : undefined,
+        publishImmediately,
       });
-      toast.success(t("addSuccess"));
+      toast.success(publishImmediately ? t("addSuccess") : t("addDraftSuccess"));
       setAddOpen(false);
       setProductId("");
       setDiscountPercent("10");
       setValidUntil("");
+      setPublishImmediately(true);
+      if (publishImmediately) setTab("running");
+      else setTab("draft");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("addError"));
     }
@@ -123,6 +163,15 @@ export function PromoProductsSection() {
       toast.success(t("cancelSuccess"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("cancelError"));
+    }
+  }
+
+  async function handlePublish(id: string) {
+    try {
+      await publish.mutateAsync(id);
+      toast.success(t("publishSuccess"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("publishError"));
     }
   }
 
@@ -191,19 +240,35 @@ export function PromoProductsSection() {
           <Btn type="submit" size="sm" disabled={create.isPending}>
             {create.isPending ? t("addingButton") : t("confirmAddButton")}
           </Btn>
+          <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 500 }}>{t("publishImmediatelyLabel")}</div>
+              <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{t("publishImmediatelyHint")}</div>
+            </div>
+            <Switch checked={publishImmediately} onCheckedChange={setPublishImmediately} />
+          </div>
           {error && <p style={{ color: "#F87171", fontSize: 11, gridColumn: "1 / -1", margin: 0 }}>{error}</p>}
         </form>
       )}
 
+      <LifecycleTabs
+        tab={tab}
+        onTabChange={setTab}
+        counts={counts}
+        labels={{ running: t("tabRunning"), past: t("tabPast"), draft: t("tabDraft") }}
+      />
+
       {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
       {isError && <div style={{ color: "#F87171", fontSize: 13 }}>{t("loadError")}</div>}
-      {!isLoading && !isError && (promos ?? []).length === 0 && (
+      {!isLoading && !isError && visiblePromos.length === 0 && (
         <div style={{ color: "#4B5563", fontSize: 13 }}>{t("emptyHint")}</div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {(promos ?? []).map((promo) => {
+        {visiblePromos.map((promo) => {
           const product = productById.get(promo.productId);
+          const isDraft = promo.status === "pending";
+          const isRunning = promo.status === "active";
           return (
             <div key={promo.id} style={rowStyle}>
               <div style={{ minWidth: 0 }}>
@@ -222,9 +287,20 @@ export function PromoProductsSection() {
                   <span>{t("validUntilShort", { date: promo.validUntil ? new Date(promo.validUntil).toLocaleDateString() : t("noExpiry") })}</span>
                 </div>
               </div>
-              <Btn size="sm" variant="danger" onClick={() => handleCancel(promo.id)} disabled={cancel.isPending}>
-                {t("removeButton")}
-              </Btn>
+              {/* Минулі (expired/cancelled) is read-only — Discount.cs's own guards refuse
+                  approve/cancel outside pending/active. */}
+              {(isDraft || isRunning) && (
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {isDraft && (
+                    <Btn size="sm" variant="success" onClick={() => handlePublish(promo.id)} disabled={publish.isPending}>
+                      {t("publishButton")}
+                    </Btn>
+                  )}
+                  <Btn size="sm" variant="danger" onClick={() => handleCancel(promo.id)} disabled={cancel.isPending}>
+                    {t("removeButton")}
+                  </Btn>
+                </div>
+              )}
             </div>
           );
         })}

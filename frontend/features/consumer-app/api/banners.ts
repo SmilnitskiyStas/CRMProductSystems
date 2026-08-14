@@ -21,6 +21,9 @@ export const bannersApi = {
 
   update: (id: string, body: UpdateBannerRequest) => api.put<BannerDto>(`/api/banners/${id}`, body),
 
+  // TASK-525: idempotent first-publish — sets publishedAt, moves lifecycleStatus draft → running.
+  publish: (id: string) => api.post<BannerDto>(`/api/banners/${id}/publish`),
+
   // Soft-hide (IsActive=false server-side) — never a hard delete.
   deactivate: (id: string) => api.delete<void>(`/api/banners/${id}`),
 

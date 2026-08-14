@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Switch } from "@/components/ui/switch";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
 import { LocationsMultiSelectDropdown } from "@/features/users/components/LocationsMultiSelectDropdown";
 import {
   useBanner,
   useCreateBanner,
+  usePublishBanner,
   useUpdateBanner,
   useUploadBannerImage,
 } from "../hooks/useBanners";
@@ -85,6 +87,11 @@ interface Props {
  * modal shape (backdrop + centered panel + form). Image upload happens after the banner
  * itself is created/saved (POST/PUT first, then POST /{id}/image if a file was picked) —
  * there is no id to upload against before the first save.
+ *
+ * TASK-525: added the "Опублікувати одразу" toggle (create mode only — `publishImmediately`
+ * has no meaning on PUT, `UpdateBannerRequest` doesn't carry it) and, when editing an existing
+ * draft (`lifecycleStatus === "draft"`), a standalone "Опублікувати" button in place of that
+ * toggle (publishing post-creation is a one-way action via POST /{id}/publish, not a form field).
  */
 export function BannerForm({ bannerId, onClose }: Props) {
   const t = useTranslations("Dashboard.consumerApp.banners.form");
@@ -95,10 +102,12 @@ export function BannerForm({ bannerId, onClose }: Props) {
   const { data: catalogProducts } = useCatalogProducts();
   const activeLocations = useMemo(() => (locations ?? []).filter((l) => l.isActive), [locations]);
   const activeProducts = useMemo(() => (catalogProducts ?? []).filter((p) => p.isActive), [catalogProducts]);
+  const isDraftEdit = isEdit && banner?.lifecycleStatus === "draft";
 
   const createBanner = useCreateBanner();
   const updateBanner = useUpdateBanner();
   const uploadImage = useUploadBannerImage();
+  const publishBanner = usePublishBanner();
   const isPending = createBanner.isPending || updateBanner.isPending || uploadImage.isPending;
 
   const [title, setTitle] = useState("");
@@ -121,6 +130,8 @@ export function BannerForm({ bannerId, onClose }: Props) {
   const [initialized, setInitialized] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  // Create-mode only — see the component doc comment for why edit mode never touches this.
+  const [publishImmediately, setPublishImmediately] = useState(true);
 
   // Prefill once the edit target loads (same `initialized` guard as UserLocationsEditor —
   // never clobber the admin's in-progress edits on a background refetch).
@@ -192,9 +203,11 @@ export function BannerForm({ bannerId, onClose }: Props) {
     };
 
     try {
+      // publishImmediately only exists on CreateBannerRequest — UpdateBannerRequest has no such
+      // field (editing a banner never changes its publish state, see BannerService.UpdateAsync).
       const saved = isEdit
         ? await updateBanner.mutateAsync({ id: bannerId!, body: shared })
-        : await createBanner.mutateAsync(shared);
+        : await createBanner.mutateAsync({ ...shared, publishImmediately });
 
       if (imageFile) {
         await uploadImage.mutateAsync({ id: saved.id, file: imageFile });
@@ -204,6 +217,17 @@ export function BannerForm({ bannerId, onClose }: Props) {
       onClose();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : t("saveError"));
+    }
+  }
+
+  async function handlePublishNow() {
+    if (!bannerId) return;
+    try {
+      await publishBanner.mutateAsync(bannerId);
+      toast.success(t("publishSuccess"));
+      onClose();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : t("publishError"));
     }
   }
 
@@ -494,6 +518,40 @@ export function BannerForm({ bannerId, onClose }: Props) {
                 {errors.validUntil && <p style={{ ...hintStyle, color: "#EF4444" }}>{errors.validUntil}</p>}
               </div>
             </div>
+
+            {/* Publish state — create mode: toggle (default ON, mirrors today's behavior when
+                left on). Edit mode on a draft: a standalone publish action instead, since
+                publishing post-creation is a one-way call to POST /{id}/publish, not a form
+                field UpdateBannerRequest even carries. Edit mode on an already-published banner:
+                nothing to show here at all. */}
+            {!isEdit && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>{t("publishImmediatelyLabel")}</div>
+                  <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{t("publishImmediatelyHint")}</div>
+                </div>
+                <Switch checked={publishImmediately} onCheckedChange={setPublishImmediately} />
+              </div>
+            )}
+            {isDraftEdit && (
+              <div
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                  padding: "10px 12px", background: "#111827", border: "1px solid #1F2937", borderRadius: 8,
+                }}
+              >
+                <div style={{ color: "#9CA3AF", fontSize: 12 }}>{t("draftHint")}</div>
+                <Btn
+                  type="button"
+                  variant="success"
+                  size="sm"
+                  onClick={handlePublishNow}
+                  disabled={publishBanner.isPending}
+                >
+                  {publishBanner.isPending ? t("publishingButton") : t("publishNowButton")}
+                </Btn>
+              </div>
+            )}
 
             {formError && <p style={{ color: "#F87171", fontSize: 12 }}>{formError}</p>}
 

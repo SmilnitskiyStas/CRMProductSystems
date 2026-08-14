@@ -8,6 +8,8 @@ import type { CreateDiscountRequest, DiscountDto } from "../types";
  * this feature since no other frontend feature calls /api/discounts yet.
  */
 export const discountsApi = {
+  // status omitted → every status for the store (pending/active/expired/cancelled), used by
+  // TASK-525's history tabs to bucket client-side rather than re-fetching per tab.
   getAll: (params: { storeId?: string; status?: string }) => {
     const qs = new URLSearchParams();
     if (params.storeId) qs.set("storeId", params.storeId);

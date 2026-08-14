@@ -207,15 +207,19 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     ],
   },
   {
-    // TASK-500: standalone "Consumer App" management area — starts with the loyalty/bonus
-    // program settings page, deliberately scoped to grow further sections (news, promos, etc.)
-    // on the SAME page later, not as new sidebar items. No moduleKey: LoyaltySettingsController
-    // itself has no [RequireModule] guard, so this isn't module-gated either.
+    // TASK-500 started this as a single page (loyalty/bonus program settings only). TASK-525
+    // split it into one page per section — banners, promo products, and the read-only catalog
+    // card each got their own route/sidebar item instead of stacking under the bonus program
+    // page. No moduleKey: LoyaltySettingsController/BannersController/DiscountsController have
+    // no [RequireModule] guard, so this group isn't module-gated either.
     key: "consumer_app",
     label: t("consumerApp.label"),
     icon: <Smartphone size={18} />,
     items: [
-      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true },
+      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
     ],
   },
   {

@@ -4551,3 +4551,82 @@ limitation); verification instead used the accessibility tree, live network insp
 direct DB checks. Test data (banner + its join rows) hard-deleted from the dev DB afterward, no
 residue.
 Log: `.claude/logs/tasks/522_2026-08-14_consumer-app-frontend_frontend-developer.md`.
+
+# TASK-523 — Consumer App: Banner.PublishedAt (draft/published lifecycle schema)
+
+**Status:** done · **Agent:** database-engineer · **Updated:** 2026-08-14 · **Next:** TASK-524
+
+Schema-only follow-up to TASK-520/521/522, for a banners admin history view (running/past/draft
+tabs). Added `Banner.PublishedAt` (nullable `DateTime`, private setter) — `null` = draft, never
+published; non-null = first-publish timestamp. Deliberately separate from `IsActive` (manual
+pause) and `ValidFrom`/`ValidUntil` (display window). `Create(...)` gained a trailing optional
+`bool publishImmediately = true` (default preserves today's immediate-publish behavior; the sole
+existing caller in `BannerService.cs` uses named args, unaffected). Added idempotent
+`Publish(DateTime utcNow)` (no-op if already published, never overwrites the original timestamp)
+to back TASK-524's publish endpoint. `Update(...)` left untouched — publishing only happens via
+`Publish()`. `AppDbContext.cs` Banner config extended with the new nullable column. Migration
+`AddBannerPublishedAt` — single-column `ALTER TABLE banners ADD COLUMN "PublishedAt" timestamp
+with time zone NULL`, no RLS changes needed. Applied cleanly against the real dev DB via the
+non-superuser `shelfguard_app_dev` role and verified via `\d banners`. `dotnet build` 0 errors;
+`dotnet test` 1411/1411 green, no regressions. TASK-524 (backend-developer: publish endpoint +
+lifecycle status logic) unblocked.
+Log: `.claude/logs/tasks/523_2026-08-14_banner-published-at_database-engineer.md`.
+
+# TASK-524 — Consumer App: banner publish endpoint + lifecycle status + draft-leak fix
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-14 · **Next:** TASK-525
+
+Follow-up to TASK-523 (done), builds the API surface for the admin banners history view
+(running/past/draft tabs). `CreateBannerRequest` gained `bool PublishImmediately = true`, wired
+into `Banner.Create(..., publishImmediately: ...)`. `BannerDto` gained `PublishedAt` and computed
+`LifecycleStatus` (`"draft"` when `PublishedAt == null`, `"running"` when published and
+`IsCurrentlyActive`, `"past"` otherwise) — derived in `BannerService`'s mapping helper, never
+stored, same pattern as `IsCurrentlyActive`. New `POST /api/banners/{id}/publish`
+(`AtLeastEnterpriseAdmin` gate, same as the rest of `BannersController`) — idempotent, calls
+`Banner.Publish(DateTime.UtcNow)`, 404 if not found. **Critical fix**: `ConsumerContentRepository
+.GetActiveBannersAsync` (backs the public `GET /api/consumer/{tenantId}/banners`) was filtering
+on `IsActive` + date window only — a draft banner (`PublishedAt == null`) with `IsActive=true`
+and a currently-valid date window could leak to anonymous consumers. Added `b.PublishedAt !=
+null` as a required condition alongside the existing checks. `Discount`/`DiscountsController`
+untouched, per brief (its own `Status` enum already covers pending/active/expired/cancelled).
+
+`dotnet build` 0 errors (1 pre-existing unrelated warning, same baseline as TASK-520/521/523).
+`dotnet test` 1411/1411 green. **Live-verified** against the real dev DB (`ea@demo.local`, tenant
+"Свіжий Кут"): created a banner with `publishImmediately=false` and a currently-valid date
+window + `IsActive=true` → confirmed `GET /api/consumer/{tenantId}/banners?storeId=` returned
+`[]` (draft correctly hidden); called `POST /api/banners/{id}/publish` → `publishedAt` set,
+`lifecycleStatus` flipped `draft`→`running`, banner immediately appeared in the consumer feed;
+called publish again → same timestamp (idempotent, confirmed no overwrite). Test banner deleted
+(soft via API, then hard-purged via psql) afterward, DB left clean. TASK-525 (frontend-developer,
+admin history tabs UI) unblocked.
+Log: `.claude/logs/tasks/524_2026-08-14_banner-publish-lifecycle_backend-developer.md`.
+
+# TASK-525 — Consumer App: split into separate pages + banner/promo history tabs
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-14 · **Next:** none
+
+Follow-up to TASK-522 (done), using TASK-523/524's lifecycle contract (`BannerDto.publishedAt`/
+`lifecycleStatus`, `POST /api/banners/{id}/publish`, `CreateBannerRequest.publishImmediately`) and
+`Discount.status` as-is (no backend changes needed — pending/active/expired/cancelled already
+maps to draft/running/past). Two parts: (1) split `/consumer-app` (previously one page stacking
+4 sections) into 4 pages — `/consumer-app` (bonus program only), `/consumer-app/banners`,
+`/consumer-app/promotions`, `/consumer-app/catalog` — mirroring `marketing-analytics`'s
+sidebar-group pattern exactly; `Sidebar.tsx`'s `consumer_app` group grew from 1 to 4 items. (2)
+Added Активні/Минулі/Чернетки history tabs (new shared `LifecycleTabs.tsx`) to `BannersSection`
+and `PromoProductsSection`, both filtering an already-fetched list client-side (no new fetch per
+tab); `usePromoProducts` dropped its `status=active` query filter to fetch full history. Both
+create forms gained an "Опублікувати одразу" toggle (default ON): ON keeps today's behavior
+(banner: `publishImmediately: true`; promo: create→approve chain), OFF leaves the row a draft
+(`lifecycleStatus: "draft"` / `status: "pending"`). Draft rows get a row-level "Опублікувати"
+action in both sections (new `usePublishBanner`/`usePublishPromoProduct` hooks).
+
+`npx tsc --noEmit` and `npm run lint` both clean. Live-verified against the real dev backend
+(`ea@demo.local`, tenant "Свіжий Кут"): sidebar shows all 4 sub-items routing correctly; created
+one banner + one promo product with the toggle ON (landed in Активні) and one each with the
+toggle OFF (landed in Чернетки, `publishedAt`/`approvedAt` null as expected); clicked each row's
+"Опублікувати" → banner `POST /{id}/publish` and promo `PUT .../approve` both returned 200 and
+moved the row to Активні (counts updated live). Test data cleaned up (soft-deleted/cancelled via
+UI, then hard-purged via psql), DB left clean. This closes the current round of Consumer App
+admin frontend work — mobile wiring remains the separate future task already documented in the
+TASK-521 handoff doc (`.claude/logs/handoffs/521-to-mobile-developer_consumer-content-api.md`).
+Log: `.claude/logs/tasks/525_2026-08-14_consumer-app-page-split-history_frontend-developer.md`.

@@ -39,6 +39,19 @@ export function useUpdateBanner() {
   });
 }
 
+/**
+ * POST /api/banners/{id}/publish — TASK-525. Moves a draft to published (idempotent
+ * server-side). Used both by BannerForm's "Опублікувати" button (editing an existing draft)
+ * and BannersSection's row-level publish action in the Чернетки tab.
+ */
+export function usePublishBanner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => bannersApi.publish(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: BANNERS_KEY }),
+  });
+}
+
 /** DELETE /api/banners/{id} — soft-hide, never a hard delete. */
 export function useDeactivateBanner() {
   const qc = useQueryClient();

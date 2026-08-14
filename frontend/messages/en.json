@@ -338,7 +338,10 @@
         },
         "consumerApp": {
           "label": "App",
-          "bonusProgram": "Bonus Program"
+          "bonusProgram": "Bonus Program",
+          "banners": "Banners",
+          "promotions": "Promotions",
+          "catalog": "Catalog"
         },
         "workforce": {
           "label": "Staff",
@@ -4256,6 +4259,18 @@
         "title": "App",
         "subtitle": "Manage the bonus program and other consumer-facing mobile app features"
       },
+      "bannersPage": {
+        "title": "Banners",
+        "subtitle": "Promotional banners on the consumer app's home feed — running, past, and drafts"
+      },
+      "promotionsPage": {
+        "title": "Promo Products",
+        "subtitle": "Discounted products for the consumer app — running, past, and drafts"
+      },
+      "catalogPage": {
+        "title": "Electronic Catalog",
+        "subtitle": "The network's product catalog, available to shoppers in the consumer app"
+      },
       "bonusProgram": {
         "title": "Bonus Program",
         "subtitle": "Accrual and redemption rules, customer card format",
@@ -4291,10 +4306,17 @@
         "loading": "Loading…",
         "loadError": "Failed to load banners",
         "emptyHint": "No banners yet. Click \"Create banner\" to add the first one.",
+        "tabRunning": "Running",
+        "tabPast": "Past",
+        "tabDraft": "Drafts",
         "statusActive": "Active",
         "statusPaused": "Paused",
+        "statusDraft": "Draft",
         "analyticsButton": "Analytics",
         "editButton": "Edit",
+        "publishButton": "Publish",
+        "publishSuccess": "Banner published",
+        "publishError": "Failed to publish banner",
         "deleteButton": "Delete",
         "locationsCount": "{count} stores",
         "viewCount": "{count} views",
@@ -4350,6 +4372,13 @@
           "validFromRequiredError": "Start date is required",
           "validUntilLabel": "Show until (optional)",
           "validUntilAfterError": "End date must be after the start date",
+          "publishImmediatelyLabel": "Publish immediately",
+          "publishImmediatelyHint": "When off, the banner is saved as a draft — it won't appear in the consumer app until you publish it.",
+          "draftHint": "This banner is still a draft and isn't showing in the consumer app.",
+          "publishNowButton": "Publish",
+          "publishingButton": "Publishing…",
+          "publishSuccess": "Banner published",
+          "publishError": "Failed to publish banner",
           "savingButton": "Saving…",
           "saveButton": "Save",
           "createButton": "Create",
@@ -4370,19 +4399,28 @@
         "validUntilLabel": "Valid until (optional)",
         "addingButton": "Adding…",
         "confirmAddButton": "Add",
+        "publishImmediatelyLabel": "Publish immediately",
+        "publishImmediatelyHint": "When off, the product stays a draft — it won't appear in the consumer app until you publish it.",
+        "tabRunning": "Running",
+        "tabPast": "Past",
+        "tabDraft": "Drafts",
         "loading": "Loading…",
         "loadError": "Failed to load promo products",
         "emptyHint": "No promo products for this store yet.",
         "discountBadge": "-{percent}%",
         "validUntilShort": "until {date}",
         "noExpiry": "no expiry",
+        "publishButton": "Publish",
         "removeButton": "Remove from promo",
         "productRequiredError": "Select a product and a store",
         "discountRangeError": "Enter a discount between 0.01 and 100",
         "addSuccess": "Product added to promo",
+        "addDraftSuccess": "Product saved as a draft",
         "addError": "Failed to add product to promo",
         "cancelSuccess": "Product removed from promo",
-        "cancelError": "Failed to remove product from promo"
+        "cancelError": "Failed to remove product from promo",
+        "publishSuccess": "Product published",
+        "publishError": "Failed to publish product"
       },
       "catalog": {
         "title": "Electronic Catalog",

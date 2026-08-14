@@ -40,6 +40,14 @@ export interface UpdateLoyaltyProgramSettingsRequest {
 
 export type BannerDetailMode = "internal" | "external";
 
+/**
+ * TASK-525: "draft" | "running" | "past" — computed server-side (BannerService.LifecycleStatusOf),
+ * never stored directly. draft = never published (publishedAt is null); running = published AND
+ * isCurrentlyActive; past = published but not currently active (window elapsed, or manually
+ * paused via IsActive=false).
+ */
+export type BannerLifecycleStatus = "draft" | "running" | "past";
+
 /** GET /api/banners, GET /api/banners/{id} response shape. */
 export interface BannerDto {
   id: string;
@@ -65,9 +73,15 @@ export interface BannerDto {
   clickCount: number;
   createdAt: string;
   updatedAt: string | null;
+  publishedAt: string | null;
+  lifecycleStatus: BannerLifecycleStatus;
 }
 
-/** POST /api/banners request body. */
+/**
+ * POST /api/banners request body. `publishImmediately` (TASK-524) defaults to `true`
+ * server-side, but every caller here always sends it explicitly (BannerForm's toggle) rather
+ * than relying on the server default — keeps the client's intent unambiguous in the request.
+ */
 export interface CreateBannerRequest {
   title: string;
   description: string;
@@ -85,6 +99,7 @@ export interface CreateBannerRequest {
   sortOrder?: number;
   locationIds?: string[];
   productIds?: string[];
+  publishImmediately: boolean;
 }
 
 /**

@@ -5,17 +5,13 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
 import { BonusProgramSection } from "@/features/consumer-app/components/BonusProgramSection";
-import { BannersSection } from "@/features/consumer-app/components/BannersSection";
-import { PromoProductsSection } from "@/features/consumer-app/components/PromoProductsSection";
-import { CatalogSection } from "@/features/consumer-app/components/CatalogSection";
 
 /**
- * TASK-500: standalone "Consumer App" management page (product decision — deliberately its own
- * page, not a Settings tab or a modal, since it is meant to grow into a general area for
- * consumer-facing mobile-app content: this bonus/loyalty section today, news/promos/etc. later).
- * Only the loyalty section is built now — the page is just a simple vertical stack of cards, so
- * adding a sibling `<...Section />` under `BonusProgramSection` later is the entire integration
- * cost; no placeholder sections are scaffolded ahead of that work.
+ * TASK-500: standalone "Consumer App" management area (product decision — deliberately its own
+ * sidebar group, not a Settings tab or a modal). Originally a single page stacking every section
+ * (bonus program, banners, promo products, catalog); TASK-525 split it into one page per section
+ * — see Sidebar.tsx's "consumer_app" group and the sibling `banners/`, `promotions/`, `catalog/`
+ * routes next to this file. This route keeps the bonus/loyalty program section only.
  *
  * Gated to AT_LEAST_ENTERPRISE_ADMIN — mirrors the backend's own
  * `[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]` on LoyaltySettingsController
@@ -47,9 +43,6 @@ export default function ConsumerAppPage() {
       </div>
 
       <BonusProgramSection />
-      <BannersSection />
-      <PromoProductsSection />
-      <CatalogSection />
     </div>
   );
 }

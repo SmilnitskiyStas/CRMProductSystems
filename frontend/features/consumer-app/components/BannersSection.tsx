@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
-import { useBannerAnalytics, useBanners, useDeactivateBanner } from "../hooks/useBanners";
+import { useBannerAnalytics, useBanners, useDeactivateBanner, usePublishBanner } from "../hooks/useBanners";
 import { BannerForm } from "./BannerForm";
+import { LifecycleTabs, type LifecycleTab } from "./LifecycleTabs";
 import type { BannerDto } from "../types";
 
 const cardStyle: React.CSSProperties = {
@@ -32,15 +33,32 @@ function formatDate(value: string | null): string {
 /**
  * TASK-522: banner list + create/edit form + per-row analytics popover. First of the three
  * sections added to /consumer-app under BonusProgramSection.
+ *
+ * TASK-525: added the Активні/Минулі/Чернетки history tabs (filtering `lifecycleStatus`
+ * client-side — GET /api/banners already returns the tenant's full history, no per-tab
+ * fetch) plus a row-level "Опублікувати" action for draft rows.
  */
 export function BannersSection() {
   const t = useTranslations("Dashboard.consumerApp.banners");
   const { data: banners, isLoading, isError } = useBanners();
   const deactivate = useDeactivateBanner();
+  const publish = usePublishBanner();
 
   // false = closed, "create" = create mode, otherwise the id being edited.
   const [formTarget, setFormTarget] = useState<false | "create" | string>(false);
   const [analyticsOpenId, setAnalyticsOpenId] = useState<string | null>(null);
+  const [tab, setTab] = useState<LifecycleTab>("running");
+
+  const counts = useMemo(() => {
+    const c: Partial<Record<LifecycleTab, number>> = { running: 0, past: 0, draft: 0 };
+    for (const b of banners ?? []) c[b.lifecycleStatus] = (c[b.lifecycleStatus] ?? 0) + 1;
+    return c;
+  }, [banners]);
+
+  const visibleBanners = useMemo(
+    () => (banners ?? []).filter((b) => b.lifecycleStatus === tab),
+    [banners, tab],
+  );
 
   async function handleDeactivate(banner: BannerDto) {
     if (!window.confirm(t("deactivateConfirm", { title: banner.title }))) return;
@@ -49,6 +67,15 @@ export function BannersSection() {
       toast.success(t("deactivateSuccess"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("deactivateError"));
+    }
+  }
+
+  async function handlePublish(banner: BannerDto) {
+    try {
+      await publish.mutateAsync(banner.id);
+      toast.success(t("publishSuccess"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("publishError"));
     }
   }
 
@@ -65,15 +92,24 @@ export function BannersSection() {
         <Btn size="sm" onClick={() => setFormTarget("create")}>{t("createButton")}</Btn>
       </div>
 
+      <LifecycleTabs
+        tab={tab}
+        onTabChange={setTab}
+        counts={counts}
+        labels={{ running: t("tabRunning"), past: t("tabPast"), draft: t("tabDraft") }}
+      />
+
       {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
       {isError && <div style={{ color: "#F87171", fontSize: 13 }}>{t("loadError")}</div>}
 
-      {!isLoading && !isError && (banners ?? []).length === 0 && (
+      {!isLoading && !isError && visibleBanners.length === 0 && (
         <div style={{ color: "#4B5563", fontSize: 13 }}>{t("emptyHint")}</div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {(banners ?? []).map((banner) => (
+        {visibleBanners.map((banner) => {
+          const isDraft = banner.lifecycleStatus === "draft";
+          return (
           <div key={banner.id} style={rowStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -81,13 +117,13 @@ export function BannersSection() {
                   style={{
                     fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
                     padding: "3px 8px", borderRadius: 999,
-                    color: banner.isCurrentlyActive ? "#4ADE80" : "#9CA3AF",
-                    background: banner.isCurrentlyActive ? "#0F2D1A" : "#1F2937",
-                    border: `1px solid ${banner.isCurrentlyActive ? "#166534" : "#374151"}`,
+                    color: isDraft ? "#9CA3AF" : banner.isCurrentlyActive ? "#4ADE80" : "#9CA3AF",
+                    background: isDraft ? "#1F2937" : banner.isCurrentlyActive ? "#0F2D1A" : "#1F2937",
+                    border: `1px solid ${isDraft ? "#374151" : banner.isCurrentlyActive ? "#166534" : "#374151"}`,
                     flexShrink: 0,
                   }}
                 >
-                  {banner.isCurrentlyActive ? t("statusActive") : t("statusPaused")}
+                  {isDraft ? t("statusDraft") : banner.isCurrentlyActive ? t("statusActive") : t("statusPaused")}
                 </span>
                 <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {banner.title}
@@ -104,6 +140,11 @@ export function BannersSection() {
                 <Btn size="sm" variant="ghost" onClick={() => setFormTarget(banner.id)}>
                   {t("editButton")}
                 </Btn>
+                {isDraft && (
+                  <Btn size="sm" variant="success" onClick={() => handlePublish(banner)} disabled={publish.isPending}>
+                    {t("publishButton")}
+                  </Btn>
+                )}
                 <Btn size="sm" variant="danger" onClick={() => handleDeactivate(banner)} disabled={deactivate.isPending}>
                   {t("deleteButton")}
                 </Btn>
@@ -119,7 +160,8 @@ export function BannersSection() {
 
             {analyticsOpenId === banner.id && <AnalyticsPanel bannerId={banner.id} />}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {formTarget !== false && (
