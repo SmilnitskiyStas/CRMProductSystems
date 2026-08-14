@@ -66,6 +66,15 @@ public sealed class Banner
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Null = draft, never published. Non-null = timestamp of the banner's first publish.
+    /// Intentionally separate from <see cref="IsActive"/> (manual pause) and
+    /// <see cref="ValidFrom"/>/<see cref="ValidUntil"/> (display window) — a banner can be
+    /// published and currently paused, or published and past its window, at the same time.
+    /// Set via <see cref="Publish"/> (TASK-524's publish endpoint), never via <see cref="Update"/>.
+    /// </summary>
+    public DateTime? PublishedAt { get; private set; }
+
     // Navigation (optional, for eager-loading) — mirrors Discount.Tenant/Creator.
     public Tenant? Tenant { get; private set; }
     public User? Creator { get; private set; }
@@ -88,8 +97,10 @@ public sealed class Banner
         string? imageUrl = null,
         string? externalUrl = null,
         int sortOrder = 0,
-        Guid? createdBy = null)
+        Guid? createdBy = null,
+        bool publishImmediately = true)
     {
+        var createdAt = DateTime.UtcNow;
         return new Banner
         {
             Id = Guid.NewGuid(),
@@ -110,7 +121,8 @@ public sealed class Banner
             IsActive = true,
             SortOrder = sortOrder,
             CreatedBy = createdBy,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = createdAt,
+            PublishedAt = publishImmediately ? createdAt : null,
         };
     }
 
@@ -160,6 +172,22 @@ public sealed class Banner
     {
         IsActive = isActive;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Idempotent: only sets <see cref="PublishedAt"/> when it is currently null, so publishing
+    /// an already-published banner never overwrites the original publish timestamp. Backs
+    /// TASK-524's POST /api/banners/{id}/publish.
+    /// </summary>
+    public void Publish(DateTime utcNow)
+    {
+        if (PublishedAt is not null)
+        {
+            return;
+        }
+
+        PublishedAt = utcNow;
+        UpdatedAt = utcNow;
     }
 
     /// <summary>

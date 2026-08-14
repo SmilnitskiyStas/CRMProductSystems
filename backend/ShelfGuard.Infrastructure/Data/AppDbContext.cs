@@ -2340,6 +2340,9 @@ public sealed class AppDbContext : DbContext
             e.Property(b => b.IsActive).HasDefaultValue(true);
             e.Property(b => b.SortOrder).HasDefaultValue(0);
             e.Property(b => b.CreatedAt).HasDefaultValueSql("NOW()");
+            // Null = draft, never published (TASK-523). Non-null = first-publish timestamp,
+            // set only via Banner.Publish(), never via the general Update() edit path.
+            e.Property(b => b.PublishedAt);
             // Consumer feed query: active banners for a tenant, ordered for display.
             e.HasIndex(b => new { b.TenantId, b.IsActive, b.SortOrder })
              .HasDatabaseName("idx_banners_tenant_active_sort");
