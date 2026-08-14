@@ -80,6 +80,19 @@ public sealed class BannersController : ControllerBase
         return Ok(banner);
     }
 
+    /// <summary>First-publish — sets PublishedAt (idempotent, no-op if already published).</summary>
+    [HttpPost("{id:guid}/publish")]
+    [ProducesResponseType(typeof(BannerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Publish(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (banner, error) = await _service.PublishAsync(tenantId.Value, id, ct);
+        return banner is null ? NotFound(new { error }) : Ok(banner);
+    }
+
     /// <summary>Soft-hide — sets IsActive=false. Never a hard delete.</summary>
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

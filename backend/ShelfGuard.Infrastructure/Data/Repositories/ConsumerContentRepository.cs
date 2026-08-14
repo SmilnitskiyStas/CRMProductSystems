@@ -18,6 +18,7 @@ public sealed class ConsumerContentRepository : IConsumerContentRepository
     {
         var banners = await _db.Banners
             .Where(b => b.TenantId == tenantId
+                && b.PublishedAt != null
                 && b.IsActive
                 && b.ValidFrom <= utcNow
                 && (b.ValidUntil == null || b.ValidUntil >= utcNow)

@@ -20,6 +20,10 @@ public interface IBannerService
     Task<(bool Success, string? Error)> DeactivateAsync(
         Guid tenantId, Guid id, CancellationToken ct = default);
 
+    /// <summary>Idempotent first-publish — sets PublishedAt if still null. No-op if already published.</summary>
+    Task<(BannerDto? Banner, string? Error)> PublishAsync(
+        Guid tenantId, Guid id, CancellationToken ct = default);
+
     Task<(string? Url, string? Error)> UploadImageAsync(
         Guid tenantId, Guid id, Stream imageStream, string fileName, CancellationToken ct = default);
 

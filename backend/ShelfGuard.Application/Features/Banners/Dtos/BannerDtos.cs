@@ -28,8 +28,19 @@ public sealed record BannerDto(
     int ViewCount,
     int ClickCount,
     DateTime CreatedAt,
-    DateTime? UpdatedAt
+    DateTime? UpdatedAt,
+    DateTime? PublishedAt,
+    string LifecycleStatus
 );
+
+/// <summary>One of "draft" | "running" | "past" — computed, never stored. See
+/// <see cref="BannerService"/>'s mapping helper for the derivation rule.</summary>
+public static class BannerLifecycleStatus
+{
+    public const string Draft = "draft";
+    public const string Running = "running";
+    public const string Past = "past";
+}
 
 public sealed record CreateBannerRequest(
     string Title,
@@ -47,7 +58,8 @@ public sealed record CreateBannerRequest(
     DateTime? ValidUntil = null,
     int SortOrder = 0,
     Guid[]? LocationIds = null,
-    Guid[]? ProductIds = null
+    Guid[]? ProductIds = null,
+    bool PublishImmediately = true
 );
 
 /// <summary>Full-replace PUT body — mirrors every field <c>Banner.Update</c> accepts, plus the join arrays.</summary>

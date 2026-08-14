@@ -55,7 +55,8 @@ public sealed class BannerService : IBannerService
             imageUrl:        request.ImageUrl,
             externalUrl:     request.ExternalUrl,
             sortOrder:       request.SortOrder,
-            createdBy:       createdBy);
+            createdBy:       createdBy,
+            publishImmediately: request.PublishImmediately);
 
         await _repo.AddAsync(banner, ct);
         await _repo.ReplaceLocationsAsync(tenantId, banner.Id, request.LocationIds ?? [], ct);
@@ -98,6 +99,22 @@ public sealed class BannerService : IBannerService
         _repo.Update(banner);
         await _repo.ReplaceLocationsAsync(tenantId, banner.Id, request.LocationIds ?? [], ct);
         await _repo.ReplaceProductsAsync(tenantId, banner.Id, request.ProductIds ?? [], ct);
+        await _repo.SaveChangesAsync(ct);
+
+        var dtos = await ToDtosAsync(tenantId, [banner], ct);
+        return (dtos[0], null);
+    }
+
+    // ── Publish ──────────────────────────────────────────────────────────────
+
+    public async Task<(BannerDto? Banner, string? Error)> PublishAsync(
+        Guid tenantId, Guid id, CancellationToken ct = default)
+    {
+        var banner = await _repo.GetByIdAsync(tenantId, id, ct);
+        if (banner is null) return (null, "Banner not found.");
+
+        banner.Publish(DateTime.UtcNow);
+        _repo.Update(banner);
         await _repo.SaveChangesAsync(ct);
 
         var dtos = await ToDtosAsync(tenantId, [banner], ct);
@@ -205,16 +222,26 @@ public sealed class BannerService : IBannerService
         return banners.Select(b =>
         {
             var (views, clicks) = countsMap.GetValueOrDefault(b.Id, (0, 0));
+            var isCurrentlyActive = b.IsCurrentlyActive(now);
             return new BannerDto(
                 b.Id, b.Title, b.Eyebrow, b.Description, b.Body, b.Terms,
                 b.ImageUrl, b.Icon, b.BackgroundColor, b.AccentColor,
                 b.DetailMode, b.ExternalUrl,
-                b.ValidFrom, b.ValidUntil, b.IsActive, b.IsCurrentlyActive(now),
+                b.ValidFrom, b.ValidUntil, b.IsActive, isCurrentlyActive,
                 b.SortOrder,
                 locationsMap.GetValueOrDefault(b.Id, []),
                 productsMap.GetValueOrDefault(b.Id, []),
                 views, clicks,
-                b.CreatedAt, b.UpdatedAt);
+                b.CreatedAt, b.UpdatedAt,
+                b.PublishedAt, LifecycleStatusOf(b.PublishedAt, isCurrentlyActive));
         }).ToList();
+    }
+
+    /// <summary>"draft" | "running" | "past" — derived the same way <see cref="Banner.IsCurrentlyActive"/>
+    /// is, never stored. See <see cref="BannerLifecycleStatus"/>.</summary>
+    private static string LifecycleStatusOf(DateTime? publishedAt, bool isCurrentlyActive)
+    {
+        if (publishedAt is null) return BannerLifecycleStatus.Draft;
+        return isCurrentlyActive ? BannerLifecycleStatus.Running : BannerLifecycleStatus.Past;
     }
 }
