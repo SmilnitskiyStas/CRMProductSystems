@@ -79,6 +79,11 @@ public static class DependencyInjection
         // Discounts
         services.AddScoped<IDiscountRepository, DiscountRepository>();
 
+        // Consumer App plan (TASK-521) - Banners (admin CRUD) + consumer-facing content reads
+        services.AddScoped<IBannerRepository, BannerRepository>();
+        services.AddScoped<Application.Features.ConsumerContent.IConsumerContentRepository,
+            ConsumerContentRepository>();
+
         // Activity log
         services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
 
