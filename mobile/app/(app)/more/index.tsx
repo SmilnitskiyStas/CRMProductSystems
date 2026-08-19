@@ -3,6 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/features/auth/store';
+import { useModulesSettings } from '@/features/navigation/hooks';
+import { visibleRoutes } from '@/features/navigation/policy';
 
 const ROLE_LABELS: Record<string, string> = {
   enterprise_admin: 'Адміністратор підприємства',
@@ -84,6 +86,8 @@ const MODULES: ModuleItem[] = [
 export default function MoreScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const { data: settings } = useModulesSettings(Boolean(user?.tenantId));
+  const visibleModules = visibleRoutes(MODULES, { user, settings: settings ?? null });
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -123,13 +127,13 @@ export default function MoreScreen() {
         </View>
 
         <View className="mx-4 bg-white rounded-2xl overflow-hidden">
-          {MODULES.map((item, index) => (
+          {visibleModules.map((item, index) => (
             <TouchableOpacity
               key={item.href}
               onPress={() => router.push(item.href as Parameters<typeof router.push>[0])}
               activeOpacity={0.7}
               className={`flex-row items-center px-4 py-3.5 ${
-                index < MODULES.length - 1 ? 'border-b border-gray-50' : ''
+                index < visibleModules.length - 1 ? 'border-b border-gray-50' : ''
               }`}
             >
               <View

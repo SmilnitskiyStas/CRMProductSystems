@@ -31,48 +31,51 @@ namespace ShelfGuard.Tests.Infrastructure;
 /// project's CI (`.github/workflows/ci.yml`) has no Postgres service, so `dotnet test` in CI never
 /// exercises this class; it is meant to run locally against `docker compose up -d postgres`.
 /// Override the target via env var SHELFGUARD_TEST_DB_CONNECTION if needed.
+///
+/// TASK-553: part of the <c>TENANT_ISOLATION_TESTS</c> collection — <c>rls_audit_test_role</c> is
+/// created once for the whole collection by <see cref="RlsAuditRoleFixture"/>, not by this class
+/// (see that fixture's remarks for why the old per-class bootstrap raced under parallel execution).
 /// </summary>
+[Collection("TENANT_ISOLATION_TESTS")]
 public sealed class RlsCrossTenantIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
+    private readonly RlsAuditRoleFixture _fixture;
     private readonly ITestOutputHelper _output;
     private NpgsqlConnection? _connection;
     private bool _dbAvailable;
 
-    public RlsCrossTenantIntegrationTests(ITestOutputHelper output) => _output = output;
+    public RlsCrossTenantIntegrationTests(RlsAuditRoleFixture fixture, ITestOutputHelper output)
+    {
+        _fixture = fixture;
+        _output = output;
+    }
 
     public async Task InitializeAsync()
     {
-        var connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+        if (!_fixture.DbAvailable)
+        {
+            _dbAvailable = false;
+            _output.WriteLine(
+                $"Skipping RLS integration tests — no reachable Postgres at '{_fixture.ConnectionString}': {_fixture.UnavailableReason}");
+            return;
+        }
 
         try
         {
-            _connection = new NpgsqlConnection(connectionString);
-            await _connection.OpenAsync();
-            _dbAvailable = true;
-
             // Throwaway non-superuser role for this test run only — the fixture's connection
             // stays superuser so it can SET ROLE at will and clean up afterwards; the actual
             // RLS-under-test statements run with `SET ROLE` active, which drops BYPASSRLS for
-            // the remainder of the session (RESET ROLE restores it).
-            await ExecAsync(@"
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rls_audit_test_role') THEN
-                        CREATE ROLE rls_audit_test_role NOSUPERUSER NOBYPASSRLS;
-                    END IF;
-                END $$;
-                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO rls_audit_test_role;
-            ");
+            // the remainder of the session (RESET ROLE restores it). Role itself is created once
+            // by RlsAuditRoleFixture, shared across the whole TENANT_ISOLATION_TESTS collection.
+            _connection = new NpgsqlConnection(_fixture.ConnectionString);
+            await _connection.OpenAsync();
+            _dbAvailable = true;
         }
         catch (Exception ex)
         {
             _dbAvailable = false;
             _output.WriteLine(
-                $"Skipping RLS integration tests — no reachable Postgres at '{connectionString}': {ex.Message}");
+                $"Skipping RLS integration tests — no reachable Postgres at '{_fixture.ConnectionString}': {ex.Message}");
         }
     }
 

@@ -285,7 +285,7 @@ export default function SupplierDetailScreen() {
                 key={tab}
                 onPress={() => setActiveTab(tab)}
                 className={`flex-1 py-2 rounded-lg items-center ${
-                  activeTab === tab ? 'bg-white shadow-sm' : ''
+                  activeTab === tab ? 'bg-white' : ''
                 }`}
               >
                 <Text className={`text-sm font-semibold ${activeTab === tab ? 'text-gray-900' : 'text-gray-500'}`}>

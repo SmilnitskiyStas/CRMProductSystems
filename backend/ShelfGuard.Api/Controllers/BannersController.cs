@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Banners;
 using ShelfGuard.Application.Features.Banners.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
@@ -18,8 +19,13 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class BannersController : ControllerBase
 {
     private readonly IBannerService _service;
+    private readonly ITenantContext _tenantContext;
 
-    public BannersController(IBannerService service) => _service = service;
+    public BannersController(IBannerService service, ITenantContext tenantContext)
+    {
+        _service = service;
+        _tenantContext = tenantContext;
+    }
 
     /// <summary>List banners for the current tenant. Supports ?locationId and ?activeOnly filters.</summary>
     [HttpGet]
@@ -29,7 +35,7 @@ public sealed class BannersController : ControllerBase
         [FromQuery] bool? activeOnly = null,
         CancellationToken ct = default)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var result = await _service.GetAllAsync(tenantId.Value, new BannerListQuery(locationId, activeOnly), ct);
@@ -41,7 +47,7 @@ public sealed class BannersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (banner, error) = await _service.GetByIdAsync(tenantId.Value, id, ct);
@@ -54,7 +60,7 @@ public sealed class BannersController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateBannerRequest request, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (banner, error) = await _service.CreateAsync(tenantId.Value, ResolveUserId(), request, ct);
@@ -70,7 +76,7 @@ public sealed class BannersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateBannerRequest request, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (banner, error) = await _service.UpdateAsync(tenantId.Value, id, request, ct);
@@ -86,7 +92,7 @@ public sealed class BannersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Publish(Guid id, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (banner, error) = await _service.PublishAsync(tenantId.Value, id, ct);
@@ -99,7 +105,7 @@ public sealed class BannersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (success, error) = await _service.DeactivateAsync(tenantId.Value, id, ct);
@@ -113,7 +119,7 @@ public sealed class BannersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         if (file is null || file.Length == 0)
@@ -137,7 +143,7 @@ public sealed class BannersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAnalytics(Guid id, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (analytics, error) = await _service.GetAnalyticsAsync(tenantId.Value, id, ct);
@@ -145,12 +151,6 @@ public sealed class BannersController : ControllerBase
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
-
-    private Guid? ResolveTenantId()
-    {
-        var raw = User.FindFirst("tenant_id")?.Value;
-        return Guid.TryParse(raw, out var id) && id != Guid.Empty ? id : null;
-    }
 
     private Guid? ResolveUserId()
     {

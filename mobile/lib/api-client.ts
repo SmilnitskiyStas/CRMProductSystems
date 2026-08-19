@@ -12,6 +12,17 @@ import {
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 const WORKSPACE_ACCESS_TOKEN_KEY = 'workspace_access_token';
 const PERSONAL_ACCESS_TOKEN_KEY = 'personal_access_token';
+export const API_TIMEOUT_MS = 15_000;
+
+export function resolveApiAssetUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const normalized = path.trim();
+  if (/^https:\/\//i.test(normalized)) return normalized;
+  if (__DEV__ && /^http:\/\//i.test(normalized)) return normalized;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) || normalized.startsWith('//')) return null;
+  const origin = BASE_URL.replace(/\/api\/?$/, '');
+  return `${origin}${normalized.startsWith('/') ? normalized : `/${normalized}`}`;
+}
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
@@ -28,6 +39,7 @@ let refreshPromise: Promise<string> | null = null;
 export const apiClient = axios.create({
   baseURL: BASE_URL,
   withCredentials: true,
+  timeout: API_TIMEOUT_MS,
 });
 
 apiClient.interceptors.request.use(async (config) => {
@@ -61,6 +73,7 @@ async function requestRefreshedAccessToken(): Promise<string> {
     refreshPromise = axios
       .post<{ accessToken?: string }>(`${BASE_URL}/auth/refresh`, null, {
         withCredentials: true,
+        timeout: API_TIMEOUT_MS,
       })
       .then(({ data }) => {
         if (!data.accessToken) throw new Error('REFRESH_TOKEN_MISSING');
@@ -142,6 +155,7 @@ apiClient.interceptors.response.use(
 export const personalApiClient = axios.create({
   baseURL: BASE_URL,
   withCredentials: true,
+  timeout: API_TIMEOUT_MS,
 });
 
 personalApiClient.interceptors.request.use(async (config) => {

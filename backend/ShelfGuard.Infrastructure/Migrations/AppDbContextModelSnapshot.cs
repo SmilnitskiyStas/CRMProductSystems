@@ -1894,6 +1894,185 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("marketplace_order_items", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("DraftVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PublishedVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftVersionId");
+
+                    b.HasIndex("PublishedVersionId");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mobile_configurations_tenant");
+
+                    b.ToTable("mobile_configurations", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfigurationVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("ConfigurationJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MobileConfigurationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("draft");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("MobileConfigurationId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mobile_configuration_versions_config_version");
+
+                    b.HasIndex("TenantId", "Status")
+                        .HasDatabaseName("idx_mobile_configuration_versions_tenant_status");
+
+                    b.ToTable("mobile_configuration_versions", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileTheme", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("BackgroundColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("ButtonRadius")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CardRadius")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LogoUrl")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("MobileConfigurationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PrimaryColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SecondaryColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SpacingPreset")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SurfaceColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TextPrimaryColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TextSecondaryColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MobileConfigurationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mobile_themes_config");
+
+                    b.ToTable("mobile_themes", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.NotificationQueue", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4602,6 +4781,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<string>("LogoUrl")
+                        .HasColumnType("text");
+
                     b.Property<string>("Modules")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -4624,6 +4806,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
 
                     b.HasKey("Id");
 
@@ -5749,6 +5936,60 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Order");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfiguration", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.MobileConfigurationVersion", "DraftVersion")
+                        .WithMany()
+                        .HasForeignKey("DraftVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.MobileConfigurationVersion", "PublishedVersion")
+                        .WithMany()
+                        .HasForeignKey("PublishedVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DraftVersion");
+
+                    b.Navigation("PublishedVersion");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfigurationVersion", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.MobileConfiguration", "MobileConfiguration")
+                        .WithMany()
+                        .HasForeignKey("MobileConfigurationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("MobileConfiguration");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileTheme", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.MobileConfiguration", "MobileConfiguration")
+                        .WithOne("Theme")
+                        .HasForeignKey("ShelfGuard.Domain.Entities.MobileTheme", "MobileConfigurationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MobileConfiguration");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.NotificationSetting", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.User", "User")
@@ -6823,6 +7064,11 @@ namespace ShelfGuard.Infrastructure.Migrations
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MarketplaceOrder", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfiguration", b =>
+                {
+                    b.Navigation("Theme");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PosTransaction", b =>

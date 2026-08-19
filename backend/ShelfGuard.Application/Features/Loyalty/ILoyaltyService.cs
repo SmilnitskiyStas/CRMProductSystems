@@ -27,6 +27,75 @@ public interface ILoyaltyService
     Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetAvailableNetworksAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// TASK-548: single-network lookup backing <c>GET /api/v1/retailers/{slug}</c>. Applies the
+    /// exact same eligibility rule <see cref="GetAvailableNetworksAsync"/> filters its list by
+    /// (decision 1's accepted consequence) — an unknown slug, an inactive tenant, a tenant
+    /// without the "loyalty" module, or a tenant whose <see cref="Loyalty.LoyaltyProgramSettings"/>
+    /// row exists but has <c>IsEnabled = false</c> are all indistinguishable 404s to the caller,
+    /// same as they're simply omitted from the list endpoint. Status codes: 404 only.
+    /// </summary>
+    Task<(LoyaltyNetworkSummaryDto? Network, string? Error, int? StatusCode)> GetNetworkBySlugAsync(
+        string slug, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-548: slug-addressed counterpart to <see cref="JoinAsync"/> backing
+    /// <c>POST /api/v1/retailers/{slug}/join</c> — resolves <paramref name="slug"/> to a tenant
+    /// id and delegates to <see cref="JoinAsync"/> for every other rule (module gate, idempotency,
+    /// reactivating a previously-left membership). Status codes: 404 unknown slug (added by this
+    /// method itself), plus everything <see cref="JoinAsync"/> can return once the tenant is
+    /// resolved (404 impossible from there on, 403 module not active).
+    /// </summary>
+    Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> JoinBySlugAsync(
+        Guid consumerAccountId, string slug, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-548: leaves a previously joined loyalty network — soft-deactivates the membership
+    /// (<see cref="ShelfGuard.Domain.Entities.LoyaltyMembershipStatus.Left"/>) rather than
+    /// deleting it, preserving Balance/JoinedAt/ledger history exactly as-is (never hard-delete
+    /// financial/loyalty data — see <see cref="ShelfGuard.Domain.Entities.LoyaltyMembershipStatus"/>
+    /// doc). Idempotent: leaving an already-left membership succeeds again without a redundant
+    /// write. Not gated on the tenant's current "loyalty" module state or
+    /// <see cref="ShelfGuard.Domain.Entities.Tenant.IsActive"/> — a consumer must always be able
+    /// to leave a network they once joined, independent of whether the retailer later disabled
+    /// the program. Status codes: 404 the consumer has no membership at this tenant to leave.
+    /// </summary>
+    Task<(bool Success, string? Error, int? StatusCode)> LeaveAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-548: slug-addressed counterpart to <see cref="LeaveAsync"/> backing
+    /// <c>DELETE /api/v1/retailers/{slug}/membership</c>. Status codes: 404 unknown slug (added
+    /// by this method itself) or no membership to leave (from <see cref="LeaveAsync"/>).
+    /// </summary>
+    Task<(bool Success, string? Error, int? StatusCode)> LeaveBySlugAsync(
+        Guid consumerAccountId, string slug, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-549: anonymous public lookup backing <c>GET /api/v1/retailers/{slug}/public</c> —
+    /// the QR/deep-link onboarding web fallback page, reached by anyone who scans a retailer's
+    /// QR code before installing the app or logging in. Takes no consumer identity, unlike every
+    /// other consumer-facing method in this interface.
+    ///
+    /// Design decision (TASK-549): kept as a separate method/DTO/route rather than relaxing
+    /// <see cref="GetNetworkBySlugAsync"/>'s <c>[Authorize]</c> requirement, even though that
+    /// method itself never actually reads a consumer id (its auth gate lives entirely in
+    /// <c>RetailersController</c>). The reason is its DTO, <see cref="LoyaltyNetworkSummaryDto"/>:
+    /// it carries the tenant's full shoppable-store list (name+address per location) and internal
+    /// <c>TenantId</c> guid, neither of which is safe to hand to an unauthenticated caller. This
+    /// method instead reuses <see cref="GetNetworkBySlugAsync"/>'s exact eligibility filter
+    /// (tenant active, "loyalty" module enabled, <see cref="Loyalty.LoyaltyProgramSettings.IsEnabled"/>
+    /// not explicitly false) and its indistinguishable-404 policy: an unknown slug, an inactive
+    /// tenant, a tenant without the "loyalty" module, and a tenant that has since paused its
+    /// program are all identical 404s — the same enumeration posture TASK-548's decision 1
+    /// already established for the list/single-network endpoints, applied consistently here so
+    /// this new anonymous surface cannot be used to distinguish "never existed" from "existed
+    /// once, deactivated/paused" any more precisely than the existing authenticated endpoint
+    /// already can. Status codes: 404 only.
+    /// </summary>
+    Task<(RetailerPublicInfoDto? Info, string? Error, int? StatusCode)> GetPublicRetailerInfoAsync(
+        string slug, CancellationToken ct = default);
+
+    /// <summary>
     /// TASK-499: <paramref name="tenantId"/> is optional and resolves which tenant's
     /// <c>CustomerCodeFormat</c> becomes the response's <c>DisplayFormat</c>:
     /// <list type="bullet">

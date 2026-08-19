@@ -33,14 +33,16 @@ namespace ShelfGuard.Tests.Infrastructure;
 /// composed from real CustomerRepository/LoyaltyRepository/ConsumerAccountRepository/
 /// TenantRepository/TenantSessionOverride, not stubs, end to end. Same connection/skip/cleanup
 /// pattern as LoyaltyRlsIntegrationTests/RlsCrossTenantIntegrationTests.
+///
+/// TASK-553: part of the <c>TENANT_ISOLATION_TESTS</c> collection — <c>rls_audit_test_role</c> is
+/// created once for the whole collection by <see cref="RlsAuditRoleFixture"/>, not by this class.
 /// </summary>
+[Collection("TENANT_ISOLATION_TESTS")]
 public sealed class LoyaltyJoinRlsIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
+    private readonly RlsAuditRoleFixture _fixture;
     private readonly ITestOutputHelper _output;
-    private string _connectionString = DefaultConnectionString;
+    private string _connectionString = RlsAuditRoleFixture.DefaultConnectionString;
     private bool _dbAvailable;
 
     // TASK-417: ONE NpgsqlDataSource (and one DbContextOptions built from it) for this whole
@@ -61,29 +63,26 @@ public sealed class LoyaltyJoinRlsIntegrationTests : IAsyncLifetime
     private NpgsqlDataSource? _dataSource;
     private DbContextOptions<AppDbContext>? _options;
 
-    public LoyaltyJoinRlsIntegrationTests(ITestOutputHelper output) => _output = output;
+    public LoyaltyJoinRlsIntegrationTests(RlsAuditRoleFixture fixture, ITestOutputHelper output)
+    {
+        _fixture = fixture;
+        _output = output;
+    }
 
     public async Task InitializeAsync()
     {
-        _connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+        _connectionString = _fixture.ConnectionString;
+
+        if (!_fixture.DbAvailable)
+        {
+            _dbAvailable = false;
+            _output.WriteLine(
+                $"Skipping Loyalty join RLS integration tests — no reachable Postgres at '{_connectionString}': {_fixture.UnavailableReason}");
+            return;
+        }
 
         try
         {
-            await using var probe = new NpgsqlConnection(_connectionString);
-            await probe.OpenAsync();
-            await using var cmd = new NpgsqlCommand(
-                @"
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rls_audit_test_role') THEN
-                        CREATE ROLE rls_audit_test_role NOSUPERUSER NOBYPASSRLS;
-                    END IF;
-                END $$;
-                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO rls_audit_test_role;",
-                probe);
-            await cmd.ExecuteNonQueryAsync();
-
             _dataSource = new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build();
             _options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseNpgsql(_dataSource)

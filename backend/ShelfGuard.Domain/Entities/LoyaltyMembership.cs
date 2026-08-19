@@ -39,7 +39,7 @@ public sealed class LoyaltyMembership
     public long? LastRedeemedTimestep { get; set; }
 
     public decimal Balance { get; set; }
-    /// <summary>active | blocked</summary>
+    /// <summary>active | blocked | left</summary>
     public string Status { get; set; } = "active";
     public DateTimeOffset JoinedAt { get; init; } = DateTimeOffset.UtcNow;
 
@@ -55,6 +55,16 @@ public static class LoyaltyMembershipStatus
 {
     public const string Active  = "active";
     public const string Blocked = "blocked";
+    /// <summary>
+    /// TASK-548: consumer left the network via <c>DELETE /api/v1/retailers/{slug}/membership</c>
+    /// (<see cref="Loyalty.LoyaltyService.LeaveAsync"/>). A soft deactivation, not a delete —
+    /// Balance/JoinedAt/LedgerEntries/TotpSecret are all preserved unchanged (same
+    /// never-hard-delete-financial-history precedent as <see cref="Customer.TotalSpent"/> and
+    /// <see cref="Tenant.Deactivate"/>). Rejoining the same network
+    /// (<see cref="Loyalty.LoyaltyService.JoinAsync"/>) reactivates this same row back to
+    /// <see cref="Active"/> rather than creating a new membership or erroring.
+    /// </summary>
+    public const string Left = "left";
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string> { Active, Blocked };
+    public static readonly IReadOnlySet<string> All = new HashSet<string> { Active, Blocked, Left };
 }

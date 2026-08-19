@@ -56,7 +56,7 @@ export default function ServiceDeskScreen() {
           <TouchableOpacity
             onPress={() => setActiveTab('my')}
             className={`flex-1 py-2 rounded-lg items-center ${
-              activeTab === 'my' ? 'bg-white shadow-sm' : ''
+              activeTab === 'my' ? 'bg-white' : ''
             }`}
           >
             <Text
@@ -70,7 +70,7 @@ export default function ServiceDeskScreen() {
           <TouchableOpacity
             onPress={() => setActiveTab('all')}
             className={`flex-1 py-2 rounded-lg items-center ${
-              activeTab === 'all' ? 'bg-white shadow-sm' : ''
+              activeTab === 'all' ? 'bg-white' : ''
             }`}
           >
             <Text

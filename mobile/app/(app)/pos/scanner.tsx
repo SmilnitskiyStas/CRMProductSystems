@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { cssInterop } from 'nativewind';
 import { getProductByBarcode } from '@/features/stock/api/stockApi';
 import type { SaleItem } from '@/features/pos/types';
+import { usePosDraftStore } from '@/features/pos/draftStore';
+import { NetworkBanner } from '@/features/pos/components/NetworkBanner';
 
 cssInterop(CameraView, { className: 'style' });
 
@@ -45,10 +47,16 @@ export default function PosScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
   const [loadingBarcode, setLoadingBarcode] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const cart = usePosDraftStore((state) => state.cart) as CartItem[];
+  const setCart = usePosDraftStore((state) => state.setCart);
+  const setShift = usePosDraftStore((state) => state.setShift);
   const lastScanRef = useRef<string | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+
+  useEffect(() => {
+    if (shiftId) setShift(shiftId);
+  }, [setShift, shiftId]);
 
   const handleBarCodeScanned = useCallback(
     async ({ data }: { data: string }) => {
@@ -62,7 +70,9 @@ export default function PosScannerScreen() {
       try {
         const product: ProductInfo = await getProductByBarcode(data);
 
-        setCart((prev) => {
+        const previous = usePosDraftStore.getState().cart;
+        setCart((() => {
+          const prev = previous;
           const existing = prev.find((i) => i.barcode === data);
           if (existing) {
             return prev.map((i) =>
@@ -79,7 +89,7 @@ export default function PosScannerScreen() {
               isCritical: product.status === 'critical',
             },
           ];
-        });
+        })());
       } catch {
         Alert.alert('Товар не знайдено', `Штрихкод: ${data}`);
       } finally {
@@ -91,28 +101,27 @@ export default function PosScannerScreen() {
         }, 1500);
       }
     },
-    [scanning, loadingBarcode]
+    [scanning, loadingBarcode, setCart]
   );
 
   const increaseQty = (barcode: string) => {
-    setCart((prev) =>
-      prev.map((i) => (i.barcode === barcode ? { ...i, quantity: i.quantity + 1 } : i))
-    );
+    const prev = usePosDraftStore.getState().cart;
+    setCart(prev.map((i) => (i.barcode === barcode ? { ...i, quantity: i.quantity + 1 } : i)));
   };
 
   const decreaseQty = (barcode: string) => {
-    setCart((prev) => {
-      const item = prev.find((i) => i.barcode === barcode);
-      if (!item) return prev;
-      if (item.quantity <= 1) return prev.filter((i) => i.barcode !== barcode);
-      return prev.map((i) =>
-        i.barcode === barcode ? { ...i, quantity: i.quantity - 1 } : i
-      );
-    });
+    const prev = usePosDraftStore.getState().cart;
+    const item = prev.find((i) => i.barcode === barcode);
+    if (!item) return;
+    if (item.quantity <= 1) {
+      setCart(prev.filter((i) => i.barcode !== barcode));
+      return;
+    }
+    setCart(prev.map((i) => (i.barcode === barcode ? { ...i, quantity: i.quantity - 1 } : i)));
   };
 
   const removeItem = (barcode: string) => {
-    setCart((prev) => prev.filter((i) => i.barcode !== barcode));
+    setCart(usePosDraftStore.getState().cart.filter((i) => i.barcode !== barcode));
   };
 
   const handleGoToPayment = () => {
@@ -162,6 +171,7 @@ export default function PosScannerScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-900">
+      <NetworkBanner />
       {/* Top bar */}
       <View className="flex-row items-center px-4 py-3">
         <TouchableOpacity

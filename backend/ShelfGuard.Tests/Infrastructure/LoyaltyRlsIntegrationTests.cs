@@ -19,44 +19,45 @@ namespace ShelfGuard.Tests.Infrastructure;
 /// rows across every tenant it holds a membership in — while a normal staff session (which
 /// never sets app.consumer_account_id) must still see only its own tenant's rows exactly
 /// as before, unaffected by this policy's mere presence.
+///
+/// TASK-553: part of the <c>TENANT_ISOLATION_TESTS</c> collection — <c>rls_audit_test_role</c> is
+/// created once for the whole collection by <see cref="RlsAuditRoleFixture"/>, not by this class.
 /// </summary>
+[Collection("TENANT_ISOLATION_TESTS")]
 public sealed class LoyaltyRlsIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
+    private readonly RlsAuditRoleFixture _fixture;
     private readonly ITestOutputHelper _output;
     private NpgsqlConnection? _connection;
     private bool _dbAvailable;
 
-    public LoyaltyRlsIntegrationTests(ITestOutputHelper output) => _output = output;
+    public LoyaltyRlsIntegrationTests(RlsAuditRoleFixture fixture, ITestOutputHelper output)
+    {
+        _fixture = fixture;
+        _output = output;
+    }
 
     public async Task InitializeAsync()
     {
-        var connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+        if (!_fixture.DbAvailable)
+        {
+            _dbAvailable = false;
+            _output.WriteLine(
+                $"Skipping Loyalty RLS integration tests — no reachable Postgres at '{_fixture.ConnectionString}': {_fixture.UnavailableReason}");
+            return;
+        }
 
         try
         {
-            _connection = new NpgsqlConnection(connectionString);
+            _connection = new NpgsqlConnection(_fixture.ConnectionString);
             await _connection.OpenAsync();
             _dbAvailable = true;
-
-            await ExecAsync(@"
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rls_audit_test_role') THEN
-                        CREATE ROLE rls_audit_test_role NOSUPERUSER NOBYPASSRLS;
-                    END IF;
-                END $$;
-                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO rls_audit_test_role;
-            ");
         }
         catch (Exception ex)
         {
             _dbAvailable = false;
             _output.WriteLine(
-                $"Skipping Loyalty RLS integration tests — no reachable Postgres at '{connectionString}': {ex.Message}");
+                $"Skipping Loyalty RLS integration tests — no reachable Postgres at '{_fixture.ConnectionString}': {ex.Message}");
         }
     }
 

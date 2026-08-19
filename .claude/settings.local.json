@@ -5,5 +5,12 @@
       "Bash(git push origin main)",
       "PowerShell(git push origin main)"
     ]
-  }
+  },
+  "autoMode": {
+  "allow": [
+    "$defaults",
+    "Bash(git push*)",
+    "PowerShell(git push*)"
+  ]
+}
 }

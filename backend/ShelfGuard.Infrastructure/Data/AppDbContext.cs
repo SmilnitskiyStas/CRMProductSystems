@@ -173,6 +173,12 @@ public sealed class AppDbContext : DbContext
     public DbSet<BannerProduct> BannerProducts => Set<BannerProduct>();
     public DbSet<BannerEvent> BannerEvents => Set<BannerEvent>();
 
+    // Mobile Configuration domain — multi-tenant consumer app-builder (CLAUDE CODE SPEC ЕТАП 3,
+    // TASK-531). Schema only; validation/CRUD/publish/API land in TASK-532/534.
+    public DbSet<MobileConfiguration> MobileConfigurations => Set<MobileConfiguration>();
+    public DbSet<MobileConfigurationVersion> MobileConfigurationVersions => Set<MobileConfigurationVersion>();
+    public DbSet<MobileTheme> MobileThemes => Set<MobileTheme>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         // ── Tenant ─────────────────────────────────────────────────────────
@@ -188,7 +194,9 @@ public sealed class AppDbContext : DbContext
             e.Property(t => t.Modules).HasColumnType("jsonb").HasDefaultValue("[]");
             e.Property(t => t.BusinessType).HasMaxLength(50).HasDefaultValue("retail");
             e.Property(t => t.IsActive).HasDefaultValue(true);
+            e.Property(t => t.LogoUrl).HasColumnType("text").IsRequired(false);
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(t => t.UpdatedAt).HasDefaultValueSql("NOW()");
         });
 
         // ── User ────────────────────────────────────────────────────────────
@@ -2417,6 +2425,103 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(x => x.BannerId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<ConsumerAccount>().WithMany()
              .HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── MobileConfiguration domain (multi-tenant consumer app-builder, TASK-531) ──────
+        // Root + versions with a pointer: MobileConfiguration.PublishedVersionId/DraftVersionId
+        // point at MobileConfigurationVersion (Restrict — a version can't be deleted out from
+        // under an active pointer), while MobileConfigurationVersion.MobileConfigurationId points
+        // back (Cascade — deleting the root config deletes all of its versions). See
+        // MobileConfiguration's class remarks for why this single-cascade-path shape is safe
+        // under PostgreSQL despite the circular FK.
+        builder.Entity<MobileConfiguration>(e =>
+        {
+            e.ToTable("mobile_configurations");
+            e.HasKey(m => m.Id);
+            e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.TenantId).IsRequired();
+            e.Property(m => m.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(m => m.UpdatedAt).HasDefaultValueSql("NOW()");
+            // TASK-544: same xmin optimistic-concurrency pattern as ProductStock (TASK-356) and
+            // LoyaltyMembership (TASK-414) — no schema change needed, xmin already exists on every
+            // row. This is the "pointer" row a publish repoints (PublishedVersionId/DraftVersionId)
+            // — without a token, two concurrent PublishAsync calls for the same tenant could race a
+            // last-write-wins UPDATE here, silently losing one publish's pointer update. Now the
+            // loser's SaveChangesAsync throws DbUpdateConcurrencyException instead;
+            // MobileConfigurationRepository translates that into ConcurrencyConflictException, and
+            // MobileConfigPublishService.PublishAsync turns it into a clean "retry" error.
+            e.Property<uint>("xmin").IsRowVersion();
+            // One row per tenant.
+            e.HasIndex(m => m.TenantId).IsUnique().HasDatabaseName("uq_mobile_configurations_tenant");
+            e.HasOne(m => m.Tenant).WithMany()
+             .HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(m => m.PublishedVersion).WithMany()
+             .HasForeignKey(m => m.PublishedVersionId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+            e.HasOne(m => m.DraftVersion).WithMany()
+             .HasForeignKey(m => m.DraftVersionId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+        });
+
+        // ── MobileConfigurationVersion (TASK-531) ──────────────────────────────────────────
+        // TenantId is denormalized from the parent MobileConfiguration (not derived via join) so
+        // RLS can scope this table directly — same pattern as LoyaltyLedgerEntry.TenantId.
+        builder.Entity<MobileConfigurationVersion>(e =>
+        {
+            e.ToTable("mobile_configuration_versions");
+            e.HasKey(v => v.Id);
+            e.Property(v => v.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(v => v.MobileConfigurationId).IsRequired();
+            e.Property(v => v.TenantId).IsRequired();
+            e.Property(v => v.Version).IsRequired();
+            e.Property(v => v.SchemaVersion).IsRequired();
+            e.Property(v => v.Status).HasMaxLength(20).HasDefaultValue(MobileConfigurationVersionStatus.Draft);
+            e.Property(v => v.ConfigurationJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+            e.Property(v => v.CreatedAt).HasDefaultValueSql("NOW()");
+            // TASK-544: same xmin token as MobileConfiguration above — this is the row Publish
+            // mutates in place (ConfigurationJson gets the composed theme, Status flips to
+            // Published) before repointing MobileConfiguration's pointers. Protects against a
+            // stale concurrent writer (e.g. a second racing publish that read this row before the
+            // first one committed) silently overwriting already-published, supposedly-immutable
+            // content with a last-write-wins UPDATE.
+            e.Property<uint>("xmin").IsRowVersion();
+            // One version number per config, never reused.
+            e.HasIndex(v => new { v.MobileConfigurationId, v.Version })
+             .IsUnique()
+             .HasDatabaseName("uq_mobile_configuration_versions_config_version");
+            // Draft/publish lookups scoped by tenant + status.
+            e.HasIndex(v => new { v.TenantId, v.Status })
+             .HasDatabaseName("idx_mobile_configuration_versions_tenant_status");
+            e.HasOne(v => v.MobileConfiguration).WithMany()
+             .HasForeignKey(v => v.MobileConfigurationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(v => v.Creator).WithMany()
+             .HasForeignKey(v => v.CreatedBy).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ── MobileTheme (TASK-531) ──────────────────────────────────────────────────────────
+        // One row per MobileConfiguration (i.e. per tenant), not per version — the Theme Editor's
+        // directly-editable working record. See MobileTheme's class remarks for the full design
+        // rationale (also documented in domain-model.md).
+        builder.Entity<MobileTheme>(e =>
+        {
+            e.ToTable("mobile_themes");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.MobileConfigurationId).IsRequired();
+            e.Property(t => t.TenantId).IsRequired();
+            e.Property(t => t.LogoUrl).HasColumnType("text");
+            e.Property(t => t.PrimaryColor).HasMaxLength(20).IsRequired();
+            e.Property(t => t.SecondaryColor).HasMaxLength(20).IsRequired();
+            e.Property(t => t.BackgroundColor).HasMaxLength(20).IsRequired();
+            e.Property(t => t.SurfaceColor).HasMaxLength(20).IsRequired();
+            e.Property(t => t.TextPrimaryColor).HasMaxLength(20).IsRequired();
+            e.Property(t => t.TextSecondaryColor).HasMaxLength(20).IsRequired();
+            e.Property(t => t.ButtonRadius).IsRequired();
+            e.Property(t => t.CardRadius).IsRequired();
+            e.Property(t => t.SpacingPreset).HasMaxLength(20).IsRequired();
+            e.Property(t => t.UpdatedAt).HasDefaultValueSql("NOW()");
+            // One theme row per config.
+            e.HasIndex(t => t.MobileConfigurationId).IsUnique().HasDatabaseName("uq_mobile_themes_config");
+            e.HasOne(t => t.MobileConfiguration).WithOne(m => m.Theme)
+             .HasForeignKey<MobileTheme>(t => t.MobileConfigurationId).OnDelete(DeleteBehavior.Cascade);
         });
 
     }

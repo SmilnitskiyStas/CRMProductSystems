@@ -44,6 +44,11 @@ import {
   Target,
   LineChart,
   Smartphone,
+  Palette,
+  LayoutTemplate,
+  Compass,
+  ToggleLeft,
+  History,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -220,6 +225,11 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
       { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
       { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
       { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
     ],
   },
   {

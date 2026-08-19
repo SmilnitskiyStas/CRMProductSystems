@@ -10,7 +10,7 @@ export function NotificationBell() {
   const readIds = useNotificationReadStore((s) => s.readIds);
 
   const unreadCount = notifications
-    ? notifications.filter((n) => !readIds.has(n.id)).length
+    ? notifications.items.filter((n) => !readIds.has(n.id)).length
     : 0;
 
   return (

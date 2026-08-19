@@ -3,6 +3,7 @@ import type {
   LoyaltyCode,
   LoyaltyLedgerEntry,
   LoyaltyMembershipSummary,
+  LoyaltyNetworkSummary,
   ManualLoyaltyAdjustRequest,
   PagedResult,
   ResolveLoyaltyCodeResult,
@@ -16,8 +17,15 @@ export async function getMemberships(): Promise<LoyaltyMembershipSummary[]> {
   return data;
 }
 
-export async function getLoyaltyCode(tenantId: string): Promise<LoyaltyCode> {
-  const { data } = await personalApiClient.get<LoyaltyCode>(`/consumer/loyalty/${tenantId}/code`);
+export async function getAvailableNetworks(): Promise<LoyaltyNetworkSummary[]> {
+  const { data } = await personalApiClient.get<LoyaltyNetworkSummary[]>('/consumer/loyalty/networks');
+  return data;
+}
+
+export async function getLoyaltyCode(tenantId?: string | null): Promise<LoyaltyCode> {
+  const { data } = await personalApiClient.get<LoyaltyCode>('/consumer/loyalty/code', {
+    params: tenantId ? { tenantId } : undefined,
+  });
   return data;
 }
 
@@ -41,6 +49,17 @@ export async function getLoyaltyHistory(
  */
 export async function joinTenantProgram(tenantId: string): Promise<LoyaltyMembershipSummary> {
   const { data } = await personalApiClient.post<LoyaltyMembershipSummary>(`/consumer/loyalty/${tenantId}/join`);
+  return data;
+}
+
+export async function setPreferredStore(
+  tenantId: string,
+  storeId: string
+): Promise<LoyaltyMembershipSummary> {
+  const { data } = await personalApiClient.put<LoyaltyMembershipSummary>(
+    '/consumer/loyalty/preferred-store',
+    { tenantId, storeId }
+  );
   return data;
 }
 

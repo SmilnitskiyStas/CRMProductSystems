@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Loyalty;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Infrastructure.Authorization;
 
 namespace ShelfGuard.Api.Controllers;
@@ -20,8 +21,13 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class LoyaltyController : ControllerBase
 {
     private readonly ILoyaltyService _loyalty;
+    private readonly ITenantContext _tenantContext;
 
-    public LoyaltyController(ILoyaltyService loyalty) => _loyalty = loyalty;
+    public LoyaltyController(ILoyaltyService loyalty, ITenantContext tenantContext)
+    {
+        _loyalty = loyalty;
+        _tenantContext = tenantContext;
+    }
 
     /// <summary>Scan/manual-entry resolution at the register. Any role that can run POS.</summary>
     [HttpPost("resolve-code")]
@@ -32,7 +38,7 @@ public sealed class LoyaltyController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ResolveCode([FromBody] ResolveLoyaltyCodeRequest request, CancellationToken ct)
     {
-        var tenantId = GetTenantId();
+        var tenantId = _tenantContext.TenantId;
         var userId = GetUserId();
         if (tenantId is null || userId is null) return Forbid();
 
@@ -58,7 +64,7 @@ public sealed class LoyaltyController : ControllerBase
     public async Task<IActionResult> ResolveOrCreateByPhone(
         [FromBody] ResolveOrCreateMembershipByPhoneRequest request, CancellationToken ct)
     {
-        var tenantId = GetTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (result, error, statusCode) = await _loyalty.ResolveOrCreateMembershipByPhoneAsync(
@@ -87,7 +93,7 @@ public sealed class LoyaltyController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ManualAdjust([FromBody] ManualLoyaltyAdjustRequest request, CancellationToken ct)
     {
-        var tenantId = GetTenantId();
+        var tenantId = _tenantContext.TenantId;
         var userId = GetUserId();
         if (tenantId is null || userId is null) return Forbid();
 
@@ -105,7 +111,7 @@ public sealed class LoyaltyController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyMembership(CancellationToken ct)
     {
-        var tenantId = GetTenantId();
+        var tenantId = _tenantContext.TenantId;
         var userId = GetUserId();
         if (tenantId is null || userId is null) return Forbid();
 
@@ -120,7 +126,7 @@ public sealed class LoyaltyController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> JoinAsStaff(CancellationToken ct)
     {
-        var tenantId = GetTenantId();
+        var tenantId = _tenantContext.TenantId;
         var userId = GetUserId();
         if (tenantId is null || userId is null) return Forbid();
 
@@ -132,12 +138,6 @@ public sealed class LoyaltyController : ControllerBase
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
-
-    private Guid? GetTenantId()
-    {
-        var claim = User.FindFirst("tenant_id")?.Value;
-        return Guid.TryParse(claim, out var id) ? id : null;
-    }
 
     private Guid? GetUserId()
     {

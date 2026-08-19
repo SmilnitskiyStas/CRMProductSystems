@@ -8,13 +8,30 @@ export interface LoyaltyMembershipSummary {
   tenantId: string;
   tenantName: string;
   balance: number;
+  tier?: string | null;
   status: 'active' | 'blocked' | string;
   joinedAt: string;
+  preferredStoreId: string | null;
+  preferredStoreName: string | null;
+  preferredStoreAddress: string | null;
+}
+
+export interface LoyaltyNetworkStore {
+  storeId: string;
+  storeName: string;
+  address: string | null;
+}
+
+export interface LoyaltyNetworkSummary {
+  tenantId: string;
+  tenantName: string;
+  stores: LoyaltyNetworkStore[];
 }
 
 /** The rotating QR/barcode payload. Never carries the TOTP secret itself. */
 export interface LoyaltyCode {
   code: string;
+  displayFormat: 'qr' | 'barcode';
   balance: number;
   expiresInSeconds: number;
 }

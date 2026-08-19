@@ -837,6 +837,59 @@ Applied via the app's own non-superuser `shelfguard_app_dev` connection (pure `D
 `CREATE INDEX`, no new FK against populated data, no RLS interaction) — correct table ownership
 was never in question here.
 
+## TASK-531 — Mobile Configuration domain schema (`AddMobileConfigurationDomain`, 2026-08-17)
+
+First schema for the multi-tenant consumer app-builder initiative's Stage B (CLAUDE CODE SPEC
+ЕТАП 3, `docs/architecture/TARGET_ARCHITECTURE.md` §2). Three new tables — no controllers,
+validation service, or API endpoint yet (TASK-532/533/534, separate future tasks).
+
+| Table | RLS | Purpose | Key fields |
+|---|---|---|---|
+| `mobile_configurations` | canonical triad only | Root/pointer record — one row per tenant | `TenantId` (unique), `PublishedVersionId?` (FK→mobile_configuration_versions, **Restrict**), `DraftVersionId?` (FK→mobile_configuration_versions, **Restrict**), `CreatedAt`, `UpdatedAt` |
+| `mobile_configuration_versions` | canonical triad only | Immutable-once-published snapshot of the config document | `MobileConfigurationId` (FK→mobile_configurations, **Cascade** — the owning direction), `TenantId` (denormalized, direct column — same treatment as `LoyaltyLedgerEntry.TenantId`), `Version` (int, unique per config, never reused), `SchemaVersion` (int), `Status` (draft\|published\|archived), `ConfigurationJson` (jsonb, default `'{}'`), `CreatedBy?` (FK→users, SetNull), `CreatedAt`, `PublishedAt?` |
+| `mobile_themes` | canonical triad only | Typed, whitelist-validated theme — one row per `MobileConfiguration` (i.e. per tenant, not per version) | `MobileConfigurationId` (FK→mobile_configurations, Cascade, **unique** — enforces one-per-config), `TenantId` (denormalized), `LogoUrl?`, `PrimaryColor`/`SecondaryColor`/`BackgroundColor`/`SurfaceColor`/`TextPrimaryColor`/`TextSecondaryColor` (hex strings), `ButtonRadius`/`CardRadius` (int), `SpacingPreset` (string), `UpdatedAt` |
+
+**Circular FK, resolved the way EF Core/PostgreSQL expect:** `mobile_configurations` points at
+`mobile_configuration_versions` twice (`PublishedVersionId`/`DraftVersionId`), and
+`mobile_configuration_versions` points back at `mobile_configurations`
+(`MobileConfigurationId`) — a genuine table-level cycle. Not a problem here because only one
+direction cascades: `MobileConfigurationId → mobile_configurations` is `ON DELETE CASCADE` (the
+owning direction — deleting the root config deletes all its versions), while both pointer FKs on
+`mobile_configurations` are `ON DELETE RESTRICT` (a version can never be deleted out from under
+an active pointer; the app must null the pointer first). `dotnet ef migrations add` resolved the
+creation order itself with no hand-editing needed: it emits `CREATE TABLE
+mobile_configuration_versions` first (without its FK to `mobile_configurations`, which doesn't
+exist yet), then `CREATE TABLE mobile_configurations` (with both Restrict FKs to the
+now-existing versions table), then a trailing `ALTER TABLE mobile_configuration_versions ADD
+CONSTRAINT ... FOREIGN KEY (MobileConfigurationId) REFERENCES mobile_configurations ... CASCADE`
+once both tables exist. This "multiple cascade paths" shape is a hard error under SQL Server but
+not under PostgreSQL — verified live (see below), not just assumed.
+
+**`MobileTheme` scoping decision (the task's one open design call):** CLAUDE CODE SPEC ЕТАП 3
+lists `MobileTheme` as its own domain entity, separate from the generic `ConfigurationJson` blob,
+even though MASTER SPEC §11's example API response also nests a `theme` object inside the same
+document. Resolved by scoping `MobileTheme` **per `MobileConfiguration` (per tenant), not per
+version** — it is the single, directly-editable working record the future Theme Editor
+(TASK-537) reads/writes, enforced by a real DB-level unique constraint
+(`uq_mobile_themes_config`) rather than a convention. `MobileConfigurationVersion.
+ConfigurationJson` remains the serialized, immutable snapshot: at publish time, the current
+`MobileTheme` row (plus future page/block/navigation tables) gets serialized into the new
+version's `ConfigurationJson.theme`. This mirrors how a future `MobilePage`/`MobileNavigationItem`
+table would relate to the same version snapshot. See `.claude/docs/domain-model.md`'s
+`MobileTheme` entry for the same rationale from the domain-model side.
+
+Applied via the app's own non-superuser `shelfguard_app_dev` connection (all three tables are
+brand-new, empty `CREATE TABLE`s — no FK-validation-under-RLS false positive, same as TASK-471).
+Table ownership confirmed correct from the start (`shelfguard_app_dev` on all three, no
+`FixLoyaltyTableGrants`-style companion migration needed). Live-verified: `\d+` on all three
+tables shows the exact FK/RESTRICT/CASCADE shape above plus all three RLS policies
+(`tenant_isolation`, `provider_bypass` as `IN ('provider','provider_admin')`, `worker_bypass`)
+under `FORCE ROW LEVEL SECURITY`. Migration `Down()` round-tripped cleanly through the real
+non-superuser connection: rolled back to the prior migration (all three tables gone, confirmed via
+`pg_tables`), then reapplied (all three tables and policies back). Full `dotnet test` — including
+the dynamic `RlsCrossTenantIntegrationTests` suite that enumerates every `FORCE ROW LEVEL SECURITY`
+table at query time — passed at 1411/1411 both before and after, with no new failures introduced.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

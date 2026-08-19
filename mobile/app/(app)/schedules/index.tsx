@@ -15,6 +15,8 @@ import { ShiftCard } from '@/features/schedules/components/ShiftCard';
 import { ScheduleCard } from '@/features/schedules/components/ScheduleCard';
 import type { ScheduleShift, WorkSchedule } from '@/features/schedules/types';
 import { AT_LEAST_STORE_MANAGER_OR_PROVIDER, hasRole } from '@/lib/roles';
+import { OfflineReadStatus } from '@/features/offline-read-cache/OfflineReadStatus';
+import { useOfflineReadUx } from '@/features/offline-read-cache/ux';
 
 const UA_DAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const UA_MONTHS = [
@@ -60,9 +62,10 @@ function formatWeekLabel(monday: Date): string {
 export default function SchedulesScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const offline = useAuthStore((s) => s.hydrationStatus === 'offline_read_ready');
   const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER_OR_PROVIDER);
 
-  const [activeTab, setActiveTab] = useState<Tab>('my');
+  const [activeTab, setActiveTab] = useState<Tab>(offline ? 'all' : 'my');
   const [weekOffset, setWeekOffset] = useState(0);
 
   const currentMonday = useMemo(() => {
@@ -74,8 +77,8 @@ export default function SchedulesScreen() {
   const weekTo = toDateStr(addDays(currentMonday, 6));
   const weekLabel = formatWeekLabel(currentMonday);
 
-  const myShiftsQuery = useMyShifts(weekFrom, weekTo);
-  const schedulesQuery = useSchedules();
+  const myShiftsQuery = useMyShifts(weekFrom, weekTo, !offline);
+  const schedulesQuery = useSchedules(undefined, undefined, !offline);
 
   const shifts: ScheduleShift[] = useMemo(() => {
     const list = myShiftsQuery.data ?? [];
@@ -89,6 +92,11 @@ export default function SchedulesScreen() {
 
   const activeQuery = activeTab === 'my' ? myShiftsQuery : schedulesQuery;
   const { isLoading, isError, refetch } = activeQuery;
+  const schedulesOfflineState = useOfflineReadUx(['schedules', undefined, undefined], {
+    hasData: schedulesQuery.data !== undefined,
+    isFetching: schedulesQuery.isFetching,
+    isError: schedulesQuery.isError,
+  });
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -104,12 +112,12 @@ export default function SchedulesScreen() {
       </View>
 
       {/* Tabs (managers only) */}
-      {isManager && (
+      {isManager && !offline && (
         <View className="flex-row mx-4 mb-3 bg-gray-100 rounded-xl p-1">
           <TouchableOpacity
             onPress={() => setActiveTab('my')}
             className={`flex-1 py-2 rounded-lg items-center ${
-              activeTab === 'my' ? 'bg-white shadow-sm' : ''
+              activeTab === 'my' ? 'bg-white' : ''
             }`}
           >
             <Text
@@ -123,7 +131,7 @@ export default function SchedulesScreen() {
           <TouchableOpacity
             onPress={() => setActiveTab('all')}
             className={`flex-1 py-2 rounded-lg items-center ${
-              activeTab === 'all' ? 'bg-white shadow-sm' : ''
+              activeTab === 'all' ? 'bg-white' : ''
             }`}
           >
             <Text
@@ -136,6 +144,10 @@ export default function SchedulesScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {activeTab === 'all' ? (
+        <OfflineReadStatus state={schedulesOfflineState} onRetry={() => { void schedulesQuery.refetch(); }} />
+      ) : null}
 
       {/* Week navigator (only in "my" tab) */}
       {activeTab === 'my' && (
@@ -161,7 +173,7 @@ export default function SchedulesScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#16a34a" />
         </View>
-      ) : isError ? (
+      ) : isError && activeQuery.data === undefined ? (
         <View className="flex-1 items-center justify-center px-4">
           <Text className="text-red-500 text-center">Помилка завантаження</Text>
           <TouchableOpacity onPress={() => { void refetch(); }} className="mt-4">
@@ -191,7 +203,7 @@ export default function SchedulesScreen() {
           renderItem={({ item }) => (
             <ScheduleCard
               item={item}
-              onPress={() => router.push(`/(app)/schedules/${item.id}`)}
+              onPress={() => { if (!offline) router.push(`/(app)/schedules/${item.id}`); }}
             />
           )}
           ItemSeparatorComponent={() => <View className="h-2" />}

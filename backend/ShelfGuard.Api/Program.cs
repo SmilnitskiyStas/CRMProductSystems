@@ -37,6 +37,20 @@ builder.Services.AddSingleton<IClientErrorFactory, ErrorBodyClientErrorFactory>(
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
+    // TASK-552: several feature modules declare a DTO with the same short name in different
+    // namespaces (e.g. Customers.CustomerDetailDto vs AutoService.Dtos.CustomerDetailDto).
+    // Swashbuckle's default schemaId is the bare type name, so it throws on the first collision
+    // it walks into ("Can't use schemaId ... same schemaId is already used for type ..."). Use the
+    // full namespace-qualified name so every DTO gets a unique schemaId regardless of collisions
+    // elsewhere in the 41-module feature tree.
+    c.CustomSchemaIds(type => type.FullName);
+    // TASK-552: without this, Swashbuckle defaults info.title to the raw assembly display name
+    // ("ShelfGuard.Api, Version=1.0.0.0, Culture=neutral, ...") in the published openapi.json.
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title   = "ShelfGuard API",
+        Version = "v1",
+    });
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Name         = "Authorization",
@@ -128,6 +142,26 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 5,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
+
+    // TASK-554: RetailersController.GetRetailerPublic (GET /api/v1/retailers/{slug}/public) is
+    // the QR/deep-link onboarding fallback (TASK-549) and, unlike every other action on that
+    // controller, carries [AllowAnonymous] — no ConsumerAccount JWT, no per-account
+    // accountability. That makes it the most attractive target on the whole consumer-platform
+    // surface for slug enumeration/scraping (unknown/inactive/loyalty-less/paused slugs all
+    // collapse to the same 404, so brute-forcing slugs costs an attacker nothing but requests).
+    // 20 req/min per IP is deliberately looser than public-leads (5/min, spam-cost mitigation for
+    // a side-effectful submit) — this is a read-only lookup, and legitimate traffic can burst from
+    // a single IP (shared retail wifi/CGNAT, several shoppers scanning the same in-store QR code
+    // within the same minute).
+    options.AddPolicy("retailer-public-lookup", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
                 Window      = TimeSpan.FromMinutes(1),
                 QueueLimit  = 0,
             }));

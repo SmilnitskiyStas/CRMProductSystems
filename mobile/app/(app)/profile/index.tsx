@@ -16,6 +16,7 @@ import { logout } from '@/features/auth/api/authApi';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useJoinAsStaff, useMyMembership } from '@/features/loyalty/hooks/useLoyalty';
+import { terminateSession } from '@/features/auth/session';
 
 const ROLE_LABELS: Record<string, string> = {
   enterprise_admin: 'Адміністратор підприємства',
@@ -63,7 +64,6 @@ function toolsForRole(role: string | undefined): Tool[] {
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const clearAuth = useAuthStore((s) => s.clearAuth);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const myTools = toolsForRole(user?.role);
@@ -79,8 +79,8 @@ export default function ProfileScreen() {
           try {
             await logout();
           } finally {
-            await clearAuth();
-            router.replace('/(auth)/login');
+            await terminateSession();
+            router.replace('/(auth)/select-role');
           }
         },
       },

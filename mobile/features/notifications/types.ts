@@ -5,6 +5,21 @@ export interface Notification {
   status: string;
   payload: string | null;
   createdAt: string;
+  isRead: boolean;
+  readAt: string | null;
+  title: string | null;
+  storeId: string | null;
+  userId: string | null;
+}
+
+// Локальна копія — за конвенцією mobile (loyalty/customers/marketplace тримають
+// свою копію в types.ts фічі, спільного mobile/lib модуля немає).
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export type NotificationCategory = 'expiry' | 'stock' | 'system';

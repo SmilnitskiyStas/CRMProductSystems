@@ -14,8 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSale } from '@/features/pos/hooks/usePosApi';
-import type { PaymentType, SaleRequest } from '@/features/pos/types';
-import type { SaleItem } from '@/features/pos/types';
+import type { PaymentType, SaleItem, SaleRequest } from '@/features/pos/types';
+import { calculateNetTotal } from '@/features/pos/utils/calculateNetTotal';
+import { usePosDraftStore } from '@/features/pos/draftStore';
+import { submitSaleSingleFlight } from '@/features/pos/saleSubmission';
+import { NetworkBanner } from '@/features/pos/components/NetworkBanner';
+import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
+import { isPosOffline } from '@/features/pos/networkPolicy';
 
 interface CartItem extends SaleItem {
   productName: string;
@@ -38,17 +43,28 @@ export default function PosPaymentScreen() {
     maskedPhone?: string;
   }>();
 
-  const shiftId = params.shiftId ?? '';
+  const draft = usePosDraftStore();
+  const network = useNetInfo();
+  const offline = isPosOffline(network);
+  const shiftId = params.shiftId ?? draft.shiftId;
   const cart: CartItem[] = useMemo(() => {
     try {
-      return params.cartJson ? JSON.parse(params.cartJson) : [];
+      return params.cartJson ? JSON.parse(params.cartJson) : draft.cart;
     } catch {
-      return [];
+      return draft.cart;
     }
-  }, [params.cartJson]);
+  }, [draft.cart, params.cartJson]);
 
-  const [paymentType, setPaymentType] = useState<PaymentType>('Cash');
-  const [cashReceived, setCashReceived] = useState('');
+  const [paymentType, setPaymentTypeState] = useState<PaymentType>(draft.paymentType);
+  const [cashReceived, setCashReceivedState] = useState(draft.cashReceived);
+  const setPaymentType = (value: PaymentType) => {
+    setPaymentTypeState(value);
+    draft.setPayment(value, cashReceived);
+  };
+  const setCashReceived = (value: string) => {
+    setCashReceivedState(value);
+    draft.setPayment(paymentType, value);
+  };
 
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
@@ -57,8 +73,10 @@ export default function PosPaymentScreen() {
   // subtracts redemption from TotalAmount before tax/change), so cash-sufficiency and
   // change must be checked against this net figure, not the raw item subtotal, or the
   // cashier would be misled into asking for more cash than the customer owes.
-  const redeemAmount = params.redeemAmount ? parseFloat(params.redeemAmount) || 0 : 0;
-  const netTotal = Math.max(0, subtotal - redeemAmount);
+  const redeemAmount = params.redeemAmount
+    ? parseFloat(params.redeemAmount) || 0
+    : draft.customer?.redeemAmount ?? 0;
+  const netTotal = calculateNetTotal(subtotal, redeemAmount);
 
   const cashAmount = parseFloat(cashReceived) || 0;
   const change = paymentType === 'Cash' ? Math.max(0, cashAmount - netTotal) : 0;
@@ -67,7 +85,11 @@ export default function PosPaymentScreen() {
 
   const saleMutation = useSale();
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (isPosOffline(await NetInfo.fetch())) {
+      Alert.alert('Немає мережі', 'Продаж можна завершити лише онлайн. Кошик збережено.');
+      return;
+    }
     if (paymentType === 'Cash' && cashAmount < netTotal) {
       Alert.alert('Недостатньо коштів', 'Введена сума менша за суму продажу.');
       return;
@@ -78,44 +100,39 @@ export default function PosPaymentScreen() {
       items: cart.map(({ barcode, quantity }) => ({ barcode, quantity })),
       paymentType,
       paymentAmount: paymentType === 'Cash' ? cashAmount : netTotal,
-      ...(params.customerId ? { customerId: params.customerId } : {}),
-      ...(params.membershipId ? { loyaltyMembershipId: params.membershipId } : {}),
+      ...(params.customerId || draft.customer?.customerId
+        ? { customerId: params.customerId ?? draft.customer?.customerId }
+        : {}),
+      ...(params.membershipId || draft.customer?.membershipId
+        ? { loyaltyMembershipId: params.membershipId ?? draft.customer?.membershipId }
+        : {}),
       ...(redeemAmount > 0 ? { redeemAmount } : {}),
     };
 
-    saleMutation.mutate(body, {
-      onSuccess: (result) => {
-        router.replace({
-          pathname: '/(app)/pos/receipt',
-          params: { resultJson: JSON.stringify(result), shiftId },
-        });
-      },
-      onError: (err: unknown) => {
-        const axiosErr = err as { response?: { status?: number; data?: { error?: string; blockedProduct?: string } } };
-        const status = axiosErr?.response?.status;
-        const errData = axiosErr?.response?.data;
-
-        if (status === 423) {
-          const productName = errData?.blockedProduct ?? 'товар';
-          Alert.alert(
-            'Продаж заблоковано',
-            `Товар "${productName}" прострочений і не може бути проданий.`,
-            [{ text: 'Зрозуміло' }]
-          );
-        } else if (status === 400 || status === 409) {
-          Alert.alert(
-            'Помилка продажу',
-            errData?.error ?? 'Перевірте дані та спробуйте знову.'
-          );
-        } else {
-          Alert.alert('Помилка', 'Не вдалося провести продаж. Спробуйте ще раз.');
-        }
-      },
-    });
+    const result = await submitSaleSingleFlight(
+      body,
+      saleMutation.mutateAsync,
+      ({ status, message, transactionId }) =>
+        draft.setSubmission(status, message, transactionId)
+    );
+    if (result) {
+      await draft.clearAfterConfirmedSale();
+      router.replace({
+        pathname: '/(app)/pos/receipt',
+        params: { resultJson: JSON.stringify(result), shiftId },
+      });
+      return;
+    }
+    const submission = usePosDraftStore.getState().submission;
+    Alert.alert(
+      submission.status === 'uncertain' ? 'Результат не підтверджено' : 'Продаж не виконано',
+      submission.message ?? 'Кошик збережено.'
+    );
   };
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
+      <NetworkBanner />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
@@ -172,18 +189,20 @@ export default function PosPaymentScreen() {
         </View>
 
         {/* Loyalty customer info (TASK-405/407) */}
-        {(params.customerName || params.membershipId) && (
+        {(params.customerName || params.membershipId || draft.customer) && (
           <View className="bg-green-50 mx-4 mt-3 rounded-2xl px-4 py-3 flex-row items-center">
             <Ionicons name="person-circle-outline" size={22} color="#15803d" />
             <View className="ml-2 flex-1">
               <Text className="text-green-800 font-semibold text-sm">
-                {params.customerName ?? 'Клієнт'}
+                {params.customerName ?? draft.customer?.customerName ?? 'Клієнт'}
               </Text>
-              {params.maskedPhone && (
-                <Text className="text-green-700 text-xs mt-0.5">{params.maskedPhone}</Text>
+              {(params.maskedPhone || draft.customer?.maskedPhone) && (
+                <Text className="text-green-700 text-xs mt-0.5">
+                  {params.maskedPhone ?? draft.customer?.maskedPhone}
+                </Text>
               )}
             </View>
-            {params.membershipId && (
+            {(params.membershipId || draft.customer?.membershipId) && (
               <Ionicons name="qr-code-outline" size={18} color="#15803d" />
             )}
           </View>
@@ -256,6 +275,59 @@ export default function PosPaymentScreen() {
           </View>
         )}
 
+        {draft.submission.status !== 'idle' && (
+          <View
+            className={`mx-4 mt-4 rounded-xl px-4 py-3 ${
+              draft.submission.status === 'uncertain'
+                ? 'bg-amber-100'
+                : draft.submission.status === 'conflict'
+                  ? 'bg-orange-100'
+                  : draft.submission.status === 'failed'
+                    ? 'bg-red-50'
+                    : 'bg-blue-50'
+            }`}
+          >
+            <Text className="font-semibold text-sm text-gray-900">
+              {draft.submission.status === 'pending'
+                ? 'Продаж надсилається'
+                : draft.submission.status === 'uncertain'
+                  ? 'Результат продажу невідомий'
+                  : draft.submission.status === 'conflict'
+                    ? 'Конфлікт даних'
+                    : draft.submission.status === 'completed'
+                      ? 'Продаж підтверджено'
+                      : 'Продаж не виконано'}
+            </Text>
+            {draft.submission.message && (
+              <Text className="text-gray-700 text-xs mt-1">{draft.submission.message}</Text>
+            )}
+            {(draft.submission.status === 'uncertain' ||
+              draft.submission.status === 'conflict') && (
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.alert(
+                    'Відкинути чернетку?',
+                    'Робіть це лише після звірки продажів і залишків поточної зміни.',
+                    [
+                      { text: 'Скасувати', style: 'cancel' },
+                      {
+                        text: 'Звірено, відкинути',
+                        style: 'destructive',
+                        onPress: () => void draft.discard(),
+                      },
+                    ]
+                  )
+                }
+                className="mt-3 border border-amber-700 rounded-lg py-2 items-center"
+              >
+                <Text className="text-amber-900 text-xs font-bold">
+                  Звірено — відкинути чернетку
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Spacer */}
         <View className="flex-1" />
 
@@ -263,9 +335,19 @@ export default function PosPaymentScreen() {
         <View className="px-4 pb-6 pt-3 bg-white border-t border-gray-100">
           <TouchableOpacity
             onPress={handleConfirm}
-            disabled={saleMutation.isPending || cashInsufficient}
+            disabled={
+              saleMutation.isPending ||
+              cashInsufficient ||
+              offline ||
+              draft.submission.status === 'uncertain' ||
+              draft.submission.status === 'conflict'
+            }
             className={`rounded-2xl py-5 items-center ${
-              saleMutation.isPending || cashInsufficient
+              saleMutation.isPending ||
+              cashInsufficient ||
+              offline ||
+              draft.submission.status === 'uncertain' ||
+              draft.submission.status === 'conflict'
                 ? 'bg-gray-200'
                 : 'bg-primary-600'
             }`}
@@ -275,7 +357,13 @@ export default function PosPaymentScreen() {
             ) : (
               <Text
                 className={`text-lg font-bold ${
-                  saleMutation.isPending || cashInsufficient ? 'text-gray-400' : 'text-white'
+                  saleMutation.isPending ||
+                  cashInsufficient ||
+                  offline ||
+                  draft.submission.status === 'uncertain' ||
+                  draft.submission.status === 'conflict'
+                    ? 'text-gray-400'
+                    : 'text-white'
                 }`}
               >
                 Провести продаж — {formatPrice(netTotal)} ₴

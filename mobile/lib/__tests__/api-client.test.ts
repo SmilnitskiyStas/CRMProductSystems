@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '@/features/auth/store';
 import { queryClient } from '@/lib/query-client';
 import { terminateSession } from '@/features/auth/session';
-import { apiClient, personalApiClient } from '../api-client';
+import { API_TIMEOUT_MS, apiClient, personalApiClient, resolveApiAssetUrl } from '../api-client';
 
 jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
@@ -308,5 +308,20 @@ describe('personalApiClient', () => {
 
     expect(refreshMockLocal.history.post).toHaveLength(0);
     refreshMockLocal.restore();
+  });
+});
+
+describe('API hardening defaults', () => {
+  test('sets a finite timeout on workspace and personal clients', () => {
+    expect(apiClient.defaults.timeout).toBe(API_TIMEOUT_MS);
+    expect(personalApiClient.defaults.timeout).toBe(API_TIMEOUT_MS);
+    expect(API_TIMEOUT_MS).toBeGreaterThan(0);
+  });
+
+  test('rejects executable and protocol-relative asset URLs', () => {
+    expect(resolveApiAssetUrl('javascript:alert(1)')).toBeNull();
+    expect(resolveApiAssetUrl('data:text/html,unsafe')).toBeNull();
+    expect(resolveApiAssetUrl('//evil.example/image.png')).toBeNull();
+    expect(resolveApiAssetUrl('https://cdn.example/image.png')).toBe('https://cdn.example/image.png');
   });
 });

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getLoyaltyCode,
+  getAvailableNetworks,
   getLoyaltyHistory,
   getMemberships,
   getMyMembership,
@@ -9,16 +10,27 @@ import {
   joinTenantProgram,
   manualAdjustLoyalty,
   resolveLoyaltyCode,
+  setPreferredStore,
 } from '../api/loyaltyApi';
 import { useLoyaltyUiStore } from '../store';
 import type { LoyaltyMembershipSummary } from '../types';
 
 // ─── Consumer wallet ──────────────────────────────────────────────────────────
 
-export function useMemberships() {
+export function useMemberships(enabled = true) {
   return useQuery({
     queryKey: ['loyalty', 'memberships'],
     queryFn: getMemberships,
+    enabled,
+  });
+}
+
+export function useAvailableNetworks(enabled = true) {
+  return useQuery({
+    queryKey: ['loyalty', 'networks'],
+    queryFn: getAvailableNetworks,
+    enabled,
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -35,7 +47,10 @@ export function useAutoSelectMembership(
   const setSelectedTenantId = useLoyaltyUiStore((s) => s.setSelectedTenantId);
 
   useEffect(() => {
-    if (!memberships || memberships.length === 0) {
+    // `undefined` means the memberships request has not resolved yet. Clearing the restored
+    // selection here races ActiveTenantProvider/LoyaltyTenantBridge and creates an update loop.
+    if (memberships === undefined) return;
+    if (memberships.length === 0) {
       if (selectedTenantId !== null) setSelectedTenantId(null);
       return;
     }
@@ -55,12 +70,15 @@ export function useAutoSelectMembership(
  */
 export function useLoyaltyCode(tenantId: string | null, enabled: boolean) {
   return useQuery({
-    queryKey: ['loyalty', 'code', tenantId],
+    queryKey: ['loyalty', 'consumer-code', tenantId],
     queryFn: () => getLoyaltyCode(tenantId as string),
-    enabled: !!tenantId && enabled,
-    refetchInterval: enabled ? 22_000 : false,
+    enabled: enabled && tenantId !== null,
+    refetchInterval: enabled && tenantId !== null ? 22_000 : false,
     staleTime: 15_000,
-    retry: 1,
+    retry: (failureCount, error: unknown) => {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      return status !== 403 && status !== 409 && failureCount < 1;
+    },
   });
 }
 
@@ -76,7 +94,30 @@ export function useJoinTenantProgram() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (tenantId: string) => joinTenantProgram(tenantId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['loyalty', 'memberships'] }),
+    onSuccess: (membership) => {
+      qc.setQueryData<LoyaltyMembershipSummary[]>(['loyalty', 'memberships'], (current) => {
+        if (!current) return [membership];
+        const withoutCurrent = current.filter((item) => item.tenantId !== membership.tenantId);
+        return [...withoutCurrent, membership];
+      });
+      void qc.invalidateQueries({ queryKey: ['loyalty', 'memberships'] });
+    },
+  });
+}
+
+export function useSetPreferredStore() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tenantId, storeId }: { tenantId: string; storeId: string }) =>
+      setPreferredStore(tenantId, storeId),
+    onSuccess: (membership) => {
+      qc.setQueryData<LoyaltyMembershipSummary[]>(['loyalty', 'memberships'], (current) =>
+        current?.map((item) =>
+          item.membershipId === membership.membershipId ? membership : item
+        )
+      );
+      void qc.invalidateQueries({ queryKey: ['loyalty', 'consumer-code', membership.tenantId] });
+    },
   });
 }
 

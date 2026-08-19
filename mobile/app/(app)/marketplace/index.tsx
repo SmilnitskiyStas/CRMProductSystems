@@ -13,6 +13,9 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useSuppliers, useSearchSuppliers } from '@/features/marketplace/hooks/useMarketplace';
 import type { SupplierListItem } from '@/features/marketplace/types';
+import { OfflineReadStatus } from '@/features/offline-read-cache/OfflineReadStatus';
+import { useOfflineReadUx } from '@/features/offline-read-cache/ux';
+import { useAuthStore } from '@/features/auth/store';
 
 function StarRating({ value }: { value: number | null }) {
   if (value === null) return <Text className="text-xs text-gray-400">—</Text>;
@@ -44,11 +47,12 @@ function PlanBadge({ plan }: { plan: 'free' | 'premium' }) {
   );
 }
 
-function SupplierCard({ item }: { item: SupplierListItem }) {
+function SupplierCard({ item, offline }: { item: SupplierListItem; offline: boolean }) {
   const router = useRouter();
   return (
     <TouchableOpacity
-      onPress={() => router.push(`/(app)/marketplace/${item.id}` as Parameters<typeof router.push>[0])}
+      onPress={() => { if (!offline) router.push(`/(app)/marketplace/${item.id}` as Parameters<typeof router.push>[0]); }}
+      disabled={offline}
       activeOpacity={0.7}
       className="bg-white mx-4 mb-3 rounded-2xl p-4 border border-gray-100"
     >
@@ -93,23 +97,31 @@ function SupplierCard({ item }: { item: SupplierListItem }) {
 }
 
 export default function MarketplaceScreen() {
+  const offline = useAuthStore((state) => state.hydrationStatus === 'offline_read_ready');
   const [searchText, setSearchText] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
 
   const isSearching = activeSearch.trim().length > 0;
 
+  const supplierParams = { page: 1, pageSize: 50 };
   const {
     data: page,
     isLoading: listLoading,
     refetch: refetchList,
     isRefetching: listRefetching,
-  } = useSuppliers({ page: 1, pageSize: 50 });
+    isError: listError,
+  } = useSuppliers(supplierParams, !offline);
+  const offlineState = useOfflineReadUx(['marketplace-suppliers', supplierParams], {
+    hasData: page !== undefined,
+    isFetching: listRefetching,
+    isError: listError,
+  });
 
   const {
     data: searchResults,
     isLoading: searchLoading,
     isRefetching: searchRefetching,
-  } = useSearchSuppliers(activeSearch);
+  } = useSearchSuppliers(activeSearch, undefined, !offline);
 
   const items: SupplierListItem[] = isSearching
     ? (searchResults ?? [])
@@ -152,6 +164,7 @@ export default function MarketplaceScreen() {
           </View>
           <TouchableOpacity
             onPress={handleSearch}
+            disabled={offline}
             className="bg-primary-600 rounded-xl px-4 items-center justify-center"
           >
             <Text className="text-white font-semibold text-sm">Знайти</Text>
@@ -169,20 +182,31 @@ export default function MarketplaceScreen() {
         ) : null}
       </View>
 
+      {!isSearching ? (
+        <OfflineReadStatus state={offlineState} onRetry={() => { void refetchList(); }} />
+      ) : null}
+
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#16a34a" />
+        </View>
+      ) : listError && page === undefined && !isSearching ? (
+        <View className="flex-1 items-center justify-center px-4">
+          <Text className="text-red-500 text-center">Не вдалося завантажити постачальників</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => { void refetchList(); }} className="min-h-[44px] mt-3 justify-center">
+            <Text className="text-primary-600 font-semibold">Спробувати знову</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <SupplierCard item={item} />}
+          renderItem={({ item }) => <SupplierCard item={item} offline={offline} />}
           contentContainerClassName="pt-2 pb-6"
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
-              onRefresh={() => void refetchList()}
+              onRefresh={() => { if (!offline) void refetchList(); }}
               tintColor="#16a34a"
             />
           }

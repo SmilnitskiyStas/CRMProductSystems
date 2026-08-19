@@ -1,89 +1,56 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  AppState,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuthStore } from '@/features/auth/store';
-import {
-  useAutoSelectMembership,
-  useJoinTenantProgram,
-  useLoyaltyCode,
-  useMemberships,
-} from '@/features/loyalty/hooks/useLoyalty';
+import { useAutoSelectMembership, useLoyaltyCode, useMemberships } from '@/features/loyalty/hooks/useLoyalty';
+import { Code128Barcode } from '@/features/loyalty/components/Code128Barcode';
 import { MembershipSelector } from '@/features/loyalty/components/MembershipSelector';
 import { useLoyaltyUiStore } from '@/features/loyalty/store';
+import { selectMembershipForTenant } from '@/features/loyalty/selection';
+import { trackConsumerEvent } from '@/features/consumer-analytics/analytics';
 
-function formatMoney(n: number): string {
-  return n.toFixed(2);
-}
+type ApiError = { response?: { status?: number; data?: { error?: string } } };
 
 export default function WalletScreen() {
-  const consumerUser = useAuthStore((s) => s.consumerUser);
-
-  const { data: memberships, isLoading: membershipsLoading, refetch: refetchMemberships } = useMemberships();
-  const selectedTenantId = useAutoSelectMembership(memberships);
-  const setSelectedTenantId = useLoyaltyUiStore((s) => s.setSelectedTenantId);
-
-  // The QR/code is a rotating security secret (plan §"живий QR") — poll it only while this
-  // tab is focused AND the app itself is foregrounded, never in the background.
+  const router = useRouter();
+  const consumerUser = useAuthStore((state) => state.consumerUser);
+  const { data: memberships, isLoading: membershipsLoading } = useMemberships();
+  const selectedTenantId = useLoyaltyUiStore((state) => state.selectedTenantId);
+  const setSelectedTenantId = useLoyaltyUiStore((state) => state.setSelectedTenantId);
   const [isFocused, setIsFocused] = useState(true);
   const [appActive, setAppActive] = useState(true);
+  useAutoSelectMembership(memberships);
 
-  useFocusEffect(
-    useCallback(() => {
-      setIsFocused(true);
-      return () => setIsFocused(false);
-    }, [])
-  );
+  useFocusEffect(useCallback(() => {
+    setIsFocused(true);
+    if (selectedTenantId) void trackConsumerEvent('loyalty_card_opened', selectedTenantId, {});
+    return () => setIsFocused(false);
+  }, [selectedTenantId]));
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active'));
-    return () => sub.remove();
+    const subscription = AppState.addEventListener('change', (state) => setAppActive(state === 'active'));
+    return () => subscription.remove();
   }, []);
 
-  const pollingEnabled = isFocused && appActive;
-  const {
-    data: codeData,
-    isLoading: codeLoading,
-    isError: codeError,
-    refetch: refetchCode,
-  } = useLoyaltyCode(selectedTenantId, pollingEnabled);
+  const selectedMembership = selectMembershipForTenant(memberships, selectedTenantId);
+  const { data: codeData, isLoading, isFetching, isError, error, refetch } = useLoyaltyCode(
+    selectedMembership?.tenantId ?? null,
+    isFocused && appActive
+  );
 
-  // No discovery/browse endpoint exists yet for "which stores run a loyalty program" — this
-  // manual tenant-id entry is an intentionally minimal stopgap so the wallet is reachable
-  // end-to-end without a backend change (see task log: flagged for a nicer QR-at-checkout or
-  // staff-assisted onboarding flow).
-  const [showJoinForm, setShowJoinForm] = useState(false);
-  const [tenantIdInput, setTenantIdInput] = useState('');
-  const joinMutation = useJoinTenantProgram();
-
-  const handleJoin = () => {
-    const tenantId = tenantIdInput.trim();
-    if (!tenantId) return;
-    joinMutation.mutate(tenantId, {
-      onSuccess: (membership) => {
-        setShowJoinForm(false);
-        setTenantIdInput('');
-        setSelectedTenantId(membership.tenantId);
-        void refetchMemberships();
-      },
-      onError: () => {
-        Alert.alert('Помилка', 'Не вдалося приєднатися. Перевірте код і спробуйте ще раз.');
-      },
-    });
-  };
-
-  const selectedMembership = memberships?.find((m) => m.tenantId === selectedTenantId) ?? null;
+  const responseStatus = (error as ApiError | null)?.response?.status;
+  const responseError = (error as ApiError | null)?.response?.data?.error;
+  const needsNetworkSelection = responseStatus === 409 && responseError === 'network_selection_required';
+  const errorMessage = responseStatus === 404
+    ? 'Сервіс картки покупця ще не оновлено на сервері.'
+    : responseStatus === 401
+      ? 'Сесію завершено. Увійдіть у застосунок ще раз.'
+      : responseStatus === 403
+        ? 'Ви більше не є учасником вибраної мережі. Оновіть список мереж.'
+        : 'Не вдалося отримати код. Перевірте інтернет-з’єднання.';
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -95,107 +62,107 @@ export default function WalletScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        {membershipsLoading ? (
-          <View className="items-center py-16">
-            <ActivityIndicator size="large" color="#16a34a" />
-          </View>
-        ) : memberships && memberships.length > 0 ? (
-          <>
-            <View className="mt-4">
-              <MembershipSelector
-                memberships={memberships}
-                selectedTenantId={selectedTenantId}
-                onSelect={setSelectedTenantId}
-              />
-            </View>
-
-            {selectedMembership && (
-              <View className="mx-4 bg-white rounded-3xl p-6 items-center border border-gray-100 shadow-sm">
-                <Text className="text-sm font-semibold text-gray-500 mb-4">
-                  {selectedMembership.tenantName}
-                </Text>
-
-                {selectedMembership.status !== 'active' ? (
-                  <View className="items-center py-10">
-                    <Ionicons name="lock-closed-outline" size={40} color="#ef4444" />
-                    <Text className="text-red-500 font-semibold mt-3">Картку заблоковано</Text>
-                    <Text className="text-gray-400 text-sm mt-1 text-center">
-                      Зверніться до магазину для розблокування
-                    </Text>
-                  </View>
-                ) : codeLoading && !codeData ? (
-                  <View className="items-center py-16">
-                    <ActivityIndicator size="large" color="#16a34a" />
-                  </View>
-                ) : codeError && !codeData ? (
-                  <View className="items-center py-10">
-                    <Ionicons name="warning-outline" size={36} color="#f59e0b" />
-                    <Text className="text-gray-500 text-sm mt-3 text-center">Не вдалося оновити код</Text>
-                    <TouchableOpacity onPress={() => refetchCode()} className="mt-3 bg-gray-100 px-4 py-2 rounded-xl">
-                      <Text className="text-gray-700 text-sm font-medium">Спробувати ще раз</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : codeData ? (
-                  <>
-                    <QRCode value={codeData.code} size={220} />
-                    <Text className="text-xs text-gray-400 mt-4 font-mono text-center">{codeData.code}</Text>
-                    <Text className="text-[11px] text-gray-300 mt-1">Код оновлюється автоматично</Text>
-                    <View className="h-px bg-gray-100 w-full my-4" />
-                    <Text className="text-sm text-gray-500">Баланс бонусів</Text>
-                    <Text className="text-3xl font-bold text-primary-600 mt-1">
-                      {formatMoney(codeData.balance)} ₴
-                    </Text>
-                  </>
-                ) : null}
-              </View>
-            )}
-
-            <TouchableOpacity onPress={() => setShowJoinForm((v) => !v)} className="mx-4 mt-5 items-center py-2">
-              <Text className="text-primary-600 text-sm font-medium">+ Приєднатися до іншої програми</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <View className="items-center px-6 py-16">
-            <Ionicons name="wallet-outline" size={56} color="#d1d5db" />
-            <Text className="text-gray-500 text-center mt-4">У вас ще немає активних бонусних програм</Text>
-            {!showJoinForm && (
-              <TouchableOpacity onPress={() => setShowJoinForm(true)} className="mt-5 bg-primary-600 px-6 py-3 rounded-xl">
-                <Text className="text-white font-semibold">Приєднатися до програми</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {showJoinForm && (
-          <View className="mx-4 mt-4 bg-white rounded-2xl p-4 border border-gray-100">
-            <Text className="text-sm font-semibold text-gray-700 mb-2">Код магазину</Text>
-            <Text className="text-xs text-gray-400 mb-2">
-              Дізнайтесь код бонусної програми у персоналу магазину.
-            </Text>
-            <TextInput
-              className="border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-900 bg-gray-50"
-              placeholder="Код закладу"
-              autoCapitalize="none"
-              value={tenantIdInput}
-              onChangeText={setTenantIdInput}
+        {memberships && memberships.length > 1 && (
+          <View className="mt-4">
+            <Text className="text-sm font-semibold text-gray-700 px-5 mb-2">Оберіть мережу магазинів</Text>
+            <MembershipSelector
+              memberships={memberships}
+              selectedTenantId={selectedTenantId}
+              onSelect={setSelectedTenantId}
             />
-            <TouchableOpacity
-              onPress={handleJoin}
-              disabled={joinMutation.isPending || !tenantIdInput.trim()}
-              className={`mt-3 rounded-xl py-3 items-center ${
-                joinMutation.isPending || !tenantIdInput.trim() ? 'bg-gray-200' : 'bg-primary-600'
-              }`}
-            >
-              {joinMutation.isPending ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className={`font-semibold ${!tenantIdInput.trim() ? 'text-gray-400' : 'text-white'}`}>
-                  Приєднатись
-                </Text>
-              )}
-            </TouchableOpacity>
           </View>
         )}
+
+        <View className="mx-4 mt-4 bg-white rounded-3xl p-6 items-center border border-gray-100 shadow-sm">
+          <Text className="text-lg font-bold text-gray-900">
+            {selectedMembership?.tenantName ?? 'Картка покупця'}
+          </Text>
+          <Text className="text-sm text-gray-500 mt-1 mb-5 text-center">
+            Покажіть код на касі вибраної мережі.
+          </Text>
+
+          {membershipsLoading || (isLoading && !codeData) ? (
+            <ActivityIndicator size="large" color="#16a34a" className="my-16" />
+          ) : !selectedMembership ? (
+            <View className="items-center py-10">
+              <Ionicons name="card-outline" size={40} color="#9ca3af" />
+              <Text className="mt-3 text-center font-semibold text-gray-600">
+                Приєднайтеся до програми лояльності магазину
+              </Text>
+            </View>
+          ) : needsNetworkSelection ? (
+            <View className="items-center py-10">
+              <Ionicons name="storefront-outline" size={40} color="#16a34a" />
+              <Text className="text-gray-700 font-semibold mt-3 text-center">Оберіть мережу магазинів вище</Text>
+              <Text className="text-gray-400 text-sm mt-1 text-center">
+                Формат картки визначається налаштуваннями вибраної мережі.
+              </Text>
+            </View>
+          ) : isError && !codeData ? (
+            <View className="items-center py-10">
+              <Ionicons name="warning-outline" size={36} color="#f59e0b" />
+              <Text className="text-gray-500 text-sm mt-3 text-center">{errorMessage}</Text>
+              <TouchableOpacity
+                onPress={() => void refetch()}
+                disabled={isFetching}
+                className={`mt-3 px-4 py-2 rounded-xl ${isFetching ? 'bg-gray-200' : 'bg-gray-100'}`}
+              >
+                {isFetching ? (
+                  <ActivityIndicator size="small" color="#16a34a" />
+                ) : (
+                  <Text className="text-gray-700 font-medium">Спробувати ще раз</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : codeData ? (
+            <>
+              {codeData.displayFormat === 'qr' ? (
+                <QRCode value={codeData.code} size={220} />
+              ) : (
+                <View style={{ width: '100%', alignItems: 'center', overflow: 'hidden' }}>
+                  <Code128Barcode value={codeData.code} />
+                </View>
+              )}
+              <Text className="text-[10px] text-gray-400 mt-3 font-mono text-center">{codeData.code}</Text>
+              <Text className="text-[11px] text-gray-400 mt-1">Код оновлюється автоматично</Text>
+            </>
+          ) : null}
+
+          {selectedMembership ? (
+            <View className="mt-6 w-full flex-row rounded-2xl bg-gray-50 p-4">
+              <View className="flex-1 items-center border-r border-gray-200">
+                <Text className="text-xs text-gray-500">Баланс</Text>
+                <Text className="mt-1 text-xl font-bold text-green-700">
+                  {(codeData?.balance ?? selectedMembership.balance).toFixed(2)} ₴
+                </Text>
+              </View>
+              <View className="flex-1 items-center">
+                <Text className="text-xs text-gray-500">Рівень</Text>
+                <Text className="mt-1 text-base font-bold text-gray-900">
+                  {selectedMembership.tier ?? 'Не налаштовано'}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        {selectedMembership ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Відкрити операції ${selectedMembership.tenantName}`}
+            onPress={() => router.push('/(personal)/history')}
+            className="mx-4 mt-4 flex-row items-center rounded-2xl border border-gray-100 bg-white p-4"
+          >
+            <View className="h-11 w-11 items-center justify-center rounded-xl bg-green-50">
+              <Ionicons name="receipt-outline" size={22} color="#16a34a" />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="font-bold text-gray-900">Транзакції</Text>
+              <Text className="mt-0.5 text-xs text-gray-500">Історія лише вибраної мережі</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

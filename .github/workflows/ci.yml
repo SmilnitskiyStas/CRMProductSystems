@@ -16,6 +16,26 @@ jobs:
   backend-ci:
     name: Backend — build & test
     runs-on: ubuntu-latest
+    # TASK-553: RlsCrossTenantIntegrationTests and the other Postgres-backed integration
+    # tests (grep ShelfGuard.Tests for IAsyncLifetime/NpgsqlConnection) soft-skip whenever
+    # no reachable Postgres is configured. Port/user/password/db mirror docker-compose.yml's
+    # local dev postgres exactly (5435:5432, crm/crm_dev_password/crm) so every test class's
+    # hardcoded DefaultConnectionString resolves here with no code changes and no env
+    # overrides — same convention documented in RlsCrossTenantIntegrationTests.cs's class doc.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: crm
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: crm_dev_password
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U crm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +51,20 @@ jobs:
       - name: Build
         run: dotnet build --no-restore
         working-directory: backend
+
+      # dotnet run/Program.cs self-migrates on API startup, but a bare `dotnet test` run
+      # against the fresh CI postgres above needs migrations applied explicitly first.
+      # Version pinned to match Microsoft.EntityFrameworkCore.Design (8.0.11, see
+      # ShelfGuard.Infrastructure.csproj) — an unpinned install can resolve a tool build
+      # for a newer .NET than the 8.x SDK/runtime this job installs, which then fails to run.
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef --version 8.0.11
+
+      - name: Apply EF Core migrations to CI Postgres
+        run: dotnet ef database update --project ShelfGuard.Infrastructure --startup-project ShelfGuard.Api
+        working-directory: backend
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password"
 
       - name: Test
         run: dotnet test --no-build --verbosity normal

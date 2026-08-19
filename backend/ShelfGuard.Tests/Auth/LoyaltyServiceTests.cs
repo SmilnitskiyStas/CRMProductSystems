@@ -1020,6 +1020,7 @@ public sealed class LoyaltyServiceTests
         var network = Assert.Single(result);
         Assert.Equal(available.Id, network.TenantId);
         Assert.Equal(available.Name, network.TenantName);
+        Assert.Equal(available.Slug, network.Slug); // TASK-548
         // No locations stubbed for this tenant (constructor default: empty list) — a
         // zero-store tenant must still appear, with an empty (not null) Stores.
         Assert.Empty(network.Stores);
@@ -1201,5 +1202,333 @@ public sealed class LoyaltyServiceTests
         Assert.Null(error);
         Assert.Equal(format, dto!.CustomerCodeFormat);
         Assert.Equal(format, existing.CustomerCodeFormat);
+    }
+
+    // ── GetNetworkBySlugAsync (TASK-548) ──────────────────────────────────
+
+    [Fact]
+    public async Task GetNetworkBySlugAsync_unknown_slug_returns_404()
+    {
+        _tenants.GetBySlugAsync("ghost", default).ReturnsNull();
+
+        var (network, error, statusCode) = await _sut.GetNetworkBySlugAsync("ghost");
+
+        Assert.Null(network);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetNetworkBySlugAsync_inactive_tenant_returns_404()
+    {
+        var tenant = MakeTenant("loyalty");
+        tenant.Deactivate();
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+
+        var (network, error, statusCode) = await _sut.GetNetworkBySlugAsync("acme");
+
+        Assert.Null(network);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetNetworkBySlugAsync_no_loyalty_module_returns_404()
+    {
+        var tenant = MakeTenant(); // no modules
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+
+        var (network, error, statusCode) = await _sut.GetNetworkBySlugAsync("acme");
+
+        Assert.Null(network);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetNetworkBySlugAsync_settings_disabled_returns_404()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+        _loyalty.GetSettingsAsync(tenant.Id, default)
+            .Returns(new LoyaltyProgramSettings { TenantId = tenant.Id, IsEnabled = false });
+
+        var (network, error, statusCode) = await _sut.GetNetworkBySlugAsync("acme");
+
+        Assert.Null(network);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetNetworkBySlugAsync_eligible_tenant_returns_network_with_slug_and_stores()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+        _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
+        var store = MakeLocation(tenant.Id, "Флагман");
+        _locations.GetAllAsync(default).Returns(new List<Location> { store });
+
+        var (network, error, statusCode) = await _sut.GetNetworkBySlugAsync("acme");
+
+        Assert.Null(error);
+        Assert.NotNull(network);
+        Assert.Equal(tenant.Id, network.TenantId);
+        Assert.Equal(tenant.Name, network.TenantName);
+        Assert.Equal(tenant.Slug, network.Slug);
+        Assert.Single(network.Stores);
+    }
+
+    // ── GetPublicRetailerInfoAsync (TASK-549) ───────────────────────────────
+
+    [Fact]
+    public async Task GetPublicRetailerInfoAsync_unknown_slug_returns_404()
+    {
+        _tenants.GetBySlugAsync("ghost", default).ReturnsNull();
+
+        var (info, error, statusCode) = await _sut.GetPublicRetailerInfoAsync("ghost");
+
+        Assert.Null(info);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetPublicRetailerInfoAsync_inactive_tenant_returns_404()
+    {
+        var tenant = MakeTenant("loyalty");
+        tenant.Deactivate();
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+
+        var (info, error, statusCode) = await _sut.GetPublicRetailerInfoAsync("acme");
+
+        Assert.Null(info);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetPublicRetailerInfoAsync_no_loyalty_module_returns_404()
+    {
+        var tenant = MakeTenant(); // no modules
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+
+        var (info, error, statusCode) = await _sut.GetPublicRetailerInfoAsync("acme");
+
+        Assert.Null(info);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetPublicRetailerInfoAsync_settings_disabled_returns_404()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+        _loyalty.GetSettingsAsync(tenant.Id, default)
+            .Returns(new LoyaltyProgramSettings { TenantId = tenant.Id, IsEnabled = false });
+
+        var (info, error, statusCode) = await _sut.GetPublicRetailerInfoAsync("acme");
+
+        Assert.Null(info);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetPublicRetailerInfoAsync_eligible_tenant_returns_minimal_public_info()
+    {
+        var tenant = MakeTenant("loyalty");
+        tenant.UpdateLogoUrl("https://cdn.example.com/acme-logo.png");
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+        _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
+
+        var (info, error, statusCode) = await _sut.GetPublicRetailerInfoAsync("acme");
+
+        Assert.Null(error);
+        Assert.Null(statusCode);
+        Assert.NotNull(info);
+        Assert.Equal(tenant.Name, info.Name);
+        Assert.Equal(tenant.Slug, info.Slug);
+        Assert.Equal(tenant.LogoUrl, info.LogoUrl);
+        Assert.True(info.Joinable);
+    }
+
+    // ── JoinBySlugAsync (TASK-548) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task JoinBySlugAsync_unknown_slug_returns_404_without_touching_consumer()
+    {
+        _tenants.GetBySlugAsync("ghost", default).ReturnsNull();
+
+        var (membership, error, statusCode) = await _sut.JoinBySlugAsync(Guid.NewGuid(), "ghost");
+
+        Assert.Null(membership);
+        Assert.Equal(404, statusCode);
+        await _consumerAccounts.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task JoinBySlugAsync_known_slug_delegates_to_JoinAsync_logic()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+        _tenants.GetByIdAsync(tenant.Id, default).Returns(tenant);
+        _consumerAccounts.GetByIdAsync(consumerId, default)
+            .Returns(new ConsumerAccount { Phone = "+380501234567", FullName = "X", IsActive = true });
+        _loyalty.GetMembershipByTenantConsumerAsync(tenant.Id, consumerId, default).ReturnsNull();
+        _customers.FindByPhoneAsync("+380501234567", tenant.Id, default).ReturnsNull();
+        _totp.GenerateSecret().Returns("SECRET");
+
+        var (membership, error, statusCode) = await _sut.JoinBySlugAsync(consumerId, "acme");
+
+        Assert.Null(error);
+        Assert.NotNull(membership);
+        Assert.Equal(tenant.Id, membership.TenantId);
+        await _loyalty.Received(1).AddMembershipAsync(Arg.Any<LoyaltyMembership>(), default);
+    }
+
+    [Fact]
+    public async Task JoinBySlugAsync_module_not_active_returns_403()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenant = MakeTenant(); // no modules
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+        _tenants.GetByIdAsync(tenant.Id, default).Returns(tenant);
+        _consumerAccounts.GetByIdAsync(consumerId, default)
+            .Returns(new ConsumerAccount { Phone = "+380501234567", FullName = "X", IsActive = true });
+
+        var (membership, error, statusCode) = await _sut.JoinBySlugAsync(consumerId, "acme");
+
+        Assert.Null(membership);
+        Assert.Equal(403, statusCode);
+    }
+
+    // ── LeaveAsync / LeaveBySlugAsync (TASK-548) ──────────────────────────
+
+    [Fact]
+    public async Task LeaveAsync_no_membership_returns_404()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+
+        var (success, error, statusCode) = await _sut.LeaveAsync(consumerId, tenantId);
+
+        Assert.False(success);
+        Assert.Equal(404, statusCode);
+        _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
+    }
+
+    [Fact]
+    public async Task LeaveAsync_active_membership_sets_status_left_and_persists_without_touching_balance()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var existing = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId,
+            Status = LoyaltyMembershipStatus.Active, Balance = 42m,
+        };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+
+        var (success, error, statusCode) = await _sut.LeaveAsync(consumerId, tenantId);
+
+        Assert.True(success);
+        Assert.Null(error);
+        Assert.Equal(LoyaltyMembershipStatus.Left, existing.Status);
+        Assert.Equal(42m, existing.Balance); // balance/history untouched by leaving
+        _loyalty.Received(1).UpdateMembership(existing);
+        await _loyalty.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task LeaveAsync_already_left_is_idempotent_without_redundant_write()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var existing = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, Status = LoyaltyMembershipStatus.Left,
+        };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+
+        var (success, error, statusCode) = await _sut.LeaveAsync(consumerId, tenantId);
+
+        Assert.True(success);
+        Assert.Null(error);
+        _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
+        await _loyalty.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task LeaveBySlugAsync_unknown_slug_returns_404()
+    {
+        _tenants.GetBySlugAsync("ghost", default).ReturnsNull();
+
+        var (success, error, statusCode) = await _sut.LeaveBySlugAsync(Guid.NewGuid(), "ghost");
+
+        Assert.False(success);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task LeaveBySlugAsync_known_slug_delegates_to_LeaveAsync()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetBySlugAsync("acme", default).Returns(tenant);
+        var existing = new LoyaltyMembership
+        {
+            TenantId = tenant.Id, ConsumerAccountId = consumerId, Status = LoyaltyMembershipStatus.Active,
+        };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenant.Id, consumerId, default).Returns(existing);
+
+        var (success, error, statusCode) = await _sut.LeaveBySlugAsync(consumerId, "acme");
+
+        Assert.True(success);
+        Assert.Equal(LoyaltyMembershipStatus.Left, existing.Status);
+    }
+
+    // ── JoinAsync — rejoin-after-leave reactivation (TASK-548) ────────────
+
+    [Fact]
+    public async Task JoinAsync_rejoining_a_left_membership_reactivates_it_and_preserves_balance()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var existing = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId,
+            Status = LoyaltyMembershipStatus.Left, Balance = 15m,
+        };
+        _consumerAccounts.GetByIdAsync(consumerId, default)
+            .Returns(new ConsumerAccount { Phone = "+380501234567", FullName = "X", IsActive = true });
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+
+        var (membership, error, statusCode) = await _sut.JoinAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(membership);
+        Assert.Equal(LoyaltyMembershipStatus.Active, existing.Status);
+        Assert.Equal(LoyaltyMembershipStatus.Active, membership.Status);
+        Assert.Equal(15m, membership.Balance); // preserved across leave/rejoin, not reset
+        _loyalty.Received(1).UpdateMembership(existing);
+        await _loyalty.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task JoinAsync_rejoining_an_already_active_membership_does_not_write()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var existing = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId,
+            Status = LoyaltyMembershipStatus.Active, Balance = 15m,
+        };
+        _consumerAccounts.GetByIdAsync(consumerId, default)
+            .Returns(new ConsumerAccount { Phone = "+380501234567", FullName = "X", IsActive = true });
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+
+        await _sut.JoinAsync(consumerId, tenantId);
+
+        _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
+        await _loyalty.DidNotReceive().SaveChangesAsync(default);
     }
 }

@@ -6,6 +6,14 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /**
+     * Raw parsed error response body, when the server returned one (TASK-537). Most endpoints
+     * only ever send `{ error: string }`, already folded into `message` above — this exists for
+     * the few endpoints (e.g. `MobileThemeController`'s `{ errors: [{ field, message }] }`) that
+     * return a structured, per-field validation shape a caller needs to inspect instead of the
+     * flattened message. `undefined` when the body was empty/unparsable or the request succeeded.
+     */
+    public readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -96,7 +104,7 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
-    throw new ApiError(res.status, body.error ?? `HTTP ${res.status}`);
+    throw new ApiError(res.status, body.error ?? `HTTP ${res.status}`, body);
   }
 
   if (res.status === 204) return undefined as T;

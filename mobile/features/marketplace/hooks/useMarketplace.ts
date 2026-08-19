@@ -11,18 +11,19 @@ export function useSuppliers(params: {
   region?: string;
   page?: number;
   pageSize?: number;
-}) {
+}, enabled = true) {
   return useQuery({
     queryKey: ['marketplace-suppliers', params],
     queryFn: () => getSuppliers(params),
+    enabled,
   });
 }
 
-export function useSearchSuppliers(itemName: string, region?: string) {
+export function useSearchSuppliers(itemName: string, region?: string, enabled = true) {
   return useQuery({
     queryKey: ['marketplace-search', itemName, region],
     queryFn: () => searchSuppliers(itemName, region),
-    enabled: itemName.trim().length > 0,
+    enabled: enabled && itemName.trim().length > 0,
   });
 }
 

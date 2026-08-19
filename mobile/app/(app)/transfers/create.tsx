@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
 import {
   View,
   Text,
@@ -17,22 +18,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { cssInterop } from 'nativewind';
 import { useCreateTransfer, useLocations } from '@/features/transfers/hooks/useTransfers';
-import type { DraftTransferItem, LocationOption } from '@/features/transfers/types';
-import { getProductByBarcode } from '@/features/stock/api/stockApi';
-import { getStock } from '@/features/stock/api/stockApi';
+import type { DraftTransferItem } from '@/features/transfers/types';
+import { getProductByBarcode, getStock } from '@/features/stock/api/stockApi';
 import { useAuthStore } from '@/features/auth/store';
+import { useOperationalDraft } from '@/features/operational-drafts/useOperationalDraft';
+import { classifyOperationalError } from '@/features/operational-drafts/submission';
 
 cssInterop(CameraView, { className: 'style' });
-
-type Step = 'items' | 'destination';
 
 export default function CreateTransferScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const createTransfer = useCreateTransfer();
   const { data: locations } = useLocations();
+  const netInfo = useNetInfo();
+  const owner = user?.tenantId ? { tenantId: user.tenantId, userId: user.id } : null;
+  const draft = useOperationalDraft(owner, 'transfer');
 
-  const [step, setStep] = useState<Step>('items');
   const [items, setItems] = useState<DraftTransferItem[]>([]);
   const [toLocationId, setToLocationId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
@@ -54,6 +56,34 @@ export default function CreateTransferScreen() {
 
   const destinationLocations = (locations ?? []).filter((l) => l.id !== user?.locationId);
   const selectedLocation = destinationLocations.find((l) => l.id === toLocationId);
+  const draftPayload = {
+    kind: 'transfer' as const,
+    fromLocationId: user?.locationId ?? '',
+    toLocationId: toLocationId ?? '',
+    notes,
+    items,
+  };
+
+  useEffect(() => {
+    if (draft.restored?.payload.kind !== 'transfer') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setToLocationId(draft.restored.payload.toLocationId || null);
+    setNotes(draft.restored.payload.notes);
+    setItems(draft.restored.payload.items.map((item) => ({
+      productStockId: item.productStockId ?? '',
+      productId: item.productId,
+      productName: item.productName,
+      batchNumber: item.batchNumber ?? null,
+      expiryDate: item.expiryDate ?? '',
+      quantity: item.quantity,
+      availableQty: item.availableQty ?? item.quantity,
+    })));
+  }, [draft.restored]);
+
+  useEffect(() => {
+    if (!draft.hydrated || (items.length === 0 && !toLocationId && !notes)) return;
+    void draft.persist(draftPayload);
+  }, [items, toLocationId, notes, draft.hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openScanner() {
     if (!permission?.granted) {
@@ -134,7 +164,7 @@ export default function CreateTransferScreen() {
     );
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!user?.locationId) {
       Alert.alert('Помилка', 'Локацію не призначено для вашого профілю.');
       return;
@@ -147,30 +177,53 @@ export default function CreateTransferScreen() {
       Alert.alert('Додайте хоча б один товар');
       return;
     }
-
-    createTransfer.mutate(
-      {
+    const network = await NetInfo.fetch();
+    if (!network.isConnected || network.isInternetReachable === false) {
+      await draft.transition({ status: 'failed', message: 'Немає мережі. Чернетку збережено.' }, draftPayload);
+      Alert.alert('Немає мережі', 'Підключіться до мережі перед відправленням.');
+      return;
+    }
+    let mutationStarted = false;
+    try {
+      const currentStock = await getStock({ locationId: user.locationId });
+      const stale = items.some((item) => {
+        const current = currentStock.find((stock) => stock.id === item.productStockId);
+        return !current || current.quantity < item.quantity;
+      });
+      if (stale) {
+        const state = { status: 'conflict' as const, message: 'Партія або залишок змінилися. Повторно відскануйте товари перед відправленням.' };
+        await draft.transition(state, draftPayload);
+        Alert.alert('Залишки змінилися', state.message);
+        return;
+      }
+      mutationStarted = true;
+      await createTransfer.mutateAsync({
         fromLocationId: user.locationId,
         toLocationId,
         transferType: 'store_to_store',
         notes: notes.trim() || undefined,
         items: items.map((i) => ({ productStockId: i.productStockId, quantity: i.quantity })),
-      },
-      {
-        onSuccess: () => {
-          Alert.alert('Переміщення створено', 'Товар відправлено в дорогу.', [
-            { text: 'OK', onPress: () => router.back() },
-          ]);
-        },
-        onError: () => {
-          Alert.alert('Помилка', 'Не вдалося створити переміщення. Спробуйте ще раз.');
-        },
-      }
-    );
+      });
+      await draft.clear();
+      Alert.alert('Переміщення створено', 'Товар відправлено в дорогу.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      const state = mutationStarted
+        ? classifyOperationalError(error)
+        : { status: 'failed' as const, message: 'Не вдалося оновити залишки. Переміщення не відправлялося, чернетку збережено.' };
+      await draft.transition(state, draftPayload);
+      Alert.alert(state.status === 'uncertain' ? 'Результат не підтверджено' : 'Помилка', state.message);
+    }
   }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
+      {(netInfo.isConnected === false || draft.submission.message) && (
+        <Text className="bg-amber-50 text-amber-800 px-4 py-2 text-sm">
+          {netInfo.isConnected === false ? 'Немає мережі. Чернетка збережена.' : draft.submission.message}
+        </Text>
+      )}
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -178,7 +231,13 @@ export default function CreateTransferScreen() {
         {/* Header */}
         <View className="bg-white px-4 pt-4 pb-3 flex-row items-center gap-3 border-b border-gray-100">
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => (items.length === 0 && !toLocationId && !notes)
+              ? router.back()
+              : Alert.alert('Зберегти чернетку?', 'Можна повернутися пізніше або видалити введені дані.', [
+                { text: 'Зберегти', onPress: () => router.back() },
+                { text: 'Видалити', style: 'destructive', onPress: () => void draft.clear().then(() => router.back()) },
+                { text: 'Скасувати', style: 'cancel' },
+              ])}
             className="w-9 h-9 items-center justify-center rounded-full bg-gray-100"
           >
             <Ionicons name="close" size={20} color="#374151" />
@@ -290,8 +349,8 @@ export default function CreateTransferScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={createTransfer.isPending || items.length === 0 || !toLocationId}
+            onPress={() => void handleSubmit()}
+            disabled={createTransfer.isPending || items.length === 0 || !toLocationId || netInfo.isConnected === false || draft.submission.status === 'uncertain'}
             className={`rounded-xl py-3.5 items-center ${
               items.length === 0 || !toLocationId ? 'bg-gray-200' : 'bg-primary-600'
             }`}

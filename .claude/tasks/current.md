@@ -3,6 +3,11 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+**Parallel workstream — Stage 6 (Multi-Tenant Consumer Platform):** TASK-526 audit done,
+TASK-556 (2026-08-17) resolved the 3 open decisions and registered TASK-527–555 as `planned`
+(TASK-529/530 descoped). Implementation ready to start with TASK-527/TASK-528 (Stage A). Full
+detail: `.claude/tasks/mobile-roadmap.md` Stage 6.
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer

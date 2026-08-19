@@ -8,7 +8,14 @@
 
 ### Tenant
 Multi-tenant root. All data tables have TenantId FK + RLS.
-Fields: id, name, slug, plan, modules (JSONB), is_active, created_at
+Fields: id, name, slug, plan, modules (JSONB), business_type, is_active, logo_url, created_at,
+updated_at
+> `logo_url` (nullable text) and `updated_at` (TASK-527) close the gap against the consumer
+> app-builder spec's minimal `Tenant` shape (`docs/architecture/TARGET_ARCHITECTURE.md` §2 ЕТАП
+> 1). `logo_url` is set via `Tenant.UpdateLogoUrl()`; `updated_at` is touched manually inside
+> every mutator (`UpdatePlan`, `UpdateModules`, `UpdateBusinessType`, `Activate`, `Deactivate`,
+> `UpdateLogoUrl`) — same house convention as `Banner`/`Customer`, no `SaveChanges` interceptor
+> exists in this codebase.
 
 ### User
 Belongs to tenant (or NULL for provider role).
@@ -243,6 +250,180 @@ Unique (segment_id, customer_id) — a customer appears at most once per segment
   `PostCampaignSegmentMember` via a denormalized column, no FK — see `database-schema.md`), RLS
   isolated, and ride under the existing `"marketing_analytics"` module key — no new module key
   introduced for this phase.
+
+### MobileConfiguration
+Root/pointer record for one tenant's mobile app configuration — Stage B of the multi-tenant
+consumer app-builder initiative (CLAUDE CODE SPEC ЕТАП 3, TASK-531). Exactly one row per tenant.
+Points at the tenant's current draft and published `MobileConfigurationVersion` snapshots. TASK-532
+added the whitelist validation service (`MobileConfigValidator`) and Application-layer Draft CRUD
+(`MobileConfigDraftService`) on top of this schema — no publish or consumer-facing read yet
+(TASK-534/544).
+Fields: id, tenant_id (unique), published_version_id? (FK→MobileConfigurationVersion, **Restrict**),
+draft_version_id? (FK→MobileConfigurationVersion, **Restrict**), created_at, updated_at
+
+### MobileConfigurationVersion
+An immutable-once-published snapshot of the tenant's configuration document
+(schemaVersion/features/navigation/pages — MASTER SPEC §11's response shape minus `tenant`, which
+is resolved separately at read time). Versions are append-only per tenant (`version` increments,
+never reused); `MobileConfiguration` is the mutable root that points at whichever version is
+currently draft/published.
+Fields: id, mobile_configuration_id (FK→MobileConfiguration, **Cascade** — the owning direction),
+tenant_id (denormalized direct column, same treatment as `LoyaltyLedgerEntry.tenant_id` — lets RLS
+scope this table without a join), version (int, unique per config), schema_version (int), status
+(draft/published/archived), configuration_json (jsonb), created_by? (FK→users, SetNull),
+created_at, published_at?
+> **Circular FK note:** `MobileConfiguration`'s two version pointers and this entity's parent
+> pointer form a genuine table-level cycle, safely broken by delete-behavior direction (this FK
+> cascades; the two pointer FKs restrict) — see `database-schema.md` TASK-531 for the full
+> verification (migrates/rolls back cleanly under PostgreSQL; would only be a problem under SQL
+> Server's stricter multiple-cascade-paths rule).
+
+### MobileTheme
+Typed, whitelist-validated theme record — **one row per `MobileConfiguration` (i.e. per tenant),
+not per version** — enforced by a DB-level unique constraint on `mobile_configuration_id`. This is
+the design decision TASK-531 had to make: CLAUDE CODE SPEC ЕТАП 3 lists `MobileTheme` as its own
+domain entity separate from the generic `ConfigurationJson` blob, even though MASTER SPEC §11's
+example API response nests a `theme` object inside the same document. Resolved by treating
+`MobileTheme` as the single, directly-editable working record the future Theme Editor (TASK-537)
+reads/writes; `MobileConfigurationVersion.ConfigurationJson` remains the serialized, immutable
+snapshot produced from it (and from future page/block/navigation tables) at publish time — the
+same relationship a future `MobilePage`/`MobileNavigationItem` table would have to a version.
+Fields: id, mobile_configuration_id (FK→MobileConfiguration, Cascade, **unique**), tenant_id
+(denormalized), logo_url?, primary_color, secondary_color, background_color, surface_color,
+text_primary_color, text_secondary_color (hex strings), button_radius, card_radius (int),
+spacing_preset (string, e.g. "comfortable"), updated_at
+
+#### Relationships to existing entities (Mobile Configuration domain)
+- **`Tenant`** — `MobileConfiguration.tenant_id` is a real FK (`Restrict`), unique — exactly one
+  configuration root per tenant. `MobileConfigurationVersion`/`MobileTheme` denormalize `tenant_id`
+  directly rather than deriving it via join, so RLS can scope them without a join (see
+  `database-schema.md`).
+- **`User`** — `MobileConfigurationVersion.created_by` (nullable, SetNull) is the staff member who
+  created that version; no other entity in this domain references `User` yet (RBAC/authorship for
+  publish/rollback is TASK-544 scope).
+
+#### TASK-532 design decisions (Application layer)
+
+- **Whitelist validation** — `MobileConfigValidator`
+  (`ShelfGuard.Application/Features/MobileConfig/MobileConfigValidator.cs`) walks the parsed JSON
+  manually (not typed-DTO deserialization) so every rejection carries a precise field path
+  (`"features.unknownKey"`, `"navigation[2].type"`, `"pages.home.blocks[0].props"`). Whitelist
+  values live in `MobileConfigWhitelists`, reused as-is by TASK-533's
+  `/contracts/mobile-config.schema.json`. `navigation`'s min-2/max-5 item-count rule (MASTER SPEC
+  §8) is enforced here, not deferred to a later publish-time gate.
+- **Theme composition timing** — the validated `ConfigurationJson` document has **no `theme`
+  key** at draft time (rejected as unknown if present); `MobileTheme` stays the single editable
+  working record. The original plan was for a copy to be composed into `ConfigurationJson.theme`
+  only at **publish time** (TASK-544), meaning `GET /api/v1/mobile/config` would read `theme`
+  straight off the published version's stored JSON. **Revised by TASK-534** (see below) — since
+  TASK-544 hasn't shipped yet, the read endpoint does not wait for it.
+- **Draft update-in-place** — `MobileConfigDraftService.SaveDraftAsync` mutates the tenant's
+  existing draft `MobileConfigurationVersion` via `UpdateConfigurationJson()` on every save; it
+  does not mint a new version row per edit. Same shape as `Banner.Update()` staying separate from
+  `Banner.Publish()`. A fresh, append-only version number is only allocated the first time a
+  tenant has no draft yet, or once a draft is actually published (TASK-544) and a new draft is
+  started afterward.
+
+#### TASK-534 — `GET /api/v1/mobile/config` (consumer-facing published read)
+
+`MobileConfigController` (`ShelfGuard.Api/Controllers/MobileConfigController.cs`) +
+`MobileConfigPublishedReadService` (`ShelfGuard.Application/Features/MobileConfig/`). Resolves only
+the tenant's current `MobileConfigurationVersion` with `Status == Published`
+(`MobileConfiguration.PublishedVersionId`) — draft/archived versions are never reachable through
+this path.
+
+- **Tenant transport** — this is the mobile workstream's top blocking item
+  (`docs/mobile/MOBILE_CURRENT_STATE.md` §8/§15/§12: "documented active-tenant transport for
+  GET /api/v1/mobile/config"). Route stays literally `GET /api/v1/mobile/config` (spec-compliant,
+  no tenant path segment); `tenantId` travels as an explicit `?tenantId=` query parameter,
+  resolved through `ITenantSessionOverride` exactly like `ConsumerContentController`'s
+  `{tenantId}` route segment already does — a consumer/anonymous session structurally never
+  carries an `app.tenant_id` claim. First endpoint under the new `/api/v1/` prefix (TASK-556
+  decision 2).
+- **Auth** — `[AllowAnonymous]`, same posture as `ConsumerContentController`. MASTER SPEC §12's
+  "discover before joining" flow requires browsing without a consumer JWT, and the document is
+  identical for every viewer of a given tenant, so there is no reason to require one.
+- **Theme sourcing — supersedes TASK-532's plan above, load-bearing for TASK-544:** because no
+  publish flow exists yet, this endpoint does **not** trust any `theme` key that might already sit
+  in `ConfigurationJson`. Instead it composes `theme` **live** from the tenant's `MobileTheme` row
+  on every call (falling back to `MobileTheme.CreateDefault`'s built-in values if the tenant has no
+  `MobileTheme` row yet — nothing auto-creates one alongside `MobileConfiguration` today; it's
+  meant to be created by the not-yet-shipped Theme Editor, TASK-536). Whoever builds TASK-544 must
+  make one explicit choice, not both by accident: (a) keep reading theme live from `MobileTheme`
+  (simplest, and correct even if a tenant edits theme without republishing — this is the
+  recommended default), or (b) switch to trusting `ConfigurationJson.theme` and remove the live
+  join, in which case every row published before TASK-544 (including this task's own test fixtures)
+  has no `theme` key and needs a compatibility plan.
+- **ETag** — a strong ETag (SHA-256 hex of the exact served JSON string, not just the version's
+  `Id`/`Version`) so a future independent theme edit (TASK-536, once it exists) that changes the
+  response without minting a new version still invalidates the ETag instead of falsely 304-ing.
+- **Bug found and NOT fixed here (out of this task's file scope)** — while building this task's
+  live-Postgres integration test, found that `MobileConfigDraftService.SaveDraftAsync`'s
+  create-a-new-`MobileConfiguration` branch (TASK-532) sets the new `MobileConfigurationVersion`'s
+  id as `config.DraftVersionId` and saves both brand-new rows in **one** `SaveChangesAsync` call —
+  EF Core throws `circular dependency detected` against real Postgres, because
+  `MobileConfigurationVersion.MobileConfigurationId` and `MobileConfiguration.DraftVersionId` each
+  require the other row inserted first. TASK-532's own tests never caught this because they mock
+  `IMobileConfigurationRepository` (never touch real EF `SaveChanges`). Practical effect: the very
+  first draft save for any tenant would 500 in production today. Fixed the identical shape in this
+  task's own test seeding (split into two `SaveChangesAsync` calls — insert both rows with the
+  pointer null, then set the pointer and save again) but left `MobileConfigDraftService.cs` itself
+  untouched, since it's outside this task's scope — flagged as a separate follow-up task instead.
+
+### Block Registry (TASK-538)
+Server-owned catalog of the 12 Core Blocks V1 block types (CODEX SPEC ЕТАП 6 — `heroBanner`,
+`bannerCarousel`, `loyaltyCard`, `loyaltyBalance`, `promotionCarousel`, `promotionGrid`,
+`productCarousel`, `productGrid`, `sectionHeader`, `quickActions`, `newsList`, `storeList`), backing
+the future App Builder (TASK-539) and Block Property Editor (TASK-540). **Deliberately not a DB
+table/migration** — block *types* are static, compile-time-known metadata; no retailer ever creates
+a new block type, only arranges instances of these fixed types on their pages. Implemented as an
+in-code static catalog instead:
+
+- `BlockRegistry.Definitions` (`ShelfGuard.Application/Features/MobileConfig/BlockRegistry/
+  BlockRegistry.cs`) — the 12 `BlockDefinition` records (`type`/`displayName`/`icon`/`category`/
+  `props`/`supportedDataSource`). `DefaultProps` is *derived* from each prop's declared default
+  (not a second, independently-authored dictionary) so the two can never drift apart.
+- `BlockPropDefinition` — one entry in a block's `validationSchema`: `name`/`type`
+  (`BlockPropTypes.String|Int|Bool|Enum|Url|StringArray` — plain string constants, the same
+  "kind travels as a string, not a C# enum" convention `MobileConfigurationVersionStatus` already
+  uses, so it serializes cleanly with no extra JSON converter) /`required`/`default`/bounds
+  (`minLength`/`maxLength`/`min`/`max`/`minItems`/`maxItems`)/`allowedValues`. A flat per-field
+  descriptor, not a full JSON-Schema document — sufficient for TASK-540 to generate the right input
+  control per field without a general-purpose validation engine.
+- `IBlockRegistryProvider`/`BlockRegistryProvider` — DI-registered **singleton** (the catalog never
+  changes at runtime) wrapping the static list; `MobileBlocksController` depends on the interface,
+  not the static class directly, so it stays swappable/testable.
+- `GET /api/v1/mobile/blocks` and `GET /api/v1/mobile/blocks/{type}`
+  (`ShelfGuard.Api/Controllers/MobileBlocksController.cs`) — `AtLeastEnterpriseAdmin`, versioned
+  under `/api/v1/` (decision 2, TASK-556), same admin-surface posture as `MobileThemeController`
+  (deliberately separate from the anonymous consumer-facing `MobileConfigController`). Not
+  tenant-scoped — the catalog is identical for every tenant. Both actions serialize whatever
+  `IBlockRegistryProvider` returns through a single generic `BlockDefinitionDto.From` mapping — no
+  per-block-type branching in the controller.
+- **Kept in lockstep with `MobileConfigWhitelists.BlockTypes`** (TASK-532's `pages.*.blocks[].type`
+  allowlist) via an agreement test (`BlockRegistryTests.Registry_type_set_matches_
+  MobileConfigWhitelists_BlockTypes_exactly`) — same pattern `MobileConfigSchemaContractTests`
+  already uses to guard TASK-533's contract against drift from TASK-532's whitelist.
+- `quickActions.actions` reuses `MobileConfigWhitelists.NavigationTypes` directly as its allowed
+  values, rather than inventing a second, parallel vocabulary — a quick action is just a shortcut to
+  an already-whitelisted navigation destination.
+- **`newsList`/`storeList`'s `supportedDataSource` honestly flag real, current gaps** rather than
+  inventing an endpoint: no `News` domain entity/endpoint exists in this repo yet, and no dedicated
+  consumer-facing store-list endpoint exists either (only `ConsumerLoyaltyController`'s
+  preferred-store *selection*, which references `storeId` directly with no GET-list counterpart).
+- **Props-validation scope decision — deliberately NOT wired into `MobileConfigValidator` this
+  task.** `MobileConfigValidator`'s `props` check stays exactly as TASK-532 shipped it (container
+  type only, no per-key/per-value enforcement). Reasons: (1) TASK-532's already-shipped, passing
+  `MobileConfigValidatorTests` encode an explicit, tested contract that `props` is free-form JSON at
+  this stage — e.g. one test uses `"props": {}` on a `heroBanner` block and asserts the whole
+  document is valid, another uses an arbitrary `"showQr"` prop key on `loyaltyBalance` that this
+  registry's own (first-ever) `loyaltyBalance` prop schema does not contain; retrofitting strict
+  enforcement now would break that already-shipped behavior or force rewriting those tests around
+  prop shapes invented for this task with no real producer to confirm them against. (2) TASK-539
+  (App Builder canvas) and TASK-540 (Property Editor) — the actual UIs that will ever *produce* a
+  block's `props` — don't exist yet; locking enforcement to this registry's shapes before they exist
+  risks a second breaking change once real usage lands. Flagged explicitly as follow-up work, not
+  left unaddressed — see task log 538.
 
 ---
 

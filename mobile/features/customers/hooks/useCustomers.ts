@@ -8,10 +8,11 @@ import {
 } from '../api';
 import type { CreateCustomerPayload, UpdateCustomerPayload } from '../types';
 
-export function useCustomers(search = '') {
+export function useCustomers(search = '', enabled = true) {
   return useQuery({
     queryKey: ['customers', search],
     queryFn: () => getCustomers(1, search),
+    enabled,
   });
 }
 

@@ -27,6 +27,9 @@ public sealed class TenantRepository : ITenantRepository
     public async Task<Tenant?> GetByIdAsync(Guid id, CancellationToken ct) =>
         await _db.Tenants.FirstOrDefaultAsync(t => t.Id == id, ct);
 
+    public async Task<Tenant?> GetBySlugAsync(string slug, CancellationToken ct) =>
+        await _db.Tenants.FirstOrDefaultAsync(t => t.Slug == slug.ToLowerInvariant(), ct);
+
     /// <summary>
     /// Active user count per tenant in a single GROUP BY query.
     /// Excludes provider-role accounts (tenant_id IS NULL) from counts.

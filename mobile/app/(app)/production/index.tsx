@@ -14,7 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
 import {
   useProductionOrders,
   useRecipes,
@@ -22,6 +23,8 @@ import {
 } from '@/features/production/hooks/useProduction';
 import type { ProductionOrderListItem, ProductionStatus } from '@/features/production/types';
 import { useAuthStore } from '@/features/auth/store';
+import { useOperationalDraft } from '@/features/operational-drafts/useOperationalDraft';
+import { classifyOperationalError } from '@/features/operational-drafts/submission';
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -118,7 +121,10 @@ function CreateOrderModal({
   onClose: () => void;
 }) {
   const user = useAuthStore((s) => s.user);
-  const { data: recipes } = useRecipes();
+  const owner = user?.tenantId ? { tenantId: user.tenantId, userId: user.id } : null;
+  const draft = useOperationalDraft(owner, 'production');
+  const netInfo = useNetInfo();
+  const { data: recipes, refetch: refetchRecipes } = useRecipes();
   const { mutateAsync, isPending } = useCreateProductionOrder();
 
   const [recipeId, setRecipeId] = useState('');
@@ -127,11 +133,38 @@ function CreateOrderModal({
   const [recipePickerOpen, setRecipePickerOpen] = useState(false);
 
   const selectedRecipe = recipes?.find((r) => r.id === recipeId);
+  const draftPayload = {
+    kind: 'production' as const,
+    locationId: user?.locationId ?? '',
+    recipeId,
+    plannedQty,
+    notes,
+  };
+
+  useEffect(() => {
+    if (draft.restored?.payload.kind !== 'production') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecipeId(draft.restored.payload.recipeId);
+    setPlannedQty(draft.restored.payload.plannedQty);
+    setNotes(draft.restored.payload.notes);
+  }, [draft.restored]);
+
+  useEffect(() => {
+    if (!draft.hydrated || (!recipeId && plannedQty === '1' && !notes)) return;
+    void draft.persist(draftPayload);
+  }, [recipeId, plannedQty, notes, draft.hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function reset() {
     setRecipeId('');
     setPlannedQty('1');
     setNotes('');
+  }
+
+  function discard() {
+    Alert.alert('Видалити чернетку?', 'Усі введені дані цього ордера буде втрачено.', [
+      { text: 'Скасувати', style: 'cancel' },
+      { text: 'Видалити', style: 'destructive', onPress: () => void draft.clear().then(reset) },
+    ]);
   }
 
   async function handleSubmit() {
@@ -148,18 +181,40 @@ function CreateOrderModal({
       Alert.alert('Помилка', 'Локацію не призначено для вашого профілю.');
       return;
     }
+    const network = await NetInfo.fetch();
+    if (!network.isConnected || network.isInternetReachable === false) {
+      const state = { status: 'failed' as const, message: 'Немає мережі. Чернетку збережено.' };
+      await draft.transition(state, draftPayload);
+      Alert.alert('Немає мережі', state.message);
+      return;
+    }
+    let mutationStarted = false;
     try {
+      const refreshed = await refetchRecipes();
+      if (refreshed.error) throw refreshed.error;
+      if (!refreshed.data?.some((recipe) => recipe.id === recipeId && recipe.isActive)) {
+        const state = { status: 'conflict' as const, message: 'Рецепт більше недоступний. Оновіть список і перевірте чернетку.' };
+        await draft.transition(state, draftPayload);
+        Alert.alert('Дані змінилися', state.message);
+        return;
+      }
+      mutationStarted = true;
       await mutateAsync({
         recipeId,
         locationId: user.locationId,
         plannedQty: qty,
         notes: notes.trim() || undefined,
       });
+      await draft.clear();
       reset();
       onClose();
       Alert.alert('Успішно', 'Виробничий ордер створено.');
-    } catch {
-      Alert.alert('Помилка', 'Не вдалося створити ордер. Спробуйте ще раз.');
+    } catch (error) {
+      const state = mutationStarted
+        ? classifyOperationalError(error)
+        : { status: 'failed' as const, message: 'Не вдалося оновити рецепти. Ордер не відправлявся, чернетку збережено.' };
+      await draft.transition(state, draftPayload);
+      Alert.alert(state.status === 'uncertain' ? 'Результат не підтверджено' : 'Помилка', state.message);
     }
   }
 
@@ -171,10 +226,19 @@ function CreateOrderModal({
       >
         <View className="flex-1 bg-black/40" />
         <View className="bg-white rounded-t-3xl px-6 pt-6 pb-10">
+          {netInfo.isConnected === false && (
+            <Text className="text-sm text-red-700 bg-red-50 p-3 rounded-xl mb-3">Немає мережі. Чернетка зберігається, відправлення заблоковано.</Text>
+          )}
+          {draft.submission.status !== 'idle' && draft.submission.message && (
+            <Text className="text-sm text-amber-700 bg-amber-50 p-3 rounded-xl mb-3">{draft.submission.message}</Text>
+          )}
           <View className="flex-row items-center justify-between mb-5">
             <Text className="text-lg font-bold text-gray-900">Новий ордер</Text>
-            <TouchableOpacity onPress={() => { reset(); onClose(); }}>
+            <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={discard}>
+              <Text className="text-red-600 text-sm">Видалити</Text>
             </TouchableOpacity>
           </View>
 
@@ -215,7 +279,7 @@ function CreateOrderModal({
 
           <TouchableOpacity
             onPress={() => void handleSubmit()}
-            disabled={isPending}
+            disabled={isPending || netInfo.isConnected === false || draft.submission.status === 'uncertain'}
             className="bg-primary-600 rounded-xl py-4 items-center"
           >
             {isPending ? (

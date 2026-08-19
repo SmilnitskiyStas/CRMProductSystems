@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Loyalty;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Infrastructure.Authorization;
 
 namespace ShelfGuard.Api.Controllers;
@@ -18,15 +19,20 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class LoyaltySettingsController : ControllerBase
 {
     private readonly ILoyaltyService _loyalty;
+    private readonly ITenantContext _tenantContext;
 
-    public LoyaltySettingsController(ILoyaltyService loyalty) => _loyalty = loyalty;
+    public LoyaltySettingsController(ILoyaltyService loyalty, ITenantContext tenantContext)
+    {
+        _loyalty = loyalty;
+        _tenantContext = tenantContext;
+    }
 
     [HttpGet]
     [ProducesResponseType(typeof(LoyaltyProgramSettingsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var dto = await _loyalty.GetSettingsAsync(tenantId.Value, ct);
@@ -39,20 +45,12 @@ public sealed class LoyaltySettingsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Upsert([FromBody] UpsertLoyaltyProgramSettingsRequest request, CancellationToken ct)
     {
-        var tenantId = ResolveTenantId();
+        var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
         var (dto, error) = await _loyalty.UpsertSettingsAsync(tenantId.Value, request, ct);
         if (error is not null) return BadRequest(new { error });
 
         return Ok(dto);
-    }
-
-    // ── helpers ────────────────────────────────────────────────────────────
-
-    private Guid? ResolveTenantId()
-    {
-        var raw = User.FindFirst("tenant_id")?.Value;
-        return Guid.TryParse(raw, out var id) && id != Guid.Empty ? id : null;
     }
 }

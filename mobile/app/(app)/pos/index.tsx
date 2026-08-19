@@ -9,6 +9,8 @@ import {
   useCloseShift,
 } from '@/features/pos/hooks/usePosApi';
 import { getLocations } from '@/features/pos/api/posApi';
+import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
+import { isPosOffline } from '@/features/pos/networkPolicy';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -26,9 +28,15 @@ export default function PosHomeScreen() {
   const { data: shift, isLoading, refetch } = useCurrentShift();
   const openMutation = useOpenShift();
   const closeMutation = useCloseShift();
+  const network = useNetInfo();
+  const offline = isPosOffline(network);
 
   const handleOpenShift = async () => {
     try {
+      if (isPosOffline(await NetInfo.fetch())) {
+        Alert.alert('Немає мережі', 'Відкриття зміни доступне лише онлайн.');
+        return;
+      }
       const locations = await getLocations();
       if (!locations || locations.length === 0) {
         Alert.alert('Помилка', 'Немає доступних локацій.');
@@ -62,7 +70,11 @@ export default function PosHomeScreen() {
     }
   };
 
-  const handleCloseShift = () => {
+  const handleCloseShift = async () => {
+    if (isPosOffline(await NetInfo.fetch())) {
+      Alert.alert('Немає мережі', 'Закриття зміни доступне лише онлайн.');
+      return;
+    }
     Alert.alert(
       'Закрити зміну',
       'Ви впевнені, що хочете закрити зміну? Всі наступні продажі будуть неможливі до відкриття нової зміни.',
@@ -149,7 +161,8 @@ export default function PosHomeScreen() {
 
                 <TouchableOpacity
                   onPress={handleCloseShift}
-                  className="bg-white border border-red-300 rounded-2xl py-4 flex-row items-center justify-center gap-3"
+                  disabled={offline}
+                  className={`${offline ? 'bg-gray-100 border-gray-200' : 'bg-white border-red-300'} border rounded-2xl py-4 flex-row items-center justify-center gap-3`}
                   style={{ minHeight: 56 }}
                 >
                   <Ionicons name="lock-closed-outline" size={22} color="#ef4444" />
@@ -183,7 +196,8 @@ export default function PosHomeScreen() {
             ) : (
               <TouchableOpacity
                 onPress={handleOpenShift}
-                className="bg-primary-600 rounded-2xl px-10 py-5 flex-row items-center gap-3"
+                disabled={offline}
+                className={`${offline ? 'bg-gray-200' : 'bg-primary-600'} rounded-2xl px-10 py-5 flex-row items-center gap-3`}
                 style={{ minHeight: 64 }}
               >
                 <Ionicons name="lock-open-outline" size={24} color="white" />

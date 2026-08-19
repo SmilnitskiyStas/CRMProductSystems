@@ -165,7 +165,7 @@ defects found and closed. All fixes are applied on dev/staging (see the deploy b
 | KI-015 | POS shift-open is per-tenant, not per-store — blocks simultaneous multi-store POS. | Plan written; needs schema migration + multi-register Checkbox setup. Decide if worth it now. |
 | KI-018 | Auto-service spare-part FEFO write-down is tenant-wide, not location-scoped. | Plan written (~1 day, additive). Real cross-location leak for auto-service chains. |
 | KI-019 | Most v2/v3 controllers have no `[RequireModule]` gate (billing/entitlement gap, not a leak). | Adding it blind would 403 working tenants; needs a product call on default module sets + backfill. |
-| KI-023 | Mobile has no 2FA input screen — a 2FA-enabled user can't log in on mobile (now fails loudly). | Build a mobile 2FA step, or document 2FA as web-only for now. |
+| KI-023 | Mobile 2FA login is implemented (TOTP + recovery code); device acceptance is pending. | Run live Android TOTP and one-time recovery-code verification when TASK-435 is unblocked. |
 | KI-017 | `needs_verification` stock status never triggers its cron notification. | Small schema + worker task. |
 | — | Cooperation-flow controller (agreements/orders/contract-settings) has no fine-grained permission key. | Needs a permission-taxonomy product decision (Block 8). |
 | — | `SuppliersController` full CRUD + several coefficient CRUD endpoints (Discounts/Cannibalization/SupplySchedules/Weather) have no UI. | v2-spec tuning knobs built backend-first; pre-launch product gap, not a code bug (Block 15). |

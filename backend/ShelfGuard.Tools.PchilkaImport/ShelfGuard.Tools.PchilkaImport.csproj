@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ShelfGuard.Tools.PchilkaImport</RootNamespace>
+    <AssemblyName>ShelfGuard.Tools.PchilkaImport</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    TASK-513: one-off local-dev data population tool — imports a real slice of Pchilka POS
+    data (read-only MySQL source) into the ShelfGuard local dev Postgres "Свіжий Кут" tenant
+    so the user can manually click through FEFO/write-offs/notifications/POS analytics
+    against realistic data instead of the near-empty seeded demo tenant.
+
+    References Application/Infrastructure/Domain directly (not the Api project) so it can
+    reuse AppDbContext, ItemService, CustomerService, ITenantSessionOverride etc. exactly the
+    way the real API does, instead of hand-rolling raw SQL against Postgres — see
+    ShelfGuard.Infrastructure.csproj's own FrameworkReference: Infrastructure depends on
+    ASP.NET Core abstractions (IHttpContextAccessor for TenantConnectionInterceptor), so this
+    console app needs the same FrameworkReference to load those assemblies at runtime.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!--
+    No MySqlConnector reference: the Pchilka source is reached via `docker exec` into the
+    container's Unix socket (see Source/PchilkaCliClient.cs for why — the container's
+    skip-grant-tables mode makes MySQL's own docker-entrypoint hard-disable TCP networking),
+    not a direct ADO.NET connection.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\ShelfGuard.Application\ShelfGuard.Application.csproj" />
+    <ProjectReference Include="..\ShelfGuard.Infrastructure\ShelfGuard.Infrastructure.csproj" />
+    <ProjectReference Include="..\ShelfGuard.Domain\ShelfGuard.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

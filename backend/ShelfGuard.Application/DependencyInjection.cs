@@ -148,6 +148,39 @@ services.AddScoped<IAuthService, AuthService>();
             Features.MarketingAnalytics.PostCampaign.IPostCampaignService,
             Features.MarketingAnalytics.PostCampaign.PostCampaignService>();
 
+        // TASK-532 - Consumer app-builder platform: config JSON validation + draft CRUD
+        services.AddScoped<Features.MobileConfig.IMobileConfigValidator, Features.MobileConfig.MobileConfigValidator>();
+        services.AddScoped<Features.MobileConfig.IMobileConfigDraftService, Features.MobileConfig.MobileConfigDraftService>();
+
+        // TASK-534 - Consumer app-builder platform: GET /api/v1/mobile/config (published read)
+        services.AddScoped<
+            Features.MobileConfig.IMobileConfigPublishedReadService,
+            Features.MobileConfig.MobileConfigPublishedReadService>();
+
+        // TASK-536 - Consumer app-builder platform: theme domain validation + PUT endpoint
+        services.AddScoped<Features.MobileConfig.IMobileThemeValidator, Features.MobileConfig.MobileThemeValidator>();
+        services.AddScoped<Features.MobileConfig.IMobileThemeService, Features.MobileConfig.MobileThemeService>();
+
+        // TASK-538 - Consumer app-builder platform: Block Registry (static catalog, GET /api/v1/mobile/blocks)
+        services.AddSingleton<
+            Features.MobileConfig.BlockRegistry.IBlockRegistryProvider,
+            Features.MobileConfig.BlockRegistry.BlockRegistryProvider>();
+
+        // TASK-543 - Consumer app-builder platform: consumer-session-aware feature flags (Stage D ЕТАП 10)
+        services.AddScoped<Features.MobileConfig.IConsumerFeatureFlagService, Features.MobileConfig.ConsumerFeatureFlagService>();
+        services.AddScoped<Features.MobileConfig.ISubscriptionPlanFeatureGate, Features.MobileConfig.SubscriptionPlanFeatureGate>();
+
+        // TASK-544 - Consumer app-builder platform: generalized Draft->Validate->Publish (Stage D ЕТАП 11)
+        services.AddScoped<Features.MobileConfig.IMobileConfigPublishService, Features.MobileConfig.MobileConfigPublishService>();
+
+        // TASK-545 - Consumer app-builder platform: Version History + Rollback (Stage D ЕТАП 12)
+        services.AddScoped<
+            Features.MobileConfig.IMobileConfigVersionHistoryService,
+            Features.MobileConfig.MobileConfigVersionHistoryService>();
+
+        // TASK-547 - Consumer app-builder platform: staff-only draft Preview API (Stage D ЕТАП 13)
+        services.AddScoped<Features.MobileConfig.IMobileConfigPreviewService, Features.MobileConfig.MobileConfigPreviewService>();
+
         return services;
     }
 }

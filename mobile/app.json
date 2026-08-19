@@ -3,18 +3,33 @@
     "name": "ShelfGuard",
     "slug": "shelfguard",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f7c5029e-c970-4f8e-86fb-9b7ff25ca1e7",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "scheme": "shelfguard",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.shelfguard.mobile"
+      "bundleIdentifier": "com.shelfguard.mobile",
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.shelfguard.mobile",
+      "versionCode": 1,
+      "allowBackup": false,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "plugins": [
@@ -28,14 +43,25 @@
       ],
       "expo-router",
       "expo-secure-store",
+      "./plugins/withShelfGuardBackupProtection",
       [
         "expo-camera",
         {
-          "cameraPermission": "ShelfGuard потребує доступ до камери для сканування штрихкодів."
+          "cameraPermission": "ShelfGuard потребує доступ до камери для сканування штрихкодів.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ShelfGuard використовує геолокацію, щоб знайти найближчий магазин."
         }
       ],
       "expo-notifications",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-font",
+      "expo-splash-screen"
     ],
     "experiments": {},
     "extra": {

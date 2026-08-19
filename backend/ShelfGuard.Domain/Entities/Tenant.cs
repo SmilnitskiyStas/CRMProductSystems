@@ -10,22 +10,32 @@ public sealed class Tenant
     // v4: business domain (retail / auto_service / warehouse / restaurant / production / distribution)
     public string BusinessType { get; private set; } = "retail";
     public bool IsActive { get; private set; } = true;
+
+    /// <summary>Consumer/admin-app branding logo (spec's minimal Tenant shape, TASK-527). Null = no logo uploaded yet.</summary>
+    public string? LogoUrl { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
+    public DateTime UpdatedAt { get; private set; }
 
     public ICollection<User> Users { get; private set; } = new List<User>();
 
     private Tenant() { }
 
-    public static Tenant Create(string name, string slug) => new()
+    public static Tenant Create(string name, string slug)
     {
-        Id = Guid.NewGuid(),
-        Name = name,
-        Slug = slug.ToLowerInvariant(),
-        Plan = "basic",
-        Modules = "[]",
-        IsActive = true,
-        CreatedAt = DateTime.UtcNow,
-    };
+        var now = DateTime.UtcNow;
+        return new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Slug = slug.ToLowerInvariant(),
+            Plan = "basic",
+            Modules = "[]",
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+    }
 
     /// <summary>Changes the billing plan (provider-only).</summary>
     public string? UpdatePlan(string plan)
@@ -34,6 +44,7 @@ public sealed class Tenant
         if (!valid.Contains(plan, StringComparer.OrdinalIgnoreCase))
             return $"Unknown plan '{plan}'. Valid: {string.Join(", ", valid)}.";
         Plan = plan.ToLowerInvariant();
+        UpdatedAt = DateTime.UtcNow;
         return null;
     }
 
@@ -60,6 +71,7 @@ public sealed class Tenant
         if (unknown.Count > 0)
             return $"Unknown modules: {string.Join(", ", unknown)}.";
         Modules = System.Text.Json.JsonSerializer.Serialize(modules);
+        UpdatedAt = DateTime.UtcNow;
         return null;
     }
 
@@ -70,6 +82,7 @@ public sealed class Tenant
         if (!valid.Contains(businessType, StringComparer.OrdinalIgnoreCase))
             return $"Unknown business type '{businessType}'. Valid: {string.Join(", ", valid)}.";
         BusinessType = businessType.ToLowerInvariant();
+        UpdatedAt = DateTime.UtcNow;
         return null;
     }
 
@@ -110,8 +123,23 @@ public sealed class Tenant
         };
 
     /// <summary>Soft-deactivates the tenant (provider-only).</summary>
-    public void Deactivate() => IsActive = false;
+    public void Deactivate()
+    {
+        IsActive = false;
+        UpdatedAt = DateTime.UtcNow;
+    }
 
     /// <summary>Re-activates a previously deactivated tenant (provider-only).</summary>
-    public void Activate() => IsActive = true;
+    public void Activate()
+    {
+        IsActive = true;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Sets the consumer/admin-app branding logo. Pass null to clear.</summary>
+    public void UpdateLogoUrl(string? logoUrl)
+    {
+        LogoUrl = logoUrl;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

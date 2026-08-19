@@ -13,7 +13,7 @@ export default function NotificationsScreen() {
   const { readIds, markRead, markAllRead } = useNotificationReadStore();
 
   const unreadCount = notifications
-    ? notifications.filter((n) => !readIds.has(n.id)).length
+    ? notifications.items.filter((n) => !readIds.has(n.id)).length
     : 0;
 
   function handleItemPress(id: string) {
@@ -22,7 +22,7 @@ export default function NotificationsScreen() {
 
   function handleMarkAll() {
     if (notifications) {
-      markAllRead(notifications.map((n) => n.id));
+      markAllRead(notifications.items.map((n) => n.id));
     }
   }
 
@@ -53,7 +53,7 @@ export default function NotificationsScreen() {
         </View>
       ) : (
         <FlatList<Notification>
-          data={notifications ?? []}
+          data={notifications?.items ?? []}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <NotificationItem
@@ -66,7 +66,7 @@ export default function NotificationsScreen() {
           onRefresh={refetch}
           refreshing={isRefetching}
           contentContainerStyle={
-            !notifications || notifications.length === 0
+            !notifications || notifications.items.length === 0
               ? { flex: 1 }
               : undefined
           }

@@ -29,6 +29,33 @@ Infrastructure → Application, Domain
 Reads JWT claims, validates role whitelist, sets `app.tenant_id` and `app.role` PostgreSQL session variables.
 All DB queries automatically filtered by RLS — application layer never filters by tenant manually.
 
+**`ITenantContext` (TASK-528) — required convention for all new controllers/services.**
+`ShelfGuard.Application/Services/ITenantContext.cs` (impl: `ShelfGuard.Infrastructure/Services/TenantContext.cs`,
+registered `AddScoped` in `Infrastructure/DependencyInjection.cs`) centrally resolves the current
+staff request's tenant id from the `tenant_id` JWT claim — `Guid? TenantId { get; }`, `null` when
+absent/invalid (unauthenticated, provider/consumer session, malformed claim). **New
+controllers/services must inject `ITenantContext` and read `.TenantId` instead of writing a new
+`ResolveTenantId()`/`GetTenantId()`-style helper that touches `ClaimsPrincipal`/`User.FindFirst("tenant_id")`
+directly.**
+
+Migrated so far (TASK-528, Stage A of the consumer-app-builder initiative — see
+`docs/architecture/CURRENT_STATE.md` §1): `BannersController`, `LoyaltyController`,
+`LoyaltySettingsController`. **The remaining ~40 pre-existing controllers under
+`backend/ShelfGuard.Api/Controllers/` still use their own per-controller
+`ResolveTenantId()`/`GetTenantId()` helper** (same `User.FindFirst("tenant_id")` logic, just not yet
+centralized) — this is a deliberate, incremental migration, not an oversight. Migrate a controller
+opportunistically whenever it's next touched for an unrelated change; do not batch-migrate the rest
+as a separate task.
+
+**Not the same thing as `ITenantSessionOverride`** (`ShelfGuard.Application/Services/ITenantSessionOverride.cs`).
+`ITenantContext` answers "whose own tenant does this staff request belong to" (read-only, from the
+JWT). `ITenantSessionOverride` instead lets an already-trusted operation temporarily assume a
+*different*, explicitly-chosen tenant's RLS context — the consumer/cross-tenant case
+(`ConsumerContentController`, parts of `LoyaltyService`), where the session structurally carries no
+`tenant_id` claim at all. Do not use one in place of the other, and do not route
+`ConsumerContentController`/`ConsumerLoyaltyController`-style cross-tenant reads through
+`ITenantContext` — they correctly stay on `ITenantSessionOverride`.
+
 > **Critical (KI-027/KI-028):** RLS is the *sole* tenant-isolation layer for single-object reads
 > (`GetByIdAsync` methods carry no `&& TenantId==` clause by design). It only works if the app's
 > Postgres connection role is a **non-superuser with `NOBYPASSRLS`** — a superuser silently bypasses
@@ -53,6 +80,44 @@ dotnet ef migrations add <Name> --project ShelfGuard.Infrastructure --startup-pr
 dotnet ef database update --project ShelfGuard.Infrastructure --startup-project ShelfGuard.Api
 ```
 > Stop the running API process before running these — DLL locking will fail the build.
+
+## OpenAPI Contract (TASK-552)
+`backend/openapi.json` is a **committed** snapshot of the full Swashbuckle-generated API surface
+(all controllers, all feature modules — not scoped to any one area), regenerated via the
+`Swashbuckle.AspNetCore.Cli` local dotnet tool (manifest: `backend/.config/dotnet-tools.json`,
+pinned to the same `6.5.0` version as the `Swashbuckle.AspNetCore` package reference in
+`ShelfGuard.Api.csproj`). It is the source doc-writer agents read from when producing
+`docs/integration/MOBILE_API.md`.
+
+**Regenerate after any endpoint/DTO change:**
+```bash
+cd backend
+dotnet build ShelfGuard.Api/ShelfGuard.Api.csproj -c Debug
+cd ShelfGuard.Api/bin/Debug/net8.0
+ASPNETCORE_ENVIRONMENT=Development dotnet tool run swagger tofile --output ../../../../openapi.json ShelfGuard.Api.dll v1
+```
+(PowerShell: replace the `ASPNETCORE_ENVIRONMENT=...` prefix with `$env:ASPNETCORE_ENVIRONMENT =
+"Development";`.)
+
+Two things make the working directory and env var non-optional, not just style:
+- The CLI loads `ShelfGuard.Api.dll` via reflection and runs `Program.cs`'s real top-level
+  statements (not just DI registration) — `WebApplication.CreateBuilder` resolves
+  `appsettings.{Environment}.json` relative to the **process's current directory**, so you must
+  `cd` into the build output folder (where the SDK already copies `appsettings*.json`) rather than
+  pass a path to the DLL from elsewhere; `ASPNETCORE_ENVIRONMENT=Development` selects
+  `appsettings.Development.json` (has a real `DefaultConnection`) instead of Production (no
+  connection string configured outside `.env`/deploy secrets → the run fails with `Host can't be
+  null`).
+- Because it runs the real startup path, this also runs `db.Database.MigrateAsync()`, the
+  KI-028 RLS-role canary, and (Development-gated) `DbSeeder` against whatever `DefaultConnection`
+  points at — **the local dev Postgres must be up** (`docker compose up -d`), same precondition as
+  `dotnet run`. All idempotent against an already-migrated/seeded dev DB.
+
+`Program.cs`'s `AddSwaggerGen` also sets `c.CustomSchemaIds(type => type.FullName)` — several
+feature modules declare same-named DTOs in different namespaces (e.g. `Customers.CustomerDetailDto`
+vs `AutoService.Dtos.CustomerDetailDto`); without this the generator throws on the first collision
+it walks into instead of producing a document. Schema names in `openapi.json` are therefore fully
+namespace-qualified, not bare class names.
 
 ## Migration History
 The 3-row table below is long superseded — the project now has **~75 EF migrations** through v1→v4

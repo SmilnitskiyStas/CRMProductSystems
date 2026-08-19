@@ -1,7 +1,175 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-11
+**Updated:** 2026-08-19
+
+## ADR-030: SubscriptionPlan → Features — `Tenant.Plan` gates consumer features through the existing TASK-543 flag hook; no billing, no enforcement yet
+Date: 2026-08-19
+Status: accepted
+
+Context: `docs/architecture/TARGET_ARCHITECTURE.md` §2 ЕТАП 18 asks for a "subscription-ready
+feature architecture" — `START`/`BUSINESS`/`PRO`/`ENTERPRISE` tiers gating which consumer-app
+features a tenant may enable, explicitly "no billing." TASK-543 (Stage D) already built
+`IConsumerFeatureFlagService`/`ConsumerFeatureFlagService` (`backend/ShelfGuard.Application/
+Features/MobileConfig/{IConsumerFeatureFlagService,ConsumerFeatureFlagService}.cs`), the real
+mechanism that resolves each of `MobileConfigWhitelists.FeatureKeys` (`loyalty`, `promotions`,
+`catalog`, `coupons`, `news`, `receipts`, `delivery`, `personalOffers`) from a tenant's published
+`MobileConfigurationVersion`, defaulting fail-open (enabled) until a tenant explicitly disables a
+key. As part of that same task, `ISubscriptionPlanFeatureGate`/`SubscriptionPlanFeatureGate`
+(same directory) was added as an explicitly documented no-enforcement placeholder: it reads and
+returns `Tenant.Plan` and nothing else. `ConsumerFeatureFlagService` never calls it, no endpoint
+is denied based on its result, and its own XML doc says so in plain terms — it exists "purely as
+a documented, already-wired seam" for whoever implements ЕТАП 18 for real. TASK-555 (this task) is
+the last registered task of the entire Stage 6 initiative (TASK-527–555, Stages A–F complete) and
+was scoped to formalize that future architecture and confirm the seam holds, not to build the
+enforcement itself.
+
+Decision:
+
+1. **Target architecture (not yet built):** `Tenant.Plan` → a plan→features mapping (does not
+   exist yet — no table, no static dictionary) → constrains which of
+   `MobileConfigWhitelists.FeatureKeys` a tenant's published configuration is allowed to enable →
+   enforced inside `ConsumerFeatureFlagService.IsEnabledAsync`, by combining today's
+   config-driven result with a plan-driven `AND`: a flag reads as enabled only if the published
+   document says so *and* the tenant's plan permits that key. `ISubscriptionPlanFeatureGate`
+   supplies the plan; `IConsumerFeatureFlagService` remains the single call site
+   `RequireConsumerFeatureAttribute` and the consumer controllers depend on, so no caller-facing
+   contract change is implied by wiring this in later.
+
+2. **Confirmed: TASK-543's `ISubscriptionPlanFeatureGate`/`SubscriptionPlanFeatureGate` already
+   satisfies the ЕТАП 18 hook as built — verified by reading the code, not assumed.** Both types
+   exist, both are DI-registered (`ShelfGuard.Application/DependencyInjection.cs:170-171`,
+   `AddScoped<IConsumerFeatureFlagService, ConsumerFeatureFlagService>` /
+   `AddScoped<ISubscriptionPlanFeatureGate, SubscriptionPlanFeatureGate>`), and
+   `GetTenantPlanAsync` already round-trips through `ITenantRepository` to the real `Tenant.Plan`
+   column — this is a live, working read path today, not a stub that still needs writing. A
+   future implementer's job is additive only: define the plan→features mapping, inject
+   `ISubscriptionPlanFeatureGate` into `ConsumerFeatureFlagService` (or a decorator around it),
+   and fold its result into `IsEnabledAsync`'s existing return. No interface signature changes,
+   no new DI wiring, no controller/attribute changes, and no rework of `ConsumerFeatureFlagService`
+   callers are needed to add real enforcement later — the seam is clean.
+
+3. **Open reconciliation item — deliberately not resolved here.** `Tenant.UpdatePlan`
+   (`backend/ShelfGuard.Domain/Entities/Tenant.cs:41-49`) only accepts
+   `basic`/`standard`/`enterprise`/`trial` (case-insensitive, lowercased on write). ЕТАП 18 in
+   `docs/CLAUDE CODE SPEC — Web Admin, App Builder & Backend.md` names the tiers
+   `START`/`BUSINESS`/`PRO`/`ENTERPRISE`. These two vocabularies do not line up — there is no
+   1:1 mapping implied anywhere in the code or spec today (e.g. it is not obvious whether `basic`
+   ≈ `START`, whether `enterprise` on both sides means the same tier, or how many ShelfGuard plans
+   collapse into how many spec tiers). Whoever schedules real plan-gating must explicitly choose
+   one of: (a) remap `Tenant.Plan`'s valid values and every existing row to the spec's tier names,
+   or (b) keep `Tenant.Plan` as-is and add an explicit translation layer (a small
+   `PlanTier`-lookup) between `Tenant.Plan` and the plan→features mapping's keys. This is a
+   product/naming decision, not an implementation detail — recorded here so it is not
+   rediscovered from scratch, and not silently guessed at by whichever task picks it up.
+
+4. **No billing/payment implementation is in scope now, or implied by this ADR.** ЕТАП 18 itself
+   is explicit that this stage is feature-gating architecture only ("no billing"). This ADR
+   documents a target read-path for an existing field; it does not introduce plan purchase,
+   upgrade/downgrade flows, payment provider integration, invoicing, or any billing UI. Nothing in
+   this decision requires touching payments to be useful — plan values can continue to be set
+   the way they are today (provider/admin-set `Tenant.Plan`, per `Tenant.UpdatePlan`'s existing
+   authorization) with real feature-gating layered on top whenever that follow-up task is
+   scheduled.
+
+Consequences:
++ Confirms Stage 6 closes with zero rework debt on this hook — TASK-543 already built the correct
+  seam, so ЕТАП 18 implementation later is additive (mapping + one `AND` in
+  `IsEnabledAsync`), not a redesign
++ The plan-naming mismatch is now a citable, explicit open item instead of a landmine a future
+  task would discover mid-implementation
++ `Tenant.Plan` continues to mean exactly what it means today (billing-adjacent tenant metadata,
+  set by provider/admin) until a follow-up task explicitly decides to enforce it — no behavior
+  changes ship from this ADR
+- Real feature-gating remains fully unenforced until that follow-up task is scheduled and the
+  naming reconciliation (point 3) is resolved — this ADR intentionally leaves both undone
+- Whoever eventually implements ЕТАП 18 must resolve the naming mismatch *before* writing the
+  plan→features mapping, or risk keying that mapping on the wrong vocabulary from day one
+
+See: `backend/ShelfGuard.Application/Features/MobileConfig/{ISubscriptionPlanFeatureGate,
+SubscriptionPlanFeatureGate,IConsumerFeatureFlagService,ConsumerFeatureFlagService,
+MobileConfigWhitelists}.cs`, `backend/ShelfGuard.Domain/Entities/Tenant.cs:41-49`,
+`docs/architecture/TARGET_ARCHITECTURE.md` §2 row 18, `docs/architecture/CURRENT_STATE.md` §1,
+`docs/CLAUDE CODE SPEC — Web Admin, App Builder & Backend.md` (ЕТАП 18 / START/BUSINESS/PRO/
+ENTERPRISE), `.claude/tasks/mobile-roadmap.md` TASK-543, TASK-555.
+
+## ADR-029: Consumer-platform "Tenant" = existing `tenants` table; `UserTenant` has no shipped generic equivalent yet
+Date: 2026-08-17
+Status: accepted (point 1) / open (point 2 — recorded as a decision to make explicitly, not to
+guess)
+
+Context: three new spec files appeared in `docs/` without any prior formal spec ever existing —
+`MASTER SPEC — Multi-Tenant Retail & Loyalty Platform.md`, `CLAUDE CODE SPEC — Web Admin, App
+Builder & Backend.md`, `CODEX SPEC — Mobile Application.md` — describing one shared consumer
+mobile app where a customer joins multiple retailers (`tenantId`), each with its own server-driven
+theme/navigation/content. TASK-526 (Stage 6, `.claude/tasks/mobile-roadmap.md`) audited the
+backend/web-admin side against this target and produced `docs/architecture/CURRENT_STATE.md` /
+`docs/architecture/TARGET_ARCHITECTURE.md`. This is not a greenfield start: `eaacfa7d`
+(`MobileAuthController`, `ConsumerAccount`), `29ec2fd4`/`4fa15f7d` (universal cross-tenant loyalty
+code), `075af2f9`/`9acf6ff5`/`db7c5d40` (network catalogue, preferred store), and
+`0dccb0d9`/`2cff57e5`/`c17a772c`/`72e33308`/`7208f89f` (banners with draft/publish, promo products,
+catalog admin) already implement large pieces of this target model, without the spec having
+existed yet to name them consistently. The critical open question the audit had to resolve with
+evidence, not assumption: does the spec's "Tenant" map onto ShelfGuard's existing B2B `tenants`
+table, or does it imply a new, parallel entity?
+
+Decision:
+
+1. **The spec's "Tenant" is ShelfGuard's existing `tenants` table — confirmed, not a new entity.**
+   Evidence, not inference: `Tenant.cs`'s existing `Id`/`Name`/`Slug`/`CreatedAt` already satisfy
+   the spec's own minimal ЕТАП 1 model (only `LogoUrl`/`UpdatedAt` are missing — additive, not
+   structural). `TenantConnectionInterceptor` already sets `app.tenant_id` from the exact same JWT
+   claim every pre-existing tenant-scoped feature reads, and the canonical RLS
+   `tenant_isolation`/`provider_bypass`/`worker_bypass` triad (`database-schema.md`) already
+   enforces the spec's ЕТАП 4 "Tenant A cannot read/write Tenant B data" requirement for every
+   tenant table in the schema. Most directly: `Banner` — the newest tenant-scoped entity in the
+   codebase, added for this exact initiative *before* the spec existed — was given a plain
+   `TenantId` FK to `tenants` with the same RLS shape as every older table, not a new isolation
+   model invented for "the consumer platform." Building a second, parallel `Retailer`/`Tenant`
+   entity for the consumer-facing side would duplicate the entire existing RLS/isolation
+   infrastructure for no isolation benefit and would fork "which tenant a user belongs to" into two
+   incompatible answers depending on which app asked. `MobileConfiguration.TenantId`,
+   `MobileTheme.TenantId`, and every future consumer-platform entity should FK straight to the
+   existing `tenants` table, exactly like `Banner` already does.
+
+2. **The spec's `UserTenant` (MASTER SPEC §14 — a generic "consumer joined this retailer" row,
+   with a separate tenant-specific `LoyaltyAccount` hanging off it) has no shipped equivalent
+   independent of loyalty — left as an open decision, not silently resolved either way.**
+   `ConsumerAccount` (ADR-023) is confirmed as the spec's global "User" — no `TenantId`, no RLS,
+   one JWT reading across every tenant it holds a relationship with, same shape the spec asks for.
+   But the only existing join mechanism, `LoyaltyMembership`, conflates "joined this retailer" with
+   "enrolled in this retailer's bonus program" into one entity: `POST
+   /api/consumer/loyalty/{tenantId}/join` **is** the only join action that exists, and retailer
+   discovery (`LoyaltyService.GetAvailableNetworksAsync`) only lists tenants with
+   `HasModule("loyalty")` enabled and `LoyaltyProgramSettings.IsEnabled`. A tenant that wanted a
+   consumer-app presence (banners, catalog, theme) without running a bonus program structurally
+   cannot appear in retailer discovery today. Two shapes were identified for closing this gap
+   (`TARGET_ARCHITECTURE.md` §3, open decision #1): keep the coupling as-is (cheaper, matches what
+   already shipped, but permanently ties "consumer app membership" to "loyalty module"), or
+   introduce a genuinely generic `ConsumerTenantMembership`/`UserTenant` that `LoyaltyMembership`
+   optionally extends (matches the spec literally, touches every existing
+   join/discovery/preferred-store call site). Deliberately NOT decided here — this is a
+   product/architecture tradeoff about what "joining a retailer" is allowed to mean, not an
+   implementation detail project-architect should pick unilaterally. Recorded so no future agent
+   assumes `LoyaltyMembership` already *is* the spec's `UserTenant` by another name.
+
+Consequences:
++ Zero new isolation infrastructure needed for the consumer platform — it inherits the existing,
+  already-audited RLS triad and `TenantConnectionInterceptor` mechanism verbatim, the same way
+  `Banner` already does
++ `MobileConfiguration`/`MobileTheme`/future App Builder entities have an unambiguous, already-
+  precedented FK target (`tenants.Id`) from day one — no risk of a later, costly identity merge
+  between "two kinds of tenant"
++ The `UserTenant` question is now explicit and citable (`TARGET_ARCHITECTURE.md` §3 open decision
+  #1) instead of being silently decided by whichever future task happens to touch it first
+- Until decision #2 is made, retailer discovery/join work (ЕТАП 2/14) cannot start — this is an
+  accepted blocking dependency, not an oversight
+- A tenant without the `loyalty` module currently has no path to a consumer-app presence at all;
+  this is the concrete, load-bearing cost of leaving decision #2 open rather than a hypothetical one
+
+See: `docs/architecture/CURRENT_STATE.md` §1/§3, `docs/architecture/TARGET_ARCHITECTURE.md` §1/§3
+(TASK-526 full audit and proposed follow-up task breakdown, not yet registered in
+`.claude/tasks/mobile-roadmap.md`).
 
 ## ADR-028: KI-033 fix — `IAnalyticsRlsOverride` + a dedicated `marketing_analytics_bypass` role value, narrowing `pos_transactions.store_scope` for one already-authorized read path
 Date: 2026-08-11

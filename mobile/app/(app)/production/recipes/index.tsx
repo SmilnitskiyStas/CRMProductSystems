@@ -4,6 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRecipes } from '@/features/production/hooks/useProduction';
 import type { RecipeListItem } from '@/features/production/types';
+import { OfflineReadStatus } from '@/features/offline-read-cache/OfflineReadStatus';
+import { useOfflineReadUx } from '@/features/offline-read-cache/ux';
+import { useAuthStore } from '@/features/auth/store';
 
 function RecipeCard({ item }: { item: RecipeListItem }) {
   return (
@@ -34,8 +37,14 @@ function RecipeCard({ item }: { item: RecipeListItem }) {
 }
 
 export default function RecipesScreen() {
+  const offline = useAuthStore((state) => state.hydrationStatus === 'offline_read_ready');
   const router = useRouter();
-  const { data: recipes, isLoading, refetch, isRefetching } = useRecipes();
+  const { data: recipes, isLoading, isError, refetch, isRefetching } = useRecipes(false, !offline);
+  const offlineState = useOfflineReadUx(['production-recipes', false], {
+    hasData: recipes !== undefined,
+    isFetching: isRefetching,
+    isError,
+  });
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -47,9 +56,18 @@ export default function RecipesScreen() {
         <Text className="text-xl font-bold text-gray-900 flex-1">Рецепти</Text>
       </View>
 
+      <OfflineReadStatus state={offlineState} onRetry={() => { void refetch(); }} />
+
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#16a34a" />
+        </View>
+      ) : isError && recipes === undefined ? (
+        <View className="flex-1 items-center justify-center px-4">
+          <Text className="text-red-500 text-center">Не вдалося завантажити рецепти</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => { void refetch(); }} className="min-h-[44px] mt-3 justify-center">
+            <Text className="text-primary-600 font-semibold">Спробувати знову</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList

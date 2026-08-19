@@ -35,8 +35,28 @@ public sealed record LoyaltyNetworkStoreDto(Guid StoreId, string StoreName, stri
 /// (see <c>PUT /api/consumer/loyalty/preferred-store</c>). Informational only, membership stays
 /// one-per-tenant, never one-per-store. Sorted alphabetically by <c>StoreName</c>; empty (not
 /// omitted, and never null) when the tenant currently has zero qualifying stores.
+/// <paramref name="Slug"/> (TASK-548) sourced from <see cref="Tenant.Slug"/> — backs the
+/// slug-addressed <c>/api/v1/retailers/{slug}</c> discovery endpoints. Purely additive: the
+/// pre-existing <c>GET /api/consumer/loyalty/networks</c> response gains this field but keeps
+/// every other field unchanged, so it stays a non-breaking superset for the live mobile client.
 /// </summary>
-public sealed record LoyaltyNetworkSummaryDto(Guid TenantId, string TenantName, IReadOnlyList<LoyaltyNetworkStoreDto> Stores);
+public sealed record LoyaltyNetworkSummaryDto(
+    Guid TenantId, string TenantName, string Slug, IReadOnlyList<LoyaltyNetworkStoreDto> Stores);
+
+/// <summary>
+/// TASK-549: minimal anonymous-safe public info for the QR/deep-link onboarding web fallback
+/// page (<c>https://app.domain/join/{slug}</c>), reached before the scanner has the app or a
+/// consumer session. Deliberately NOT <see cref="LoyaltyNetworkSummaryDto"/> reused as-is — that
+/// DTO's <c>Stores</c> list (name+address per location) and internal <c>TenantId</c> guid are
+/// not meant for an anonymous caller; see
+/// <see cref="ILoyaltyService.GetPublicRetailerInfoAsync"/> for the full design rationale.
+/// <paramref name="Joinable"/> is always <c>true</c> whenever this DTO is actually returned — a
+/// currently non-joinable retailer never reaches this DTO under the method's 404 policy (see its
+/// doc). The field ships anyway so the response is self-describing rather than requiring the
+/// frontend to infer meaning purely from the HTTP status code, and so a future "found but
+/// temporarily paused" state could set it <c>false</c> without a breaking shape change.
+/// </summary>
+public sealed record RetailerPublicInfoDto(string Name, string Slug, string? LogoUrl, bool Joinable);
 
 /// <summary>TASK-507: request body for PUT /api/consumer/loyalty/preferred-store.</summary>
 public sealed record SetPreferredStoreRequest(Guid TenantId, Guid StoreId);

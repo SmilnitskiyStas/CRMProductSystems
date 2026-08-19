@@ -13,5 +13,8 @@ interface LoyaltyUiState {
 
 export const useLoyaltyUiStore = create<LoyaltyUiState>((set) => ({
   selectedTenantId: null,
-  setSelectedTenantId: (tenantId) => set({ selectedTenantId: tenantId }),
+  setSelectedTenantId: (tenantId) =>
+    set((state) =>
+      state.selectedTenantId === tenantId ? state : { selectedTenantId: tenantId }
+    ),
 }));

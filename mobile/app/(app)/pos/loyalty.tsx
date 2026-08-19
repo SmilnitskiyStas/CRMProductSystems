@@ -19,6 +19,8 @@ import type { ResolveLoyaltyCodeResult } from '@/features/loyalty/types';
 import { useCustomers } from '@/features/customers/hooks/useCustomers';
 import { CustomerCard } from '@/features/customers/components/CustomerCard';
 import type { SaleItem } from '@/features/pos/types';
+import { usePosDraftStore } from '@/features/pos/draftStore';
+import { NetworkBanner } from '@/features/pos/components/NetworkBanner';
 
 interface CartItem extends SaleItem {
   productName: string;
@@ -40,16 +42,19 @@ function formatPrice(amount: number): string {
 export default function PosLoyaltyScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ shiftId?: string; cartJson?: string }>();
-  const shiftId = params.shiftId ?? '';
-  const cartJson = params.cartJson ?? '[]';
+  const draftCart = usePosDraftStore((state) => state.cart);
+  const draftShiftId = usePosDraftStore((state) => state.shiftId);
+  const setCustomerDraft = usePosDraftStore((state) => state.setCustomer);
+  const shiftId = params.shiftId ?? draftShiftId;
 
   const cart: CartItem[] = useMemo(() => {
     try {
-      return params.cartJson ? JSON.parse(params.cartJson) : [];
+      return params.cartJson ? JSON.parse(params.cartJson) : draftCart;
     } catch {
-      return [];
+      return draftCart;
     }
-  }, [params.cartJson]);
+  }, [draftCart, params.cartJson]);
+  const cartJson = JSON.stringify(cart);
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
   const [mode, setMode] = useState<Mode>('scan');
@@ -104,6 +109,7 @@ export default function PosLoyaltyScreen() {
     setResolved(null);
     setManualCustomer(null);
     setRedeemText('');
+    setCustomerDraft(null);
     resumeScanning();
   };
 
@@ -121,6 +127,17 @@ export default function PosLoyaltyScreen() {
         extra.customerName = manualCustomer.name;
       }
     }
+    setCustomerDraft(
+      opts?.skip
+        ? null
+        : {
+            ...(extra.customerId ? { customerId: extra.customerId } : {}),
+            ...(extra.customerName ? { customerName: extra.customerName } : {}),
+            ...(extra.maskedPhone ? { maskedPhone: extra.maskedPhone } : {}),
+            ...(extra.membershipId ? { membershipId: extra.membershipId } : {}),
+            ...(extra.redeemAmount ? { redeemAmount: Number(extra.redeemAmount) } : {}),
+          }
+    );
     router.push({
       pathname: '/(app)/pos/payment',
       params: { shiftId, cartJson, ...extra },
@@ -131,6 +148,7 @@ export default function PosLoyaltyScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-900">
+      <NetworkBanner />
       {/* Top bar */}
       <View className="flex-row items-center px-4 py-3">
         <TouchableOpacity
@@ -232,7 +250,7 @@ export default function PosLoyaltyScreen() {
                   <TouchableOpacity
                     key={m}
                     onPress={() => setMode(m)}
-                    className={`flex-1 py-2 rounded-lg items-center ${mode === m ? 'bg-white shadow-sm' : ''}`}
+                    className={`flex-1 py-2 rounded-lg items-center ${mode === m ? 'bg-white' : ''}`}
                   >
                     <Text className={`text-xs font-semibold ${mode === m ? 'text-gray-900' : 'text-gray-400'}`}>
                       {m === 'scan' ? 'QR-скан' : m === 'code-entry' ? 'Код вручну' : 'Пошук клієнта'}
@@ -244,7 +262,7 @@ export default function PosLoyaltyScreen() {
               {mode === 'scan' && (
                 <View className="mx-4 mt-4">
                   <BarcodeCameraView
-                    barcodeTypes={['qr']}
+                    barcodeTypes={['qr', 'code128']}
                     scanning={scanning && !resolveMutation.isPending}
                     onScan={handleBarcodeScanned}
                     caption={resolveMutation.isPending ? 'Перевірка...' : 'Наведіть на QR-код клієнта'}
@@ -257,7 +275,7 @@ export default function PosLoyaltyScreen() {
                   <Text className="text-sm font-semibold text-gray-600 mb-2">Повний код з екрану клієнта</Text>
                   <TextInput
                     className="border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-900 bg-gray-50"
-                    placeholder="SGLOY1.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.123456"
+                    placeholder="SGCUS1.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.123456"
                     autoCapitalize="none"
                     autoCorrect={false}
                     value={codeText}

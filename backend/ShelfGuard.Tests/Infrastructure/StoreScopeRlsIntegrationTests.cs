@@ -23,44 +23,45 @@ namespace ShelfGuard.Tests.Infrastructure;
 /// DB is currently in. If <c>20260719193545_AddLocationStoreScopeRlsPolicies</c> has not been
 /// applied yet (or was rolled back), every scoping test below will fail loudly — that is the
 /// intended signal, not a flaky test.
+///
+/// TASK-553: part of the <c>TENANT_ISOLATION_TESTS</c> collection — <c>rls_audit_test_role</c> is
+/// created once for the whole collection by <see cref="RlsAuditRoleFixture"/>, not by this class.
 /// </summary>
+[Collection("TENANT_ISOLATION_TESTS")]
 public sealed class StoreScopeRlsIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
+    private readonly RlsAuditRoleFixture _fixture;
     private readonly ITestOutputHelper _output;
     private NpgsqlConnection? _connection;
     private bool _dbAvailable;
 
-    public StoreScopeRlsIntegrationTests(ITestOutputHelper output) => _output = output;
+    public StoreScopeRlsIntegrationTests(RlsAuditRoleFixture fixture, ITestOutputHelper output)
+    {
+        _fixture = fixture;
+        _output = output;
+    }
 
     public async Task InitializeAsync()
     {
-        var connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+        if (!_fixture.DbAvailable)
+        {
+            _dbAvailable = false;
+            _output.WriteLine(
+                $"Skipping store_scope RLS integration tests — no reachable Postgres at '{_fixture.ConnectionString}': {_fixture.UnavailableReason}");
+            return;
+        }
 
         try
         {
-            _connection = new NpgsqlConnection(connectionString);
+            _connection = new NpgsqlConnection(_fixture.ConnectionString);
             await _connection.OpenAsync();
             _dbAvailable = true;
-
-            await ExecAsync(@"
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rls_audit_test_role') THEN
-                        CREATE ROLE rls_audit_test_role NOSUPERUSER NOBYPASSRLS;
-                    END IF;
-                END $$;
-                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO rls_audit_test_role;
-            ");
         }
         catch (Exception ex)
         {
             _dbAvailable = false;
             _output.WriteLine(
-                $"Skipping store_scope RLS integration tests — no reachable Postgres at '{connectionString}': {ex.Message}");
+                $"Skipping store_scope RLS integration tests — no reachable Postgres at '{_fixture.ConnectionString}': {ex.Message}");
         }
     }
 

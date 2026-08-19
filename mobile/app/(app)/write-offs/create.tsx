@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
 import {
   View,
   Text,
@@ -7,7 +8,6 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -21,6 +21,8 @@ import { WRITE_OFF_REASON_LABELS } from '@/features/write-offs/types';
 import type { WriteOffReason } from '@/features/write-offs/types';
 import { getProductByBarcode } from '@/features/stock/api/stockApi';
 import { useAuthStore } from '@/features/auth/store';
+import { useOperationalDraft } from '@/features/operational-drafts/useOperationalDraft';
+import { classifyOperationalError } from '@/features/operational-drafts/submission';
 
 cssInterop(CameraView, { className: 'style' });
 
@@ -36,6 +38,9 @@ export default function CreateWriteOffScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const createWriteOff = useCreateWriteOff();
+  const netInfo = useNetInfo();
+  const owner = user?.tenantId ? { tenantId: user.tenantId, userId: user.id } : null;
+  const draft = useOperationalDraft(owner, 'write-off');
 
   const [items, setItems] = useState<DraftItem[]>([]);
   const [reason, setReason] = useState<WriteOffReason>('expired');
@@ -45,6 +50,25 @@ export default function CreateWriteOffScreen() {
   const [reasonOpen, setReasonOpen] = useState(false);
 
   const [permission, requestPermission] = useCameraPermissions();
+  const draftPayload = {
+    kind: 'write-off' as const,
+    locationId: user?.locationId ?? '',
+    reason,
+    notes: '',
+    items,
+  };
+
+  useEffect(() => {
+    if (draft.restored?.payload.kind !== 'write-off') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReason(draft.restored.payload.reason as WriteOffReason);
+    setItems(draft.restored.payload.items.map(({ productId, productName, quantity }) => ({ productId, productName, quantity })));
+  }, [draft.restored]);
+
+  useEffect(() => {
+    if (!draft.hydrated || items.length === 0) return;
+    void draft.persist(draftPayload);
+  }, [items, reason, draft.hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openScanner() {
     if (!permission?.granted) {
@@ -87,7 +111,7 @@ export default function CreateWriteOffScreen() {
     );
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!user?.locationId) {
       Alert.alert('Помилка', 'Локацію не призначено для вашого профілю.');
       return;
@@ -96,28 +120,36 @@ export default function CreateWriteOffScreen() {
       Alert.alert('Додайте хоча б один товар');
       return;
     }
-
-    createWriteOff.mutate(
-      {
+    const network = await NetInfo.fetch();
+    if (!network.isConnected || network.isInternetReachable === false) {
+      await draft.transition({ status: 'failed', message: 'Немає мережі. Чернетку збережено.' }, draftPayload);
+      Alert.alert('Немає мережі', 'Підключіться до мережі перед відправленням.');
+      return;
+    }
+    try {
+      await createWriteOff.mutateAsync({
         locationId: user.locationId,
         reason,
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-      },
-      {
-        onSuccess: () => {
-          Alert.alert('Успішно', 'Списання створено і відправлено на затвердження.', [
-            { text: 'OK', onPress: () => router.back() },
-          ]);
-        },
-        onError: () => {
-          Alert.alert('Помилка', 'Не вдалося створити списання. Спробуйте ще раз.');
-        },
-      }
-    );
+      });
+      await draft.clear();
+      Alert.alert('Успішно', 'Списання створено і відправлено на затвердження.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      const state = classifyOperationalError(error);
+      await draft.transition(state, draftPayload);
+      Alert.alert(state.status === 'uncertain' ? 'Результат не підтверджено' : 'Помилка', state.message);
+    }
   }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
+      {(netInfo.isConnected === false || draft.submission.message) && (
+        <Text className="bg-amber-50 text-amber-800 px-4 py-2 text-sm">
+          {netInfo.isConnected === false ? 'Немає мережі. Чернетка збережена.' : draft.submission.message}
+        </Text>
+      )}
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -125,7 +157,13 @@ export default function CreateWriteOffScreen() {
         {/* Header */}
         <View className="bg-white px-4 pt-4 pb-3 flex-row items-center gap-3 border-b border-gray-100">
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => items.length === 0
+              ? router.back()
+              : Alert.alert('Зберегти чернетку?', 'Можна повернутися пізніше або видалити введені дані.', [
+                { text: 'Зберегти', onPress: () => router.back() },
+                { text: 'Видалити', style: 'destructive', onPress: () => void draft.clear().then(() => router.back()) },
+                { text: 'Скасувати', style: 'cancel' },
+              ])}
             className="w-9 h-9 items-center justify-center rounded-full bg-gray-100"
           >
             <Ionicons name="close" size={20} color="#374151" />
@@ -206,8 +244,8 @@ export default function CreateWriteOffScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={createWriteOff.isPending || items.length === 0}
+            onPress={() => void handleSubmit()}
+            disabled={createWriteOff.isPending || items.length === 0 || netInfo.isConnected === false || draft.submission.status === 'uncertain'}
             className={`rounded-xl py-3.5 items-center ${
               items.length === 0 ? 'bg-gray-200' : 'bg-primary-600'
             }`}

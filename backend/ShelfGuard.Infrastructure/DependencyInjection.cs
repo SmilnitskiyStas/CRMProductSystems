@@ -22,6 +22,10 @@ public static class DependencyInjection
     {
         services.AddHttpContextAccessor();
         services.AddSingleton<TenantConnectionInterceptor>();
+        // TASK-528: centralized replacement for the per-controller ResolveTenantId()/GetTenantId()
+        // duplication — see ITenantContext's doc for the contract and how it differs from
+        // ITenantSessionOverride below. Scoped: wraps the request-scoped HttpContext.
+        services.AddScoped<Application.Services.ITenantContext, Services.TenantContext>();
 
         var npgsqlDataSource = new NpgsqlDataSourceBuilder(
                 configuration.GetConnectionString("DefaultConnection"))
@@ -83,6 +87,10 @@ public static class DependencyInjection
         services.AddScoped<IBannerRepository, BannerRepository>();
         services.AddScoped<Application.Features.ConsumerContent.IConsumerContentRepository,
             ConsumerContentRepository>();
+
+        // Consumer app-builder platform (TASK-531/532) - MobileConfiguration domain
+        services.AddScoped<Domain.Interfaces.IMobileConfigurationRepository,
+            Data.Repositories.MobileConfigurationRepository>();
 
         // Activity log
         services.AddScoped<IActivityLogRepository, ActivityLogRepository>();

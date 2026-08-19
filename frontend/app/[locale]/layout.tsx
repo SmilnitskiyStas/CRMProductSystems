@@ -27,9 +27,12 @@ export default async function LocaleLayout({
 
   const messages = await getMessages();
   // frontend/messages/{locale}.json also carries `Dashboard`/`Common` (i18n Block 1,
-  // TASK-376) for the authenticated dashboard's own client-side provider — the landing
-  // only ever used (and should only ever ship) `Landing.*`, so scope it down explicitly
-  // rather than passing the whole file to the client.
+  // TASK-376) for the authenticated dashboard's own client-side provider. The landing
+  // only ever used (and should only ever ship) `Landing.*`. The join page
+  // (app/[locale]/join/[slug]/page.tsx, TASK-549) also renders under this layout but
+  // keeps its copy inline in the page module and reads it server-side, so it needs
+  // nothing added here — scope stays down to `Landing.*` rather than passing the
+  // whole file to the client.
   const landingMessages = { Landing: messages.Landing };
 
   return (

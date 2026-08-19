@@ -83,7 +83,23 @@ public sealed class LoyaltyService : ILoyaltyService
         // Idempotent: scanning the same invite QR/link twice must not error.
         var existing = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
         if (existing is not null)
+        {
+            // TASK-548: rejoining a network the consumer previously left (LeaveAsync set
+            // Status to "left") reactivates this same row rather than leaving it stranded or
+            // creating a second membership — the unique (TenantId, ConsumerAccountId) index
+            // means a second row is not even possible, and "join" should always result in an
+            // active membership. Balance/JoinedAt/history are untouched by either leaving or
+            // rejoining. Only touches loyalty_memberships, which the consumer_self_access RLS
+            // policy already covers for this session shape — no ITenantSessionOverride needed,
+            // same as this idempotency check itself.
+            if (existing.Status == LoyaltyMembershipStatus.Left)
+            {
+                existing.Status = LoyaltyMembershipStatus.Active;
+                _loyalty.UpdateMembership(existing);
+                await _loyalty.SaveChangesAsync(ct);
+            }
             return (ToSummaryDto(existing, tenant.Name), null, null);
+        }
 
         // TASK-417: a consumer session never carries app.tenant_id (cross-tenant by design —
         // see TenantConnectionInterceptor), so "customers"' plain tenant_isolation RLS policy
@@ -193,9 +209,105 @@ public sealed class LoyaltyService : ILoyaltyService
             var (settings, stores) = await _tenantScope.ExecuteAsync(
                 tenant.Id, () => LoadNetworkDetailsAsync(tenant.Id, ct), ct);
             if (settings?.IsEnabled == false) continue;
-            result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name, stores));
+            result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name, tenant.Slug, stores));
         }
         return result;
+    }
+
+    /// <summary>
+    /// TASK-548: single-network lookup by slug for <c>GET /api/v1/retailers/{slug}</c> — applies
+    /// the exact same eligibility rule <see cref="GetAvailableNetworksAsync"/> filters its list
+    /// by, reusing the same <see cref="LoadNetworkDetailsAsync"/> helper (and thus the same
+    /// <see cref="ITenantSessionOverride"/> pattern) so the two endpoints can never drift apart.
+    /// </summary>
+    public async Task<(LoyaltyNetworkSummaryDto? Network, string? Error, int? StatusCode)> GetNetworkBySlugAsync(
+        string slug, CancellationToken ct = default)
+    {
+        const string notFound = "Retailer not found.";
+
+        var tenant = await _tenants.GetBySlugAsync(slug, ct);
+        if (tenant is null || !tenant.IsActive || !tenant.HasModule("loyalty"))
+            return (null, notFound, 404);
+
+        var (settings, stores) = await _tenantScope.ExecuteAsync(
+            tenant.Id, () => LoadNetworkDetailsAsync(tenant.Id, ct), ct);
+        if (settings?.IsEnabled == false)
+            return (null, notFound, 404);
+
+        return (new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name, tenant.Slug, stores), null, null);
+    }
+
+    /// <summary>
+    /// TASK-548: resolves <paramref name="slug"/> to a tenant id and delegates every other rule
+    /// to <see cref="JoinAsync"/> — kept as a thin wrapper so the join logic itself (module gate,
+    /// idempotency, left-membership reactivation) has exactly one implementation shared by both
+    /// the legacy tenantId-addressed route and this slug-addressed one.
+    /// </summary>
+    public async Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> JoinBySlugAsync(
+        Guid consumerAccountId, string slug, CancellationToken ct = default)
+    {
+        var tenant = await _tenants.GetBySlugAsync(slug, ct);
+        if (tenant is null)
+            return (null, "Retailer not found.", 404);
+
+        return await JoinAsync(consumerAccountId, tenant.Id, ct);
+    }
+
+    /// <summary>See <see cref="ILoyaltyService.LeaveAsync"/>.</summary>
+    public async Task<(bool Success, string? Error, int? StatusCode)> LeaveAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default)
+    {
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null)
+            return (false, "You are not a member of this network.", 404);
+
+        // Idempotent: leaving twice is a success both times, not a 404/409 — matches this
+        // file's other idempotent consumer actions (JoinAsync, ResolveOrCreateMembershipByPhoneAsync).
+        if (membership.Status != LoyaltyMembershipStatus.Left)
+        {
+            membership.Status = LoyaltyMembershipStatus.Left;
+            _loyalty.UpdateMembership(membership);
+            await _loyalty.SaveChangesAsync(ct);
+        }
+
+        _logger.LogInformation(
+            "Consumer {ConsumerId} left loyalty program for tenant {TenantId}.", consumerAccountId, tenantId);
+
+        return (true, null, null);
+    }
+
+    /// <summary>Slug-addressed counterpart to <see cref="LeaveAsync"/> — see its doc.</summary>
+    public async Task<(bool Success, string? Error, int? StatusCode)> LeaveBySlugAsync(
+        Guid consumerAccountId, string slug, CancellationToken ct = default)
+    {
+        var tenant = await _tenants.GetBySlugAsync(slug, ct);
+        if (tenant is null)
+            return (false, "Retailer not found.", 404);
+
+        return await LeaveAsync(consumerAccountId, tenant.Id, ct);
+    }
+
+    /// <summary>See <see cref="ILoyaltyService.GetPublicRetailerInfoAsync"/> for the full design
+    /// rationale. Deliberately does not call <see cref="LoadNetworkDetailsAsync"/> — the public
+    /// DTO never needs the store list, so there is no reason to pay for loading/projecting it.</summary>
+    public async Task<(RetailerPublicInfoDto? Info, string? Error, int? StatusCode)> GetPublicRetailerInfoAsync(
+        string slug, CancellationToken ct = default)
+    {
+        const string notFound = "Retailer not found.";
+
+        var tenant = await _tenants.GetBySlugAsync(slug, ct);
+        if (tenant is null || !tenant.IsActive || !tenant.HasModule("loyalty"))
+            return (null, notFound, 404);
+
+        // loyalty_program_settings has no consumer_self_access RLS policy, same reason
+        // GetNetworkBySlugAsync/LoadNetworkDetailsAsync route this read through the tenant
+        // session override instead of reading it ambiently.
+        var settings = await _tenantScope.ExecuteAsync(
+            tenant.Id, () => _loyalty.GetSettingsAsync(tenant.Id, ct), ct);
+        if (settings?.IsEnabled == false)
+            return (null, notFound, 404);
+
+        return (new RetailerPublicInfoDto(tenant.Name, tenant.Slug, tenant.LogoUrl, true), null, null);
     }
 
     /// <summary>

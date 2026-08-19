@@ -10,10 +10,11 @@ import {
 } from '../api';
 import type { ProductionOrderCreate } from '../types';
 
-export function useRecipes(includeInactive = false) {
+export function useRecipes(includeInactive = false, enabled = true) {
   return useQuery({
     queryKey: ['production-recipes', includeInactive],
     queryFn: () => getRecipes(includeInactive),
+    enabled,
   });
 }
 

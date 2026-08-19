@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agrusystems.pp.ua/contracts/mobile-config.schema.json",
+  "title": "ShelfGuard Mobile Config",
+  "description": "Canonical contract for the document GET /api/v1/mobile/config serves to mobile clients (MASTER SPEC §11, TASK-533/534). Draft 07 is used deliberately, NOT the newer 2020-12 draft: the mobile client's AJV instance (mobile/features/mobile-config/validation.ts) is constructed as `new Ajv(...)` (the default export), which only understands Draft 07 out of the box — Draft 2019-09/2020-12 require importing `ajv/dist/2019` or `ajv/dist/2020` instead, which mobile does not do, and `ajv-formats` is not installed either (see \"format\" avoidance below). Compiling a 2020-12-flavored schema (e.g. one that used \"$defs\"/\"prefixItems\") against that default Ajv instance would throw at runtime (\"no schema with key or ref\" for an unrecognized $schema, or an unknown-keyword error), so this file intentionally sticks to Draft 07 keywords only (\"definitions\"+\"$ref\", not \"$defs\"; no \"prefixItems\"; no \"format\" keyword, since ajv-formats is absent). See TASK-533 task log for the full compatibility note. This is the SECOND, independent enforcement of the same declarative-only/whitelist-only shape MobileConfigValidator.cs enforces server-side for the pre-publish draft document (TASK-532) — kept in lockstep by backend/ShelfGuard.Tests/MobileConfig/MobileConfigSchemaContractTests.cs, which asserts this schema's enums equal MobileConfigWhitelists.cs's constants. NOTE: this schema describes the PUBLISHED/served document, which (unlike the draft ConfigurationJson TASK-532 validates) DOES include \"theme\" — theme is composed in at publish time (TASK-544). The \"theme\" sub-schema is sourced from ShelfGuard.Domain/Entities/MobileTheme.cs's typed fields plus CLAUDE CODE SPEC §10 (ЕТАП 6 Theme Editor: Logo/Primary/Secondary/Background/Surface/Text/Button radius/Card radius/Spacing preset) — NOT from MobileConfigWhitelists.cs, which has no theme concept by design. \"theme.spacing\" was left as a free string (no enum) pending TASK-536 (Theme domain validation + PUT endpoints); TASK-536 has now shipped and defined the authoritative spacing-preset whitelist in ShelfGuard.Application/Features/MobileConfig/MobileThemeWhitelists.cs (['compact','comfortable']), reconciled with mobile's own pre-existing placeholder guess (mobile/features/mobile-config/validation.ts already used the same two values) — this file's \"theme.spacing\" now enforces that same enum, kept in lockstep by MobileConfigSchemaContractTests. \"navigation[].icon\" was similarly left as a free non-empty string pending TASK-542 (Navigation Builder); TASK-542 has now shipped and defined the authoritative icon whitelist in ShelfGuard.Application/Features/MobileConfig/MobileConfigWhitelists.cs's NavigationIcons (['home','tag','grid','qr','ticket','map','news','user']), matching mobile's own pre-existing placeholder guess in mobile/features/mobile-config/validation.ts exactly — this file's \"navigation[].icon\" now enforces that same enum, kept in lockstep by MobileConfigSchemaContractTests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "configVersion", "tenant", "theme", "features", "navigation", "pages"],
+  "properties": {
+    "schemaVersion": {
+      "description": "Must match MobileConfigWhitelists.SupportedSchemaVersions exactly (verified by MobileConfigSchemaContractTests).",
+      "type": "integer",
+      "enum": [1]
+    },
+    "configVersion": {
+      "description": "MobileConfigurationVersion.Version — increments per tenant, starts at 1, never reused.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "tenant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "name", "logoUrl"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "slug": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "logoUrl": { "type": ["string", "null"] }
+      }
+    },
+    "theme": {
+      "description": "Sourced from MobileTheme.cs typed fields + CLAUDE CODE SPEC §10 (Theme Editor field list), not from MobileConfigWhitelists.cs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logoUrl", "colors", "buttons", "cards", "spacing"],
+      "properties": {
+        "logoUrl": { "type": ["string", "null"] },
+        "colors": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primary", "secondary", "background", "surface", "textPrimary", "textSecondary"],
+          "properties": {
+            "primary": { "$ref": "#/definitions/hexColor" },
+            "secondary": { "$ref": "#/definitions/hexColor" },
+            "background": { "$ref": "#/definitions/hexColor" },
+            "surface": { "$ref": "#/definitions/hexColor" },
+            "textPrimary": { "$ref": "#/definitions/hexColor" },
+            "textSecondary": { "$ref": "#/definitions/hexColor" }
+          }
+        },
+        "buttons": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["radius"],
+          "properties": { "radius": { "type": "integer", "minimum": 0 } }
+        },
+        "cards": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["radius"],
+          "properties": { "radius": { "type": "integer", "minimum": 0 } }
+        },
+        "spacing": {
+          "description": "Whitelisted preset key (MobileTheme.SpacingPreset). Enum resolved by TASK-536, matching MobileThemeWhitelists.SpacingPresets exactly (verified by MobileConfigSchemaContractTests) — reconciled with the pre-existing mobile-side placeholder guess in mobile/features/mobile-config/validation.ts, which already used the same two values.",
+          "enum": ["compact", "comfortable"]
+        }
+      }
+    },
+    "features": {
+      "description": "Keys must be a subset of MobileConfigWhitelists.FeatureKeys (verified by MobileConfigSchemaContractTests). No key is required present — matches MobileConfigValidator, which accepts a partial or empty features object.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "loyalty": { "type": "boolean" },
+        "promotions": { "type": "boolean" },
+        "catalog": { "type": "boolean" },
+        "coupons": { "type": "boolean" },
+        "news": { "type": "boolean" },
+        "receipts": { "type": "boolean" },
+        "delivery": { "type": "boolean" },
+        "personalOffers": { "type": "boolean" }
+      }
+    },
+    "navigation": {
+      "description": "Bounds and item.type/item.icon enums must match MobileConfigWhitelists (verified by MobileConfigSchemaContractTests).",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "label", "icon"],
+        "properties": {
+          "type": {
+            "enum": ["home", "promotions", "catalog", "loyalty", "coupons", "stores", "news", "profile"]
+          },
+          "label": { "type": "string", "minLength": 1 },
+          "icon": {
+            "description": "Must match MobileConfigWhitelists.NavigationIcons exactly (TASK-542, verified by MobileConfigSchemaContractTests).",
+            "enum": ["home", "tag", "grid", "qr", "ticket", "map", "news", "user"]
+          }
+        }
+      }
+    },
+    "pages": {
+      "description": "Keys must be a subset of MobileConfigWhitelists.PageNames (verified by MobileConfigSchemaContractTests). No page is required present.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "home": { "$ref": "#/definitions/page" },
+        "promotions": { "$ref": "#/definitions/page" },
+        "catalog": { "$ref": "#/definitions/page" },
+        "news": { "$ref": "#/definitions/page" }
+      }
+    }
+  },
+  "definitions": {
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blocks"],
+      "properties": {
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/block" }
+        }
+      }
+    },
+    "block": {
+      "description": "type enum must match MobileConfigWhitelists.BlockTypes (verified by MobileConfigSchemaContractTests). props stays loosely-validated free-form JSON, matching MobileConfigValidator — per-block-type prop schemas are TASK-538's Block Registry concern.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "order", "props"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": {
+          "enum": [
+            "heroBanner", "bannerCarousel",
+            "loyaltyCard", "loyaltyBalance",
+            "promotionCarousel", "promotionGrid",
+            "productCarousel", "productGrid",
+            "sectionHeader", "quickActions",
+            "newsList", "storeList"
+          ]
+        },
+        "order": { "type": "integer" },
+        "props": { "type": "object" }
+      }
+    }
+  }
+}
