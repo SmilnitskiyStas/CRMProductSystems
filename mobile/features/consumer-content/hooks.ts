@@ -5,9 +5,9 @@ import { selectMembershipForTenant } from '@/features/loyalty/selection';
 import { getConsumerBanners, getConsumerCatalog, getConsumerPromotions } from './api';
 import type { ConsumerContentContext } from './types';
 
-export function useSelectedConsumerContext() {
+export function useSelectedConsumerContext(enabled = true) {
   const selectedTenantId = useLoyaltyUiStore((state) => state.selectedTenantId);
-  const membershipsQuery = useMemberships();
+  const membershipsQuery = useMemberships(enabled);
   const membership = selectMembershipForTenant(membershipsQuery.data, selectedTenantId);
   const context = membership?.preferredStoreId
     ? { tenantId: membership.tenantId, storeId: membership.preferredStoreId }

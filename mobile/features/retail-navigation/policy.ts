@@ -52,13 +52,15 @@ export interface ResolvedNavigationItem extends RetailNavigationItem {
 
 export function resolveRetailNavigation(
   items: readonly RetailNavigationItem[],
-  features: RetailFeatureConfig,
+  _features: RetailFeatureConfig,
   hasPersonalAccess: boolean
 ): ResolvedNavigationItem[] {
   return items.flatMap((item) => {
     const policy = retailRoutePolicies[item.type];
     if (!policy) return [];
-    if (policy.feature && !features[policy.feature]) return [];
+    // Published navigation is an explicit retailer choice. Do not silently remove an item a
+    // retailer placed in Navigation Builder because the separate feature map still has its
+    // seed/default value. Feature flags continue to protect direct routes not present in menu.
     if (policy.requiresPersonalAccess && !hasPersonalAccess) return [];
     return [{ ...item, screen: policy.screen, href: policy.href, iconName: navigationIconNames[item.icon] }];
   });
@@ -78,11 +80,13 @@ const protectedPersonalScreens: Readonly<
 export function personalRouteAllowed(
   screen: string | undefined,
   features: RetailFeatureConfig,
-  hasPersonalAccess: boolean
+  hasPersonalAccess: boolean,
+  navigation: readonly RetailNavigationItem[] = []
 ): boolean {
   if (!screen) return true;
   const requirement = protectedPersonalScreens[screen];
   if (!requirement) return true;
-  if (requirement.feature && !features[requirement.feature]) return false;
+  const configuredScreen = navigation.some((item) => retailRoutePolicies[item.type]?.screen === screen);
+  if (!configuredScreen && requirement.feature && !features[requirement.feature]) return false;
   return !requirement.requiresPersonalAccess || hasPersonalAccess;
 }

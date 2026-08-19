@@ -17,7 +17,6 @@ export function deriveMobileConfigOfflineUx({
   loading?: boolean;
 }): MobileConfigOfflineUx {
   if (loading) return { visible: false, message: null };
-  if (source === 'preview') return { visible: false, message: null };
   if (source === 'safe-default') {
     return {
       visible: true,

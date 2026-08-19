@@ -1,6 +1,12 @@
 import MockAdapter from 'axios-mock-adapter';
 import { personalApiClient } from '@/lib/api-client';
-import { getAvailableNetworks, getLoyaltyCode, setPreferredStore } from '../loyaltyApi';
+import {
+  getAvailableNetworks,
+  getLoyaltyCode,
+  getPublicRetailer,
+  joinRetailerBySlug,
+  setPreferredStore,
+} from '../loyaltyApi';
 
 const mock = new MockAdapter(personalApiClient);
 
@@ -34,6 +40,7 @@ describe('getAvailableNetworks', () => {
       {
         tenantId: 'tenant-a',
         tenantName: 'Мережа A',
+        slug: 'merezha-a',
         stores: [{ storeId: 'store-a', storeName: 'Центр', address: null }],
       },
     ]);
@@ -42,9 +49,26 @@ describe('getAvailableNetworks', () => {
       {
         tenantId: 'tenant-a',
         tenantName: 'Мережа A',
+        slug: 'merezha-a',
         stores: [{ storeId: 'store-a', storeName: 'Центр', address: null }],
       },
     ]);
+  });
+});
+
+describe('slug-addressed retailer onboarding', () => {
+  afterEach(() => mock.reset());
+
+  it('resolves only public retailer information before join', async () => {
+    const retailer = { name: 'Свіжий Кут', slug: 'svizhyi-kut', logoUrl: null, joinable: true };
+    mock.onGet('/v1/retailers/svizhyi-kut/public').reply(200, retailer);
+    await expect(getPublicRetailer('svizhyi-kut')).resolves.toEqual(retailer);
+  });
+
+  it('joins using the authenticated slug endpoint', async () => {
+    const membership = { tenantId: 'tenant-a' };
+    mock.onPost('/v1/retailers/svizhyi-kut/join').reply(200, membership);
+    await expect(joinRetailerBySlug('svizhyi-kut')).resolves.toEqual(membership);
   });
 });
 

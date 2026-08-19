@@ -6,12 +6,14 @@ import { useConsumerPromotions, useSelectedConsumerContext } from '@/features/co
 import { registerConsumerProduct } from '@/features/shopping/products';
 import type { NewsPromotionProduct } from '@/features/loyalty/news';
 import { trackConsumerEvent } from '@/features/consumer-analytics/analytics';
+import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
+import { ConfiguredRetailPage } from '@/features/server-driven-ui/ConfiguredRetailPage';
 
 function price(value: number | null) {
   return value === null ? '—' : value.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export default function PromotionsScreen() {
+function StaticPromotionsScreen() {
   const router = useRouter();
   const { context, membership, membershipsQuery } = useSelectedConsumerContext();
   const query = useConsumerPromotions(context);
@@ -67,4 +69,12 @@ export default function PromotionsScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+export default function PromotionsScreen() {
+  const { config, source } = useMobileConfig();
+  if ((source === 'published' || source === 'last-valid') && config.pages.promotions) {
+    return <ConfiguredRetailPage pageKey="promotions" title="Акції" />;
+  }
+  return <StaticPromotionsScreen />;
 }

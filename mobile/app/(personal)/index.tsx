@@ -36,6 +36,8 @@ import { registerConsumerProducts } from '@/features/shopping/products';
 import { useConsumerBanners, useConsumerPromotions } from '@/features/consumer-content/hooks';
 import { recordBannerClick, recordBannerView } from '@/features/consumer-content/api';
 import { PageRenderer } from '@/features/server-driven-ui/PageRenderer';
+import { useRetailTheme } from '@/features/theme/RetailThemeProvider';
+import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -53,6 +55,8 @@ function formatBalance(value: number | null) {
 
 export default function PersonalHomeScreen() {
   const router = useRouter();
+  const theme = useRetailTheme();
+  const { config, source: configSource, refresh: refreshMobileConfig } = useMobileConfig();
   const { width: screenWidth } = useWindowDimensions();
   const [storeSelectorOpen, setStoreSelectorOpen] = useState(false);
   const [activeNewsIndex, setActiveNewsIndex] = useState(0);
@@ -108,6 +112,12 @@ export default function PersonalHomeScreen() {
     bannersQuery.isRefetching ||
     promotionsQuery.isRefetching;
   const newsCardWidth = Math.max(280, screenWidth - 48);
+  // A published empty Home page is intentional: the retailer removed every block. Only the
+  // bundled mock/safe fallback should retain the legacy Home below.
+  const hasConfiguredHome =
+    configSource === 'published' || configSource === 'last-valid'
+      ? config.pages.home !== undefined
+      : Boolean(config.pages.home?.blocks.length);
 
   useEffect(() => {
     registerConsumerProducts(discountedProducts, contentContext?.tenantId);
@@ -127,6 +137,7 @@ export default function PersonalHomeScreen() {
   }, [activeNewsIndex, banners, contentContext]);
 
   function refresh() {
+    refreshMobileConfig();
     void membershipsQuery.refetch();
     void networksQuery.refetch();
     void bannersQuery.refetch();
@@ -315,7 +326,7 @@ export default function PersonalHomeScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50" edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top', 'left', 'right']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 36 }}
@@ -328,21 +339,23 @@ export default function PersonalHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Відкрити профіль"
             onPress={() => router.push('/(personal)/account')}
-            className="h-12 w-12 items-center justify-center rounded-2xl bg-green-100"
+            className="h-12 w-12 items-center justify-center"
+            style={{ borderRadius: theme.radius.button, backgroundColor: theme.colors.border }}
           >
-            <Text className="text-lg font-bold text-green-800">
+            <Text className="text-lg font-bold" style={{ color: theme.colors.primary }}>
               {fullName?.trim().charAt(0).toUpperCase() || 'S'}
             </Text>
           </Pressable>
           <View className="ml-3 flex-1">
-            <Text className="text-sm text-gray-500">Вітаємо,</Text>
-            <Text className="text-xl font-bold text-gray-900">{firstName(fullName)}!</Text>
+            <Text className="text-sm" style={{ color: theme.colors.textSecondary }}>Вітаємо,</Text>
+            <Text className="text-xl font-bold" style={{ color: theme.colors.textPrimary }}>{firstName(fullName)}!</Text>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Сканувати штрихкод товару"
             onPress={() => router.push('/(personal)/scan')}
-            className="h-11 w-11 items-center justify-center rounded-full bg-gray-900"
+            className="h-11 w-11 items-center justify-center rounded-full"
+            style={{ backgroundColor: theme.colors.primary }}
           >
             <Ionicons name="scan-outline" size={21} color="white" />
           </Pressable>
@@ -350,21 +363,24 @@ export default function PersonalHomeScreen() {
 
         <PageRenderer pageKey="home" />
 
+        {!hasConfiguredHome ? (
+          <>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Вибрати магазин"
           accessibilityState={{ expanded: storeSelectorOpen }}
           onPress={() => setStoreSelectorOpen(true)}
-          className="mb-4 flex-row items-center rounded-2xl border border-gray-100 bg-white px-4 py-3"
+          className="mb-4 flex-row items-center border px-4 py-3"
+          style={{ borderRadius: theme.radius.card, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }}
         >
-          <View className="h-10 w-10 items-center justify-center rounded-xl bg-green-50">
-            <Ionicons name="storefront-outline" size={20} color="#16a34a" />
+          <View className="h-10 w-10 items-center justify-center" style={{ borderRadius: theme.radius.button, backgroundColor: theme.colors.border }}>
+            <Ionicons name="storefront-outline" size={20} color={theme.colors.primary} />
           </View>
           <View className="ml-3 flex-1">
             <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
               Магазин
             </Text>
-            <Text className="mt-0.5 text-sm font-bold text-gray-900" numberOfLines={1}>
+            <Text className="mt-0.5 text-sm font-bold" style={{ color: theme.colors.textPrimary }} numberOfLines={1}>
               {selectedMembership?.preferredStoreName || 'Оберіть зручний магазин'}
             </Text>
             {selectedMembership?.preferredStoreAddress ? (
@@ -387,7 +403,8 @@ export default function PersonalHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Відкрити картку покупця"
             onPress={() => router.push('/(personal)/wallet')}
-            className="overflow-hidden rounded-3xl bg-green-700 p-5"
+            className="overflow-hidden p-5"
+            style={{ borderRadius: theme.radius.card, backgroundColor: theme.colors.primary }}
           >
             <View className="absolute -right-9 -top-12 h-40 w-40 rounded-full bg-white/10" />
             <View className="absolute -bottom-16 right-12 h-36 w-36 rounded-full bg-green-400/20" />
@@ -663,6 +680,8 @@ export default function PersonalHomeScreen() {
             </View>
           </View>
         </View>
+          </>
+        ) : null}
       </ScrollView>
 
       <Modal

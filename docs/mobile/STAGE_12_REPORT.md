@@ -1,5 +1,9 @@
 # Stage 12 — Preview Mode
 
+> Superseded on 2026-08-19 by Stage 17: the final product decision keeps draft preview in the
+> staff web admin only. All mobile preview-token and draft-rendering code described below has been
+> removed. See `STAGE_17_REPORT.md` and `docs/integration/MOBILE_API.md` §7B.
+
 Date: 2026-08-18
 
 ## Delivered

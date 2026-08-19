@@ -25,7 +25,15 @@ export interface LoyaltyNetworkStore {
 export interface LoyaltyNetworkSummary {
   tenantId: string;
   tenantName: string;
+  slug: string;
   stores: LoyaltyNetworkStore[];
+}
+
+export interface RetailerPublicInfo {
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  joinable: boolean;
 }
 
 /** The rotating QR/barcode payload. Never carries the TOTP secret itself. */

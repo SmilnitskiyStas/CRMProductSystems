@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadMobileConfig, loadPreviewMobileConfig } from '../loader';
+import { loadMobileConfig } from '../loader';
 import { createMockMobileConfig } from '../mock';
 import { persistLastValidMobileConfig, readLastValidMobileConfig } from '../storage';
 
@@ -33,26 +33,7 @@ describe('mobile configuration loading policy', () => {
     const result = await loadMobileConfig('tenant-b', async () => ({ schemaVersion: 999 }));
     expect(result.source).toBe('safe-default');
     expect(result.config.tenant.id).toBe('tenant-b');
-    expect(result.error?.message).toBe('INVALID_MOBILE_CONFIG');
-  });
-
-  test('validates preview without writing it to production last-valid storage', async () => {
-    const config = createMockMobileConfig('tenant-preview');
-    const loaded = await loadPreviewMobileConfig(
-      'tenant-preview',
-      'preview-token-1234',
-      async () => config
-    );
-    expect(loaded).toEqual(config);
-    expect(await readLastValidMobileConfig('tenant-preview')).toBeNull();
-  });
-
-  test('rejects cross-tenant preview configuration', async () => {
-    await expect(
-      loadPreviewMobileConfig('tenant-a', 'preview-token-1234', async () =>
-        createMockMobileConfig('tenant-b')
-      )
-    ).rejects.toThrow('INVALID_PREVIEW_MOBILE_CONFIG');
+    expect(result.error?.message).toMatch(/^INVALID_MOBILE_CONFIG:/);
   });
 
   test('never uses Tenant A cache after switching to Tenant B', async () => {

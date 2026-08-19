@@ -3,7 +3,7 @@ import { readLastValidMobileConfigEntry, persistLastValidMobileConfig } from './
 import type { MobileConfig } from './types';
 import { validateMobileConfig } from './validation';
 
-export type MobileConfigSource = 'mock' | 'published' | 'preview' | 'last-valid' | 'safe-default';
+export type MobileConfigSource = 'mock' | 'published' | 'last-valid' | 'safe-default';
 
 export interface LoadedMobileConfig {
   config: MobileConfig;
@@ -21,7 +21,11 @@ export async function loadMobileConfig(
     const candidate = await getConfig(tenantId);
     const result = validateMobileConfig(candidate);
     if (!result.valid || !result.config || result.config.tenant.id !== tenantId) {
-      throw new Error('INVALID_MOBILE_CONFIG');
+      const details = result.errors
+        .slice(0, 5)
+        .map((item) => `${item.instancePath || '/'} ${item.message ?? 'is invalid'}`)
+        .join('; ');
+      throw new Error(details ? `INVALID_MOBILE_CONFIG: ${details}` : 'INVALID_MOBILE_CONFIG');
     }
     const cachedAt = Date.now();
     await persistLastValidMobileConfig(result.config, cachedAt);
@@ -32,17 +36,4 @@ export async function loadMobileConfig(
     if (cached) return { config: cached.config, source: 'last-valid', error, cachedAt: cached.cachedAt };
     return { config: createMockMobileConfig(tenantId), source: 'safe-default', error, cachedAt: null };
   }
-}
-
-export async function loadPreviewMobileConfig(
-  tenantId: string,
-  token: string,
-  getPreviewConfig: (tenantId: string, token: string) => Promise<unknown>
-): Promise<MobileConfig> {
-  const candidate = await getPreviewConfig(tenantId, token);
-  const result = validateMobileConfig(candidate);
-  if (!result.valid || !result.config || result.config.tenant.id !== tenantId) {
-    throw new Error('INVALID_PREVIEW_MOBILE_CONFIG');
-  }
-  return result.config;
 }

@@ -15,12 +15,12 @@ describe('retail navigation policy', () => {
     ]);
   });
 
-  test('applies feature and personal-access gates centrally', () => {
+  test('treats configured navigation as authoritative while retaining identity gates', () => {
     const config = createMockMobileConfig('tenant-a');
     const features = { ...config.features, catalog: false };
     const result = resolveRetailNavigation(config.navigation, features, false);
 
-    expect(result.map((item) => item.type)).toEqual(['home', 'profile']);
+    expect(result.map((item) => item.type)).toEqual(['home', 'catalog', 'profile']);
   });
 
   test('ignores an unsupported runtime route even if data bypasses TypeScript', () => {
@@ -37,6 +37,14 @@ describe('retail navigation policy', () => {
   test('protects feature and identity routes opened through deep links', () => {
     const config = createMockMobileConfig('tenant-a');
     expect(personalRouteAllowed('catalog', { ...config.features, catalog: false }, true)).toBe(false);
+    expect(
+      personalRouteAllowed(
+        'catalog',
+        { ...config.features, catalog: false },
+        true,
+        config.navigation
+      )
+    ).toBe(true);
     expect(personalRouteAllowed('wallet', config.features, false)).toBe(false);
     expect(personalRouteAllowed('wallet', config.features, true)).toBe(true);
     expect(personalRouteAllowed('account', config.features, false)).toBe(true);

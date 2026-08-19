@@ -6,8 +6,10 @@ import {
   getLoyaltyHistory,
   getMemberships,
   getMyMembership,
+  getPublicRetailer,
   joinAsStaff,
   joinTenantProgram,
+  joinRetailerBySlug,
   manualAdjustLoyalty,
   resolveLoyaltyCode,
   setPreferredStore,
@@ -101,6 +103,30 @@ export function useJoinTenantProgram() {
         return [...withoutCurrent, membership];
       });
       void qc.invalidateQueries({ queryKey: ['loyalty', 'memberships'] });
+    },
+  });
+}
+
+export function usePublicRetailer(slug: string | null) {
+  return useQuery({
+    queryKey: ['retailers', 'public', slug],
+    queryFn: () => getPublicRetailer(slug as string),
+    enabled: slug !== null,
+    retry: false,
+  });
+}
+
+export function useJoinRetailerBySlug() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) => joinRetailerBySlug(slug),
+    onSuccess: (membership) => {
+      qc.setQueryData<LoyaltyMembershipSummary[]>(['loyalty', 'memberships'], (current) => {
+        if (!current) return [membership];
+        return [...current.filter((item) => item.tenantId !== membership.tenantId), membership];
+      });
+      void qc.invalidateQueries({ queryKey: ['loyalty', 'memberships'] });
+      void qc.invalidateQueries({ queryKey: ['loyalty', 'networks'] });
     },
   });
 }

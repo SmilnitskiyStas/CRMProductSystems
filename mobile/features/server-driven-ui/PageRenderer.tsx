@@ -7,6 +7,10 @@ import { componentRegistry } from './coreRegistry';
 import type { ComponentRegistry } from './registry';
 import { defaultRendererLogger } from './logger';
 import type { RendererLogger } from './types';
+import { useConsumerBanners, useConsumerCatalog, useConsumerPromotions, useSelectedConsumerContext } from '@/features/consumer-content/hooks';
+import { useAvailableNetworks } from '@/features/loyalty/hooks/useLoyalty';
+import { resolvePage } from './resolveBlocks';
+import { useAuthStore } from '@/features/auth/store';
 
 interface PageBlockListProps {
   page: MobilePageConfig;
@@ -35,7 +39,18 @@ export function PageBlockList({
 
 export function PageRenderer({ pageKey }: { pageKey: string }) {
   const { config } = useMobileConfig();
+  const hasPersonalAccess = useAuthStore((state) => state.personalAccessToken !== null);
+  const { context, membership } = useSelectedConsumerContext(hasPersonalAccess);
+  const banners = useConsumerBanners(context);
+  const promotions = useConsumerPromotions(context);
+  const catalog = useConsumerCatalog(context, { page: 1, pageSize: 30 });
+  const networks = useAvailableNetworks(hasPersonalAccess);
   const page = config.pages[pageKey];
   if (!page) return null;
-  return <PageBlockList page={page} features={config.features} />;
+  const network = networks.data?.find((item) => item.tenantId === membership?.tenantId) ?? null;
+  const resolved = resolvePage(page, {
+    banners: banners.data ?? [], promotions: promotions.data ?? [],
+    catalog: catalog.data?.items ?? [], membership: membership ?? null, network,
+  });
+  return <PageBlockList page={resolved} features={config.features} />;
 }

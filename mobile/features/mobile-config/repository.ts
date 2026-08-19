@@ -1,6 +1,5 @@
 import { createMockMobileConfig } from './mock';
-import { apiClient, personalApiClient } from '@/lib/api-client';
-import { previewRequestHeaders } from '@/features/mobile-preview/policy';
+import { personalApiClient } from '@/lib/api-client';
 import type { MobileConfig } from './types';
 
 export interface MobileConfigRepository {
@@ -20,11 +19,3 @@ export const publishedMobileConfigRepository: MobileConfigRepository = {
     return data;
   },
 };
-
-export async function getPreviewMobileConfig(tenantId: string, token: string): Promise<unknown> {
-  const { data } = await apiClient.get('/v1/mobile/config/preview', {
-    params: { tenantId },
-    headers: previewRequestHeaders(token),
-  });
-  return data;
-}

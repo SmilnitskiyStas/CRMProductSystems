@@ -1,9 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { AppState } from 'react-native';
 import { useActiveTenant } from '@/features/tenant/ActiveTenantProvider';
 import { createMockMobileConfig, SAFE_DEFAULT_TENANT_ID } from './mock';
-import { loadMobileConfig, loadPreviewMobileConfig, type MobileConfigSource } from './loader';
-import { getPreviewMobileConfig, publishedMobileConfigRepository } from './repository';
-import { useMobilePreviewStore } from '@/features/mobile-preview/store';
+import { loadMobileConfig, type MobileConfigSource } from './loader';
+import { publishedMobileConfigRepository } from './repository';
 import type { MobileConfig } from './types';
 
 interface MobileConfigContextValue {
@@ -11,8 +11,8 @@ interface MobileConfigContextValue {
   source: MobileConfigSource;
   status: 'loading' | 'ready' | 'fallback';
   error: Error | null;
-  preview: boolean;
   cachedAt: number | null;
+  refresh: () => void;
 }
 
 const MobileConfigContext = createContext<MobileConfigContextValue | null>(null);
@@ -20,55 +20,60 @@ const MobileConfigContext = createContext<MobileConfigContextValue | null>(null)
 export function MobileConfigProvider({ children }: PropsWithChildren) {
   const { activeTenantId } = useActiveTenant();
   const tenantId = activeTenantId ?? SAFE_DEFAULT_TENANT_ID;
-  const previewToken = useMobilePreviewStore((state) => state.token);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const refresh = useCallback(() => setRefreshVersion((version) => version + 1), []);
   const [loaded, setLoaded] = useState<MobileConfigContextValue>(() => ({
     config: createMockMobileConfig(tenantId),
     source: 'safe-default' as MobileConfigSource,
     status: 'loading',
     error: null as Error | null,
-    preview: false,
     cachedAt: null,
+    refresh,
   }));
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => subscription.remove();
+  }, [refresh]);
+
+  useEffect(() => {
     let current = true;
-    const request = previewToken && __DEV__
-      ? loadPreviewMobileConfig(tenantId, previewToken, getPreviewMobileConfig).then((config) => ({
-          config,
-          source: 'preview' as MobileConfigSource,
-          error: null,
-          cachedAt: null,
-        }))
-      : loadMobileConfig(
-          tenantId,
-          publishedMobileConfigRepository.getConfig,
-          publishedMobileConfigRepository.source
-        );
+    const request = loadMobileConfig(
+      tenantId,
+      publishedMobileConfigRepository.getConfig,
+      publishedMobileConfigRepository.source
+    );
     void request.then((result) => {
       if (!current) return;
+      if (__DEV__ && result.error) {
+        console.warn('[mobile-config] Fresh configuration unavailable', result.error);
+      }
       setLoaded({
         config: result.config,
         source: result.source,
-        status: ['mock', 'published', 'preview'].includes(result.source) ? 'ready' : 'fallback',
+        status: ['mock', 'published'].includes(result.source) ? 'ready' : 'fallback',
         error: result.error,
-        preview: result.source === 'preview',
         cachedAt: result.cachedAt,
+        refresh,
       });
     }).catch((cause) => {
       if (!current) return;
+      if (__DEV__) console.warn('[mobile-config] Configuration load failed', cause);
       setLoaded({
         config: createMockMobileConfig(tenantId),
         source: 'safe-default',
         status: 'fallback',
-        error: cause instanceof Error ? cause : new Error('PREVIEW_LOAD_FAILED'),
-        preview: false,
+        error: cause instanceof Error ? cause : new Error('MOBILE_CONFIG_LOAD_FAILED'),
         cachedAt: null,
+        refresh,
       });
     });
     return () => {
       current = false;
     };
-  }, [previewToken, tenantId]);
+  }, [refresh, refreshVersion, tenantId]);
 
   const value = useMemo<MobileConfigContextValue>(
     () =>
@@ -79,10 +84,10 @@ export function MobileConfigProvider({ children }: PropsWithChildren) {
             source: 'safe-default',
             status: 'loading',
             error: null,
-            preview: false,
             cachedAt: null,
+            refresh,
           },
-    [loaded, tenantId]
+    [loaded, refresh, tenantId]
   );
 
   return <MobileConfigContext.Provider value={value}>{children}</MobileConfigContext.Provider>;

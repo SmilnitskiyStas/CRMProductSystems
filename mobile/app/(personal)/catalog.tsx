@@ -16,6 +16,8 @@ import { useConsumerCatalog, useSelectedConsumerContext } from '@/features/consu
 import { registerConsumerProduct } from '@/features/shopping/products';
 import type { ConsumerCatalogItem } from '@/features/consumer-content/types';
 import type { NewsPromotionProduct } from '@/features/loyalty/news';
+import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
+import { ConfiguredRetailPage } from '@/features/server-driven-ui/ConfiguredRetailPage';
 
 function formatPrice(value: number | null) {
   if (value === null) return 'Ціну уточнюйте';
@@ -42,7 +44,7 @@ function mapCatalogProduct(item: ConsumerCatalogItem): NewsPromotionProduct {
   };
 }
 
-export default function ConsumerCatalogScreen() {
+function StaticConsumerCatalogScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -221,4 +223,12 @@ export default function ConsumerCatalogScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+export default function ConsumerCatalogScreen() {
+  const { config, source } = useMobileConfig();
+  if ((source === 'published' || source === 'last-valid') && config.pages.catalog) {
+    return <ConfiguredRetailPage pageKey="catalog" title="Каталог" />;
+  }
+  return <StaticConsumerCatalogScreen />;
 }

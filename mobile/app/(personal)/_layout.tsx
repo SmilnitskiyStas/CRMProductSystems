@@ -1,13 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs, useSegments } from 'expo-router';
-import { ActivityIndicator, Pressable, Text, View, type ColorValue } from 'react-native';
+import { ActivityIndicator, View, type ColorValue } from 'react-native';
 import { useAuthStore } from '@/features/auth/store';
 import { AuthBootstrapState } from '@/features/auth/components/AuthBootstrapState';
 import { RetailShellProviders } from '@/features/mobile-config/RetailShellProviders';
 import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
 import { personalRouteAllowed, resolveRetailNavigation } from '@/features/retail-navigation/policy';
 import { useRetailTheme } from '@/features/theme/RetailThemeProvider';
-import { useMobilePreviewStore } from '@/features/mobile-preview/store';
 import { MobileConfigOfflineBanner } from '@/features/mobile-config/MobileConfigOfflineBanner';
 
 const CONFIGURABLE_SCREENS = [
@@ -23,8 +22,7 @@ const CONFIGURABLE_SCREENS = [
 
 function PersonalTabs({ hasPersonalAccess }: { hasPersonalAccess: boolean }) {
   const theme = useRetailTheme();
-  const { config, preview } = useMobileConfig();
-  const disablePreview = useMobilePreviewStore((state) => state.disable);
+  const { config } = useMobileConfig();
   const segments = useSegments();
   const navigation = resolveRetailNavigation(config.navigation, config.features, hasPersonalAccess);
 
@@ -41,7 +39,7 @@ function PersonalTabs({ hasPersonalAccess }: { hasPersonalAccess: boolean }) {
   const selectedScreens = new Set(navigation.map((item) => item.screen));
   const activeScreen = (segments as readonly string[])[1];
 
-  if (!personalRouteAllowed(activeScreen, config.features, hasPersonalAccess)) {
+  if (!personalRouteAllowed(activeScreen, config.features, hasPersonalAccess, config.navigation)) {
     return <Redirect href="/(personal)" />;
   }
 
@@ -69,18 +67,7 @@ function PersonalTabs({ hasPersonalAccess }: { hasPersonalAccess: boolean }) {
       <Tabs.Screen name="product/[id]" options={{ href: null }} />
       <Tabs.Screen name="scan" options={{ href: null }} />
       <Tabs.Screen name="retailer-onboarding" options={{ href: null }} />
-      <Tabs.Screen name="preview" options={{ href: null }} />
     </Tabs>
-    {preview ? (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Вийти з режиму preview"
-        onPress={disablePreview}
-        className="absolute left-3 right-3 top-12 items-center rounded-xl bg-amber-400 px-4 py-2"
-      >
-        <Text className="text-xs font-bold text-amber-950">PREVIEW · натисніть, щоб вийти</Text>
-      </Pressable>
-    ) : null}
     <MobileConfigOfflineBanner />
     </View>
   );

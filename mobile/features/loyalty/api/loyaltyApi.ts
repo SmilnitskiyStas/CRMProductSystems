@@ -7,6 +7,7 @@ import type {
   ManualLoyaltyAdjustRequest,
   PagedResult,
   ResolveLoyaltyCodeResult,
+  RetailerPublicInfo,
 } from '../types';
 
 // ─── Consumer wallet (consumer JWT via personalApiClient — ConsumerLoyaltyController,
@@ -49,6 +50,20 @@ export async function getLoyaltyHistory(
  */
 export async function joinTenantProgram(tenantId: string): Promise<LoyaltyMembershipSummary> {
   const { data } = await personalApiClient.post<LoyaltyMembershipSummary>(`/consumer/loyalty/${tenantId}/join`);
+  return data;
+}
+
+export async function getPublicRetailer(slug: string): Promise<RetailerPublicInfo> {
+  const { data } = await personalApiClient.get<RetailerPublicInfo>(
+    `/v1/retailers/${encodeURIComponent(slug)}/public`
+  );
+  return data;
+}
+
+export async function joinRetailerBySlug(slug: string): Promise<LoyaltyMembershipSummary> {
+  const { data } = await personalApiClient.post<LoyaltyMembershipSummary>(
+    `/v1/retailers/${encodeURIComponent(slug)}/join`
+  );
   return data;
 }
 

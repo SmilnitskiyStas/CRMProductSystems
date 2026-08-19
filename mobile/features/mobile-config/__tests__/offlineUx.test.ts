@@ -1,9 +1,8 @@
 import { deriveMobileConfigOfflineUx } from '../offlineUx';
 
 describe('mobile config offline UX', () => {
-  test('keeps fresh and preview configuration quiet', () => {
+  test('keeps fresh configuration quiet', () => {
     expect(deriveMobileConfigOfflineUx({ online: true, source: 'mock', cachedAt: 1 }).visible).toBe(false);
-    expect(deriveMobileConfigOfflineUx({ online: false, source: 'preview', cachedAt: null }).visible).toBe(false);
   });
 
   test('does not flash a fallback warning during initial loading', () => {
