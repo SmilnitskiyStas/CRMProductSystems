@@ -52,6 +52,11 @@ describe('Core Blocks V1', () => {
     expect(isQuickActionsProps({ items: Array.from({ length: 9 }, () => ({ id: 'q', label: 'Too many' })) })).toBe(false);
   });
 
+  test('accepts columns: 4 for promotion and product grids (TASK-569)', () => {
+    expect(isPromotionCollectionProps({ items: [{ id: 'p', title: 'Promo' }], columns: 4 })).toBe(true);
+    expect(isProductCollectionProps({ items: [{ id: 'p', name: 'Milk', price: 20 }], columns: 4 })).toBe(true);
+  });
+
   test('accepts the new optional heightPx/cardWidthPx size props and rejects non-numeric values', () => {
     expect(isHeroBannerProps({ title: 'Hero', heightPx: 220 })).toBe(true);
     expect(isHeroBannerProps({ title: 'Hero', heightPx: '220' })).toBe(false);
@@ -158,6 +163,27 @@ describe('Core Blocks V1', () => {
     expect(screen.getByTestId('banner-card-b').props.style.width).toBe(280);
     expect(screen.getByTestId('promotion-card-pc').props.style.width).toBe(210);
     expect(screen.getByTestId('product-card-xc').props.style.width).toBe(170);
+    await screen.unmount();
+    client.clear();
+  });
+
+  test('renders promotionGrid/productGrid cards at 23% width for columns: 4 (TASK-569)', async () => {
+    const page: MobilePageConfig = {
+      blocks: [
+        { id: 'promo-grid-4', type: 'promotionGrid', props: { items: [{ id: 'pg4', title: 'Promo grid 4' }], columns: 4 } },
+        { id: 'product-grid-4', type: 'productGrid', props: { items: [{ id: 'xg4', name: 'Product grid 4', price: 3 }], columns: 4 } },
+      ],
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const screen = await render(
+      <QueryClientProvider client={client}>
+        <RetailShellProviders>
+          <PageBlockList page={page} />
+        </RetailShellProviders>
+      </QueryClientProvider>
+    );
+    expect(screen.getByTestId('promotion-card-pg4').props.style.width).toBe('23%');
+    expect(screen.getByTestId('product-card-xg4').props.style.width).toBe('23%');
     await screen.unmount();
     client.clear();
   });

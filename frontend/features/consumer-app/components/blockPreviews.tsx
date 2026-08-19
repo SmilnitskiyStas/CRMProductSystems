@@ -109,8 +109,8 @@ function positiveInt(value: unknown, fallback: number, maximum: number): number 
     : fallback;
 }
 
-function columns(value: unknown): 2 | 3 {
-  return value === 3 ? 3 : 2;
+function columns(value: unknown): 2 | 3 | 4 {
+  return value === 4 ? 4 : value === 3 ? 3 : 2;
 }
 
 function str(value: unknown, fallback = ""): string {
@@ -400,7 +400,8 @@ export function PromotionGridPreview({ block, ctx }: { block: MobileConfigBlockI
   const { tokens } = ctx;
   const title = str(block.props.title) || undefined;
   const limit = positiveInt(block.props.limit, 12, 30);
-  const width = columns(block.props.columns) === 3 ? "31%" : "48%";
+  const c = columns(block.props.columns);
+  const width = c === 4 ? "23%" : c === 3 ? "31%" : "48%";
   const items = ctx.promotions.slice(0, limit);
 
   return (
@@ -471,7 +472,8 @@ export function ProductGridPreview({ block, ctx }: { block: MobileConfigBlockIns
   const { tokens } = ctx;
   const title = str(block.props.title) || undefined;
   const limit = positiveInt(block.props.limit, 12, 30);
-  const width = columns(block.props.columns) === 3 ? "31%" : "48%";
+  const c = columns(block.props.columns);
+  const width = c === 4 ? "23%" : c === 3 ? "31%" : "48%";
   const items = ctx.catalog.slice(0, limit);
 
   return (

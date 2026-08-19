@@ -17,8 +17,8 @@ function positiveInt(value: unknown, fallback: number, maximum: number) {
     : fallback;
 }
 
-function columns(value: unknown): 2 | 3 {
-  return value === 3 ? 3 : 2;
+function columns(value: unknown): 2 | 3 | 4 {
+  return value === 3 ? 3 : value === 4 ? 4 : 2;
 }
 
 const actionLabels: Record<string, string> = {

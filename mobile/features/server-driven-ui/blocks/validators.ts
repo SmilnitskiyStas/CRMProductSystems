@@ -84,8 +84,8 @@ export function isLoyaltyBalanceProps(value: unknown): value is LoyaltyBalancePr
   return record(value) && text(value.label) && finiteNumber(value.balance, true) && text(value.unit);
 }
 
-function validColumns(value: unknown): value is 2 | 3 | undefined {
-  return value === undefined || value === 2 || value === 3;
+function validColumns(value: unknown): value is 2 | 3 | 4 | undefined {
+  return value === undefined || value === 2 || value === 3 || value === 4;
 }
 
 export function isPromotionCollectionProps(value: unknown): value is PromotionCollectionProps {

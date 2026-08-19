@@ -44,6 +44,14 @@ describe('App Builder block data resolution', () => {
     expect(JSON.stringify(resolved.props)).toContain(String(expected));
   });
 
+  test.each([
+    ['promotionGrid', { limit: 5, columns: 4 }],
+    ['productGrid', { limit: 5, columns: 4 }],
+  ])('forwards columns: 4 through resolveBlock unchanged for %s (TASK-569)', (type, props) => {
+    const resolved = resolveBlock({ id: type, type, props }, data);
+    expect((resolved.props as { columns?: number }).columns).toBe(4);
+  });
+
   it('preserves static blocks authored directly in the builder', () => {
     const block = { id: 'hero', type: 'heroBanner', props: { title: 'Вітаємо' } };
     expect(resolveBlock(block, data)).toBe(block);

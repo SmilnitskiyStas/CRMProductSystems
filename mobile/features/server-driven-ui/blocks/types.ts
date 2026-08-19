@@ -43,7 +43,7 @@ export interface PromotionItem {
 
 export interface PromotionCollectionProps {
   items: PromotionItem[];
-  columns?: 2 | 3;
+  columns?: 2 | 3 | 4;
   title?: string;
   showViewAll?: boolean;
   cardWidthPx?: number;
@@ -60,7 +60,7 @@ export interface ProductItem {
 
 export interface ProductCollectionProps {
   items: ProductItem[];
-  columns?: 2 | 3;
+  columns?: 2 | 3 | 4;
   title?: string;
   showViewAll?: boolean;
   cardWidthPx?: number;

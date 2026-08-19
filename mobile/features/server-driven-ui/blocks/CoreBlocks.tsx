@@ -138,7 +138,7 @@ export function PromotionCarouselBlock({ block }: BlockComponentProps<PromotionC
 
 export function PromotionGridBlock({ block }: BlockComponentProps<PromotionCollectionProps>) {
   const theme = useRetailTheme();
-  const width = block.props.columns === 3 ? '31%' : '48%';
+  const width = block.props.columns === 4 ? '23%' : block.props.columns === 3 ? '31%' : '48%';
   return (
     <View style={{ marginBottom: theme.spacing.md }}>
       {block.props.title ? <Text style={{ color: theme.colors.textPrimary, fontSize: 20, fontWeight: '800', marginBottom: theme.spacing.sm }}>{block.props.title}</Text> : null}
@@ -178,7 +178,7 @@ export function ProductCarouselBlock({ block }: BlockComponentProps<ProductColle
 
 export function ProductGridBlock({ block }: BlockComponentProps<ProductCollectionProps>) {
   const theme = useRetailTheme();
-  const width = block.props.columns === 3 ? '31%' : '48%';
+  const width = block.props.columns === 4 ? '23%' : block.props.columns === 3 ? '31%' : '48%';
   return (
     <View style={{ marginBottom: theme.spacing.md }}>
       {block.props.title ? <Text style={{ color: theme.colors.textPrimary, fontSize: 20, fontWeight: '800', marginBottom: theme.spacing.sm }}>{block.props.title}</Text> : null}

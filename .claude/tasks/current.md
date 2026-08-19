@@ -118,6 +118,29 @@ task's scope): the 4 resize handles' pointer-delta math isn't scale-aware, so un
 value change — functionally correct (clamps/commits right), just visually less than 1:1 while
 scaled below 1.
 
+## TASK-569 — Fix 4-column grid preview clamped to 2 columns (web + mobile)
+
+**Status:** done · **Agents:** frontend-developer (web half) + mobile-developer (app half, parallel)
+Log (web): `.claude/logs/tasks/569_2026-08-19_fix-4-column-grid-preview_frontend-developer.md`
+Log (mobile): `.claude/logs/tasks/569_2026-08-19_fix-4-column-grid-mobile_mobile-developer.md`
+Bug: `columns: 4` on Product Grid / Promotion Grid rendered only 2 cards per row. Root cause (web):
+`blockPreviews.tsx`'s `columns()` helper only recognized `3`, clamping everything else (including
+`4`) to `2`; the two grid width ternaries were binary (`=== 3 ? "31%" : "48%"`), so `4` never had a
+branch. Root cause (mobile) was worse: `validators.ts`'s `validColumns` type guard only accepted
+`2 | 3 | undefined`, so a published block with `columns: 4` failed prop validation entirely and
+`BlockRenderer.tsx` rendered it as `null` — the block vanished on real devices, not just wrong
+layout. Also clamped in `resolveBlocks.ts`'s `columns()` helper and hardcoded 2-or-3 in
+`types.ts` (`PromotionCollectionProps`/`ProductCollectionProps`) and `CoreBlocks.tsx`'s
+`PromotionGridBlock`/`ProductGridBlock` width ternaries. Fixed all 4 mobile spots to accept/pass
+through/render `2 | 3 | 4`, using the same `23%` 4-column width as the web fix (ADR-031 web/app
+parity). Widths for 2 (`48%`) and 3 (`31%`) unchanged.
+
+Tests: +5 new cases across `coreBlocks.test.tsx` (validators accept `columns: 4`; grids render at
+`23%`) and `resolveBlocks.test.ts` (columns: 4 forwarded unchanged) — 35/35 passing (was 30).
+`npx tsc --noEmit` clean on mobile. `npx tsc --noEmit` clean on web (frontend half). Verified
+in-browser (DOM geometry, web) and by full jest run (mobile) — zero regression on existing
+2/3/undefined column values on either side.
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer
