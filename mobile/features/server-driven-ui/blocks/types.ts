@@ -3,6 +3,9 @@ export interface HeroBannerProps {
   subtitle?: string;
   imageUrl?: string;
   eyebrow?: string;
+  ctaLabel?: string;
+  ctaLink?: string;
+  heightPx?: number;
 }
 
 export interface BannerItem {
@@ -14,6 +17,7 @@ export interface BannerItem {
 
 export interface BannerCarouselProps {
   items: BannerItem[];
+  cardWidthPx?: number;
 }
 
 export interface LoyaltyCardProps {
@@ -40,6 +44,9 @@ export interface PromotionItem {
 export interface PromotionCollectionProps {
   items: PromotionItem[];
   columns?: 2 | 3;
+  title?: string;
+  showViewAll?: boolean;
+  cardWidthPx?: number;
 }
 
 export interface ProductItem {
@@ -54,12 +61,16 @@ export interface ProductItem {
 export interface ProductCollectionProps {
   items: ProductItem[];
   columns?: 2 | 3;
+  title?: string;
+  showViewAll?: boolean;
+  cardWidthPx?: number;
 }
 
 export interface SectionHeaderProps {
   title: string;
   subtitle?: string;
   actionLabel?: string;
+  alignment?: 'left' | 'center';
 }
 
 export interface QuickActionItem {
@@ -94,4 +105,6 @@ export interface StoreItem {
 
 export interface StoreListProps {
   items: StoreItem[];
+  title?: string;
+  showDistance?: boolean;
 }

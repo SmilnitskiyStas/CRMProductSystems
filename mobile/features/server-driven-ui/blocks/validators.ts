@@ -32,7 +32,7 @@ function finiteNumber(value: unknown, required = false): boolean {
 }
 
 function imageUrl(value: unknown): boolean {
-  return value === undefined || (
+  return value === undefined || value === '' || (
     typeof value === 'string' &&
     value.length <= 2048 &&
     /^https:\/\/[^\s]+$/i.test(value)
@@ -68,11 +68,12 @@ function store(value: unknown): value is StoreItem {
 }
 
 export function isHeroBannerProps(value: unknown): value is HeroBannerProps {
-  return record(value) && text(value.title, true) && text(value.subtitle) && imageUrl(value.imageUrl) && text(value.eyebrow);
+  return record(value) && text(value.title, true) && text(value.subtitle) && imageUrl(value.imageUrl) &&
+    text(value.eyebrow) && text(value.ctaLabel) && imageUrl(value.ctaLink) && finiteNumber(value.heightPx);
 }
 
 export function isBannerCarouselProps(value: unknown): value is BannerCarouselProps {
-  return record(value) && arrayOf(value.items, banner, 20);
+  return record(value) && arrayOf(value.items, banner, 20) && finiteNumber(value.cardWidthPx);
 }
 
 export function isLoyaltyCardProps(value: unknown): value is LoyaltyCardProps {
@@ -88,15 +89,18 @@ function validColumns(value: unknown): value is 2 | 3 | undefined {
 }
 
 export function isPromotionCollectionProps(value: unknown): value is PromotionCollectionProps {
-  return record(value) && arrayOf(value.items, promotion) && validColumns(value.columns);
+  return record(value) && arrayOf(value.items, promotion) && validColumns(value.columns) && text(value.title) &&
+    (value.showViewAll === undefined || typeof value.showViewAll === 'boolean') && finiteNumber(value.cardWidthPx);
 }
 
 export function isProductCollectionProps(value: unknown): value is ProductCollectionProps {
-  return record(value) && arrayOf(value.items, product) && validColumns(value.columns);
+  return record(value) && arrayOf(value.items, product) && validColumns(value.columns) && text(value.title) &&
+    (value.showViewAll === undefined || typeof value.showViewAll === 'boolean') && finiteNumber(value.cardWidthPx);
 }
 
 export function isSectionHeaderProps(value: unknown): value is SectionHeaderProps {
-  return record(value) && text(value.title, true) && text(value.subtitle) && text(value.actionLabel);
+  return record(value) && text(value.title, true) && text(value.subtitle) && text(value.actionLabel) &&
+    (value.alignment === undefined || value.alignment === 'left' || value.alignment === 'center');
 }
 
 export function isQuickActionsProps(value: unknown): value is QuickActionsProps {
@@ -108,5 +112,6 @@ export function isNewsListProps(value: unknown): value is NewsListProps {
 }
 
 export function isStoreListProps(value: unknown): value is StoreListProps {
-  return record(value) && arrayOf(value.items, store, 50);
+  return record(value) && arrayOf(value.items, store, 50) && text(value.title) &&
+    (value.showDistance === undefined || typeof value.showDistance === 'boolean');
 }

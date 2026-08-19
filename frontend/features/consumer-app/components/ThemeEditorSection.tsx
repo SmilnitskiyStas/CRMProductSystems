@@ -12,6 +12,7 @@ import { Btn } from "@/components/ui/Btn";
 import { extractThemeValidationErrors } from "../api/mobileTheme";
 import { useMobileTheme, useUpdateMobileTheme } from "../hooks/useMobileTheme";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { PhoneFrame } from "./PhoneFrame";
 import {
   THEME_BUTTON_RADIUS_MAX,
   THEME_BUTTON_RADIUS_MIN,
@@ -521,21 +522,8 @@ function ThemePreview({
   return (
     <div>
       <p style={{ ...labelStyle, marginBottom: 10 }}>{t("previewTitle")}</p>
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 320,
-          margin: "0 auto",
-          background,
-          borderRadius: 28,
-          border: "8px solid #000",
-          padding: metrics.padding + 8,
-          display: "flex",
-          flexDirection: "column",
-          gap: metrics.gap,
-          boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
-        }}
-      >
+      <PhoneFrame background={background} padding={metrics.padding + 8}>
+      <div style={{ display: "flex", flexDirection: "column", gap: metrics.gap }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {logoUrl ? (
@@ -617,6 +605,7 @@ function ThemePreview({
           ))}
         </div>
       </div>
+      </PhoneFrame>
     </div>
   );
 }

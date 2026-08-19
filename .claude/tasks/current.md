@@ -8,6 +8,69 @@ TASK-556 (2026-08-17) resolved the 3 open decisions and registered TASK-527–55
 (TASK-529/530 descoped). Implementation ready to start with TASK-527/TASK-528 (Stage A). Full
 detail: `.claude/tasks/mobile-roadmap.md` Stage 6.
 
+## TASK-560 — App Builder live preview: architecture + task breakdown (project-architect)
+
+**Status:** done · **Agent:** project-architect
+Log: `.claude/logs/tasks/560_2026-08-19_app-builder-live-preview-architecture_project-architect.md`
+ADR: `.claude/docs/decisions.md` ADR-031. Designed the Elementor-style live preview panel for
+`/consumer-app/pages` (`AppBuilderCanvas.tsx`) — web-native mirror components (not RN-web reuse),
+4 new resizable `int` props on 4 block types (`heroBanner.heightPx`,
+`bannerCarousel`/`promotionCarousel`/`productCarousel`.`cardWidthPx`), entirely client-side
+(zero new backend endpoints). Registered TASK-561–566 as `planned`, sequenced backend → {mobile ∥
+frontend chain} → qa; no worktree isolation needed (backend/mobile/frontend touch disjoint trees).
+
+## TASK-561 — Block Registry: 4 new resizable size props (backend)
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/561_2026-08-19_block-registry-size-props_backend-developer.md`
+Added `heightPx`/`cardWidthPx` `BlockPropDefinition`s to `heroBanner`/`bannerCarousel`/
+`promotionCarousel`/`productCarousel` per ADR-031's bounds table. Build clean, 251/251
+`MobileConfig`-filtered tests pass.
+
+## TASK-562 — Mobile: consume heightPx/cardWidthPx in CoreBlocks + fix resolveBlocks prop drop
+**Status:** done · **Agent:** mobile-developer
+Log: `.claude/logs/tasks/562_2026-08-19_mobile-block-resize-props_mobile-developer.md`
+Added `heightPx`/`cardWidthPx` to block types + validators; fixed the `resolveBlocks.ts`
+prop-forwarding gap for `cardWidthPx` on all 3 carousel types (was silently dropped before);
+`CoreBlocks.tsx` now honors both with today's hardcoded values as fallback. `tsc --noEmit` clean,
+full mobile suite 54/54 suites (255/255 tests) green including new regression-guard cases.
+
+## TASK-563 — Frontend: extract shared PhoneFrame.tsx from ThemeEditorSection
+**Status:** done · **Agent:** frontend-developer
+Log: `.claude/logs/tasks/563-565_2026-08-19_app-builder-live-preview-panel_frontend-developer.md`
+New `PhoneFrame.tsx`, wired into `ThemeEditorSection.tsx`. Verified byte-identical computed styles
+in-browser (320px/28px/8px border/boxShadow/24px padding) — zero visual change.
+
+## TASK-564 — Frontend: web-native block preview mirror components + AppPreviewPanel (read-only column)
+**Status:** done · **Agent:** frontend-developer
+Log: `.claude/logs/tasks/563-565_2026-08-19_app-builder-live-preview-panel_frontend-developer.md`
+New `blockPreviews.tsx` (12 mirror components, theme tokens derived from `MobileThemeDto` via the
+same formulas as `mobile/features/theme/tokens.ts`) + `AppPreviewPanel.tsx` (maps `useBanners`/
+`usePromoProducts`/`useCatalogProducts`/`useLocations` into preview items); third sticky column
+added to `AppBuilderCanvas.tsx`. Verified live in-browser: add/remove/reorder reflect in the same
+render, loyalty blocks show a visible "приклад даних" sample-data badge.
+
+## TASK-565 — Frontend: live unsaved-edit reflection + resize drag handles
+**Status:** done · **Agent:** frontend-developer
+Log: `.claude/logs/tasks/563-565_2026-08-19_app-builder-live-preview-panel_frontend-developer.md`
+`BlockPropertyEditor.tsx` gained `onLiveChange`; `AppBuilderCanvas.tsx` gained `liveProps`/
+`previewBlocks`/`updateBlockSizeProp`; new `useResizeDrag.ts` hook (native Pointer Events, no drag
+library) backs 4 resize handles in `blockPreviews.tsx`. Verified live in-browser: typing reflects
+before Apply and reverts on Cancel; drag clamps at both registry bounds (120/260px tested); dirty/
+Save-button state changes exactly once per drag gesture, not per pointermove.
+
+## TASK-566 — QA: App Builder live preview regression pass (web ↔ mobile parity)
+**Status:** done · **Agent:** qa-tester
+Log: `.claude/logs/tasks/566_2026-08-19_app-builder-live-preview-regression_qa-tester.md`
+Full regression pass clean: add/remove/reorder, property live-edit/revert/persist, all 4 resize
+types' bounds + commit-once-per-drag, old-config zero-regression (web + mobile suite 31/31), full
+draft→publish byte-for-byte parity, loyalty sample-data badges, TASK-539/540/541/546 flows all
+unaffected. One bug found (TASK-565 `BlockPropertyEditor.tsx` infinite "Maximum update depth
+exceeded" loop while any drawer was open) — fixed in TASK-565b (switched to `watch()`'s
+subscription form). Targeted re-check confirmed the fix: 0 console errors over 9s idle with a
+drawer open (was 37/~6s), live-reflect-before-Apply/Apply-persists (verified via raw API)/
+Cancel-reverts all intact, resize commit-once-per-drag intact (dirty stayed false through
+pointerdown+pointermove, flipped true only on pointerup).
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer

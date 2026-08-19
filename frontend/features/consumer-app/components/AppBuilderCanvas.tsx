@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { extractDraftValidationErrors } from "../api/mobileConfigDraft";
+import { AppPreviewPanel } from "./AppPreviewPanel";
 import { BlockPropertyEditor } from "./BlockPropertyEditor";
 import { useBlockRegistry } from "../hooks/useBlockRegistry";
 import { useMobileConfigDraft, useSaveMobileConfigDraft } from "../hooks/useMobileConfigDraft";
@@ -211,6 +212,11 @@ export function AppBuilderCanvas() {
   const [activePage, setActivePage] = useState<MobileConfigPageName>("home");
   // TASK-540: id of the block whose Property Editor drawer is open, or null when closed.
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  // TASK-565: the open drawer's unapplied, live-watched form values (BlockPropertyEditor's own
+  // `watch()`) — feeds `previewBlocks` below so the preview panel reflects every keystroke before
+  // "Apply". Reset to `null` whenever the selection changes (new block, or drawer closed) so a
+  // stale live value never leaks onto a different block.
+  const [liveProps, setLiveProps] = useState<Record<string, unknown> | null>(null);
 
   // TASK-546: warns before losing unsaved edits (tab-close/refresh always; in-app link-click
   // navigation best-effort) — see useUnsavedChangesGuard.ts's remarks for exact coverage.
@@ -232,6 +238,25 @@ export function AppBuilderCanvas() {
 
   const blocks = configDoc?.pages[activePage]?.blocks ?? [];
   const selectedBlock = selectedBlockId ? blocks.find((b) => b.id === selectedBlockId) ?? null : null;
+
+  // TASK-565: a stale live-watched value must never leak onto a different block (or linger after
+  // the drawer closes) — reset on every selection change, covering every `setSelectedBlockId` call
+  // site (edit-click, close, remove, page switch, Apply) in one place rather than each of them.
+  useEffect(() => {
+    setLiveProps(null);
+  }, [selectedBlockId]);
+
+  // TASK-565: the preview panel reads this instead of raw `blocks` — substitutes the selected
+  // block's props with its unapplied live-watched values (if the drawer is open and has emitted
+  // at least one `onLiveChange`) so typing in the Property Editor reflects instantly, before
+  // "Apply" ever touches `configDoc`.
+  const previewBlocks = useMemo(
+    () =>
+      liveProps && selectedBlockId
+        ? blocks.map((b) => (b.id === selectedBlockId ? { ...b, props: liveProps } : b))
+        : blocks,
+    [blocks, selectedBlockId, liveProps],
+  );
 
   // TASK-541: switching pages closes any open Property Editor — a selected block id only makes
   // sense for the page it was selected on (block ids never collide across pages, so `selectedBlock`
@@ -301,6 +326,22 @@ export function AppBuilderCanvas() {
     setConfigDoc((doc) =>
       doc
         ? withPageBlocks(doc, activePage, (current) => current.map((b) => (b.id === id ? { ...b, props } : b)))
+        : doc,
+    );
+    setDirty(true);
+    setSaveError(null);
+  }
+
+  // TASK-565: single-field commit for the preview panel's resize drag handles — same
+  // read-modify-write shape as `updateBlockProps` above, but merges one prop key instead of
+  // replacing the whole `props` object, and is called by `useResizeDrag` exactly once per drag
+  // gesture (on pointerup), never on every pointermove — `dirty` must not churn mid-drag.
+  function updateBlockSizeProp(id: string, propName: string, value: number) {
+    setConfigDoc((doc) =>
+      doc
+        ? withPageBlocks(doc, activePage, (current) =>
+            current.map((b) => (b.id === id ? { ...b, props: { ...b.props, [propName]: value } } : b)),
+          )
         : doc,
     );
     setDirty(true);
@@ -456,6 +497,20 @@ export function AppBuilderCanvas() {
                 {!dirty && <span style={{ color: "#4B5563", fontSize: 12 }}>{t("noChanges")}</span>}
               </div>
             </div>
+
+            {/* TASK-564/565: live preview column — reads `previewBlocks` (raw `blocks`, with the
+                open drawer's unapplied live edits substituted in, TASK-565) so add/remove/reorder,
+                Apply, in-drawer typing, and resize-drag handles all reflect here within the same
+                render. Known, accepted tradeoff: `BlockPropertyEditor`'s `DetailDrawer` is a fixed
+                right-edge overlay (up to 520px) that overlaps part of this column on narrower
+                viewports while open — not fixed here, see TASK-560's log. */}
+            <div style={{ flex: "0 1 340px", position: "sticky", top: 20 }}>
+              <AppPreviewPanel
+                blocks={previewBlocks}
+                registryByType={registryByType}
+                onResizeCommit={updateBlockSizeProp}
+              />
+            </div>
         </div>
 
         <DragOverlay>
@@ -475,6 +530,7 @@ export function AppBuilderCanvas() {
               updateBlockProps(selectedBlock.id, props);
               setSelectedBlockId(null);
             }}
+            onLiveChange={setLiveProps}
           />
         )}
       </DndContext>

@@ -88,6 +88,23 @@ public sealed class BlockRegistryTests
         }
     }
 
+    [Theory]
+    [InlineData("heroBanner", "heightPx", 190, 120, 260)]
+    [InlineData("bannerCarousel", "cardWidthPx", 280, 200, 360)]
+    [InlineData("promotionCarousel", "cardWidthPx", 210, 150, 270)]
+    [InlineData("productCarousel", "cardWidthPx", 170, 120, 220)]
+    public void Resizable_block_types_declare_their_new_size_prop_with_expected_bounds(
+        string blockType, string propName, int expectedDefault, int expectedMin, int expectedMax)
+    {
+        var def = BlockRegistry.Definitions.Single(d => d.Type == blockType);
+        var prop = def.Props.Single(p => p.Name == propName);
+        Assert.Equal(BlockPropTypes.Int, prop.Type);
+        Assert.Equal(expectedDefault, prop.Default);
+        Assert.Equal(expectedMin, prop.Min);
+        Assert.Equal(expectedMax, prop.Max);
+        Assert.False(prop.Required);
+    }
+
     [Fact]
     public void QuickActions_allowed_values_reuse_the_navigation_types_whitelist()
     {

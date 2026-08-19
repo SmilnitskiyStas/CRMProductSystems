@@ -58,6 +58,7 @@ public static class BlockRegistry
                 new("imageUrl", BlockPropTypes.Url, Required: true, Default: "", MaxLength: MobileThemeWhitelists.MaxLogoUrlLength),
                 new("ctaLabel", BlockPropTypes.String, Required: false, Default: "", MaxLength: 30),
                 new("ctaLink", BlockPropTypes.Url, Required: false, Default: "", MaxLength: MobileThemeWhitelists.MaxLogoUrlLength),
+                new("heightPx", BlockPropTypes.Int, Required: false, Default: 190, Min: 120, Max: 260),
             },
             SupportedDataSource: "none — static hero content (title/subtitle/imageUrl/CTA) authored " +
                 "directly via props; no backend read."),
@@ -71,6 +72,7 @@ public static class BlockRegistry
             {
                 new("limit", BlockPropTypes.Int, Required: false, Default: 5, Min: 1, Max: 10),
                 new("autoPlay", BlockPropTypes.Bool, Required: false, Default: true),
+                new("cardWidthPx", BlockPropTypes.Int, Required: false, Default: 280, Min: 200, Max: 360),
             },
             SupportedDataSource: "banners — the tenant's active Banner list, ordered for display " +
                 "(ConsumerContentController GET /api/consumer/{tenantId}/banners)."),
@@ -113,6 +115,7 @@ public static class BlockRegistry
                 new("showViewAll", BlockPropTypes.Bool, Required: false, Default: true),
                 new("cardStyle", BlockPropTypes.Enum, Required: false, Default: "compact",
                     AllowedValues: new List<string> { "compact", "expanded" }),
+                new("cardWidthPx", BlockPropTypes.Int, Required: false, Default: 210, Min: 150, Max: 270),
             },
             SupportedDataSource: "promotions — active discounted products for the consumer's store " +
                 "(ConsumerContentController GET /api/consumer/{tenantId}/promotions)."),
@@ -141,6 +144,7 @@ public static class BlockRegistry
                 new("title", BlockPropTypes.String, Required: false, Default: "Товари", MaxLength: 60),
                 new("limit", BlockPropTypes.Int, Required: false, Default: 10, Min: 1, Max: 20),
                 new("showViewAll", BlockPropTypes.Bool, Required: false, Default: true),
+                new("cardWidthPx", BlockPropTypes.Int, Required: false, Default: 170, Min: 120, Max: 220),
             },
             SupportedDataSource: "catalog — paginated active product catalog, optionally filtered " +
                 "by category (ConsumerContentController GET /api/consumer/{tenantId}/catalog)."),

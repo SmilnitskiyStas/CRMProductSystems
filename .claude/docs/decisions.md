@@ -3,6 +3,106 @@
 **Owner:** project-architect
 **Updated:** 2026-08-19
 
+## ADR-031: App Builder live preview — web-native mirror components (not RN-web reuse), entirely client-side, 4 new resizable size props on the Block Registry
+Date: 2026-08-19
+Status: accepted
+
+Context: Retailer Admin's App Builder (`/consumer-app/pages`, `AppBuilderCanvas.tsx`, TASK-539/541)
+lets a tenant admin add/remove/reorder blocks and edit their props (`BlockPropertyEditor.tsx`,
+TASK-540), but has no visual feedback — the only way to see the result is to save the draft and
+open the real mobile app. Product decision (same day, follow-on to today's removal of the
+mobile-side draft-preview screen — `docs/mobile/STAGE_17_REPORT.md`, `STAGE_18_REPORT.md`): draft
+preview is a staff/web-admin-only capability, and it should be *instant* (no save round-trip),
+Elementor-style — add/remove/reorder and property edits reflected live, plus a genuinely new
+resize control for the 4 block types with a currently-fixed, currently-unconfigurable visual
+dimension.
+
+Two implementation choices were fixed by the user ahead of this ADR; both are evaluated and
+confirmed below rather than re-litigated:
+
+**1. Rendering approach: web-native mirror components, not react-native-web.** `AppBuilderCanvas.tsx`
+already holds the entire draft `MobileConfigDocument` in React state pre-save (TASK-539's
+read-modify-write design) — the enabler for a true pre-save live preview. The question is only how
+to *render* it. Reusing `mobile/features/server-driven-ui/blocks/CoreBlocks.tsx`'s actual React
+Native components server-side-rendered into the Next.js admin would require adding
+react-native-web/NativeWind-web to the frontend bundle and stubbing every RN-only API the blocks (or
+their transitive imports, e.g. `expo-router`'s `useRouter`, `Ionicons`, `SafeAreaView`-adjacent
+layout) touch — `StoreListBlock` alone pulls in `expo-router`, `@expo/vector-icons`, and two loyalty
+hooks. That is a permanent, ongoing maintenance surface for a feature whose only job is an
+approximate visual preview. **Confirmed: build new plain React/inline-style "mirror" components in
+`frontend/features/consumer-app/`, one per block type, matching CoreBlocks.tsx's exact proportions
+(280/210/170px carousel cards, 190px hero minHeight, 48%/31% grid widths) rather than reusing RN
+components.** This is the same boundary `ThemeEditorSection.tsx`'s existing `ThemePreview` already
+drew for the theme mockup ("a static mock, not the real mobile block renderer") — this ADR extends
+that same boundary to block-level content, still deliberately approximate, not pixel-perfect.
+
+**2. Resize scope: a new prop, not just live-reflection of existing props.** Confirmed scoping,
+narrowed to the 4 block types with a real fixed dimension and no prop for it today —
+`CoreBlocks.tsx` hardcodes `heroBanner` minHeight (190), and carousel card widths for
+`bannerCarousel`/`promotionCarousel`/`productCarousel` (280/210/170, fixed, not prop-driven).
+`promotionGrid`/`productGrid` already have a resizable `columns` prop (2 or 3) wired end-to-end —
+left untouched, out of scope. The other 6 types (loyaltyCard, loyaltyBalance, sectionHeader,
+quickActions, newsList, storeList) are content-list/fixed-layout blocks with no single meaningful
+size dimension — no new prop for them; their preview still updates live for content/order changes.
+
+New `BlockPropDefinition` entries (`BlockRegistry.cs`), each `int`, optional, bounds bracketing
+today's hardcoded value so the default *is* the exact current visual (no jump on first render of an
+old saved config):
+
+| Block type | Prop | Default | Min | Max |
+|---|---|---|---|---|
+| `heroBanner` | `heightPx` | 190 | 120 | 260 |
+| `bannerCarousel` | `cardWidthPx` | 280 | 200 | 360 |
+| `promotionCarousel` | `cardWidthPx` | 210 | 150 | 270 |
+| `productCarousel` | `cardWidthPx` | 170 | 120 | 220 |
+
+Card *image height* inside each carousel card (130px for banners, 120px default for
+promotion/product cards) is deliberately **not** tied to the new width prop — resizing width only
+avoids a cascading aspect-ratio recompute this task doesn't need to solve.
+
+**A concrete correctness finding that shapes the mobile task:** `mobile/features/server-driven-ui/
+resolveBlocks.ts`'s `resolveBlock()` *rebuilds* the props object for `bannerCarousel`,
+`promotionCarousel`/`promotionGrid`, and `productCarousel`/`productGrid` (`return { ...block, props:
+{ items: ... } }` etc.) — any static authored prop not explicitly listed in that literal is silently
+dropped before it reaches `CoreBlocks.tsx`. `heroBanner` has no `case` in that switch (falls through
+to `default: return block`, unchanged) so its new `heightPx` passes through for free — but the 3
+carousel types do **not** get `cardWidthPx` for free; `resolveBlocks.ts` must explicitly forward it
+in each of those 3 `case` blocks or the new prop silently no-ops on real devices while still
+"working" in the web preview. Called out explicitly so the mobile task doesn't ship a preview that
+lies.
+
+No backend endpoint changes: `MobileConfigValidator` already treats block `props` as free-form JSON
+(container-type-checked only, see `domain-model.md`'s Block Registry section) — adding registry
+entries is purely additive, no validator/whitelist change. The preview itself introduces **zero new
+backend endpoints** — it is 100% client-side, computed from documents/data the admin already has
+access to (`useMobileConfigDraft`'s in-memory `configDoc`, plus existing `useBanners`/
+`usePromoProducts`/`useCatalogProducts`/`useLocations`/`useMobileTheme` reads, all already gated
+`AtLeastEnterpriseAdmin`+ on their own controllers). `MobileConfigPreviewController`/
+`MobileConfigPreviewService` (TASK-547, reads the last *saved* draft from DB) are unrelated to this
+feature and are not used by it — the web admin's in-memory `configDoc` is strictly richer
+(pre-save) than what that endpoint could ever return.
+
+Decision: Approved as scoped by the user; task breakdown TASK-561..566 (`.claude/logs/tasks/
+560_2026-08-19_app-builder-live-preview-architecture_project-architect.md`).
+
+Consequences:
+- Preview content for 4 of 12 block types needs an admin-side data source with no 1:1 "the real
+  consumer read" equivalent: `promotionCarousel`/`promotionGrid` need a `storeId` (`usePromoProducts`
+  is store-scoped) that the App Builder screen has no selector for — resolved by silently using the
+  tenant's first `useLocations()` result for preview purposes only (a preview-only convenience, not
+  a real store-selection UI). `loyaltyCard`/`loyaltyBalance` render clearly-labeled sample data (an
+  admin has no consumer session to read real balance from). `newsList` mirrors mobile's own current
+  (interim) behavior of reusing banner data — matching what mobile *actually* renders today rather
+  than inventing a different, more-honest-looking placeholder that would make the preview lie.
+- Two client-side prop catalogs (web mirror components' expected shapes vs. mobile's resolved
+  `BlockComponentProps<T>` shapes) must be kept conceptually aligned by hand, same manual-mirroring
+  convention this feature already accepted for `MOBILE_CONFIG_BLOCK_TYPES`/`THEME_*` (no shared
+  package between `frontend/` and `mobile/`).
+- `architecture.md` is **not** updated by this ADR — no layer/module boundary changes, no new
+  service, no new endpoint; this is UI work inside the already-documented MobileConfig/Consumer App
+  module. `domain-model.md`'s existing Block Registry section gets a short addition for the 4 new
+  props (data-model-level change); see that file.
+
 ## ADR-030: SubscriptionPlan → Features — `Tenant.Plan` gates consumer features through the existing TASK-543 flag hook; no billing, no enforcement yet
 Date: 2026-08-19
 Status: accepted

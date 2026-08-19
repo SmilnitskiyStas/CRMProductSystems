@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { RetailShellProviders } from '@/features/mobile-config/RetailShellProviders';
 import type { MobilePageConfig } from '@/features/mobile-config/types';
 import { componentRegistry } from '../coreRegistry';
@@ -52,6 +52,15 @@ describe('Core Blocks V1', () => {
     expect(isQuickActionsProps({ items: Array.from({ length: 9 }, () => ({ id: 'q', label: 'Too many' })) })).toBe(false);
   });
 
+  test('accepts the new optional heightPx/cardWidthPx size props and rejects non-numeric values', () => {
+    expect(isHeroBannerProps({ title: 'Hero', heightPx: 220 })).toBe(true);
+    expect(isHeroBannerProps({ title: 'Hero', heightPx: '220' })).toBe(false);
+    expect(isBannerCarouselProps({ items: [{ id: 'b', title: 'Banner' }], cardWidthPx: 320 })).toBe(true);
+    expect(isBannerCarouselProps({ items: [{ id: 'b', title: 'Banner' }], cardWidthPx: '320' })).toBe(false);
+    expect(isPromotionCollectionProps({ items: [{ id: 'p', title: 'Promo' }], cardWidthPx: 240 })).toBe(true);
+    expect(isProductCollectionProps({ items: [{ id: 'p', name: 'Milk', price: 20 }], cardWidthPx: 190 })).toBe(true);
+  });
+
   test('renders all core block families through the default registry', async () => {
     const page: MobilePageConfig = {
       blocks: [
@@ -77,6 +86,7 @@ describe('Core Blocks V1', () => {
         </RetailShellProviders>
       </QueryClientProvider>
     );
+    await act(async () => fireEvent.press(screen.getByLabelText('Відкрити список магазинів')));
     for (const expected of [
       'Hero title',
       'Banner title',
@@ -93,6 +103,61 @@ describe('Core Blocks V1', () => {
     ]) {
       expect(screen.getByText(expected)).toBeOnTheScreen();
     }
+    await screen.unmount();
+    client.clear();
+  });
+
+  test('renders heightPx/cardWidthPx overrides when authored, and today\'s defaults when absent', async () => {
+    const page: MobilePageConfig = {
+      blocks: [
+        { id: 'hero-custom', type: 'heroBanner', props: { title: 'Hero custom', heightPx: 240 } },
+        { id: 'hero-default', type: 'heroBanner', props: { title: 'Hero default' } },
+        { id: 'banners', type: 'bannerCarousel', props: { items: [
+          { id: 'b-custom', title: 'Banner custom' },
+          { id: 'b-default', title: 'Banner default' },
+        ], cardWidthPx: 320 } },
+        { id: 'promo-carousel', type: 'promotionCarousel', props: { items: [{ id: 'pc', title: 'Promo carousel' }], cardWidthPx: 240 } },
+        { id: 'product-carousel', type: 'productCarousel', props: { items: [{ id: 'xc', name: 'Product carousel', price: 1 }], cardWidthPx: 190 } },
+      ],
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const screen = await render(
+      <QueryClientProvider client={client}>
+        <RetailShellProviders>
+          <PageBlockList page={page} />
+        </RetailShellProviders>
+      </QueryClientProvider>
+    );
+    expect(screen.getByTestId('block-hero-custom').props.style.minHeight).toBe(240);
+    expect(screen.getByTestId('block-hero-default').props.style.minHeight).toBe(190);
+    expect(screen.getByTestId('banner-card-b-custom').props.style.width).toBe(320);
+    expect(screen.getByTestId('promotion-card-pc').props.style.width).toBe(240);
+    expect(screen.getByTestId('product-card-xc').props.style.width).toBe(190);
+    await screen.unmount();
+    client.clear();
+  });
+
+  test('falls back to today\'s exact default pixel values when heightPx/cardWidthPx are absent (regression guard)', async () => {
+    const page: MobilePageConfig = {
+      blocks: [
+        { id: 'hero', type: 'heroBanner', props: { title: 'Hero' } },
+        { id: 'banners', type: 'bannerCarousel', props: { items: [{ id: 'b', title: 'Banner' }] } },
+        { id: 'promo-carousel', type: 'promotionCarousel', props: { items: [{ id: 'pc', title: 'Promo' }] } },
+        { id: 'product-carousel', type: 'productCarousel', props: { items: [{ id: 'xc', name: 'Product', price: 1 }] } },
+      ],
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const screen = await render(
+      <QueryClientProvider client={client}>
+        <RetailShellProviders>
+          <PageBlockList page={page} />
+        </RetailShellProviders>
+      </QueryClientProvider>
+    );
+    expect(screen.getByTestId('block-hero').props.style.minHeight).toBe(190);
+    expect(screen.getByTestId('banner-card-b').props.style.width).toBe(280);
+    expect(screen.getByTestId('promotion-card-pc').props.style.width).toBe(210);
+    expect(screen.getByTestId('product-card-xc').props.style.width).toBe(170);
     await screen.unmount();
     client.clear();
   });

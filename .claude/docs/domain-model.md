@@ -424,6 +424,15 @@ in-code static catalog instead:
   block's `props` — don't exist yet; locking enforcement to this registry's shapes before they exist
   risks a second breaking change once real usage lands. Flagged explicitly as follow-up work, not
   left unaddressed — see task log 538.
+- **Resizable size props (TASK-561, ADR-031)** — 4 of the 12 definitions gained one new optional
+  `int` prop each, for the App Builder's live-preview resize control: `heroBanner.heightPx`
+  (190/120/260 default/min/max), `bannerCarousel.cardWidthPx` (280/200/360),
+  `promotionCarousel.cardWidthPx` (210/150/270), `productCarousel.cardWidthPx` (170/120/220) —
+  bounds bracket each type's previously-hardcoded `CoreBlocks.tsx` dimension so the default renders
+  identically to every already-saved config. `promotionGrid`/`productGrid`'s existing `columns` prop
+  (2 or 3) is the only other size-adjacent prop and is unrelated/unchanged. The other 6 types
+  (loyaltyCard, loyaltyBalance, sectionHeader, quickActions, newsList, storeList) have no size prop —
+  content-list/fixed-layout blocks with no single meaningful dimension.
 
 ---
 

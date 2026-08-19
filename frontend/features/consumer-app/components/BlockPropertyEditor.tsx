@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, type UseFormRegister, type UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z, type ZodTypeAny } from "zod";
@@ -439,6 +439,13 @@ interface BlockPropertyEditorProps {
   definition: BlockDefinitionDto | undefined;
   onClose: () => void;
   onApply: (props: Record<string, unknown>) => void;
+  /**
+   * TASK-565: fired on every keystroke/toggle, before "Apply" — mirrors `ThemeEditorSection.tsx`'s
+   * own existing `watch()`-based live-preview pattern. Lets `AppBuilderCanvas` reflect unsaved
+   * edits in the preview column instantly. Does not change this component's own persistence
+   * behavior — "Apply" (`onApply`) is still the only thing that writes into `configDoc`.
+   */
+  onLiveChange?: (props: Record<string, unknown>) => void;
 }
 
 /**
@@ -453,7 +460,7 @@ interface BlockPropertyEditorProps {
  * explicit "Save draft" button (TASK-538b's Draft CRUD `PUT`), matching this feature's
  * established explicit-save convention (no autosave anywhere in this directory).
  */
-export function BlockPropertyEditor({ block, definition, onClose, onApply }: BlockPropertyEditorProps) {
+export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiveChange }: BlockPropertyEditorProps) {
   const t = useTranslations("Dashboard.consumerApp.appBuilder.propertyEditor");
   const tCommon = useTranslations("Common");
 
@@ -473,6 +480,21 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply }: Blo
   });
 
   const values = watch();
+
+  // TASK-565b (fix for TASK-566's regression): `watch()` called during render (above, still used
+  // to drive this form's own controlled inputs, e.g. `StringArrayField`'s `value` prop) returns a
+  // NEW object reference every render — react-hook-form doesn't memoize it. Keying a `useEffect`
+  // off that unstable reference (the previous implementation) fired the effect on every render,
+  // which called `onLiveChange` → parent `setLiveProps` → re-render → new `values` reference →
+  // effect fires again: an infinite "Maximum update depth exceeded" loop for as long as this
+  // component was mounted. `watch`'s callback/subscription form has a stable function identity and
+  // only invokes the callback when a field actually changes, so it's safe as an effect dependency.
+  useEffect(() => {
+    const subscription = watch((formValues) => {
+      onLiveChange?.(formValues as Record<string, unknown>);
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, onLiveChange]);
 
   function onValid(formValues: PropFormValues) {
     onApply(formValues);
