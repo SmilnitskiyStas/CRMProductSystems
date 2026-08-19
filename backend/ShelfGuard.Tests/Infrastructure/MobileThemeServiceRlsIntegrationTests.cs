@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using ShelfGuard.Application.Features.MobileConfig;
 using ShelfGuard.Application.Features.MobileConfig.Dtos;
@@ -89,7 +88,7 @@ public sealed class MobileThemeServiceRlsIntegrationTests : IAsyncLifetime
             _dataSource = new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build();
             _options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseNpgsql(_dataSource)
-                .ConfigureWarnings(w => w.Log(CoreEventId.ManyServiceProvidersCreatedWarning))
+                .IgnoreManyServiceProvidersWarning()
                 .Options;
 
             _dbAvailable = true;

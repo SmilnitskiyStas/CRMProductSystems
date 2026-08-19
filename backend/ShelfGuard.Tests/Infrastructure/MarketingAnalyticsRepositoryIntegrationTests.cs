@@ -467,17 +467,24 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
     }
 
     // STATIC and shared across every test method (xUnit creates one class instance per [Fact],
-    // so a per-instance cache still builds one NpgsqlDataSource per test — 8 tests here plus
+    // so a per-instance cache still builds one NpgsqlDataSource per test — 12 tests here plus
     // every other integration-test class's own instances in the same run tripped EF Core's
     // ManyServiceProvidersCreatedWarning-as-error past its cumulative ~20-instance threshold
     // for the whole process). NpgsqlDataSource is explicitly designed to be a thread-safe,
     // poolable, shareable connection factory (Npgsql 7+) — safe to reuse across every test here.
+    // CI FIX (2026-08-19): this class was the ONE Postgres-integration test file in the assembly
+    // missing IgnoreManyServiceProvidersWarning() — every sibling file already downgrades this
+    // diagnostic to a log line (see TestDbContextOptionsExtensions), so this class's own
+    // never-before-seen DbContextOptions was the one left to actually throw once the process-wide
+    // threshold was crossed. See
+    // .claude/logs/tasks/ci-fix_2026-08-19_ef-many-service-providers_backend-developer.md.
     private static DbContextOptions<AppDbContext>? _options;
 
     private AppDbContext NewContext()
     {
         _options ??= new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build())
+            .IgnoreManyServiceProvidersWarning()
             .Options;
         return new AppDbContext(_options);
     }

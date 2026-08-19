@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Infrastructure.Data;
@@ -164,15 +163,14 @@ public sealed class LoyaltyRepositoryIntegrationTests : IAsyncLifetime
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(dataSource)
             // TASK-406: this file builds a fresh NpgsqlDataSource per call, and the test
-            // assembly now has a 3rd raw-Postgres integration-test file alongside this one and
-            // PosConcurrencySalesIntegrationTests (MarketingAnalyticsRepositoryIntegrationTests)
-            // — their combined distinct DbContextOptions instances trip EF Core's
-            // ManyServiceProvidersCreatedWarning-as-error past its cumulative ~20-instance
-            // process-wide threshold when the full suite runs together. Purely an EF internal
-            // diagnostic about provider-cache growth, not a correctness signal for what this
-            // test actually verifies — downgrading it to a log line (test infra hygiene, zero
-            // behavior change to TryClaimTimestepAsync's own assertions).
-            .ConfigureWarnings(w => w.Log(CoreEventId.ManyServiceProvidersCreatedWarning))
+            // assembly now has many raw-Postgres integration-test files whose combined distinct
+            // DbContextOptions instances trip EF Core's ManyServiceProvidersCreatedWarning-as-
+            // error past its cumulative ~20-instance process-wide threshold when the full suite
+            // runs together. Purely an EF internal diagnostic about provider-cache growth, not a
+            // correctness signal for what this test actually verifies — downgraded to a log line
+            // (test infra hygiene, zero behavior change to TryClaimTimestepAsync's own
+            // assertions). See TestDbContextOptionsExtensions for why this is centralized.
+            .IgnoreManyServiceProvidersWarning()
             .Options;
         return new AppDbContext(options);
     }

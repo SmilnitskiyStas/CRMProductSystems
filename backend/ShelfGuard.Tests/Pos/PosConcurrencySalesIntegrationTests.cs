@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using ShelfGuard.Application.Features.Pos;
@@ -9,6 +8,7 @@ using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 using ShelfGuard.Infrastructure.Data;
 using ShelfGuard.Infrastructure.Data.Repositories;
+using ShelfGuard.Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -206,8 +206,9 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
             // observed failing once TASK-417 added another such file. Purely an EF internal
             // diagnostic about provider-cache growth, not a correctness signal for anything this
             // file actually asserts (same fix LoyaltyRepositoryIntegrationTests.NewContext
-            // already applies to itself for the identical reason).
-            .ConfigureWarnings(w => w.Log(CoreEventId.ManyServiceProvidersCreatedWarning))
+            // already applies to itself for the identical reason). See
+            // TestDbContextOptionsExtensions for the centralized helper.
+            .IgnoreManyServiceProvidersWarning()
             .Options;
         return new AppDbContext(options);
     }

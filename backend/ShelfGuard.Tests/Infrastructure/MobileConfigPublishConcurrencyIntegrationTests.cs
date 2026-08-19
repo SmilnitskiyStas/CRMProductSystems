@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using ShelfGuard.Application.Features.MobileConfig;
 using ShelfGuard.Application.Features.MobileConfig.Dtos;
@@ -190,8 +189,8 @@ public sealed class MobileConfigPublishConcurrencyIntegrationTests : IAsyncLifet
             // builds its own distinct NpgsqlDataSource/DbContextOptions, and enough such files
             // exist in this test assembly to trip EF Core's
             // ManyServiceProvidersCreatedWarning-as-error past its cumulative threshold when the
-            // full suite runs together.
-            .ConfigureWarnings(w => w.Log(CoreEventId.ManyServiceProvidersCreatedWarning))
+            // full suite runs together. See TestDbContextOptionsExtensions.
+            .IgnoreManyServiceProvidersWarning()
             .Options;
         return new AppDbContext(options);
     }

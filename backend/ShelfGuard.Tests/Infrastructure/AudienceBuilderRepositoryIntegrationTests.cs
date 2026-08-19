@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using ShelfGuard.Application.Features.MarketingAnalytics.AudienceBuilder;
 using ShelfGuard.Domain.Entities;
@@ -556,7 +555,7 @@ public sealed class AudienceBuilderRepositoryIntegrationTests : IAsyncLifetime
     {
         _options ??= new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build())
-            .ConfigureWarnings(w => w.Log(CoreEventId.ManyServiceProvidersCreatedWarning))
+            .IgnoreManyServiceProvidersWarning()
             .Options;
         return new AppDbContext(_options);
     }

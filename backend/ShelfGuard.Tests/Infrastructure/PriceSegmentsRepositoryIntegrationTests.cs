@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using ShelfGuard.Application.Features.MarketingAnalytics.PriceSegments;
 using ShelfGuard.Domain.Constants;
@@ -549,7 +548,7 @@ public sealed class PriceSegmentsRepositoryIntegrationTests : IAsyncLifetime
     {
         _options ??= new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build())
-            .ConfigureWarnings(w => w.Log(CoreEventId.ManyServiceProvidersCreatedWarning))
+            .IgnoreManyServiceProvidersWarning()
             .Options;
         return new AppDbContext(_options);
     }
