@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NSubstitute;
 using ShelfGuard.Application.Features.Loyalty;
+using ShelfGuard.Application.Features.MobileConfig;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -317,7 +318,19 @@ public sealed class LoyaltyJoinRlsIntegrationTests : IAsyncLifetime
         Substitute.For<IResolveCodeAttemptTracker>(),
         Substitute.For<IActivityLogRepository>(),
         new TenantSessionOverride(db),
+        // TASK-559: JoinAsync itself doesn't consult the consumer-app feature flag (only the
+        // controller-level [RequireConsumerFeature("loyalty")] attribute does, tested separately
+        // in LoyaltyFeatureGateRlsIntegrationTests) — a default-enabled stub keeps this file's
+        // pre-existing JoinAsync-focused tests unaffected.
+        BuildFeatureFlagsStub(),
         NullLogger<LoyaltyService>.Instance);
+
+    private static IConsumerFeatureFlagService BuildFeatureFlagsStub()
+    {
+        var flags = Substitute.For<IConsumerFeatureFlagService>();
+        flags.IsEnabledAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+        return flags;
+    }
 
     private static ITotpService BuildTotpStub()
     {

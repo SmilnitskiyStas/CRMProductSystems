@@ -5,6 +5,7 @@ using NSubstitute.ExceptionExtensions;
 using NSubstitute.ReturnsExtensions;
 using ShelfGuard.Application.Features.Loyalty;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
+using ShelfGuard.Application.Features.MobileConfig;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Exceptions;
@@ -26,13 +27,21 @@ public sealed class LoyaltyServiceTests
     private readonly IResolveCodeAttemptTracker _attempts = Substitute.For<IResolveCodeAttemptTracker>();
     private readonly IActivityLogRepository _activityLogs = Substitute.For<IActivityLogRepository>();
     private readonly ITenantSessionOverride _tenantScope = Substitute.For<ITenantSessionOverride>();
+    private readonly IConsumerFeatureFlagService _featureFlags = Substitute.For<IConsumerFeatureFlagService>();
     private readonly LoyaltyService _sut;
 
     public LoyaltyServiceTests()
     {
         _sut = new LoyaltyService(
             _loyalty, _customers, _tenants, _users, _consumerAccounts, _locations, _hasher, _totp,
-            _attempts, _activityLogs, _tenantScope, NullLogger<LoyaltyService>.Instance);
+            _attempts, _activityLogs, _tenantScope, _featureFlags, NullLogger<LoyaltyService>.Instance);
+
+        // TASK-559: production-safety default — every tenant's "loyalty" consumer-app flag
+        // resolves enabled unless a specific test overrides it, matching
+        // IConsumerFeatureFlagService's own documented default-enabled contract. Keeps every
+        // pre-existing GetAvailableNetworksAsync test in this file passing unchanged.
+        _featureFlags.IsEnabledAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(true);
 
         _customers.CreateAsync(Arg.Any<Customer>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(ci.Arg<Customer>()));
@@ -1024,6 +1033,63 @@ public sealed class LoyaltyServiceTests
         // No locations stubbed for this tenant (constructor default: empty list) — a
         // zero-store tenant must still appear, with an empty (not null) Stores.
         Assert.Empty(network.Stores);
+    }
+
+    // ── GetAvailableNetworksAsync — TASK-559 consumer-app feature-flag filter ──
+
+    [Fact]
+    public async Task GetAvailableNetworksAsync_excludes_tenant_with_loyalty_feature_flag_disabled()
+    {
+        var enabledTenant = MakeTenant("loyalty");
+        var disabledTenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([enabledTenant, disabledTenant]);
+        _loyalty.GetSettingsAsync(enabledTenant.Id, default).ReturnsNull();
+        _featureFlags.IsEnabledAsync(disabledTenant.Id, "loyalty", Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        var network = Assert.Single(result);
+        Assert.Equal(enabledTenant.Id, network.TenantId);
+    }
+
+    /// <summary>
+    /// TASK-559 DoD: "a tenant with zero MobileConfiguration activity ... still appears in
+    /// GetNetworks" — at the mock level this is exactly the default-enabled stub set up in the
+    /// constructor (mirroring IConsumerFeatureFlagService's real default-enabled contract); the
+    /// real-Postgres proof against the actual flag service lives in
+    /// LoyaltyFeatureGateRlsIntegrationTests.PRODUCTION_SAFETY_GetAvailableNetworksAsync_includes_tenant_with_zero_MobileConfiguration_activity.
+    /// </summary>
+    [Fact]
+    public async Task GetAvailableNetworksAsync_includes_tenant_when_flag_service_defaults_enabled()
+    {
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([tenant]);
+        _loyalty.GetSettingsAsync(tenant.Id, default).ReturnsNull();
+        // No explicit _featureFlags stub for this tenant — falls through to the constructor's
+        // blanket "IsEnabledAsync returns true" default, same as a tenant with no published
+        // MobileConfigurationVersion resolves for the real service.
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        Assert.Single(result);
+    }
+
+    /// <summary>
+    /// TASK-559 N+1 note: the feature-flag check is deliberately checked BEFORE the tenant-scoped
+    /// settings/store load (<see cref="ITenantSessionOverride"/>) so a disabled tenant skips that
+    /// second per-tenant round trip entirely, rather than paying for both. Pins that ordering.
+    /// </summary>
+    [Fact]
+    public async Task GetAvailableNetworksAsync_disabled_flag_skips_the_tenant_scoped_settings_lookup()
+    {
+        var disabledTenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([disabledTenant]);
+        _featureFlags.IsEnabledAsync(disabledTenant.Id, "loyalty", Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await _sut.GetAvailableNetworksAsync();
+
+        Assert.Empty(result);
+        await _loyalty.DidNotReceive().GetSettingsAsync(disabledTenant.Id, Arg.Any<CancellationToken>());
     }
 
     // ── GetAvailableNetworksAsync — TASK-501/507 Stores ─────────────────────
