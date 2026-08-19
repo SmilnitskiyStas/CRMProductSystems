@@ -108,10 +108,11 @@ const errorStyle: React.CSSProperties = { color: "#F87171", fontSize: 11, margin
 // resolves natively — no icon-key→lucide-component mapping existed anywhere in this codebase
 // before this task (checked `mobile/features/mobile-config/*` and `frontend/features/consumer-app`
 // — the mobile side maps these keys to its own native icon components, not lucide). This mapping
-// is admin-preview-only, kept local to this file the same way AppBuilderCanvas.tsx keeps its own
-// `BLOCK_ICONS` map local rather than a shared file, since nothing else in the frontend needs it.
+// is admin-preview-only. TASK-568: exported (was file-local) so `AppPreviewPanel.tsx`'s bottom nav
+// mockup can reuse it instead of a third copy of this mapping — still the one canonical place it's
+// defined, per this file's own icon-key→component convention.
 
-const NAVIGATION_ICON_COMPONENTS: Record<MobileConfigNavigationIcon, LucideIcon> = {
+export const NAVIGATION_ICON_COMPONENTS: Record<MobileConfigNavigationIcon, LucideIcon> = {
   home: Home,
   tag: Tag,
   grid: Grid3x3,

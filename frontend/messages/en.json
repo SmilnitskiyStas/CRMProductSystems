@@ -4359,6 +4359,8 @@
         "saveSuccess": "Draft saved",
         "saveError": "Failed to save the draft",
         "noChanges": "No unsaved changes",
+        "hidePreviewButton": "Hide preview",
+        "showPreviewButton": "Show preview",
         "propertyEditor": {
           "subtitle": "Block settings",
           "unknownBlockType": "This block type is not recognized by the current registry. It can still be removed, but its settings can't be edited here.",
@@ -4388,6 +4390,7 @@
           "loading": "Loading…",
           "loadError": "Failed to load preview data",
           "emptyBlocks": "No blocks to preview yet.",
+          "navItemNotEditable": "This tab isn't editable in the App Builder.",
           "noStoreHint": "No locations yet — promotion blocks are shown without data."
         }
       },

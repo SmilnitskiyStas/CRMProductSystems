@@ -226,6 +226,9 @@ export function AppBuilderCanvas() {
   // "Apply". Reset to `null` whenever the selection changes (new block, or drawer closed) so a
   // stale live value never leaks onto a different block.
   const [liveProps, setLiveProps] = useState<Record<string, unknown> | null>(null);
+  // TASK-568: show/hide toggle for the whole preview column — pure local UI state, no persistence.
+  // Default `true` preserves today's always-visible behavior.
+  const [previewVisible, setPreviewVisible] = useState(true);
 
   // TASK-546: warns before losing unsaved edits (tab-close/refresh always; in-app link-click
   // navigation best-effort) — see useUnsavedChangesGuard.ts's remarks for exact coverage.
@@ -265,6 +268,18 @@ export function AppBuilderCanvas() {
         ? blocks.map((b) => (b.id === selectedBlockId ? { ...b, props: liveProps } : b))
         : blocks,
     [blocks, selectedBlockId, liveProps],
+  );
+
+  // TASK-568: `AppPreviewPanel` now takes every page's blocks (its own bottom-nav mockup lets the
+  // admin browse pages independent of `activePage`) — substitute just `activePage`'s entry with
+  // `previewBlocks` (the live-edit-merged array above) so TASK-565's before-Apply live editing
+  // still reflects instantly whenever the preview's own nav happens to be showing that same page
+  // (the common case: preview defaults to `activePage` until the admin clicks elsewhere in the
+  // mockup's nav). Every other page passes through `configDoc.pages` untouched — they never have
+  // an open drawer, so there's nothing to live-merge for them.
+  const previewPages = useMemo(
+    () => ({ ...configDoc?.pages, [activePage]: { blocks: previewBlocks } }),
+    [configDoc, activePage, previewBlocks],
   );
 
   // TASK-541: switching pages closes any open Property Editor — a selected block id only makes
@@ -462,9 +477,17 @@ export function AppBuilderCanvas() {
             {/* Canvas */}
             <div style={{ flex: "1 1 420px", minWidth: 0 }}>
               <div style={cardStyle}>
-                {/* TASK-541: title reflects the active page tab, generalized from the old static
-                    "Home screen" text — still reads exactly the same when Home is selected. */}
-                <p style={sectionLabelStyle}>{t("canvasTitle", { page: t(`pageTabs.${activePage}`) })}</p>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                  {/* TASK-541: title reflects the active page tab, generalized from the old static
+                      "Home screen" text — still reads exactly the same when Home is selected. */}
+                  <p style={{ ...sectionLabelStyle, margin: 0 }}>{t("canvasTitle", { page: t(`pageTabs.${activePage}`) })}</p>
+                  {/* TASK-568: show/hide toggle for the whole preview column — pure local UI
+                      state, reclaims the canvas column's width when hidden (`flex: "1 1 420px"`
+                      grows to fill the freed space once the preview column stops rendering). */}
+                  <Btn variant="ghost" size="sm" onClick={() => setPreviewVisible((visible) => !visible)}>
+                    {previewVisible ? t("hidePreviewButton") : t("showPreviewButton")}
+                  </Btn>
+                </div>
                 <CanvasDropzone
                   blocks={blocks}
                   registryByType={registryByType}
@@ -514,25 +537,32 @@ export function AppBuilderCanvas() {
               </div>
             </div>
 
-            {/* TASK-564/565: live preview column — reads `previewBlocks` (raw `blocks`, with the
-                open drawer's unapplied live edits substituted in, TASK-565) so add/remove/reorder,
-                Apply, in-drawer typing, and resize-drag handles all reflect here within the same
-                render. Known, accepted tradeoff: `BlockPropertyEditor`'s `DetailDrawer` is a fixed
-                right-edge overlay (up to 520px) that overlaps part of this column on narrower
-                viewports while open — not fixed here, see TASK-560's log.
+            {/* TASK-564/565: live preview column — reads `previewPages` (TASK-568: every page's
+                blocks, with `activePage`'s entry substituted by the open drawer's unapplied live
+                edits, TASK-565) so add/remove/reorder, Apply, in-drawer typing, and resize-drag
+                handles all reflect here within the same render. Known, accepted tradeoff:
+                `BlockPropertyEditor`'s `DetailDrawer` is a fixed right-edge overlay (up to 520px)
+                that overlaps part of this column on narrower viewports while open — not fixed
+                here, see TASK-560's log.
                 TASK-567: widened 340 → 500px so the column comfortably fits the widest device
                 preset (Pixel 8 Pro, 448px) plus its frame's 8px border ×2 and breathing room — the
                 column's own width stays fixed regardless of which preset is selected; the actual
                 device frame (384–448px wide across presets) is centered within it via
                 `PhoneFrame`'s own `margin: "0 auto"`, so switching devices never jumps the
-                3-column layout. */}
-            <div style={{ flex: "0 1 500px", position: "sticky", top: 20 }}>
-              <AppPreviewPanel
-                blocks={previewBlocks}
-                registryByType={registryByType}
-                onResizeCommit={updateBlockSizeProp}
-              />
-            </div>
+                3-column layout.
+                TASK-568: only rendered while `previewVisible` — when hidden, the canvas column
+                (`flex: "1 1 420px"`, flex-grow 1) naturally reclaims the freed width. */}
+            {previewVisible && (
+              <div style={{ flex: "0 1 500px", position: "sticky", top: 20 }}>
+                <AppPreviewPanel
+                  pages={previewPages}
+                  navigation={configDoc.navigation}
+                  activePage={activePage}
+                  registryByType={registryByType}
+                  onResizeCommit={updateBlockSizeProp}
+                />
+              </div>
+            )}
         </div>
 
         <DragOverlay>

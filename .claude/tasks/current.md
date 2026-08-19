@@ -83,6 +83,41 @@ device-model picker (`devicePresets.ts`, default Pixel 8 Pro) — `PhoneFrame.ts
 preview), `AppPreviewPanel.tsx`'s scroll area now sized from the selected device's real height.
 `tsc --noEmit` clean; verified in-browser via DOM geometry (screenshot unavailable this session).
 
+## TASK-568 — App Builder preview: viewport-fit scaling, show/hide toggle, interactive bottom nav (frontend)
+
+**Status:** done · **Agent:** frontend-developer · **Follow-up to TASK-560..567**
+Log: `.claude/logs/tasks/568_2026-08-19_preview-scale-toggle-navigation_frontend-developer.md`
+Three parts: (1) `PhoneFrame.tsx` gained opt-in `fitToViewport` — scales the device mockup down
+(CSS `transform: scale()`, true aspect ratio, outer box reserves the scaled footprint) to fit the
+vertical room below the panel, recomputed on window resize; omitted → byte-identical
+(`ThemeEditorSection.tsx` unaffected, verified). (2) `AppBuilderCanvas.tsx` gained a
+`previewVisible` toggle (`Btn variant="ghost"` next to the canvas title) — hiding the preview
+column lets the canvas column reclaim the width. (3) `AppPreviewPanel.tsx` now renders its own
+bottom tab bar mirroring the tenant's real `navigation` config (icons reused from
+`NavigationBuilderSection.tsx`'s now-exported `NAVIGATION_ICON_COMPONENTS`) — clicking one of the
+4 App-Builder-editable types (home/promotions/catalog/news) switches the previewed page
+independent of the canvas's own `PageTabs`; clicking one of the other 4 (loyalty/coupons/stores/
+profile — verified against `mobile/features/retail-navigation/policy.ts`'s `retailRoutePolicies`
+as the source of truth, not guessed) shows a "not editable here" placeholder instead of
+fabricated content (ADR-031 truthfulness requirement). `AppBuilderCanvas.tsx` now passes
+`pages`/`navigation`/`activePage` instead of a single page's `blocks`, substituting
+`activePage`'s entry with the TASK-565 live-edit-merged array so before-Apply live editing still
+works when the preview's shown page matches the canvas's active page.
+
+`npx tsc --noEmit` clean. Verified in-browser at an 800px-tall viewport: full mockup (chrome +
+bottom nav) fits with 0 outer-page scroll needed to see its bottom; toggle hides/reclaims width
+and restores correctly; clicking Home→Promotions in the mockup's own nav changed content
+independent of the canvas's active tab; a temporarily-added `loyalty`-type nav item showed the
+placeholder (test nav items removed after); re-synced correctly when the canvas's `PageTabs`
+selection changed; live-property-edit-before-Apply and the resize-drag handles (simulated
+pointer down/move/up, 225→255px, dirty flipped once on release) both still function with the new
+nested/scaled frame. `ThemeEditorSection.tsx`'s own preview confirmed pixel-identical (320px,
+`transform: none`, `overflow: visible`). Known accepted minor tradeoff (not fixed, out of this
+task's scope): the 4 resize handles' pointer-delta math isn't scale-aware, so under
+`fitToViewport` scaling a drag needs more physical mouse travel than before to reach the same
+value change — functionally correct (clamps/commits right), just visually less than 1:1 while
+scaled below 1.
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer

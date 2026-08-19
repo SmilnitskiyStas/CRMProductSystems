@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Home, type LucideIcon } from "lucide-react";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useBanners } from "../hooks/useBanners";
 import { useMobileTheme } from "../hooks/useMobileTheme";
 import { usePromoProducts } from "../hooks/usePromoProducts";
 import { DEFAULT_DEVICE_PRESET_ID, DEVICE_PRESETS, getDevicePreset, type DevicePresetId } from "./devicePresets";
+import { NAVIGATION_ICON_COMPONENTS } from "./NavigationBuilderSection";
 import { PHONE_FRAME_BORDER_PX, PhoneFrame } from "./PhoneFrame";
 import {
   renderBlockPreview,
@@ -20,11 +22,35 @@ import {
 } from "./blockPreviews";
 import type {
   BlockDefinitionDto,
-  MobileConfigBlockInstance,
   MobileConfigBlockType,
+  MobileConfigNavigationIcon,
+  MobileConfigNavigationItem,
+  MobileConfigNavigationType,
+  MobileConfigPage,
+  MobileConfigPageName,
   MobileThemeDto,
   ThemeSpacingPreset,
 } from "../types";
+
+// ── TASK-568: nav item type → App-Builder-editable page mapping ────────────────────────────────
+// Source of truth verified directly against `mobile/features/retail-navigation/policy.ts`'s
+// `retailRoutePolicies` — only these 4 of the 8 `MobileConfigNavigationType`s route to a screen
+// whose content actually comes from the App Builder's `pages` document; the other 4 (`loyalty` →
+// wallet, `coupons` → coupons, `stores` → retailers, `profile` → account) are fixed native screens
+// with no App Builder involvement at all, so clicking them in this mockup must never show
+// fabricated block content (ADR-031's core truthfulness requirement) — a type absent from this map
+// falls through to the "not editable here" placeholder, see `nonEditableNavType` state below.
+const NAV_TYPE_TO_EDITABLE_PAGE: Partial<Record<MobileConfigNavigationType, MobileConfigPageName>> = {
+  home: "home",
+  promotions: "promotions",
+  catalog: "catalog",
+  news: "news",
+};
+
+/** Rendered height of the bottom nav bar mockup below, in px — subtracted from the scroll area's
+ *  `maxHeight` so the nav bar always has room and is never pushed outside the (overflow-hidden)
+ *  frame by a long block list. Matches the icon+label+padding sizes used in the nav bar JSX. */
+const NAV_BAR_HEIGHT_PX = 54;
 
 const cardStyle: React.CSSProperties = {
   background: "#0D1117",
@@ -107,7 +133,18 @@ function buildTokens(theme: MobileThemeDto): PreviewTokens {
 }
 
 interface AppPreviewPanelProps {
-  blocks: MobileConfigBlockInstance[];
+  /** TASK-568: every whitelisted page's blocks (was a single page's `blocks` array pre-TASK-568) —
+   *  the mockup's own bottom nav (below) lets the admin browse between pages independent of which
+   *  `PageTabs` tab is active in the canvas above, so this panel needs every page's content, not
+   *  just the active one. */
+  pages: Partial<Record<MobileConfigPageName, MobileConfigPage>>;
+  /** TASK-568: the tenant's configured navigation — drives the mockup's own bottom tab bar (one
+   *  entry per item, 2–5 items). */
+  navigation: MobileConfigNavigationItem[];
+  /** TASK-568: the canvas's current `PageTabs` selection — the mockup's own nav defaults to
+   *  showing this page, and re-syncs to it whenever it changes, until the admin clicks a different
+   *  item in the mockup's own nav (see `previewPage` state below). */
+  activePage: MobileConfigPageName;
   registryByType: Map<MobileConfigBlockType, BlockDefinitionDto>;
   /** TASK-565: called exactly once per drag gesture by the 4 resizable block previews. Omit to
    *  render every preview read-only (no grab handles). */
@@ -119,13 +156,14 @@ interface AppPreviewPanelProps {
  * (`AppBuilderCanvas.tsx`) — an Elementor-style "what will this actually look like" panel,
  * entirely client-side (ADR-031): every data source here is a GET the admin already has access to
  * (`useMobileTheme`, `useBanners`, `usePromoProducts`, `useCatalogProducts`, `useLocations`), and
- * `blocks` is the caller's own in-memory (pre-save) draft — never a round trip to a "preview"
+ * `pages` is the caller's own in-memory (pre-save) draft — never a round trip to a "preview"
  * endpoint.
  *
- * Page-agnostic by design: takes `blocks`/`registryByType` as props rather than reading the whole
- * `configDoc` itself, so `AppBuilderCanvas` decides which page's blocks are being shown.
+ * TASK-568: gained its own bottom nav mockup (mirrors the tenant's real `navigation` config) so the
+ * admin can browse pages inside the mockup itself, independent of `AppBuilderCanvas`'s own
+ * `PageTabs` — see `previewPage`/`nonEditableNavType` state below.
  */
-export function AppPreviewPanel({ blocks, registryByType, onResizeCommit }: AppPreviewPanelProps) {
+export function AppPreviewPanel({ pages, navigation, activePage, registryByType, onResizeCommit }: AppPreviewPanelProps) {
   const t = useTranslations("Dashboard.consumerApp.appBuilder.preview");
   const themeQuery = useMobileTheme();
   const bannersQuery = useBanners();
@@ -139,11 +177,42 @@ export function AppPreviewPanel({ blocks, registryByType, onResizeCommit }: AppP
   const [deviceId, setDeviceId] = useState<DevicePresetId>(DEFAULT_DEVICE_PRESET_ID);
   const device = getDevicePreset(deviceId);
   const framePadding = 16;
+
+  // TASK-568: which page's blocks the mockup's content area currently shows — initialized from
+  // (and re-synced to) the canvas's own `activePage` on every change, so switching `PageTabs`
+  // above still drives the preview by default. Diverges from `activePage` only once the admin
+  // clicks a *different* item in the mockup's own bottom nav below (real-user-like browsing,
+  // independent of what an admin happens to be editing) — until `activePage` changes again.
+  const [previewPage, setPreviewPage] = useState<MobileConfigPageName>(activePage);
+  // TASK-568: non-null while the admin has selected one of the 4 nav items with no App-Builder
+  // page behind it (loyalty/coupons/stores/profile) — swaps the content area to a "not editable
+  // here" placeholder instead of `pages[previewPage]`'s blocks, and marks that nav item (not a
+  // page) as the mockup's visually "active" tab. Cleared whenever an editable nav item is clicked,
+  // or `activePage` changes (re-sync brings the mockup back to showing real page content).
+  const [nonEditableNavType, setNonEditableNavType] = useState<MobileConfigNavigationType | null>(null);
+
+  useEffect(() => {
+    setPreviewPage(activePage);
+    setNonEditableNavType(null);
+  }, [activePage]);
+
+  function handleNavClick(item: MobileConfigNavigationItem) {
+    const page = NAV_TYPE_TO_EDITABLE_PAGE[item.type];
+    if (page) {
+      setPreviewPage(page);
+      setNonEditableNavType(null);
+    } else {
+      setNonEditableNavType(item.type);
+    }
+  }
+
   // Frame renders border-box at exactly `device.height` (see `PhoneFrame`'s `width`/`height` prop
   // docs) — the space actually available to children is that total minus the frame's own chrome
-  // (its border on both sides, plus the padding passed to it on both sides), so the scrollable
-  // block list below always matches "this device's screen", not an arbitrary constant.
-  const scrollAreaMaxHeight = device.height - PHONE_FRAME_BORDER_PX * 2 - framePadding * 2;
+  // (its border on both sides, plus the padding passed to it on both sides) and, TASK-568, the
+  // bottom nav bar's own height — so the scrollable block list below always matches "this device's
+  // screen, minus the tab bar", not an arbitrary constant.
+  const scrollAreaMaxHeight =
+    device.height - PHONE_FRAME_BORDER_PX * 2 - framePadding * 2 - (navigation.length > 0 ? NAV_BAR_HEIGHT_PX : 0);
 
   // ADR-031: App Builder has no store selector — the tenant's first location stands in for
   // preview purposes only (a preview-only convenience, not a real store-selection UI). Renders
@@ -219,6 +288,7 @@ export function AppPreviewPanel({ blocks, registryByType, onResizeCommit }: AppP
 
   const tokens = buildTokens(themeQuery.data);
   const ctx: PreviewContext = { tokens, banners, promotions, catalog, locations, registryByType, onResizeCommit };
+  const previewBlocks = pages[previewPage]?.blocks ?? [];
 
   return (
     <div style={cardStyle}>
@@ -240,22 +310,101 @@ export function AppPreviewPanel({ blocks, registryByType, onResizeCommit }: AppP
           ))}
         </select>
       </div>
-      <PhoneFrame background={tokens.colors.background} padding={framePadding} width={device.width} height={device.height}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: tokens.spacing.md,
-            maxHeight: scrollAreaMaxHeight,
-            overflowY: "auto",
-          }}
-        >
-          {blocks.length === 0 ? (
-            <p style={{ color: tokens.colors.textSecondary, fontSize: 12, textAlign: "center", padding: "24px 0" }}>
-              {t("emptyBlocks")}
-            </p>
-          ) : (
-            blocks.map((block) => renderBlockPreview(block, ctx))
+      {/* TASK-568: `fitToViewport` scales the frame to the vertical room actually available below
+          this panel, so the full mockup (including the bottom nav below) is visible without
+          forcing the outer dashboard page to scroll. */}
+      <PhoneFrame
+        background={tokens.colors.background}
+        padding={framePadding}
+        width={device.width}
+        height={device.height}
+        fitToViewport
+      >
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: tokens.spacing.md,
+              maxHeight: scrollAreaMaxHeight,
+              overflowY: "auto",
+            }}
+          >
+            {nonEditableNavType ? (
+              <p style={{ color: tokens.colors.textSecondary, fontSize: 12, textAlign: "center", padding: "24px 0" }}>
+                {t("navItemNotEditable")}
+              </p>
+            ) : previewBlocks.length === 0 ? (
+              <p style={{ color: tokens.colors.textSecondary, fontSize: 12, textAlign: "center", padding: "24px 0" }}>
+                {t("emptyBlocks")}
+              </p>
+            ) : (
+              previewBlocks.map((block) => renderBlockPreview(block, ctx))
+            )}
+          </div>
+
+          {/* TASK-568: mirrors the tenant's real bottom tab bar (`navigation`) — clicking an
+              App-Builder-editable item (home/promotions/catalog/news) switches `previewPage`;
+              clicking one of the other 4 (loyalty/coupons/stores/profile, fixed native screens
+              with no App Builder involvement) shows the "not editable here" placeholder above
+              instead of fabricated content (ADR-031). `marginTop: auto` pins it to the frame's
+              bottom edge even when the content above is short; the negative side/bottom margins
+              pull it flush to the frame's own padding, matching a real edge-to-edge tab bar. */}
+          {navigation.length > 0 && (
+            <div
+              style={{
+                marginTop: "auto",
+                marginLeft: -framePadding,
+                marginRight: -framePadding,
+                marginBottom: -framePadding,
+                display: "flex",
+                borderTop: `1px solid ${tokens.colors.border}`,
+                background: tokens.colors.surface,
+              }}
+            >
+              {navigation.map((item, index) => {
+                const Icon: LucideIcon =
+                  NAVIGATION_ICON_COMPONENTS[item.icon as MobileConfigNavigationIcon] ?? Home;
+                const editablePage = NAV_TYPE_TO_EDITABLE_PAGE[item.type];
+                const isActive = nonEditableNavType
+                  ? item.type === nonEditableNavType
+                  : !!editablePage && editablePage === previewPage;
+                const color = isActive ? tokens.colors.primary : tokens.colors.textSecondary;
+                return (
+                  <button
+                    key={`${item.type}-${index}`}
+                    type="button"
+                    onClick={() => handleNavClick(item)}
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 2,
+                      padding: "8px 4px 10px",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      color,
+                    }}
+                  >
+                    <Icon size={18} />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: isActive ? 700 : 500,
+                        maxWidth: "100%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       </PhoneFrame>
