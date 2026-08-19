@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.ConsumerContent;
 using ShelfGuard.Domain.Entities;
+using ShelfGuard.Infrastructure.Authorization;
 
 namespace ShelfGuard.Api.Controllers;
 
@@ -18,6 +19,12 @@ namespace ShelfGuard.Api.Controllers;
 /// app.tenant_id (see TenantConnectionInterceptor remarks), so every read/write here runs
 /// through ITenantSessionOverride inside ConsumerContentService, the same mechanism
 /// ConsumerLoyaltyController/LoyaltyService already use for cross-tenant consumer sessions.
+///
+/// TASK-558: GetPromotions/GetCatalog are gated by [RequireConsumerFeature("promotions"/"catalog")]
+/// — see RequireConsumerFeatureAttribute/IConsumerFeatureFlagService remarks for the
+/// default-enabled production-safety contract this relies on. GetBanners/RecordView/RecordClick
+/// stay ungated: "banners" is not one of MobileConfigWhitelists.FeatureKeys' 8 flags, so there is
+/// no real flag to map it to.
 /// </summary>
 [ApiController]
 [Route("api/consumer")]
@@ -52,6 +59,7 @@ public sealed class ConsumerContentController : ControllerBase
 
     /// <summary>Active discounted products for a store — read projection over Discount, no Discount API changes.</summary>
     [HttpGet("{tenantId:guid}/promotions")]
+    [RequireConsumerFeature("promotions")]
     public async Task<IActionResult> GetPromotions(Guid tenantId, [FromQuery] Guid storeId, CancellationToken ct)
     {
         var (promotions, error) = await _service.GetActivePromotionsAsync(tenantId, storeId, ct);
@@ -60,6 +68,7 @@ public sealed class ConsumerContentController : ControllerBase
 
     /// <summary>Paginated active catalog for the tenant, annotated with availability at storeId.</summary>
     [HttpGet("{tenantId:guid}/catalog")]
+    [RequireConsumerFeature("catalog")]
     public async Task<IActionResult> GetCatalog(
         Guid tenantId,
         [FromQuery] Guid storeId,

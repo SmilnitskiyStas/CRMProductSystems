@@ -1,17 +1,19 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ToggleLeft } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
-import { PlaceholderSection } from "@/features/consumer-app/components/PlaceholderSection";
+import { FeatureFlagsSection } from "@/features/consumer-app/components/FeatureFlagsSection";
 
 /**
- * TASK-535: Retailer Admin shell scaffolding — routing/nav only, no Feature Flags UI
- * yet (Stage D, not yet scheduled in detail). Same role gate and page-shell shape as
- * every sibling route here (mirrors `/consumer-app/page.tsx` exactly, just a placeholder
- * body instead of a real section component).
+ * TASK-557: replaces TASK-535's placeholder with the real Feature Flags UI — 8 fixed toggles
+ * (one per `MobileConfigWhitelists.FeatureKeys`), backed by the same whole-document draft
+ * AppBuilderCanvas.tsx (TASK-539/541), ThemeEditorSection.tsx (TASK-537) and
+ * NavigationBuilderSection.tsx (TASK-542) already read/write. No task in the original Stage D
+ * breakdown ever scheduled this screen (only TASK-543's backend service, explicitly scoped
+ * backend-only) — discovered as a gap and filled here. Same role gate and page-shell shape as
+ * every sibling route here (mirrors `/consumer-app/page.tsx`).
  */
 export default function ConsumerAppFeaturesPage() {
   const t = useTranslations("Dashboard.consumerApp.featuresPage");
@@ -37,7 +39,7 @@ export default function ConsumerAppFeaturesPage() {
         </p>
       </div>
 
-      <PlaceholderSection icon={ToggleLeft} />
+      <FeatureFlagsSection />
     </div>
   );
 }

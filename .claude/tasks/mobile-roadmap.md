@@ -2472,3 +2472,132 @@ No critical/high security findings. Live browser E2E genuinely performed and pas
 App Builder + Publish/Rollback flow (Pages, Design, Navigation, Publish, Archive, Rollback); the
 Block Property Editor, multi-page tab switching, and the Preview endpoint remain implemented and
 unit/integration-tested but not separately browser-verified.
+
+---
+
+## TASK-557 — Feature Flags UI (fills the `/consumer-app/features` placeholder)
+
+**Status:** `done`
+**Agent:** `frontend-developer`
+**Priority:** medium
+**Depends:** TASK-543 (backend flag domain), TASK-538b-style Draft CRUD pattern (TASK-532/538b)
+**Context:** discovered as a genuine gap in the original TASK-527–555 breakdown — user noticed
+`/consumer-app/features` (TASK-535) was still a bare `PlaceholderSection` and asked what belongs
+there; no task in Stage D ever scheduled the UI (only TASK-543's backend service, which was
+explicitly scoped backend-only). `docs/CLAUDE CODE SPEC — Web Admin, App Builder & Backend.md`
+ЕТАП 10, `MobileConfigWhitelists.FeatureKeys` (8 flags: loyalty/promotions/catalog/coupons/news/
+receipts/delivery/personalOffers).
+
+### Scope
+
+- Replace the `/consumer-app/features` placeholder with a real screen: one toggle per feature key,
+  reading/writing the draft config document's `features` object via the existing
+  `useMobileConfigDraft` hook and the same read-modify-write pattern
+  `AppBuilderCanvas`/`NavigationBuilderSection` already use (touch only `features`, never clobber
+  `pages`/`navigation`/`schemaVersion`). Same `draftNotice`/`Save draft` convention as the other
+  three editor screens.
+- **Required, explicit UI warning (per user instruction):** `IConsumerFeatureFlagService`
+  (TASK-543) is not wired into any live consumer endpoint yet — toggling these flags saves real
+  data but currently has **no effect** on what the consumer app can access. The screen must say
+  this plainly, not bury it — this is the same honesty standard TASK-544b's theme notice already
+  established for a similar "saved but not yet live" gap.
+
+### Definition of Done
+
+- [x] All 8 feature keys render as toggles with Ukrainian labels, current draft state loaded.
+- [x] Save round-trips through the draft API without touching other document sections.
+- [x] The "not yet enforced anywhere" warning is clear and honest, not a vague disclaimer.
+- [x] `tsc --noEmit` and lint pass.
+
+**Completed:** 2026-08-19
+**Result:** `FeatureFlagsSection.tsx` — 8 `Switch` toggles (one per `MOBILE_CONFIG_FEATURE_KEYS`),
+`useMobileConfigDraft`/`useSaveMobileConfigDraft`, read-modify-write on `features` only (mirrors
+`NavigationBuilderSection.tsx`'s `restOfDoc` pattern — verified, not assumed). First-time-tenant
+seeding matches `AppBuilderCanvas.tsx`'s existing default exactly (all 8 `false`). Labels
+cross-checked against already-established terminology elsewhere in the codebase
+(`admin.modules.loyalty`, `navigationBuilder.navTypes`), not invented fresh.
+**Warning — deliberately different from the other three screens' notice, not a copy-paste:**
+skips the usual "takes effect after publish" blue notice (would falsely imply publish matters
+here) in favor of an amber `AlertTriangle` warning (matching `TemporaryPasswordBanner.tsx`'s
+existing actionable-warning convention), text grounded directly in
+`IConsumerFeatureFlagService.cs`'s own doc comments — independently verified no controller
+references that service or `RequireConsumerFeatureAttribute` (DI-registered and unit-tested only,
+nothing wired). Copy: "ці перемикачі зберігаються по-справжньому... але сьогодні не мають жодного
+ефекту в застосунку покупців... Публікація цієї чернетки також нічого не змінить для покупців,
+поки цю перевірку не додадуть на бекенді."
+**Verification:** `tsc --noEmit` clean; `next lint` clean; both message files valid JSON. No live
+browser check this run (static compile/lint only, stated honestly).
+**Log:** `.claude/logs/tasks/557_2026-08-19_feature-flags-ui_frontend-developer.md`
+**Handoff:** none
+**Next:** TASK-558 registered below — gating the flags for real is now scheduled.
+
+---
+
+## TASK-558 — Wire consumer feature flags onto ConsumerContentController
+
+**Status:** `done`
+**Agent:** `backend-developer`
+**Priority:** high
+**Depends:** TASK-543 (flag service), TASK-544/546 (Publish is now real — this was the exact
+precondition `RequireConsumerFeatureAttribute`'s own doc comment named as blocking this task)
+**Context:** `backend/ShelfGuard.Infrastructure/Authorization/RequireConsumerFeatureAttribute.cs`
+(already built, never attached anywhere — its own remarks name this exact task as the follow-up),
+`backend/ShelfGuard.Api/Controllers/ConsumerContentController.cs`
+
+### Scope
+
+- Apply `[RequireConsumerFeature("promotions")]` to `ConsumerContentController.GetPromotions` and
+  `[RequireConsumerFeature("catalog")]` to `GetCatalog` — clean 1:1 mapping to
+  `MobileConfigWhitelists.FeatureKeys`, both already `{tenantId:guid}`-route-scoped exactly as the
+  attribute expects.
+- `GetBanners`/`RecordView`/`RecordClick` have **no matching feature key** (`banners` is not one of
+  the 8 `FeatureKeys`) — leave ungated, confirm and document this rather than forcing a flag onto
+  something with no real mapping.
+- `ConsumerLoyaltyController` is **explicitly out of scope for this task** — it already has its own
+  working gate (`Tenant.HasModule("loyalty")`, a B2B module concept, checked inside
+  `LoyaltyService.JoinAsync`), and `GetNetworks` returns a cross-tenant list with no single
+  `tenantId` to gate against at the attribute level (would need per-item filtering logic, not an
+  attribute). Layering the new consumer-facing `features.loyalty` flag on top is a real, separate
+  design question (should both gates apply, and how does a cross-tenant list filter per-item?) —
+  flag it precisely as an open follow-up, don't guess an answer.
+
+### Definition of Done
+
+- [x] `GetPromotions`/`GetCatalog` reject with the flag service's existing `403 {"error": "Feature
+  not enabled"}` shape when a tenant has explicitly published `features.promotions`/`.catalog` as
+  `false`.
+- [x] **Critical, non-negotiable:** every existing production tenant (none of which have ever
+  published a `MobileConfigurationVersion`) continues to see promotions/catalog exactly as before —
+  proven by a test seeding a tenant with zero `MobileConfiguration` activity and asserting 200, not
+  403 (this is `IConsumerFeatureFlagService`'s own documented safety default; this task must not
+  regress it).
+- [x] `GetBanners`/view/click tracking unchanged (no flag attribute, confirmed and documented why).
+- [x] `ConsumerLoyaltyController` untouched; the loyalty-flag/module-gate interaction question is
+  written up as an explicit open item, not silently resolved.
+- [x] `dotnet build` and full `dotnet test` pass, re-verified at the moment of finishing.
+
+**Completed:** 2026-08-19
+**Result:** `[RequireConsumerFeature("promotions")]`/`[RequireConsumerFeature("catalog")]` added to
+`GetPromotions`/`GetCatalog` — a two-attribute diff, nothing else in the controller changed.
+`banners` confirmed absent from `MobileConfigWhitelists.FeatureKeys`'s 8-key set (read directly,
+not assumed); `GetBanners`/`RecordView`/`RecordClick` correctly left ungated.
+**Safety-default proof — the critical part, done right:** new
+`ConsumerContentFeatureGateRlsIntegrationTests.cs` wires the **real** `ConsumerFeatureFlagService`
++ `MobileConfigPublishedReadService` + real anonymous Postgres RLS session through the **real**
+`RequireConsumerFeatureFilter` (no mocks) against actual dev Postgres.
+`PRODUCTION_SAFETY_tenant_with_zero_MobileConfiguration_activity_passes_the_gate` seeds only a
+`Tenant` row (representing every real production tenant today) and asserts 200 for both flags —
+passed. A second test confirms an explicit published `false` correctly 403s. Plus a reflection test
+pinning the exact attribute placement and confirming the three banner actions carry none.
+**Open question, correctly left open:** whether `features.loyalty` should additionally gate
+`ConsumerLoyaltyController` (on top of its existing, different `Tenant.HasModule("loyalty")` gate),
+and how a cross-tenant list action (`GetNetworks`, no single `tenantId`) would even apply a
+per-tenant flag — not resolved, flagged for a future task.
+**Verification:** `dotnet build` 0 errors (1 pre-existing unrelated warning); `dotnet test`
+1694/1694 passed, 0 skipped (real DB reachable, all RLS tests including the 9 new ones actually
+ran). `git status` confirmed `ConsumerLoyaltyController.cs` and the flag-service/attribute files
+untouched.
+**Log:** `.claude/logs/tasks/558_2026-08-19_wire-feature-flags-consumer-content_backend-developer.md`
+**Handoff:** none
+**Next:** none scheduled. Open item: whether/how `features.loyalty` should gate
+`ConsumerLoyaltyController`.

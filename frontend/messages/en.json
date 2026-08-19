@@ -4470,6 +4470,38 @@
         "saveError": "Failed to save the draft",
         "noChanges": "No unsaved changes"
       },
+      "featureFlags": {
+        "loading": "Loading…",
+        "loadError": "Failed to load app features",
+        "warningTitle": "Not wired up yet:",
+        "warningText": "these toggles are saved for real — in the draft and after publishing — but today they have zero effect on the consumer app: no consumer app endpoint checks these flags yet. Publishing this draft won't change anything for shoppers either, until that check is added on the backend.",
+        "keys": {
+          "loyalty": "Loyalty Program",
+          "promotions": "Promotions",
+          "catalog": "Catalog",
+          "coupons": "Coupons",
+          "news": "News",
+          "receipts": "Receipts",
+          "delivery": "Delivery",
+          "personalOffers": "Personal Offers"
+        },
+        "hints": {
+          "loyalty": "Bonus card, point accrual and redemption",
+          "promotions": "Discounted and promotional items section",
+          "catalog": "The network's electronic product catalog",
+          "coupons": "The shopper's personal coupons",
+          "news": "The network's news feed",
+          "receipts": "The shopper's in-app receipt history",
+          "delivery": "Delivery ordering section",
+          "personalOffers": "Personalized discounts and recommendations"
+        },
+        "unsavedChangesWarning": "You have unsaved changes. Leave this page without saving?",
+        "saveButton": "Save draft",
+        "savingButton": "Saving…",
+        "saveSuccess": "Draft saved",
+        "saveError": "Failed to save the draft",
+        "noChanges": "No unsaved changes"
+      },
       "bonusProgram": {
         "title": "Bonus Program",
         "subtitle": "Accrual and redemption rules, customer card format",
