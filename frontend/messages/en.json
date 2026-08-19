@@ -4384,6 +4384,7 @@
         },
         "preview": {
           "title": "Live preview",
+          "deviceLabel": "Device",
           "loading": "Loading…",
           "loadError": "Failed to load preview data",
           "emptyBlocks": "No blocks to preview yet.",

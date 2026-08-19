@@ -26,7 +26,17 @@ export default function ConsumerAppPagesPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1100, display: "flex", flexDirection: "column", gap: 20 }}>
+    // TASK-567: maxWidth bumped 1100 → 1360. `AppBuilderCanvas.tsx`'s 3-column row (palette 300 +
+    // canvas 420 + preview 500, TASK-567 widened the preview column for the device picker + 2×20
+    // gaps = 1260px combined) never had room here — this wrapper capped content at 1100px
+    // (1036px inside its own padding) regardless of how wide the browser window was, so the row
+    // fell back to wrapping the preview column below the canvas on every screen size, not just
+    // narrow ones. That was the actual bug behind "there's a lot of room on the right, but the
+    // preview shows up at the bottom" — the empty room the user saw was real screen space sitting
+    // outside this now-too-narrow cap. 1360 gives the row's combined basis (1260) headroom to fit
+    // without shrinking once the browser window is wide enough (see `AppBuilderCanvas.tsx`'s
+    // `canFitThreeColumns` remarks for the matching breakpoint).
+    <div style={{ padding: "28px 32px", maxWidth: 1360, display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
           {t("title")}

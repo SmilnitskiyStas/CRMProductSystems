@@ -50,6 +50,7 @@ import { extractDraftValidationErrors } from "../api/mobileConfigDraft";
 import { AppPreviewPanel } from "./AppPreviewPanel";
 import { BlockPropertyEditor } from "./BlockPropertyEditor";
 import { useBlockRegistry } from "../hooks/useBlockRegistry";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useMobileConfigDraft, useSaveMobileConfigDraft } from "../hooks/useMobileConfigDraft";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import {
@@ -203,6 +204,14 @@ export function AppBuilderCanvas() {
   const registryQuery = useBlockRegistry();
   const draftQuery = useMobileConfigDraft();
   const save = useSaveMobileConfigDraft();
+
+  // TASK-567: the palette/canvas/preview row below only fits on one line (`flexWrap: "nowrap"`)
+  // above this breakpoint — chosen with headroom over the row's combined flex-basis (300 palette +
+  // 420 canvas + 500 preview + 2×20 gap = 1260px) so real dashboard chrome (sidebar nav + content
+  // padding, which eats into the raw browser width) doesn't tip it back into a forced wrap right at
+  // the edge. Below it, `flexWrap: "wrap"` drops the preview column onto its own line instead of
+  // clipping/overflowing — verified empirically against this repo's dashboard shell, see task log.
+  const canFitThreeColumns = useMediaQuery("(min-width: 1360px)");
 
   const [configDoc, setConfigDoc] = useState<MobileConfigDocument | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -424,7 +433,14 @@ export function AppBuilderCanvas() {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDrag(null)}
       >
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 20,
+            alignItems: "flex-start",
+            flexWrap: canFitThreeColumns ? "nowrap" : "wrap",
+          }}
+        >
             {/* Palette */}
             <div style={{ ...cardStyle, flex: "0 1 300px", position: "sticky", top: 20 }}>
               <p style={sectionLabelStyle}>{t("paletteTitle")}</p>
@@ -503,8 +519,14 @@ export function AppBuilderCanvas() {
                 Apply, in-drawer typing, and resize-drag handles all reflect here within the same
                 render. Known, accepted tradeoff: `BlockPropertyEditor`'s `DetailDrawer` is a fixed
                 right-edge overlay (up to 520px) that overlaps part of this column on narrower
-                viewports while open — not fixed here, see TASK-560's log. */}
-            <div style={{ flex: "0 1 340px", position: "sticky", top: 20 }}>
+                viewports while open — not fixed here, see TASK-560's log.
+                TASK-567: widened 340 → 500px so the column comfortably fits the widest device
+                preset (Pixel 8 Pro, 448px) plus its frame's 8px border ×2 and breathing room — the
+                column's own width stays fixed regardless of which preset is selected; the actual
+                device frame (384–448px wide across presets) is centered within it via
+                `PhoneFrame`'s own `margin: "0 auto"`, so switching devices never jumps the
+                3-column layout. */}
+            <div style={{ flex: "0 1 500px", position: "sticky", top: 20 }}>
               <AppPreviewPanel
                 blocks={previewBlocks}
                 registryByType={registryByType}

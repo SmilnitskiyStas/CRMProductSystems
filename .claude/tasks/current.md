@@ -71,6 +71,18 @@ drawer open (was 37/~6s), live-reflect-before-Apply/Apply-persists (verified via
 Cancel-reverts all intact, resize commit-once-per-drag intact (dirty stayed false through
 pointerdown+pointermove, flipped true only on pointerup).
 
+## TASK-567 — App Builder: fix preview-panel wrap bug + phone-model picker (frontend)
+
+**Status:** done · **Agent:** frontend-developer · **Direct user-reported follow-up to TASK-560..566**
+Log: `.claude/logs/tasks/567_2026-08-19_preview-layout-and-device-picker_frontend-developer.md`
+Bug: preview column wrapped below the canvas on every window size — root cause was
+`consumer-app/pages/page.tsx`'s `maxWidth: 1100` page wrapper, not just the row's own `flexWrap`;
+bumped to 1360 + new `useMediaQuery` hook drives `nowrap` above that breakpoint. Feature: 5-preset
+device-model picker (`devicePresets.ts`, default Pixel 8 Pro) — `PhoneFrame.tsx` gained additive
+`width`/`height` props (byte-identical when omitted, verified against `ThemeEditorSection.tsx`'s
+preview), `AppPreviewPanel.tsx`'s scroll area now sized from the selected device's real height.
+`tsc --noEmit` clean; verified in-browser via DOM geometry (screenshot unavailable this session).
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer

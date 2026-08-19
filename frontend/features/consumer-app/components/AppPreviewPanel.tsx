@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useBanners } from "../hooks/useBanners";
 import { useMobileTheme } from "../hooks/useMobileTheme";
 import { usePromoProducts } from "../hooks/usePromoProducts";
-import { PhoneFrame } from "./PhoneFrame";
+import { DEFAULT_DEVICE_PRESET_ID, DEVICE_PRESETS, getDevicePreset, type DevicePresetId } from "./devicePresets";
+import { PHONE_FRAME_BORDER_PX, PhoneFrame } from "./PhoneFrame";
 import {
   renderBlockPreview,
   type PreviewBannerItem,
@@ -39,6 +40,26 @@ const sectionLabelStyle: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: 0.4,
   margin: "0 0 12px",
+};
+
+// TASK-567: device picker — same inline `<select>` styling convention as `BlockPropertyEditor.tsx`'s
+// `EnumField` (`selectStyle`/`inputStyle`), copied rather than imported since that component's
+// styles aren't exported shared infrastructure (this feature area's established pattern — see the
+// "Style constants" banner comment at the top of every sibling component in this directory).
+const deviceSelectStyle: React.CSSProperties = {
+  background: "#0D1117",
+  border: "1px solid #374151",
+  borderRadius: 8,
+  padding: "6px 30px 6px 10px",
+  color: "#E8EDF5",
+  fontSize: 12,
+  outline: "none",
+  cursor: "pointer",
+  appearance: "none",
+  backgroundImage:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")",
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 // ── Theme token derivation ───────────────────────────────────────────────────────────────────
@@ -110,6 +131,19 @@ export function AppPreviewPanel({ blocks, registryByType, onResizeCommit }: AppP
   const bannersQuery = useBanners();
   const catalogQuery = useCatalogProducts();
   const locationsQuery = useLocations();
+
+  // TASK-567: which real device's screen dimensions the frame below renders at. Pure display
+  // state, not part of the draft document — deliberately local (not persisted, not synced to the
+  // backend, resets to the default on reload), same as every other purely-visual choice already
+  // living in this panel's own component state.
+  const [deviceId, setDeviceId] = useState<DevicePresetId>(DEFAULT_DEVICE_PRESET_ID);
+  const device = getDevicePreset(deviceId);
+  const framePadding = 16;
+  // Frame renders border-box at exactly `device.height` (see `PhoneFrame`'s `width`/`height` prop
+  // docs) — the space actually available to children is that total minus the frame's own chrome
+  // (its border on both sides, plus the padding passed to it on both sides), so the scrollable
+  // block list below always matches "this device's screen", not an arbitrary constant.
+  const scrollAreaMaxHeight = device.height - PHONE_FRAME_BORDER_PX * 2 - framePadding * 2;
 
   // ADR-031: App Builder has no store selector — the tenant's first location stands in for
   // preview purposes only (a preview-only convenience, not a real store-selection UI). Renders
@@ -188,14 +222,31 @@ export function AppPreviewPanel({ blocks, registryByType, onResizeCommit }: AppP
 
   return (
     <div style={cardStyle}>
-      <p style={sectionLabelStyle}>{t("title")}</p>
-      <PhoneFrame background={tokens.colors.background} padding={16}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+        <p style={{ ...sectionLabelStyle, margin: 0 }}>{t("title")}</p>
+        {/* TASK-567: switches which real device's screen dimensions the frame below renders at —
+            local state only, updates the frame size and scroll area instantly, no backend round-trip
+            (same pattern as everything else in this panel). */}
+        <select
+          value={deviceId}
+          onChange={(e) => setDeviceId(e.target.value as DevicePresetId)}
+          aria-label={t("deviceLabel")}
+          style={deviceSelectStyle}
+        >
+          {DEVICE_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <PhoneFrame background={tokens.colors.background} padding={framePadding} width={device.width} height={device.height}>
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             gap: tokens.spacing.md,
-            maxHeight: 600,
+            maxHeight: scrollAreaMaxHeight,
             overflowY: "auto",
           }}
         >
