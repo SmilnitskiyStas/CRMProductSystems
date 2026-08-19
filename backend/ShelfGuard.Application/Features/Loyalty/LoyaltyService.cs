@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
+using ShelfGuard.Application.Features.MobileConfig;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Exceptions;
@@ -35,6 +36,7 @@ public sealed class LoyaltyService : ILoyaltyService
     private readonly IResolveCodeAttemptTracker _attempts;
     private readonly IActivityLogRepository _activityLogs;
     private readonly ITenantSessionOverride _tenantScope;
+    private readonly IConsumerFeatureFlagService _featureFlags;
     private readonly ILogger<LoyaltyService> _logger;
 
     public LoyaltyService(
@@ -49,6 +51,7 @@ public sealed class LoyaltyService : ILoyaltyService
         IResolveCodeAttemptTracker attempts,
         IActivityLogRepository activityLogs,
         ITenantSessionOverride tenantScope,
+        IConsumerFeatureFlagService featureFlags,
         ILogger<LoyaltyService> logger)
     {
         _loyalty = loyalty;
@@ -62,6 +65,7 @@ public sealed class LoyaltyService : ILoyaltyService
         _attempts = attempts;
         _activityLogs = activityLogs;
         _tenantScope = tenantScope;
+        _featureFlags = featureFlags;
         _logger = logger;
     }
 
@@ -199,6 +203,18 @@ public sealed class LoyaltyService : ILoyaltyService
         return location is { IsActive: true } && location.TenantId == m.TenantId ? location : null;
     }
 
+    /// <summary>
+    /// TASK-559 (Option A): alongside the existing B2B <c>HasModule("loyalty")</c>/
+    /// <c>LoyaltyProgramSettings.IsEnabled</c> filters, also excludes any tenant that has
+    /// published <c>features.loyalty: false</c> (TASK-543/558 consumer-app flag,
+    /// <see cref="IConsumerFeatureFlagService"/>) — a discovery-only cut, never applied to an
+    /// existing member's own data (see this file's other consumer-facing methods, none of which
+    /// call <see cref="_featureFlags"/>). Checked first, before the tenant-scoped settings/store
+    /// load below, so a disabled tenant skips that second per-tenant round trip entirely — this
+    /// method already pays one <see cref="ITenantSessionOverride"/> round trip per candidate
+    /// tenant (a pre-existing N+1-shaped pattern, not introduced by this change), and the flag
+    /// check adds one more per candidate; not optimized away here per TASK-559 scope.
+    /// </summary>
     public async Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetAvailableNetworksAsync(
         CancellationToken ct = default)
     {
@@ -206,6 +222,9 @@ public sealed class LoyaltyService : ILoyaltyService
         var result = new List<LoyaltyNetworkSummaryDto>();
         foreach (var tenant in tenants.Where(t => t.IsActive && t.HasModule("loyalty")))
         {
+            if (!await _featureFlags.IsEnabledAsync(tenant.Id, "loyalty", ct))
+                continue;
+
             var (settings, stores) = await _tenantScope.ExecuteAsync(
                 tenant.Id, () => LoadNetworkDetailsAsync(tenant.Id, ct), ct);
             if (settings?.IsEnabled == false) continue;

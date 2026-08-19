@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Loyalty;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
+using ShelfGuard.Infrastructure.Authorization;
 
 namespace ShelfGuard.Api.Controllers;
 
@@ -11,6 +12,18 @@ namespace ShelfGuard.Api.Controllers;
 /// [RequireModule("loyalty")]: that filter reads the "tenant_id" claim, which a consumer
 /// session never carries (it is cross-tenant by design) — module activation is instead
 /// enforced inside LoyaltyService.JoinAsync itself.
+///
+/// TASK-559 (Option A — discovery-only gate, not a hard gate): <see cref="Join"/> and
+/// <see cref="ILoyaltyService.GetAvailableNetworksAsync"/> (backing <see cref="GetNetworks"/>)
+/// are the only places <c>features.loyalty</c> (TASK-543/558) is checked — a tenant that has
+/// published <c>features.loyalty: false</c> disappears from discovery and rejects new joins,
+/// but an existing member's own data (<see cref="GetMemberships"/>/<see cref="GetCode"/>/
+/// <see cref="SetPreferredStore"/>/<see cref="GetHistory"/>) is deliberately left ungated —
+/// those four already structurally require an existing LoyaltyMembership row to succeed, which
+/// is what makes "the flag never revokes access to a relationship the consumer already has"
+/// hold without any new gate logic on them. Option B (a hard gate that would also cut off
+/// existing members) was explicitly rejected by the user — see
+/// .claude/tasks/mobile-roadmap.md TASK-559.
 /// </summary>
 [ApiController]
 [Route("api/consumer/loyalty")]
@@ -22,6 +35,7 @@ public sealed class ConsumerLoyaltyController : ControllerBase
     public ConsumerLoyaltyController(ILoyaltyService loyalty) => _loyalty = loyalty;
 
     [HttpPost("{tenantId:guid}/join")]
+    [RequireConsumerFeature("loyalty")]
     public async Task<IActionResult> Join(Guid tenantId, CancellationToken ct)
     {
         var consumerId = ResolveConsumerAccountId();

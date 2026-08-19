@@ -2599,5 +2599,94 @@ ran). `git status` confirmed `ConsumerLoyaltyController.cs` and the flag-service
 untouched.
 **Log:** `.claude/logs/tasks/558_2026-08-19_wire-feature-flags-consumer-content_backend-developer.md`
 **Handoff:** none
-**Next:** none scheduled. Open item: whether/how `features.loyalty` should gate
-`ConsumerLoyaltyController`.
+**Next:** TASK-559 registered below — option A (discovery-only gate) chosen by the user.
+
+---
+
+## TASK-559 — Gate ConsumerLoyaltyController's discovery/join surface (Option A)
+
+**Status:** `done`
+**Agent:** `backend-developer`
+**Priority:** high
+**Depends:** TASK-558 (established the pattern), TASK-543 (`IConsumerFeatureFlagService`)
+**Context:** TASK-558's open question, resolved by the user (2026-08-19) as **Option A —
+discovery-only gate**, not a hard gate: `features.loyalty = false` hides a tenant from being
+newly discovered/joined, but never revokes an existing member's access to their own
+balance/code/history. Rejected alternative (Option B, a hard gate blocking existing members from
+their own data too) explicitly — do not implement that.
+
+### Scope — which actions get the new gate and which deliberately don't
+
+- **`ConsumerLoyaltyController.Join`** (`POST /{tenantId}/join`) — add
+  `[RequireConsumerFeature("loyalty")]`. Single `tenantId` in the route, same mechanical pattern as
+  TASK-558's `GetPromotions`/`GetCatalog`. Coexists fine with the existing internal
+  `Tenant.HasModule("loyalty")` check inside `LoyaltyService.JoinAsync` — different concept (B2B
+  module licensing vs. consumer-app presentation), both must pass.
+- **`LoyaltyService.GetAvailableNetworksAsync`** (backs `GetNetworks`) — this is the one that
+  can't use the attribute (cross-tenant list, no single `tenantId`). Inject
+  `IConsumerFeatureFlagService` and filter out any candidate tenant where
+  `IsEnabledAsync(tenantId, "loyalty")` resolves `false`, alongside whatever `HasModule`/
+  `LoyaltyProgramSettings.IsEnabled` filtering already happens there. Read the method now before
+  changing it — don't guess its current filter shape.
+- **Deliberately left ungated — existing-member data access, per Option A:**
+  `GetMemberships`, `GetCode`, `SetPreferredStore`, `GetHistory`. None of these should check
+  `features.loyalty` at all. `SetPreferredStore` and `GetCode`/`GetHistory` already structurally
+  require an existing `LoyaltyMembership` to succeed (verify this is still true, don't just assume)
+  — that existing structural requirement is what makes "existing members keep access" hold without
+  needing new gate logic on these four actions. Do not add the attribute to any of them.
+- **`RetailersController`'s `DELETE /{slug}/membership`** (leave/unjoin, TASK-548) — also
+  deliberately ungated. Leaving a program should always be allowed regardless of the flag state (a
+  consumer shouldn't be trapped in a membership because a retailer toggled a flag) — confirm this
+  reasoning holds and leave it untouched.
+
+### Definition of Done
+
+- [x] `Join` rejects with the existing `403 {"error":"Feature not enabled"}` shape when a tenant
+  has explicitly published `features.loyalty: false`.
+- [x] `GetNetworks` excludes a tenant with `features.loyalty: false` published from its results.
+- [x] **Critical, non-negotiable (same standard as TASK-558):** a tenant with zero
+  `MobileConfiguration` activity (every real production tenant today) is unaffected — still appears
+  in `GetNetworks`, `Join` still succeeds. Proven by a real-Postgres integration test, not a mock.
+- [x] **The actual point of choosing Option A over B — prove it, don't just assert it:** for a
+  tenant that has `features.loyalty: false` published AND already has an existing
+  `LoyaltyMembership` from before that publish, `GetMemberships`/`GetCode`/`GetHistory`/
+  `SetPreferredStore` all still succeed for that existing member. This is the one test that
+  actually distinguishes Option A from Option B — if it's missing, this task hasn't proven what it
+  claims to.
+- [x] `dotnet build` and full `dotnet test` pass, re-verified at the moment of finishing.
+
+### Constraints
+
+- Do not touch `GetMemberships`/`GetCode`/`SetPreferredStore`/`GetHistory`'s code beyond what's
+  needed to prove they're unaffected — no new gate logic on them.
+- Do not touch `RetailersController`'s leave endpoint.
+- `GetAvailableNetworksAsync`'s new per-tenant flag check will add at least one more call per
+  candidate tenant — if this method already had an N+1-shaped concern before your change (check),
+  don't make it meaningfully worse without at least noting it; this doesn't need to be optimized
+  away in this task unless it's cheap to avoid, just don't be the one who makes an existing
+  known-acceptable pattern into a real problem.
+
+**Completed:** 2026-08-19
+**Result:** `[RequireConsumerFeature("loyalty")]` added to `Join` only. `GetAvailableNetworksAsync`
+now checks `IConsumerFeatureFlagService.IsEnabledAsync(tenant.Id, "loyalty")` **before** its
+existing per-tenant `ITenantSessionOverride` round trip (a disabled tenant now skips that second
+call entirely, a small win, not just a neutral addition). `GetMemberships`/`GetCode`/
+`SetPreferredStore`/`GetHistory` confirmed (by reading each, not assumed) to already structurally
+require an existing `LoyaltyMembership` — untouched, no gate added. `RetailersController`'s leave
+endpoint untouched, confirmed via diff.
+**Both critical tests pass, reviewed and confirmed by the orchestrator:**
+`PRODUCTION_SAFETY_GetAvailableNetworksAsync_includes_tenant_with_zero_MobileConfiguration_activity`
++ `PRODUCTION_SAFETY_tenant_with_zero_MobileConfiguration_activity_passes_the_join_gate` (every
+real production tenant unaffected), and
+`OptionA_existing_member_keeps_full_access_after_tenant_later_disables_loyalty_discovery` — joins
+while enabled, tenant then publishes `false`, proves the tenant drops from discovery and new joins
+403 while the *same already-existing member's* memberships/code/history/preferred-store all still
+succeed. This is the test that actually distinguishes Option A from the rejected Option B.
+**N+1 note:** the pre-existing per-candidate-tenant round trip in `GetAvailableNetworksAsync`
+predates this task; the new flag check doesn't meaningfully worsen it (and short-circuits early
+for disabled tenants) — not optimized away, per scope.
+**Verification:** `dotnet build` 0 errors (1 pre-existing unrelated warning); `dotnet test`
+1708/1708 passed, 0 skipped (+14 vs TASK-558's 1694 baseline).
+**Log:** `.claude/logs/tasks/559_2026-08-19_gate-loyalty-discovery-option-a_backend-developer.md`
+**Handoff:** none
+**Next:** none scheduled.
