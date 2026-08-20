@@ -2,6 +2,7 @@ using NSubstitute;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Vchasno;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -24,6 +25,7 @@ public sealed class SupplierAgreementServiceTests
     private readonly IVchasnoClientFactory _vchasno = Substitute.For<IVchasnoClientFactory>();
     private readonly ILegalEntityService _legalEntities = Substitute.For<ILegalEntityService>();
     private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
+    private readonly ITenantSessionOverride _tenantSessionOverride = Substitute.For<ITenantSessionOverride>();
     private readonly SupplierAgreementService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -34,7 +36,8 @@ public sealed class SupplierAgreementServiceTests
     public SupplierAgreementServiceTests()
     {
         _sut = new SupplierAgreementService(
-            _agreements, _settings, _marketplace, _tenantNames, _pdf, _vchasno, _legalEntities, _notifications);
+            _agreements, _settings, _marketplace, _tenantNames, _pdf, _vchasno, _legalEntities, _notifications,
+            _tenantSessionOverride);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);
@@ -43,6 +46,15 @@ public sealed class SupplierAgreementServiceTests
         _tenantNames.GetTenantDisplayNameAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns("Tenant");
         _pdf.Generate(Arg.Any<ContractPdfData>()).Returns([1, 2, 3]);
+
+        // TASK-582: MarkSignedAsync now runs its notification-enqueue + SaveChanges tail inside
+        // _tenantSessionOverride.ExecuteAsync — same pure pass-through convention
+        // LoyaltyServiceTests uses for ITenantSessionOverride: invokes the delegate immediately
+        // instead of opening a real transaction, so every pre-existing MarkSigned assertion still
+        // works unchanged.
+        _tenantSessionOverride
+            .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<bool>>>()());
     }
 
     // ── SubmitRequestAsync ─────────────────────────────────────────────────────

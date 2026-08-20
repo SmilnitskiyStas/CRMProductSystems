@@ -1,5 +1,6 @@
 using NSubstitute;
 using ShelfGuard.Application.Features.Marketplace;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 using Xunit;
@@ -15,13 +16,26 @@ public sealed class SupplierChatServiceTests
 {
     private readonly ISupplierChatRepository _repo = Substitute.For<ISupplierChatRepository>();
     private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
+    private readonly ITenantSessionOverride _tenantSessionOverride = Substitute.For<ITenantSessionOverride>();
     private readonly SupplierChatService _sut;
 
     private readonly Guid _supplierTenantId = Guid.NewGuid();
     private readonly Guid _clientTenantId = Guid.NewGuid();
     private readonly Guid _userId = Guid.NewGuid();
 
-    public SupplierChatServiceTests() => _sut = new SupplierChatService(_repo, _notifications);
+    public SupplierChatServiceTests()
+    {
+        _sut = new SupplierChatService(_repo, _notifications, _tenantSessionOverride);
+
+        // TASK-582: SendMessageAsync's supplier→client branch now runs its notification-enqueue
+        // + SaveChanges tail inside _tenantSessionOverride.ExecuteAsync — same pure pass-through
+        // convention LoyaltyServiceTests uses for ITenantSessionOverride: invokes the delegate
+        // immediately instead of opening a real transaction, so every pre-existing SendMessage
+        // assertion still works unchanged.
+        _tenantSessionOverride
+            .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<bool>>>()());
+    }
 
     // ── GetOrCreateSessionAsync ────────────────────────────────────────────────
 

@@ -34,6 +34,13 @@ builder.Services.AddControllers()
             return new BadRequestObjectResult(new { error = message });
         });
 builder.Services.AddSingleton<IClientErrorFactory, ErrorBodyClientErrorFactory>();
+
+// TASK-582: catches any unhandled exception at the API boundary and returns a clean
+// { "error": "..." } 500 instead of letting Kestrel abort the connection before headers are
+// sent (which the browser previously reported as a misleading CORS error) — see
+// GlobalExceptionHandler's doc comment for the concrete bug this generalizes from.
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -286,6 +293,11 @@ app.Use(async (context, next) =>
     headers["Permissions-Policy"]     = "camera=(), microphone=(), geolocation=()";
     await next();
 });
+
+// TASK-582: must run before UseCors() so CORS middleware still gets to add
+// Access-Control-Allow-Origin to an error response produced here — placing it after UseCors()
+// would reproduce the exact masking bug this middleware exists to fix, just one layer up.
+app.UseExceptionHandler();
 
 app.UseCors();
 app.UseStaticFiles();

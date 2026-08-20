@@ -2,6 +2,7 @@ using System.Text.Json;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Marketplace.Vchasno;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -45,6 +46,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
     private readonly IVchasnoClientFactory _vchasno;
     private readonly ILegalEntityService _legalEntities;
     private readonly INotificationRepository _notifications;
+    private readonly ITenantSessionOverride _tenantSessionOverride;
 
     public SupplierAgreementService(
         ISupplierAgreementRepository agreements,
@@ -54,7 +56,8 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         IContractPdfGenerator pdf,
         IVchasnoClientFactory vchasno,
         ILegalEntityService legalEntities,
-        INotificationRepository notifications)
+        INotificationRepository notifications,
+        ITenantSessionOverride tenantSessionOverride)
     {
         _agreements    = agreements;
         _settings      = settings;
@@ -64,6 +67,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         _vchasno       = vchasno;
         _legalEntities = legalEntities;
         _notifications = notifications;
+        _tenantSessionOverride = tenantSessionOverride;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -371,8 +375,28 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         agreement.UpdatedAt = DateTimeOffset.UtcNow;
 
         _agreements.Update(agreement);
-        await EnqueueSignedNotificationAsync(agreement, ct);
-        await _agreements.SaveChangesAsync(ct);
+
+        // TASK-582: EnqueueSignedNotificationAsync inserts into notification_queue with
+        // TenantId = agreement.ClientTenantId (the notification recipient), while the ambient
+        // DB session here is authenticated as the SUPPLIER tenant (whoever called this
+        // endpoint) — notification_queue's plain tenant_isolation RLS policy only allows
+        // TenantId = session tenant, so this insert used to throw an unhandled
+        // PostgresException (42501 RLS violation) that propagated to the client as a bare 500
+        // (masked as a CORS error, since the exception aborted the connection before headers
+        // were sent — see Program.cs's exception handler). Run the notification enqueue and the
+        // final SaveChangesAsync under an explicit override of the CLIENT tenant's RLS context
+        // instead (ITenantSessionOverride) — safe because agreement.ClientTenantId is already a
+        // trusted value at this point (GetOwnAsync above already confirmed this agreement
+        // belongs to the calling supplier tenant), and supplier_agreements' own RLS policy is
+        // OR-based on both SupplierTenantId/ClientTenantId, so the status-change columns that
+        // also get flushed by this same SaveChangesAsync call still satisfy their RLS under
+        // either tenant. Bonus: the status change and the outbox row now commit atomically.
+        await _tenantSessionOverride.ExecuteAsync(agreement.ClientTenantId, async () =>
+        {
+            await EnqueueSignedNotificationAsync(agreement, ct);
+            await _agreements.SaveChangesAsync(ct);
+            return true;
+        }, ct);
 
         return (await ToDtoAsync(agreement, ct), null);
     }

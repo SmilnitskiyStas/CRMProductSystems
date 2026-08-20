@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -21,11 +22,14 @@ public sealed class SupplierChatService : ISupplierChatService
 
     private readonly ISupplierChatRepository _repo;
     private readonly INotificationRepository _notifications;
+    private readonly ITenantSessionOverride _tenantSessionOverride;
 
-    public SupplierChatService(ISupplierChatRepository repo, INotificationRepository notifications)
+    public SupplierChatService(
+        ISupplierChatRepository repo, INotificationRepository notifications, ITenantSessionOverride tenantSessionOverride)
     {
         _repo = repo;
         _notifications = notifications;
+        _tenantSessionOverride = tenantSessionOverride;
     }
 
     public async Task<SupplierChatSessionDto> GetOrCreateSessionAsync(
@@ -129,9 +133,33 @@ public sealed class SupplierChatService : ISupplierChatService
         // ADR-018 §2: only supplier → client messages notify (the client isn't otherwise
         // watching this thread); client → supplier messages don't enqueue anything here.
         if (session.SupplierTenantId == senderTenantId)
-            await EnqueueSupplierMessageNotificationAsync(session, message, ct);
-
-        await _repo.SaveChangesAsync(ct);
+        {
+            // TASK-582: EnqueueSupplierMessageNotificationAsync inserts into notification_queue
+            // with TenantId = session.ClientTenantId (the recipient), while the ambient DB
+            // session here is authenticated as the SUPPLIER tenant (the sender) —
+            // notification_queue's plain tenant_isolation RLS policy only allows TenantId =
+            // session tenant, so an unscoped insert here would throw an unhandled
+            // PostgresException (42501), same bug class as SupplierAgreementService.MarkSignedAsync
+            // (TASK-582). Run the notification enqueue and the final SaveChangesAsync under an
+            // explicit override of the CLIENT tenant's RLS context (ITenantSessionOverride) —
+            // safe because session.ClientTenantId is already a trusted value (this session was
+            // already loaded and the caller confirmed above to belong to it), and
+            // supplier_chat_messages'/supplier_chat_sessions' own RLS is OR-based on both
+            // SupplierTenantId/ClientTenantId, so the chat message insert and session bump that
+            // also get flushed by this same SaveChangesAsync call still satisfy their RLS under
+            // either tenant. The client → supplier branch below doesn't need this — it never
+            // enqueues, and already writes fine under the sender's own (client) tenant.
+            await _tenantSessionOverride.ExecuteAsync(session.ClientTenantId, async () =>
+            {
+                await EnqueueSupplierMessageNotificationAsync(session, message, ct);
+                await _repo.SaveChangesAsync(ct);
+                return true;
+            }, ct);
+        }
+        else
+        {
+            await _repo.SaveChangesAsync(ct);
+        }
 
         return (ToMessageDto(message), null);
     }
