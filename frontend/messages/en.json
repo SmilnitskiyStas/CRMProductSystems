@@ -880,6 +880,7 @@
           "all": "All"
         },
         "empty": "No receipts",
+        "newButton": "New receipt",
         "headers": {
           "id": "#",
           "store": "Store",
@@ -893,6 +894,37 @@
           "view": "View",
           "openPage": "Open page"
         }
+      },
+      "createForm": {
+        "modalTitle": "New receipt",
+        "supplierLabel": "Supplier",
+        "supplierPlaceholder": "No supplier",
+        "destinationStoreLabel": "Destination store *",
+        "destinationStorePlaceholder": "Select store…",
+        "expectedAtLabel": "Expected delivery date",
+        "viaCentralStoreLabel": "Via central store",
+        "productSearchPlaceholder": "Search product by name or barcode…",
+        "productSearchHint": "Start typing a product name…",
+        "productSearchEmpty": "No matches found",
+        "alreadyAdded": "Already added",
+        "itemsSectionTitle": "Selected items ({count})",
+        "noRowsYet": "No items added yet",
+        "quantityLabel": "Qty *",
+        "quantityPlaceholder": "0",
+        "priceLabel": "Purchase price",
+        "pricePlaceholder": "optional",
+        "expiryLabel": "Expiry date",
+        "batchLabel": "Batch",
+        "batchPlaceholder": "optional",
+        "removeItem": "Remove",
+        "notesLabel": "Notes",
+        "notesPlaceholder": "Notes for this receipt (optional)…",
+        "errorNoDestination": "Select a destination store",
+        "errorNoItems": "Add at least one item",
+        "errorQuantityRequired": "Enter a quantity for “{product}”",
+        "errorSaveFailed": "Failed to create receipt",
+        "saving": "Creating…",
+        "submit": "Create receipt"
       },
       "drawer": {
         "section": "General information",
@@ -949,6 +981,7 @@
       },
       "page": {
         "subtitle": "Moving stock between stores and warehouses",
+        "newButton": "New Transfer",
         "statusTabs": {
           "all": "All"
         },
@@ -965,6 +998,32 @@
           "view": "View",
           "confirm": "Confirm receipt"
         }
+      },
+      "createForm": {
+        "modalTitle": "New Transfer",
+        "fromStoreLabel": "Source store",
+        "fromStorePlaceholder": "Select store…",
+        "toStoreLabel": "Destination store",
+        "toStorePlaceholder": "Select store…",
+        "sourceStoreHint": "Select a source store first",
+        "noBatchesAtStore": "No stock at this store",
+        "batchSearchPlaceholder": "Search product, batch, barcode…",
+        "batchSearchEmpty": "Nothing found",
+        "availableLabel": "Available: {qty}",
+        "alreadyAdded": "Already added",
+        "itemsSectionTitle": "Selected items ({count})",
+        "noRowsYet": "Add items from the list above",
+        "quantityPlaceholder": "Qty",
+        "removeItem": "Remove",
+        "notesLabel": "Notes",
+        "notesPlaceholder": "optional",
+        "errorNoDestination": "Select a destination store",
+        "errorNoItems": "Add at least one item",
+        "errorQuantityRequired": "Enter a quantity for \"{product}\"",
+        "errorQuantityExceeds": "Quantity for \"{product}\" exceeds available stock (available: {available})",
+        "errorSaveFailed": "Failed to save",
+        "saving": "Saving…",
+        "submit": "Create transfer"
       },
       "drawer": {
         "section": "General information",
@@ -1027,7 +1086,8 @@
         "filterChips": {
           "reason": "Reason: {value}",
           "store": "Store: {value}"
-        }
+        },
+        "newButton": "New write-off"
       },
       "drawer": {
         "section": "General information",
@@ -1048,6 +1108,33 @@
           "actions": "Actions"
         },
         "analyticsAction": "Product analytics"
+      },
+      "createForm": {
+        "modalTitle": "New write-off",
+        "storeLabel": "Store *",
+        "storePlaceholder": "Select store…",
+        "reasonLabel": "Reason",
+        "reasonPlaceholder": "Not specified",
+        "sourceStoreHint": "Select a store first to see available batches",
+        "noBatchesAtStore": "No stock available at this store",
+        "batchSearchPlaceholder": "Search product, batch, or barcode…",
+        "batchSearchEmpty": "No matches found",
+        "availableLabel": "Available: {qty}",
+        "alreadyAdded": "Already added",
+        "itemsSectionTitle": "Selected items ({count})",
+        "noRowsYet": "No items added yet",
+        "quantityLabel": "Qty *",
+        "quantityPlaceholder": "0",
+        "unitPriceLabel": "Unit price",
+        "unitPricePlaceholder": "optional",
+        "removeItem": "Remove",
+        "errorNoStore": "Select a store",
+        "errorNoItems": "Add at least one item",
+        "errorQuantityRequired": "Enter a quantity for “{product}”",
+        "errorQuantityExceeds": "Quantity for “{product}” exceeds the batch balance (available: {available})",
+        "errorSaveFailed": "Failed to create write-off",
+        "saving": "Creating…",
+        "submit": "Create write-off"
       }
     },
     "locations": {

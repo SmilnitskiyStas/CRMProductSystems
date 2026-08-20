@@ -4834,4 +4834,123 @@ moved the row to Активні (counts updated live). Test data cleaned up (sof
 UI, then hard-purged via psql), DB left clean. This closes the current round of Consumer App
 admin frontend work — mobile wiring remains the separate future task already documented in the
 TASK-521 handoff doc (`.claude/logs/handoffs/521-to-mobile-developer_consumer-content-api.md`).
+
+# TASK-577 — Transfers: create-transfer form on the web frontend
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-20 · **Next:** none
+
+`/transfers` was read-only; backend (`POST /api/transfers`) and frontend data layer
+(`transfersApi.create`, `useCreateTransfer`) already existed unused. Added
+`frontend/features/transfers/components/CreateTransferForm.tsx` (styled like `AddBatchForm.tsx`:
+local inline styles, native `<select>`/`<input>`, single error box) wired into
+`/transfers` via a new "New Transfer" button + `Modal`. Source-store select drives
+`useStock({ store_id }, enabled)` (added the `enabled` param to `useStock` — backward compatible)
+to populate a FEFO-sorted, text-filterable batch picker; rows keyed by `productStockId` so two
+batches of the same product stay separate; destination options structurally exclude the source
+store. `transferType` hardcoded `store_to_store` (no UI switch, matches mobile reference). Full
+i18n block added under `Dashboard.transfers.createForm` in `uk.json`/`en.json`.
+
+Deviation from plan (found live in-browser, not by inspection): the plan's literal
+`max={availableQty}` on the quantity input triggers native HTML5 constraint validation that
+silently blocks submission *before* the custom over-limit error message can render. Fixed with
+`noValidate` on the `<form>` so the plan's own validation/error copy always runs; `min`/`max`/
+`step` kept for spinner UX only.
+
+`npx tsc --noEmit` and `npm run lint` clean. **Live-verified in-browser** (dotnet API :5000 +
+`next dev` :3002 against the real dev DB, `ea@demo.local`/"Свіжий Кут", 4 stores, source store
+with 645 batches): source-store selection populates FEFO-sorted batches; destination excludes
+source; two batches of the same product become two rows; already-added batch shows "Already
+added" (no-op re-click); row removal works; empty-quantity and over-available-quantity submits
+both show the correct per-product error text and fire no request; a valid submit (incl. a
+fractional quantity) → `POST /api/transfers` 201, modal closed, new "In Transit" row appeared at
+the top of the list with no manual refresh. Cross-checked in Postgres: transfer/items rows
+correct, source `product_stock.Quantity` decremented correctly, `stock_movements` written. Test
+transfer + movements deleted and stock quantities restored via psql afterward — dev DB left
+clean. Temporary local-only CORS entry (`:3002`) added for testing and reverted (confirmed via
+`git diff`); dev servers stopped.
+Log: `.claude/logs/tasks/577_2026-08-20_create-transfer-form_frontend-developer.md`.
 Log: `.claude/logs/tasks/525_2026-08-14_consumer-app-page-split-history_frontend-developer.md`.
+
+# TASK-578 — Receipts: create-receipt form on the web frontend
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-20 · **Next:** none
+
+`/receipts` was read-only; backend (`POST /api/receipts`) and frontend data layer
+(`receiptsApi.create`, `useCreateReceipt`) already existed unused. A receipt is a standalone
+document (no PO entity in this codebase) — this task is only the "create draft receipt" step;
+`/receipts/[id]` (fill-in/confirm-receive) was untouched. Added new feature module
+`frontend/features/suppliers/` (mirrors `features/locations/`: `types.ts`/`api/`/`hooks/`,
+`SupplierDto` matches the backend record) plus
+`frontend/features/receipts/components/CreateReceiptForm.tsx` (same structural convention as
+TASK-577's `CreateTransferForm.tsx`), wired into `/receipts` via a new "New receipt" button +
+`Modal` (width 720). `useLocations()` for destination store (required), `useSuppliers()` for
+supplier (optional), `useCatalogProducts({ search: debouncedQuery })` for the product picker
+(receipts create new stock, so catalog not `useStock`) — search debounced ~300ms. Rows keyed by
+`productId` (not `productStockId` — no batch identity yet at draft time), so a product can only
+appear once; already-added shows a badge, no-op on re-click. Each row has 4 compact inputs
+(qty required, price/expiry/batch optional, price pre-filled from the catalog when known).
+Validation: destination store → empty rows → per-row `NaN`/`<=0` quantity; price/expiry/batch
+stay optional client-side (filled in later on `[id]`, enforced server-side at receive time). Full
+i18n block added under `Dashboard.receipts.createForm` in `uk.json`/`en.json` (28 keys) plus
+`page.newButton`.
+
+No deviations from the brief.
+
+`npx tsc --noEmit` and `npm run lint` clean. **Live-verified in-browser** (dotnet API :5000 +
+`next dev` :3002 against the real dev DB, tenant "Свіжий Кут", role `network_manager`): supplier
+(3 active) and destination store (4) dropdowns populate; debounced product search confirmed via
+network log (fires once after ~300ms, not per keystroke); added 2 products, re-adding one was a
+no-op ("Already added"); removed a row, count updated correctly; empty-quantity submit showed the
+correct per-product error and fired no request; valid submit (qty/price/expiry/batch all filled)
+→ `POST /api/receipts` 201, modal closed, new "Draft" row appeared at the top of the list with no
+manual refresh; opened the new receipt's `/receipts/{id}` detail page and confirmed qty/expiry/
+batch all round-tripped correctly into the existing editable table. Browser pane didn't composite
+frames this session, so clicks were driven via `javascript_tool` DOM dispatch (verified via
+`read_page`/network log, not assumed) instead of `computer`. Test `stock_receipts`/
+`stock_receipt_items` rows deleted via psql afterward (no stock movements existed to unwind, since
+the test receipt was never confirmed-received) — dev DB left clean. Temporary local-only CORS
+entry (`:3002`) and `.claude/launch.json` port override both reverted (confirmed via `git diff`
+clean on both); dev servers stopped.
+
+# TASK-579 — Write-offs: create-write-off form on the web frontend
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-20 · **Next:** none
+
+`/write-offs` was read-only (view + approve/reject); backend (`POST /api/write-offs`) creates
+directly at `pending_approval` (no draft step) and does not touch stock — deduction happens only
+on approve (existing `useApproveWriteOff`, untouched), via FEFO or the named `productStockId`.
+Added `frontend/features/write-offs/components/CreateWriteOffForm.tsx`, structurally closest to
+TASK-577's `CreateTransferForm.tsx` (a write-off item references an existing batch, not a new
+one): `useLocations()` for a single store select, `useStock({store_id}, !!storeId)` for a
+FEFO-sorted (soonest-expiry-first) text-filterable batch picker, rows keyed by `productStockId`.
+Each row has 2 compact inputs (qty required with `max={availableQty}`, unit price optional) —
+no notes field, since `CreateWriteOffRequest.notes` is silently discarded server-side (no `Notes`
+column on the `WriteOff` entity; flagged as a backend follow-up, not fixed). Wired into
+`/write-offs` via a new "New write-off" `Btn` + `Modal` (width 700) — this page had no page-wide
+access gate before and still doesn't; only the create button is conditional on
+`hasRole(me.role, CAN_RECEIVE_STOCK)`, preserving the broader existing view access (merchandiser
+can view, not create). Full i18n block added under `Dashboard.writeOffs.createForm` in
+`uk.json`/`en.json` (24 keys) plus `page.newButton`; reason labels reused from the existing
+`Dashboard.writeOffs.reason` namespace.
+
+No deviations from the brief.
+
+`npx tsc --noEmit` and `npm run lint` clean. **Live-verified in-browser** (dotnet API :5000 +
+`next dev` :3002 against the real dev DB, tenant "Свіжий Кут", role `network_manager`): store
+select populates a FEFO-sorted batch picker; text search filters correctly; adding the same batch
+twice is a no-op ("Already added", opacity/cursor confirm disabled); removing a row works; submit
+with empty quantity shows the correct per-product error; submit with qty exceeding `availableQty`
+(999 > max=45) shows the correct exceeds-error — confirms `noValidate` lets the custom validator
+run past the native `max` block; valid submit (qty=3, price=25.5, reason=Expired) → `POST
+/api/write-offs` 201, modal closed, new "Pending Approval" row appeared at the top of the list
+with no manual refresh (loss amount 76.5 = 3×25.5 correct). Confirmed via direct `fetch
+('/api/stock?...')` that the batch's quantity was unchanged (still 45) immediately after create —
+stock genuinely untouched pre-approval. Approved via the existing unmodified approve action →
+status flipped to "Approved", re-fetched stock → quantity now 42 (45−3), confirming the create
+flow feeds the existing FEFO-consuming approve flow correctly. Browser pane didn't composite
+frames this session either, so clicks were driven via `javascript_tool` DOM dispatch (verified via
+`get_page_text`/direct API fetches, not assumed). Test write-off deleted via psql and stock
+quantity restored (+3) afterward — dev DB re-verified back to its original 3-row list. Temporary
+local-only CORS entry (`:3002`) reverted (confirmed via `git diff` clean); dev servers stopped.
+Log: `.claude/logs/tasks/579_2026-08-20_create-write-off-form_frontend-developer.md`.
+Log: `.claude/logs/tasks/578_2026-08-20_create-receipt-form_frontend-developer.md`.

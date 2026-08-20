@@ -2,15 +2,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { stockApi } from "../api/stock";
 import type { CreateStockRequest } from "../types";
 
-export function useStock(params?: {
-  store_id?: string;
-  status?: string;
-  zone_id?: string;
-  product_id?: string;
-}) {
+export function useStock(
+  params?: {
+    store_id?: string;
+    status?: string;
+    zone_id?: string;
+    product_id?: string;
+  },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["stock", params],
     queryFn: () => stockApi.getAll(params),
+    enabled,
   });
 }
 

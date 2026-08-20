@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, ExternalLink } from "lucide-react";
+import { Eye, ExternalLink, Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useReceipts } from "@/features/receipts/hooks/useReceipts";
 import { ReceiptStatusBadge } from "@/features/receipts/components/ReceiptStatusBadge";
+import { CreateReceiptForm } from "@/features/receipts/components/CreateReceiptForm";
 import type { ReceiptDto, ReceiptStatus } from "@/features/receipts/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
 import {
   DetailDrawer,
   DrawerField,
@@ -208,6 +211,7 @@ export default function ReceiptsPage() {
   );
 
   const [selected, setSelected] = useState<ReceiptDto | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   if (access === null) return null;
   if (!access) return <AccessDenied title={t("title")} />;
@@ -218,11 +222,16 @@ export default function ReceiptsPage() {
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          {tPage("subtitle")}
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
+          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+            {tPage("subtitle")}
+          </p>
+        </div>
+        <Btn icon={<Plus size={15} />} onClick={() => setShowCreateModal(true)}>
+          {tPage("newButton")}
+        </Btn>
       </div>
 
       {/* Status tabs */}
@@ -346,6 +355,15 @@ export default function ReceiptsPage() {
       >
         {selected && <ReceiptDetail r={selected} />}
       </DetailDrawer>
+
+      {showCreateModal && (
+        <Modal title={t("createForm.modalTitle")} onClose={() => setShowCreateModal(false)} width={720}>
+          <CreateReceiptForm
+            onSuccess={() => setShowCreateModal(false)}
+            onCancel={() => setShowCreateModal(false)}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

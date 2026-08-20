@@ -880,6 +880,7 @@
           "all": "Всі"
         },
         "empty": "Немає прийомок",
+        "newButton": "Нова прийомка",
         "headers": {
           "id": "#",
           "store": "Магазин",
@@ -893,6 +894,37 @@
           "view": "Переглянути",
           "openPage": "Відкрити сторінку"
         }
+      },
+      "createForm": {
+        "modalTitle": "Нова прийомка",
+        "supplierLabel": "Постачальник",
+        "supplierPlaceholder": "Без постачальника",
+        "destinationStoreLabel": "Магазин призначення *",
+        "destinationStorePlaceholder": "Оберіть магазин…",
+        "expectedAtLabel": "Очікувана дата постачання",
+        "viaCentralStoreLabel": "Через центральний склад",
+        "productSearchPlaceholder": "Пошук товару за назвою або штрихкодом…",
+        "productSearchHint": "Почніть вводити назву товару…",
+        "productSearchEmpty": "Нічого не знайдено",
+        "alreadyAdded": "Вже додано",
+        "itemsSectionTitle": "Обрані товари ({count})",
+        "noRowsYet": "Ще не додано жодного товару",
+        "quantityLabel": "К-сть *",
+        "quantityPlaceholder": "0",
+        "priceLabel": "Ціна закупівлі",
+        "pricePlaceholder": "необов'язково",
+        "expiryLabel": "Термін придатності",
+        "batchLabel": "Партія",
+        "batchPlaceholder": "необов'язково",
+        "removeItem": "Видалити",
+        "notesLabel": "Примітки",
+        "notesPlaceholder": "Примітки до прийомки (необов'язково)…",
+        "errorNoDestination": "Оберіть магазин призначення",
+        "errorNoItems": "Додайте хоча б один товар",
+        "errorQuantityRequired": "Вкажіть кількість для «{product}»",
+        "errorSaveFailed": "Не вдалося створити прийомку",
+        "saving": "Створення…",
+        "submit": "Створити прийомку"
       },
       "drawer": {
         "section": "Загальна інформація",
@@ -949,6 +981,7 @@
       },
       "page": {
         "subtitle": "Переміщення товарів між магазинами та складами",
+        "newButton": "Нове переміщення",
         "statusTabs": {
           "all": "Всі"
         },
@@ -965,6 +998,32 @@
           "view": "Переглянути",
           "confirm": "Підтвердити отримання"
         }
+      },
+      "createForm": {
+        "modalTitle": "Нове переміщення",
+        "fromStoreLabel": "Магазин-джерело",
+        "fromStorePlaceholder": "Оберіть магазин…",
+        "toStoreLabel": "Магазин призначення",
+        "toStorePlaceholder": "Оберіть магазин…",
+        "sourceStoreHint": "Спочатку оберіть магазин-джерело",
+        "noBatchesAtStore": "Немає товару в наявності",
+        "batchSearchPlaceholder": "Пошук товару, партії, штрихкоду…",
+        "batchSearchEmpty": "Нічого не знайдено",
+        "availableLabel": "Доступно: {qty}",
+        "alreadyAdded": "Вже додано",
+        "itemsSectionTitle": "Обрані товари ({count})",
+        "noRowsYet": "Додайте товари зі списку вище",
+        "quantityPlaceholder": "К-сть",
+        "removeItem": "Видалити",
+        "notesLabel": "Примітки",
+        "notesPlaceholder": "необов'язково",
+        "errorNoDestination": "Оберіть магазин призначення",
+        "errorNoItems": "Додайте хоча б один товар",
+        "errorQuantityRequired": "Вкажіть кількість для «{product}»",
+        "errorQuantityExceeds": "Кількість «{product}» перевищує залишок партії (доступно: {available})",
+        "errorSaveFailed": "Помилка збереження",
+        "saving": "Збереження…",
+        "submit": "Створити переміщення"
       },
       "drawer": {
         "section": "Загальна інформація",
@@ -1027,7 +1086,8 @@
         "filterChips": {
           "reason": "Причина: {value}",
           "store": "Магазин: {value}"
-        }
+        },
+        "newButton": "Нове списання"
       },
       "drawer": {
         "section": "Загальна інформація",
@@ -1048,6 +1108,33 @@
           "actions": "Дії"
         },
         "analyticsAction": "Аналітика товару"
+      },
+      "createForm": {
+        "modalTitle": "Нове списання",
+        "storeLabel": "Магазин *",
+        "storePlaceholder": "Оберіть магазин…",
+        "reasonLabel": "Причина",
+        "reasonPlaceholder": "Не вказано",
+        "sourceStoreHint": "Спочатку оберіть магазин, щоб побачити доступні партії",
+        "noBatchesAtStore": "У цьому магазині немає товарів у наявності",
+        "batchSearchPlaceholder": "Пошук товару, партії або штрихкоду…",
+        "batchSearchEmpty": "Нічого не знайдено",
+        "availableLabel": "Доступно: {qty}",
+        "alreadyAdded": "Вже додано",
+        "itemsSectionTitle": "Обрані товари ({count})",
+        "noRowsYet": "Ще не додано жодного товару",
+        "quantityLabel": "К-сть *",
+        "quantityPlaceholder": "0",
+        "unitPriceLabel": "Ціна за од.",
+        "unitPricePlaceholder": "необов'язково",
+        "removeItem": "Видалити",
+        "errorNoStore": "Оберіть магазин",
+        "errorNoItems": "Додайте хоча б один товар",
+        "errorQuantityRequired": "Вкажіть кількість для «{product}»",
+        "errorQuantityExceeds": "Кількість «{product}» перевищує залишок партії (доступно: {available})",
+        "errorSaveFailed": "Не вдалося створити списання",
+        "saving": "Створення…",
+        "submit": "Створити списання"
       }
     },
     "locations": {

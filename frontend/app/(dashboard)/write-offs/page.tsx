@@ -4,7 +4,7 @@ import { Suspense, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import {
-  Eye, CheckCircle, XCircle, FileDown, BarChart2,
+  Eye, CheckCircle, XCircle, FileDown, BarChart2, Plus,
 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import {
@@ -14,7 +14,12 @@ import {
 } from "@/features/write-offs/hooks/useWriteOffs";
 import type { WriteOffDto, WriteOffStatus } from "@/features/write-offs/types";
 import { WRITE_OFF_STATUS_COLOR } from "@/features/write-offs/types";
+import { CreateWriteOffForm } from "@/features/write-offs/components/CreateWriteOffForm";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
 import {
   DetailDrawer,
   DrawerField,
@@ -241,6 +246,8 @@ function WriteOffsPageContent() {
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: me } = useMe();
+  const canCreate = me ? hasRole(me.role, CAN_RECEIVE_STOCK) : false;
 
   const [statusFilter, setStatusFilter] = useState("");
   const [reasonFilter] = useState(searchParams.get("reason") ?? "");
@@ -253,6 +260,7 @@ function WriteOffsPageContent() {
   const reject = useRejectWriteOff();
 
   const [selected, setSelected] = useState<WriteOffDto | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Client-side filtering for reason and store_id
   const filteredWriteOffs = useMemo(() => {
@@ -294,11 +302,18 @@ function WriteOffsPageContent() {
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          {tPage("subtitle")}
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
+          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+            {tPage("subtitle")}
+          </p>
+        </div>
+        {canCreate && (
+          <Btn icon={<Plus size={15} />} onClick={() => setShowCreateModal(true)}>
+            {tPage("newButton")}
+          </Btn>
+        )}
       </div>
 
       {/* Status tabs */}
@@ -494,6 +509,15 @@ function WriteOffsPageContent() {
           />
         )}
       </DetailDrawer>
+
+      {showCreateModal && (
+        <Modal title={t("createForm.modalTitle")} onClose={() => setShowCreateModal(false)} width={700}>
+          <CreateWriteOffForm
+            onSuccess={() => setShowCreateModal(false)}
+            onCancel={() => setShowCreateModal(false)}
+          />
+        </Modal>
+      )}
     </div>
   );
 }
