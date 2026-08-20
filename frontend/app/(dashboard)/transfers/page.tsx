@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Eye, CheckCircle, XCircle, BarChart2, Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
@@ -12,6 +12,7 @@ import {
 import type { TransferDto, TransferStatus } from "@/features/transfers/types";
 import { TRANSFER_STATUS_COLOR } from "@/features/transfers/types";
 import { CreateTransferForm } from "@/features/transfers/components/CreateTransferForm";
+import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
@@ -230,6 +231,8 @@ export default function TransfersPage() {
     statusFilter ? { status: statusFilter } : undefined,
     access === true,
   );
+  const { data: locations = [] } = useLocations();
+  const myLocationIds = useMemo(() => new Set(locations.map((l) => l.id)), [locations]);
   const confirm = useConfirmTransfer();
   const cancel = useCancelTransfer();
 
@@ -348,7 +351,7 @@ export default function TransfersPage() {
                           onClick: () => setSelected(tr),
                         },
                         { separator: true },
-                        ...(tr.status === "in_transit"
+                        ...(tr.status === "in_transit" && myLocationIds.has(tr.toStoreId)
                           ? [
                               {
                                 label: tPage("actionMenu.confirm"),

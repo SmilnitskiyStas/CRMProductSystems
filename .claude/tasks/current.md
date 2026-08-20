@@ -4954,3 +4954,46 @@ quantity restored (+3) afterward — dev DB re-verified back to its original 3-r
 local-only CORS entry (`:3002`) reverted (confirmed via `git diff` clean); dev servers stopped.
 Log: `.claude/logs/tasks/579_2026-08-20_create-write-off-form_frontend-developer.md`.
 Log: `.claude/logs/tasks/578_2026-08-20_create-receipt-form_frontend-developer.md`.
+
+# TASK-580 — Transfers: fail-closed destination-store check on confirm
+
+**Status:** done · **Agent:** security-reviewer · **Updated:** 2026-08-20 · **Next:** none
+
+`TransferService.ConfirmAsync` had zero store-membership checks — any user whose role passed the
+`CanReceiveStock` policy could confirm any transfer in the tenant regardless of store assignment.
+Plugged into ADR-022's `user_locations` mechanism (same repo/DTO as `LocationService`) but
+**fail-closed** (not fail-open like that transitional precedent): `network_manager`/
+`store_manager`/`storekeeper` must have a `user_locations` row for the transfer's `ToStoreId`;
+`provider`/`enterprise_admin` bypass unconditionally; a null/missing role claim falls into the
+checked (rejected) path rather than silently bypassing. `ConfirmAsync`/`ITransferService` gained
+`(Guid tenantId, string? role)` params; `TransfersController.Confirm` now requires `tenantId`
+(mirrors `Create`'s existing Forbid-on-missing-context pattern) and maps the new error to 403.
+`CancelAsync` has the same *kind* of gap but is out of scope (flagged as follow-up, not fixed).
+
+`dotnet build` clean (0 errors, 1 pre-existing unrelated warning). Transfers suite 26/26 passed
+(3 pre-existing + 8 new/parameterized), full suite 1748/1748 passed. No browser/HTTP verification
+— backend-only, fully covered by unit tests.
+
+Log: `.claude/logs/tasks/580_2026-08-20_transfer-confirm-store-scope_security-reviewer.md`.
+
+# TASK-581 — Transfers: hide "Confirm receipt" for users outside the destination store
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-20 · **Next:** none
+
+Frontend UX counterpart to TASK-580's backend 403. `frontend/app/(dashboard)/transfers/page.tsx`
+now fetches `useLocations()` and gates the "Confirm receipt" `ActionMenu` item on
+`tr.status === "in_transit" && myLocationIds.has(tr.toStoreId)` (was status-only). Verified via
+`LocationService.GetAllAsync` that this correctly mirrors the backend for both scoped roles
+(real `user_locations` filter) and bypass roles (`provider`/`enterprise_admin` see the full list,
+so the check trivially passes). No `onError`/toast added to the confirm mutation — checked
+write-offs' approve/reject and transfers' own cancel action, none of the app's one-click
+`ActionMenu` row actions surface mutation errors; adding one only here would be inconsistent.
+Flagged as a pre-existing app-wide gap, not fixed.
+
+`tsc --noEmit` and `npm run lint` clean. Live-verified in-browser against the dev DB: `ea@demo.local`
+(enterprise_admin) sees Confirm on the in-transit transfer; `manager@demo.local` (store_manager,
+assigned to Центральний+Подільський) does NOT see it once the transfer's `ToLocationId` was
+temporarily pointed at Троєщина (a store they're not assigned to) — reverted after. No backend
+files touched.
+
+Log: `.claude/logs/tasks/581_2026-08-20_transfer-confirm-hide-wrong-store_frontend-developer.md`.

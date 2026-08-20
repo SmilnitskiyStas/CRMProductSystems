@@ -59,15 +59,18 @@ public sealed class TransfersController : ControllerBase
     [HttpPut("{id:guid}/confirm")]
     [ProducesResponseType(typeof(TransferDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Confirm(Guid id, CancellationToken ct)
     {
-        var (_, userId) = GetContext();
-        if (userId is null) return Forbid();
+        var (tenantId, userId) = GetContext();
+        if (tenantId is null || userId is null) return Forbid();
 
-        var (transfer, error) = await _transfers.ConfirmAsync(id, userId.Value, ct);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        var (transfer, error) = await _transfers.ConfirmAsync(id, userId.Value, tenantId.Value, role, ct);
 
         if (error == "Transfer not found.") return NotFound();
+        if (error == "You do not have access to confirm transfers for this store.") return Forbid();
         if (error is not null) return BadRequest(new { error });
 
         return Ok(transfer);

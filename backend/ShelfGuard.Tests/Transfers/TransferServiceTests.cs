@@ -1,6 +1,7 @@
 using NSubstitute;
 using ShelfGuard.Application.Features.Transfers;
 using ShelfGuard.Application.Features.Transfers.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 using Xunit;
@@ -10,6 +11,7 @@ namespace ShelfGuard.Tests.Transfers;
 public sealed class TransferServiceTests
 {
     private readonly ITransferRepository _repo = Substitute.For<ITransferRepository>();
+    private readonly IUserLocationRepository _userLocations = Substitute.For<IUserLocationRepository>();
     private readonly TransferService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly Guid _userId = Guid.NewGuid();
@@ -17,7 +19,16 @@ public sealed class TransferServiceTests
     private readonly Guid _toStore = Guid.NewGuid();
     private readonly Guid _productId = Guid.NewGuid();
 
-    public TransferServiceTests() => _sut = new TransferService(_repo);
+    public TransferServiceTests()
+    {
+        _sut = new TransferService(_repo, _userLocations);
+
+        // Default: confirming user is assigned to the destination store, so existing
+        // ConfirmAsync tests (written before TASK-580's store-membership check existed)
+        // keep passing without each one having to know about user_locations.
+        _userLocations.GetLocationIdsForUserAsync(_tenantId, _userId, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid> { _toStore });
+    }
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -164,7 +175,7 @@ public sealed class TransferServiceTests
         _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns((StockTransfer?)null);
 
-        var (t, error) = await _sut.ConfirmAsync(Guid.NewGuid(), _userId);
+        var (t, error) = await _sut.ConfirmAsync(Guid.NewGuid(), _userId, _tenantId, AppRoles.StoreManager);
         Assert.Null(t);
         Assert.Equal("Transfer not found.", error);
     }
@@ -176,7 +187,7 @@ public sealed class TransferServiceTests
         transfer.Status = "received";
         _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
 
-        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId);
+        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId, _tenantId, AppRoles.StoreManager);
         Assert.Null(t);
         Assert.Contains("already received", error);
     }
@@ -188,7 +199,7 @@ public sealed class TransferServiceTests
         var transfer = BuildTransfer(expiryDate: expiry, batchNumber: "B001");
         _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
 
-        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId);
+        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId, _tenantId, AppRoles.StoreManager);
 
         Assert.Null(error);
         Assert.Equal("received", transfer.Status);
@@ -204,6 +215,96 @@ public sealed class TransferServiceTests
         await _repo.Received(1).AddMovementAsync(
             Arg.Is<StockMovement>(m => m.MovementType == "transfer" && m.QuantityBefore == 0),
             Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(AppRoles.NetworkManager)]
+    [InlineData(AppRoles.StoreManager)]
+    [InlineData(AppRoles.Storekeeper)]
+    public async Task ConfirmAsync_ScopedRoleAssignedToDestStore_Succeeds(string role)
+    {
+        var transfer = BuildTransfer();
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        // Constructor default already assigns _userId to _toStore.
+
+        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId, _tenantId, role);
+
+        Assert.Null(error);
+        Assert.NotNull(t);
+        Assert.Equal("received", transfer.Status);
+    }
+
+    [Theory]
+    [InlineData(AppRoles.NetworkManager)]
+    [InlineData(AppRoles.StoreManager)]
+    [InlineData(AppRoles.Storekeeper)]
+    public async Task ConfirmAsync_ScopedRoleNotAssignedToDestStore_RejectsAndDoesNotMutateStock(string role)
+    {
+        var transfer = BuildTransfer();
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        // User is assigned only to the SOURCE store, not the destination — must be rejected.
+        _userLocations.GetLocationIdsForUserAsync(_tenantId, _userId, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid> { _fromStore });
+
+        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId, _tenantId, role);
+
+        Assert.Null(t);
+        Assert.Equal("You do not have access to confirm transfers for this store.", error);
+        Assert.Equal("in_transit", transfer.Status); // unchanged
+
+        await _repo.DidNotReceive().AddStockAsync(Arg.Any<ProductStock>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().AddMovementAsync(Arg.Any<StockMovement>(), Arg.Any<CancellationToken>());
+        _repo.DidNotReceive().Update(Arg.Any<StockTransfer>());
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_ScopedRoleWithNoLocationAssignments_Rejects()
+    {
+        var transfer = BuildTransfer();
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        _userLocations.GetLocationIdsForUserAsync(_tenantId, _userId, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid>());
+
+        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId, _tenantId, AppRoles.Storekeeper);
+
+        Assert.Null(t);
+        Assert.Equal("You do not have access to confirm transfers for this store.", error);
+        await _repo.DidNotReceive().AddStockAsync(Arg.Any<ProductStock>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(AppRoles.Provider)]
+    [InlineData(AppRoles.EnterpriseAdmin)]
+    public async Task ConfirmAsync_BypassRoleWithZeroLocationAssignments_Succeeds(string role)
+    {
+        var transfer = BuildTransfer();
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        // Zero user_locations rows at all for this user — bypass roles must still succeed.
+        _userLocations.GetLocationIdsForUserAsync(_tenantId, _userId, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid>());
+
+        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId, _tenantId, role);
+
+        Assert.Null(error);
+        Assert.NotNull(t);
+        Assert.Equal("received", transfer.Status);
+        await _userLocations.DidNotReceive().GetLocationIdsForUserAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_NullRole_IsRejectedNotBypassed()
+    {
+        var transfer = BuildTransfer();
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        _userLocations.GetLocationIdsForUserAsync(_tenantId, _userId, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid>());
+
+        var (t, error) = await _sut.ConfirmAsync(transfer.Id, _userId, _tenantId, null);
+
+        Assert.Null(t);
+        Assert.Equal("You do not have access to confirm transfers for this store.", error);
     }
 
     // ── Cancel ─────────────────────────────────────────────────────────────

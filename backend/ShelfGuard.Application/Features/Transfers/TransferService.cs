@@ -1,6 +1,7 @@
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Application.Features.Transfers.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -8,9 +9,31 @@ namespace ShelfGuard.Application.Features.Transfers;
 
 public sealed class TransferService : ITransferService
 {
-    private readonly ITransferRepository _repo;
+    /// <summary>
+    /// Roles that must have a <c>user_locations</c> grant for the transfer's <c>ToStoreId</c>
+    /// before they may confirm it (TASK-580). Mirrors ADR-022's restricted ranks, narrowed to
+    /// the subset that can even reach this action — Infrastructure's <c>AppPolicies
+    /// .CanReceiveStockRoles</c> already excludes merchandiser/cashier/staff from
+    /// this controller entirely, and provider/enterprise_admin bypass store-scoping
+    /// unconditionally per ADR-022, so only these three remain. Defined here from Domain's
+    /// AppRoles (not Infrastructure's AppPolicies) to keep the Application → Infrastructure
+    /// dependency direction clean — same rationale as <c>LocationService.StoreScopedRoles</c>.
+    /// </summary>
+    private static readonly IReadOnlySet<string> StoreScopedConfirmRoles = new HashSet<string>
+    {
+        AppRoles.NetworkManager,
+        AppRoles.StoreManager,
+        AppRoles.Storekeeper,
+    };
 
-    public TransferService(ITransferRepository repo) => _repo = repo;
+    private readonly ITransferRepository _repo;
+    private readonly IUserLocationRepository _userLocations;
+
+    public TransferService(ITransferRepository repo, IUserLocationRepository userLocations)
+    {
+        _repo = repo;
+        _userLocations = userLocations;
+    }
 
     public async Task<List<TransferDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
     {
@@ -119,7 +142,7 @@ public sealed class TransferService : ITransferService
     }
 
     public async Task<(TransferDto? Transfer, string? Error)> ConfirmAsync(
-        Guid id, Guid confirmedBy, CancellationToken ct = default)
+        Guid id, Guid confirmedBy, Guid tenantId, string? role, CancellationToken ct = default)
     {
         var transfer = await _repo.GetByIdAsync(id, ct);
         if (transfer is null)
@@ -130,6 +153,24 @@ public sealed class TransferService : ITransferService
 
         if (transfer.Status == "cancelled")
             return (null, "Cannot confirm a cancelled transfer.");
+
+        // TASK-580: fail-closed store-membership check. Unlike LocationService.GetAllAsync's
+        // transitional fail-open list filter, this guards an actual stock-mutating action, so a
+        // scoped-role user with zero (or non-matching) user_locations rows for the destination
+        // store is rejected outright — the coverage-gap report against prod confirmed zero
+        // active scoped-role users are currently unassigned, so there is no legacy population
+        // this newly breaks. Only provider/enterprise_admin bypass unconditionally (matching
+        // every other ADR-022 bypass site); a null/missing role claim is deliberately NOT
+        // treated as a bypass — it falls through into the check (and is rejected, since it has
+        // no matching user_locations row) rather than skipping it. In practice the JWT always
+        // carries a role claim for anything that passed [Authorize], so this null path is a
+        // defensive fallback, not a normal route.
+        if (role is null || StoreScopedConfirmRoles.Contains(role))
+        {
+            var assignedIds = await _userLocations.GetLocationIdsForUserAsync(tenantId, confirmedBy, ct);
+            if (!assignedIds.Contains(transfer.ToStoreId))
+                return (null, "You do not have access to confirm transfers for this store.");
+        }
 
         // Create new ProductStock batches at destination store
         foreach (var item in transfer.Items)

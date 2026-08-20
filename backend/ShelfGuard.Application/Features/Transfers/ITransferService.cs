@@ -13,7 +13,7 @@ public interface ITransferService
         Guid tenantId, Guid initiatedBy, CreateTransferRequest request, CancellationToken ct = default);
 
     Task<(TransferDto? Transfer, string? Error)> ConfirmAsync(
-        Guid id, Guid confirmedBy, CancellationToken ct = default);
+        Guid id, Guid confirmedBy, Guid tenantId, string? role, CancellationToken ct = default);
 
     Task<(TransferDto? Transfer, string? Error)> CancelAsync(
         Guid id, CancellationToken ct = default);
