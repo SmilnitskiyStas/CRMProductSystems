@@ -286,6 +286,12 @@ export interface MarketplaceOrderDto {
   totalAmount: number;
   createdAt: string;
   updatedAt: string;
+  /** ISO date string, set when status transitions to "shipped". Null until then. */
+  shippedAt: string | null;
+  /** Supplier-entered whole days, set at the same time as shippedAt. Null until shipped. */
+  estimatedDeliveryDays: number | null;
+  /** ISO date string, set when status transitions to "delivered". Null until then. */
+  deliveredAt: string | null;
   items: MarketplaceOrderItemDto[];
 }
 

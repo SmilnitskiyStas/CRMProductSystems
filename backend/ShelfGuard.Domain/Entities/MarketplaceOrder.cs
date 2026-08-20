@@ -23,6 +23,13 @@ public sealed class MarketplaceOrder
     public string? CancelReason { get; set; }
     public decimal TotalAmount { get; set; }
 
+    /// <summary>Set by the service layer when Status transitions to shipped.</summary>
+    public DateTimeOffset? ShippedAt { get; set; }
+    /// <summary>Supplier-entered delivery estimate (in days), captured at ship time.</summary>
+    public int? EstimatedDeliveryDays { get; set; }
+    /// <summary>Set by the service layer when Status transitions to delivered.</summary>
+    public DateTimeOffset? DeliveredAt { get; set; }
+
     /// <summary>Client-side user who placed the order.</summary>
     public Guid? CreatedByUserId { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;

@@ -1,6 +1,7 @@
 using NSubstitute;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -18,6 +19,8 @@ public sealed class MarketplaceOrderServiceTests
     private readonly ISupplierAgreementRepository _agreements = Substitute.For<ISupplierAgreementRepository>();
     private readonly IMarketplaceRepository _marketplace = Substitute.For<IMarketplaceRepository>();
     private readonly ISupplierChatRepository _tenantNames = Substitute.For<ISupplierChatRepository>();
+    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
+    private readonly ITenantSessionOverride _tenantSessionOverride = Substitute.For<ITenantSessionOverride>();
     private readonly MarketplaceOrderService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -27,12 +30,22 @@ public sealed class MarketplaceOrderServiceTests
 
     public MarketplaceOrderServiceTests()
     {
-        _sut = new MarketplaceOrderService(_orders, _agreements, _marketplace, _tenantNames);
+        _sut = new MarketplaceOrderService(
+            _orders, _agreements, _marketplace, _tenantNames, _notifications, _tenantSessionOverride);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);
         _tenantNames.GetTenantDisplayNameAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns("Tenant");
+
+        // TASK-584: UpdateOrderStatusAsync's Shipped branch runs its notification-enqueue +
+        // SaveChanges tail inside _tenantSessionOverride.ExecuteAsync — same pure pass-through
+        // convention as SupplierAgreementServiceTests (TASK-582): invokes the delegate
+        // immediately instead of opening a real transaction, so assertions on the resulting order
+        // state still work unchanged.
+        _tenantSessionOverride
+            .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<bool>>>()());
     }
 
     // ── The agreement gate ─────────────────────────────────────────────────────
@@ -261,8 +274,11 @@ public sealed class MarketplaceOrderServiceTests
         var order = Order(from);
         _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
+        // EstimatedDeliveryDays is only consulted on the Shipped branch, but supplying it
+        // unconditionally keeps this matrix test focused on the transition check itself.
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
-            _supplierTenantId, order.Id, new UpdateMarketplaceOrderStatusDto(to, "причина"));
+            _supplierTenantId, order.Id,
+            new UpdateMarketplaceOrderStatusDto(to, "причина", EstimatedDeliveryDays: 3));
 
         if (allowed)
         {
@@ -291,6 +307,80 @@ public sealed class MarketplaceOrderServiceTests
         Assert.Null(dto);
         Assert.Equal(MarketplaceOrderService.CancelReasonRequiredError, error);
         Assert.Equal(MarketplaceOrderStatus.New, order.Status);
+    }
+
+    // ── TASK-584: shipping requires an ETA + fires a client notification ────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task UpdateOrderStatus_ShipWithoutValidEstimatedDeliveryDays_ReturnsError(int? days)
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.UpdateOrderStatusAsync(
+            _supplierTenantId, order.Id,
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: days));
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.EstimatedDeliveryDaysRequiredError, error);
+        Assert.Equal(MarketplaceOrderStatus.Confirmed, order.Status);
+        Assert.Null(order.ShippedAt);
+        await _orders.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateOrderStatus_ShipWithValidEstimatedDeliveryDays_SetsShippedAtAndNotifiesClient()
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.UpdateOrderStatusAsync(
+            _supplierTenantId, order.Id,
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: 3));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);
+        Assert.Equal(3, order.EstimatedDeliveryDays);
+        Assert.NotNull(order.ShippedAt);
+        Assert.Equal(3, dto!.EstimatedDeliveryDays);
+        Assert.NotNull(dto.ShippedAt);
+
+        // The enqueue + SaveChanges must run under the CLIENT tenant's RLS override, never the
+        // ambient (supplier) session — the TASK-582 regression this guards against.
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            order.ClientTenantId, Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n =>
+                n.TenantId == order.ClientTenantId &&
+                n.UserId == null &&
+                n.Channel == "system" &&
+                n.Status == "pending" &&
+                n.EventType == "marketplace_order.shipped"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateOrderStatus_Deliver_SetsDeliveredAt()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.UpdateOrderStatusAsync(
+            _supplierTenantId, order.Id, new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Delivered));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(MarketplaceOrderStatus.Delivered, order.Status);
+        Assert.NotNull(order.DeliveredAt);
+        Assert.Equal(order.DeliveredAt, dto!.DeliveredAt);
+
+        // Delivered has no cross-tenant write — must not go through the tenant override.
+        await _tenantSessionOverride.DidNotReceive().ExecuteAsync(
+            Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

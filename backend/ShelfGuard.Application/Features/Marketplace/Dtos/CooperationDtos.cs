@@ -109,12 +109,19 @@ public record MarketplaceOrderDto(
     decimal TotalAmount,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
+    DateTimeOffset? ShippedAt,
+    int? EstimatedDeliveryDays,
+    DateTimeOffset? DeliveredAt,
     IReadOnlyList<MarketplaceOrderItemDto> Items);
 
 public record CancelMarketplaceOrderDto(string Reason);
 
-/// <summary>Supplier-side status change. Reason is required when Status = cancelled.</summary>
-public record UpdateMarketplaceOrderStatusDto(string Status, string? Reason = null);
+/// <summary>
+/// Supplier-side status change. Reason is required when Status = cancelled.
+/// EstimatedDeliveryDays (whole days, must be &gt; 0) is required when Status = shipped
+/// (TASK-584) — the client sees it as the order's ETA.
+/// </summary>
+public record UpdateMarketplaceOrderStatusDto(string Status, string? Reason = null, int? EstimatedDeliveryDays = null);
 
 // ── Supplier support tickets ─────────────────────────────────────────────────
 

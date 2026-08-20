@@ -299,8 +299,13 @@ export interface UpsertContractSettingsRequest {
   isVatPayer: boolean;
 }
 
-/** POST /api/supplier-cabinet/orders/{id}/status — Reason обовʼязковий для cancelled. */
+/**
+ * POST /api/supplier-cabinet/orders/{id}/status — Reason обовʼязковий для
+ * cancelled; estimatedDeliveryDays обовʼязковий (> 0) для shipped — backend
+ * повертає 400 "Вкажіть орієнтовну кількість днів до доставки." інакше.
+ */
 export interface UpdateMarketplaceOrderStatusRequest {
   status: "confirmed" | "shipped" | "delivered" | "cancelled";
   reason?: string;
+  estimatedDeliveryDays?: number;
 }

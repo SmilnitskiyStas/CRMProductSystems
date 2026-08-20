@@ -1,4 +1,6 @@
+using System.Text.Json;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -20,6 +22,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string EmptyOrderError = "Додайте хоча б одну позицію до замовлення.";
     public const string CancelReasonRequiredError = "Вкажіть причину скасування.";
     public const string OnlyNewCancellableError = "Скасувати можна лише замовлення у статусі «нове».";
+    public const string EstimatedDeliveryDaysRequiredError = "Вкажіть орієнтовну кількість днів до доставки.";
 
     /// <summary>Allowed supplier-side status transitions.</summary>
     private static readonly Dictionary<string, string[]> AllowedTransitions = new()
@@ -33,17 +36,23 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     private readonly ISupplierAgreementRepository _agreements;
     private readonly IMarketplaceRepository _marketplace;
     private readonly ISupplierChatRepository _tenantNames;
+    private readonly INotificationRepository _notifications;
+    private readonly ITenantSessionOverride _tenantSessionOverride;
 
     public MarketplaceOrderService(
         IMarketplaceOrderRepository orders,
         ISupplierAgreementRepository agreements,
         IMarketplaceRepository marketplace,
-        ISupplierChatRepository tenantNames)
+        ISupplierChatRepository tenantNames,
+        INotificationRepository notifications,
+        ITenantSessionOverride tenantSessionOverride)
     {
         _orders      = orders;
         _agreements  = agreements;
         _marketplace = marketplace;
         _tenantNames = tenantNames;
+        _notifications = notifications;
+        _tenantSessionOverride = tenantSessionOverride;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -187,16 +196,89 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             order.CancelReason = request.Reason.Trim();
         }
 
+        if (request.Status == MarketplaceOrderStatus.Shipped)
+        {
+            if (request.EstimatedDeliveryDays is null or <= 0)
+                return (null, EstimatedDeliveryDaysRequiredError);
+            order.ShippedAt = DateTimeOffset.UtcNow;
+            order.EstimatedDeliveryDays = request.EstimatedDeliveryDays;
+        }
+        else if (request.Status == MarketplaceOrderStatus.Delivered)
+        {
+            order.DeliveredAt = DateTimeOffset.UtcNow;
+        }
+
         order.Status    = request.Status;
         order.UpdatedAt = DateTimeOffset.UtcNow;
 
-        _orders.Update(order);
-        await _orders.SaveChangesAsync(ct);
+        if (request.Status == MarketplaceOrderStatus.Shipped)
+        {
+            // TASK-584: mirrors TASK-582's SupplierAgreementService.MarkSignedAsync fix — the
+            // notification-queue insert below targets order.ClientTenantId (the recipient), while
+            // the ambient DB session here is authenticated as the SUPPLIER tenant (whoever called
+            // this endpoint). notification_queue's plain tenant_isolation RLS policy only allows
+            // TenantId = session tenant, so an unscoped insert would throw an unhandled Postgres
+            // RLS-violation exception (42501) that surfaces to the client as a masked 500/CORS
+            // error. Run the enqueue and the final SaveChangesAsync under an explicit override of
+            // the CLIENT tenant's RLS context instead — safe because order.ClientTenantId is
+            // already a trusted value at this point (the SupplierTenantId ownership check above
+            // already confirmed this order belongs to the calling supplier tenant), and
+            // marketplace_orders' own RLS policy is OR-based on both SupplierTenantId/
+            // ClientTenantId, so the status-change columns flushed by this same SaveChangesAsync
+            // call still satisfy their RLS under either tenant. Bonus: the status change and the
+            // outbox row commit atomically.
+            _orders.Update(order);
+            await _tenantSessionOverride.ExecuteAsync(order.ClientTenantId, async () =>
+            {
+                await EnqueueShippedNotificationAsync(order, ct);
+                await _orders.SaveChangesAsync(ct);
+                return true;
+            }, ct);
+        }
+        else
+        {
+            _orders.Update(order);
+            await _orders.SaveChangesAsync(ct);
+        }
 
         return (await ToDtoAsync(order, ct), null);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ADR-018 §2: Postgres outbox row (EventType = "marketplace_order.shipped") for the client
+    /// tenant, picked up by the worker's notification-dispatch job. UserId = null,
+    /// Channel = "system", Status = "pending". Directly closes the "nowhere shows the order is
+    /// on the way" complaint — the client gets a proactive notification, not just a DB field they
+    /// have to go look for.
+    /// </summary>
+    private async Task EnqueueShippedNotificationAsync(MarketplaceOrder order, CancellationToken ct)
+    {
+        var supplierName = await _tenantNames.GetTenantDisplayNameAsync(order.SupplierTenantId, ct)
+                           ?? "Постачальник";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            supplierName,
+            estimatedDeliveryDays = order.EstimatedDeliveryDays,
+            shippedAt = order.ShippedAt,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = order.ClientTenantId,
+            UserId    = null,
+            StoreId   = null,
+            Title     = $"Замовлення {order.OrderNumber} відправлено — очікується за ~{order.EstimatedDeliveryDays} дн.",
+            Channel   = "system",
+            EventType = "marketplace_order.shipped",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
+    }
 
     /// <summary>«MP-{yyyy}-{NNN}» — NNN sequential per supplier via CountForSupplierAsync.</summary>
     private async Task<string> NextOrderNumberAsync(Guid supplierTenantId, CancellationToken ct)
@@ -253,6 +335,9 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             o.TotalAmount,
             o.CreatedAt,
             o.UpdatedAt,
+            o.ShippedAt,
+            o.EstimatedDeliveryDays,
+            o.DeliveredAt,
             o.Items
                 .OrderBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase)
                 .Select(i => new MarketplaceOrderItemDto(

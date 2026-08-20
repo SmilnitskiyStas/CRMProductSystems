@@ -11,7 +11,9 @@ import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
 import { OrderStatusBadge } from "@/features/marketplace/components/CooperationBadges";
+import { getShippingEta } from "@/features/marketplace/utils";
 import type { MarketplaceOrderDto } from "@/features/marketplace/types";
+import { EstimateDeliveryModal } from "./EstimateDeliveryModal";
 import {
   useCabinetOrders,
   useUpdateCabinetOrderStatus,
@@ -61,8 +63,9 @@ export function CabinetOrdersTab() {
   const updateStatus = useUpdateCabinetOrderStatus();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<MarketplaceOrderDto | null>(null);
+  const [shipTarget, setShipTarget] = useState<MarketplaceOrderDto | null>(null);
 
-  function transition(order: MarketplaceOrderDto, status: "confirmed" | "shipped" | "delivered") {
+  function transition(order: MarketplaceOrderDto, status: "confirmed" | "delivered") {
     updateStatus.mutate(
       { id: order.id, body: { status } },
       {
@@ -96,7 +99,7 @@ export function CabinetOrdersTab() {
             <Btn
               size="sm"
               disabled={updateStatus.isPending}
-              onClick={() => transition(order, "shipped")}
+              onClick={() => setShipTarget(order)}
             >
               {t("shipButton")}
             </Btn>
@@ -186,6 +189,26 @@ export function CabinetOrdersTab() {
           onClose={() => setCancelTarget(null)}
         />
       )}
+
+      {shipTarget && (
+        <EstimateDeliveryModal
+          title={t("shipModalTitle", { number: shipTarget.orderNumber })}
+          pending={updateStatus.isPending}
+          onConfirm={(estimatedDeliveryDays) =>
+            updateStatus.mutate(
+              { id: shipTarget.id, body: { status: "shipped", estimatedDeliveryDays } },
+              {
+                onSuccess: () => {
+                  toast.success(t("toastUpdated", { number: shipTarget.orderNumber }));
+                  setShipTarget(null);
+                },
+                onError: (err) => toast.error(err.message),
+              }
+            )
+          }
+          onClose={() => setShipTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -239,6 +262,12 @@ function OrderRow({
                   {t("cancelReasonLabel", { reason: order.cancelReason })}
                 </div>
               )}
+              <ShippingDetail
+                shippedAt={order.shippedAt}
+                estimatedDeliveryDays={order.estimatedDeliveryDays}
+                deliveredAt={order.deliveredAt}
+                intlLocale={intlLocale}
+              />
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
@@ -273,6 +302,50 @@ function OrderRow({
             </div>
           </td>
         </tr>
+      )}
+    </>
+  );
+}
+
+/**
+ * Shipped/estimated-delivery/delivered dates for the supplier's own order
+ * view — symmetric with the client-facing detail in
+ * app/(dashboard)/marketplace/orders/page.tsx (TASK-584). The estimated
+ * delivery date is derived client-side via getShippingEta and swapped for
+ * the actual deliveredAt once the order is delivered.
+ */
+function ShippingDetail({
+  shippedAt,
+  estimatedDeliveryDays,
+  deliveredAt,
+  intlLocale,
+}: {
+  shippedAt: string | null;
+  estimatedDeliveryDays: number | null;
+  deliveredAt: string | null;
+  intlLocale: string;
+}) {
+  const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
+  if (!shippedAt) return null;
+  const eta = getShippingEta(shippedAt, estimatedDeliveryDays);
+
+  return (
+    <>
+      <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
+        {t("shippedAtLabel", { date: formatDate(shippedAt, intlLocale) })}
+        {!deliveredAt && eta && (
+          <>
+            {" · "}
+            {t("estimatedDeliveryLabel", {
+              date: formatDate(eta.estimatedDeliveryDate.toISOString(), intlLocale),
+            })}
+          </>
+        )}
+      </div>
+      {deliveredAt && (
+        <div style={{ color: "#4ADE80", fontSize: 12, marginBottom: 8 }}>
+          {t("deliveredAtLabel", { date: formatDate(deliveredAt, intlLocale) })}
+        </div>
       )}
     </>
   );

@@ -5025,4 +5025,49 @@ Added `selectStoreHint` key to `Dashboard.orders.page` and `Dashboard.aiOrders.p
 to this agent (fresh dev server, empty localStorage) — did not log in per task boundary; live
 dashboard check left for the orchestrator.
 
+# TASK-584 — Marketplace order shipping: shipped/ETA/delivered
+
+**Status:** done · **Agent:** database-engineer → backend-developer → frontend-developer · **Updated:** 2026-08-20
+
+Supplier ships a marketplace order → must declare an estimated delivery time (whole days)
+at ship time; client needs to see shipment status + ETA (previously invisible beyond a bare
+status badge).
+
+**database-engineer (done):** `MarketplaceOrder` entity gained `ShippedAt`
+(`DateTimeOffset?`), `EstimatedDeliveryDays` (`int?`), `DeliveredAt` (`DateTimeOffset?`).
+Migration `20260820131503_AddMarketplaceOrderShippingFields` applied to local dev DB. RLS
+unchanged (inherits the table's existing policies). Handoff:
+`.claude/logs/handoffs/584-to-backend_database-engineer.md`.
+
+**backend-developer (done):** `UpdateMarketplaceOrderStatusDto` gained
+`EstimatedDeliveryDays` (required, must be > 0, when `Status = "shipped"`, else `400` with
+`EstimatedDeliveryDaysRequiredError`). `MarketplaceOrderDto` gained
+`ShippedAt`/`EstimatedDeliveryDays`/`DeliveredAt`. `MarketplaceOrderService.UpdateOrderStatusAsync`
+sets `ShippedAt`+`EstimatedDeliveryDays` on `shipped`, `DeliveredAt` on `delivered`. Added a
+`marketplace_order.shipped` outbox notification (ADR-018 §2) for the client tenant, wrapped
+in `ITenantSessionOverride.ExecuteAsync(order.ClientTenantId, ...)` — mirrors TASK-582's
+`SupplierAgreementService.MarkSignedAsync` fix, avoiding the same cross-tenant RLS-violation
+(42501) bug. Controller needed no changes (binds `[FromBody]` directly). `dotnet build`
+clean, `dotnet test` 1755/1755 passed (added ship-validation/notification/deliver test
+coverage in `MarketplaceOrderServiceTests.cs`). Log:
+`.claude/logs/tasks/584_2026-08-20_marketplace-order-shipping-logic_backend-developer.md`.
+Handoff: `.claude/logs/handoffs/584-to-frontend_backend-developer.md`.
+
+**frontend-developer (done):** types updated (`MarketplaceOrderDto` +3 fields,
+`UpdateMarketplaceOrderStatusRequest` +1); new `EstimateDeliveryModal.tsx` in supplier
+cabinet replaces the bare `transition(order, "shipped")` call, blocks submit until a valid
+positive integer is entered; shared `getShippingEta()` helper in
+`features/marketplace/utils.ts` derives ETA/overdue state client-side. Client orders page
+gained a compact "In transit: N of M days" (or overdue-safe) label directly under the status
+badge in the table row — visible without expanding, which is the part that most directly
+answers the original complaint — plus full shipped/estimated/delivered detail in the
+expanded row, symmetric with the supplier cabinet's own view. i18n keys added to both
+`Dashboard.marketplace.ordersPage.ordersTab` and `Dashboard.supplierCabinet.ordersTab` in
+`messages/{en,uk}.json` (deviated from the brief's "supplier-cabinet is untranslated"
+assumption — `CabinetOrdersTab.tsx` already fully uses `useTranslations`, confirmed by
+direct inspection; see task log for detail). `tsc`/`lint` clean. Full manual browser
+verification done (Ship modal validation, in-transit/overdue/delivered states, both supplier
+and client views) via temporary DB test fixtures, created and cleaned up after. Log:
+`.claude/logs/tasks/584_2026-08-20_marketplace-order-shipping-ui_frontend-developer.md`.
+
 Log: `.claude/logs/tasks/583_2026-08-20_remove-local-store-pickers-orders-ai-orders_frontend-developer.md`.

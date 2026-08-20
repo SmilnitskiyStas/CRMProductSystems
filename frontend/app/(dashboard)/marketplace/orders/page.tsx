@@ -16,6 +16,7 @@ import {
   AgreementStatusBadge,
   OrderStatusBadge,
 } from "@/features/marketplace/components/CooperationBadges";
+import { getShippingEta } from "@/features/marketplace/utils";
 import { SigningMethodChoice } from "@/features/marketplace/components/SigningMethodChoice";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES, type AppRole } from "@/lib/roles";
@@ -168,6 +169,7 @@ function FragmentRow({
         </td>
         <td style={cellStyle}>
           <OrderStatusBadge status={order.status} />
+          <ShippingEtaHint order={order} />
         </td>
         <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
           {money(order.totalAmount, intlLocale)}
@@ -197,6 +199,12 @@ function FragmentRow({
                   {t("cancelReasonLabel", { reason: order.cancelReason })}
                 </div>
               )}
+              <ShippingDetail
+                shippedAt={order.shippedAt}
+                estimatedDeliveryDays={order.estimatedDeliveryDays}
+                deliveredAt={order.deliveredAt}
+                intlLocale={intlLocale}
+              />
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
@@ -231,6 +239,73 @@ function FragmentRow({
             </div>
           </td>
         </tr>
+      )}
+    </>
+  );
+}
+
+/**
+ * Compact ETA label rendered directly under the status badge in the table
+ * row — visible without expanding the row (TASK-584). This is the part that
+ * most directly answers the original "nowhere shows it's on the way"
+ * complaint: the client no longer has to click into the order to learn
+ * anything about shipping timing.
+ */
+function ShippingEtaHint({ order }: { order: MarketplaceOrderDto }) {
+  const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
+  if (order.status !== "shipped" || order.estimatedDeliveryDays == null) return null;
+  const eta = getShippingEta(order.shippedAt, order.estimatedDeliveryDays);
+  if (!eta) return null;
+
+  return (
+    <div style={{ fontSize: 11, color: eta.isOverdue ? "#FBBF24" : "#6B7280", marginTop: 3 }}>
+      {eta.isOverdue
+        ? t("etaOverdue")
+        : t("etaInTransit", {
+            daysElapsed: eta.daysElapsed,
+            estimatedDeliveryDays: order.estimatedDeliveryDays,
+          })}
+    </div>
+  );
+}
+
+/**
+ * Shipped/estimated-delivery/delivered dates in the expanded row detail
+ * (TASK-584). The estimated delivery date is derived client-side via
+ * getShippingEta and swapped for the actual deliveredAt once delivered.
+ */
+function ShippingDetail({
+  shippedAt,
+  estimatedDeliveryDays,
+  deliveredAt,
+  intlLocale,
+}: {
+  shippedAt: string | null;
+  estimatedDeliveryDays: number | null;
+  deliveredAt: string | null;
+  intlLocale: string;
+}) {
+  const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
+  if (!shippedAt) return null;
+  const eta = getShippingEta(shippedAt, estimatedDeliveryDays);
+
+  return (
+    <>
+      <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
+        {t("shippedAtLabel", { date: formatDate(shippedAt, intlLocale) })}
+        {!deliveredAt && eta && (
+          <>
+            {" · "}
+            {t("estimatedDeliveryLabel", {
+              date: formatDate(eta.estimatedDeliveryDate.toISOString(), intlLocale),
+            })}
+          </>
+        )}
+      </div>
+      {deliveredAt && (
+        <div style={{ color: "#4ADE80", fontSize: 12, marginBottom: 8 }}>
+          {t("deliveredAtLabel", { date: formatDate(deliveredAt, intlLocale) })}
+        </div>
       )}
     </>
   );
