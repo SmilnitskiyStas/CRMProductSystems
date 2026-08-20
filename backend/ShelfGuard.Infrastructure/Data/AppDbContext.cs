@@ -1925,6 +1925,7 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("new").IsRequired();
             e.Property(x => x.Comment).HasMaxLength(2000).IsRequired(false);
             e.Property(x => x.CancelReason).HasMaxLength(2000).IsRequired(false);
+            e.Property(x => x.DelayReason).HasMaxLength(2000).IsRequired(false);
             e.Property(x => x.TotalAmount).HasColumnType("numeric(14,2)").HasDefaultValue(0m);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");

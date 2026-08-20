@@ -5071,3 +5071,52 @@ and client views) via temporary DB test fixtures, created and cleaned up after. 
 `.claude/logs/tasks/584_2026-08-20_marketplace-order-shipping-ui_frontend-developer.md`.
 
 Log: `.claude/logs/tasks/583_2026-08-20_remove-local-store-pickers-orders-ai-orders_frontend-developer.md`.
+
+# TASK-585 — Marketplace order delay reason (supplier-entered, shown to client)
+
+**Status:** done · **Agent:** database-engineer → backend-developer → frontend-developer · **Updated:** 2026-08-20
+
+Two follow-ups to TASK-584: (1) supplier's own order view should show the same in-transit
+ETA info the client already sees (pure frontend parity — no backend change), and (2) when a
+shipped order's estimated delivery window has passed and it hasn't arrived, supplier needs to
+record why, visible to the client.
+
+**database-engineer (done):** `MarketplaceOrder` entity gained `DelayReason` (`string?`,
+free-text, right after `DeliveredAt`), mirroring `CancelReason`'s type/nullability exactly.
+`AppDbContext` fluent config: `HasMaxLength(2000).IsRequired(false)` (same as `CancelReason`).
+Migration `20260820193144_AddMarketplaceOrderDelayReason` — single nullable
+`character varying(2000)` column on `marketplace_orders`, no unrelated model drift, applied to
+local dev DB and verified via `\d marketplace_orders`. RLS unchanged (existing
+`tenant_isolation`/`provider_bypass`/`worker_bypass` policies cover new columns automatically,
+confirmed). No index (free-text, never filtered/sorted). `dotnet build` clean, `dotnet test`
+1755/1755 passed. Log:
+`.claude/logs/tasks/585_2026-08-20_marketplace-order-delay-reason-schema_database-engineer.md`.
+Handoff: `.claude/logs/handoffs/585-to-backend_database-engineer.md`.
+
+**backend-developer (done):** `MarketplaceOrderDto` gained `DelayReason` (after `DeliveredAt`);
+new `SetOrderDelayReasonDto(string Reason)`. New service method
+`IMarketplaceOrderService.SetDelayReasonAsync(supplierTenantId, orderId, reason, ct)`: validates
+non-empty reason → order exists & belongs to supplier tenant → `Status == Shipped`; sets
+`DelayReason` (trimmed), enqueues client-tenant notification
+(`marketplace_order.delay_reason_added`) under `_tenantSessionOverride.ExecuteAsync` — same
+cross-tenant RLS pattern as TASK-584's Shipped branch. New endpoint
+`POST /api/supplier-cabinet/orders/{id}/delay-reason { reason }` on
+`SupplierCabinetCooperationController`, mirrors `UpdateOrderStatus` action shape. 10 new tests.
+`dotnet build` clean, `dotnet test` 1765/1765 passed. Docs updated
+(`.claude/docs/api-contracts.md`). Log:
+`.claude/logs/tasks/585_2026-08-20_marketplace-order-delay-reason-logic_backend-developer.md`.
+Handoff: `.claude/logs/handoffs/585-to-frontend_backend-developer.md`.
+
+**frontend-developer (done):** `MarketplaceOrderDto` gained `delayReason`; new
+`SetOrderDelayReasonRequest`, `supplierCabinetApi.setOrderDelayReason`, `useSetOrderDelayReason`
+hook. `CabinetOrdersTab.tsx` gained the `ShippingEtaHint` parity component (item 1) and a
+"Record delay reason" button on `shipped` orders, shown only when overdue (`getShippingEta(...)
+?.isOverdue`), wired to the existing `ReasonModal` (no new modal component). Both supplier and
+client `ShippingDetail` components now render `delayReason` when present (client read-only, no
+action). i18n keys added to both `Dashboard.supplierCabinet.ordersTab` and
+`Dashboard.marketplace.ordersPage.ordersTab` in `en.json`/`uk.json`. `tsc --noEmit` and
+`npm run lint` clean. Full manual browser verification (temp SQL fixture, deleted after —
+DB counts confirmed restored). Log:
+`.claude/logs/tasks/585_2026-08-20_marketplace-order-delay-reason-ui_frontend-developer.md`.
+
+**Status: done** — all three slices (schema, service/API, UI) complete.

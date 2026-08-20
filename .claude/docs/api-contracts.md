@@ -454,7 +454,8 @@ GET  /api/supplier-cabinet/cooperation-requests/{id}/contract      -> applicatio
 GET|PUT /api/supplier-cabinet/contract-settings                    -> SupplierContractSettingsDto (PUT body: UpsertContractSettingsDto, legalName required)
 POST /api/supplier-cabinet/contract-settings/signature-image|stamp-image  multipart file png/jpg <=2MB -> { imageUrl }
 GET  /api/supplier-cabinet/orders                                  -> MarketplaceOrderDto[]
-POST /api/supplier-cabinet/orders/{id}/status  { status, reason? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled, shipped->delivered; cancel requires reason
+POST /api/supplier-cabinet/orders/{id}/status  { status, reason?, estimatedDeliveryDays? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled, shipped->delivered; cancel requires reason, ship requires estimatedDeliveryDays (>0, TASK-584) and enqueues client notification "marketplace_order.shipped"
+POST /api/supplier-cabinet/orders/{id}/delay-reason  { reason }    -> dto | 400 (empty reason / order not shipped) | 404; supplier-only, only while status=shipped (TASK-585), enqueues client notification "marketplace_order.delay_reason_added"
 GET  /api/supplier-cabinet/support-tickets                         -> SupplierSupportTicketDto[]
 GET  /api/supplier-cabinet/support-tickets/{id}                    -> dto with messages
 POST /api/supplier-cabinet/support-tickets/{id}/messages  { body } -> 201 SupportTicketMessageDto

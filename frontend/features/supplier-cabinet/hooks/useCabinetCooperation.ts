@@ -13,6 +13,7 @@ import type {
 import type {
   UpsertContractSettingsRequest,
   UpdateMarketplaceOrderStatusRequest,
+  SetOrderDelayReasonRequest,
 } from "../types";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -131,6 +132,18 @@ export function useUpdateCabinetOrderStatus() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateMarketplaceOrderStatusRequest }) =>
       supplierCabinetApi.updateOrderStatus(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_COOP_KEYS.orders });
+    },
+  });
+}
+
+/** POST .../delay-reason — тільки для замовлень зі статусом "shipped" (TASK-585). */
+export function useSetOrderDelayReason() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: SetOrderDelayReasonRequest }) =>
+      supplierCabinetApi.setOrderDelayReason(id, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CABINET_COOP_KEYS.orders });
     },

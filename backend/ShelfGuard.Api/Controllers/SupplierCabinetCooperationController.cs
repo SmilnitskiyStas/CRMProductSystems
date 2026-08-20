@@ -240,6 +240,27 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
         return Ok(order);
     }
 
+    /// <summary>Records why a shipped order's delivery is running late. Only allowed while status = shipped.</summary>
+    [HttpPost("orders/{id:guid}/delay-reason")]
+    [ProducesResponseType(typeof(MarketplaceOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDelayReason(
+        Guid id, [FromBody] SetOrderDelayReasonDto request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (order, error) = await _orders.SetDelayReasonAsync(tenantId.Value, id, request.Reason, ct);
+
+        if (error == MarketplaceOrderService.OrderNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(order);
+    }
+
     // ── Support tickets ────────────────────────────────────────────────────────
 
     /// <summary>Support tickets addressed to the own supplier, newest first (no messages).</summary>

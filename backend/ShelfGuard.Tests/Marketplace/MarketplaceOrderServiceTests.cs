@@ -407,6 +407,95 @@ public sealed class MarketplaceOrderServiceTests
         Assert.Contains("Невідомий статус", error);
     }
 
+    // ── TASK-585: recording a shipping delay reason ─────────────────────────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task SetDelayReason_EmptyReason_ReturnsError(string? reason)
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.SetDelayReasonAsync(_supplierTenantId, order.Id, reason!);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.DelayReasonRequiredError, error);
+        Assert.Null(order.DelayReason);
+        await _orders.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetDelayReason_OrderNotFound_ReturnsError()
+    {
+        _orders.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((MarketplaceOrder?)null);
+
+        var (dto, error) = await _sut.SetDelayReasonAsync(_supplierTenantId, Guid.NewGuid(), "Затримка на митниці");
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.OrderNotFoundError, error);
+    }
+
+    [Fact]
+    public async Task SetDelayReason_ForeignSupplierTenant_ReturnsNotFound()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.SetDelayReasonAsync(Guid.NewGuid(), order.Id, "Затримка на митниці");
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.OrderNotFoundError, error);
+        Assert.Null(order.DelayReason);
+    }
+
+    [Theory]
+    [InlineData(MarketplaceOrderStatus.New)]
+    [InlineData(MarketplaceOrderStatus.Confirmed)]
+    [InlineData(MarketplaceOrderStatus.Delivered)]
+    [InlineData(MarketplaceOrderStatus.Cancelled)]
+    public async Task SetDelayReason_NotShipped_ReturnsError(string status)
+    {
+        var order = Order(status);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.SetDelayReasonAsync(_supplierTenantId, order.Id, "Затримка на митниці");
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.OnlyShippedCanHaveDelayReasonError, error);
+        Assert.Null(order.DelayReason);
+    }
+
+    [Fact]
+    public async Task SetDelayReason_ShippedOrder_SetsReasonAndNotifiesClient()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.SetDelayReasonAsync(
+            _supplierTenantId, order.Id, "  Затримка на митниці  ");
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal("Затримка на митниці", order.DelayReason);
+        Assert.Equal("Затримка на митниці", dto!.DelayReason);
+
+        // Same cross-tenant RLS guard as the Shipped-notification branch (TASK-584/TASK-582):
+        // the enqueue + SaveChanges must run under the CLIENT tenant's override.
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            order.ClientTenantId, Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n =>
+                n.TenantId == order.ClientTenantId &&
+                n.UserId == null &&
+                n.Channel == "system" &&
+                n.Status == "pending" &&
+                n.EventType == "marketplace_order.delay_reason_added"),
+            Arg.Any<CancellationToken>());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static CreateMarketplaceOrderDto OrderRequest() =>

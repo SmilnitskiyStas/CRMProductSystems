@@ -23,6 +23,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string CancelReasonRequiredError = "Вкажіть причину скасування.";
     public const string OnlyNewCancellableError = "Скасувати можна лише замовлення у статусі «нове».";
     public const string EstimatedDeliveryDaysRequiredError = "Вкажіть орієнтовну кількість днів до доставки.";
+    public const string DelayReasonRequiredError = "Вкажіть причину затримки доставки.";
+    public const string OnlyShippedCanHaveDelayReasonError = "Причину затримки можна вказати лише для відправленого замовлення.";
 
     /// <summary>Allowed supplier-side status transitions.</summary>
     private static readonly Dictionary<string, string[]> AllowedTransitions = new()
@@ -244,6 +246,43 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         return (await ToDtoAsync(order, ct), null);
     }
 
+    /// <summary>
+    /// Records why a shipped order's delivery is running late (TASK-585). Notifies the
+    /// client tenant the same cross-tenant-outbox way the Shipped branch above does.
+    /// </summary>
+    public async Task<(MarketplaceOrderDto? Order, string? Error)> SetDelayReasonAsync(
+        Guid supplierTenantId, Guid orderId, string reason, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return (null, DelayReasonRequiredError);
+
+        var order = await _orders.GetByIdAsync(orderId, ct);
+        if (order is null || order.SupplierTenantId != supplierTenantId)
+            return (null, OrderNotFoundError);
+
+        if (order.Status != MarketplaceOrderStatus.Shipped)
+            return (null, OnlyShippedCanHaveDelayReasonError);
+
+        order.DelayReason = reason.Trim();
+        order.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Same TASK-584/TASK-582 pattern: the notification-queue insert targets
+        // order.ClientTenantId (the recipient) while the ambient DB session is authenticated
+        // as the SUPPLIER tenant, so the enqueue + SaveChanges tail must run under an explicit
+        // override of the CLIENT tenant's RLS context — order.ClientTenantId is already a
+        // trusted value here (the SupplierTenantId ownership check above confirmed this order
+        // belongs to the calling supplier tenant).
+        _orders.Update(order);
+        await _tenantSessionOverride.ExecuteAsync(order.ClientTenantId, async () =>
+        {
+            await EnqueueDelayReasonNotificationAsync(order, ct);
+            await _orders.SaveChangesAsync(ct);
+            return true;
+        }, ct);
+
+        return (await ToDtoAsync(order, ct), null);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -275,6 +314,36 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             Title     = $"Замовлення {order.OrderNumber} відправлено — очікується за ~{order.EstimatedDeliveryDays} дн.",
             Channel   = "system",
             EventType = "marketplace_order.shipped",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
+    }
+
+    /// <summary>
+    /// TASK-585: Postgres outbox row (EventType = "marketplace_order.delay_reason_added") for
+    /// the client tenant when the supplier explains why a shipped order is running late.
+    /// </summary>
+    private async Task EnqueueDelayReasonNotificationAsync(MarketplaceOrder order, CancellationToken ct)
+    {
+        var supplierName = await _tenantNames.GetTenantDisplayNameAsync(order.SupplierTenantId, ct)
+                           ?? "Постачальник";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            supplierName,
+            reason = order.DelayReason,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = order.ClientTenantId,
+            UserId    = null,
+            StoreId   = null,
+            Title     = $"Затримка доставки: {order.OrderNumber}",
+            Channel   = "system",
+            EventType = "marketplace_order.delay_reason_added",
             Payload   = payload,
             Status    = "pending",
         }, ct);
@@ -338,6 +407,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             o.ShippedAt,
             o.EstimatedDeliveryDays,
             o.DeliveredAt,
+            o.DelayReason,
             o.Items
                 .OrderBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase)
                 .Select(i => new MarketplaceOrderItemDto(

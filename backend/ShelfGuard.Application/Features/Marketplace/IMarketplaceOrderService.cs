@@ -35,4 +35,11 @@ public interface IMarketplaceOrderService
     Task<(MarketplaceOrderDto? Order, string? Error)> UpdateOrderStatusAsync(
         Guid supplierTenantId, Guid orderId, UpdateMarketplaceOrderStatusDto request,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Records why a shipped order's delivery is running late (TASK-585). Only allowed
+    /// while the order is still status = shipped; notifies the client tenant.
+    /// </summary>
+    Task<(MarketplaceOrderDto? Order, string? Error)> SetDelayReasonAsync(
+        Guid supplierTenantId, Guid orderId, string reason, CancellationToken ct = default);
 }

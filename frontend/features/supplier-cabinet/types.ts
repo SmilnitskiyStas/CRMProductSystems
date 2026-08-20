@@ -309,3 +309,9 @@ export interface UpdateMarketplaceOrderStatusRequest {
   reason?: string;
   estimatedDeliveryDays?: number;
 }
+
+/** POST /api/supplier-cabinet/orders/{id}/delay-reason — reason required, non-blank
+ * (trimmed server-side); only allowed while order.status === "shipped" (TASK-585). */
+export interface SetOrderDelayReasonRequest {
+  reason: string;
+}

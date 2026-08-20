@@ -29,6 +29,8 @@ public sealed class MarketplaceOrder
     public int? EstimatedDeliveryDays { get; set; }
     /// <summary>Set by the service layer when Status transitions to delivered.</summary>
     public DateTimeOffset? DeliveredAt { get; set; }
+    /// <summary>Supplier-entered explanation when delivery runs past the estimated window.</summary>
+    public string? DelayReason { get; set; }
 
     /// <summary>Client-side user who placed the order.</summary>
     public Guid? CreatedByUserId { get; set; }

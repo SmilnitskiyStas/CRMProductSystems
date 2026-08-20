@@ -17,6 +17,7 @@ import { EstimateDeliveryModal } from "./EstimateDeliveryModal";
 import {
   useCabinetOrders,
   useUpdateCabinetOrderStatus,
+  useSetOrderDelayReason,
 } from "../hooks/useCabinetCooperation";
 
 const headerCellStyle: React.CSSProperties = {
@@ -61,9 +62,11 @@ export function CabinetOrdersTab() {
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: orders = [], isLoading } = useCabinetOrders();
   const updateStatus = useUpdateCabinetOrderStatus();
+  const setDelayReason = useSetOrderDelayReason();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<MarketplaceOrderDto | null>(null);
   const [shipTarget, setShipTarget] = useState<MarketplaceOrderDto | null>(null);
+  const [delayReasonTarget, setDelayReasonTarget] = useState<MarketplaceOrderDto | null>(null);
 
   function transition(order: MarketplaceOrderDto, status: "confirmed" | "delivered") {
     updateStatus.mutate(
@@ -108,17 +111,31 @@ export function CabinetOrdersTab() {
             </Btn>
           </>
         );
-      case "shipped":
+      case "shipped": {
+        const eta = getShippingEta(order.shippedAt, order.estimatedDeliveryDays);
         return (
-          <Btn
-            size="sm"
-            variant="success"
-            disabled={updateStatus.isPending}
-            onClick={() => transition(order, "delivered")}
-          >
-            {t("deliverButton")}
-          </Btn>
+          <>
+            <Btn
+              size="sm"
+              variant="success"
+              disabled={updateStatus.isPending}
+              onClick={() => transition(order, "delivered")}
+            >
+              {t("deliverButton")}
+            </Btn>
+            {eta?.isOverdue && (
+              <Btn
+                size="sm"
+                variant="ghost"
+                disabled={setDelayReason.isPending}
+                onClick={() => setDelayReasonTarget(order)}
+              >
+                {t("delayReasonButton")}
+              </Btn>
+            )}
+          </>
         );
+      }
       default:
         return null;
     }
@@ -209,6 +226,30 @@ export function CabinetOrdersTab() {
           onClose={() => setShipTarget(null)}
         />
       )}
+
+      {delayReasonTarget && (
+        <ReasonModal
+          title={t("delayReasonModalTitle", { number: delayReasonTarget.orderNumber })}
+          label={t("delayReasonModalLabel")}
+          confirmLabel={t("delayReasonModalConfirm")}
+          variant="primary"
+          required
+          pending={setDelayReason.isPending}
+          onConfirm={(reason) =>
+            setDelayReason.mutate(
+              { id: delayReasonTarget.id, body: { reason } },
+              {
+                onSuccess: () => {
+                  toast.success(t("toastDelayReasonSaved"));
+                  setDelayReasonTarget(null);
+                },
+                onError: (err) => toast.error(err.message),
+              }
+            )
+          }
+          onClose={() => setDelayReasonTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -240,6 +281,7 @@ function OrderRow({
         </td>
         <td style={cellStyle}>
           <OrderStatusBadge status={order.status} />
+          <ShippingEtaHint order={order} />
         </td>
         <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
           {money(order.totalAmount, intlLocale)}
@@ -266,6 +308,7 @@ function OrderRow({
                 shippedAt={order.shippedAt}
                 estimatedDeliveryDays={order.estimatedDeliveryDays}
                 deliveredAt={order.deliveredAt}
+                delayReason={order.delayReason}
                 intlLocale={intlLocale}
               />
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -308,21 +351,50 @@ function OrderRow({
 }
 
 /**
+ * Compact ETA label rendered directly under the status badge in the table
+ * row — mirrors the client-facing ShippingEtaHint in
+ * app/(dashboard)/marketplace/orders/page.tsx (TASK-584/585) so the
+ * supplier sees the same "in transit, N of M days" / overdue phrasing the
+ * client sees, without expanding the row.
+ */
+function ShippingEtaHint({ order }: { order: MarketplaceOrderDto }) {
+  const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
+  if (order.status !== "shipped" || order.estimatedDeliveryDays == null) return null;
+  const eta = getShippingEta(order.shippedAt, order.estimatedDeliveryDays);
+  if (!eta) return null;
+
+  return (
+    <div style={{ fontSize: 11, color: eta.isOverdue ? "#FBBF24" : "#6B7280", marginTop: 3 }}>
+      {eta.isOverdue
+        ? t("etaOverdue")
+        : t("etaInTransit", {
+            daysElapsed: eta.daysElapsed,
+            estimatedDeliveryDays: order.estimatedDeliveryDays,
+          })}
+    </div>
+  );
+}
+
+/**
  * Shipped/estimated-delivery/delivered dates for the supplier's own order
  * view — symmetric with the client-facing detail in
  * app/(dashboard)/marketplace/orders/page.tsx (TASK-584). The estimated
  * delivery date is derived client-side via getShippingEta and swapped for
- * the actual deliveredAt once the order is delivered.
+ * the actual deliveredAt once the order is delivered. delayReason (TASK-585)
+ * is shown once the supplier has recorded one, styled like the cancelReason
+ * warning above it in OrderRow.
  */
 function ShippingDetail({
   shippedAt,
   estimatedDeliveryDays,
   deliveredAt,
+  delayReason,
   intlLocale,
 }: {
   shippedAt: string | null;
   estimatedDeliveryDays: number | null;
   deliveredAt: string | null;
+  delayReason: string | null;
   intlLocale: string;
 }) {
   const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
@@ -345,6 +417,11 @@ function ShippingDetail({
       {deliveredAt && (
         <div style={{ color: "#4ADE80", fontSize: 12, marginBottom: 8 }}>
           {t("deliveredAtLabel", { date: formatDate(deliveredAt, intlLocale) })}
+        </div>
+      )}
+      {delayReason && (
+        <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
+          {t("delayReasonLabel", { reason: delayReason })}
         </div>
       )}
     </>

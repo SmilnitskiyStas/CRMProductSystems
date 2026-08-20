@@ -292,6 +292,8 @@ export interface MarketplaceOrderDto {
   estimatedDeliveryDays: number | null;
   /** ISO date string, set when status transitions to "delivered". Null until then. */
   deliveredAt: string | null;
+  /** Supplier's free-text explanation for a delay (TASK-585). Null until set. */
+  delayReason: string | null;
   items: MarketplaceOrderItemDto[];
 }
 

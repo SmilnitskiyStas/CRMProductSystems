@@ -35,6 +35,7 @@ import type {
   SupplierContractSettingsDto,
   UpsertContractSettingsRequest,
   UpdateMarketplaceOrderStatusRequest,
+  SetOrderDelayReasonRequest,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 
@@ -214,6 +215,10 @@ export const supplierCabinetApi = {
    * new→confirmed|cancelled, confirmed→shipped|cancelled, shipped→delivered */
   updateOrderStatus: (id: string, body: UpdateMarketplaceOrderStatusRequest) =>
     api.post<MarketplaceOrderDto>(`${BASE}/orders/${id}/status`, body),
+
+  /** POST /api/supplier-cabinet/orders/{id}/delay-reason — тільки для status "shipped" */
+  setOrderDelayReason: (id: string, body: SetOrderDelayReasonRequest) =>
+    api.post<MarketplaceOrderDto>(`${BASE}/orders/${id}/delay-reason`, body),
 
   // ── Support tickets (TASK-318) ──────────────────────────────────────────────
 

@@ -112,6 +112,7 @@ public record MarketplaceOrderDto(
     DateTimeOffset? ShippedAt,
     int? EstimatedDeliveryDays,
     DateTimeOffset? DeliveredAt,
+    string? DelayReason,
     IReadOnlyList<MarketplaceOrderItemDto> Items);
 
 public record CancelMarketplaceOrderDto(string Reason);
@@ -122,6 +123,12 @@ public record CancelMarketplaceOrderDto(string Reason);
 /// (TASK-584) — the client sees it as the order's ETA.
 /// </summary>
 public record UpdateMarketplaceOrderStatusDto(string Status, string? Reason = null, int? EstimatedDeliveryDays = null);
+
+/// <summary>
+/// Supplier-entered explanation when a shipped order's delivery is running past its
+/// estimated window (TASK-585). Only allowed while the order is still status = shipped.
+/// </summary>
+public record SetOrderDelayReasonDto(string Reason);
 
 // ── Supplier support tickets ─────────────────────────────────────────────────
 

@@ -203,6 +203,7 @@ function FragmentRow({
                 shippedAt={order.shippedAt}
                 estimatedDeliveryDays={order.estimatedDeliveryDays}
                 deliveredAt={order.deliveredAt}
+                delayReason={order.delayReason}
                 intlLocale={intlLocale}
               />
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -273,16 +274,20 @@ function ShippingEtaHint({ order }: { order: MarketplaceOrderDto }) {
  * Shipped/estimated-delivery/delivered dates in the expanded row detail
  * (TASK-584). The estimated delivery date is derived client-side via
  * getShippingEta and swapped for the actual deliveredAt once delivered.
+ * delayReason (TASK-585) is read-only here — only the supplier can record
+ * one, via the supplier cabinet's own order view.
  */
 function ShippingDetail({
   shippedAt,
   estimatedDeliveryDays,
   deliveredAt,
+  delayReason,
   intlLocale,
 }: {
   shippedAt: string | null;
   estimatedDeliveryDays: number | null;
   deliveredAt: string | null;
+  delayReason: string | null;
   intlLocale: string;
 }) {
   const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
@@ -305,6 +310,11 @@ function ShippingDetail({
       {deliveredAt && (
         <div style={{ color: "#4ADE80", fontSize: 12, marginBottom: 8 }}>
           {t("deliveredAtLabel", { date: formatDate(deliveredAt, intlLocale) })}
+        </div>
+      )}
+      {delayReason && (
+        <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
+          {t("delayReasonLabel", { reason: delayReason })}
         </div>
       )}
     </>
