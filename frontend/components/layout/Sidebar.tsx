@@ -283,7 +283,9 @@ function buildSupplierNavGroup(t: SidebarGroupsT): NavGroup {
   // behind an easy-to-miss toggle. Always expanded, no reason to collapse it.
   alwaysExpanded: true,
   items: [
-    { href: "/supplier/profile", label: t("supplierCabinet.profile"),  icon: <Store size={16} />,        roles: SUPPLIER_ONLY, permission: "profile_management" },
+    // Profile viewing (TASK-585) — no permission key: backend no longer requires
+    // profile_management to GET the profile, only to edit/publish it.
+    { href: "/supplier/profile", label: t("supplierCabinet.profile"),  icon: <Store size={16} />,        roles: SUPPLIER_ONLY },
     { href: "/supplier/items",   label: t("supplierCabinet.myItems"),  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
     { href: "/supplier/reviews", label: t("supplierCabinet.reviews"),  icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
     { href: "/supplier/tasks",   label: t("supplierCabinet.tasks"),    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },

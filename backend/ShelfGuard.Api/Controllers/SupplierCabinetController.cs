@@ -47,7 +47,7 @@ public sealed class SupplierCabinetController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
-        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ProfileManagement)) return Forbid();
+        // Intentionally ungated (TASK-585, mirrors TASK-359): any supplier_admin can view their own profile regardless of assigned permissions.
 
         var (profile, error) = await _cabinet.GetProfileAsync(tenantId.Value, ct);
         return error is not null ? NotFound(new { error }) : Ok(profile);
