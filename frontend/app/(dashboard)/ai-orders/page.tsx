@@ -1,42 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { AiOrderReview } from "@/features/ai-orders/components/AiOrderReview";
 import { useAiOrder, useAiOrders, useGenerateAiOrder } from "@/features/ai-orders/hooks/useAiOrders";
-import { useStores } from "@/features/stores/hooks/useStores";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { STATUS_META } from "@/features/ai-orders/types";
-
-const selectStyle: React.CSSProperties = {
-  background: "#111827", border: "1px solid #1F2937", borderRadius: 8,
-  color: "#E8EDF5", fontSize: 13, padding: "7px 10px",
-};
 
 export default function AiOrdersPage() {
   const t = useTranslations("Dashboard.aiOrders.page");
   const tCommon = useTranslations("Common");
   const tStatus = useTranslations("Dashboard.aiOrders.status");
-  const { data: stores = [] } = useStores();
-  const [storeId, setStoreId] = useState<string>("");
+  const primaryStoreId = usePrimaryStoreId();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data: list = [], isLoading } = useAiOrders(storeId || undefined);
+  const { data: list = [], isLoading } = useAiOrders(primaryStoreId);
   const { data: selected } = useAiOrder(selectedId);
   const generate = useGenerateAiOrder();
 
-  const effectiveStoreId = storeId || stores[0]?.id || "";
+  // Mirror the old local picker's behavior: switching the (now global) store context
+  // clears the selected review panel, since it belonged to the previous store's history.
+  useEffect(() => {
+    setSelectedId(null);
+  }, [primaryStoreId]);
 
-  const handleGenerate = () =>
-    generate.mutate(effectiveStoreId, {
+  const handleGenerate = () => {
+    if (!primaryStoreId) return;
+    generate.mutate(primaryStoreId, {
       onSuccess: (order) => {
         toast.success(t("toastGenerated", { count: order.items.length }));
         setSelectedId(order.id);
       },
       onError: (e) => toast.error(e.message),
     });
+  };
 
   return (
     <div style={{ padding: "28px 32px" }}>
@@ -50,12 +50,11 @@ export default function AiOrdersPage() {
             {t("subtitle")}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <select value={storeId} onChange={(e) => { setStoreId(e.target.value); setSelectedId(null); }} style={selectStyle}>
-            <option value="">{t("allStores")}</option>
-            {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <Btn icon={<Sparkles size={15} />} disabled={generate.isPending || !effectiveStoreId} onClick={handleGenerate}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {!primaryStoreId && (
+            <span style={{ color: "#6B7280", fontSize: 12 }}>{t("selectStoreHint")}</span>
+          )}
+          <Btn icon={<Sparkles size={15} />} disabled={generate.isPending || !primaryStoreId} onClick={handleGenerate}>
             {generate.isPending ? t("generating") : t("generate")}
           </Btn>
         </div>

@@ -1358,6 +1358,7 @@
         "statAduCalculated": "ADU calculated",
         "statBuffersUpdated": "Buffers updated",
         "statPositionsToOrder": "Lines to order",
+        "selectStoreHint": "Select a specific store at the top of the page to generate an order",
         "emptyTitle": "Select a store and click “Generate order” —",
         "emptySubtitle": "the system will refresh ADU, rebuild CDA buffers, and calculate order quantities."
       },
@@ -1493,7 +1494,7 @@
       "page": {
         "title": "AI Orders",
         "subtitle": "Claude analyzes weather, events, and promotions — and adjusts the math-based order with explanations",
-        "allStores": "All stores",
+        "selectStoreHint": "Select a specific store at the top of the page to generate an order",
         "generate": "Generate now",
         "generating": "Claude is analyzing…",
         "emptyHistory": "No suggestions yet — click “Generate now” or wait for the daily generation at 05:00.",

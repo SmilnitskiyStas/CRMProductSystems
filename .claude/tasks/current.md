@@ -4997,3 +4997,32 @@ temporarily pointed at Троєщина (a store they're not assigned to) — re
 files touched.
 
 Log: `.claude/logs/tasks/581_2026-08-20_transfer-confirm-hide-wrong-store_frontend-developer.md`.
+
+# TASK-583 — Remove local store pickers on Orders and AI Orders pages
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-20 · **Next:** none
+
+Both pages had their own local store `<select>`, redundant with the global header
+`StoreSelector`. Removed both, switched to `usePrimaryStoreId()` (`frontend/lib/useStoreContext.ts`).
+No backend changes — `POST /api/orders/calculate` and `POST /api/ai-orders/generate` already
+require a single concrete `Guid StoreId`, exactly what `usePrimaryStoreId()` produces
+(`undefined` in "all stores" mode).
+
+`frontend/app/(dashboard)/orders/page.tsx`: dropped `storeId` state, `useStores()`, the
+`<select>`; Generate button now `disabled={!primaryStoreId}` with a hint shown next to it when
+no single store is selected.
+
+`frontend/app/(dashboard)/ai-orders/page.tsx`: same removal. List (`useAiOrders(primaryStoreId)`)
+still supports "all stores" (undefined → unfiltered) unchanged — not gated, only Generate is.
+Deleted the now-unused `Dashboard.aiOrders.page.allStores` i18n key (confirmed unused elsewhere).
+Added a `useEffect` clearing the selected review panel on store-context change, mirroring the old
+picker's `onChange` behavior.
+
+Added `selectStoreHint` key to `Dashboard.orders.page` and `Dashboard.aiOrders.page` in both
+`en.json`/`uk.json` (only 2 locales in this project).
+
+`tsc --noEmit` and `eslint` on both files clean. No authenticated browser session was available
+to this agent (fresh dev server, empty localStorage) — did not log in per task boundary; live
+dashboard check left for the orchestrator.
+
+Log: `.claude/logs/tasks/583_2026-08-20_remove-local-store-pickers-orders-ai-orders_frontend-developer.md`.

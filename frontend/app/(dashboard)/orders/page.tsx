@@ -1,22 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { OrderLinesTable } from "@/features/orders/components/OrderLinesTable";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
-import { useStores } from "@/features/stores/hooks/useStores";
-
-const selectStyle: React.CSSProperties = {
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "7px 10px",
-};
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 
 const statCard: React.CSSProperties = {
   background: "#0D1117",
@@ -28,16 +18,14 @@ const statCard: React.CSSProperties = {
 
 export default function OrdersPage() {
   const t = useTranslations("Dashboard.orders.page");
-  const { data: stores = [] } = useStores();
-  const [storeId, setStoreId] = useState<string>("");
+  const primaryStoreId = usePrimaryStoreId();
   const generate = useGenerateOrder();
 
-  const effectiveStoreId = storeId || stores[0]?.id || "";
   const result = generate.data;
 
   const handleGenerate = () => {
-    if (!effectiveStoreId) return;
-    generate.mutate(effectiveStoreId, {
+    if (!primaryStoreId) return;
+    generate.mutate(primaryStoreId, {
       onSuccess: (r) =>
         toast.success(
           t("toastResult", {
@@ -63,15 +51,13 @@ export default function OrdersPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <select value={storeId} onChange={(e) => setStoreId(e.target.value)} style={selectStyle}>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          {!primaryStoreId && (
+            <span style={{ color: "#6B7280", fontSize: 12 }}>{t("selectStoreHint")}</span>
+          )}
           <Btn
             icon={<Calculator size={15} />}
             onClick={handleGenerate}
-            disabled={generate.isPending || !effectiveStoreId}
+            disabled={generate.isPending || !primaryStoreId}
           >
             {generate.isPending ? t("generating") : t("generate")}
           </Btn>
