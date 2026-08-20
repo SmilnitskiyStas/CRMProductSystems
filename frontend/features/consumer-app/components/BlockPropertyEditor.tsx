@@ -9,6 +9,7 @@ import { Info, X } from "lucide-react";
 import { DetailDrawer } from "@/components/ui/DetailDrawer";
 import { Btn } from "@/components/ui/Btn";
 import type { BlockDefinitionDto, BlockPropDefinitionDto, MobileConfigBlockInstance } from "../types";
+import { ProductPickerField } from "./ProductPickerField";
 
 // ── Style constants (mirrors ThemeEditorSection.tsx / AppBuilderCanvas.tsx conventions — this
 // feature area has no shadcn form primitives of its own) ───────────────────────────────────────
@@ -143,8 +144,8 @@ function stringArrayFieldSchema(def: BlockPropDefinitionDto, t: PropT): ZodTypeA
   return schema;
 }
 
-/** The one place this editor switches on `BlockPropDefinition.Type` — six cases, matching
- *  `BlockPropTypes.cs` exactly. A future 7th type falls through to a permissive schema instead
+/** The one place this editor switches on `BlockPropDefinition.Type` — seven cases, matching
+ *  `BlockPropTypes.cs` exactly. A future 8th type falls through to a permissive schema instead
  *  of crashing the form. */
 function fieldSchemaFor(def: BlockPropDefinitionDto, t: PropT): ZodTypeAny {
   switch (def.type) {
@@ -159,6 +160,11 @@ function fieldSchemaFor(def: BlockPropDefinitionDto, t: PropT): ZodTypeAny {
     case "url":
       return urlFieldSchema(def, t);
     case "stringArray":
+      return stringArrayFieldSchema(def, t);
+    case "productIds":
+      // Same array-of-strings shape as stringArray; `def.allowedValues` is always null for this
+      // kind (the valid set is the tenant's live catalog, not a static list), which
+      // `stringArrayFieldSchema` already handles gracefully — no dedicated schema needed.
       return stringArrayFieldSchema(def, t);
     default:
       return z.unknown();
@@ -178,6 +184,7 @@ function coerceValue(def: BlockPropDefinitionDto, value: unknown): unknown {
     case "int":
       return typeof value === "number" && Number.isFinite(value) ? value : Number(def.default ?? 0) || 0;
     case "stringArray":
+    case "productIds":
       if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
       return Array.isArray(def.default) ? def.default : [];
     case "string":
@@ -204,7 +211,7 @@ function buildDefaultValues(
 // ── Field renderer (schema-driven — switches ONLY on `def.type`, never on the block's own
 // `type`; adding a new block type to the Registry never requires touching this file) ───────────
 
-interface FieldProps {
+export interface FieldProps {
   def: BlockPropDefinitionDto;
   label: string;
   register: UseFormRegister<PropFormValues>;
@@ -412,7 +419,7 @@ function StringArrayField({ def, label, setValue, value, error, t }: FieldProps)
   );
 }
 
-/** Dispatch on `def.type` only — the six `BlockPropTypes.cs` cases. This is the sole switch in
+/** Dispatch on `def.type` only — the seven `BlockPropTypes.cs` cases. This is the sole switch in
  *  the file; there is deliberately no branch anywhere on the block's own `type`. */
 function PropField(props: FieldProps) {
   switch (props.def.type) {
@@ -422,6 +429,8 @@ function PropField(props: FieldProps) {
       return <EnumField {...props} />;
     case "stringArray":
       return <StringArrayField {...props} />;
+    case "productIds":
+      return <ProductPickerField {...props} />;
     case "int":
       return <NumberField {...props} />;
     case "url":
@@ -452,7 +461,7 @@ interface BlockPropertyEditorProps {
  * TASK-540: property editor for a single block selected on the App Builder canvas (TASK-539).
  * Entirely schema-driven off `definition.validationSchema` (`BlockDefinitionDto.validationSchema`,
  * TASK-538's `GET /api/v1/mobile/blocks`) — a new block type registered on the backend renders
- * here with zero changes to this file, as long as its props use the six existing
+ * here with zero changes to this file, as long as its props use the seven existing
  * `BlockPropTypes.cs` kinds.
  *
  * "Apply" only writes the edited props into `AppBuilderCanvas`'s in-memory `configDoc` (via

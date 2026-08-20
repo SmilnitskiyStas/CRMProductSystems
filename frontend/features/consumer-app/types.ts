@@ -359,7 +359,7 @@ export interface MobileConfigDocument {
  *  because the registry response is the source of truth and a new value should render gracefully
  *  (falls back to a plain text input in the Property Editor, TASK-540) instead of a client build
  *  break. */
-export type BlockPropType = "string" | "int" | "bool" | "enum" | "url" | "stringArray";
+export type BlockPropType = "string" | "int" | "bool" | "enum" | "url" | "stringArray" | "productIds";
 
 /** One entry in a block type's `validationSchema` (TASK-540's Property Editor generates a field
  *  per entry; this task only consumes `defaultProps`, not this schema, when placing a block). */

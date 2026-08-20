@@ -32,4 +32,14 @@ public static class BlockPropTypes
     /// <see cref="BlockPropDefinition.MinItems"/>/<see cref="BlockPropDefinition.MaxItems"/>.
     /// </summary>
     public const string StringArray = "stringArray";
+
+    /// <summary>
+    /// An array of Item (product) UUIDs the admin explicitly curated, in display order (TASK-570/571,
+    /// ADR-032 "Catalog Curation"). Same wire shape as <see cref="StringArray"/> (an array of strings)
+    /// but a distinct kind, not StringArray + a name special-case: the valid values are the tenant's
+    /// live catalog, not a static AllowedValues list, so AllowedValues stays null here and the admin UI
+    /// needs an async search-by-name picker (frontend/features/consumer-app/components/
+    /// ProductPickerField.tsx) instead of StringArrayField's fixed-badge/free-text modes.
+    /// </summary>
+    public const string ProductIds = "productIds";
 }

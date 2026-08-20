@@ -433,6 +433,19 @@ in-code static catalog instead:
   (2 or 3) is the only other size-adjacent prop and is unrelated/unchanged. The other 6 types
   (loyaltyCard, loyaltyBalance, sectionHeader, quickActions, newsList, storeList) have no size prop —
   content-list/fixed-layout blocks with no single meaningful dimension.
+- **7th `BlockPropType`: `productIds` (TASK-571, ADR-032)** — `BlockPropTypes.ProductIds`, an array
+  of `Item.Id` GUIDs the admin explicitly curated in display order, added to `productGrid.productIds`
+  (`MaxItems: 30`, matching that type's `limit.Max`) and `productCarousel.productIds` (`MaxItems: 20`).
+  Wire shape is the same "array of strings" as `StringArray`, but it is a **distinct kind, not a
+  `StringArray` + name special-case** — the valid values are a tenant's live catalog, not a static
+  `AllowedValues` list, so `AllowedValues` stays `null` and the admin UI needs an async
+  search-by-name picker instead of `StringArrayField`'s fixed-badge/free-text modes (see ADR-032
+  Decision 1 for the full reasoning, including why this keeps `BlockPropertyEditor.tsx`'s
+  switch-only-on-`type` invariant intact instead of eroding it). `MinItems: 0` on both — an empty/
+  absent selection is the explicit "no curation, fall back to today's alphabetical-first-`limit`"
+  state (ADR-032 Decision 2), never a validation error. `promotionGrid`/`promotionCarousel` do **not**
+  get this prop — they already resolve from `ctx.promotions` (active-`Discount` items), a separately
+  curated data source, out of scope for this feature.
 
 ---
 

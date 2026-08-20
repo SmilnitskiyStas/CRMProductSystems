@@ -127,6 +127,45 @@ public sealed class ItemServiceTests
         _repo.Received(1).Update(existing);
     }
 
+    // ── GetPaged (search/ids passthrough — TASK-572) ─────────────────────────
+
+    [Fact]
+    public async Task GetPagedAsync_NoSearchOrIds_PassesNullsThrough()
+    {
+        _repo.GetPagedAsync(null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>())
+            .Returns((new List<Item>(), 0));
+
+        await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, 1, 50);
+
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_WithSearch_PassesSearchThrough()
+    {
+        _repo.GetPagedAsync(null, null, null, "молок", null, 1, 50, Arg.Any<CancellationToken>())
+            .Returns((new List<Item>(), 0));
+
+        await _sut.GetPagedAsync(_tenantId, null, null, null, "молок", null, 1, 50);
+
+        await _repo.Received(1).GetPagedAsync(null, null, null, "молок", null, 1, 50, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_WithIds_PassesIdsThroughAndReturnsExactSet()
+    {
+        var a = new Item { TenantId = _tenantId, Name = "A", ManagementType = "MTS" };
+        var b = new Item { TenantId = _tenantId, Name = "Z", ManagementType = "MTS" };
+        var ids = new List<Guid> { a.Id, b.Id };
+        _repo.GetPagedAsync(null, null, null, null, ids, 1, 30, Arg.Any<CancellationToken>())
+            .Returns((new List<Item> { a, b }, 2));
+
+        var result = await _sut.GetPagedAsync(_tenantId, null, null, null, null, ids, 1, 30);
+
+        Assert.Equal(2, result.Items.Count);
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, ids, 1, 30, Arg.Any<CancellationToken>());
+    }
+
     // ── Delete ─────────────────────────────────────────────────────────────
 
     [Fact]

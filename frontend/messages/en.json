@@ -4382,7 +4382,11 @@
           "maxItemsError": "Select at most {max}",
           "itemsHint": "Select between {min} and {max}",
           "addTagPlaceholder": "Type and press Enter to add",
-          "removeTag": "Remove"
+          "removeTag": "Remove",
+          "productSearchPlaceholder": "Search products by name…",
+          "productSearchLoading": "Searching…",
+          "productSearchEmpty": "No products found",
+          "productPickerEmptyHint": "With nothing selected, the first products alphabetically are shown"
         },
         "preview": {
           "title": "Live preview",

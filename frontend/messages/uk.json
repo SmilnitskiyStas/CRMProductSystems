@@ -4382,7 +4382,11 @@
           "maxItemsError": "Оберіть не більше {max}",
           "itemsHint": "Оберіть від {min} до {max}",
           "addTagPlaceholder": "Введіть значення та натисніть Enter",
-          "removeTag": "Видалити"
+          "removeTag": "Видалити",
+          "productSearchPlaceholder": "Пошук товару за назвою…",
+          "productSearchLoading": "Пошук…",
+          "productSearchEmpty": "Товарів не знайдено",
+          "productPickerEmptyHint": "Без вибору показуються перші товари за алфавітом"
         },
         "preview": {
           "title": "Попередній перегляд",

@@ -136,7 +136,7 @@ file sealed class RetryFakeCatalogRepo : IItemRepository
 {
     public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<List<Item>> GetAllAsync(Guid? c, Guid? s, string? m, CancellationToken ct = default) => Task.FromResult(new List<Item>());
-    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, int page, int pageSize, CancellationToken ct = default) =>
+    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids, int page, int pageSize, CancellationToken ct = default) =>
         Task.FromResult((new List<Item>(), 0));
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) => Task.FromResult(new List<ProductSupplierSetting>());

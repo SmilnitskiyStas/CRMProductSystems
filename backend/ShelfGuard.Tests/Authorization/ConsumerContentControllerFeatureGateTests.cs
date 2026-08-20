@@ -22,6 +22,7 @@ public sealed class ConsumerContentControllerFeatureGateTests
     [Theory]
     [InlineData(nameof(ConsumerContentController.GetPromotions), "promotions")]
     [InlineData(nameof(ConsumerContentController.GetCatalog), "catalog")]
+    [InlineData(nameof(ConsumerContentController.GetCatalogByIds), "catalog")]
     public void Gated_action_carries_RequireConsumerFeature_with_the_expected_flag_key(string methodName, string expectedFlagKey)
     {
         var method = GetPublicMethod(methodName);

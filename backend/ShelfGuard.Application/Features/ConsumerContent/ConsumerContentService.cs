@@ -101,4 +101,22 @@ public sealed class ConsumerContentService : IConsumerContentService
             PageSize = pageSize,
         }, null);
     }
+
+    public async Task<(IReadOnlyList<ConsumerCatalogItemDto>? Items, string? Error)> GetCatalogByIdsAsync(
+        Guid tenantId, Guid storeId, IReadOnlyList<Guid> ids, CancellationToken ct = default)
+    {
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        if (tenant is null) return (null, "Tenant not found.");
+
+        if (ids.Count == 0) return (Array.Empty<ConsumerCatalogItemDto>(), null);
+
+        // Defensive clamp — the controller already bounds to 30, but the registry's own MaxItems
+        // (BlockRegistry.cs productGrid/productCarousel) is the real source of truth for "why 30".
+        var clampedIds = ids.Count > 30 ? ids.Take(30).ToList() : ids;
+
+        var items = await _tenantScope.ExecuteAsync(
+            tenantId, () => _repo.GetCatalogByIdsAsync(tenantId, storeId, clampedIds, ct), ct);
+
+        return (items, null);
+    }
 }

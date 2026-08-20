@@ -17,4 +17,9 @@ public interface IConsumerContentService
     Task<(PagedResult<ConsumerCatalogItemDto>? Catalog, string? Error)> GetCatalogAsync(
         Guid tenantId, Guid storeId, string? search, Guid? categoryId, int page, int pageSize,
         CancellationToken ct = default);
+
+    /// <summary>Active catalog items matching exactly the given ids — resolves a curated productIds
+    /// selection regardless of alphabetical position (TASK-570/572, ADR-032).</summary>
+    Task<(IReadOnlyList<ConsumerCatalogItemDto>? Items, string? Error)> GetCatalogByIdsAsync(
+        Guid tenantId, Guid storeId, IReadOnlyList<Guid> ids, CancellationToken ct = default);
 }

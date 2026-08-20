@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemberships } from '@/features/loyalty/hooks/useLoyalty';
 import { useLoyaltyUiStore } from '@/features/loyalty/store';
 import { selectMembershipForTenant } from '@/features/loyalty/selection';
-import { getConsumerBanners, getConsumerCatalog, getConsumerPromotions } from './api';
+import { getConsumerBanners, getConsumerCatalog, getConsumerCatalogByIds, getConsumerPromotions } from './api';
 import type { ConsumerContentContext } from './types';
 
 export function useSelectedConsumerContext(enabled = true) {
@@ -42,5 +42,14 @@ export function useConsumerCatalog(
     queryFn: () => getConsumerCatalog(context as ConsumerContentContext, params),
     enabled: Boolean(context),
     placeholderData: (previous) => previous,
+  });
+}
+
+export function useConsumerCatalogByIds(context: ConsumerContentContext | null, ids: string[]) {
+  return useQuery({
+    queryKey: ['consumer-content', 'catalog-by-ids', context?.tenantId, context?.storeId, [...ids].sort()],
+    queryFn: () => getConsumerCatalogByIds(context as ConsumerContentContext, ids),
+    enabled: Boolean(context) && ids.length > 0,
+    staleTime: 60_000,
   });
 }

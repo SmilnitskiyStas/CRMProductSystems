@@ -1,6 +1,11 @@
 import { resolveBlock } from '../resolveBlocks';
 import type { BlockDataSources } from '../resolveBlocks';
 
+const catalog: BlockDataSources['catalog'] = [{
+  id: 'product-1', name: 'Хліб', imageUrl: null, unit: 'шт', priceRetail: 30,
+  categoryId: null, categoryName: null, isAvailableAtStore: true,
+}];
+
 const data: BlockDataSources = {
   banners: [{
     id: 'banner-1', title: 'Літня акція', eyebrow: null, description: 'Опис', body: [], terms: [],
@@ -12,10 +17,8 @@ const data: BlockDataSources = {
     discountPercent: 20, regularPrice: 50, appPrice: 40, icon: 'pricetag-outline',
     background: '#ffffff', manufacturer: null, countryOfOrigin: null,
   }],
-  catalog: [{
-    id: 'product-1', name: 'Хліб', imageUrl: null, unit: 'шт', priceRetail: 30,
-    categoryId: null, categoryName: null, isAvailableAtStore: true,
-  }],
+  catalog,
+  catalogById: new Map(catalog.map((item) => [item.id, item])),
   membership: {
     membershipId: 'membership-1234', tenantId: 'tenant-1', tenantName: 'Мережа', balance: 125,
     status: 'active', joinedAt: '2026-08-01', preferredStoreId: null,
@@ -79,5 +82,68 @@ describe('App Builder block data resolution', () => {
   ])('resolves cardWidthPx to undefined when not authored, so the default renders (%s)', (type, props) => {
     const resolved = resolveBlock({ id: type, type, props }, data);
     expect((resolved.props as { cardWidthPx?: number }).cardWidthPx).toBeUndefined();
+  });
+
+  describe('curated productIds selection (TASK-570/573, ADR-032)', () => {
+    const curatedCatalog: BlockDataSources['catalog'] = [
+      { id: 'a', name: 'Яблука', imageUrl: null, unit: 'кг', priceRetail: 10, categoryId: null, categoryName: null, isAvailableAtStore: true },
+      { id: 'b', name: 'Банани', imageUrl: null, unit: 'кг', priceRetail: 20, categoryId: null, categoryName: null, isAvailableAtStore: true },
+      { id: 'c', name: 'Вишні', imageUrl: null, unit: 'кг', priceRetail: null, categoryId: null, categoryName: null, isAvailableAtStore: true },
+      { id: 'd', name: 'Груші', imageUrl: null, unit: 'кг', priceRetail: 40, categoryId: null, categoryName: null, isAvailableAtStore: true },
+    ];
+    const curatedData: BlockDataSources = {
+      ...data,
+      catalog: curatedCatalog,
+      catalogById: new Map(curatedCatalog.map((item) => [item.id, item])),
+    };
+
+    test.each(['productCarousel', 'productGrid'])(
+      '(a) resolves a curated selection in the admin\'s exact chosen order, not alphabetical (%s)',
+      (type) => {
+        const resolved = resolveBlock({ id: type, type, props: { limit: 10, productIds: ['d', 'a', 'b'] } }, curatedData);
+        const items = (resolved.props as { items: { id: string }[] }).items;
+        expect(items.map((item) => item.id)).toEqual(['d', 'a', 'b']);
+      }
+    );
+
+    test.each(['productCarousel', 'productGrid'])(
+      '(b) silently skips a curated id with no match in catalogById, remaining items still resolve (%s)',
+      (type) => {
+        const resolved = resolveBlock({ id: type, type, props: { limit: 10, productIds: ['a', 'missing-id', 'b'] } }, curatedData);
+        const items = (resolved.props as { items: { id: string }[] }).items;
+        expect(items.map((item) => item.id)).toEqual(['a', 'b']);
+      }
+    );
+
+    test.each(['productCarousel', 'productGrid'])(
+      '(c) silently skips a curated id whose item has priceRetail === null (%s)',
+      (type) => {
+        const resolved = resolveBlock({ id: type, type, props: { limit: 10, productIds: ['a', 'c', 'b'] } }, curatedData);
+        const items = (resolved.props as { items: { id: string }[] }).items;
+        expect(items.map((item) => item.id)).toEqual(['a', 'b']);
+      }
+    );
+
+    test.each(['productCarousel', 'productGrid'])(
+      '(d) caps a curated selection longer than limit (%s)',
+      (type) => {
+        const resolved = resolveBlock({ id: type, type, props: { limit: 2, productIds: ['d', 'a', 'b'] } }, curatedData);
+        const items = (resolved.props as { items: { id: string }[] }).items;
+        expect(items.map((item) => item.id)).toEqual(['d', 'a']);
+      }
+    );
+
+    test.each(['productCarousel', 'productGrid'])(
+      "(e) empty productIds resolves identically to a block with no productIds prop at all — regression guard on the unchanged alphabetical fallback (%s)",
+      (type) => {
+        const withoutProp = resolveBlock({ id: type, type, props: { limit: 10 } }, curatedData);
+        const withEmptyArray = resolveBlock({ id: type, type, props: { limit: 10, productIds: [] } }, curatedData);
+        expect(withEmptyArray).toEqual(withoutProp);
+        // Fallback is still "alphabetical order as authored in the catalog array, priceRetail-filtered" —
+        // 'c' (priceRetail: null) excluded, 'd' kept even though it wasn't curated.
+        const items = (withoutProp.props as { items: { id: string }[] }).items;
+        expect(items.map((item) => item.id)).toEqual(['a', 'b', 'd']);
+      }
+    );
   });
 });

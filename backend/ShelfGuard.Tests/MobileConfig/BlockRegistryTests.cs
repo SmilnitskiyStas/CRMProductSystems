@@ -54,6 +54,7 @@ public sealed class BlockRegistryTests
         {
             BlockPropTypes.String, BlockPropTypes.Int, BlockPropTypes.Bool,
             BlockPropTypes.Enum, BlockPropTypes.Url, BlockPropTypes.StringArray,
+            BlockPropTypes.ProductIds,
         };
 
         foreach (var prop in def.Props)
@@ -112,6 +113,31 @@ public sealed class BlockRegistryTests
         var actionsProp = quickActions.Props.Single(p => p.Name == "actions");
 
         Assert.Equal(MobileConfigWhitelists.NavigationTypes.ToHashSet(), actionsProp.AllowedValues!.ToHashSet());
+    }
+
+    [Theory]
+    [InlineData("productCarousel", 20)]
+    [InlineData("productGrid", 30)]
+    public void Curatable_product_block_types_declare_productIds_with_expected_MaxItems(
+        string blockType, int expectedMaxItems)
+    {
+        var def = BlockRegistry.Definitions.Single(d => d.Type == blockType);
+        var prop = def.Props.Single(p => p.Name == "productIds");
+        Assert.Equal(BlockPropTypes.ProductIds, prop.Type);
+        Assert.Equal(0, prop.MinItems);
+        Assert.Equal(expectedMaxItems, prop.MaxItems);
+        Assert.False(prop.Required);
+        Assert.Null(prop.AllowedValues);
+    }
+
+    [Fact]
+    public void PromotionCollection_block_types_do_not_get_productIds()
+    {
+        foreach (var type in new[] { "promotionGrid", "promotionCarousel" })
+        {
+            var def = BlockRegistry.Definitions.Single(d => d.Type == type);
+            Assert.DoesNotContain(def.Props, p => p.Name == "productIds");
+        }
     }
 
     public static IEnumerable<object[]> AllDefinitions() =>

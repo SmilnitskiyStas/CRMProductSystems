@@ -7,6 +7,7 @@ export interface BlockDataSources {
   banners: readonly ConsumerNewsItem[];
   promotions: readonly NewsPromotionProduct[];
   catalog: readonly ConsumerCatalogItem[];
+  catalogById: ReadonlyMap<string, ConsumerCatalogItem>;
   membership: LoyaltyMembershipSummary | null;
   network: LoyaltyNetworkSummary | null;
 }
@@ -64,11 +65,23 @@ export function resolveBlock(block: MobileBlockConfig, data: BlockDataSources): 
     case 'productCarousel':
     case 'productGrid': {
       const limit = positiveInt(props.limit, block.type === 'productGrid' ? 12 : 10, 30);
+      // TASK-570/573 (ADR-032): an admin-curated `productIds` selection overrides the
+      // alphabetical fallback, resolved in the admin's chosen order via catalogById (which
+      // covers ids outside the default catalog page window). A stale/deleted id, or one
+      // whose item has no retail price, is silently skipped — never rendered as "missing".
+      // Empty/absent productIds falls back to today's unchanged alphabetical-by-limit behavior.
+      const productIds = Array.isArray(props.productIds)
+        ? props.productIds.filter((value): value is string => typeof value === 'string')
+        : [];
+      const sourceItems = productIds.length > 0
+        ? productIds
+            .map((id) => data.catalogById.get(id))
+            .filter((item): item is ConsumerCatalogItem => !!item && item.priceRetail !== null)
+        : data.catalog.filter((item) => item.priceRetail !== null);
       return { ...block, props: { title: props.title, showViewAll: props.showViewAll,
         columns: columns(props.columns),
         cardWidthPx: typeof props.cardWidthPx === 'number' ? props.cardWidthPx : undefined,
-        items: data.catalog
-        .filter((item) => item.priceRetail !== null)
+        items: sourceItems
         .slice(0, limit)
         .map((item) => ({ id: item.id, name: item.name, price: item.priceRetail as number,
           unit: item.unit, imageUrl: item.imageUrl ?? undefined })) } };

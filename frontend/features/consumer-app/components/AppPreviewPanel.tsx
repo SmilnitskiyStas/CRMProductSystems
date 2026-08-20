@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Home, type LucideIcon } from "lucide-react";
-import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
+import { useCatalogProducts, useCatalogProductsByIds } from "@/features/catalog/hooks/useCatalog";
+import type { CatalogProductDto } from "@/features/catalog/types";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useBanners } from "../hooks/useBanners";
 import { useMobileTheme } from "../hooks/useMobileTheme";
@@ -22,6 +23,7 @@ import {
 } from "./blockPreviews";
 import type {
   BlockDefinitionDto,
+  MobileConfigBlockInstance,
   MobileConfigBlockType,
   MobileConfigNavigationIcon,
   MobileConfigNavigationItem,
@@ -115,6 +117,32 @@ function mixWithBackground(hex: string): string {
     .join("")}`;
 }
 
+/**
+ * TASK-575 (ADR-032 Decision 2/3): the single DTO→`PreviewProductItem` transform used for BOTH
+ * `catalog` (the existing default-page fetch) and `catalogById` (the new by-ids fetch) below — a
+ * product missing `priceRetail` or deactivated is excluded here, exactly the same "not sellable,
+ * don't show" rule the block previews' fallback branch already applied via its own inline filter.
+ * Do not add a second mapping anywhere else in this file for the same DTO.
+ */
+function toPreviewProductItem(p: CatalogProductDto): PreviewProductItem | null {
+  if (!p.isActive || p.priceRetail === null) return null;
+  return { id: p.id, name: p.name, price: p.priceRetail, unit: p.unit, imageUrl: p.imageUrl ?? undefined };
+}
+
+/** TASK-575: every id referenced by a `productGrid`/`productCarousel` block's `productIds` prop
+ *  across the given page's blocks, deduped — the curated selection this panel needs to resolve via
+ *  a by-ids fetch (ADR-032 Decision 3), regardless of where those ids fall alphabetically. */
+function curatedProductIdsOf(blocks: MobileConfigBlockInstance[]): string[] {
+  const ids = new Set<string>();
+  for (const block of blocks) {
+    if (block.type !== "productGrid" && block.type !== "productCarousel") continue;
+    const raw = block.props.productIds;
+    if (!Array.isArray(raw)) continue;
+    for (const id of raw) if (typeof id === "string") ids.add(id);
+  }
+  return [...ids];
+}
+
 function buildTokens(theme: MobileThemeDto): PreviewTokens {
   return {
     colors: {
@@ -206,6 +234,13 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
     }
   }
 
+  // TASK-575 (ADR-032 Decision 3): every id a `productGrid`/`productCarousel` curated selection
+  // references on the currently-previewed page — computed ahead of the loading/error early returns
+  // below since `useCatalogProductsByIds` (a hook) must run unconditionally on every render.
+  const previewBlocks = pages[previewPage]?.blocks ?? [];
+  const curatedIds = useMemo(() => curatedProductIdsOf(previewBlocks), [previewBlocks]);
+  const catalogByIdsQuery = useCatalogProductsByIds(curatedIds);
+
   // Frame renders border-box at exactly `device.height` (see `PhoneFrame`'s `width`/`height` prop
   // docs) — the space actually available to children is that total minus the frame's own chrome
   // (its border on both sides, plus the padding passed to it on both sides) and, TASK-568, the
@@ -258,18 +293,27 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
   );
 
   const catalog: PreviewProductItem[] = useMemo(
-    () =>
-      (catalogQuery.data ?? [])
-        .filter((p) => p.isActive && p.priceRetail !== null)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          price: p.priceRetail as number,
-          unit: p.unit,
-          imageUrl: p.imageUrl ?? undefined,
-        })),
+    () => (catalogQuery.data ?? []).map(toPreviewProductItem).filter((item): item is PreviewProductItem => item !== null),
     [catalogQuery.data],
   );
+
+  // TASK-575 (ADR-032 Decision 3): merges the same bounded default `catalogQuery` fetch above with
+  // the by-ids fetch (`catalogByIdsQuery`) into a lookup map keyed by id, both mapped through the
+  // SAME `toPreviewProductItem` transform used for `catalog` — so a curated pick outside
+  // `catalogQuery`'s default page window still resolves. Used only by `productGrid`/
+  // `productCarousel` previews when their `productIds` prop is non-empty (blockPreviews.tsx).
+  const catalogById: Map<string, PreviewProductItem> = useMemo(() => {
+    const map = new Map<string, PreviewProductItem>();
+    for (const p of catalogQuery.data ?? []) {
+      const item = toPreviewProductItem(p);
+      if (item) map.set(item.id, item);
+    }
+    for (const p of catalogByIdsQuery.data ?? []) {
+      const item = toPreviewProductItem(p);
+      if (item) map.set(item.id, item);
+    }
+    return map;
+  }, [catalogQuery.data, catalogByIdsQuery.data]);
 
   const locations: PreviewStoreItem[] = useMemo(
     () =>
@@ -287,8 +331,7 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
   }
 
   const tokens = buildTokens(themeQuery.data);
-  const ctx: PreviewContext = { tokens, banners, promotions, catalog, locations, registryByType, onResizeCommit };
-  const previewBlocks = pages[previewPage]?.blocks ?? [];
+  const ctx: PreviewContext = { tokens, banners, promotions, catalog, catalogById, locations, registryByType, onResizeCommit };
 
   return (
     <div style={cardStyle}>

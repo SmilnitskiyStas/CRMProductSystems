@@ -22,6 +22,8 @@ public sealed class ItemsController : ControllerBase
         [FromQuery] Guid? category_id,
         [FromQuery] Guid? segment_id,
         [FromQuery] string? management_type,
+        [FromQuery] string? search = null,
+        [FromQuery(Name = "ids")] Guid[]? ids = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
@@ -29,8 +31,22 @@ public sealed class ItemsController : ControllerBase
         // tenantId is accepted by the service but not yet used for filtering (RLS handles isolation at DB level).
         // Provider users have no tenant_id claim — still allowed to view the global catalog.
         var tenantId = GetTenantId() ?? Guid.Empty;
+
+        // ids means "give me exactly these," not a paginated browse (TASK-570/572, ADR-032) —
+        // clamp to 30 (registry's MaxItems bound for curatable blocks) and force page 1/pageSize 30
+        // regardless of the caller's own page/pageSize.
+        List<Guid>? clampedIds = null;
+        if (ids is { Length: > 0 })
+        {
+            clampedIds = ids.Take(30).ToList();
+            page = 1;
+            pageSize = 30;
+        }
+
         var query = new PagedQuery { Page = page, PageSize = pageSize };
-        var result = await _catalog.GetPagedAsync(tenantId, category_id, segment_id, management_type, query.ClampedPage, query.ClampedPageSize, ct);
+        var result = await _catalog.GetPagedAsync(
+            tenantId, category_id, segment_id, management_type, search, clampedIds,
+            query.ClampedPage, query.ClampedPageSize, ct);
         return Ok(result);
     }
 

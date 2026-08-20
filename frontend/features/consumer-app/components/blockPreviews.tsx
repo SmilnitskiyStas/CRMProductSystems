@@ -90,6 +90,15 @@ export interface PreviewContext {
   banners: PreviewBannerItem[];
   promotions: PreviewPromotionItem[];
   catalog: PreviewProductItem[];
+  /**
+   * TASK-575 (ADR-032 Decision 3): every product referenced by a `productGrid`/`productCarousel`
+   * curated selection on the currently-previewed page, keyed by id — merges the same bounded
+   * default `catalog` fetch above with a dedicated by-ids fetch, so a curated pick outside
+   * `catalog`'s default page window still resolves correctly. Absent from this map means "not
+   * found or not sellable" — resolution skips it silently (ADR-032 Decision 2), never a
+   * placeholder.
+   */
+  catalogById: Map<string, PreviewProductItem>;
   locations: PreviewStoreItem[];
   registryByType: Map<MobileConfigBlockType, BlockDefinitionDto>;
   /**
@@ -127,6 +136,32 @@ function num(value: unknown, fallback: number): number {
 
 function money(value: number): string {
   return value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * TASK-575: curated-selection resolution for `productGrid`/`productCarousel` — must stay
+ * IDENTICAL in shape to `resolveBlocks.ts`'s mobile-side case (ADR-032 Decision 2, ADR-031
+ * "preview must never lie"). Non-empty `productIds` overrides the alphabetical fallback, resolved
+ * in the admin's exact chosen order via `ctx.catalogById`, silently skipping any id that doesn't
+ * resolve (deleted/deactivated/not-sellable — `catalogById` already excludes those, see
+ * `AppPreviewPanel.tsx`'s `toPreviewProductItem`), then capped to `limit`. Empty/absent
+ * `productIds` falls back to exactly today's behavior, byte-for-byte.
+ */
+function resolveProductItems(
+  props: Record<string, unknown>,
+  ctx: PreviewContext,
+  limit: number,
+): PreviewProductItem[] {
+  const productIds = Array.isArray(props.productIds)
+    ? props.productIds.filter((v): v is string => typeof v === "string")
+    : [];
+  if (productIds.length > 0) {
+    const resolved = productIds
+      .map((id) => ctx.catalogById.get(id))
+      .filter((item): item is PreviewProductItem => !!item);
+    return resolved.slice(0, limit);
+  }
+  return ctx.catalog.slice(0, limit);
 }
 
 /** Matches `resolveBlocks.ts`'s `actionLabels` exactly — do not invent different labels. */
@@ -452,7 +487,7 @@ export function ProductCarouselPreview({ block, ctx }: { block: MobileConfigBloc
   const title = str(block.props.title) || undefined;
   const limit = positiveInt(block.props.limit, 10, 30);
   const cardWidthPx = num(block.props.cardWidthPx, 170);
-  const items = ctx.catalog.slice(0, limit);
+  const items = resolveProductItems(block.props, ctx, limit);
 
   return (
     <div>
@@ -474,7 +509,7 @@ export function ProductGridPreview({ block, ctx }: { block: MobileConfigBlockIns
   const limit = positiveInt(block.props.limit, 12, 30);
   const c = columns(block.props.columns);
   const width = c === 4 ? "23%" : c === 3 ? "31%" : "48%";
-  const items = ctx.catalog.slice(0, limit);
+  const items = resolveProductItems(block.props, ctx, limit);
 
   return (
     <div>

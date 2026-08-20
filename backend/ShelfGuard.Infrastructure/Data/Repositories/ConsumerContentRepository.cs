@@ -123,6 +123,32 @@ public sealed class ConsumerContentRepository : IConsumerContentRepository
         return (items, total);
     }
 
+    public async Task<IReadOnlyList<ConsumerCatalogItemDto>> GetCatalogByIdsAsync(
+        Guid tenantId, Guid storeId, IReadOnlyList<Guid> ids, CancellationToken ct = default)
+    {
+        var matchedItems = await _db.Items
+            .Where(i => i.TenantId == tenantId && i.IsActive && ids.Contains(i.Id))
+            .Include(i => i.Category)
+            .ToListAsync(ct);
+
+        // Availability lookup restricted to just the matched item ids — same shape as
+        // GetCatalogPagedAsync's own stock join, just keyed off the id list instead of a page.
+        var itemIds = matchedItems.Select(i => i.Id).ToList();
+        var stockByProduct = itemIds.Count == 0
+            ? new Dictionary<Guid, decimal>()
+            : await _db.ProductStocks
+                .Where(s => s.TenantId == tenantId && s.StoreId == storeId && itemIds.Contains(s.ProductId))
+                .GroupBy(s => s.ProductId)
+                .Select(g => new { ProductId = g.Key, Qty = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.ProductId, x => x.Qty, ct);
+
+        return matchedItems.Select(i => new ConsumerCatalogItemDto(
+            i.Id, i.Name, i.ImageUrl, i.Unit, i.PriceRetail,
+            i.CategoryId, i.Category?.Name,
+            stockByProduct.TryGetValue(i.Id, out var qty) && qty > 0))
+            .ToList();
+    }
+
     private static string[] SplitLines(string text) =>
         text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

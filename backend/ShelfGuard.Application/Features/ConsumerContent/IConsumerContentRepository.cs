@@ -34,4 +34,10 @@ public interface IConsumerContentRepository
     Task<(IReadOnlyList<ConsumerCatalogItemDto> Items, int Total)> GetCatalogPagedAsync(
         Guid tenantId, Guid storeId, string? search, Guid? categoryId, int page, int pageSize,
         CancellationToken ct = default);
+
+    /// <summary>Active Items matching exactly the given ids (bounded, ≤30), same shape/store-availability
+    /// annotation as GetCatalogPagedAsync — resolves a curated productIds selection (TASK-570/572,
+    /// ADR-032) regardless of where those ids fall in the default alphabetical page window.</summary>
+    Task<IReadOnlyList<ConsumerCatalogItemDto>> GetCatalogByIdsAsync(
+        Guid tenantId, Guid storeId, IReadOnlyList<Guid> ids, CancellationToken ct = default);
 }

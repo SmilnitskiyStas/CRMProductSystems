@@ -17,6 +17,8 @@ public interface IItemService
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
+        string? search,
+        IReadOnlyList<Guid>? ids,
         int page,
         int pageSize,
         CancellationToken ct = default);

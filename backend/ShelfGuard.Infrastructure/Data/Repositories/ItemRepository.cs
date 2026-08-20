@@ -38,7 +38,7 @@ public sealed class ItemRepository : IItemRepository
     }
 
     public async Task<(List<Item> Items, int Total)> GetPagedAsync(
-        Guid? categoryId, Guid? segmentId, string? managementType,
+        Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids,
         int page, int pageSize, CancellationToken ct = default)
     {
         var query = _db.Items
@@ -53,6 +53,10 @@ public sealed class ItemRepository : IItemRepository
             query = query.Where(p => p.SegmentId == segmentId);
         if (!string.IsNullOrWhiteSpace(managementType))
             query = query.Where(p => p.ManagementType == managementType.ToUpperInvariant());
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+        if (ids is { Count: > 0 })
+            query = query.Where(p => ids.Contains(p.Id));
 
         var total = await query.CountAsync(ct);
         var items = await query

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.ConsumerContent;
+using ShelfGuard.Application.Features.ConsumerContent.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Infrastructure.Authorization;
 
@@ -83,6 +84,19 @@ public sealed class ConsumerContentController : ControllerBase
 
         var (catalog, error) = await _service.GetCatalogAsync(tenantId, storeId, search, categoryId, page, pageSize, ct);
         return catalog is null ? NotFound(new { error }) : Ok(catalog);
+    }
+
+    /// <summary>Active catalog items matching exactly the given ids — resolves a curated productIds
+    /// selection regardless of alphabetical position (TASK-570/572, ADR-032).</summary>
+    [HttpGet("{tenantId:guid}/catalog/by-ids")]
+    [RequireConsumerFeature("catalog")]
+    public async Task<IActionResult> GetCatalogByIds(
+        Guid tenantId, [FromQuery] Guid storeId, [FromQuery(Name = "ids")] Guid[] ids, CancellationToken ct)
+    {
+        if (ids.Length == 0) return Ok(Array.Empty<ConsumerCatalogItemDto>());
+
+        var (items, error) = await _service.GetCatalogByIdsAsync(tenantId, storeId, ids.Take(30).ToList(), ct);
+        return items is null ? NotFound(new { error }) : Ok(items);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

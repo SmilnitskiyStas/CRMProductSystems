@@ -2,6 +2,7 @@ import { personalApiClient, resolveApiAssetUrl } from '@/lib/api-client';
 import type { ConsumerNewsItem, NewsPromotionProduct } from '@/features/loyalty/news';
 import type {
   ConsumerBannerDto,
+  ConsumerCatalogItem,
   ConsumerCatalogPage,
   ConsumerContentContext,
   ConsumerPromotionDto,
@@ -116,4 +117,22 @@ export async function getConsumerCatalog(
       imageUrl: resolveApiAssetUrl(item.imageUrl),
     })),
   };
+}
+
+export async function getConsumerCatalogByIds(
+  context: ConsumerContentContext,
+  ids: string[]
+): Promise<ConsumerCatalogItem[]> {
+  if (ids.length === 0) return [];
+  // ASP.NET Core's `[FromQuery(Name = "ids")] Guid[]` model binder expects repeated
+  // `ids=<guid1>&ids=<guid2>` pairs. Axios has no built-in multi-value-param precedent
+  // elsewhere in this codebase, and its default paramsSerializer (verified against
+  // node_modules/axios's toFormData, default `indexes: false`) emits `ids[]=<guid>`
+  // instead, which the binder would not populate — so this one call builds its query
+  // string by hand rather than passing `ids` through axios's `params` option.
+  const idsQuery = ids.map((id) => `ids=${encodeURIComponent(id)}`).join('&');
+  const { data } = await personalApiClient.get<ConsumerCatalogItem[]>(
+    `/consumer/${context.tenantId}/catalog/by-ids?storeId=${encodeURIComponent(context.storeId)}&${idsQuery}`
+  );
+  return data.map((item) => ({ ...item, imageUrl: resolveApiAssetUrl(item.imageUrl) }));
 }

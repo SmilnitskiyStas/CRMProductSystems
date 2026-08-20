@@ -3,6 +3,147 @@
 **Owner:** project-architect
 **Updated:** 2026-08-19
 
+## ADR-032: Catalog curation — new `productIds` block-prop kind, curated-selection resolution semantics, and a catalog-by-ids read path to keep it correct at scale
+Date: 2026-08-19
+Status: accepted
+
+Context: Retailer admins reported the consumer app's "Каталог" tab shows every active SKU
+uncurated — "не всі позиції потрібно показувати, а ті, які є актуальними для продажу." This is
+**Phase 1 of a larger, deliberately-descoped ask**: the user also raised bestsellers, personalized
+recommendations, personalized discounts, and a POS-payment bonus in the same message, then
+explicitly chose to scope this round to catalog curation only and defer the rest to a separate
+future initiative — none of that is designed or placeholder-scaffolded here.
+
+Page-level curation already works today with zero changes: `mobile/app/(personal)/catalog.tsx`
+already renders the block-driven `ConfiguredRetailPage` when the admin has configured the
+"catalog" page in App Builder, falling back to the uncurated `StaticConsumerCatalogScreen` only
+when no blocks exist. **The actual gap is one level down**: `productGrid`/`productCarousel`
+(`BlockRegistry.cs`) only have a `limit` (int) prop — both `resolveBlocks.ts` (mobile) and
+`blockPreviews.tsx` (web preview) resolve them as `ctx.catalog.slice(0, limit)`, and
+`ConsumerContentRepository.GetCatalogPagedAsync` orders by `i.Name` — so a block can only ever show
+"the first N products alphabetically," never a deliberately-chosen set. Scope boundary (unchanged
+from the brief, not re-litigated here): only `productGrid`/`productCarousel` gain curation —
+`promotionGrid`/`promotionCarousel` already pull from `ctx.promotions` (items with an active
+`Discount`), a data source that is inherently curated by a different mechanism, out of scope.
+
+### Decision 1 — new `BlockPropTypes.ProductIds` kind, not a `stringArray` + name special-case
+
+`BlockPropertyEditor.tsx`'s `PropField` (frontend) switches only on `def.type` — six cases matching
+`BlockPropTypes.cs` — and states explicitly in its own comment that this is "the sole switch in the
+file; there is deliberately no branch anywhere on the block's own `type`," so a new block type
+renders with zero changes to that file as long as its props use the six existing kinds. The existing
+`stringArray` type's UI (`StringArrayField`) has exactly two modes: a fixed-`AllowedValues`
+badge-picker (used by `quickActions.actions`, a small closed set known at compile time), or a raw
+free-text tag input. Neither fits "search and pick from a tenant's live catalog, potentially
+thousands of SKUs, by name, with a thumbnail" — the value set here is dynamic, per-tenant, and
+requires an async lookup, not a static list.
+
+**Decision: add `BlockPropTypes.ProductIds = "productIds"`, a 7th kind.** Reusing `stringArray` and
+special-casing the new UI by prop **name** (`if (def.name === "productIds")`) would violate this
+file's own stated single-switch-on-type invariant and set a precedent for name-based branching to
+keep multiplying as later curation-adjacent features (bestsellers, etc. — deferred, but the pattern
+would recur) arrive. The cost of a real 7th kind is small and contained: one `BlockPropTypes.cs`
+constant, one `stringArrayFieldSchema`-reuse case each in `fieldSchemaFor`/`coerceValue`, one new
+`ProductPickerField` component wired into `PropField`'s switch. `MinItems`/`MaxItems` (already on
+`BlockPropDefinition`) bound the selection count exactly like they already bound `quickActions`;
+`AllowedValues` is left `null` — the point of this kind is precisely that the valid set isn't static.
+
+`productCarousel.productIds`: `Required: false, Default: [], MinItems: 0, MaxItems: 20` (matches
+`productCarousel.limit`'s own `Max: 20` — an admin can never usefully pick more than could ever
+display). `productGrid.productIds`: same shape, `MaxItems: 30` (matches `productGrid.limit`'s
+`Max: 30`). `MobileConfigValidator`/`MobileConfigWhitelists` are **not** touched — block `props`
+stays free-form JSON at save-time by this registry's own already-documented, already-tested
+decision (`BlockRegistry.cs`'s class remarks); adding a registry entry only changes what
+`GET /api/v1/mobile/blocks` advertises, exactly the same boundary ADR-031/TASK-561 already drew.
+
+### Decision 2 — resolution semantics: curated selection overrides the alphabetical fallback; `limit` becomes a cap, not a page-size driver
+
+Both `resolveBlocks.ts` (mobile) and `blockPreviews.tsx` (web preview) must implement **identical**
+logic (ADR-031's "preview must never lie about what the real app shows" carries over unchanged):
+
+1. Read `props.productIds` (array of strings, defensively filtered), default `[]`.
+2. **If non-empty:** resolve items by walking `productIds` *in the admin's chosen order* (order of
+   selection in the picker is authoritative display order — no separate `order` field), looking each
+   id up in the available catalog data. Skip an id silently if it doesn't resolve, or if it resolves
+   but `priceRetail === null` (the same "not sellable, don't show" filter the existing fallback
+   branch already applies to every item). Then `.slice(0, limit)` — `limit`'s existing prop/bounds
+   are unchanged in meaning-adjacent-but-different: with a curated selection present, it caps the
+   curated list's length rather than driving which page of the catalog gets fetched.
+3. **If empty/absent:** fall back to **exactly today's behavior**, byte-for-byte —
+   `ctx.catalog.filter(item => item.priceRetail !== null).slice(0, limit)`, alphabetical-first-N.
+   Every already-saved block (no `productIds` in its `props`) renders identically to today; this is
+   a strictly additive capability, never a replacement of `limit`.
+
+**Stale/deleted product handling: silently skip, no placeholder.** A selected product can later be
+deactivated (`Item.IsActive = false`) or hard-deleted; the block should just render as if it was
+never selected. Precedent, not invention: every other read path in this feature area already treats
+a referenced-but-now-invalid row the same way — `GetCatalogPagedAsync`'s own `IsActive` filter
+silently excludes deactivated items from the general browse, and neither the banner nor promotion
+read paths ever render a "this item no longer exists" placeholder anywhere in the consumer app.
+Curated selections get the same treatment for consistency, not a new UX pattern.
+
+### Decision 3 — a real correctness gap this feature would otherwise ship with: catalog fetches are capped short of "the whole tenant catalog," on both sides
+
+This is the equivalent of ADR-031's "prop-forwarding gap" finding — a concrete bug the brief didn't
+ask about but that would make curation *silently unreliable*, not just incomplete, for exactly the
+retailers who need it (large catalogs):
+
+- **Mobile:** `PageRenderer.tsx` calls `useConsumerCatalog(context, { page: 1, pageSize: 30 })` —
+  hardcoded. `ctx.catalog` (what `resolveBlocks.ts` reads) only ever contains the first 30 active
+  items **alphabetically**. A curated pick outside that window would resolve as "not found" and
+  silently vanish — not because it's stale, but because it was never fetched. Any tenant with >30
+  active SKUs (the overwhelmingly common case for a feature whose entire purpose is picking specific
+  SKUs out of a big catalog) hits this immediately.
+- **Web preview:** `AppPreviewPanel.tsx` maps `useCatalogProducts()` → `/api/items` (admin catalog),
+  which defaults to `pageSize=50` with no way to reach page 2 from this screen and no `search`/`ids`
+  filter at all today. Same failure mode, different cap.
+
+**Decision: add a bounded "fetch by exact id list" read path on both sides**, used only when a page
+actually has a curated selection (zero added requests for every page that doesn't):
+- New `IConsumerContentRepository.GetCatalogByIdsAsync(tenantId, storeId, ids, ct)` +
+  `GET /api/consumer/{tenantId}/catalog/by-ids?storeId=&ids=...` (same DTO shape, `IsActive` filter,
+  and store-availability annotation as `GetCatalogPagedAsync`, bounded to ≤30 ids — the larger of
+  the two `MaxItems` values). `PageRenderer.tsx` unions every `productIds` referenced on the current
+  page, fetches this endpoint only when that set is non-empty, and merges the result into a new
+  `catalogById: Map<string, ConsumerCatalogItem>` passed alongside the existing (unchanged)
+  `catalog` array — the alphabetical-fallback branch keeps reading `catalog` exactly as before; only
+  the curated-lookup branch reads `catalogById`. This is also the natural place to give
+  `/api/items` (admin) a `search` (name `ILike`, mirroring `GetCatalogPagedAsync`'s own existing
+  pattern) and `ids` filter — `search` is what makes a "search among thousands of SKUs by name"
+  picker viable at all (today `/api/items` has no text search of any kind), and `ids` gives
+  `AppPreviewPanel.tsx` the same by-id resolution the mobile side needs, via one shared endpoint
+  change instead of two different mechanisms.
+
+### Decision 4 — no new reusable component exists for "pick several products by name"; build one, scoped narrowly
+
+`PromoProductsSection.tsx`'s product field is a single-select native `<select>` bound to
+`useCatalogProducts()` — not a multi-select, no search. A new `ProductPickerField.tsx` (debounced
+name search via the new `search` param, thumbnail+name+price result rows, ordered selected-chips
+list, respects `MaxItems`) is genuinely new work, wired into `BlockPropertyEditor.tsx`'s `PropField`
+switch as the `productIds` case. Selection order = display order; no drag-reorder in this phase
+(remove-and-re-add covers reordering) — kept out to match this feature's own "Phase 1, deliberately
+descoped" framing rather than gold-plating the picker beyond what curation needs.
+
+Decision: Approved as scoped. Task breakdown TASK-571..576 (`.claude/logs/tasks/
+570_2026-08-19_catalog-curation-architecture_project-architect.md`).
+
+Consequences:
+- `BlockPropTypes.cs` grows from 6 to 7 kinds; every place that already switches exhaustively on
+  type (`BlockPropertyEditor.tsx`'s `fieldSchemaFor`/`coerceValue`/`PropField`, this codebase's only
+  three such switches) gains one case each — small, additive, no restructuring.
+- `/api/items` (admin) gains two optional query params (`search`, `ids`) with no behavior change
+  when neither is passed — existing callers (`PromoProductsSection.tsx`, any other consumer of
+  `useCatalogProducts()`) are unaffected.
+- A new anonymous, feature-gated consumer endpoint (`catalog/by-ids`) is added alongside the existing
+  paginated one — same auth posture, same `[RequireConsumerFeature("catalog")]` gate, no new feature
+  flag.
+- `architecture.md` is **not** updated — same reasoning as ADR-031: no layer/module/service boundary
+  change, this is read-path and prop-schema work inside the already-documented MobileConfig/
+  ConsumerContent/Catalog features. `domain-model.md`'s Block Registry section gets a short addition
+  for the new prop kind and the two new curated props (data-model-level change); see that file.
+- Bestsellers, personalization, personal discounts, and the POS-payment bonus remain fully
+  undesigned — no field, prop, or endpoint here anticipates or scaffolds any of them.
+
 ## ADR-031: App Builder live preview — web-native mirror components (not RN-web reuse), entirely client-side, 4 new resizable size props on the Block Registry
 Date: 2026-08-19
 Status: accepted

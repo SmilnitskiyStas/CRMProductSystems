@@ -141,6 +141,73 @@ Tests: +5 new cases across `coreBlocks.test.tsx` (validators accept `columns: 4`
 in-browser (DOM geometry, web) and by full jest run (mobile) — zero regression on existing
 2/3/undefined column values on either side.
 
+## TASK-570 — Catalog Curation (Phase 1): architecture + task breakdown (project-architect)
+
+**Status:** done · **Agent:** project-architect
+Log: `.claude/logs/tasks/570_2026-08-19_catalog-curation-architecture_project-architect.md`
+ADR: `.claude/docs/decisions.md` ADR-032. Handoff: `.claude/logs/handoffs/
+570-to-backend-mobile-frontend_project-architect.md`. Designed catalog curation for
+`productGrid`/`productCarousel` — a new `BlockPropTypes.ProductIds` kind (not a `stringArray` name
+special-case, keeps `BlockPropertyEditor.tsx`'s switch-only-on-type invariant intact), curated
+selection overrides today's alphabetical `limit`-slice with the admin's exact chosen order, stale/
+deleted ids silently skipped. Found and designed around a real gap: both `PageRenderer.tsx` (mobile,
+hardcoded `pageSize=30`) and `AppPreviewPanel.tsx` (web, `/api/items` default `pageSize=50`, no
+search/id filter) only ever see a short alphabetical catalog prefix — a curated pick outside that
+window would silently resolve as "deleted" without a new bounded catalog-by-ids read path on both
+sides. `promotionGrid`/`promotionCarousel` and bestsellers/personalization/personal-discounts/
+POS-bonus are explicitly out of scope (user-deferred to a future initiative). Registered TASK-571–576
+as `planned` below, sequenced backend (571→572, one spawn) ∥ mobile (573) ∥ frontend (574→575, one
+spawn) → qa (576); no worktree isolation needed (disjoint trees).
+
+## TASK-571 — Backend: `productIds` block-prop kind + Block Registry entries
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/571-572_2026-08-19_catalog-curation-backend_backend-developer.md`
+`BlockPropTypes.ProductIds` constant + `productGrid.productIds`
+(MaxItems 30) / `productCarousel.productIds` (MaxItems 20) registry entries.
+
+## TASK-572 — Backend: catalog-by-ids query support (admin `/api/items` + new consumer endpoint)
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/571-572_2026-08-19_catalog-curation-backend_backend-developer.md`
+`/api/items` gains `search`/`ids` filters; new
+`GET /api/consumer/{tenantId}/catalog/by-ids` endpoint.
+
+## TASK-573 — Mobile: curated-selection resolution
+**Status:** done · **Agent:** mobile-developer
+Log: `.claude/logs/tasks/573_2026-08-19_mobile-curated-catalog-resolution_mobile-developer.md`
+`resolveBlocks.ts` curated-order resolution + `PageRenderer.tsx` catalog-by-ids merge (fixes the
+"only sees first 30 alphabetically" gap).
+
+## TASK-574 — Frontend: `productIds` field type + `ProductPickerField` + catalog search/by-ids hooks
+**Status:** done · **Agent:** frontend-developer
+Log: `.claude/logs/tasks/574-575_2026-08-19_catalog-curation-frontend_frontend-developer.md`
+`BlockPropertyEditor.tsx` gains the `productIds` case in its 3 switches; new searchable
+multi-select `ProductPickerField.tsx`; `catalogApi.getAll`/`useCatalogProducts` gain `search`/`ids`;
+new `useCatalogProductsByIds`. `npx tsc --noEmit` clean.
+
+## TASK-575 — Frontend: `blockPreviews.tsx` + `AppPreviewPanel.tsx` curated-selection parity
+**Status:** done · **Agent:** frontend-developer
+Log: `.claude/logs/tasks/574-575_2026-08-19_catalog-curation-frontend_frontend-developer.md`
+Same curated-resolution logic as TASK-573, web-preview side (fixes the same "short catalog prefix"
+gap via a new `catalogById` by-ids fetch merged into `AppPreviewPanel`). `npx tsc --noEmit` clean;
+live-verified in browser (`ea@demo.local`): search reaches `/api/items?search=`, curated pick
+outside the default page resolves via `/api/items?ids=`, live preview updates instantly in chosen
+order, removal reverts to byte-identical alphabetical fallback, Apply/Cancel untouched.
+
+## TASK-576 — QA: Catalog curation regression pass
+**Status:** done · **Agent:** qa-tester
+Log: `.claude/logs/tasks/576_2026-08-19_catalog-curation-regression_qa-tester.md`
+Clean pass, no bugs. Verified: search reaches `/api/items?search=` (network-confirmed, not
+client-filtered); `MaxItems` cap (20/30) enforced with search UI hidden past cap; empty selection
+byte-identical to today's alphabetical-`limit` fallback; curated order + `limit` cap correct;
+outside-window resolution correct on both web preview (`/api/items?ids=`) and the mobile-facing
+`catalog/by-ids` endpoint (tested directly); deactivated curated item silently disappears
+client-side and server-side (`IsActive` filter), no console error; full publish loop round-trips
+byte-identical `productIds`/order via `GET /api/v1/mobile/config`; `promotionGrid`/
+`promotionCarousel` untouched; App Builder regressions (device picker, preview toggle, interactive
+nav, dirty-guard) spot-checked clean; drag-reorder not re-driven (pane tooling limitation) but
+`AppBuilderCanvas.tsx` confirmed zero-diff via `git diff --stat`. `tsc --noEmit` clean; targeted
+`dotnet test` 307/307 pass.
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer

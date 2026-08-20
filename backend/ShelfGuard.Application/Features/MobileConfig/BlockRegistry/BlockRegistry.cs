@@ -145,6 +145,8 @@ public static class BlockRegistry
                 new("limit", BlockPropTypes.Int, Required: false, Default: 10, Min: 1, Max: 20),
                 new("showViewAll", BlockPropTypes.Bool, Required: false, Default: true),
                 new("cardWidthPx", BlockPropTypes.Int, Required: false, Default: 170, Min: 120, Max: 220),
+                new("productIds", BlockPropTypes.ProductIds, Required: false, Default: new List<string>(),
+                    MinItems: 0, MaxItems: 20),
             },
             SupportedDataSource: "catalog — paginated active product catalog, optionally filtered " +
                 "by category (ConsumerContentController GET /api/consumer/{tenantId}/catalog)."),
@@ -159,6 +161,8 @@ public static class BlockRegistry
                 new("title", BlockPropTypes.String, Required: false, Default: "Товари", MaxLength: 60),
                 new("limit", BlockPropTypes.Int, Required: false, Default: 12, Min: 1, Max: 30),
                 new("columns", BlockPropTypes.Int, Required: false, Default: 2, Min: 2, Max: 4),
+                new("productIds", BlockPropTypes.ProductIds, Required: false, Default: new List<string>(),
+                    MinItems: 0, MaxItems: 30),
             },
             SupportedDataSource: "catalog — paginated active product catalog, optionally filtered " +
                 "by category (ConsumerContentController GET /api/consumer/{tenantId}/catalog)."),

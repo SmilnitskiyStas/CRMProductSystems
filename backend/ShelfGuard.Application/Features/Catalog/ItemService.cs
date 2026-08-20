@@ -28,11 +28,13 @@ public sealed class ItemService : IItemService
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
+        string? search,
+        IReadOnlyList<Guid>? ids,
         int page,
         int pageSize,
         CancellationToken ct = default)
     {
-        var (products, total) = await _repo.GetPagedAsync(categoryId, segmentId, managementType, page, pageSize, ct);
+        var (products, total) = await _repo.GetPagedAsync(categoryId, segmentId, managementType, search, ids, page, pageSize, ct);
         return new PagedResult<ItemDto>
         {
             Items = products.Select(ToDto).ToList(),
