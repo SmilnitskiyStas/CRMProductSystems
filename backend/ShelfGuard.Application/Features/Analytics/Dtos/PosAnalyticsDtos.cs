@@ -67,12 +67,11 @@ public sealed record CashierStatDto(
 // ── TASK-482: single-product sales trend (row-click drill-down from pos/top-products) ───────
 
 /// <summary>
-/// Day/week revenue+quantity trend for one product. No compare-mode variant — this is a
-/// snapshot drill-down off a table row, not a page-level KPI trend (see PosRevenueTrendDto for
-/// that). <see cref="MarginAmount"/> on each point is null unless the caller cleared
-/// AnalyticsAuthorization.CanViewMargin (ADR-027) — same "оцінна маржа" retroactive-cost-basis
-/// caveat as GetCategoryProductBreakdownAsync (TASK-481): current Item.PricePurchase applied
-/// retroactively, not the batch cost at the time of each historical sale.
+/// Day/week revenue+quantity trend for one product. <see cref="MarginAmount"/> on each point is
+/// null unless the caller cleared AnalyticsAuthorization.CanViewMargin (ADR-027) — same "оцінна
+/// маржа" retroactive-cost-basis caveat as GetCategoryProductBreakdownAsync (TASK-481): current
+/// Item.PricePurchase applied retroactively, not the batch cost at the time of each historical
+/// sale. See <see cref="ProductSalesTrendComparisonDto"/> (TASK-590) for the compare-mode variant.
 /// </summary>
 public sealed record ProductSalesTrendDto(
     Guid ProductId,
@@ -86,6 +85,33 @@ public sealed record ProductSalesTrendPointDto(
     decimal Quantity,
     int TransactionCount,
     decimal? MarginAmount);
+
+// ── TASK-590: single-product sales trend vs. baseline comparison (Events calendar — a product
+// linked to a demand event, e.g. Easter → paska bread, sold during the event's date window vs.
+// the equal-length period immediately preceding it) ─────────────────────────────────────────
+
+/// <summary>
+/// Compare-mode variant of <see cref="ProductSalesTrendDto"/>: current window vs. baseline
+/// (equal-length period immediately preceding <see cref="From"/> by default — see
+/// AnalyticsController.ResolveCompareRange). <see cref="Comparison"/> points are not zero-filled
+/// for gap days, same convention as <see cref="ProductSalesTrendDto"/>/
+/// <see cref="PosRevenueTrendComparisonDto"/> — the frontend should align series by day-offset
+/// from <see cref="From"/>/<see cref="CompareFrom"/>, not raw array index. <see cref="Comparison"/>
+/// is an empty list (never null) when the product had zero sales in the baseline window — a
+/// routine case (product only started selling recently, or genuinely had none before the event),
+/// not an error. *PercentChange is null when the corresponding baseline total is zero (see
+/// AnalyticsService.PercentChange's "previous == 0 → null" convention).
+/// </summary>
+public sealed record ProductSalesTrendComparisonDto(
+    Guid ProductId,
+    string ProductName,
+    IReadOnlyList<ProductSalesTrendPointDto> Current,
+    IReadOnlyList<ProductSalesTrendPointDto> Comparison,
+    string GroupBy,
+    DateOnly From, DateOnly To,
+    DateOnly CompareFrom, DateOnly CompareTo,
+    decimal CurrentTotalRevenue, decimal ComparisonTotalRevenue, decimal? RevenuePercentChange,
+    decimal CurrentTotalQuantity, decimal ComparisonTotalQuantity, decimal? QuantityPercentChange);
 
 // ── TASK-490: worst-performing products / dead stock (pos/worst-products) ───────────────────
 

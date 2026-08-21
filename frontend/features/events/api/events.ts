@@ -21,6 +21,9 @@ export const eventsApi = {
   updateCoefficient: (eventId: string, coefId: string, coefficient: number) =>
     api.put<EventCoefficient>(`/api/events/${eventId}/coefficients/${coefId}`, { coefficient }),
 
+  removeCoefficient: (eventId: string, coefId: string) =>
+    api.delete<void>(`/api/events/${eventId}/coefficients/${coefId}`),
+
   seedDefaults: () =>
     api.post<{ eventsCreated: number; coefficientsCreated: number }>("/api/events/seed-defaults"),
 };

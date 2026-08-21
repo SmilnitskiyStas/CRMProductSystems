@@ -7,6 +7,7 @@ import type {
   PosTopProductsDto,
   PosCashierStatsDto,
   ProductSalesTrendDto,
+  ProductSalesTrendCompareDto,
   WorstProductsDto,
 } from "../types";
 
@@ -77,6 +78,29 @@ function getRevenueTrend(
   );
 }
 
+// TASK-484: row-click drill-down from top-products; productId is a path segment, not a query
+// param. TASK-590 added the compare-mode overload (same split as getRevenueTrend above).
+function getProductSalesTrend(
+  productId: string,
+  params: PosDateRangeParams & { group_by?: "day" | "week"; compare?: false },
+): Promise<ProductSalesTrendDto>;
+function getProductSalesTrend(
+  productId: string,
+  params: PosDateRangeParams & { group_by?: "day" | "week"; compare: true } & PosCompareParams,
+): Promise<ProductSalesTrendCompareDto>;
+function getProductSalesTrend(
+  productId: string,
+  params: PosDateRangeParams & { group_by?: "day" | "week" } & PosCompareParams,
+): Promise<ProductSalesTrendDto | ProductSalesTrendCompareDto> {
+  return api.get(
+    `/api/analytics/pos/products/${productId}/trend${buildQs([
+      ...rangeEntries(params),
+      ["group_by", params.group_by],
+      ...compareEntries(params),
+    ])}`,
+  );
+}
+
 export const posAnalyticsApi = {
   getSummary,
 
@@ -99,10 +123,5 @@ export const posAnalyticsApi = {
       `/api/analytics/pos/cashiers${buildQs(rangeEntries(params))}`,
     ),
 
-  // TASK-484: row-click drill-down from top-products. No compare-mode variant (see
-  // getRevenueTrend above for that shape) — productId is a path segment, not a query param.
-  getProductSalesTrend: (productId: string, params: PosDateRangeParams & { group_by?: "day" | "week" }) =>
-    api.get<ProductSalesTrendDto>(
-      `/api/analytics/pos/products/${productId}/trend${buildQs([...rangeEntries(params), ["group_by", params.group_by]])}`,
-    ),
+  getProductSalesTrend,
 };

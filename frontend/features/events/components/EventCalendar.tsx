@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent } from "../types";
+import { isEventActiveOnDate } from "../utils";
 
 interface Props {
   year: number;
@@ -13,16 +14,6 @@ interface Props {
 
 function iso(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-/** Recurring events match by month/day each year, incl. windows wrapping over New Year. */
-function isActiveOn(ev: DemandEvent, dateIso: string): boolean {
-  if (!ev.isRecurring) return dateIso >= ev.startsAt && dateIso <= ev.endsAt;
-
-  const md = dateIso.slice(5);          // "MM-dd"
-  const s = ev.startsAt.slice(5);
-  const e = ev.endsAt.slice(5);
-  return s <= e ? md >= s && md <= e : md >= s || md <= e;
 }
 
 export function EventCalendar({ year, month, events, onEventClick, onDayClick }: Props) {
@@ -58,7 +49,7 @@ export function EventCalendar({ year, month, events, onEventClick, onDayClick }:
           }
 
           const dateIso = iso(year, month, day);
-          const dayEvents = events.filter((ev) => isActiveOn(ev, dateIso));
+          const dayEvents = events.filter((ev) => isEventActiveOnDate(ev, dateIso));
           const isToday = dateIso === todayIso;
 
           return (

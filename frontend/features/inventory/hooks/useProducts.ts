@@ -7,7 +7,7 @@ const PRODUCTS_KEY = ["products"] as const;
 export function useProducts() {
   return useQuery({
     queryKey: PRODUCTS_KEY,
-    queryFn: productsApi.getAll,
+    queryFn: () => productsApi.getAll(),
   });
 }
 
@@ -16,6 +16,22 @@ export function useProduct(id: string) {
     queryKey: [...PRODUCTS_KEY, id],
     queryFn: () => productsApi.getById(id),
     enabled: Boolean(id),
+  });
+}
+
+export function useProductsByIds(ids: string[]) {
+  return useQuery({
+    queryKey: [...PRODUCTS_KEY, "by-ids", [...ids].sort()],
+    queryFn: () => productsApi.getAll({ ids }),
+    enabled: ids.length > 0,
+  });
+}
+
+export function useProductSearch(search: string, enabled = true) {
+  return useQuery({
+    queryKey: [...PRODUCTS_KEY, "search", search],
+    queryFn: () => productsApi.getAll({ search, pageSize: 20 }),
+    enabled: enabled && search.trim().length > 0,
   });
 }
 

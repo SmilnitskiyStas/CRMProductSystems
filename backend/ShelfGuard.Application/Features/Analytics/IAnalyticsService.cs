@@ -29,6 +29,10 @@ public interface IAnalyticsService
     // (controller 404s), mirroring IItemService.GetByIdAsync's nullable-DTO convention.
     Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, CancellationToken ct = default);
 
+    // ── TASK-590: single-product sales trend vs. baseline comparison (Events calendar) ───────
+    // Same null convention as GetProductSalesTrendAsync above (product not found in tenant scope).
+    Task<ProductSalesTrendComparisonDto?> GetProductSalesTrendComparisonAsync(Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, DateOnly compareFrom, DateOnly compareTo, CancellationToken ct = default);
+
     // ── TASK-490: worst-performing products / dead stock ─────────────────────
     Task<WorstProductsDto> GetWorstProductsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default);
 

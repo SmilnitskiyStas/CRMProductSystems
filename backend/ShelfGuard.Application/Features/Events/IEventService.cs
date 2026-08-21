@@ -23,6 +23,8 @@ public interface IEventService
     Task<(EventCoefficientDto? Coefficient, string? Error)> UpdateCoefficientAsync(
         Guid eventId, Guid coefId, UpdateCoefficientRequest request, CancellationToken ct = default);
 
+    Task<string?> RemoveCoefficientAsync(Guid eventId, Guid coefId, CancellationToken ct = default);
+
     /// <summary>Seeds standard Ukrainian holidays with default coefficients (v2-spec §4). Idempotent.</summary>
     Task<(SeedDefaultsResult? Result, string? Error)> SeedDefaultsAsync(
         Guid tenantId, CancellationToken ct = default);

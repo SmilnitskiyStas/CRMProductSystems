@@ -229,8 +229,9 @@ export interface PosRevenueTrendCompareDto {
 
 // ── Single-product sales trend (interactive analytics + margin plan, TASK-484) ─────────────
 // Row-click drill-down from PosTopProductsTable, rendered inline via the extended
-// ProductAnalyticsTab (frontend/features/inventory/components/ProductAnalyticsTab.tsx). No
-// compare-mode variant — this is a snapshot trend off a table row, not a page-level KPI trend.
+// ProductAnalyticsTab (frontend/features/inventory/components/ProductAnalyticsTab.tsx).
+// Compare-mode variant (`?compare=true`) added in TASK-590 — see ProductSalesTrendCompareDto
+// below.
 // marginAmount is null both when the caller can't see margin (ADR-027 — server-side
 // AnalyticsAuthorization.CanViewMargin resolved false) and when the product itself has no
 // Item.PricePurchase on file — same "don't distinguish, just gate on canViewAnalyticsMargin"
@@ -249,6 +250,29 @@ export interface ProductSalesTrendDto {
   productName: string;
   points: ProductSalesTrendPointDto[];
   groupBy: "day" | "week";
+}
+
+// ── Single-product sales trend — period comparison (Events product-linking, TASK-590) ──────
+// Opt-in via `?compare=true` on the same endpoint as ProductSalesTrendDto above. `current`/
+// `comparison` are sparse point arrays (mirrors PosRevenueTrendCompareDto) — align by day-offset
+// from `from`/`compareFrom` respectively, not raw array index.
+
+export interface ProductSalesTrendCompareDto {
+  productId: string;
+  productName: string;
+  current: ProductSalesTrendPointDto[];
+  comparison: ProductSalesTrendPointDto[];
+  groupBy: "day" | "week";
+  from: string;
+  to: string;
+  compareFrom: string;
+  compareTo: string;
+  currentTotalRevenue: number;
+  comparisonTotalRevenue: number;
+  revenuePercentChange: number | null;
+  currentTotalQuantity: number;
+  comparisonTotalQuantity: number;
+  quantityPercentChange: number | null;
 }
 
 // ── Losses/write-offs trend over time (TASK-489/492) ────────────────────────

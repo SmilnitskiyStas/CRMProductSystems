@@ -63,6 +63,9 @@ public sealed class EventRepository : IEventRepository
     public void Remove(DemandEvent demandEvent) =>
         _db.DemandEvents.Remove(demandEvent);
 
+    public void RemoveCoefficient(DemandEventCoefficient coefficient) =>
+        _db.DemandEventCoefficients.Remove(coefficient);
+
     public Task SaveChangesAsync(CancellationToken ct = default) =>
         _db.SaveChangesAsync(ct);
 }

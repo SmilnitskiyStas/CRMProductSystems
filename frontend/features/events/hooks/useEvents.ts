@@ -59,6 +59,15 @@ export function useUpdateCoefficient() {
   });
 }
 
+export function useRemoveCoefficient() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ eventId, coefId }: { eventId: string; coefId: string }) =>
+      eventsApi.removeCoefficient(eventId, coefId),
+    onSuccess: invalidate,
+  });
+}
+
 export function useSeedDefaults() {
   const invalidate = useInvalidate();
   return useMutation({

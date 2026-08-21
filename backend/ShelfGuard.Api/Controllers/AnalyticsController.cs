@@ -347,12 +347,16 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
-    // TASK-482: single-product sales trend — row-click drill-down from pos/top-products. No
-    // compare-mode variant (a row-click drill-down isn't a page-level KPI trend concept, unlike
-    // pos/revenue-trend above). 404s when productId doesn't resolve to a real Item in the
-    // caller's tenant scope (mirrors ItemsController.GetById's nullable-DTO -> NotFound() convention).
+    // TASK-482: single-product sales trend — row-click drill-down from pos/top-products. 404s
+    // when productId doesn't resolve to a real Item in the caller's tenant scope (mirrors
+    // ItemsController.GetById's nullable-DTO -> NotFound() convention).
+    // TASK-590: added an opt-in compare mode (Events calendar — product-vs-baseline sales),
+    // same compare/compareFrom/compareTo query params and ResolveCompareRange default (equal-
+    // length period immediately preceding `from`) as pos/revenue-trend above. compare=false
+    // (the default) is unchanged from TASK-482's original single-window behavior.
     [HttpGet("pos/products/{productId:guid}/trend")]
     [ProducesResponseType(typeof(ProductSalesTrendDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductSalesTrendComparisonDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProductSalesTrend(
         Guid productId,
@@ -360,6 +364,9 @@ public sealed class AnalyticsController : ControllerBase
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] string group_by = "day",
+        [FromQuery] bool compare = false,
+        [FromQuery] DateOnly? compareFrom = null,
+        [FromQuery] DateOnly? compareTo = null,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
@@ -368,10 +375,17 @@ public sealed class AnalyticsController : ControllerBase
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
         var includeMargin = AnalyticsAuthorization.CanViewMargin(User);
 
-        var result = await _analytics.GetProductSalesTrendAsync(
-            tenantId, store_id, productId, resolvedFrom, resolvedTo, group_by, includeMargin, ct);
+        if (!compare)
+        {
+            var result = await _analytics.GetProductSalesTrendAsync(
+                tenantId, store_id, productId, resolvedFrom, resolvedTo, group_by, includeMargin, ct);
+            return result is null ? NotFound() : Ok(result);
+        }
 
-        return result is null ? NotFound() : Ok(result);
+        var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
+        var comparison = await _analytics.GetProductSalesTrendComparisonAsync(
+            tenantId, store_id, productId, resolvedFrom, resolvedTo, group_by, includeMargin, cFrom, cTo, ct);
+        return comparison is null ? NotFound() : Ok(comparison);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

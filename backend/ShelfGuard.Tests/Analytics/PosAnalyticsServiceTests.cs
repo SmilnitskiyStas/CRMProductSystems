@@ -610,6 +610,190 @@ public sealed class PosAnalyticsServiceTests
         await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, unknownProductId, From30, Today, "day", false, default);
     }
 
+    // ── TASK-590: GetProductSalesTrendComparisonAsync ────────────────────────
+
+    // Calls the repository's GetProductSalesTrendAsync exactly twice -- once per date range --
+    // and sums each window's points into the DTO's totals. Repository (not the service) owns the
+    // actual points; this pins that the two ranges are forwarded distinctly and correctly summed.
+    [Fact]
+    public async Task GetProductSalesTrendComparisonAsync_calls_repository_twice_once_per_date_range()
+    {
+        var productId = Guid.NewGuid();
+        var compareFrom = From30.AddDays(-31);
+        var compareTo = From30.AddDays(-1);
+
+        var current = new ProductSalesTrendDto(
+            ProductId: productId, ProductName: "Paska",
+            Points: new List<ProductSalesTrendPointDto>
+            {
+                new(Today, Revenue: 100m, Quantity: 10m, TransactionCount: 5, MarginAmount: null),
+                new(Today.AddDays(-1), Revenue: 50m, Quantity: 5m, TransactionCount: 2, MarginAmount: null),
+            },
+            GroupBy: "day");
+
+        var comparison = new ProductSalesTrendDto(
+            ProductId: productId, ProductName: "Paska",
+            Points: new List<ProductSalesTrendPointDto>
+            {
+                new(compareFrom, Revenue: 100m, Quantity: 10m, TransactionCount: 4, MarginAmount: null),
+            },
+            GroupBy: "day");
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default)
+             .Returns(current);
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, compareFrom, compareTo, "day", false, default)
+             .Returns(comparison);
+
+        var result = await _sut.GetProductSalesTrendComparisonAsync(
+            _tenantId, null, productId, From30, Today, "day", includeMargin: false, compareFrom, compareTo);
+
+        Assert.NotNull(result);
+        Assert.Equal(productId, result!.ProductId);
+        Assert.Equal("Paska", result.ProductName);
+        Assert.Equal(2, result.Current.Count);
+        Assert.Single(result.Comparison);
+        Assert.Equal(150m, result.CurrentTotalRevenue);
+        Assert.Equal(15m, result.CurrentTotalQuantity);
+        Assert.Equal(100m, result.ComparisonTotalRevenue);
+        Assert.Equal(10m, result.ComparisonTotalQuantity);
+
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default);
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, productId, compareFrom, compareTo, "day", false, default);
+    }
+
+    // PercentChange is (current - previous) / previous * 100, rounded to 2 decimals (see
+    // AnalyticsService.PercentChange) -- 150 vs 100 is a clean +50%.
+    [Fact]
+    public async Task GetProductSalesTrendComparisonAsync_percent_change_is_computed_via_percent_change_helper()
+    {
+        var productId = Guid.NewGuid();
+        var compareFrom = From30.AddDays(-31);
+        var compareTo = From30.AddDays(-1);
+
+        var current = new ProductSalesTrendDto(
+            ProductId: productId, ProductName: "Paska",
+            Points: new List<ProductSalesTrendPointDto>
+            {
+                new(Today, Revenue: 150m, Quantity: 30m, TransactionCount: 5, MarginAmount: null),
+            },
+            GroupBy: "day");
+
+        var comparison = new ProductSalesTrendDto(
+            ProductId: productId, ProductName: "Paska",
+            Points: new List<ProductSalesTrendPointDto>
+            {
+                new(compareFrom, Revenue: 100m, Quantity: 20m, TransactionCount: 4, MarginAmount: null),
+            },
+            GroupBy: "day");
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default)
+             .Returns(current);
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, compareFrom, compareTo, "day", false, default)
+             .Returns(comparison);
+
+        var result = await _sut.GetProductSalesTrendComparisonAsync(
+            _tenantId, null, productId, From30, Today, "day", includeMargin: false, compareFrom, compareTo);
+
+        Assert.Equal(50m, result!.RevenuePercentChange);
+        Assert.Equal(50m, result.QuantityPercentChange);
+    }
+
+    // Baseline window with zero sales is a routine case (product only started selling
+    // recently, or genuinely had none before the event), not an error -- repository returns a
+    // valid DTO with an empty Points list (NOT null; null is reserved for "product not found",
+    // see GetProductSalesTrendAsync_returns_null_when_repository_finds_no_matching_product
+    // above). Comparison totals should come back zero and PercentChange null (PercentChange's
+    // own "previous == 0 -> null" convention), without throwing.
+    [Fact]
+    public async Task GetProductSalesTrendComparisonAsync_zero_sales_baseline_produces_zero_totals_and_null_percent_change()
+    {
+        var productId = Guid.NewGuid();
+        var compareFrom = From30.AddDays(-31);
+        var compareTo = From30.AddDays(-1);
+
+        var current = new ProductSalesTrendDto(
+            ProductId: productId, ProductName: "Paska",
+            Points: new List<ProductSalesTrendPointDto>
+            {
+                new(Today, Revenue: 100m, Quantity: 10m, TransactionCount: 5, MarginAmount: null),
+            },
+            GroupBy: "day");
+
+        var comparison = new ProductSalesTrendDto(
+            ProductId: productId, ProductName: "Paska",
+            Points: [],
+            GroupBy: "day");
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default)
+             .Returns(current);
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, compareFrom, compareTo, "day", false, default)
+             .Returns(comparison);
+
+        var result = await _sut.GetProductSalesTrendComparisonAsync(
+            _tenantId, null, productId, From30, Today, "day", includeMargin: false, compareFrom, compareTo);
+
+        Assert.NotNull(result);
+        Assert.Empty(result!.Comparison);
+        Assert.Equal(0m, result.ComparisonTotalRevenue);
+        Assert.Equal(0m, result.ComparisonTotalQuantity);
+        Assert.Null(result.RevenuePercentChange);
+        Assert.Null(result.QuantityPercentChange);
+    }
+
+    // Repository returning null for the comparison-window call (defensive case -- current-window
+    // productId/tenantId already resolved, so this can't newly occur through normal use, but the
+    // service must not throw if it somehow did) is handled the same as the empty-Points case
+    // above: zero totals, null percent-change, no exception.
+    [Fact]
+    public async Task GetProductSalesTrendComparisonAsync_null_comparison_window_does_not_throw()
+    {
+        var productId = Guid.NewGuid();
+        var compareFrom = From30.AddDays(-31);
+        var compareTo = From30.AddDays(-1);
+
+        var current = new ProductSalesTrendDto(
+            ProductId: productId, ProductName: "Paska",
+            Points: new List<ProductSalesTrendPointDto>
+            {
+                new(Today, Revenue: 100m, Quantity: 10m, TransactionCount: 5, MarginAmount: null),
+            },
+            GroupBy: "day");
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, From30, Today, "day", false, default)
+             .Returns(current);
+        _repo.GetProductSalesTrendAsync(_tenantId, null, productId, compareFrom, compareTo, "day", false, default)
+             .Returns((ProductSalesTrendDto?)null);
+
+        var result = await _sut.GetProductSalesTrendComparisonAsync(
+            _tenantId, null, productId, From30, Today, "day", includeMargin: false, compareFrom, compareTo);
+
+        Assert.NotNull(result);
+        Assert.Empty(result!.Comparison);
+        Assert.Equal(0m, result.ComparisonTotalRevenue);
+        Assert.Null(result.RevenuePercentChange);
+    }
+
+    // Current-window call returning null (productId not found in tenant scope) short-circuits
+    // the whole comparison -- mirrors GetProductSalesTrendAsync's own null/404 convention, and the
+    // comparison-window repository call must never even fire (nothing meaningful to compare).
+    [Fact]
+    public async Task GetProductSalesTrendComparisonAsync_returns_null_when_current_window_product_not_found()
+    {
+        var unknownProductId = Guid.NewGuid();
+        var compareFrom = From30.AddDays(-31);
+        var compareTo = From30.AddDays(-1);
+
+        _repo.GetProductSalesTrendAsync(_tenantId, null, unknownProductId, From30, Today, "day", false, default)
+             .Returns((ProductSalesTrendDto?)null);
+
+        var result = await _sut.GetProductSalesTrendComparisonAsync(
+            _tenantId, null, unknownProductId, From30, Today, "day", includeMargin: false, compareFrom, compareTo);
+
+        Assert.Null(result);
+        await _repo.Received(1).GetProductSalesTrendAsync(_tenantId, null, unknownProductId, From30, Today, "day", false, default);
+        await _repo.DidNotReceive().GetProductSalesTrendAsync(_tenantId, null, unknownProductId, compareFrom, compareTo, "day", false, default);
+    }
+
     // ── TASK-490: GetWorstProductsAsync ──────────────────────────────────────
 
     // The whole point of this endpoint (see AnalyticsRepository.GetWorstProductsAsync's own

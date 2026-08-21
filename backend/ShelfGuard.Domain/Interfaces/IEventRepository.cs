@@ -20,5 +20,6 @@ public interface IEventRepository
     Task AddAsync(DemandEvent demandEvent, CancellationToken ct = default);
     Task AddCoefficientAsync(DemandEventCoefficient coefficient, CancellationToken ct = default);
     void Remove(DemandEvent demandEvent);
+    void RemoveCoefficient(DemandEventCoefficient coefficient);
     Task SaveChangesAsync(CancellationToken ct = default);
 }

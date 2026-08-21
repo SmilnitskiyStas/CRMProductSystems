@@ -125,6 +125,17 @@ public sealed class EventService : IEventService
         return (ToCoefDto(coef), null);
     }
 
+    public async Task<string?> RemoveCoefficientAsync(Guid eventId, Guid coefId, CancellationToken ct = default)
+    {
+        var coef = await _repo.GetCoefficientAsync(coefId, ct);
+        if (coef is null || coef.EventId != eventId)
+            return "Coefficient not found.";
+
+        _repo.RemoveCoefficient(coef);
+        await _repo.SaveChangesAsync(ct);
+        return null;
+    }
+
     public async Task<(SeedDefaultsResult? Result, string? Error)> SeedDefaultsAsync(
         Guid tenantId, CancellationToken ct = default)
     {

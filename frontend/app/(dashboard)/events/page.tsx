@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { EventCalendar } from "@/features/events/components/EventCalendar";
+import { EventDayDetailDrawer } from "@/features/events/components/EventDayDetailDrawer";
 import { EventForm } from "@/features/events/components/EventForm";
 import {
   useCreateEvent, useDeleteEvent, useEvents, useSeedDefaults, useUpdateEvent,
@@ -23,6 +24,7 @@ export default function EventsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [editing, setEditing] = useState<DemandEvent | null>(null);
   const [creating, setCreating] = useState<string | null>(null); // initial date or null
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const from = `${year}-${String(month).padStart(2, "0")}-01`;
   const to = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
@@ -119,7 +121,18 @@ export default function EventsPage() {
           month={month}
           events={events}
           onEventClick={setEditing}
-          onDayClick={setCreating}
+          onDayClick={setSelectedDay}
+        />
+      )}
+
+      {selectedDay !== null && (
+        <EventDayDetailDrawer
+          dateIso={selectedDay}
+          allEvents={events}
+          stores={stores}
+          onAddEvent={() => setCreating(selectedDay)}
+          onEditEvent={(ev) => setEditing(ev)}
+          onClose={() => setSelectedDay(null)}
         />
       )}
 

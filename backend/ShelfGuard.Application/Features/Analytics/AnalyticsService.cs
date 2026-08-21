@@ -63,6 +63,36 @@ public sealed class AnalyticsService : IAnalyticsService
     public Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, CancellationToken ct = default)
         => _repo.GetProductSalesTrendAsync(tenantId, storeId, productId, from, to, groupBy, includeMargin, ct);
 
+    // ── TASK-590: single-product sales trend vs. baseline comparison (Events calendar) ───────
+    public async Task<ProductSalesTrendComparisonDto?> GetProductSalesTrendComparisonAsync(
+        Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin,
+        DateOnly compareFrom, DateOnly compareTo, CancellationToken ct = default)
+    {
+        var current = await _repo.GetProductSalesTrendAsync(tenantId, storeId, productId, from, to, groupBy, includeMargin, ct);
+        if (current is null)
+            return null;
+
+        // Baseline window can legitimately have zero sales (product only started selling
+        // recently, or genuinely had none before the event) -- GetProductSalesTrendAsync only
+        // returns null for "product not found in tenant scope", which can't newly occur here
+        // since the current-window call above already resolved this exact productId/tenantId.
+        // Still treated defensively as zero totals rather than erroring, in case that changes.
+        var comparison = await _repo.GetProductSalesTrendAsync(tenantId, storeId, productId, compareFrom, compareTo, groupBy, includeMargin, ct);
+
+        var currentRevenue    = current.Points.Sum(p => p.Revenue);
+        var currentQuantity   = current.Points.Sum(p => p.Quantity);
+        var comparisonRevenue  = comparison?.Points.Sum(p => p.Revenue) ?? 0m;
+        var comparisonQuantity = comparison?.Points.Sum(p => p.Quantity) ?? 0m;
+
+        return new ProductSalesTrendComparisonDto(
+            current.ProductId, current.ProductName,
+            current.Points, comparison?.Points ?? Array.Empty<ProductSalesTrendPointDto>(),
+            current.GroupBy,
+            from, to, compareFrom, compareTo,
+            currentRevenue, comparisonRevenue, PercentChange(currentRevenue, comparisonRevenue),
+            currentQuantity, comparisonQuantity, PercentChange(currentQuantity, comparisonQuantity));
+    }
+
     // ── TASK-490: worst-performing products / dead stock ──────────────────────
 
     public Task<WorstProductsDto> GetWorstProductsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)

@@ -67,6 +67,20 @@ export function useProductSalesTrend(
   });
 }
 
+// TASK-590: compare-mode counterpart to useProductSalesTrend above, consumed by
+// LinkedProductSalesCard (Events product-linking sales-comparison section).
+export function useProductSalesTrendCompare(
+  productId: string,
+  params: PosDateRangeParams & { group_by?: "day" | "week" },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["pos-analytics-product-trend-compare", productId, params],
+    queryFn: () => posAnalyticsApi.getProductSalesTrend(productId, { ...params, compare: true }),
+    enabled: enabled && !!productId,
+  });
+}
+
 // ── Period comparison (ADR-016) ─────────────────────────────────────────────
 
 export function usePosSummaryCompare(

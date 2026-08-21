@@ -101,6 +101,15 @@ public sealed class EventsController : ControllerBase
         return Ok(coef);
     }
 
+    [HttpDelete("{id:guid}/coefficients/{coefId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveCoefficient(Guid id, Guid coefId, CancellationToken ct)
+    {
+        var error = await _events.RemoveCoefficientAsync(id, coefId, ct);
+        return error is not null ? NotFound(new { error }) : NoContent();
+    }
+
     [HttpPost("seed-defaults")]
     [ProducesResponseType(typeof(SeedDefaultsResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> SeedDefaults(CancellationToken ct)

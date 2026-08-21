@@ -3,6 +3,26 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-590 — Product sales trend vs. baseline comparison (backend)
+
+**Status:** done · **Agent:** backend-developer
+Log: `.claude/logs/tasks/590_2026-08-21_product-sales-trend-comparison_backend-developer.md`
+
+Backend half of the Events calendar sales-comparison feature (product linked to a demand event,
+e.g. Easter → paska bread, vs. an equal-length baseline period immediately preceding it, sourced
+from live POS transactions). Extended the existing `GET /api/analytics/pos/products/{productId}/
+trend` action (TASK-482) with `compare`/`compareFrom`/`compareTo` query params — no new route,
+reused the existing `ResolveCompareRange`/`PercentChange` helpers unchanged.
+New `ProductSalesTrendComparisonDto` + `IAnalyticsService.GetProductSalesTrendComparisonAsync`
+(calls `IAnalyticsRepository.GetProductSalesTrendAsync` twice — current + baseline — same
+zip pattern as `GetPosRevenueTrendComparisonAsync`; no repository/SQL changes). Zero-sale
+baseline window handled as zero totals + null percent-change, not an error. Deliberately kept
+single-product (no batched multi-product endpoint) — frontend calls once per linked product.
+5 new tests. Build clean, full suite 1790/1790 passing. Frontend team: see task log's "Notes for
+frontend" for the exact contract.
+Note: originally logged as TASK-588 by the agent (ran in an isolated worktree, collided with a
+parallel agent's TASK-588); renumbered to TASK-590 when merging into the main tree.
+
 **Parallel workstream — Stage 6 (Multi-Tenant Consumer Platform):** TASK-526 audit done,
 TASK-556 (2026-08-17) resolved the 3 open decisions and registered TASK-527–555 as `planned`
 (TASK-529/530 descoped). Implementation ready to start with TASK-527/TASK-528 (Stage A). Full
@@ -278,6 +298,25 @@ i18n: added `Dashboard.sales.page.selectStoreHint`; removed the now-dead `allSto
 confirmed unused elsewhere via grep) — in both `en.json`/`uk.json`. `tsc --noEmit` and
 `eslint` clean on all 5 touched files. No authenticated browser session available (fresh dev
 server, empty localStorage) — did not log in per task boundary; live check left for the user.
+
+## TASK-588 — Remove event coefficient endpoint (backend)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-21 · **Next:** frontend
+(day-detail drawer "unlink product" button; already in progress in parallel per orchestrator)
+Log: `.claude/logs/tasks/588_2026-08-21_remove-event-coefficient-endpoint_backend-developer.md`
+
+Added `DELETE /api/events/{id}/coefficients/{coefId}` — the missing counterpart to existing
+`POST`/`PUT` coefficient endpoints, needed by the Events calendar day-detail view (link/unlink
+products to a demand event). `IEventRepository.RemoveCoefficient(DemandEventCoefficient)` (void,
+mirrors existing `Remove(DemandEvent)`) → `EventRepository` removes via
+`_db.DemandEventCoefficients`. `IEventService.RemoveCoefficientAsync(eventId, coefId, ct)` reuses
+existing `GetCoefficientAsync` lookup and mirrors `UpdateCoefficientAsync`'s not-found/ownership
+check exactly (`"Coefficient not found."` when missing OR `coef.EventId != eventId`). Controller
+action inherits the controller's class-level `[Authorize(Policy = AppPolicies.AtLeastStoreManager)]`
+— same as `AddCoefficient`/`UpdateCoefficient`, no per-action override needed. New
+`EventServiceTests.cs` (Events test folder had none yet, only the resolver test) covers not-found,
+wrong-event-id, and happy-path (repo `RemoveCoefficient` + `SaveChangesAsync` called). Full
+`dotnet test` (1788 tests) and `dotnet build` clean.
 
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
@@ -5191,3 +5230,42 @@ DB counts confirmed restored). Log:
 `.claude/logs/tasks/585_2026-08-20_marketplace-order-delay-reason-ui_frontend-developer.md`.
 
 **Status: done** — all three slices (schema, service/API, UI) complete.
+
+# TASK-589 — Events calendar: day-detail drawer (shell + basic info)
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-21
+
+First piece of a larger event-calendar feature: clicking a day now opens a detail drawer
+listing that day's existing event(s) (list → event detail, via `EventDayDetailDrawer.tsx` +
+`EventDetailPanel.tsx`) instead of jumping straight to the create-event form. Add/edit still
+route through the existing `EventForm.tsx` modal via `setCreating`/`setEditing`, unchanged.
+Shared day-matching logic extracted to new `frontend/features/events/utils.ts`
+(`isEventActiveOnDate`, behavior-preserving refactor of `EventCalendar.tsx`'s old private
+`isActiveOn`) plus a new `resolveEventWindowForYear` helper for a later agent's
+sales-comparison window. i18n: new `Dashboard.events.dayDetail.*` in `en.json`/`uk.json`.
+`tsc`/`eslint` clean; no authenticated browser session available, live check skipped. Log:
+`.claude/logs/tasks/589_2026-08-21_events-day-detail-drawer_frontend-developer.md`.
+
+# TASK-591 — Events calendar: product linking + sales comparison (Wave 2)
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-21
+
+Extends TASK-589's `EventDetailPanel.tsx` with two `DrawerSection`s: **Linked Products**
+(search/add/inline-edit/remove product-scoped `DemandEventCoefficient`s via new
+`EventProductPicker.tsx`) and **Sales Comparison** (per linked product, a `LinkedProductSalesCard.tsx`
+comparing the event's date window vs. server auto-baseline, via the now-compare-capable
+`GET /api/analytics/pos/products/{id}/trend?compare=true`, TASK-590). Frontend-only, both
+backend endpoints already merged. New `removeCoefficient`/`useRemoveCoefficient` (→ `DELETE
+/api/events/{id}/coefficients/{coefId}`, TASK-588), `useProductsByIds`/`useProductSearch`
+(extended `productsApi.getAll` with optional `search`/`ids`/`pageSize`),
+`ProductSalesTrendCompareDto` + overloaded `getProductSalesTrend`/`useProductSalesTrendCompare`.
+Fixed a latent type break in `useProducts()` (was passing `productsApi.getAll` as `queryFn` by
+reference — broke once `getAll` gained optional params — now `() => productsApi.getAll()`).
+19 new i18n keys under `Dashboard.events.dayDetail` in `en.json`/`uk.json`. `tsc`/`eslint` clean
+on all 11 touched/created files; no authenticated browser session available, live check skipped.
+Log: `.claude/logs/tasks/591_2026-08-21_events-product-linking-sales-comparison_frontend-developer.md`.
+Note: originally logged as TASK-590 by the agent, colliding with the backend comparison-endpoint
+task also numbered 590 minutes earlier; renumbered to TASK-591 when reconciling.
+
+**Status: done** — day-detail drawer (TASK-589) + product linking/sales comparison
+(TASK-591) complete the event-calendar drawer feature.
