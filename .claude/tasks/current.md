@@ -260,6 +260,25 @@ barcode flow, missing date-picker dependency) for the separate Codex agent to bu
 count/finalize screens against. Backend + web scope for TASK-586 is now fully done; mobile is out
 of this session's scope entirely.
 
+## TASK-587 — Remove local store picker on Sales page (frontend)
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-21 · **Next:** none
+Log: `.claude/logs/tasks/587_2026-08-21_remove-local-store-picker-sales_frontend-developer.md`
+
+Same cleanup as TASK-583, extended to Sales (manual daily-sales entry). Removed all three
+local store `<select>`s — page filter, `SaleEntryForm`, `CsvImportDialog` — all previously
+reading `useStores()` independently of the header's `StoreSelector`. Switched to
+`usePrimaryStoreId()`. List filter (`useDailySales`) stays unfiltered when "all stores" is
+active (backend `store_id` is optional there); "Add Sales"/"Import CSV" are
+`disabled={!primaryStoreId}` with **one shared** hint (not duplicated per button). `storeId`
+is now a fixed prop into both modals (no longer a user-editable field) — `POST /api/daily-sales`
+and `POST /api/daily-sales/import` both require a single concrete `Guid StoreId`, unchanged.
+i18n: added `Dashboard.sales.page.selectStoreHint`; removed the now-dead `allStores`,
+`entryForm.storeLabel`, `csvImport.storeLabel`, `entryForm.validation.selectStore` keys (all
+confirmed unused elsewhere via grep) — in both `en.json`/`uk.json`. `tsc --noEmit` and
+`eslint` clean on all 5 touched files. No authenticated browser session available (fresh dev
+server, empty localStorage) — did not log in per task boundary; live check left for the user.
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer

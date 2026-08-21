@@ -1284,7 +1284,7 @@
         "subtitle": "Історія щоденних продажів — джерело даних для ADU та автозамовлень",
         "importCsv": "Імпорт CSV",
         "addSale": "Внести продажі",
-        "allStores": "Всі магазини",
+        "selectStoreHint": "Оберіть конкретний магазин угорі сторінки, щоб додати продажі або імпортувати CSV",
         "recordsCount": "записів: {count}",
         "errorLoading": "Помилка завантаження продажів. Перевірте підключення до API.",
         "toastSaved": "Продажі збережено",
@@ -1298,7 +1298,6 @@
         "formatLabel": "Формат:",
         "dateFormatLabel": "Дата —",
         "formatDescription": ". Товари знаходяться за штрихкодом. Існуючі записи за (товар, дата) оновлюються.",
-        "storeLabel": "Магазин",
         "resultSummary": "Створено: {created} · Оновлено: {updated}",
         "resultSkipped": "Пропущено: {count}",
         "importing": "Імпорт…",
@@ -1306,7 +1305,6 @@
       },
       "entryForm": {
         "title": "Внести продажі за день",
-        "storeLabel": "Магазин",
         "productLabel": "Товар",
         "selectProductPlaceholder": "— оберіть товар —",
         "dateLabel": "Дата",
@@ -1316,7 +1314,6 @@
         "saving": "Збереження…",
         "save": "Зберегти",
         "validation": {
-          "selectStore": "Оберіть магазин",
           "selectProduct": "Оберіть товар",
           "enterDate": "Вкажіть дату",
           "negativeQuantity": "Не може бути від'ємною"

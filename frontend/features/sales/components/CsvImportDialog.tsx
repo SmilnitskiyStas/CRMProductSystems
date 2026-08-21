@@ -1,44 +1,30 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
-import type { StoreDto as Store } from "@/features/stores/types";
 import type { CsvImportResult } from "../types";
 
 interface Props {
-  stores: Store[];
-  defaultStoreId: string;
   isPending: boolean;
   result: CsvImportResult | null;
   error: string | null;
   onClose: () => void;
-  onImport: (storeId: string, file: File) => void;
+  onImport: (file: File) => void;
 }
 
 export function CsvImportDialog({
-  stores, defaultStoreId, isPending, result, error, onClose, onImport,
+  isPending, result, error, onClose, onImport,
 }: Props) {
   const t = useTranslations("Dashboard.sales.csvImport");
   const tCommon = useTranslations("Common");
-  const [storeId, setStoreId] = useState(defaultStoreId);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function submit() {
     const file = fileRef.current?.files?.[0];
-    if (file) onImport(storeId, file);
+    if (file) onImport(file);
   }
-
-  const selectStyle: React.CSSProperties = {
-    width: "100%",
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 8,
-    color: "#E8EDF5",
-    fontSize: 13,
-    padding: "8px 12px",
-  };
 
   return (
     <Modal title={t("title")} onClose={onClose}>
@@ -46,15 +32,6 @@ export function CsvImportDialog({
         <div style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.6 }}>
           {t("formatLabel")} <code style={{ color: "#9CA3AF" }}>barcode,date,quantity_sold[,quantity_end_of_day][,is_promo_day]</code>
           <br />{t("dateFormatLabel")} <code style={{ color: "#9CA3AF" }}>yyyy-MM-dd</code>{t("formatDescription")}
-        </div>
-
-        <div>
-          <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 5 }}>{t("storeLabel")}</label>
-          <select value={storeId} onChange={(e) => setStoreId(e.target.value)} style={selectStyle}>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
         </div>
 
         <input

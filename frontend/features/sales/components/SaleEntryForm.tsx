@@ -8,7 +8,6 @@ import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import type { Product } from "@/features/inventory/types";
-import type { StoreDto as Store } from "@/features/stores/types";
 import type { UpsertDailySalePayload } from "../types";
 
 // Zod .min(1, message) needs a translated message, so the schema is built once per
@@ -16,7 +15,6 @@ import type { UpsertDailySalePayload } from "../types";
 // mirrors `buildProductSchema(t)` in features/inventory/components/ProductForm.tsx.
 function buildSaleSchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
-    storeId: z.string().min(1, t("validation.selectStore")),
     productId: z.string().min(1, t("validation.selectProduct")),
     date: z.string().min(1, t("validation.enterDate")),
     quantitySold: z.coerce.number().min(0, t("validation.negativeQuantity")),
@@ -28,9 +26,9 @@ function buildSaleSchema(t: ReturnType<typeof useTranslations>) {
 type FormValues = z.infer<ReturnType<typeof buildSaleSchema>>;
 
 interface Props {
-  stores: Store[];
+  /** Store to log the sale against — the header's global selector, not a field in this form. */
+  storeId: string;
   products: Product[];
-  defaultStoreId: string;
   isPending: boolean;
   error: string | null;
   onClose: () => void;
@@ -60,7 +58,7 @@ const labelStyle: React.CSSProperties = {
 const errStyle: React.CSSProperties = { color: "#F87171", fontSize: 11, marginTop: 3 };
 
 export function SaleEntryForm({
-  stores, products, defaultStoreId, isPending, error, onClose, onSubmit,
+  storeId, products, isPending, error, onClose, onSubmit,
 }: Props) {
   const t = useTranslations("Dashboard.sales.entryForm");
   const tCommon = useTranslations("Common");
@@ -73,7 +71,6 @@ export function SaleEntryForm({
   } = useForm<FormValues>({
     resolver: zodResolver(saleSchema),
     defaultValues: {
-      storeId: defaultStoreId,
       productId: "",
       date: new Date().toISOString().slice(0, 10),
       quantitySold: 0,
@@ -84,7 +81,7 @@ export function SaleEntryForm({
 
   function submit(values: FormValues) {
     onSubmit({
-      storeId: values.storeId,
+      storeId,
       productId: values.productId,
       date: values.date,
       quantitySold: values.quantitySold,
@@ -96,16 +93,6 @@ export function SaleEntryForm({
   return (
     <Modal title={t("title")} onClose={onClose}>
       <form onSubmit={handleSubmit(submit)} style={{ display: "grid", gap: 14 }}>
-        <div>
-          <label style={labelStyle}>{t("storeLabel")}</label>
-          <select {...register("storeId")} style={inputStyle}>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          {errors.storeId && <div style={errStyle}>{errors.storeId.message}</div>}
-        </div>
-
         <div>
           <label style={labelStyle}>{t("productLabel")}</label>
           <select {...register("productId")} style={inputStyle}>

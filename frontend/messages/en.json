@@ -1284,7 +1284,7 @@
         "subtitle": "Daily sales history — the data source for ADU and auto-ordering",
         "importCsv": "Import CSV",
         "addSale": "Add Sales",
-        "allStores": "All stores",
+        "selectStoreHint": "Select a specific store at the top of the page to add or import sales",
         "recordsCount": "records: {count}",
         "errorLoading": "Failed to load sales. Check your API connection.",
         "toastSaved": "Sales saved",
@@ -1298,7 +1298,6 @@
         "formatLabel": "Format:",
         "dateFormatLabel": "Date —",
         "formatDescription": ". Products are matched by barcode. Existing records for (product, date) are updated.",
-        "storeLabel": "Store",
         "resultSummary": "Created: {created} · Updated: {updated}",
         "resultSkipped": "Skipped: {count}",
         "importing": "Importing…",
@@ -1306,7 +1305,6 @@
       },
       "entryForm": {
         "title": "Add daily sales",
-        "storeLabel": "Store",
         "productLabel": "Product",
         "selectProductPlaceholder": "— select a product —",
         "dateLabel": "Date",
@@ -1316,7 +1314,6 @@
         "saving": "Saving…",
         "save": "Save",
         "validation": {
-          "selectStore": "Select a store",
           "selectProduct": "Select a product",
           "enterDate": "Enter a date",
           "negativeQuantity": "Cannot be negative"

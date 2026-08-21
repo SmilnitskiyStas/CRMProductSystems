@@ -14,8 +14,8 @@ import {
   useMarkAnomaly,
   useUpsertSale,
 } from "@/features/sales/hooks/useSales";
-import { useStores } from "@/features/stores/hooks/useStores";
 import { useProducts } from "@/features/inventory/hooks/useProducts";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import type { UpsertDailySalePayload } from "@/features/sales/types";
 
 function daysAgo(n: number): string {
@@ -36,25 +36,22 @@ const selectStyle: React.CSSProperties = {
 export default function SalesPage() {
   const t = useTranslations("Dashboard.sales.page");
   const tCommon = useTranslations("Common");
-  const [storeId, setStoreId] = useState<string>("");
+  const primaryStoreId = usePrimaryStoreId();
   const [from, setFrom] = useState(daysAgo(30));
   const [to, setTo] = useState(daysAgo(0));
   const [entryOpen, setEntryOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  const { data: stores = [] } = useStores();
   const { data: products = [] } = useProducts();
   const filters = useMemo(
-    () => ({ storeId: storeId || undefined, from, to }),
-    [storeId, from, to],
+    () => ({ storeId: primaryStoreId, from, to }),
+    [primaryStoreId, from, to],
   );
   const { data: sales = [], isLoading, isError } = useDailySales(filters);
 
   const upsert = useUpsertSale();
   const importCsv = useImportCsv();
   const markAnomaly = useMarkAnomaly();
-
-  const defaultStoreId = storeId || stores[0]?.id || "";
 
   const handleUpsert = (payload: UpsertDailySalePayload) => {
     upsert.mutate(payload, {
@@ -66,9 +63,10 @@ export default function SalesPage() {
     });
   };
 
-  const handleImport = (importStoreId: string, file: File) => {
+  const handleImport = (file: File) => {
+    if (!primaryStoreId) return;
     importCsv.mutate(
-      { storeId: importStoreId, file },
+      { storeId: primaryStoreId, file },
       {
         onSuccess: (r) =>
           r.errors.length === 0
@@ -110,11 +108,19 @@ export default function SalesPage() {
             {t("subtitle")}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Btn variant="ghost" icon={<Upload size={15} />} onClick={() => setImportOpen(true)}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {!primaryStoreId && (
+            <span style={{ color: "#6B7280", fontSize: 12 }}>{t("selectStoreHint")}</span>
+          )}
+          <Btn
+            variant="ghost"
+            icon={<Upload size={15} />}
+            onClick={() => setImportOpen(true)}
+            disabled={!primaryStoreId}
+          >
             {t("importCsv")}
           </Btn>
-          <Btn icon={<Plus size={15} />} onClick={() => setEntryOpen(true)}>
+          <Btn icon={<Plus size={15} />} onClick={() => setEntryOpen(true)} disabled={!primaryStoreId}>
             {t("addSale")}
           </Btn>
         </div>
@@ -122,12 +128,6 @@ export default function SalesPage() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 10, marginBottom: 18, alignItems: "center" }}>
-        <select value={storeId} onChange={(e) => setStoreId(e.target.value)} style={selectStyle}>
-          <option value="">{t("allStores")}</option>
-          {stores.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
         <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} style={selectStyle} />
         <span style={{ color: "#4B5563" }}>—</span>
         <input type="date" value={to} min={from} max={daysAgo(0)} onChange={(e) => setTo(e.target.value)} style={selectStyle} />
@@ -138,11 +138,10 @@ export default function SalesPage() {
 
       <SalesTable sales={sales} onToggleAnomaly={handleToggleAnomaly} />
 
-      {entryOpen && (
+      {entryOpen && primaryStoreId && (
         <SaleEntryForm
-          stores={stores}
+          storeId={primaryStoreId}
           products={products}
-          defaultStoreId={defaultStoreId}
           isPending={upsert.isPending}
           error={upsert.error?.message ?? null}
           onClose={() => setEntryOpen(false)}
@@ -150,10 +149,8 @@ export default function SalesPage() {
         />
       )}
 
-      {importOpen && (
+      {importOpen && primaryStoreId && (
         <CsvImportDialog
-          stores={stores}
-          defaultStoreId={defaultStoreId}
           isPending={importCsv.isPending}
           result={importCsv.data ?? null}
           error={importCsv.error?.message ?? null}
