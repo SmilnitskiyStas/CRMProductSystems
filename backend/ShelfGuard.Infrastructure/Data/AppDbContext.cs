@@ -132,6 +132,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierAgreement> SupplierAgreements => Set<SupplierAgreement>();
     public DbSet<MarketplaceOrder> MarketplaceOrders => Set<MarketplaceOrder>();
     public DbSet<MarketplaceOrderItem> MarketplaceOrderItems => Set<MarketplaceOrderItem>();
+
+    // Marketplace order receiving — client-confirmed receipt (TASK-586, ADR-033)
+    public DbSet<MarketplaceOrderReceipt> MarketplaceOrderReceipts => Set<MarketplaceOrderReceipt>();
+    public DbSet<MarketplaceOrderReceiptItem> MarketplaceOrderReceiptItems => Set<MarketplaceOrderReceiptItem>();
     public DbSet<SupplierSupportTicket> SupplierSupportTickets => Set<SupplierSupportTicket>();
     public DbSet<SupplierSupportTicketMessage> SupplierSupportTicketMessages => Set<SupplierSupportTicketMessage>();
 
@@ -1929,6 +1933,9 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.TotalAmount).HasColumnType("numeric(14,2)").HasDefaultValue(0m);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            // TASK-586, ADR-033 Decision 2: nullable at the DB — historical orders have no
+            // backfill value. Application-layer validation enforces it for new orders.
+            e.Property(x => x.DestinationStoreId).IsRequired(false);
             e.HasIndex(x => x.SupplierTenantId);
             e.HasIndex(x => x.ClientTenantId);
             e.HasIndex(x => x.AgreementId);
@@ -1940,6 +1947,8 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany()
              .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(x => x.DestinationStoreId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
             e.HasMany(x => x.Items)
              .WithOne(x => x.Order)
              .HasForeignKey(x => x.OrderId)
@@ -1965,6 +1974,70 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(x => x.OrderId);
             e.HasOne<SupplierItem>().WithMany()
              .HasForeignKey(x => x.SupplierItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── MarketplaceOrderReceipt (TASK-586, ADR-033) ────────────────────────
+        // Client-confirmed receipt of a MarketplaceOrder. Deliberately its own entity, not a
+        // StockReceipt reuse (ADR-033 Decision 1) — StockReceipt is single-tenant RLS, this
+        // needs client-write + supplier-read.
+        builder.Entity<MarketplaceOrderReceipt>(e =>
+        {
+            e.ToTable("marketplace_order_receipts");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.MarketplaceOrderId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.DestinationStoreId).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("draft").IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            // v1 scope limit (ADR-033): one receiving session per order.
+            e.HasIndex(x => x.MarketplaceOrderId).IsUnique();
+            e.HasIndex(x => x.ClientTenantId);
+            e.HasIndex(x => x.SupplierTenantId);
+            e.HasOne(x => x.Order).WithMany()
+             .HasForeignKey(x => x.MarketplaceOrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.DestinationStore).WithMany()
+             .HasForeignKey(x => x.DestinationStoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.ReceivedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(x => x.Items)
+             .WithOne(x => x.Receipt)
+             .HasForeignKey(x => x.ReceiptId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── MarketplaceOrderReceiptItem (TASK-586, ADR-033) ────────────────────
+        builder.Entity<MarketplaceOrderReceiptItem>(e =>
+        {
+            e.ToTable("marketplace_order_receipt_items");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.ReceiptId).IsRequired();
+            e.Property(x => x.MarketplaceOrderItemId).IsRequired();
+            // Denormalised copies of the parent receipt's tenant pair — lets the RLS policy
+            // filter without a join, same convention MarketplaceOrderItem already established.
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ItemNameSnapshot).HasMaxLength(500).IsRequired();
+            // numeric(12,3) — matches MarketplaceOrderItem.Qty's precision, not
+            // StockReceiptItem's numeric(10,2) (ADR-033): must reconcile against the order
+            // line without rounding drift.
+            e.Property(x => x.QuantityOrdered).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(x => x.QuantityReceived).HasColumnType("numeric(12,3)");
+            e.Property(x => x.BatchNumber).HasMaxLength(100);
+            e.HasIndex(x => x.ReceiptId);
+            e.HasIndex(x => x.MarketplaceOrderItemId);
+            e.HasOne(x => x.OrderItem).WithMany()
+             .HasForeignKey(x => x.MarketplaceOrderItemId).OnDelete(DeleteBehavior.Restrict);
+            // Resolved at barcode-scan time — nullable, unlike StockReceiptItem.ProductId
+            // (required). SET NULL, not Cascade/Restrict: an Item being deleted later must not
+            // block or cascade-delete the historical receipt record.
+            e.HasOne(x => x.Product).WithMany()
+             .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── SupplierSupportTicket (TASK-316) ──────────────────────────────────

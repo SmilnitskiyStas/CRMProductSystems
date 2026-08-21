@@ -68,7 +68,7 @@ export function CabinetOrdersTab() {
   const [shipTarget, setShipTarget] = useState<MarketplaceOrderDto | null>(null);
   const [delayReasonTarget, setDelayReasonTarget] = useState<MarketplaceOrderDto | null>(null);
 
-  function transition(order: MarketplaceOrderDto, status: "confirmed" | "delivered") {
+  function transition(order: MarketplaceOrderDto, status: "confirmed") {
     updateStatus.mutate(
       { id: order.id, body: { status } },
       {
@@ -115,14 +115,9 @@ export function CabinetOrdersTab() {
         const eta = getShippingEta(order.shippedAt, order.estimatedDeliveryDays);
         return (
           <>
-            <Btn
-              size="sm"
-              variant="success"
-              disabled={updateStatus.isPending}
-              onClick={() => transition(order, "delivered")}
-            >
-              {t("deliverButton")}
-            </Btn>
+            <span style={{ color: "#6B7280", fontSize: 12, fontStyle: "italic" }}>
+              {t("awaitingClientConfirmationHint")}
+            </span>
             {eta?.isOverdue && (
               <Btn
                 size="sm"

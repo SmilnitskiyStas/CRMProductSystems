@@ -10,6 +10,7 @@ import {
   useMyCooperation,
   useMyMarketplaceOrders,
   useCancelMarketplaceOrder,
+  useMarketplaceOrderReceipt,
 } from "@/features/marketplace/hooks/useCooperation";
 import { marketplaceApi } from "@/features/marketplace/api/marketplace-api";
 import {
@@ -22,7 +23,11 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES, type AppRole } from "@/lib/roles";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
-import type { CooperationAgreementDto, MarketplaceOrderDto } from "@/features/marketplace/types";
+import type {
+  CooperationAgreementDto,
+  MarketplaceOrderDto,
+  MarketplaceOrderReceiptDto,
+} from "@/features/marketplace/types";
 
 type ActiveTab = "orders" | "cooperation";
 
@@ -206,6 +211,9 @@ function FragmentRow({
                 delayReason={order.delayReason}
                 intlLocale={intlLocale}
               />
+              {order.status === "delivered" && (
+                <ReceiptDetail orderId={order.id} intlLocale={intlLocale} />
+              )}
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
@@ -318,6 +326,88 @@ function ShippingDetail({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Read-only "what was actually received" block, shown once an order is
+ * `delivered` (TASK-586, ADR-033). Fetches the receiving session via GET
+ * .../receipt — a 404 means no receiving session exists (shouldn't normally
+ * happen for a delivered order, but the endpoint documents it as a possible
+ * edge case), so it's treated as "nothing to show", not an error.
+ */
+function ReceiptDetail({ orderId, intlLocale }: { orderId: string; intlLocale: string }) {
+  const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
+  const { data: receipt, isLoading } = useMarketplaceOrderReceipt(orderId, true);
+
+  if (isLoading) {
+    return (
+      <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 8 }}>{t("loading")}</div>
+    );
+  }
+  if (!receipt) return null;
+
+  return (
+    <div style={{ marginBottom: 14, marginTop: 4 }}>
+      <div style={{ color: "#4ADE80", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        {t("receiptTitle")}
+      </div>
+      <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
+        {t("receiptDestinationStoreLabel", { store: receipt.destinationStoreName })}
+        {receipt.receivedAt && (
+          <>
+            {" · "}
+            {t("receiptReceivedAtLabel", { date: formatDate(receipt.receivedAt, intlLocale) })}
+          </>
+        )}
+      </div>
+      <ReceiptItemsTable receipt={receipt} t={t} intlLocale={intlLocale} />
+    </div>
+  );
+}
+
+function ReceiptItemsTable({
+  receipt,
+  t,
+  intlLocale,
+}: {
+  receipt: MarketplaceOrderReceiptDto;
+  t: ReturnType<typeof useTranslations>;
+  intlLocale: string;
+}) {
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}>
+      <thead>
+        <tr>
+          <th style={headerCellStyle}>{t("headerProduct")}</th>
+          <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("receiptHeaderOrdered")}</th>
+          <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("receiptHeaderReceived")}</th>
+          <th style={headerCellStyle}>{t("receiptHeaderBatch")}</th>
+          <th style={headerCellStyle}>{t("receiptHeaderExpiry")}</th>
+          <th style={headerCellStyle}>{t("receiptHeaderDiscrepancy")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {receipt.items.map((item) => (
+          <tr key={item.id}>
+            <td style={cellStyle}>{item.productName ?? item.itemNameSnapshot}</td>
+            <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
+              {item.quantityOrdered}
+            </td>
+            <td style={{ ...cellStyle, textAlign: "right" }}>
+              {item.quantityReceived ?? "—"}
+            </td>
+            <td style={{ ...cellStyle, color: "#9CA3AF" }}>{item.batchNumber ?? "—"}</td>
+            <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
+              {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString(intlLocale) : "—"}
+            </td>
+            <td style={{ ...cellStyle, color: item.discrepancyNotes ? "#F87171" : "#4B5563" }}>
+              {item.discrepancyNotes ?? "—"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

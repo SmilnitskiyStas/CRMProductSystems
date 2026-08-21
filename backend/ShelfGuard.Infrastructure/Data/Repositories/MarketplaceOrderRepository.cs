@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -33,6 +34,22 @@ public sealed class MarketplaceOrderRepository : IMarketplaceOrderRepository
         await _db.MarketplaceOrders.AsNoTracking()
             .Include(o => o.Items)
             .Where(o => o.ClientTenantId == clientTenantId)
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// TASK-586: "no receipt exists" OR "receipt exists but still draft" — since receiving
+    /// always sets order.Status = Delivered on finalize, Status == Shipped alone already implies
+    /// no completed receipt exists; the NOT EXISTS below is the defensive, literal form of the
+    /// spec (also covers a receipt row in "draft" some other request left dangling).
+    /// </summary>
+    public async Task<IReadOnlyList<MarketplaceOrder>> ListAwaitingReceiptForClientAsync(
+        Guid clientTenantId, CancellationToken ct = default) =>
+        await _db.MarketplaceOrders.AsNoTracking()
+            .Include(o => o.Items)
+            .Where(o => o.ClientTenantId == clientTenantId && o.Status == MarketplaceOrderStatus.Shipped)
+            .Where(o => !_db.MarketplaceOrderReceipts.Any(
+                r => r.MarketplaceOrderId == o.Id && r.Status != "draft"))
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(ct);
 

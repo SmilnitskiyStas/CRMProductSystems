@@ -90,6 +90,9 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IMarketplaceOrderService, MarketplaceOrderService>();
         services.AddScoped<ISupplierSupportService, SupplierSupportService>();
 
+        // TASK-586 - Marketplace order receiving (client-confirmed receipt, ADR-033)
+        services.AddScoped<IMarketplaceOrderReceiptService, MarketplaceOrderReceiptService>();
+
         // v4 Phase 4 - Auto Service Module (TASK-231)
         services.AddScoped<IAutoServiceService, AutoServiceService>();
 

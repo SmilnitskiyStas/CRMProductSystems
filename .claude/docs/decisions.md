@@ -1,7 +1,318 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-19
+**Updated:** 2026-08-21
+
+## ADR-033: Marketplace order receiving — client-confirmed receipt (scan/qty/expiry) replaces the supplier one-click Deliver; new `MarketplaceOrderReceipt`/`Item` entities, `MarketplaceOrder.DestinationStoreId`, split client-write/supplier-read RLS
+Date: 2026-08-21
+Status: accepted
+
+Context: `MarketplaceOrderService.UpdateOrderStatusAsync` today lets the **supplier** flip a B2B
+marketplace order `Shipped → Delivered` with one click, no verification of what actually arrived.
+Product owner wants the **client** (receiving tenant) to confirm physical receipt instead —
+mobile employee scans the product barcode, enters received quantity, enters batch expiry date —
+replacing the supplier's button as the only path to `Delivered`. Full design brief (3 Explore
+agents' research + recommended architecture) is at
+`C:\Users\stass\.claude\plans\abundant-popping-ladybug.md`; this ADR resolves that plan's open
+points into a concrete, buildable spec and corrects/sharpens several places the plan left as
+"decide later." Mobile implementation is **out of scope for this session** (a separate Codex-based
+agent builds it against the API contract sketched in Decision 5, from the handoff doc referenced
+at the end); this session covers backend + web-adjacent architecture only, database-engineer and
+backend-developer implement in follow-up sessions.
+
+A working, already-shipped reference pattern exists for exactly this shape of problem:
+`StockReceipt`/`StockReceiptItem`/`ReceiptService` (regular supplier deliveries — ordered vs.
+received qty, batch, expiry, non-blocking discrepancy notes, a `ReceiveAsync` gate that requires
+every item to have `ExpiryDate` before it creates `ProductStock`+`StockMovement`). The new feature
+is a marketplace-specific sibling of that pattern, not a rebuild of it.
+
+Decision:
+
+### Decision 1 — New `MarketplaceOrderReceipt`/`MarketplaceOrderReceiptItem` entities; `StockReceipt` reuse rejected (confirms the plan, with one added argument)
+
+The plan's own rejection reasons hold: `StockReceiptItem.ProductId` is required non-nullable,
+but a marketplace receipt item must exist *before* scanning resolves `ProductId` (the row is
+created empty from the order's snapshot line, filled in as the employee scans); and
+`StockReceipt.SupplierId` points at the tenant's own local `Supplier` catalog row, a different
+and incompatible reference from a marketplace order's `SupplierTenantId`.
+
+**One more reason the plan didn't name, and the deciding one for this ADR:** `StockReceipt` is
+a **single-tenant** row — RLS is plain `tenant_isolation` on `TenantId`, no counterparty ever
+reads it. The new receiving flow needs the **opposite**: the client writes, and (Decision 3) the
+supplier tenant needs read-only visibility into what was actually received, for its own cabinet
+view (plan section 4). Bolting cross-tenant read access onto `StockReceipt`/`StockReceiptItem` —
+an already-shipped, tested, single-tenant table used by every non-marketplace delivery in the
+system — to serve one new marketplace-only read case would widen that table's RLS blast radius
+for every existing caller, just to save one new (small, low-risk) migration. A separate entity
+pair keeps `StockReceipt`'s RLS contract exactly as it is today and gives the new cross-tenant
+read requirement its own policy set, scoped to only the rows that need it.
+
+**Exact field lists (verbatim spec for database-engineer):**
+
+**`MarketplaceOrderReceipt`** → table `marketplace_order_receipts`
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `Id` | `Guid` | no (PK) | `gen_random_uuid()` default, matches every sibling entity |
+| `MarketplaceOrderId` | `Guid` | no | FK → `marketplace_orders.Id`, `ON DELETE RESTRICT` (orders are never hard-deleted, only status-transitioned — Restrict matches `marketplace_orders`' own FK convention). **UNIQUE** index — enforces the plan's explicit v1 scope limit "one receiving session per order," no partial/multiple receipts |
+| `ClientTenantId` | `Guid` | no | Denormalized copy of `MarketplaceOrder.ClientTenantId` at draft-creation time — avoids a join in the RLS policy, same convention `MarketplaceOrderItem` already established for this feature area |
+| `SupplierTenantId` | `Guid` | no | Denormalized copy of `MarketplaceOrder.SupplierTenantId` — needed by the new `supplier_read` policy (Decision 3), same reasoning as `ClientTenantId` above |
+| `DestinationStoreId` | `Guid` | no | Copied from `MarketplaceOrder.DestinationStoreId` (Decision 2) at draft-creation time — the store `ProductStock` rows get created against. FK → `locations.Id`, `ON DELETE RESTRICT` |
+| `Status` | `string` | no | `"draft"` → `"received"` only — **no `"cancelled"` state** (see "Rejected alternatives") — default `"draft"` |
+| `CreatedByUserId` | `Guid?` | yes | Client-side user who started the draft. FK → `users.Id`, `ON DELETE SET NULL` |
+| `ReceivedByUserId` | `Guid?` | yes | Set on finalize. FK → `users.Id`, `ON DELETE SET NULL` |
+| `ReceivedAt` | `DateTimeOffset?` | yes | Set on finalize |
+| `CreatedAt` | `DateTimeOffset` | no | `NOW()` default |
+| `UpdatedAt` | `DateTimeOffset` | no | `NOW()` default, bumped on every item update |
+
+**`MarketplaceOrderReceiptItem`** → table `marketplace_order_receipt_items`
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `Id` | `Guid` | no (PK) | `gen_random_uuid()` default |
+| `ReceiptId` | `Guid` | no | FK → `marketplace_order_receipts.Id`, `ON DELETE CASCADE` (matches `marketplace_order_items.OrderId → marketplace_orders` Cascade) |
+| `MarketplaceOrderItemId` | `Guid` | no | FK → `marketplace_order_items.Id`, `ON DELETE RESTRICT` — which ordered line this closes; order items are never deleted in practice |
+| `ClientTenantId` | `Guid` | no | Denormalized, same rationale as the parent |
+| `SupplierTenantId` | `Guid` | no | Denormalized, same rationale as the parent |
+| `ProductId` | `Guid?` | **yes** | Resolved at scan time — the deliberate divergence from `StockReceiptItem.ProductId` (required). FK → `items.Id`, `ON DELETE SET NULL` |
+| `ItemNameSnapshot` | `string` | no | Copied from `MarketplaceOrderItem.ItemName` at draft-creation time — lets the mobile UI show "what you're supposed to be scanning" *before* `ProductId` resolves, matching `varchar(500)` (same width as `MarketplaceOrderItem.ItemName`) |
+| `QuantityOrdered` | `decimal` | no | `numeric(12,3)` — **matches `MarketplaceOrderItem.Qty`'s precision, not `StockReceiptItem.QuantityOrdered`'s `numeric(10,2)`** — this field is a direct snapshot of `MarketplaceOrderItem.Qty` and must reconcile against it without rounding drift |
+| `QuantityReceived` | `decimal?` | yes | `numeric(12,3)`, same reasoning |
+| `ExpiryDate` | `DateOnly?` | yes | `date`, matches `StockReceiptItem.ExpiryDate` exactly |
+| `BatchNumber` | `string?` | yes | `varchar(100)`, matches `StockReceiptItem.BatchNumber` exactly |
+| `DiscrepancyNotes` | `string?` | yes | `text`, matches `StockReceiptItem.DiscrepancyNotes` exactly |
+
+### Decision 2 — `MarketplaceOrder.DestinationStoreId`: nullable `Guid` at the DB level, required by application-layer validation for every new order
+
+Confirmed needed: `MarketplaceOrderService.CreateOrderAsync` (read in full) has zero location
+concept today — nothing on `MarketplaceOrder`/`MarketplaceOrderItem` says which of the client's
+stores the goods are headed to, and `ProductStock` cannot exist without a `StoreId`. Type: `Guid`,
+FK → `locations.Id` (`ON DELETE RESTRICT`, matching `StockReceipt.DestinationStoreId`'s target
+entity — the receiving side always models "store" as `Location`, never a separate `Store` type).
+
+**Nullable at the DB column, not `NOT NULL`.** This is the one place this ADR diverges from
+reading the plan's field sketch at face value (it didn't flag the tension). Orders placed
+*before* this migration ships have no possible value to backfill into this column — nobody can
+retroactively know which store a historical order was headed to, and a `NOT NULL` constraint
+would force picking *something* (wrong) for every pre-existing row, including ones already
+`Delivered`/`Cancelled` that will never be received through this flow again. Instead:
+`CreateOrderAsync` gets a new validation branch — `request.DestinationStoreId is null` → 400,
+same shape as the existing `EmptyOrderError` check — so every order placed **after** this ships
+always has one, while the DB stays permissive for the historical gap. This is the same pattern
+already established in this exact codebase for an analogous "column must exist for new rows,
+can't be enforced for old ones" situation: ADR-017 point 5, `SupplierItem.category`/`attributes` —
+"nullable columns, DEFAULT NULL... a valid state forever, not a temporary migration pit." Set at
+the client-side order-creation flow (frontend-developer's job, out of this ADR's scope) — a
+required store picker on the order/cart form, not inferred from any ambient "current store"
+context, because an order is a future delivery to one specific store, not tied to whatever store
+the ordering user happens to be viewing (the plan's own reasoning for rejecting
+`usePrimaryStoreId()` here is correct and this ADR endorses it — TASK-583 precedent is about
+*viewing* the user's current store context, this is *choosing* a delivery destination).
+
+### Decision 3 — RLS: split `tenant_isolation` (client, full read/write) from a new `supplier_read` (supplier tenant, `SELECT`-only) policy — sharpens the plan's "decide whether the supplier gets read access" into a concrete shape
+
+**Supplier gets read access, not write.** The plan's own section 4 ("Видимість на веб") already
+commits to this in practice — it requires the supplier cabinet to show "фактично отримані дані"
+(actually-received qty/batch/expiry/discrepancies) after `Delivered` — so the read side isn't
+optional, it's already scoped work for frontend-developer downstream. The write side must stay
+client-only: this is the client's physical confirmation of receipt, nothing about it is a
+supplier-authored fact, and there is no legitimate case for a supplier session to create or edit
+a `MarketplaceOrderReceiptItem` row.
+
+**Why this needs a genuinely different RLS shape than every existing two-tenant table in this
+feature area, not just a copy-paste of the `marketplace_orders` policy:** `marketplace_orders`/
+`marketplace_order_items` use one `tenant_isolation` policy with no `FOR` clause (`SupplierTenantId
+= ... OR ClientTenantId = ...`), which in Postgres — no `FOR` clause means the policy applies to
+**every** command, and `WITH CHECK` defaults to the same expression as `USING` when not given
+separately — grants **both** tenants full read/write on those tables. That's correct there:
+client creates the order, supplier updates its status, both are legitimate writers of the same
+rows. It would be wrong here: reusing that exact pattern would silently hand the supplier tenant
+INSERT/UPDATE/DELETE on the client's receipt data, which nothing in the product requirement calls
+for and which this ADR explicitly rules out above. Postgres policies are additive/permissive by
+command, so the fix is two named policies instead of one, each scoped with an explicit `FOR`:
+
+```sql
+ALTER TABLE marketplace_order_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE marketplace_order_receipts FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON marketplace_order_receipts
+  USING ("ClientTenantId" = (NULLIF(current_setting('app.tenant_id', true), ''))::uuid)
+  WITH CHECK ("ClientTenantId" = (NULLIF(current_setting('app.tenant_id', true), ''))::uuid);
+
+CREATE POLICY supplier_read ON marketplace_order_receipts
+  FOR SELECT
+  USING ("SupplierTenantId" = (NULLIF(current_setting('app.tenant_id', true), ''))::uuid);
+
+CREATE POLICY provider_bypass ON marketplace_order_receipts
+  USING (current_setting('app.role', true) IN ('provider', 'provider_admin'));
+
+CREATE POLICY worker_bypass ON marketplace_order_receipts
+  USING (current_setting('app.role', true) = 'worker');
+```
+
+Same four policies, same shape, on `marketplace_order_receipt_items` (substituting the table
+name). `provider_bypass` uses the current `IN ('provider', 'provider_admin')` form from day one
+(`20260714150000_ExpandProviderBypassToProviderAdmin` is the live source of truth per
+`database-schema.md`'s own note — the file's top-of-doc RLS Template section predates that
+migration and is stale on this point, don't copy it verbatim). **`worker_bypass` is mandatory,
+not optional**, even though no worker cron job touches these tables today: the regression test
+`RlsCrossTenantIntegrationTests.AllForceRlsTables_HaveTenantIsolationNullifGuard_
+ProviderBypass_AndWorkerBypass` asserts, by exact policy name, that every `FORCE ROW LEVEL
+SECURITY` table has all three — a migration that omits it fails that test outright, and per
+project memory this is also the exact class of bug (`TASK-343`) that silently dropped worker
+writes on other tables until someone noticed rows weren't being written.
+
+### Decision 4 — Status transition: `AllowedTransitions` drops the `Shipped` key entirely; `MarketplaceOrderReceiptService` is the sole writer of `Status = Delivered`
+
+Confirms the plan's mechanism exactly. Today `AllowedTransitions[Shipped] = [Delivered]` is the
+**only** entry for `Shipped` — no other transition exists (no `Shipped → Cancelled` either).
+Removing `Delivered` from it leaves an entry mapping to an empty array, which is behaviorally
+identical to removing the key outright (`TryGetValue` fails either way against
+`AllowedTransitions.TryGetValue(order.Status, out var allowed) && !allowed.Contains(...)`) — this
+ADR directs **removing the key**, not leaving a dangling empty-array entry, for readability: a
+missing key reads unambiguously as "no supplier-initiated transition exists from this status,"
+where an empty-array entry invites a future reader to wonder if that's a bug.
+
+**Effect on the existing supplier endpoint, confirmed unambiguous:** `POST
+.../orders/{id}/status` with `status: "delivered"` now always falls through to the existing
+generic `"Перехід зі статусу 'shipped' у 'delivered' неможливий."` error (400) — no new error
+branch, no behavior change to the error path itself, just one fewer reachable transition. This
+is exactly the "confirm the backend contract is unambiguous" bar the frontend-developer step
+needs: **removing the Deliver button becomes purely a UI change on their side** — the button's
+own POST would already 400 today the instant this migration+service change lands, whether or not
+the button is removed in the same deploy. `MarketplaceOrderReceiptService` (new, not a method on
+`MarketplaceOrderService`) is the only code path that ever sets `Status = Delivered` — its
+finalize/receive method reads `order.Status` itself (must be exactly `Shipped`, checked
+explicitly, the same way `ReceiptService.ReceiveAsync` checks `receipt.Status` itself rather than
+going through any shared transition table) and writes `Status`/`DeliveredAt` directly via
+`IMarketplaceOrderRepository`, entirely bypassing `AllowedTransitions`. No double-write path, no
+ambiguity about which service "owns" the `Delivered` transition going forward.
+
+One more consistency note for backend-developer: the client's own DB session already has native
+RLS write access to `marketplace_orders` (the OR-based policy there, unchanged — see Decision 3's
+explanation of why that table is different from the new ones), so **this finalize path needs no
+`ITenantSessionOverride` cross-tenant hack**, unlike the supplier→client notification writes in
+`EnqueueShippedNotificationAsync`/`SetDelayReasonAsync`. If a future iteration wants to notify the
+*supplier* tenant that an order was received (not required by the current plan or this ADR — see
+Consequences), that write direction (client session → `NotificationQueue` row targeting
+`SupplierTenantId`) is the one that *would* need the override pattern, mirroring TASK-582/584/585
+exactly.
+
+### Decision 5 — Client-facing API contract sketch (backend-developer's build spec; also the mobile/Codex handoff shape)
+
+**Controller placement:** extend `MarketplaceCooperationController.cs` with a new region, rather
+than a new controller. It already carries the `[Authorize] [RequireModule("marketplace")]` class
+gate and the `ResolveTenantId()`/`ResolveUserId()` helpers this flow needs verbatim — four more
+actions don't justify duplicating that boilerplate in a new file, and it keeps every
+client-facing marketplace endpoint (orders, agreements, receiving) discoverable in one place, the
+same "one file per bounded conversation, not one per verb" shape the controller already has.
+
+Route addressing is **order-centric throughout** (`orderId` in every path, never a separately
+surfaced `receiptId`) — the receipt is 1:1 with its order (Decision 1's unique index), so mobile
+never needs to learn or persist a second id after landing on an order's detail screen.
+
+| # | Method + route | Request | Response | Errors |
+|---|---|---|---|---|
+| a | `GET /api/marketplace/orders/awaiting-receipt` | — | `200 IReadOnlyList<MarketplaceOrderDto>` (existing DTO, reused as-is — already carries `Items`/`ShippedAt`/`EstimatedDeliveryDays`, everything the list+detail screens need) — filtered server-side to caller's `ClientTenantId` + `Status == Shipped` | — |
+| b | `POST /api/marketplace/orders/{orderId}/receipt` | — | `200/201 MarketplaceOrderReceiptDto` — **idempotent create-or-get**: if a draft already exists for this order, returns it instead of erroring (resumes an interrupted receiving session) | `404` order not found/not owned; `400` order.Status != Shipped; `400` order.DestinationStoreId is null (the Decision 2 historical-gap case) |
+| c | `GET /api/marketplace/orders/{orderId}/receipt` | — | `200 MarketplaceOrderReceiptDto` — read-only, no side effects; this is also what the web read-only block (plan section 4) and the supplier cabinet's `supplier_read`-gated view call | `404` no receipt exists yet for this order |
+| d | `PUT /api/marketplace/orders/{orderId}/receipt/items/{itemId}` | `UpdateMarketplaceOrderReceiptItemRequest { ProductId?, QuantityReceived?, ExpiryDate?, BatchNumber?, DiscrepancyNotes? }` | `200 MarketplaceOrderReceiptDto` | `404` receipt/item not found or not owned; `400` receipt already `received`; `400` `QuantityReceived < 0` |
+| e | `POST /api/marketplace/orders/{orderId}/receipt/finalize` | — | `200 MarketplaceOrderReceiptDto` (`Status = received`) — gate gate: every item must have both `ProductId` **and** `ExpiryDate` set (extends `ReceiptService.ReceiveAsync`'s existing expiry-only gate with the new not-yet-scanned case), then creates one `ProductStock` (`SourceType = "marketplace_order_receipt"`, `SourceId = receipt.Id`, `StoreId = receipt.DestinationStoreId`) + one `StockMovement` (`ReferenceType = "marketplace_order_receipt"`, `ReferenceId = receipt.Id`) per item — field-for-field the same construction `ReceiptService.ReceiveAsync` already does, then sets `order.Status = Delivered`, `order.DeliveredAt = UtcNow` directly | `404` not found; `400` already received; `400` N item(s) missing product/expiry |
+
+**One deliberate shape deviation from the `ReceiptsController` template, called out explicitly
+per the brief:** `ReceiptsController`'s `PUT /{id}/items` updates **all** items in one bulk
+payload (`UpdateItemsRequest.Items: []`). Endpoint (d) above is **per-item**, not bulk. Reason:
+the mobile UX here is scan-one-commit-one (plan section 3, steps 3-4) — an employee resolves and
+confirms exactly one physical item per scan, there is no "fill out a form for every line, submit
+once" moment the bulk shape was built for. The request *field* shape still mirrors
+`UpdateItemsRequest`'s per-item payload 1:1 (same four editable fields, same names) — only the
+batching granularity changes, so it stays a familiar, easy-to-implement variant of the reference
+pattern rather than a new one invented from scratch.
+
+**Authorization:** reads (a, c) stay at the controller's existing class-level gate only (any
+authenticated tenant user with the `marketplace` module — matches `GetMyOrders`'s existing
+posture, no extra role check). Mutations (b, d, e) should require `AppPolicies.CanReceiveStock`
+(storekeeper+) — the direct analog of `ReceiptsController`'s own choice for its equivalent
+write actions, and consistent with "this creates real stock, gate it like every other stock-in
+action in the system."
+
+### Decision 6 — Barcode resolution: `GET /api/items/by-barcode/{code}` is sufficient as-is, zero new backend work
+
+Confirmed by reading `ItemsController.cs` in full. The endpoint already: 404s cleanly on an
+unknown code (`return product is null ? NotFound() : Ok(product)`); sits under the controller's
+class-level `[Authorize(Policy = AppPolicies.CanViewStock)]`, the same JWT-bearer auth every
+other mobile stock/POS/write-off screen already uses — no new auth wiring needed for a mobile
+caller; and is tenant-scoped implicitly through `items` table RLS + `TenantConnectionInterceptor`,
+so it can never resolve a barcode into another tenant's catalog row. Nothing about the new
+receiving flow requires touching this file.
+
+Consequences:
++ One new, cleanly-scoped entity pair with its own RLS policy set — `StockReceipt`'s existing,
+  tested single-tenant contract is untouched, and `marketplace_orders`/`marketplace_order_items`'
+  existing bidirectional-write RLS is untouched (Decision 3 only adds new tables, doesn't modify
+  either existing policy).
++ The `Delivered` transition has exactly one writer after this ships
+  (`MarketplaceOrderReceiptService`), removing the current "supplier can lie about delivery"
+  gap entirely — this was the point of the whole feature.
++ `DestinationStoreId` nullable-at-DB / required-at-API-boundary-for-new-orders follows an
+  already-precedented pattern in this codebase (ADR-017 point 5) rather than inventing a new one.
+- **Flagged, not resolved here — a required pre-deploy check for database-engineer/
+  backend-developer, not this ADR:** any `MarketplaceOrder` already sitting in `Status = 'shipped'`
+  the moment this migration lands, with `DestinationStoreId IS NULL` (true for every order placed
+  before this ships, since the column didn't exist), becomes **permanently un-receivable through
+  the new flow** the instant the supplier's self-service `Delivered` path is removed — there is no
+  `ProductStock` without a `StoreId`, and nothing backfills one automatically. Before removing the
+  `Shipped → Delivered` supplier transition, run:
+  ```sql
+  SELECT id, order_number, client_tenant_id
+  FROM marketplace_orders
+  WHERE status = 'shipped' AND destination_store_id IS NULL;
+  ```
+  against prod. This ADR could not run that query itself (read-only, code/task-log investigation
+  only, per this session's scope) — task-log evidence points to the blast radius being small: the
+  order-shipping lifecycle itself is brand new (`ShippedAt`/`EstimatedDeliveryDays` landed
+  2026-08-20 via TASK-584, same day as `DelayReason`/TASK-585; TASK-359's 2026-07-15 audit of this
+  feature area recorded no order-volume figures at all), so this is very likely zero or a
+  small handful of rows — but "likely" is not "confirmed," and the fix if the query returns any
+  rows is cheap (one manual `UPDATE` per affected tenant's actual delivery store, not a generic
+  migration script) — do this check before merging, not after.
+- Discrepancy handling stays **non-blocking** (`DiscrepancyNotes` is informational only,
+  `QuantityReceived != QuantityOrdered` never blocks finalize) — this ADR agrees with the plan.
+  It's the same posture already shipped and working for `StockReceiptItem`, and inventing an
+  approval/hold workflow for marketplace-specific discrepancies is out of proportion to what was
+  asked for; if a future need for blocking discrepancy review emerges it should be its own ADR,
+  not retrofitted here.
+- No "order received" notification to the supplier tenant is part of this design — the plan only
+  asked for a **read-only** supplier-cabinet display after `Delivered` (Decision 3), not a
+  push/outbox notification. Noted as a documented extension point (Decision 4), not built.
+- New audit-test surface: the two new tables must appear correctly in
+  `AllForceRlsTables_HaveTenantIsolationNullifGuard_ProviderBypass_AndWorkerBypass`'s scan the
+  moment their migration lands (it queries `pg_policies`/`pg_class` directly, no code change
+  needed on the test's side) — database-engineer should run that test locally against the new
+  migration before considering it done, not just the migration's own `Up()`/`Down()` symmetry.
+
+Rejected alternatives:
+- **Extending `StockReceipt`/`StockReceiptItem` directly** — see Decision 1 (nullable-`ProductId`
+  precedent risk to an already-tested table, incompatible `SupplierId` meaning, and the new
+  cross-tenant-read requirement this ADR adds as a third reason).
+- **EXISTS-through-parent RLS for `marketplace_order_receipt_items`** (the codebase's other,
+  more common child-table pattern, e.g. `supplier_support_ticket_messages`) — rejected in favor
+  of denormalized `ClientTenantId`/`SupplierTenantId` columns, matching the sibling
+  `MarketplaceOrderItem`'s own precedent within this exact feature area, and needed anyway for the
+  item-level `supplier_read` policy without a join.
+- **A `"cancelled"` receipt status** — out of v1 scope; nothing in the plan calls for abandoning
+  an in-progress receiving session, and a stuck `"draft"` row is harmless (the order stays
+  `Shipped`, re-opening the draft via endpoint (b) just resumes it).
+- **Bulk item-update endpoint** (copying `ReceiptsController`'s exact shape) — rejected for
+  endpoint (d); see Decision 5's called-out deviation.
+
+Task breakdown: TASK-586 (this ADR). Schema/RLS (database-engineer), service+endpoints+tests
+(backend-developer), and the web read-only display + Deliver-button removal (frontend-developer)
+are separate follow-up sessions per the approved plan — task numbers to be assigned by
+project-manager. Mobile handoff: `.claude/logs/handoffs/586-to-mobile-codex_project-architect.md`
+(to be written once backend-developer's actual DTO field names are final, per the plan's own
+sequencing — this ADR's Decision 5 sketch is the contract backend-developer builds against, not
+a substitute for that final handoff doc).
 
 ## ADR-032: Catalog curation — new `productIds` block-prop kind, curated-selection resolution semantics, and a catalog-by-ids read path to keep it correct at scale
 Date: 2026-08-19

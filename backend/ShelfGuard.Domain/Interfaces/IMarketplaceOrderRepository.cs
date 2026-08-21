@@ -19,6 +19,13 @@ public interface IMarketplaceOrderRepository
     Task<IReadOnlyList<MarketplaceOrder>> ListForClientAsync(
         Guid clientTenantId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Shipped orders for a client tenant that don't yet have a MarketplaceOrderReceipt, or have
+    /// one still in "draft" (TASK-586) — backs the receiving-flow "awaiting receipt" list.
+    /// </summary>
+    Task<IReadOnlyList<MarketplaceOrder>> ListAwaitingReceiptForClientAsync(
+        Guid clientTenantId, CancellationToken ct = default);
+
     Task AddAsync(MarketplaceOrder order, CancellationToken ct = default);
 
     void Update(MarketplaceOrder order);

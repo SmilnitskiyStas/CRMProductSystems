@@ -82,9 +82,15 @@ public record UpsertContractSettingsDto(
 
 public record CreateMarketplaceOrderItemDto(Guid SupplierItemId, decimal Qty);
 
+/// <summary>
+/// DestinationStoreId is required for every new order (TASK-586, ADR-033 Decision 2) — validated
+/// in <see cref="MarketplaceOrderService.CreateOrderAsync"/>, not enforced at the DB level (the
+/// column stays nullable so historical pre-migration orders remain valid rows).
+/// </summary>
 public record CreateMarketplaceOrderDto(
     List<CreateMarketplaceOrderItemDto> Items,
-    string? Comment);
+    string? Comment,
+    Guid? DestinationStoreId = null);
 
 public record MarketplaceOrderItemDto(
     Guid Id,
@@ -113,7 +119,12 @@ public record MarketplaceOrderDto(
     int? EstimatedDeliveryDays,
     DateTimeOffset? DeliveredAt,
     string? DelayReason,
-    IReadOnlyList<MarketplaceOrderItemDto> Items);
+    IReadOnlyList<MarketplaceOrderItemDto> Items,
+    /// <summary>
+    /// Read-only (TASK-586, ADR-033 Decision 2). Nullable — orders placed before this column
+    /// existed have no value and can never be received through the new client-confirmation flow.
+    /// </summary>
+    Guid? DestinationStoreId = null);
 
 public record CancelMarketplaceOrderDto(string Reason);
 
@@ -129,6 +140,59 @@ public record UpdateMarketplaceOrderStatusDto(string Status, string? Reason = nu
 /// estimated window (TASK-585). Only allowed while the order is still status = shipped.
 /// </summary>
 public record SetOrderDelayReasonDto(string Reason);
+
+// ── Marketplace order receiving (TASK-586, ADR-033) ──────────────────────────
+// Client-confirmed receipt of a shipped MarketplaceOrder — replaces the supplier's one-click
+// Shipped -> Delivered transition. See ADR-033 Decision 5 for the full endpoint contract.
+
+public record MarketplaceOrderReceiptItemDto(
+    Guid Id,
+    Guid MarketplaceOrderItemId,
+    Guid? ProductId,
+    /// <summary>Snapshot of the ordered item's name — shown before ProductId resolves.</summary>
+    string ItemNameSnapshot,
+    /// <summary>Resolved product name once ProductId is set; null until scanned.</summary>
+    string? ProductName,
+    decimal QuantityOrdered,
+    decimal? QuantityReceived,
+    DateOnly? ExpiryDate,
+    string? BatchNumber,
+    string? DiscrepancyNotes,
+    /// <summary>True once ProductId, QuantityReceived, and ExpiryDate are all set — the exact
+    /// per-item condition the finalize gate checks. Lets callers show per-item progress without
+    /// re-implementing the gate logic client-side.</summary>
+    bool IsResolved);
+
+public record MarketplaceOrderReceiptDto(
+    Guid Id,
+    Guid MarketplaceOrderId,
+    Guid ClientTenantId,
+    Guid SupplierTenantId,
+    Guid DestinationStoreId,
+    string DestinationStoreName,
+    /// <summary>"draft" | "received".</summary>
+    string Status,
+    Guid? CreatedByUserId,
+    Guid? ReceivedByUserId,
+    DateTimeOffset? ReceivedAt,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<MarketplaceOrderReceiptItemDto> Items);
+
+/// <summary>
+/// Per-item scan/count update (endpoint d, ADR-033 Decision 5) — one PUT per physical item,
+/// not a bulk payload (deliberate deviation from ReceiptsController's UpdateItemsRequest shape,
+/// matching the mobile scan-one-commit-one UX). Field semantics mirror
+/// Receipts.Dtos.UpdateItemPayload exactly: QuantityReceived/DiscrepancyNotes overwrite directly
+/// (omit = clear), ProductId/ExpiryDate/BatchNumber merge with the existing value when omitted
+/// (send null to leave alone, not to clear).
+/// </summary>
+public record UpdateMarketplaceOrderReceiptItemRequest(
+    Guid? ProductId,
+    decimal? QuantityReceived,
+    DateOnly? ExpiryDate,
+    string? BatchNumber,
+    string? DiscrepancyNotes);
 
 // ── Supplier support tickets ─────────────────────────────────────────────────
 

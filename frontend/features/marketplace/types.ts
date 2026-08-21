@@ -294,12 +294,55 @@ export interface MarketplaceOrderDto {
   deliveredAt: string | null;
   /** Supplier's free-text explanation for a delay (TASK-585). Null until set. */
   delayReason: string | null;
+  /** Store the goods are headed to. Null on orders placed before TASK-586 — permanent/expected
+   * there (historical orders can never be received through the new flow), not a loading state. */
+  destinationStoreId: string | null;
   items: MarketplaceOrderItemDto[];
 }
 
 export interface CreateMarketplaceOrderRequest {
   items: { supplierItemId: string; qty: number }[];
   comment?: string;
+  /** Required — the client's store this order is a future delivery to (ADR-033 Decision 2). */
+  destinationStoreId: string;
+}
+
+// ─── Marketplace order receiving (TASK-586, ADR-033) ───────────────────────────
+// Matches backend DTOs: ShelfGuard.Application/Features/Marketplace/Dtos/MarketplaceOrderReceiptDtos.cs
+// (handoff .claude/logs/handoffs/586-to-frontend_backend-developer.md). Web scope is read-only
+// (GET .../receipt) — the scan/count mutation endpoints are mobile-only for this stage.
+
+export interface MarketplaceOrderReceiptItemDto {
+  id: string;
+  marketplaceOrderItemId: string;
+  productId: string | null;
+  /** What the employee was supposed to be scanning — always present, even before productId resolves. */
+  itemNameSnapshot: string;
+  productName: string | null;
+  quantityOrdered: number;
+  quantityReceived: number | null;
+  /** "YYYY-MM-DD" */
+  expiryDate: string | null;
+  batchNumber: string | null;
+  discrepancyNotes: string | null;
+  isResolved: boolean;
+}
+
+export interface MarketplaceOrderReceiptDto {
+  id: string;
+  marketplaceOrderId: string;
+  clientTenantId: string;
+  supplierTenantId: string;
+  destinationStoreId: string;
+  /** "—" if somehow unresolved, shouldn't happen. */
+  destinationStoreName: string;
+  status: "draft" | "received";
+  createdByUserId: string | null;
+  receivedByUserId: string | null;
+  receivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: MarketplaceOrderReceiptItemDto[];
 }
 
 export type SupportTicketStatus = "open" | "in_progress" | "resolved" | "closed";

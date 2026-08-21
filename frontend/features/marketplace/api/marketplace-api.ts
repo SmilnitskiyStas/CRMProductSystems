@@ -20,6 +20,7 @@ import type {
   ChooseSigningMethodRequest,
   MarketplaceOrderDto,
   CreateMarketplaceOrderRequest,
+  MarketplaceOrderReceiptDto,
   SupplierSupportTicketDto,
   SupportTicketMessageDto,
   CreateSupportTicketRequest,
@@ -141,6 +142,12 @@ export const marketplaceApi = {
   /** POST /api/marketplace/orders/{orderId}/cancel — лише зі статусу new */
   cancelOrder: (orderId: string, reason: string) =>
     api.post<MarketplaceOrderDto>(`/api/marketplace/orders/${orderId}/cancel`, { reason }),
+
+  /** GET /api/marketplace/orders/{orderId}/receipt — read-only "what was actually received"
+   * (TASK-586, ADR-033). 404 = no receiving session started yet (order isn't delivered, or
+   * some edge case) — treat as "nothing to show", not an error. */
+  getOrderReceipt: (orderId: string) =>
+    api.get<MarketplaceOrderReceiptDto>(`/api/marketplace/orders/${orderId}/receipt`),
 
   // ── Support tickets (TASK-318, без угоди — відкрито всім клієнтам) ──────────
 

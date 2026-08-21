@@ -218,7 +218,11 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>
     /// Changes an order status. Allowed: new → confirmed | cancelled;
-    /// confirmed → shipped | cancelled; shipped → delivered. Cancelling requires Reason.
+    /// confirmed → shipped | cancelled. Cancelling requires Reason. No transition out of
+    /// shipped is reachable here any more (TASK-586, ADR-033) — a status update of "delivered"
+    /// on a shipped order now always 400s; the client's own scan/count receiving flow
+    /// (MarketplaceOrderReceiptService, /api/marketplace/orders/{id}/receipt/*) is the only
+    /// remaining path to Delivered.
     /// </summary>
     [HttpPost("orders/{id:guid}/status")]
     [ProducesResponseType(typeof(MarketplaceOrderDto), StatusCodes.Status200OK)]

@@ -163,6 +163,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.ISupplierSupportTicketRepository,
             Data.Repositories.SupplierSupportTicketRepository>();
 
+        // TASK-586 - Marketplace order receiving (client-confirmed receipt, ADR-033)
+        services.AddScoped<Domain.Interfaces.IMarketplaceOrderReceiptRepository,
+            Data.Repositories.MarketplaceOrderReceiptRepository>();
+
         // TASK-317 - Contract PDF generation (QuestPDF) + Вчасно e-signature.
         // License is set here once at startup; ContractPdfGenerator's static ctor
         // re-asserts it defensively for non-DI usage (tests).

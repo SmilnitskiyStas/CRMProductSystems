@@ -23,15 +23,18 @@ public sealed class MarketplaceCooperationController : ControllerBase
     private readonly ISupplierAgreementService _agreements;
     private readonly IMarketplaceOrderService _orders;
     private readonly ISupplierSupportService _support;
+    private readonly IMarketplaceOrderReceiptService _receiving;
 
     public MarketplaceCooperationController(
         ISupplierAgreementService agreements,
         IMarketplaceOrderService orders,
-        ISupplierSupportService support)
+        ISupplierSupportService support,
+        IMarketplaceOrderReceiptService receiving)
     {
         _agreements = agreements;
         _orders     = orders;
         _support    = support;
+        _receiving  = receiving;
     }
 
     // ── Cooperation requests / agreements ─────────────────────────────────────
@@ -175,6 +178,119 @@ public sealed class MarketplaceCooperationController : ControllerBase
             return BadRequest(new { error });
 
         return Ok(order);
+    }
+
+    // ── Marketplace order receiving (TASK-586, ADR-033) ───────────────────────
+    // Client-confirmed receipt of a shipped order — replaces the supplier's one-click Deliver.
+    // Route addressing is order-centric throughout (orderId, never a separately surfaced
+    // receiptId) — the receipt is 1:1 with its order, so callers never need a second id.
+
+    /// <summary>Shipped orders of the calling tenant that still need to be received.</summary>
+    [HttpGet("orders/awaiting-receipt")]
+    [ProducesResponseType(typeof(IReadOnlyList<MarketplaceOrderDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOrdersAwaitingReceipt(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        return Ok(await _receiving.ListAwaitingReceiptAsync(tenantId.Value, ct));
+    }
+
+    /// <summary>
+    /// Idempotent create-or-get: starts a receiving session for a shipped order, or returns the
+    /// one already in progress. 400 if the order isn't shipped yet or has no destination store.
+    /// </summary>
+    [HttpPost("orders/{orderId:guid}/receipt")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
+    [ProducesResponseType(typeof(MarketplaceOrderReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateOrGetReceipt(Guid orderId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        var (receipt, error) = await _receiving.GetOrCreateDraftAsync(tenantId.Value, orderId, userId.Value, ct);
+
+        if (error == MarketplaceOrderReceiptService.OrderNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(receipt);
+    }
+
+    /// <summary>Reads the receiving session for an order, read-only. 404 if none started yet.</summary>
+    [HttpGet("orders/{orderId:guid}/receipt")]
+    [ProducesResponseType(typeof(MarketplaceOrderReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReceipt(Guid orderId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (receipt, error) = await _receiving.GetAsync(tenantId.Value, orderId, ct);
+        return error is not null ? NotFound(new { error }) : Ok(receipt);
+    }
+
+    /// <summary>
+    /// Records a scan/count for one item of the receiving session: ProductId (resolved from a
+    /// barcode by the caller beforehand, via GET /api/items/by-barcode), QuantityReceived,
+    /// ExpiryDate, BatchNumber, DiscrepancyNotes. One physical item per call (not bulk).
+    /// </summary>
+    [HttpPut("orders/{orderId:guid}/receipt/items/{itemId:guid}")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
+    [ProducesResponseType(typeof(MarketplaceOrderReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateReceiptItem(
+        Guid orderId, Guid itemId, [FromBody] UpdateMarketplaceOrderReceiptItemRequest request,
+        CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (receipt, error) = await _receiving.UpdateItemAsync(tenantId.Value, orderId, itemId, request, ct);
+
+        if (error is MarketplaceOrderReceiptService.ReceiptNotFoundError
+            or MarketplaceOrderReceiptService.ReceiptItemNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(receipt);
+    }
+
+    /// <summary>
+    /// Finalizes the receiving session: every item must have been scanned (ProductId) with a
+    /// quantity and expiry date. Creates ProductStock/StockMovement per item and sets the order
+    /// to Delivered — the only remaining path to that status (ADR-033 Decision 4).
+    /// </summary>
+    [HttpPost("orders/{orderId:guid}/receipt/finalize")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
+    [ProducesResponseType(typeof(MarketplaceOrderReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> FinalizeReceipt(Guid orderId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        var (receipt, error) = await _receiving.ReceiveAsync(tenantId.Value, orderId, userId.Value, ct);
+
+        if (error is MarketplaceOrderReceiptService.OrderNotFoundError
+            or MarketplaceOrderReceiptService.ReceiptNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(receipt);
     }
 
     // ── Supplier support tickets ───────────────────────────────────────────────

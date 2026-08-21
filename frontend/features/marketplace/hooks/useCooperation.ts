@@ -19,6 +19,7 @@ export const COOPERATION_KEYS = {
   myOrders: ["marketplace", "my-orders"] as const,
   myTickets: ["marketplace", "my-support-tickets"] as const,
   ticket: (id: string) => ["marketplace", "support-ticket", id] as const,
+  orderReceipt: (orderId: string) => ["marketplace", "order-receipt", orderId] as const,
 };
 
 // ─── Agreements ───────────────────────────────────────────────────────────────
@@ -88,6 +89,19 @@ export function useCancelMarketplaceOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: COOPERATION_KEYS.myOrders });
     },
+  });
+}
+
+/** Read-only "what was actually received" (TASK-586). Only meaningful once
+ * `order.status === "delivered"` — pass `enabled` accordingly. A 404 means no
+ * receiving session exists yet; the caller treats that as "nothing to show". */
+export function useMarketplaceOrderReceipt(orderId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: COOPERATION_KEYS.orderReceipt(orderId),
+    queryFn: () => marketplaceApi.getOrderReceipt(orderId),
+    enabled: enabled && Boolean(orderId),
+    staleTime: 15_000,
+    retry: false,
   });
 }
 

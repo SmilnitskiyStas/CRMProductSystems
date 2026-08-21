@@ -431,15 +431,47 @@ Client side (`[Authorize]` + module `marketplace`; `{supplierId}` = public marke
 POST /api/marketplace/suppliers/{supplierId}/cooperation-requests  { message? }        -> 201 CooperationAgreementDto | 409 (live agreement exists) | 404 | 400
 GET  /api/marketplace/cooperation                                                      -> CooperationAgreementDto[]
 GET  /api/marketplace/cooperation/{id}/contract                                        -> application/pdf | 400 | 404
-POST /api/marketplace/suppliers/{supplierId}/orders  { items:[{supplierItemId,qty}], comment? }
-                                                                                       -> 201 MarketplaceOrderDto | 403 (no ACTIVE agreement) | 400 | 404
-GET  /api/marketplace/my-orders                                                        -> MarketplaceOrderDto[]
+POST /api/marketplace/suppliers/{supplierId}/orders  { items:[{supplierItemId,qty}], comment?, destinationStoreId }
+                                                                                       -> 201 MarketplaceOrderDto | 403 (no ACTIVE agreement) | 400 (empty items / missing destinationStoreId, TASK-586) | 404
+GET  /api/marketplace/my-orders                                                        -> MarketplaceOrderDto[] (now carries destinationStoreId, null on pre-TASK-586 orders)
 POST /api/marketplace/orders/{id}/cancel  { reason }                                   -> MarketplaceOrderDto | 400 (only status=new) | 404
 POST /api/marketplace/suppliers/{supplierId}/support-tickets  { subject, message }     -> 201 SupplierSupportTicketDto (no agreement required)
 GET  /api/marketplace/my-support-tickets                                               -> SupplierSupportTicketDto[]
 GET  /api/marketplace/support-tickets/{id}                                             -> SupplierSupportTicketDto (with messages) | 404
 POST /api/marketplace/support-tickets/{id}/messages  { body }                          -> 201 SupportTicketMessageDto | 400 | 404
 ```
+
+**Marketplace order receiving (v4.3.1 — TASK-586, ADR-033).** Client-confirmed receipt of a
+shipped order (scan/qty/expiry) — replaces the supplier's one-click Deliver; the endpoints below
+are the *only* remaining path that can set an order's status to `delivered`
+(`supplier-cabinet/orders/{id}/status` with `status:"delivered"` on a `shipped` order now always
+400s — no `shipped` entry left in the transition table). Route addressing is order-centric
+throughout (`orderId` in every path, never a separately surfaced receipt id — the receipt is 1:1
+with its order). Auth: same `[Authorize]` + module `marketplace` as the rest of this controller;
+mutations (b/d/e below) additionally require `CanReceiveStock` (storekeeper+).
+```
+GET  /api/marketplace/orders/awaiting-receipt                          -> 200 MarketplaceOrderDto[] (status=shipped, own tenant)
+POST /api/marketplace/orders/{orderId}/receipt                         -> 200/201 MarketplaceOrderReceiptDto (idempotent create-or-get) | 404 order not found/not owned | 400 order not shipped | 400 order has no destinationStoreId (pre-TASK-586 order)
+GET  /api/marketplace/orders/{orderId}/receipt                         -> 200 MarketplaceOrderReceiptDto | 404 no receipt started yet
+PUT  /api/marketplace/orders/{orderId}/receipt/items/{itemId}  { productId?, quantityReceived?, expiryDate?, batchNumber?, discrepancyNotes? }
+                                                                        -> 200 MarketplaceOrderReceiptDto | 404 receipt/item not found | 400 receipt already received | 400 negative quantity | 400 unknown productId
+POST /api/marketplace/orders/{orderId}/receipt/finalize                -> 200 MarketplaceOrderReceiptDto (status=received, order status=delivered) | 404 | 400 already received | 400 gate: some item missing productId/quantityReceived/expiryDate
+```
+`productId` in the PUT body is resolved by the caller beforehand via the existing
+`GET /api/items/by-barcode/{code}` (client-catalog-first — no marketplace-specific barcode
+mapping). PUT field semantics: `quantityReceived`/`discrepancyNotes` overwrite directly (omit to
+clear — resend the full known value each call); `productId`/`expiryDate`/`batchNumber` merge with
+the existing value when omitted (`null` = leave alone, not clear). On finalize: creates one
+`ProductStock` + one `StockMovement` per item (`sourceType`/`referenceType` =
+`"marketplace_order_receipt"`), sets the order to `delivered`. No supplier notification is
+enqueued (ADR-033 scopes that out — the plan only asked for a read-only supplier-cabinet view,
+not built in this stage). DTOs: `MarketplaceOrderReceiptDto { id, marketplaceOrderId,
+clientTenantId, supplierTenantId, destinationStoreId, destinationStoreName, status(draft|received),
+createdByUserId?, receivedByUserId?, receivedAt?, createdAt, updatedAt, items: [...] }`,
+`MarketplaceOrderReceiptItemDto { id, marketplaceOrderItemId, productId?, itemNameSnapshot,
+productName?, quantityOrdered, quantityReceived?, expiryDate?, batchNumber?, discrepancyNotes?,
+isResolved }` (`isResolved` = productId + quantityReceived + expiryDate all set — the exact
+per-item finalize-gate condition, precomputed so callers don't re-implement it).
 
 Supplier cabinet (`SupplierCabinet` policy + module `marketplace_supplier`):
 ```
@@ -454,7 +486,7 @@ GET  /api/supplier-cabinet/cooperation-requests/{id}/contract      -> applicatio
 GET|PUT /api/supplier-cabinet/contract-settings                    -> SupplierContractSettingsDto (PUT body: UpsertContractSettingsDto, legalName required)
 POST /api/supplier-cabinet/contract-settings/signature-image|stamp-image  multipart file png/jpg <=2MB -> { imageUrl }
 GET  /api/supplier-cabinet/orders                                  -> MarketplaceOrderDto[]
-POST /api/supplier-cabinet/orders/{id}/status  { status, reason?, estimatedDeliveryDays? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled, shipped->delivered; cancel requires reason, ship requires estimatedDeliveryDays (>0, TASK-584) and enqueues client notification "marketplace_order.shipped"
+POST /api/supplier-cabinet/orders/{id}/status  { status, reason?, estimatedDeliveryDays? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled; cancel requires reason, ship requires estimatedDeliveryDays (>0, TASK-584) and enqueues client notification "marketplace_order.shipped". No transition out of shipped any more (TASK-586, ADR-033) — status:"delivered" on a shipped order always 400s "Перехід зі статусу 'shipped' у 'delivered' неможливий."; delivered is now set only by the client's own receiving flow, see "Marketplace order receiving" below.
 POST /api/supplier-cabinet/orders/{id}/delay-reason  { reason }    -> dto | 400 (empty reason / order not shipped) | 404; supplier-only, only while status=shipped (TASK-585), enqueues client notification "marketplace_order.delay_reason_added"
 GET  /api/supplier-cabinet/support-tickets                         -> SupplierSupportTicketDto[]
 GET  /api/supplier-cabinet/support-tickets/{id}                    -> dto with messages

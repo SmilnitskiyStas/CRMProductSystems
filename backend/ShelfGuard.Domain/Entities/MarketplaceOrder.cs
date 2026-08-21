@@ -23,6 +23,13 @@ public sealed class MarketplaceOrder
     public string? CancelReason { get; set; }
     public decimal TotalAmount { get; set; }
 
+    /// <summary>
+    /// Client store the goods are headed to (TASK-586, ADR-033 Decision 2). Nullable at the DB —
+    /// orders placed before this column existed have no possible backfill value. Required by
+    /// application-layer validation for every order placed going forward (backend-developer).
+    /// </summary>
+    public Guid? DestinationStoreId { get; set; }
+
     /// <summary>Set by the service layer when Status transitions to shipped.</summary>
     public DateTimeOffset? ShippedAt { get; set; }
     /// <summary>Supplier-entered delivery estimate (in days), captured at ship time.</summary>

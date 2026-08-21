@@ -208,6 +208,58 @@ nav, dirty-guard) spot-checked clean; drag-reorder not re-driven (pane tooling l
 `AppBuilderCanvas.tsx` confirmed zero-diff via `git diff --stat`. `tsc --noEmit` clean; targeted
 `dotnet test` 307/307 pass.
 
+## TASK-586 (stage 2/4) — Marketplace order receiving: schema layer (database-engineer)
+
+**Status:** done · **Agent:** database-engineer · **Depends:** project-architect ADR-033
+Log: `.claude/logs/tasks/586_2026-08-21_marketplace-order-receiving-schema_database-engineer.md`
+Handoff: `.claude/logs/handoffs/586-to-backend_database-engineer.md`
+New `MarketplaceOrderReceipt`/`MarketplaceOrderReceiptItem` entities + `MarketplaceOrder.
+DestinationStoreId` (nullable) + migration `20260821151649_AddMarketplaceOrderReceiving` with
+split client-write/supplier-read RLS (`tenant_isolation` + `supplier_read` FOR SELECT, deliberately
+not the OR-based `marketplace_orders` pattern — supplier gets no write access). Migration applied
+to local dev DB, schema verified column-for-column against ADR-033's spec, `RlsCrossTenantIntegrationTests`
+(incl. the FORCE-RLS audit test) pass, full suite 1765/1765. Stage 3 (backend-developer) and stage 4
+(frontend-developer) pending; mobile handled separately by a Codex-based agent.
+
+## TASK-586 (stage 3/4) — Marketplace order receiving: DTO/service/API layer (backend-developer)
+
+**Status:** done · **Agent:** backend-developer · **Depends:** TASK-586 stage 2 (database-engineer)
+Log: `.claude/logs/tasks/586_2026-08-21_marketplace-order-receiving-logic_backend-developer.md`
+Handoff: `.claude/logs/handoffs/586-to-frontend_backend-developer.md`
+New `MarketplaceOrderReceiptService`/`IMarketplaceOrderReceiptService` + `IMarketplaceOrderReceiptRepository`
+(create-draft / per-item update / finalize, mirrors `ReceiptService`). 5 new endpoints on
+`MarketplaceCooperationController` (order-centric routes). `AllowedTransitions[Shipped]` key
+removed — supplier can no longer self-declare Delivered; `MarketplaceOrderReceiptService.ReceiveAsync`
+is now the only writer of `Status = Delivered`. `CreateOrderAsync` requires `DestinationStoreId`
+(400 if missing); DB column stays nullable (historical orders). Full suite 1785/1785 (1765 + 20
+new). **Pre-deploy check required on PROD before this ships** — see task log; local dev returned
+0 rows but the table is empty there (uninformative). Stage 4 (frontend-developer) next; mobile
+handled separately by a Codex-based agent using the handoff doc above.
+
+## TASK-586 (stage 4/4) — Marketplace order receiving: web layer (frontend-developer)
+
+**Status:** done · **Agent:** frontend-developer · **Depends:** TASK-586 stage 3 (backend-developer)
+Log: `.claude/logs/tasks/586_2026-08-21_marketplace-order-receiving-web_frontend-developer.md`
+Required destination-store picker on the order-creation cart (`SupplierOrderCart.tsx`, explicit
+`useStores()` `<select>`, not `usePrimaryStoreId()` per ADR-033 Decision 2). Removed the dead
+"Deliver" button in `CabinetOrdersTab.tsx` (`shipped` case), replaced with a status hint. New
+read-only "what was actually received" block on `/marketplace/orders` (client side only) via new
+`useMarketplaceOrderReceipt` hook + `GET .../orders/{id}/receipt`. **Supplier-cabinet received-
+detail block skipped, confirmed unreachable**: the endpoint hard-checks the caller's tenant
+against the order's `ClientTenantId` (backend/.../MarketplaceOrderReceiptService.cs:108-113) and,
+independently, the supplier tenant used in testing doesn't have the `marketplace` module active
+(`403 Module not activated`) — both confirmed live against a real supplier session. `tsc`/lint
+clean; full manual browser pass (order creation → confirm → ship → SQL-fixtured deliver+receipt),
+fixtures cleaned up after. Stage 4/4 — TASK-586 complete; mobile scan/count UI handled separately
+by a Codex-based agent per the handoff.
+
+**Stage 5/4 (orchestrator, not a spawned agent):** wrote
+`.claude/logs/handoffs/586-to-mobile-codex.md` — self-contained mobile-facing API contract
+(routes, DTOs, error messages, existing mobile patterns to follow — Receipts screens, `scan.tsx`
+barcode flow, missing date-picker dependency) for the separate Codex agent to build the scan/
+count/finalize screens against. Backend + web scope for TASK-586 is now fully done; mobile is out
+of this session's scope entirely.
+
 ## TASK-519 — Users list: close storeIds authorization gap (backend)
 
 **Status:** done · **Agent:** security-reviewer

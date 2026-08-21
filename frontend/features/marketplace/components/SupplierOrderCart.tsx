@@ -10,6 +10,7 @@ import { ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { useStores } from "@/features/stores/hooks/useStores";
 import { useCreateMarketplaceOrder } from "../hooks/useCooperation";
 import type { SupplierItemDto } from "../types";
 
@@ -48,17 +49,21 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [comment, setComment] = useState("");
+  const [storeId, setStoreId] = useState("");
   const createOrder = useCreateMarketplaceOrder(supplierId);
+  const { data: stores, isLoading: storesLoading } = useStores();
 
   if (cart.length === 0) return null;
 
   const total = cart.reduce((sum, line) => sum + (line.item.price ?? 0) * line.qty, 0);
 
   function handleSubmit() {
+    if (!storeId) return;
     createOrder.mutate(
       {
         items: cart.map((line) => ({ supplierItemId: line.item.id, qty: line.qty })),
         comment: comment.trim() || undefined,
+        destinationStoreId: storeId,
       },
       {
         onSuccess: (order) => {
@@ -69,10 +74,11 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
             },
           });
           setComment("");
+          setStoreId("");
           setModalOpen(false);
           onClear();
         },
-        // 403 — гейт «тільки active agreement», 400 — валідація позицій/кількостей
+        // 403 — гейт «тільки active agreement», 400 — валідація позицій/кількостей/магазину
         onError: (err) => toast.error(err.message),
       }
     );
@@ -244,6 +250,47 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
 
               <div style={{ marginTop: 16 }}>
                 <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
+                  {t("destinationStoreLabel")}
+                </label>
+                {storesLoading ? (
+                  <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loadingStores")}</div>
+                ) : (
+                  <select
+                    value={storeId}
+                    onChange={(e) => setStoreId(e.target.value)}
+                    required
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: "#1F2937",
+                      border: "1px solid #374151",
+                      borderRadius: 8,
+                      color: "#E8EDF5",
+                      fontSize: 13,
+                      padding: "9px 12px",
+                      outline: "none",
+                      appearance: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">{t("destinationStorePlaceholder")}</option>
+                    {stores?.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                        {s.address ? ` — ${s.address}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!storeId && !storesLoading && (
+                  <div style={{ color: "#FBBF24", fontSize: 11, marginTop: 6 }}>
+                    {t("destinationStoreRequiredError")}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
                   {t("commentLabel")}
                 </label>
                 <textarea
@@ -284,7 +331,11 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                 <Btn variant="ghost" onClick={() => setModalOpen(false)}>
                   {t("close")}
                 </Btn>
-                <Btn variant="success" disabled={createOrder.isPending} onClick={handleSubmit}>
+                <Btn
+                  variant="success"
+                  disabled={createOrder.isPending || !storeId}
+                  onClick={handleSubmit}
+                >
                   {createOrder.isPending ? t("submitting") : t("confirmOrder")}
                 </Btn>
               </div>

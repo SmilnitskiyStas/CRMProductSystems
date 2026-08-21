@@ -99,8 +99,9 @@ public sealed class MarketplaceOrderServiceTests
         _orders.AddAsync(Arg.Do<MarketplaceOrder>(o => created = o), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
+        var destinationStoreId = Guid.NewGuid();
         var request = new CreateMarketplaceOrderDto(
-            [new CreateMarketplaceOrderItemDto(item.Id, 3)], "  Терміново  ");
+            [new CreateMarketplaceOrderItemDto(item.Id, 3)], "  Терміново  ", destinationStoreId);
 
         var (dto, error, isGateViolation) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId, request, _userId);
@@ -114,6 +115,8 @@ public sealed class MarketplaceOrderServiceTests
         Assert.Equal(MarketplaceOrderStatus.New, created.Status);
         Assert.Equal("Терміново", created.Comment);
         Assert.Equal(_userId, created.CreatedByUserId);
+        Assert.Equal(destinationStoreId, created.DestinationStoreId);
+        Assert.Equal(destinationStoreId, dto!.DestinationStoreId);
 
         var line = Assert.Single(created.Items);
         Assert.Equal("Молоко 2.5%", line.ItemName);
@@ -136,7 +139,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error, isGateViolation) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
-            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 2)], null),
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 2)], null, Guid.NewGuid()),
             _userId);
 
         Assert.Null(dto);
@@ -156,7 +159,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
-            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 50)], null),
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 50)], null, Guid.NewGuid()),
             _userId);
 
         Assert.Null(dto);
@@ -176,7 +179,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
-            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null),
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
             _userId);
 
         Assert.Null(dto);
@@ -193,7 +196,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
-            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(Guid.NewGuid(), 1)], null),
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(Guid.NewGuid(), 1)], null, Guid.NewGuid()),
             _userId);
 
         Assert.Null(dto);
@@ -208,6 +211,20 @@ public sealed class MarketplaceOrderServiceTests
 
         Assert.Null(dto);
         Assert.Equal(MarketplaceOrderService.EmptyOrderError, error);
+    }
+
+    // ── TASK-586: DestinationStoreId required for every new order ──────────────
+
+    [Fact]
+    public async Task CreateOrder_NoDestinationStoreId_ReturnsValidationError()
+    {
+        var (dto, error, isGateViolation) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId, OrderRequest() with { DestinationStoreId = null }, _userId);
+
+        Assert.Null(dto);
+        Assert.False(isGateViolation);
+        Assert.Equal(MarketplaceOrderService.DestinationStoreRequiredError, error);
+        await _orders.DidNotReceive().AddAsync(Arg.Any<MarketplaceOrder>(), Arg.Any<CancellationToken>());
     }
 
     // ── Client cancellation ────────────────────────────────────────────────────
@@ -265,7 +282,9 @@ public sealed class MarketplaceOrderServiceTests
     [InlineData(MarketplaceOrderStatus.Confirmed, MarketplaceOrderStatus.Cancelled, true)]
     [InlineData(MarketplaceOrderStatus.Confirmed, MarketplaceOrderStatus.Delivered, false)]
     [InlineData(MarketplaceOrderStatus.Confirmed, MarketplaceOrderStatus.New,       false)]
-    [InlineData(MarketplaceOrderStatus.Shipped,   MarketplaceOrderStatus.Delivered, true)]
+    // TASK-586, ADR-033 Decision 4: Shipped has no supplier-initiated transition any more —
+    // Delivered is now set exclusively by MarketplaceOrderReceiptService's receiving flow.
+    [InlineData(MarketplaceOrderStatus.Shipped,   MarketplaceOrderStatus.Delivered, false)]
     [InlineData(MarketplaceOrderStatus.Shipped,   MarketplaceOrderStatus.Cancelled, false)]
     [InlineData(MarketplaceOrderStatus.Delivered, MarketplaceOrderStatus.Cancelled, false)]
     [InlineData(MarketplaceOrderStatus.Cancelled, MarketplaceOrderStatus.Confirmed, false)]
@@ -364,23 +383,25 @@ public sealed class MarketplaceOrderServiceTests
     }
 
     [Fact]
-    public async Task UpdateOrderStatus_Deliver_SetsDeliveredAt()
+    public async Task UpdateOrderStatus_Deliver_NoLongerReachable_ReturnsError()
     {
+        // TASK-586, ADR-033 Decision 4: the supplier's one-click Deliver is gone — Shipped has
+        // no entry in AllowedTransitions any more, so this always falls through to the generic
+        // "transition not possible" error. MarketplaceOrderReceiptService.ReceiveAsync is now
+        // the only code path that may set Status = Delivered.
         var order = Order(MarketplaceOrderStatus.Shipped);
         _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
             _supplierTenantId, order.Id, new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Delivered));
 
-        Assert.Null(error);
-        Assert.NotNull(dto);
-        Assert.Equal(MarketplaceOrderStatus.Delivered, order.Status);
-        Assert.NotNull(order.DeliveredAt);
-        Assert.Equal(order.DeliveredAt, dto!.DeliveredAt);
-
-        // Delivered has no cross-tenant write — must not go through the tenant override.
+        Assert.Null(dto);
+        Assert.NotNull(error);
+        Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);
+        Assert.Null(order.DeliveredAt);
         await _tenantSessionOverride.DidNotReceive().ExecuteAsync(
             Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _orders.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -499,7 +520,7 @@ public sealed class MarketplaceOrderServiceTests
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static CreateMarketplaceOrderDto OrderRequest() =>
-        new([new CreateMarketplaceOrderItemDto(Guid.NewGuid(), 1)], null);
+        new([new CreateMarketplaceOrderItemDto(Guid.NewGuid(), 1)], null, Guid.NewGuid());
 
     private SupplierAgreement Agreement(string status) => new()
     {

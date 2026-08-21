@@ -25,13 +25,20 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string EstimatedDeliveryDaysRequiredError = "Вкажіть орієнтовну кількість днів до доставки.";
     public const string DelayReasonRequiredError = "Вкажіть причину затримки доставки.";
     public const string OnlyShippedCanHaveDelayReasonError = "Причину затримки можна вказати лише для відправленого замовлення.";
+    public const string DestinationStoreRequiredError = "Оберіть магазин-призначення для замовлення.";
 
-    /// <summary>Allowed supplier-side status transitions.</summary>
+    /// <summary>
+    /// Allowed supplier-side status transitions. No entry for Shipped (TASK-586, ADR-033 Decision
+    /// 4) — the supplier can no longer self-declare Delivered; a Shipped order's only remaining
+    /// transition is through <see cref="MarketplaceOrderReceiptService"/>'s client-confirmed
+    /// receiving flow, which writes Status/DeliveredAt directly and bypasses this table entirely.
+    /// A missing key here reads unambiguously as "no supplier-initiated transition from this
+    /// status" — an empty array would invite a reader to wonder if that's a bug.
+    /// </summary>
     private static readonly Dictionary<string, string[]> AllowedTransitions = new()
     {
         [MarketplaceOrderStatus.New]       = [MarketplaceOrderStatus.Confirmed, MarketplaceOrderStatus.Cancelled],
         [MarketplaceOrderStatus.Confirmed] = [MarketplaceOrderStatus.Shipped, MarketplaceOrderStatus.Cancelled],
-        [MarketplaceOrderStatus.Shipped]   = [MarketplaceOrderStatus.Delivered],
     };
 
     private readonly IMarketplaceOrderRepository _orders;
@@ -65,6 +72,11 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     {
         if (request.Items is null || request.Items.Count == 0)
             return (null, EmptyOrderError, false);
+
+        // TASK-586, ADR-033 Decision 2: required for every new order (application-layer only —
+        // the DB column stays nullable so historical pre-migration orders remain valid rows).
+        if (request.DestinationStoreId is null)
+            return (null, DestinationStoreRequiredError, false);
 
         var supplierTenantId = await _marketplace.GetSupplierTenantIdAsync(supplierId, ct);
         if (supplierTenantId is null)
@@ -123,6 +135,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             Comment          = NormalizeComment(request.Comment),
             TotalAmount      = orderItems.Sum(i => i.LineTotal),
             CreatedByUserId  = userId,
+            DestinationStoreId = request.DestinationStoreId,
         };
 
         foreach (var item in orderItems)
@@ -412,5 +425,21 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
                 .OrderBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase)
                 .Select(i => new MarketplaceOrderItemDto(
                     i.Id, i.SupplierItemId, i.ItemName, i.Unit, i.Price, i.Qty, i.LineTotal))
-                .ToList());
+                .ToList(),
+            o.DestinationStoreId);
+
+    // ── Order receiving support (TASK-586) ──────────────────────────────────────
+
+    /// <summary>
+    /// Shipped orders of the calling client tenant that still need to be received — no
+    /// <see cref="MarketplaceOrderReceipt"/> yet, or one still in "draft" (ADR-033 Decision 5,
+    /// endpoint a). Consumed by <see cref="MarketplaceOrderReceiptService"/> so the tenant/DTO
+    /// mapping logic above stays in one place instead of being duplicated across services.
+    /// </summary>
+    public async Task<IReadOnlyList<MarketplaceOrderDto>> ListAwaitingReceiptForClientAsync(
+        Guid clientTenantId, CancellationToken ct = default)
+    {
+        var rows = await _orders.ListAwaitingReceiptForClientAsync(clientTenantId, ct);
+        return await ToDtosAsync(rows, ct);
+    }
 }

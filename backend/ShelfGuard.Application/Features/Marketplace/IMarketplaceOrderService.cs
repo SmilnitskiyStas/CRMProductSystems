@@ -1,4 +1,5 @@
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Domain.Entities;
 
 namespace ShelfGuard.Application.Features.Marketplace;
 
@@ -29,8 +30,11 @@ public interface IMarketplaceOrderService
         Guid supplierTenantId, CancellationToken ct = default);
 
     /// <summary>
-    /// Allowed transitions: new → confirmed | cancelled; confirmed → shipped | cancelled;
-    /// shipped → delivered. Cancelling requires a reason.
+    /// Allowed transitions: new → confirmed | cancelled; confirmed → shipped | cancelled. No
+    /// supplier-initiated transition exists out of shipped any more (TASK-586, ADR-033 Decision
+    /// 4) — delivered is now set exclusively by <see cref="MarketplaceOrderReceiptService"/>'s
+    /// client-confirmed receiving flow; a status update of "delivered" always 400s here.
+    /// Cancelling requires a reason.
     /// </summary>
     Task<(MarketplaceOrderDto? Order, string? Error)> UpdateOrderStatusAsync(
         Guid supplierTenantId, Guid orderId, UpdateMarketplaceOrderStatusDto request,
@@ -42,4 +46,12 @@ public interface IMarketplaceOrderService
     /// </summary>
     Task<(MarketplaceOrderDto? Order, string? Error)> SetDelayReasonAsync(
         Guid supplierTenantId, Guid orderId, string reason, CancellationToken ct = default);
+
+    /// <summary>
+    /// Shipped orders of the calling client tenant that still need to be received (TASK-586) —
+    /// no <see cref="MarketplaceOrderReceipt"/> yet, or one still in "draft". Used by
+    /// <see cref="MarketplaceOrderReceiptService"/>.
+    /// </summary>
+    Task<IReadOnlyList<MarketplaceOrderDto>> ListAwaitingReceiptForClientAsync(
+        Guid clientTenantId, CancellationToken ct = default);
 }
