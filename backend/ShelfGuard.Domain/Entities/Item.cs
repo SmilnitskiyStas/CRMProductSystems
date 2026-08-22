@@ -24,6 +24,12 @@ public sealed class Item
     public decimal? StorageTempMax { get; set; }
     public int? ShelfLifeDays { get; set; }
     public Guid? DefaultSupplierId { get; set; }
+    /// <summary>
+    /// Lineage pointer: the marketplace <see cref="SupplierItem"/> this Item was
+    /// auto-provisioned from at order time (TASK-596). Nullable and SET NULL on delete —
+    /// this Item must survive even if the source supplier listing is later removed.
+    /// </summary>
+    public Guid? SourceSupplierItemId { get; set; }
     public decimal VatRate { get; set; } = 20;
     public decimal? PricePurchase { get; set; }
     public decimal? PriceRetail { get; set; }
@@ -36,4 +42,5 @@ public sealed class Item
     public Category? Category { get; init; }
     public ProductSegment? Segment { get; init; }
     public Supplier? DefaultSupplier { get; init; }
+    public SupplierItem? SourceSupplierItem { get; init; }
 }

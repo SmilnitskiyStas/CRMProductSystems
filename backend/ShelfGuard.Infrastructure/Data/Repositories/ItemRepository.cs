@@ -95,6 +95,30 @@ public sealed class ItemRepository : IItemRepository
             .FirstOrDefaultAsync(p => EF.Functions.JsonContains(p.Barcodes, needle), ct);
     }
 
+    // TASK-596: batch variant for checkout, where GetByAnyBarcodeAsync is called once per
+    // order line and a loop-of-N-queries-per-barcode-per-line would add up. A single-query
+    // jsonb-overlap approach IS available here: EF.Functions.JsonExistAny(json, string[] keys)
+    // — confirmed present in the installed Npgsql.EntityFrameworkCore.PostgreSQL 8.0.11
+    // package (reflected NpgsqlJsonDbFunctionsExtensions: JsonContains/JsonContained/
+    // JsonExists/JsonExistAny/JsonExistAll/JsonTypeof) and translates to Postgres's `?|`
+    // array-overlap operator ("Barcodes" ?| ARRAY[...]) — "does this jsonb array contain any
+    // of these elements", exactly the semantics needed against Barcodes' `'[]'::jsonb` array
+    // shape (same column GetByBarcodeAsync above already targets with JsonContains/`@>`).
+    // One round trip regardless of how many barcodes are passed.
+    public async Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default)
+    {
+        if (barcodes.Count == 0)
+            return Array.Empty<Item>();
+
+        var needles = barcodes as string[] ?? barcodes.ToArray();
+        return await _db.Items
+            .Include(p => p.Category)
+            .Include(p => p.Segment)
+            .Include(p => p.DefaultSupplier)
+            .Where(p => EF.Functions.JsonExistAny(p.Barcodes, needles))
+            .ToListAsync(ct);
+    }
+
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) =>
         _db.ProductSupplierSettings
             .Include(s => s.Supplier)

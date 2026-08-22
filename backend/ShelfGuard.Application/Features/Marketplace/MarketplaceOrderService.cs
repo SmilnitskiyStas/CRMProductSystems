@@ -1,4 +1,6 @@
 using System.Text.Json;
+using ShelfGuard.Application.Features.Catalog;
+using ShelfGuard.Application.Features.Catalog.Dtos;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
@@ -27,6 +29,16 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string OnlyShippedCanHaveDelayReasonError = "Причину затримки можна вказати лише для відправленого замовлення.";
     public const string DestinationStoreRequiredError = "Оберіть магазин-призначення для замовлення.";
 
+    // ── TASK-597: marketplace catalog auto-provisioning ─────────────────────────
+    public const string BarcodeCollisionError =
+        "Штрихкод товару вже існує у вашому каталозі — потрібно вирішити конфлікт перед оформленням.";
+    public const string LinkedItemRequiredError = "Оберіть товар каталогу для прив'язки.";
+    public const string LinkedItemNotFoundError = "Товар для прив'язки не знайдено у вашому каталозі.";
+    public const string LinkedItemBarcodeMismatchError = "Обраний товар не має спільного штрихкоду з позицією постачальника.";
+    public const string SupplierItemNameMissingError =
+        "У постачальника не вказано назву товару — неможливо додати його до каталогу.";
+    public const string CatalogProvisioningFailedError = "Не вдалося додати товар до каталогу.";
+
     /// <summary>
     /// Allowed supplier-side status transitions. No entry for Shipped (TASK-586, ADR-033 Decision
     /// 4) — the supplier can no longer self-declare Delivered; a Shipped order's only remaining
@@ -47,6 +59,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     private readonly ISupplierChatRepository _tenantNames;
     private readonly INotificationRepository _notifications;
     private readonly ITenantSessionOverride _tenantSessionOverride;
+    private readonly IItemRepository _items;
+    private readonly IItemService _itemService;
 
     public MarketplaceOrderService(
         IMarketplaceOrderRepository orders,
@@ -54,7 +68,9 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         IMarketplaceRepository marketplace,
         ISupplierChatRepository tenantNames,
         INotificationRepository notifications,
-        ITenantSessionOverride tenantSessionOverride)
+        ITenantSessionOverride tenantSessionOverride,
+        IItemRepository items,
+        IItemService itemService)
     {
         _orders      = orders;
         _agreements  = agreements;
@@ -62,6 +78,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         _tenantNames = tenantNames;
         _notifications = notifications;
         _tenantSessionOverride = tenantSessionOverride;
+        _items       = items;
+        _itemService = itemService;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -91,26 +109,25 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         var catalog = (await _marketplace.GetSupplierItemsAsync(supplierId, ct))
             .ToDictionary(i => i.Id);
 
+        // Pass 1: validate every line and plan its catalog outcome (read-only — no Item is
+        // created or linked yet). Only once every line clears this pass do we execute the plans
+        // (pass 2, below). This ordering matters: without it, a failure on line 3 could leave
+        // lines 1-2's auto-provisioned Items already committed to the DB even though the whole
+        // order creation failed, and a client retry would then duplicate them (TASK-597).
         var orderItems = new List<MarketplaceOrderItem>(request.Items.Count);
+        var plans = new List<CatalogPlan>(request.Items.Count);
         foreach (var line in request.Items)
         {
-            if (!catalog.TryGetValue(line.SupplierItemId, out var item))
-                return (null, "Позицію не знайдено в каталозі постачальника.", false);
+            var (item, validationError) = ValidateLine(line, catalog);
+            if (validationError is not null)
+                return (null, validationError, false);
 
-            var name = item.CustomName ?? item.Item?.Name ?? string.Empty;
+            var (plan, planError) = await PlanCatalogOutcomeAsync(item!, line, ct);
+            if (planError is not null)
+                return (null, planError, false);
+            plans.Add(plan!);
 
-            if (!item.IsAvailable)
-                return (null, $"Позиція «{name}» наразі недоступна.", false);
-
-            if (line.Qty <= 0)
-                return (null, $"Кількість для «{name}» має бути більшою за нуль.", false);
-
-            if (item.MinQty.HasValue && line.Qty < item.MinQty.Value)
-                return (null, $"Мінімальна кількість для «{name}» — {item.MinQty.Value}.", false);
-
-            if (item.MaxQty.HasValue && line.Qty > item.MaxQty.Value)
-                return (null, $"Максимальна кількість для «{name}» — {item.MaxQty.Value}.", false);
-
+            var name = item!.CustomName ?? item.Item?.Name ?? string.Empty;
             var price = item.Price ?? 0m;
             orderItems.Add(new MarketplaceOrderItem
             {
@@ -123,6 +140,17 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
                 Qty              = line.Qty,
                 LineTotal        = decimal.Round(price * line.Qty, 2),
             });
+        }
+
+        // Pass 2: every line cleared validation and planning — now actually create/link catalog
+        // Items, before the order itself is built/persisted below. A mid-loop failure here is a
+        // last-resort defence only (see ExecuteCatalogPlanAsync — planning already validated
+        // everything the execute step could otherwise fail on).
+        foreach (var plan in plans)
+        {
+            var execError = await ExecuteCatalogPlanAsync(clientTenantId, plan, ct);
+            if (execError is not null)
+                return (null, execError, false);
         }
 
         var order = new MarketplaceOrder
@@ -148,6 +176,55 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         await _orders.SaveChangesAsync(ct);
 
         return (await ToDtoAsync(order, ct), null, false);
+    }
+
+    /// <summary>
+    /// TASK-597 read-only pre-flight: same per-line supplier-catalog validation as
+    /// <see cref="CreateOrderAsync"/> (via <see cref="ValidateLine"/>) plus a barcode-collision
+    /// check against the calling client tenant's own Item catalog. Never creates or links
+    /// anything — CreateOrderAsync re-runs the collision check itself and is the sole source of
+    /// truth for what actually gets provisioned.
+    /// </summary>
+    public async Task<(IReadOnlyList<MarketplaceOrderConflictDto>? Conflicts, string? Error, bool IsGateViolation)> CheckCatalogConflictsAsync(
+        Guid clientTenantId, Guid supplierId, IReadOnlyList<CreateMarketplaceOrderItemDto> items,
+        CancellationToken ct = default)
+    {
+        if (items.Count == 0)
+            return (null, EmptyOrderError, false);
+
+        var supplierTenantId = await _marketplace.GetSupplierTenantIdAsync(supplierId, ct);
+        if (supplierTenantId is null)
+            return (null, SupplierNotFoundError, false);
+
+        var agreement = await _agreements.GetForPairAsync(supplierTenantId.Value, clientTenantId, ct);
+        if (agreement is null || agreement.Status != SupplierAgreementStatus.Active)
+            return (null, AgreementRequiredError, true);
+
+        var catalog = (await _marketplace.GetSupplierItemsAsync(supplierId, ct))
+            .ToDictionary(i => i.Id);
+
+        var conflicts = new List<MarketplaceOrderConflictDto>();
+        foreach (var line in items)
+        {
+            var (item, validationError) = ValidateLine(line, catalog);
+            if (validationError is not null)
+                return (null, validationError, false);
+
+            var barcodes = item!.Barcodes.Select(b => b.Barcode).ToList();
+            if (barcodes.Count == 0)
+                continue;
+
+            var matches = await _items.GetByAnyBarcodeAsync(barcodes, ct);
+            var match = matches.FirstOrDefault();
+            if (match is null)
+                continue;
+
+            conflicts.Add(new MarketplaceOrderConflictDto(
+                item.Id,
+                new MarketplaceOrderConflictingItemDto(match.Id, match.Name, match.ImageUrl, match.Barcodes)));
+        }
+
+        return (conflicts, null, false);
     }
 
     public async Task<IReadOnlyList<MarketplaceOrderDto>> ListForClientAsync(
@@ -297,6 +374,150 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Shared per-line validation used by both <see cref="CreateOrderAsync"/> and
+    /// <see cref="CheckCatalogConflictsAsync"/> (TASK-597): supplier item exists in the given
+    /// catalog, is available, and Qty is within MinQty/MaxQty bounds.
+    /// </summary>
+    private static (SupplierItem? Item, string? Error) ValidateLine(
+        CreateMarketplaceOrderItemDto line, Dictionary<Guid, SupplierItem> catalog)
+    {
+        if (!catalog.TryGetValue(line.SupplierItemId, out var item))
+            return (null, "Позицію не знайдено в каталозі постачальника.");
+
+        var name = item.CustomName ?? item.Item?.Name ?? string.Empty;
+
+        if (!item.IsAvailable)
+            return (null, $"Позиція «{name}» наразі недоступна.");
+
+        if (line.Qty <= 0)
+            return (null, $"Кількість для «{name}» має бути більшою за нуль.");
+
+        if (item.MinQty.HasValue && line.Qty < item.MinQty.Value)
+            return (null, $"Мінімальна кількість для «{name}» — {item.MinQty.Value}.");
+
+        if (item.MaxQty.HasValue && line.Qty > item.MaxQty.Value)
+            return (null, $"Максимальна кількість для «{name}» — {item.MaxQty.Value}.");
+
+        return (item, null);
+    }
+
+    /// <summary>
+    /// TASK-597: what CreateOrderAsync's pass 2 (<see cref="ExecuteCatalogPlanAsync"/>) should do
+    /// for one order line once planning has decided it's safe to proceed. "Create" builds a new
+    /// client Item from the SupplierItem snapshot; "Link" attaches SourceSupplierItemId to an
+    /// already-validated existing client Item instead.
+    /// </summary>
+    private sealed record CatalogPlan(SupplierItem SupplierItem, bool IsLink, Item? LinkedItem);
+
+    /// <summary>
+    /// Read-only planning step (TASK-597): resolves what CatalogAction means for this line
+    /// without writing anything. "link" validates LinkedItemId belongs to this client tenant
+    /// (ambient RLS on GetByIdAsync already enforces this — a foreign-tenant id resolves to null)
+    /// and genuinely shares a barcode with the SupplierItem (defence against a forged/stale
+    /// request). null/"auto"/"create_new" re-checks the barcode collision authoritatively — never
+    /// trusts a stale earlier call to CheckCatalogConflictsAsync — and rejects null/"auto" when a
+    /// collision exists, since silently guessing (auto-link or silent duplicate) is exactly what
+    /// this feature must not do.
+    /// </summary>
+    private async Task<(CatalogPlan? Plan, string? Error)> PlanCatalogOutcomeAsync(
+        SupplierItem supplierItem, CreateMarketplaceOrderItemDto line, CancellationToken ct)
+    {
+        var barcodes = supplierItem.Barcodes.Select(b => b.Barcode).ToList();
+        var action = string.IsNullOrWhiteSpace(line.CatalogAction) ? "auto" : line.CatalogAction;
+
+        if (action == "link")
+        {
+            if (line.LinkedItemId is null)
+                return (null, LinkedItemRequiredError);
+
+            var linkedItem = await _items.GetByIdAsync(line.LinkedItemId.Value, ct);
+            if (linkedItem is null)
+                return (null, LinkedItemNotFoundError);
+
+            if (barcodes.Count == 0 || !linkedItem.Barcodes.Intersect(barcodes).Any())
+                return (null, LinkedItemBarcodeMismatchError);
+
+            return (new CatalogPlan(supplierItem, IsLink: true, linkedItem), null);
+        }
+
+        if (barcodes.Count > 0)
+        {
+            var collisions = await _items.GetByAnyBarcodeAsync(barcodes, ct);
+            if (collisions.Count > 0 && action != "create_new")
+                return (null, BarcodeCollisionError);
+        }
+
+        // No collision, or the user explicitly overrode one with "create_new" — either way this
+        // line creates a new client Item. Fail fast here (planning stage) on the one input this
+        // service doesn't fully control — the supplier item's own name — so pass 2's execute step
+        // practically never fails once planning has succeeded for every line.
+        var newItemName = supplierItem.CustomName ?? supplierItem.Item?.Name;
+        if (string.IsNullOrWhiteSpace(newItemName))
+            return (null, SupplierItemNameMissingError);
+
+        return (new CatalogPlan(supplierItem, IsLink: false, null), null);
+    }
+
+    /// <summary>
+    /// Write step (TASK-597), only ever called after every line in the order has already been
+    /// planned successfully (see CreateOrderAsync pass 2). Link: sets SourceSupplierItemId on the
+    /// already-validated existing Item. Create: provisions a brand-new client Item from the
+    /// SupplierItem snapshot — no client-catalog category mapping, no supplier-side stock policy
+    /// equivalent (MinStock/MaxStock/SafetyBuffer = 0), ManagementType "NA" (no default exists),
+    /// VatRate 0 (no tenant-level default VAT rate exists in this codebase — known simplification,
+    /// see task log), PricePurchase from SupplierItem.Price, PriceRetail left null.
+    /// </summary>
+    private async Task<string?> ExecuteCatalogPlanAsync(Guid clientTenantId, CatalogPlan plan, CancellationToken ct)
+    {
+        if (plan.IsLink)
+        {
+            plan.LinkedItem!.SourceSupplierItemId = plan.SupplierItem.Id;
+            _items.Update(plan.LinkedItem);
+            await _items.SaveChangesAsync(ct);
+            return null;
+        }
+
+        var supplierItem = plan.SupplierItem;
+        var request = new CreateProductRequest(
+            Name: supplierItem.CustomName ?? supplierItem.Item?.Name ?? string.Empty,
+            Barcodes: supplierItem.Barcodes.Select(b => b.Barcode).ToList(),
+            CategoryId: null,
+            SegmentId: null,
+            Unit: supplierItem.Unit ?? string.Empty,
+            ManagementType: "NA",
+            ItemType: null,
+            MinStock: 0,
+            MaxStock: 0,
+            SafetyBuffer: 0,
+            StorageTempMin: null,
+            StorageTempMax: null,
+            ShelfLifeDays: null,
+            DefaultSupplierId: null,
+            VatRate: 0,
+            PricePurchase: supplierItem.Price,
+            PriceRetail: null,
+            ImageUrl: PickImageUrl(supplierItem),
+            Manufacturer: supplierItem.Manufacturer,
+            CountryOrigin: supplierItem.ManufacturerCountry,
+            PerishabilityClass: null,
+            SourceSupplierItemId: supplierItem.Id);
+
+        var (created, error) = await _itemService.CreateAsync(clientTenantId, request, ct);
+        return created is null ? error ?? CatalogProvisioningFailedError : null;
+    }
+
+    /// <summary>
+    /// Same "main first" convention as MarketplaceService/SupplierCabinetService's own image
+    /// ordering (<c>Images.OrderBy(img => img.SortOrder)</c>): prefer the lowest-SortOrder image
+    /// of Kind "main"; fall back to the lowest-SortOrder image of any kind if there's no "main".
+    /// </summary>
+    private static string? PickImageUrl(SupplierItem supplierItem)
+    {
+        var ordered = supplierItem.Images.OrderBy(img => img.SortOrder).ToList();
+        return ordered.FirstOrDefault(img => img.Kind == "main")?.Url ?? ordered.FirstOrDefault()?.Url;
+    }
 
     /// <summary>
     /// ADR-018 §2: Postgres outbox row (EventType = "marketplace_order.shipped") for the client

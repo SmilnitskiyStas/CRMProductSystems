@@ -300,11 +300,40 @@ export interface MarketplaceOrderDto {
   items: MarketplaceOrderItemDto[];
 }
 
+/** How to resolve a barcode conflict on one order line (TASK-597). Omit/"auto" is only
+ * safe when a pre-flight `checkOrderConflicts` call found no conflict for that line —
+ * if a conflict exists and this is left "auto", the backend rejects the whole order (400). */
+export type CatalogAction = "auto" | "link" | "create_new";
+
+export interface CreateMarketplaceOrderItem {
+  supplierItemId: string;
+  qty: number;
+  catalogAction?: CatalogAction;
+  /** Required when catalogAction === "link" — id of the existing catalog Item to link to. */
+  linkedItemId?: string;
+}
+
 export interface CreateMarketplaceOrderRequest {
-  items: { supplierItemId: string; qty: number }[];
+  items: CreateMarketplaceOrderItem[];
   comment?: string;
   /** Required — the client's store this order is a future delivery to (ADR-033 Decision 2). */
   destinationStoreId: string;
+}
+
+// ─── Barcode conflict pre-flight check (TASK-597, order-time catalog provisioning) ────
+// POST /api/marketplace/suppliers/{id}/orders/conflicts — same items shape as
+// CreateMarketplaceOrderRequest.items, returns the (possibly empty) list of conflicts.
+
+export interface BarcodeConflictExistingItem {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  barcodes: string[];
+}
+
+export interface BarcodeConflict {
+  supplierItemId: string;
+  existingItem: BarcodeConflictExistingItem;
 }
 
 // ─── Marketplace order receiving (TASK-586, ADR-033) ───────────────────────────

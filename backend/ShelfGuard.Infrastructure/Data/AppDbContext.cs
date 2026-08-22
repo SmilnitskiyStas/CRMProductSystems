@@ -451,6 +451,18 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(p => p.SegmentId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasOne(p => p.DefaultSupplier).WithMany()
              .HasForeignKey(p => p.DefaultSupplierId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // Lineage pointer (TASK-596): which SupplierItem this Item was auto-provisioned
+            // from at order time. SET NULL, not Cascade/Restrict — an Item must survive even
+            // if the source supplier listing is later removed. No explicit standalone
+            // HasIndex() here (unlike SupplierItem.ItemId's own convention above) — Item and
+            // SupplierItem already have a reference nav pointing at each other in the OTHER
+            // direction (SupplierItem.Item -> Item), and pairing an explicit index with this
+            // FK made EF's relationship discovery treat the two as one 1:1 pair, incorrectly
+            // marking this FK's index unique (confirmed by generating the migration and
+            // reverting once). The plain FK-by-convention index below is sufficient and
+            // correctly non-unique.
+            e.HasOne(p => p.SourceSupplierItem).WithMany()
+             .HasForeignKey(p => p.SourceSupplierItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── ProductSupplierSetting ──────────────────────────────────────────
@@ -2069,12 +2081,19 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(x => x.SupplierTenantId);
             e.HasIndex(x => x.ClientTenantId);
+            e.HasIndex(x => x.MarketplaceOrderId);
             e.HasOne<Tenant>().WithMany()
              .HasForeignKey(x => x.SupplierTenantId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<Tenant>().WithMany()
              .HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany()
              .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // TASK-596: order this ticket was auto-opened for on a flagged receiving
+            // discrepancy. Restrict (not SetNull like CreatedByUserId above) — matches
+            // MarketplaceOrderReceipt.MarketplaceOrderId's own choice: orders are never
+            // hard-deleted, only status-transitioned, so Restrict is safe and consistent.
+            e.HasOne<MarketplaceOrder>().WithMany()
+             .HasForeignKey(x => x.MarketplaceOrderId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
             e.HasMany(x => x.Messages)
              .WithOne(x => x.Ticket)
              .HasForeignKey(x => x.TicketId)

@@ -80,7 +80,21 @@ public record UpsertContractSettingsDto(
 
 // ── Marketplace orders ───────────────────────────────────────────────────────
 
-public record CreateMarketplaceOrderItemDto(Guid SupplierItemId, decimal Qty);
+/// <summary>
+/// CatalogAction resolves a barcode collision between this line's SupplierItem and the client's
+/// own Item catalog (TASK-597): null/"auto" (default) — auto-provision a new Item unless a
+/// collision is found, in which case the whole order is rejected; "link" — attach provenance
+/// (SourceSupplierItemId) to an existing client Item instead of creating a new one, requires
+/// LinkedItemId; "create_new" — create a new Item anyway even though a collision exists (the
+/// user explicitly chose to keep them separate). See
+/// <see cref="MarketplaceOrderService.CheckCatalogConflictsAsync"/> for the pre-flight check that
+/// tells the frontend which lines need a CatalogAction before the real order is submitted.
+/// </summary>
+public record CreateMarketplaceOrderItemDto(
+    Guid SupplierItemId,
+    decimal Qty,
+    string? CatalogAction = null,
+    Guid? LinkedItemId = null);
 
 /// <summary>
 /// DestinationStoreId is required for every new order (TASK-586, ADR-033 Decision 2) — validated
@@ -91,6 +105,26 @@ public record CreateMarketplaceOrderDto(
     List<CreateMarketplaceOrderItemDto> Items,
     string? Comment,
     Guid? DestinationStoreId = null);
+
+/// <summary>Request body for the conflicts pre-flight check — same item shape as the real order.</summary>
+public record CheckMarketplaceOrderConflictsDto(List<CreateMarketplaceOrderItemDto> Items);
+
+/// <summary>The client's own existing Item that collides with a supplier item's barcode.</summary>
+public record MarketplaceOrderConflictingItemDto(
+    Guid Id,
+    string Name,
+    string? ImageUrl,
+    List<string> Barcodes);
+
+/// <summary>
+/// One order line whose SupplierItem shares a barcode with an Item already in the client's
+/// catalog (TASK-597). Frontend renders this as a "this barcode already exists on item X"
+/// comparison card and asks the user to choose a CatalogAction ("link" or "create_new") before
+/// resubmitting the order. An empty conflicts list is safe to submit as-is.
+/// </summary>
+public record MarketplaceOrderConflictDto(
+    Guid SupplierItemId,
+    MarketplaceOrderConflictingItemDto ExistingItem);
 
 public record MarketplaceOrderItemDto(
     Guid Id,

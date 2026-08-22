@@ -3082,7 +3082,16 @@
         "totalLabel": "Total: {total}",
         "removeFromCartTitle": "Remove from cart",
         "toastCreated": "Order {number} created",
-        "toastMyOrdersAction": "My orders"
+        "toastMyOrdersAction": "My orders",
+        "checkingConflicts": "Checking...",
+        "back": "Back",
+        "conflictStepTitle": "Barcode matches found",
+        "conflictIntro": "Some ordered items' barcodes already exist in your catalog under a different name. Choose what to do with each one.",
+        "conflictOrderedLabel": "Ordered item",
+        "conflictExistingLabel": "Already in your catalog",
+        "conflictNoBarcodes": "No barcodes",
+        "conflictLinkAction": "Link to this item",
+        "conflictCreateNewAction": "Create a new item anyway"
       },
       "chatPanel": {
         "emptyMessages": "No messages yet. Send the first one.",

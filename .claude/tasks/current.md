@@ -3,6 +3,41 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-598 — Marketplace catalog auto-provisioning at order time (Wave 2, backend)
+
+**Status:** done · **Agent:** backend-developer · Wave 2 of 2 on TASK-596's schema.
+Log: `.claude/logs/tasks/598_2026-08-22_marketplace-catalog-auto-provisioning_backend-developer.md`
+
+Placing a marketplace order now auto-provisions the client's own `Item` catalog from the
+supplier's `SupplierItem` listing (name/barcodes/price/unit/image), unless a barcode collision
+is found with an existing client `Item` — in which case the order is rejected until the client
+picks `catalogAction: "link"` (attach to the existing item) or `"create_new"` (duplicate anyway).
+New read-only pre-flight `POST /api/marketplace/suppliers/{id}/orders/conflicts` lets the
+checkout UI show conflicts before submitting. `CreateMarketplaceOrderItemDto` extended with
+`CatalogAction`/`LinkedItemId`. `CreateOrderAsync` does a two-pass validate-then-execute per line
+so a mid-order failure can never leave an earlier line's auto-created `Item` orphaned. Full
+contract in the task log. Parallel: TASK-597 (frontend-developer, checkout UI, already verified
+this contract) + a separate backend-developer agent (isolated worktree) on receipt enrichment/
+discrepancy tickets — no file overlap. `dotnet build` clean; `dotnet test` — 1819/1819 passing
+(1810 baseline + 9 new).
+
+## TASK-596 — Marketplace catalog auto-provisioning + discrepancy tickets: schema (Wave 1)
+
+**Status:** done · **Agent:** database-engineer · Wave 1 of 2 (repository/service/controller
+logic is a follow-up wave for backend-developer agents, not built here).
+Log: `.claude/logs/tasks/596_2026-08-22_marketplace-catalog-provisioning-schema_database-engineer.md`
+
+Two schema additions + one repository method, in support of client-catalog auto-provisioning
+from a supplier's marketplace listing at order time, and auto-opening a `SupplierSupportTicket`
+when a receiving employee flags a discrepancy. `Item.SourceSupplierItemId` (nullable, FK →
+`supplier_items.Id`, SET NULL) and `SupplierSupportTicket.MarketplaceOrderId` (nullable, FK →
+`marketplace_orders.Id`, RESTRICT) — migration `AddItemSourceSupplierItemAndTicketOrderRef`,
+applied cleanly to local dev DB, confirmed via psql. `IItemRepository.GetByAnyBarcodeAsync`
+(batch barcode lookup for checkout) added using `EF.Functions.JsonExistAny` (Postgres `?|`
+jsonb-array-overlap operator) — single query regardless of barcode count; 3 new integration
+tests against real Postgres confirm correctness (dedup, no-match, empty-input short circuit).
+`dotnet test` — 1810 passed, 0 failed.
+
 ## TASK-595 — Marketplace order receiving: post-implementation API reference (docs)
 
 **Status:** done · **Agent:** documentation-writer
@@ -5335,3 +5370,24 @@ in `EventServiceTests.cs`/new `EventRepositoryStoresTests.cs`, EF InMemory provi
 against TASK-593's frontend contract (already built in parallel) — compatible: repeated
 `?storeIds=` query params, `storeIds: string[]` JSON field.
 Log: `.claude/logs/tasks/594_2026-08-22_multi-store-event-scope-backend_backend-developer.md`.
+
+# TASK-597 — Marketplace checkout: barcode-conflict resolution UI (frontend)
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-22
+
+Frontend half of the order-time catalog-provisioning safety check (parallel backend-developer
+agents building `MarketplaceOrderService.CheckCatalogConflictsAsync` + the `orders/conflicts`
+route against TASK-596's schema). `SupplierOrderCart.tsx` checkout modal is now a two-step flow
+(`step: "cart" | "conflicts"`): Confirm first calls new `useCheckOrderConflicts` (→
+`POST /api/marketplace/suppliers/{id}/orders/conflicts`); empty result submits exactly as before
+(no UX change); non-empty result shows a per-conflict card (ordered line vs. existing catalog
+item's photo/name/barcodes, `ImageOff` fallback matching `SupplierItemDetailDialog.tsx`'s
+pattern) with "Прив'язати"/"Створити новий" toggles before re-enabling Confirm. New types
+`CatalogAction`/`CreateMarketplaceOrderItem`/`BarcodeConflict`(+`ExistingItem`) in
+`features/marketplace/types.ts`, `checkOrderConflicts` in `marketplace-api.ts`,
+`useCheckOrderConflicts` in `useCooperation.ts`. 9 new i18n keys under
+`Dashboard.marketplace.orderCart`. Field names cross-checked against the real (uncommitted)
+backend DTOs in `CooperationDtos.cs` — exact match; the controller route itself wasn't wired up
+yet at verification time, so the conflict step's live behavior is unverified (no-conflict path
+and compile/typecheck are). `tsc`/`eslint` clean on all 4 touched files; `uk.json`/`en.json`
+valid JSON. Log: `.claude/logs/tasks/597_2026-08-22_marketplace-checkout-barcode-conflict-ui_frontend-developer.md`.

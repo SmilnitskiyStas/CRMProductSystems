@@ -17,6 +17,18 @@ public interface IMarketplaceOrderService
         Guid clientTenantId, Guid supplierId, CreateMarketplaceOrderDto request, Guid userId,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Read-only pre-flight for the checkout screen (TASK-597): runs the same per-line supplier
+    /// catalog validation as <see cref="CreateOrderAsync"/> plus a barcode-collision check against
+    /// the calling client tenant's own Item catalog. Creates nothing. Same gate as CreateOrderAsync
+    /// (IsGateViolation = true → 403) since it previews exactly what a real order would need to
+    /// pass. Empty conflicts list means the items are safe to submit as-is (CatalogAction can stay
+    /// null/"auto" on every line).
+    /// </summary>
+    Task<(IReadOnlyList<MarketplaceOrderConflictDto>? Conflicts, string? Error, bool IsGateViolation)> CheckCatalogConflictsAsync(
+        Guid clientTenantId, Guid supplierId, IReadOnlyList<CreateMarketplaceOrderItemDto> items,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<MarketplaceOrderDto>> ListForClientAsync(
         Guid clientTenantId, CancellationToken ct = default);
 

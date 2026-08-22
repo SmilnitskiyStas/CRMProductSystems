@@ -1,4 +1,6 @@
 using NSubstitute;
+using ShelfGuard.Application.Features.Catalog;
+using ShelfGuard.Application.Features.Catalog.Dtos;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Services;
@@ -21,6 +23,8 @@ public sealed class MarketplaceOrderServiceTests
     private readonly ISupplierChatRepository _tenantNames = Substitute.For<ISupplierChatRepository>();
     private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly ITenantSessionOverride _tenantSessionOverride = Substitute.For<ITenantSessionOverride>();
+    private readonly IItemRepository _items = Substitute.For<IItemRepository>();
+    private readonly IItemService _itemService = Substitute.For<IItemService>();
     private readonly MarketplaceOrderService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -31,7 +35,8 @@ public sealed class MarketplaceOrderServiceTests
     public MarketplaceOrderServiceTests()
     {
         _sut = new MarketplaceOrderService(
-            _orders, _agreements, _marketplace, _tenantNames, _notifications, _tenantSessionOverride);
+            _orders, _agreements, _marketplace, _tenantNames, _notifications, _tenantSessionOverride,
+            _items, _itemService);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);
@@ -46,6 +51,16 @@ public sealed class MarketplaceOrderServiceTests
         _tenantSessionOverride
             .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<bool>>>()());
+
+        // TASK-597: no barcodes set up on CatalogItem() by default → PlanCatalogOutcomeAsync's
+        // collision check short-circuits (empty list), so every pre-existing CreateOrderAsync test
+        // below hits the auto-create path. Stub it to always succeed so those tests don't need to
+        // know anything about catalog auto-provisioning; dedicated tests further down override
+        // this per-case and assert on the request/received calls instead.
+        _items.GetByAnyBarcodeAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Item>());
+        _itemService.CreateAsync(Arg.Any<Guid>(), Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => (FakeItemDto(ci.Arg<CreateProductRequest>().Name), (string?)null));
     }
 
     // ── The agreement gate ─────────────────────────────────────────────────────
@@ -225,6 +240,246 @@ public sealed class MarketplaceOrderServiceTests
         Assert.False(isGateViolation);
         Assert.Equal(MarketplaceOrderService.DestinationStoreRequiredError, error);
         await _orders.DidNotReceive().AddAsync(Arg.Any<MarketplaceOrder>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── TASK-597: marketplace catalog auto-provisioning ─────────────────────────
+
+    [Fact]
+    public async Task CheckCatalogConflicts_NoCollision_ReturnsEmptyList()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+        // No override on _items.GetByAnyBarcodeAsync — constructor default (empty) applies.
+
+        var (conflicts, error, isGateViolation) = await _sut.CheckCatalogConflictsAsync(
+            _clientTenantId, _supplierId, [new CreateMarketplaceOrderItemDto(item.Id, 1)]);
+
+        Assert.Null(error);
+        Assert.False(isGateViolation);
+        Assert.NotNull(conflicts);
+        Assert.Empty(conflicts);
+    }
+
+    [Fact]
+    public async Task CheckCatalogConflicts_Collision_ReturnsMatchedItemDetails()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var existing = new Item
+        {
+            TenantId = _clientTenantId,
+            Name = "Молоко існуюче",
+            Barcodes = ["111"],
+            ImageUrl = "https://x/img.jpg",
+        };
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("111")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { existing });
+
+        var (conflicts, error, _) = await _sut.CheckCatalogConflictsAsync(
+            _clientTenantId, _supplierId, [new CreateMarketplaceOrderItemDto(item.Id, 1)]);
+
+        Assert.Null(error);
+        Assert.NotNull(conflicts);
+        var conflict = Assert.Single(conflicts);
+        Assert.Equal(item.Id, conflict.SupplierItemId);
+        Assert.Equal(existing.Id, conflict.ExistingItem.Id);
+        Assert.Equal("Молоко існуюче", conflict.ExistingItem.Name);
+        Assert.Equal("https://x/img.jpg", conflict.ExistingItem.ImageUrl);
+        Assert.Equal(["111"], conflict.ExistingItem.Barcodes);
+    }
+
+    [Fact]
+    public async Task CreateOrder_NoCollision_AutoCreatesItemWithSourceSupplierItemIdAndBarcodes()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 25.50m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "222", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        await _itemService.Received(1).CreateAsync(
+            _clientTenantId,
+            Arg.Is<CreateProductRequest>(r =>
+                r.Name == "Молоко 2.5%" &&
+                r.Barcodes != null && r.Barcodes.SequenceEqual(new[] { "222" }) &&
+                r.PricePurchase == 25.50m &&
+                r.ManagementType == "NA" &&
+                r.SourceSupplierItemId == item.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_CollisionWithAutoAction_FailsAndCreatesNoItem()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "333", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("333")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { new() { TenantId = _clientTenantId, Name = "Існуючий", Barcodes = ["333"] } });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.BarcodeCollisionError, error);
+        await _itemService.DidNotReceive().CreateAsync(
+            Arg.Any<Guid>(), Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
+        await _orders.DidNotReceive().AddAsync(Arg.Any<MarketplaceOrder>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_CollisionWithLinkAction_LinksExistingItemAndCreatesNoNewOne()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "444", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var existing = new Item { TenantId = _clientTenantId, Name = "Існуючий", Barcodes = ["444"] };
+        _items.GetByIdAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto(
+                [new CreateMarketplaceOrderItemDto(item.Id, 1, "link", existing.Id)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(item.Id, existing.SourceSupplierItemId);
+        _items.Received(1).Update(existing);
+        await _items.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _itemService.DidNotReceive().CreateAsync(
+            Arg.Any<Guid>(), Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_LinkAction_LinkedItemNotOwnedByTenant_ReturnsError()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "555", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var foreignItemId = Guid.NewGuid();
+        // Ambient RLS would scope GetByIdAsync to the caller's own tenant — a foreign-tenant id
+        // simply resolves to null, same as "not found".
+        _items.GetByIdAsync(foreignItemId, Arg.Any<CancellationToken>()).Returns((Item?)null);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto(
+                [new CreateMarketplaceOrderItemDto(item.Id, 1, "link", foreignItemId)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.LinkedItemNotFoundError, error);
+    }
+
+    [Fact]
+    public async Task CreateOrder_LinkAction_LinkedItemBarcodeMismatch_ReturnsError()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "666", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var unrelated = new Item { TenantId = _clientTenantId, Name = "Не той товар", Barcodes = ["999"] };
+        _items.GetByIdAsync(unrelated.Id, Arg.Any<CancellationToken>()).Returns(unrelated);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto(
+                [new CreateMarketplaceOrderItemDto(item.Id, 1, "link", unrelated.Id)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.LinkedItemBarcodeMismatchError, error);
+        Assert.Null(unrelated.SourceSupplierItemId);
+    }
+
+    [Fact]
+    public async Task CreateOrder_CollisionWithCreateNewAction_CreatesDuplicateItemAnyway()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "777", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("777")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { new() { TenantId = _clientTenantId, Name = "Існуючий", Barcodes = ["777"] } });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto(
+                [new CreateMarketplaceOrderItemDto(item.Id, 1, "create_new")], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        await _itemService.Received(1).CreateAsync(
+            _clientTenantId,
+            Arg.Is<CreateProductRequest>(r => r.SourceSupplierItemId == item.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_SupplierItemWithNoBarcodes_SkipsCollisionCheckAndAutoCreates()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m); // no barcodes added
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        await _items.DidNotReceive().GetByAnyBarcodeAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        await _itemService.Received(1).CreateAsync(
+            _clientTenantId, Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
     }
 
     // ── Client cancellation ────────────────────────────────────────────────────
@@ -549,4 +804,8 @@ public sealed class MarketplaceOrderServiceTests
         ClientTenantId   = _clientTenantId,
         Status           = status,
     };
+
+    private static ItemDto FakeItemDto(string name, Guid? id = null) => new(
+        id ?? Guid.NewGuid(), [], name, null, null, null, null, "шт", "NA", "product",
+        0, 0, 0, null, null, null, null, null, 0, null, null, null, true, DateTime.UtcNow, null, null, "standard");
 }

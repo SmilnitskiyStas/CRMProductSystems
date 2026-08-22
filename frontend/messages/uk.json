@@ -3082,7 +3082,16 @@
         "totalLabel": "Разом: {total}",
         "removeFromCartTitle": "Прибрати з кошика",
         "toastCreated": "Замовлення {number} створено",
-        "toastMyOrdersAction": "Мої замовлення"
+        "toastMyOrdersAction": "Мої замовлення",
+        "checkingConflicts": "Перевірка...",
+        "back": "Назад",
+        "conflictStepTitle": "Знайдено збіги штрихкодів",
+        "conflictIntro": "Штрихкод деяких замовлених товарів вже є у вашому каталозі під іншою назвою. Оберіть, що робити з кожним із них.",
+        "conflictOrderedLabel": "Замовлена позиція",
+        "conflictExistingLabel": "Вже є у вашому каталозі",
+        "conflictNoBarcodes": "Без штрихкодів",
+        "conflictLinkAction": "Прив'язати до цього товару",
+        "conflictCreateNewAction": "Все одно створити новий товар"
       },
       "chatPanel": {
         "emptyMessages": "Повідомлень ще немає. Напишіть перше.",

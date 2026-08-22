@@ -148,6 +148,37 @@ public sealed class MarketplaceCooperationController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, order);
     }
 
+    /// <summary>
+    /// Read-only pre-flight (TASK-597): checks whether any of the given supplier items collide
+    /// (by barcode) with an Item already in the calling tenant's own catalog, before the order is
+    /// actually submitted. Empty result means every line is safe to submit with CatalogAction
+    /// left null/"auto". Same auth posture as CreateOrder (class-level module gate only) — this
+    /// endpoint creates nothing, it only reads.
+    /// </summary>
+    [HttpPost("suppliers/{id:guid}/orders/conflicts")]
+    [ProducesResponseType(typeof(IReadOnlyList<MarketplaceOrderConflictDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckOrderConflicts(
+        Guid id, [FromBody] CheckMarketplaceOrderConflictsDto request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (conflicts, error, isGateViolation) = await _orders.CheckCatalogConflictsAsync(
+            tenantId.Value, id, request.Items, ct);
+
+        if (isGateViolation)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error });
+        if (error == MarketplaceOrderService.SupplierNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(conflicts);
+    }
+
     /// <summary>All marketplace orders of the calling tenant (client side), newest first.</summary>
     [HttpGet("my-orders")]
     [ProducesResponseType(typeof(IReadOnlyList<MarketplaceOrderDto>), StatusCodes.Status200OK)]

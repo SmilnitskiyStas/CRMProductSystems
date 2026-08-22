@@ -97,6 +97,7 @@ public sealed class ItemService : IItemService
             Manufacturer = request.Manufacturer,
             CountryOrigin = request.CountryOrigin,
             PerishabilityClass = request.PerishabilityClass ?? "standard",
+            SourceSupplierItemId = request.SourceSupplierItemId,
         };
 
         await _repo.AddAsync(product, ct);

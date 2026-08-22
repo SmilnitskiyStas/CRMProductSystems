@@ -81,6 +81,17 @@ export function useCreateMarketplaceOrder(supplierId: string) {
   });
 }
 
+/** Pre-flight barcode-conflict check (TASK-597) — call at checkout-confirm time, right
+ * before createOrder, with the cart's current items. Not a useQuery: it's triggered
+ * on-demand, not on mount, and its result is only relevant for the confirm click that
+ * requested it. */
+export function useCheckOrderConflicts(supplierId: string) {
+  return useMutation({
+    mutationFn: (items: { supplierItemId: string; qty: number }[]) =>
+      marketplaceApi.checkOrderConflicts(supplierId, items),
+  });
+}
+
 export function useCancelMarketplaceOrder() {
   const queryClient = useQueryClient();
   return useMutation({

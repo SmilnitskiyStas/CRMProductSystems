@@ -6,13 +6,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingCart, Trash2, X } from "lucide-react";
+import { ShoppingCart, Trash2, X, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useStores } from "@/features/stores/hooks/useStores";
-import { useCreateMarketplaceOrder } from "../hooks/useCooperation";
-import type { SupplierItemDto } from "../types";
+import { useCreateMarketplaceOrder, useCheckOrderConflicts } from "../hooks/useCooperation";
+import type { SupplierItemDto, BarcodeConflict, CreateMarketplaceOrderItem } from "../types";
 
 export interface CartLine {
   item: SupplierItemDto;
@@ -42,6 +42,12 @@ function clampQty(item: SupplierItemDto, qty: number): number {
   return q;
 }
 
+/** Per-conflict resolution chosen by the user (TASK-597). */
+interface ConflictResolution {
+  catalogAction: "link" | "create_new";
+  linkedItemId?: string;
+}
+
 export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onClear }: Props) {
   const t = useTranslations("Dashboard.marketplace.orderCart");
   const locale = useLocale();
@@ -50,21 +56,48 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
   const [modalOpen, setModalOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [storeId, setStoreId] = useState("");
+  // Checkout is a two-step flow: "cart" (review + qty/store/comment, today's flow) → an
+  // optional "conflicts" step only entered when the pre-flight check finds a barcode that
+  // already belongs to a different existing catalog item (TASK-597).
+  const [step, setStep] = useState<"cart" | "conflicts">("cart");
+  const [conflicts, setConflicts] = useState<BarcodeConflict[]>([]);
+  const [resolutions, setResolutions] = useState<Record<string, ConflictResolution>>({});
   const createOrder = useCreateMarketplaceOrder(supplierId);
+  const checkConflicts = useCheckOrderConflicts(supplierId);
   const { data: stores, isLoading: storesLoading } = useStores();
 
   if (cart.length === 0) return null;
 
   const total = cart.reduce((sum, line) => sum + (line.item.price ?? 0) * line.qty, 0);
+  const allConflictsResolved = conflicts.every((c) => resolutions[c.supplierItemId] != null);
 
-  function handleSubmit() {
-    if (!storeId) return;
+  function closeModal() {
+    setModalOpen(false);
+    setStep("cart");
+    setConflicts([]);
+    setResolutions({});
+  }
+
+  function backToCart() {
+    setStep("cart");
+    setConflicts([]);
+    setResolutions({});
+  }
+
+  function submitOrder() {
+    const items: CreateMarketplaceOrderItem[] = cart.map((line) => {
+      const resolution = resolutions[line.item.id];
+      return resolution
+        ? {
+            supplierItemId: line.item.id,
+            qty: line.qty,
+            catalogAction: resolution.catalogAction,
+            linkedItemId: resolution.linkedItemId,
+          }
+        : { supplierItemId: line.item.id, qty: line.qty };
+    });
     createOrder.mutate(
-      {
-        items: cart.map((line) => ({ supplierItemId: line.item.id, qty: line.qty })),
-        comment: comment.trim() || undefined,
-        destinationStoreId: storeId,
-      },
+      { items, comment: comment.trim() || undefined, destinationStoreId: storeId },
       {
         onSuccess: (order) => {
           toast.success(t("toastCreated", { number: order.orderNumber }), {
@@ -75,10 +108,30 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
           });
           setComment("");
           setStoreId("");
-          setModalOpen(false);
+          closeModal();
           onClear();
         },
         // 403 — гейт «тільки active agreement», 400 — валідація позицій/кількостей/магазину
+        // (в т.ч. нерозвʼязаний конфлікт штрихкоду — не мало б статись, бо перевіряємо заздалегідь)
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  }
+
+  function handleSubmit() {
+    if (!storeId) return;
+    checkConflicts.mutate(
+      cart.map((line) => ({ supplierItemId: line.item.id, qty: line.qty })),
+      {
+        onSuccess: (found) => {
+          if (found.length === 0) {
+            submitOrder();
+          } else {
+            setConflicts(found);
+            setResolutions({});
+            setStep("conflicts");
+          }
+        },
         onError: (err) => toast.error(err.message),
       }
     );
@@ -135,7 +188,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
             zIndex: 999,
             padding: 20,
           }}
-          onClick={() => setModalOpen(false)}
+          onClick={closeModal}
         >
           <div
             style={{
@@ -161,10 +214,10 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               }}
             >
               <span style={{ color: "#E8EDF5", fontWeight: 700, fontSize: 15 }}>
-                {t("modalTitle")}
+                {step === "cart" ? t("modalTitle") : t("conflictStepTitle")}
               </span>
               <button
-                onClick={() => setModalOpen(false)}
+                onClick={closeModal}
                 style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4 }}
               >
                 <X size={18} />
@@ -172,6 +225,125 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: 18 }}>
+              {step === "conflicts" ? (
+              <div>
+                <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 16 }}>
+                  {t("conflictIntro")}
+                </div>
+                {conflicts.map((conflict) => {
+                  const line = cart.find((l) => l.item.id === conflict.supplierItemId);
+                  const chosen = resolutions[conflict.supplierItemId];
+                  return (
+                    <div
+                      key={conflict.supplierItemId}
+                      style={{
+                        border: "1px solid #1F2937",
+                        borderRadius: 10,
+                        padding: 14,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                        {t("conflictOrderedLabel")}
+                      </div>
+                      <div style={{ color: "#E8EDF5", fontSize: 13, marginBottom: 12 }}>
+                        {line?.item.customName ?? line?.item.itemName ?? "—"}
+                      </div>
+
+                      <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                        {t("conflictExistingLabel")}
+                      </div>
+                      <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                        <div
+                          style={{
+                            width: 56,
+                            height: 56,
+                            flexShrink: 0,
+                            background: "#111827",
+                            border: "1px solid #1F2937",
+                            borderRadius: 8,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {conflict.existingItem.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={conflict.existingItem.imageUrl}
+                              alt={conflict.existingItem.name}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <ImageOff size={18} color="#4B5563" />
+                          )}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                            {conflict.existingItem.name}
+                          </div>
+                          <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>
+                            {conflict.existingItem.barcodes.length > 0
+                              ? conflict.existingItem.barcodes.join(", ")
+                              : t("conflictNoBarcodes")}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={() =>
+                            setResolutions((r) => ({
+                              ...r,
+                              [conflict.supplierItemId]: {
+                                catalogAction: "link",
+                                linkedItemId: conflict.existingItem.id,
+                              },
+                            }))
+                          }
+                          style={{
+                            flex: 1,
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            border: chosen?.catalogAction === "link" ? "1px solid #22C55E" : "1px solid #374151",
+                            background: chosen?.catalogAction === "link" ? "#052e16" : "#1F2937",
+                            color: chosen?.catalogAction === "link" ? "#4ADE80" : "#9CA3AF",
+                          }}
+                        >
+                          {t("conflictLinkAction")}
+                        </button>
+                        <button
+                          onClick={() =>
+                            setResolutions((r) => ({
+                              ...r,
+                              [conflict.supplierItemId]: { catalogAction: "create_new" },
+                            }))
+                          }
+                          style={{
+                            flex: 1,
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            border: chosen?.catalogAction === "create_new" ? "1px solid #3B82F6" : "1px solid #374151",
+                            background: chosen?.catalogAction === "create_new" ? "#0c1e3d" : "#1F2937",
+                            color: chosen?.catalogAction === "create_new" ? "#60A5FA" : "#9CA3AF",
+                          }}
+                        >
+                          {t("conflictCreateNewAction")}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              ) : (
+              <>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
@@ -313,6 +485,8 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                   }}
                 />
               </div>
+              </>
+              )}
             </div>
 
             <div
@@ -328,16 +502,37 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                 {t("totalLabel", { total: money(total, intlLocale) })}
               </span>
               <div style={{ display: "flex", gap: 10 }}>
-                <Btn variant="ghost" onClick={() => setModalOpen(false)}>
-                  {t("close")}
-                </Btn>
-                <Btn
-                  variant="success"
-                  disabled={createOrder.isPending || !storeId}
-                  onClick={handleSubmit}
-                >
-                  {createOrder.isPending ? t("submitting") : t("confirmOrder")}
-                </Btn>
+                {step === "cart" ? (
+                  <>
+                    <Btn variant="ghost" onClick={closeModal}>
+                      {t("close")}
+                    </Btn>
+                    <Btn
+                      variant="success"
+                      disabled={createOrder.isPending || checkConflicts.isPending || !storeId}
+                      onClick={handleSubmit}
+                    >
+                      {checkConflicts.isPending
+                        ? t("checkingConflicts")
+                        : createOrder.isPending
+                          ? t("submitting")
+                          : t("confirmOrder")}
+                    </Btn>
+                  </>
+                ) : (
+                  <>
+                    <Btn variant="ghost" onClick={backToCart}>
+                      {t("back")}
+                    </Btn>
+                    <Btn
+                      variant="success"
+                      disabled={!allConflictsResolved || createOrder.isPending}
+                      onClick={submitOrder}
+                    >
+                      {createOrder.isPending ? t("submitting") : t("confirmOrder")}
+                    </Btn>
+                  </>
+                )}
               </div>
             </div>
           </div>

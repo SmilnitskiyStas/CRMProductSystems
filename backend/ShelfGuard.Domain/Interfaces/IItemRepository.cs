@@ -22,6 +22,7 @@ public interface IItemRepository
 
     Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default);
+    Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default);
 
     Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default);
     Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default);

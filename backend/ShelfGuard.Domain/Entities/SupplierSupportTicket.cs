@@ -18,6 +18,13 @@ public sealed class SupplierSupportTicket
 
     /// <summary>Client-side user who opened the ticket.</summary>
     public Guid? CreatedByUserId { get; set; }
+
+    /// <summary>
+    /// Order this ticket was auto-opened for, when a receiving employee flags a discrepancy
+    /// (damage, wrong qty) during mobile receiving (TASK-596). Null for manually-opened
+    /// tickets unrelated to a specific order.
+    /// </summary>
+    public Guid? MarketplaceOrderId { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

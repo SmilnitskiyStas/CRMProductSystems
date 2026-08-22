@@ -51,7 +51,13 @@ public sealed record CreateProductRequest(
     string? ImageUrl,
     string? Manufacturer,
     string? CountryOrigin,
-    string? PerishabilityClass
+    string? PerishabilityClass,
+    /// <summary>
+    /// Lineage pointer (TASK-597): set when this Item is being auto-provisioned from a
+    /// marketplace SupplierItem at order time. Null for every other creation path (manual entry,
+    /// barcode-lookup import, Pchilka import). See Item.SourceSupplierItemId.
+    /// </summary>
+    Guid? SourceSupplierItemId = null
 );
 
 public sealed record UpdateProductRequest(

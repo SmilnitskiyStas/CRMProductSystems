@@ -124,6 +124,9 @@ file sealed class FakeCatalogRepo : IItemRepository
     public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) =>
         Task.FromResult(Products.FirstOrDefault(p => p.Barcodes.Contains(barcode)));
 
+    public Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<Item>>(Products.Where(p => p.Barcodes.Any(barcodes.Contains)).ToList());
+
     public Task<List<Item>> GetAllAsync(Guid? categoryId, Guid? segmentId, string? managementType, CancellationToken ct = default) =>
         Task.FromResult(Products);
 

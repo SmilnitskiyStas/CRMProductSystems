@@ -24,6 +24,7 @@ import type {
   SupplierSupportTicketDto,
   SupportTicketMessageDto,
   CreateSupportTicketRequest,
+  BarcodeConflict,
 } from "../types";
 
 export const marketplaceApi = {
@@ -132,9 +133,21 @@ export const marketplaceApi = {
 
   // ── Marketplace orders (TASK-318) ──────────────────────────────────────────
 
-  /** POST /api/marketplace/suppliers/{id}/orders — 403 без активного договору */
+  /** POST /api/marketplace/suppliers/{id}/orders — 403 без активного договору, 400 якщо
+   * лишилась нерозвʼязана barcode-конфліктна лінія (catalogAction "auto"/omitted) — див.
+   * checkOrderConflicts, TASK-597 */
   createOrder: (supplierId: string, body: CreateMarketplaceOrderRequest) =>
     api.post<MarketplaceOrderDto>(`/api/marketplace/suppliers/${supplierId}/orders`, body),
+
+  /** POST /api/marketplace/suppliers/{id}/orders/conflicts — pre-flight check before
+   * createOrder (TASK-597): does any ordered supplier item's barcode already belong to a
+   * DIFFERENT existing item in the client's own catalog? Empty array = no conflicts, safe
+   * to submit as-is. */
+  checkOrderConflicts: (supplierId: string, items: { supplierItemId: string; qty: number }[]) =>
+    api.post<BarcodeConflict[]>(
+      `/api/marketplace/suppliers/${supplierId}/orders/conflicts`,
+      { items }
+    ),
 
   /** GET /api/marketplace/my-orders */
   getMyOrders: () => api.get<MarketplaceOrderDto[]>("/api/marketplace/my-orders"),
