@@ -3,6 +3,18 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-595 — Marketplace order receiving: post-implementation API reference (docs)
+
+**Status:** done · **Agent:** documentation-writer
+Log: `.claude/logs/tasks/595_2026-08-22_marketplace-orders-api-reference_documentation-writer.md`
+
+New `mobile/features/marketplace-orders/API.md` — reference doc for the already-shipped
+marketplace order receiving feature (TASK-586/ADR-033 backend + mobile, both live in prod).
+Full API contract (5 endpoints, DTOs, error strings, auth), known v1 limits, and
+confirmed-implemented details (manual search fallback, datetimepicker 9.1.0, barcode types,
+`saveItem()` always sends a full field snapshot). Verified every route/DTO/error string against
+current source — old pre-implementation handoff (`586-to-mobile-codex.md`) had zero drift.
+
 ## TASK-593 — Events: multi-store scope + global header selector wiring (frontend)
 
 **Status:** done · **Agent:** frontend-developer · parallel to TASK-592 (database-engineer,
