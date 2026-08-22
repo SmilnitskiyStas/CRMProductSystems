@@ -5,6 +5,14 @@
 > This is a **reference document** for extending, fixing, or building adjacent to this feature —
 > it is not a build spec. Every route, DTO field, and policy below was read directly from the
 > current source and cross-checked against it while writing this file.
+>
+> **Addendum (2026-08-22, TASK-596..599, commits `96a4fefe` / `40632ba8`):** two more backend
+> changes landed on top of the above and are folded into this file below — client-catalog
+> auto-provisioning at order time (affects the "Known v1 limitations" barcode-crosswalk note),
+> and two new `MarketplaceOrderReceiptItemDto` fields, `price` and `referenceImageUrl`, plus a
+> finalize-time discrepancy auto-ticket. The new fields exist on the wire today but are **not yet
+> rendered by the mobile screen** — see the dedicated "Not yet built" section below. Re-verified
+> directly against current backend source, same discipline as the rest of this file.
 
 ## What this feature does
 
@@ -87,6 +95,13 @@ Request body — `UpdateMarketplaceOrderReceiptItemRequest`, all fields nullable
 - `productId` / `expiryDate` / `batchNumber` — **merge** with the existing value. Omitting keeps
   whatever was already set; there is no way to explicitly null these back out once set.
 
+> **What happens to `discrepancyNotes`?** As of TASK-599 (2026-08-22): when a receipt is
+> finalized (endpoint e below) and one or more items have non-empty `discrepancyNotes`, the
+> backend automatically opens a support ticket to the supplier tenant with those details — this
+> happens entirely server-side, triggered by the same `finalize` call mobile already makes.
+> Nothing new for mobile to call or handle; just context so this field doesn't read as purely
+> decorative.
+
 > **Does the mobile client need to worry about this in practice? No.** `saveItem()` in
 > `[orderId].tsx` (line ~151) always builds and sends all five fields together in a single object
 > on every save — `productId`, `quantityReceived`, `expiryDate`, `batchNumber` (`?? null`),
@@ -142,9 +157,18 @@ type MarketplaceOrderReceiptItemDto = {
   quantityReceived: number | null;
   expiryDate: string | null;      // "YYYY-MM-DD"
   batchNumber: string | null;
-  discrepancyNotes: string | null;
+  discrepancyNotes: string | null; // non-empty on finalize -> auto-opens a supplier support
+                                   // ticket server-side (TASK-599, see endpoint d's field notes)
   isResolved: boolean;            // productId && quantityReceived && expiryDate all set —
                                    // exact finalize-gate condition, precomputed for you
+  price: number;                  // frozen purchase price from the order line — always present,
+                                   // unrelated to scan/receive progress (TASK-599)
+  referenceImageUrl: string | null; // reference photo so the employee can visually confirm the
+                                   // item before/while scanning (TASK-599). Once productId
+                                   // resolves: the client's own catalog Item.imageUrl (may be
+                                   // null if that item has no photo — no fallback once scanned).
+                                   // Before that: falls back to the order line's linked
+                                   // SupplierItem's primary image. Null when neither exists.
 };
 ```
 
@@ -175,11 +199,18 @@ one specific call site.
 
 - **One receipt per order, no reopening after finalize.** `MarketplaceOrderReceipt.MarketplaceOrderId`
   has a unique index enforcing this at the DB level.
-- **No barcode crosswalk between supplier and client catalogs.** Scanning only ever resolves
-  within the client tenant's own `Item` catalog (via the unchanged, pre-existing
-  `GET /api/items/by-barcode/:barcode`). If the product isn't yet in the client's own catalog, it
-  cannot be scan-received — the employee must use the manual-search fallback (see below), and if
-  it's not in the catalog at all, the item stays unresolved and blocks finalize.
+- **No barcode crosswalk between supplier and client catalogs** — still true, but hit
+  meaningfully less often since TASK-596..598 (2026-08-22). Scanning only ever resolves within
+  the client tenant's own `Item` catalog (via the unchanged, pre-existing
+  `GET /api/items/by-barcode/:barcode`) — there is still no direct supplier-SKU → client-SKU
+  lookup endpoint. What changed: placing a marketplace order now auto-provisions (or links to an
+  existing) `Item` in the client's own catalog from the supplier's listing data at order time,
+  unless a barcode collision is detected (resolved through a new web-only checkout flow — not
+  mobile's concern). So by the time a shipment physically arrives for receiving, the barcode
+  usually already resolves. The manual-search fallback below is still necessary for: orders
+  placed before this shipped, barcode collisions the client chose to resolve as "create new item
+  anyway" with a still-unrelated barcode, and other edge cases — it has not been removed, and an
+  unresolved item still blocks finalize exactly as before.
 - **No supplier-facing view of receipt data exists yet.** RLS already permits the supplier tenant
   read access at the DB level (ADR-033 Decision 3), but no endpoint has been built to expose it.
 
@@ -200,6 +231,36 @@ one specific call site.
   (client-side UX only — the backend does not itself reject past/implausible dates).
 - **Barcode types scanned:** `['ean8', 'ean13', 'qr', 'code128']` — same set `mobile/app/(app)/scan.tsx`
   uses, passed via `CameraView`'s `barcodeScannerSettings` prop in `[orderId].tsx`.
+
+## Not yet built: price + reference-photo display in the receiving UI
+
+> **This section describes intended UX, not shipped behavior.** Unlike the rest of this file
+> (which documents already-shipped, verified-against-source behavior), nothing below has been
+> built in the mobile screen as of this update — treat it as a build note for whoever picks this
+> up next, not documentation of existing code.
+
+The two new DTO fields documented above (`price`, `referenceImageUrl`, TASK-599) are already
+present on the wire — `useMarketplaceReceipt`'s response carries them today — but
+`mobile/app/(app)/marketplace-orders/[orderId].tsx` doesn't read or render either one yet, and
+`mobile/features/marketplace-orders/types.ts`'s `MarketplaceOrderReceiptItem` interface hasn't
+been extended to include them either (both would need updating alongside any UI work here).
+
+Intended UX:
+- **Item list row (`ItemRow` component, `[orderId].tsx` ~line 48).** Show `item.price` alongside
+  the "Замовлено: …" line, and a small thumbnail from `item.referenceImageUrl` near the row's
+  status icon — gives the employee a visual before they even tap into an item.
+- **Detail/scan view (the non-scanning, non-search branch of the item `Modal`, ~lines 227-240).**
+  Show the same photo larger, plus price, ideally above the quantity/expiry/batch form fields.
+  Critically, this should be visible **before** a successful scan, not only after — that's the
+  whole point of `referenceImageUrl`'s pre-resolution fallback to the supplier listing's photo:
+  give the employee something to visually match against while still physically locating/
+  confirming the item, not just as post-scan confirmation.
+- **No-image state.** Follow the placeholder pattern already established elsewhere in this app
+  for a missing product photo rather than inventing a new one — see
+  `mobile/app/(personal)/catalog.tsx` (~lines 199-204) and
+  `mobile/app/(personal)/product/[id].tsx` (~lines 105-108): a rounded `bg-gray-100` container
+  showing `<Image source={{ uri }} resizeMode="contain" className="h-full w-full" />` when a URL
+  is present, else an `<Ionicons name="cube-outline" />` glyph.
 
 ## Deeper source material (not duplicated here)
 

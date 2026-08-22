@@ -3,6 +3,19 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-600 — Marketplace order receiving: API reference update (docs)
+
+**Status:** done · **Agent:** documentation-writer
+Log: `.claude/logs/tasks/600_2026-08-22_marketplace-orders-api-reference-update_documentation-writer.md`
+
+Updated `mobile/features/marketplace-orders/API.md` (TASK-586/595's reference doc) for
+TASK-596..599: added `price`/`referenceImageUrl` to the `MarketplaceOrderReceiptItemDto` TS
+block (verified against the live backend record), documented the finalize-time discrepancy
+auto-ticket, rewrote the barcode-crosswalk limitation to reflect order-time catalog
+auto-provisioning, and added a new "Not yet built" section describing the intended (unbuilt)
+mobile UX for showing price + reference photo per item, pointing at the existing no-image
+placeholder pattern in `catalog.tsx`/`product/[id].tsx`. Docs-only, no code changes.
+
 ## TASK-598 — Marketplace catalog auto-provisioning at order time (Wave 2, backend)
 
 **Status:** done · **Agent:** backend-developer · Wave 2 of 2 on TASK-596's schema.
