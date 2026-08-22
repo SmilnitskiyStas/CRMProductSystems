@@ -4,10 +4,10 @@ import type { CreateCoefficientPayload, UpsertEventPayload } from "../types";
 
 const EVENTS_KEY = ["demand-events"] as const;
 
-export function useEvents(from: string, to: string) {
+export function useEvents(from: string, to: string, storeIds?: string[]) {
   return useQuery({
-    queryKey: [...EVENTS_KEY, from, to],
-    queryFn: () => eventsApi.getAll(from, to),
+    queryKey: [...EVENTS_KEY, from, to, storeIds],
+    queryFn: () => eventsApi.getAll(from, to, storeIds),
   });
 }
 

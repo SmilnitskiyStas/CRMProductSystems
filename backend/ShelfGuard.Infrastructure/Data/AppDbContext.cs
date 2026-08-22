@@ -62,6 +62,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<ProductBuffer> ProductBuffers => Set<ProductBuffer>();
     public DbSet<DemandEvent> DemandEvents => Set<DemandEvent>();
     public DbSet<DemandEventCoefficient> DemandEventCoefficients => Set<DemandEventCoefficient>();
+    public DbSet<DemandEventStore> DemandEventStores => Set<DemandEventStore>();
     public DbSet<WeatherData> WeatherData => Set<WeatherData>();
     public DbSet<WeatherCoefficient> WeatherCoefficients => Set<WeatherCoefficient>();
     public DbSet<PromoCannibalization> PromoCannibalizations => Set<PromoCannibalization>();
@@ -947,6 +948,20 @@ public sealed class AppDbContext : DbContext
             e.Property(c => c.Coefficient).HasColumnType("decimal(5,2)").HasDefaultValue(1.00m);
             e.Property(c => c.Source).HasMaxLength(20).HasDefaultValue("manual");
             e.HasIndex(c => c.EventId);
+        });
+
+        // ── DemandEventStore (TASK-592): event ↔ specific-store links for Scope == "stores" ──
+        builder.Entity<DemandEventStore>(e =>
+        {
+            e.ToTable("demand_event_stores");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.HasIndex(x => x.EventId);
+            e.HasIndex(x => new { x.EventId, x.StoreId }).IsUnique();
+            e.HasOne(x => x.Event).WithMany(d => d.Stores)
+             .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── WeatherData (v2) ────────────────────────────────────────────────

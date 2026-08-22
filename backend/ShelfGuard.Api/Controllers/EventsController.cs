@@ -16,12 +16,14 @@ public sealed class EventsController : ControllerBase
 
     public EventsController(IEventService events) => _events = events;
 
+    /// <summary>Lists demand events in range, optionally filtered to any of the given stores
+    /// (network-scoped events always included; "stores"-scoped events match on any overlap).</summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<DemandEventDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(
-        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] Guid[]? storeIds,
         CancellationToken ct)
-        => Ok(await _events.GetAsync(from, to, store_id, ct));
+        => Ok(await _events.GetAsync(from, to, storeIds, ct));
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(DemandEventDto), StatusCodes.Status200OK)]

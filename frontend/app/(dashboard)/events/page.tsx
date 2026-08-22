@@ -12,6 +12,7 @@ import {
   useCreateEvent, useDeleteEvent, useEvents, useSeedDefaults, useUpdateEvent,
 } from "@/features/events/hooks/useEvents";
 import { useStores } from "@/features/stores/hooks/useStores";
+import { useStoreContext } from "@/lib/useStoreContext";
 import { EVENT_TYPES, EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent, type UpsertEventPayload } from "@/features/events/types";
 
 export default function EventsPage() {
@@ -29,7 +30,10 @@ export default function EventsPage() {
   const from = `${year}-${String(month).padStart(2, "0")}-01`;
   const to = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
 
-  const { data: events = [], isLoading } = useEvents(from, to);
+  // List/calendar view — reacts to the full global header selection (multi-store), not a
+  // single primary store. Empty selection = all stores, same convention as useUsers().
+  const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
+  const { data: events = [], isLoading } = useEvents(from, to, selectedStoreIds);
   const { data: stores = [] } = useStores();
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();

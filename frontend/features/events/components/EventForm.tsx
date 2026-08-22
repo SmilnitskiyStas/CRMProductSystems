@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import type { StoreDto as Store } from "@/features/stores/types";
+import { LocationsMultiSelectDropdown } from "@/features/users/components/LocationsMultiSelectDropdown";
 import { EVENT_TYPES, getEventTypeLabel, type DemandEvent, type EventType, type UpsertEventPayload } from "../types";
 import { useAddCoefficient, useUpdateCoefficient } from "../hooks/useEvents";
 import { toast } from "sonner";
@@ -18,16 +19,22 @@ import { useMemo, useState } from "react";
 // Block 8b), which itself mirrors features/locations/components/LocationFormDialog.tsx
 // (i18n Block 2).
 function buildSchema(t: ReturnType<typeof useTranslations>) {
-  return z.object({
-    name: z.string().min(1, t("validationRequired")).max(255),
-    eventType: z.enum(["holiday", "promo", "local_event", "season_start", "custom"]),
-    scope: z.enum(["network", "store"]),
-    storeId: z.string().optional(),
-    startsAt: z.string().min(1, t("validationDateRequired")),
-    endsAt: z.string().min(1, t("validationDateRequired")),
-    isRecurring: z.boolean(),
-    notes: z.string().optional(),
-  });
+  return z
+    .object({
+      name: z.string().min(1, t("validationRequired")).max(255),
+      eventType: z.enum(["holiday", "promo", "local_event", "season_start", "custom"]),
+      scope: z.enum(["network", "store", "stores"]),
+      storeId: z.string().optional(),
+      storeIds: z.array(z.string()).optional(),
+      startsAt: z.string().min(1, t("validationDateRequired")),
+      endsAt: z.string().min(1, t("validationDateRequired")),
+      isRecurring: z.boolean(),
+      notes: z.string().optional(),
+    })
+    .refine((v) => v.scope !== "stores" || (v.storeIds && v.storeIds.length > 0), {
+      message: t("validationStoresRequired"),
+      path: ["storeIds"],
+    });
 }
 
 type FormValues = z.infer<ReturnType<typeof buildSchema>>;
@@ -61,16 +68,17 @@ export function EventForm({ event, initialDate, stores, isPending, onClose, onSu
 
   const schema = useMemo(() => buildSchema(t), [t]);
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: event
       ? {
           name: event.name, eventType: event.eventType, scope: event.scope,
-          storeId: event.storeId ?? "", startsAt: event.startsAt, endsAt: event.endsAt,
+          storeId: event.storeId ?? "", storeIds: event.storeIds ?? [],
+          startsAt: event.startsAt, endsAt: event.endsAt,
           isRecurring: event.isRecurring, notes: event.notes ?? "",
         }
       : {
-          name: "", eventType: "custom", scope: "network", storeId: "",
+          name: "", eventType: "custom", scope: "network", storeId: "", storeIds: [],
           startsAt: initialDate ?? new Date().toISOString().slice(0, 10),
           endsAt: initialDate ?? new Date().toISOString().slice(0, 10),
           isRecurring: false, notes: "",
@@ -78,6 +86,12 @@ export function EventForm({ event, initialDate, stores, isPending, onClose, onSu
   });
 
   const scope = watch("scope");
+  const storeIds = watch("storeIds") ?? [];
+
+  function toggleStoreId(id: string) {
+    const next = storeIds.includes(id) ? storeIds.filter((x) => x !== id) : [...storeIds, id];
+    setValue("storeIds", next, { shouldValidate: true });
+  }
 
   function submit(v: FormValues) {
     onSubmit({
@@ -85,6 +99,7 @@ export function EventForm({ event, initialDate, stores, isPending, onClose, onSu
       eventType: v.eventType as EventType,
       scope: v.scope,
       storeId: v.scope === "store" ? v.storeId || null : null,
+      storeIds: v.scope === "stores" ? v.storeIds ?? [] : [],
       startsAt: v.startsAt,
       endsAt: v.endsAt,
       isRecurring: v.isRecurring,
@@ -115,6 +130,7 @@ export function EventForm({ event, initialDate, stores, isPending, onClose, onSu
             <select {...register("scope")} style={inputStyle}>
               <option value="network">{t("scopeNetworkOption")}</option>
               <option value="store">{t("scopeStoreOption")}</option>
+              <option value="stores">{t("scopeStoresOption")}</option>
             </select>
           </div>
         </div>
@@ -126,6 +142,21 @@ export function EventForm({ event, initialDate, stores, isPending, onClose, onSu
               <option value="">{t("storePlaceholder")}</option>
               {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+          </div>
+        )}
+
+        {scope === "stores" && (
+          <div>
+            <label style={labelStyle}>{t("storesLabel")}</label>
+            <LocationsMultiSelectDropdown
+              locations={stores}
+              selectedIds={storeIds}
+              onToggle={toggleStoreId}
+              summaryLabel={t("storesSelectedCount", { count: storeIds.length })}
+              placeholderLabel={t("storesPlaceholder")}
+              doneLabel={t("storesDoneButton")}
+            />
+            {errors.storeIds && <div style={errStyle}>{errors.storeIds.message}</div>}
           </div>
         )}
 

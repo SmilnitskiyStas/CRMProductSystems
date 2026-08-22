@@ -106,7 +106,7 @@ public sealed class AiOrderService : IAiOrderService
         // 1. Context: weather, events (14d), promos, schedule
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var forecast = await _weather.GetForecastAsync(storeId, ct);
-        var events = await _events.GetAsync(today, today.AddDays(14), storeId, ct);
+        var events = await _events.GetAsync(today, today.AddDays(14), new[] { storeId }, ct);
         var promoCoefs = await _promos.GetActivePromoCoefficientsAsync(storeId, DateTime.UtcNow, ct);
         var adu30 = await _repo.GetAdu30Async(storeId, ct);
         var nextDelivery = await ComputeNextDeliveryAsync(storeId, today, ct);

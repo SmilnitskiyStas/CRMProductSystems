@@ -8,7 +8,7 @@ public sealed class EventService : IEventService
 {
     private static readonly HashSet<string> ValidEventTypes =
         ["holiday", "promo", "local_event", "season_start", "custom"];
-    private static readonly HashSet<string> ValidScopes = ["network", "store"];
+    private static readonly HashSet<string> ValidScopes = ["network", "store", "stores"];
     private static readonly HashSet<string> ValidCoefScopes = ["category", "segment", "product"];
 
     private readonly IEventRepository _repo;
@@ -16,9 +16,9 @@ public sealed class EventService : IEventService
     public EventService(IEventRepository repo) => _repo = repo;
 
     public async Task<List<DemandEventDto>> GetAsync(
-        DateOnly? from, DateOnly? to, Guid? storeId, CancellationToken ct = default)
+        DateOnly? from, DateOnly? to, Guid[]? storeIds, CancellationToken ct = default)
     {
-        var events = await _repo.GetAsync(from, to, storeId, ct);
+        var events = await _repo.GetAsync(from, to, storeIds, ct);
         return events.Select(ToDto).ToList();
     }
 
@@ -49,6 +49,8 @@ public sealed class EventService : IEventService
         };
 
         await _repo.AddAsync(ev, ct);
+        await _repo.ReplaceStoresForEventAsync(
+            ev.Id, request.Scope == "stores" ? request.StoreIds ?? [] : [], ct);
         await _repo.SaveChangesAsync(ct);
         return (ToDto(ev), null);
     }
@@ -71,6 +73,8 @@ public sealed class EventService : IEventService
         ev.IsRecurring = request.IsRecurring;
         ev.Notes = request.Notes;
 
+        await _repo.ReplaceStoresForEventAsync(
+            ev.Id, request.Scope == "stores" ? request.StoreIds ?? [] : [], ct);
         await _repo.SaveChangesAsync(ct);
         return (ToDto(ev), null);
     }
@@ -190,14 +194,17 @@ public sealed class EventService : IEventService
         if (string.IsNullOrWhiteSpace(r.Name)) return "Name is required.";
         if (!ValidEventTypes.Contains(r.EventType))
             return "EventType must be holiday, promo, local_event, season_start or custom.";
-        if (!ValidScopes.Contains(r.Scope)) return "Scope must be network or store.";
+        if (!ValidScopes.Contains(r.Scope)) return "Scope must be network, store or stores.";
         if (r.Scope == "store" && r.StoreId is null) return "StoreId is required for store scope.";
+        if (r.Scope == "stores" && (r.StoreIds is null || r.StoreIds.Count == 0))
+            return "StoreIds is required for stores scope.";
         if (!r.IsRecurring && r.EndsAt < r.StartsAt) return "EndsAt must not be before StartsAt.";
         return null;
     }
 
     private static DemandEventDto ToDto(DemandEvent e) => new(
         e.Id, e.Name, e.EventType, e.Scope, e.StoreId,
+        e.Stores.Select(s => s.StoreId).ToList(),
         e.StartsAt.ToString("yyyy-MM-dd"), e.EndsAt.ToString("yyyy-MM-dd"),
         e.IsRecurring, e.Notes,
         e.Coefficients.Select(ToCoefDto).ToList());

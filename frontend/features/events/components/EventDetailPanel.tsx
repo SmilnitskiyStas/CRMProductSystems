@@ -44,6 +44,14 @@ const removeButtonStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+/** Scope label keys — all reused from `eventForm` (tForm), matching how the create/edit form
+ * already labels these same three options. Lookup object instead of nested ternaries. */
+const SCOPE_LABEL_KEYS: Record<DemandEvent["scope"], string> = {
+  network: "scopeNetworkOption",
+  store: "scopeStoreOption",
+  stores: "scopeStoresOption",
+};
+
 export function EventDetailPanel({ event, stores, referenceDateIso, onEdit }: Props) {
   const t = useTranslations("Dashboard.events.dayDetail");
   const tTypes = useTranslations("Dashboard.events.types");
@@ -51,7 +59,20 @@ export function EventDetailPanel({ event, stores, referenceDateIso, onEdit }: Pr
 
   const typeStyle = EVENT_TYPE_STYLES[event.eventType];
   const typeLabel = getEventTypeLabel(tTypes, event.eventType);
-  const storeName = event.storeId ? stores.find((s) => s.id === event.storeId)?.name ?? event.storeId : null;
+  const scopeLabel = tForm(SCOPE_LABEL_KEYS[event.scope]);
+
+  // "store" resolves the single linked store; "stores" resolves + joins each id in
+  // `event.storeIds` using the exact same lookup, just mapped over the array; "network" has
+  // no store to show.
+  const storeNames =
+    event.scope === "store"
+      ? event.storeId
+        ? [stores.find((s) => s.id === event.storeId)?.name ?? event.storeId]
+        : []
+      : event.scope === "stores"
+        ? event.storeIds.map((id) => stores.find((s) => s.id === id)?.name ?? id)
+        : [];
+  const storeName = storeNames.length > 0 ? storeNames.join(", ") : null;
 
   // Product-scoped coefficients drive both the "Linked Products" editor and the "Sales
   // Comparison" cards below — one filtered list, reused for both sections.
@@ -86,10 +107,7 @@ export function EventDetailPanel({ event, stores, referenceDateIso, onEdit }: Pr
             {typeLabel}
           </span>
         } />
-        <DrawerField
-          label={t("scopeLabel")}
-          value={event.scope === "network" ? tForm("scopeNetworkOption") : tForm("scopeStoreOption")}
-        />
+        <DrawerField label={t("scopeLabel")} value={scopeLabel} />
         <DrawerField label={t("storeLabel")} value={storeName ?? t("noStoreValue")} />
         <DrawerField label={t("datesLabel")} value={`${event.startsAt} – ${event.endsAt}`} />
         <DrawerField label={t("recurringLabel")} value={event.isRecurring ? t("recurringYes") : t("recurringNo")} />
@@ -200,7 +218,7 @@ export function EventDetailPanel({ event, stores, referenceDateIso, onEdit }: Pr
                     productName={product?.name ?? `${c.scopeId.slice(0, 8)}…`}
                     referenceDateIso={referenceDateIso}
                     event={event}
-                    storeId={event.storeId ?? undefined}
+                    storeId={event.scope === "store" ? (event.storeId ?? undefined) : undefined}
                   />
                 );
               })}

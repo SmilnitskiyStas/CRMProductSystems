@@ -4,8 +4,13 @@ import type {
 } from "../types";
 
 export const eventsApi = {
-  getAll: (from: string, to: string) =>
-    api.get<DemandEvent[]>(`/api/events?from=${from}&to=${to}`),
+  /** GET /api/events — events in [from, to], optionally filtered by store (repeated
+   * ?storeIds=, omitted entirely when empty — same serialization style as usersApi.getAll). */
+  getAll: (from: string, to: string, storeIds?: string[]) => {
+    const qs = new URLSearchParams({ from, to });
+    for (const id of storeIds ?? []) qs.append("storeIds", id);
+    return api.get<DemandEvent[]>(`/api/events?${qs.toString()}`);
+  },
 
   create: (payload: UpsertEventPayload) =>
     api.post<DemandEvent>("/api/events", payload),

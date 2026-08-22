@@ -14,6 +14,7 @@ public sealed record DemandEventDto(
     string EventType,
     string Scope,
     Guid? StoreId,
+    List<Guid> StoreIds,
     string StartsAt,  // yyyy-MM-dd
     string EndsAt,
     bool IsRecurring,
@@ -26,6 +27,7 @@ public sealed record UpsertEventRequest(
     string EventType,
     string Scope,
     Guid? StoreId,
+    List<Guid>? StoreIds,
     DateOnly StartsAt,
     DateOnly EndsAt,
     bool IsRecurring,

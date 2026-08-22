@@ -35,7 +35,7 @@ public sealed class AiOrderServiceTests
         // Common plumbing so GenerateAsync tests don't need to repeat it.
         _repo.GetStoreNameAsync(_storeId, Arg.Any<CancellationToken>()).Returns("Store 1");
         _weather.GetForecastAsync(_storeId, Arg.Any<CancellationToken>()).Returns(new List<WeatherData>());
-        _events.GetAsync(Arg.Any<DateOnly?>(), Arg.Any<DateOnly?>(), _storeId, Arg.Any<CancellationToken>())
+        _events.GetAsync(Arg.Any<DateOnly?>(), Arg.Any<DateOnly?>(), Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == _storeId), Arg.Any<CancellationToken>())
             .Returns(new List<DemandEvent>());
         _promos.GetActivePromoCoefficientsAsync(_storeId, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<Guid, decimal>());

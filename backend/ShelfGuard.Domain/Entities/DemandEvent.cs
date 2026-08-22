@@ -11,7 +11,8 @@ public sealed class DemandEvent
     public string Name { get; set; } = string.Empty;
     /// <summary>holiday / promo / local_event / season_start / custom</summary>
     public string EventType { get; set; } = "custom";
-    /// <summary>network — applies to all stores; store — only StoreId.</summary>
+    /// <summary>network — applies to all stores; store — only StoreId; stores — several
+    /// specific stores via the Stores collection.</summary>
     public string Scope { get; set; } = "network";
     public Guid? StoreId { get; set; }
     public DateOnly StartsAt { get; set; }
@@ -25,6 +26,7 @@ public sealed class DemandEvent
 
     public Location? Store { get; init; }
     public ICollection<DemandEventCoefficient> Coefficients { get; init; } = new List<DemandEventCoefficient>();
+    public ICollection<DemandEventStore> Stores { get; init; } = new List<DemandEventStore>();
 
     /// <summary>
     /// True when the event affects the given date. Recurring events compare

@@ -12,8 +12,10 @@ export interface DemandEvent {
   id: string;
   name: string;
   eventType: EventType;
-  scope: "network" | "store";
+  scope: "network" | "store" | "stores";
   storeId: string | null;
+  /** Populated (non-empty) only when `scope === "stores"`; empty array otherwise. */
+  storeIds: string[];
   startsAt: string; // yyyy-MM-dd
   endsAt: string;
   isRecurring: boolean;
@@ -24,8 +26,10 @@ export interface DemandEvent {
 export interface UpsertEventPayload {
   name: string;
   eventType: EventType;
-  scope: "network" | "store";
+  scope: "network" | "store" | "stores";
   storeId: string | null;
+  /** Populated (non-empty) only when `scope === "stores"`; empty array otherwise. */
+  storeIds: string[];
   startsAt: string;
   endsAt: string;
   isRecurring: boolean;

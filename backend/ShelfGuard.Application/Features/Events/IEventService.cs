@@ -5,7 +5,7 @@ namespace ShelfGuard.Application.Features.Events;
 public interface IEventService
 {
     Task<List<DemandEventDto>> GetAsync(
-        DateOnly? from, DateOnly? to, Guid? storeId, CancellationToken ct = default);
+        DateOnly? from, DateOnly? to, Guid[]? storeIds, CancellationToken ct = default);
 
     Task<(DemandEventDto? Event, string? Error)> GetByIdAsync(Guid id, CancellationToken ct = default);
 

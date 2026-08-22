@@ -890,6 +890,31 @@ non-superuser connection: rolled back to the prior migration (all three tables g
 the dynamic `RlsCrossTenantIntegrationTests` suite that enumerates every `FORCE ROW LEVEL SECURITY`
 table at query time — passed at 1411/1411 both before and after, with no new failures introduced.
 
+## TASK-592 — `demand_event_stores`: event↔specific-stores join (`AddDemandEventStores`, 2026-08-22)
+
+New third `demand_events.Scope` value `"stores"` (several specific stores), alongside the
+existing `"network"` (all stores) / `"store"` (single `demand_events.LocationId`). Schema
+layer only — repository/service query logic, scope validation, CRUD endpoints, and
+frontend are a follow-up wave (see `.claude/logs/handoffs/592-to-backend_database-engineer.md`).
+
+| Table | RLS | Purpose | Key fields |
+|---|---|---|---|
+| `demand_event_stores` | tenant_isolation (EXISTS→`demand_events`) + provider_bypass + worker_bypass, FORCE RLS | Many-to-many: which specific stores an event targets when `Scope == "stores"` | `EventId` (FK→demand_events, Cascade), `StoreId` (FK→locations, Cascade); UNIQUE(EventId, StoreId) |
+
+Same shape as `demand_event_coefficients` (no own `TenantId`, tenant derived via `EXISTS`
+into `demand_events`), but with a `WITH CHECK` matching `USING` (this table is written to
+directly, unlike coefficients which the older policy only read) and a unique composite
+index — `demand_event_coefficients` deliberately allows duplicate scope rows, this table
+doesn't (it only ever answers "is store X targeted", so a duplicate is meaningless).
+`provider_bypass` written as the current `IN ('provider','provider_admin')` form; the
+`demand_event_coefficients`/`demand_events` policies from `V2EventsWeather`
+(2026-06-11) predate that convention and were not backfilled here — out of scope.
+
+Physical FK target for "store" is `locations`, not `stores` — `V2EventsWeather`'s original
+`demand_events.StoreId → stores` FK predates the v4 Store→Location table rename; the C#
+navigation property is still named `Store`/`StoreId` (mapped to column `LocationId`) but
+the physical table has been `locations` since v4.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

@@ -3,6 +3,18 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-593 — Events: multi-store scope + global header selector wiring (frontend)
+
+**Status:** done · **Agent:** frontend-developer · parallel to TASK-592 (database-engineer,
+`storeIds` migration) and a backend-developer agent building the matching API contract.
+Log: `.claude/logs/tasks/593_2026-08-22_multi-store-event-scope-frontend_frontend-developer.md`
+
+Adds a 3rd event scope `"stores"` (several specific stores, via reused
+`LocationsMultiSelectDropdown`) alongside existing `"network"`/single-`"store"`; wires the
+Events calendar page to the global header store selector (`useStoreContext`, multi-store
+pattern like `useUsers()`) so it now filters by the selected store(s) instead of always
+fetching every event. `tsc --noEmit` + eslint clean on all 6 touched files.
+
 ## TASK-590 — Product sales trend vs. baseline comparison (backend)
 
 **Status:** done · **Agent:** backend-developer
@@ -5269,3 +5281,45 @@ task also numbered 590 minutes earlier; renumbered to TASK-591 when reconciling.
 
 **Status: done** — day-detail drawer (TASK-589) + product linking/sales comparison
 (TASK-591) complete the event-calendar drawer feature.
+
+# TASK-592 — DemandEventStore: event↔specific-stores join table (schema layer)
+
+**Status:** done · **Agent:** database-engineer · **Updated:** 2026-08-22
+
+New third `DemandEvent.Scope` value `"stores"` (several specific stores, vs. existing
+`"network"`/`"store"`) — schema layer only. New entity `DemandEventStore` (`Id`, `EventId`,
+`StoreId`, mirrors `DemandEventCoefficient`'s anemic `init`-property style exactly, no
+private setters/factory), `DemandEvent.Stores` collection added, migration
+`20260822081221_AddDemandEventStores` creates `demand_event_stores` (FK→`demand_events`
+CASCADE, FK→`locations` CASCADE — physical stores table is `locations`, not `stores`),
+unique composite index `(EventId, StoreId)`. RLS: `tenant_isolation`/`provider_bypass`
+(`IN ('provider','provider_admin')`)/`worker_bypass` triad via `EXISTS`-into-`demand_events`
+(no own `TenantId`), `FORCE ROW LEVEL SECURITY`. Applied to local dev DB, verified via
+`\d demand_event_stores` in psql. `dotnet build` clean; `dotnet test`: 1793 passed, 0
+failed. Log: `.claude/logs/tasks/592_2026-08-22_demand-event-stores-migration_database-engineer.md`.
+Handoff for next wave: `.claude/logs/handoffs/592-to-backend_database-engineer.md`
+(scope validation, store-membership query logic, CRUD endpoints, DTOs, frontend all
+still pending — not touched by this task).
+
+# TASK-594 — Events: multi-store scope backend (`Scope == "stores"`)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-22
+
+Wired repo/service/controller to use `DemandEventStore` (TASK-592 schema): `IEventRepository.GetAsync`
+widened `Guid? storeId` → `Guid[]? storeIds` (any-match: `network` OR `StoreId in storeIds` OR
+`Stores.Any(s => storeIds.Contains(s.StoreId))`); `GetCandidatesForDateAsync` gained the third OR
+clause (single-store signature unchanged, order-calc consumer); new
+`ReplaceStoresForEventAsync(eventId, storeIds, ct)` (delete/insert, no own `SaveChangesAsync` —
+mirrors `UserLocationRepository.ReplaceForUserAsync`). `EventService`: `ValidScopes` gains
+`"stores"`; `Validate` requires non-empty `StoreIds` for it; `CreateAsync`/`UpdateAsync` always call
+`ReplaceStoresForEventAsync` (clears stale rows on scope switch-away); `ToDto` projects
+`StoreIds` from the entity's `Stores` collection, no `Scope` special-casing. `DemandEventDto`/
+`UpsertEventRequest` gain `StoreIds: List<Guid>` (DTO output never null; request input nullable).
+`EventsController.Get`: `[FromQuery] Guid? store_id` → `[FromQuery] Guid[]? storeIds` (repeated
+camelCase param, matches `PriceSegmentsController`/`UsersController` convention; no real callers
+broke). `AiOrderService.GenerateAsync` call-site: `GetAsync(..., new[] { storeId }, ct)`, no
+behavior change. `dotnet build` clean; `dotnet test`: **1807/1807 passed** (1793 baseline + 14 new
+in `EventServiceTests.cs`/new `EventRepositoryStoresTests.cs`, EF InMemory provider). Verified
+against TASK-593's frontend contract (already built in parallel) — compatible: repeated
+`?storeIds=` query params, `storeIds: string[]` JSON field.
+Log: `.claude/logs/tasks/594_2026-08-22_multi-store-event-scope-backend_backend-developer.md`.
