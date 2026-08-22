@@ -18,7 +18,7 @@ public interface IMarketplaceOrderService
         CancellationToken ct = default);
 
     /// <summary>
-    /// Read-only pre-flight for the checkout screen (TASK-597): runs the same per-line supplier
+    /// Read-only pre-flight for the checkout screen (TASK-598): runs the same per-line supplier
     /// catalog validation as <see cref="CreateOrderAsync"/> plus a barcode-collision check against
     /// the calling client tenant's own Item catalog. Creates nothing. Same gate as CreateOrderAsync
     /// (IsGateViolation = true → 403) since it previews exactly what a real order would need to

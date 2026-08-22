@@ -3586,7 +3586,8 @@
         "updatedLabel": "Оновлено {date}",
         "selectPrompt": "Оберіть звернення зі списку",
         "statusUpdated": "Статус оновлено",
-        "replyPlaceholder": "Написати відповідь..."
+        "replyPlaceholder": "Написати відповідь...",
+        "orderReference": "Щодо замовлення {orderNumber}"
       },
       "clientChatPanel": {
         "emptyMessages": "Повідомлень ще немає. Напишіть перше.",

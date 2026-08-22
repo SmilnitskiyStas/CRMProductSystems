@@ -398,6 +398,9 @@ export interface SupplierSupportTicketDto {
   updatedAt: string;
   /** null у списках; заповнено в GET одного тікета (старіші перші). */
   messages: SupportTicketMessageDto[] | null;
+  /** MarketplaceOrder.orderNumber, коли тікет автоматично відкрито через розбіжність при
+   * прийомці замовлення (TASK-599). Null для звичайного, вручну відкритого тікета. */
+  orderNumber: string | null;
 }
 
 export interface CreateSupportTicketRequest {

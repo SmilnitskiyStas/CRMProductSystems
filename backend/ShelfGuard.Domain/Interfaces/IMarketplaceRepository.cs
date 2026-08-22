@@ -30,6 +30,16 @@ public interface IMarketplaceRepository
         Guid supplierId, CancellationToken ct = default);
 
     /// <summary>
+    /// Images of the given supplier items, grouped by SupplierItemId (via provider context —
+    /// same cross-tenant-read need as <see cref="GetSupplierItemsAsync"/>: the caller is a client
+    /// tenant reading a supplier's catalog data). Used by MarketplaceOrderReceiptService's
+    /// reference-photo fallback for not-yet-scanned receipt lines (TASK-599). Suppliers with no
+    /// images, or ids not found, are simply absent from the result — never throws.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<SupplierItemImage>>> GetSupplierItemImagesByIdsAsync(
+        IReadOnlyList<Guid> supplierItemIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Searches public suppliers whose item catalog contains items matching
     /// <paramref name="itemName"/> and optionally filtered by <paramref name="region"/>.
     /// Uses provider context.

@@ -21,6 +21,37 @@ this contract) + a separate backend-developer agent (isolated worktree) on recei
 discrepancy tickets — no file overlap. `dotnet build` clean; `dotnet test` — 1819/1819 passing
 (1810 baseline + 9 new).
 
+## TASK-599 — Marketplace receipt enrichment (price/photo) + discrepancy auto-ticket (backend)
+
+**Status:** done · **Agent:** backend-developer (isolated worktree) · Wave 2 of TASK-586/ADR-033,
+parallel to TASK-598 (catalog auto-provisioning, main worktree) — no file overlap except
+`Dtos/CooperationDtos.cs`, reconciled by the orchestrator when merging both worktrees.
+Log: `.claude/logs/tasks/599_2026-08-22_marketplace-receipt-enrichment-discrepancy-ticket_backend-developer.md`
+
+`MarketplaceOrderReceiptItemDto` +`Price`/+`ReferenceImageUrl` (reference photo resolves via a
+new provider-bypass repository method — `supplier_items` RLS has no client-read policy, a plain
+Include would have silently returned nulls). New `ISupplierSupportService.CreateSystemTicketAsync`
+— `MarketplaceOrderReceiptService.ReceiveAsync` auto-opens a supplier support ticket + outbox
+notification (`supplier_support_ticket.opened`) when a finalized receipt has discrepancy notes.
+Deviated from the brief's "single atomic SaveChangesAsync" ask for the discrepancy ticket —
+verified that's unsafe given `product_stocks`/`stock_movements` vs. `notification_queue` need
+opposite ambient-tenant RLS contexts; used two sequential `SaveChangesAsync` calls instead (see
+task log for full rationale). Worker (`notification-dispatch.job.ts`) + `CabinetSupportTab.tsx`
+(+ `marketplace/types.ts` companion field) wired for the new event. Build clean, full suite
+1819/1819 passing after merge (this agent's own worktree run reported 1813/1813 against its
+stale pre-Wave-1 baseline), frontend `tsc --noEmit` clean.
+
+**Merge note (orchestrator):** this agent's worktree was created before TASK-596 (Wave 1) was
+committed to `main`, so it never saw the `SupplierSupportTicket.MarketplaceOrderId` column and
+independently re-added it (entity property, `AppDbContext` FK/index, and a duplicate migration
+`20260822141854_AddMarketplaceOrderIdToSupplierSupportTickets`). That duplicate schema work was
+discarded when merging (TASK-596's `20260822134439_...` migration already covers the same
+column) — only this agent's genuine application-layer work (DTOs, service methods, worker/
+frontend wiring, tests) was merged into `main`. Originally self-logged as TASK-596 (a second
+collision, on top of the schema duplication) — renumbered to TASK-599 here and in its own log
+file, and all in-code `TASK-597`/`TASK-596` comment references corrected to `TASK-599` (or
+`TASK-598` for TASK-598's own stray comments referencing the wrong number) during the merge.
+
 ## TASK-596 — Marketplace catalog auto-provisioning + discrepancy tickets: schema (Wave 1)
 
 **Status:** done · **Agent:** database-engineer · Wave 1 of 2 (repository/service/controller

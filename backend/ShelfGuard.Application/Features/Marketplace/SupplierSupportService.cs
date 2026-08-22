@@ -24,15 +24,18 @@ public sealed class SupplierSupportService : ISupplierSupportService
     private readonly ISupplierSupportTicketRepository _tickets;
     private readonly IMarketplaceRepository _marketplace;
     private readonly ISupplierChatRepository _tenantNames;
+    private readonly IMarketplaceOrderRepository _orders;
 
     public SupplierSupportService(
         ISupplierSupportTicketRepository tickets,
         IMarketplaceRepository marketplace,
-        ISupplierChatRepository tenantNames)
+        ISupplierChatRepository tenantNames,
+        IMarketplaceOrderRepository orders)
     {
         _tickets     = tickets;
         _marketplace = marketplace;
         _tenantNames = tenantNames;
+        _orders      = orders;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -82,6 +85,39 @@ public sealed class SupplierSupportService : ISupplierSupportService
         await _tickets.SaveChangesAsync(ct);
 
         return (await ToDtoAsync(ticket, includeMessages: true, ct), null);
+    }
+
+    // ── System-originated (TASK-599, Wave 2) ────────────────────────────────────
+
+    public async Task<SupplierSupportTicketDto> CreateSystemTicketAsync(
+        Guid clientTenantId, Guid supplierTenantId, Guid marketplaceOrderId,
+        string subject, string body, Guid actingUserId, CancellationToken ct = default)
+    {
+        var ticket = new SupplierSupportTicket
+        {
+            SupplierTenantId   = supplierTenantId,
+            ClientTenantId     = clientTenantId,
+            MarketplaceOrderId = marketplaceOrderId,
+            Subject            = subject,
+            Status             = SupplierSupportTicketStatus.Open,
+            CreatedByUserId    = actingUserId,
+        };
+
+        var message = new SupplierSupportTicketMessage
+        {
+            TicketId       = ticket.Id,
+            SenderTenantId = clientTenantId,
+            SenderUserId   = actingUserId,
+            Body           = body,
+        };
+        ticket.Messages.Add(message);
+
+        // No SaveChangesAsync here by design — see the XML doc on ISupplierSupportService. The
+        // caller flushes together with its own writes (e.g. the notification-queue enqueue) in
+        // one SaveChangesAsync call, under its own ITenantSessionOverride block.
+        await _tickets.AddAsync(ticket, ct);
+
+        return await ToDtoAsync(ticket, includeMessages: true, ct);
     }
 
     public async Task<IReadOnlyList<SupplierSupportTicketDto>> ListForClientAsync(
@@ -172,11 +208,13 @@ public sealed class SupplierSupportService : ISupplierSupportService
         IReadOnlyList<SupplierSupportTicket> rows, CancellationToken ct)
     {
         var names = new Dictionary<Guid, string>();
+        var orderNumbers = new Dictionary<Guid, string?>();
         var result = new List<SupplierSupportTicketDto>(rows.Count);
         foreach (var row in rows)
             result.Add(ToDto(row,
                 await GetNameCachedAsync(row.SupplierTenantId, names, ct),
                 await GetNameCachedAsync(row.ClientTenantId, names, ct),
+                await GetOrderNumberCachedAsync(row.MarketplaceOrderId, orderNumbers, ct),
                 includeMessages: false));
         return result;
     }
@@ -186,6 +224,7 @@ public sealed class SupplierSupportService : ISupplierSupportService
         ToDto(t,
             await _tenantNames.GetTenantDisplayNameAsync(t.SupplierTenantId, ct) ?? string.Empty,
             await _tenantNames.GetTenantDisplayNameAsync(t.ClientTenantId, ct) ?? string.Empty,
+            await GetOrderNumberAsync(t.MarketplaceOrderId, ct),
             includeMessages);
 
     private async Task<string> GetNameCachedAsync(
@@ -197,8 +236,30 @@ public sealed class SupplierSupportService : ISupplierSupportService
         return name;
     }
 
+    /// <summary>Resolves MarketplaceOrder.OrderNumber for a ticket auto-opened from a receipt
+    /// discrepancy (TASK-599, Wave 2). Null for a regular ticket (MarketplaceOrderId unset).
+    /// marketplace_orders' RLS is OR-based on both tenant parties, same as supplier_support_tickets
+    /// itself, so this resolves under the ambient session for either party without an override.</summary>
+    private async Task<string?> GetOrderNumberAsync(Guid? marketplaceOrderId, CancellationToken ct)
+    {
+        if (marketplaceOrderId is null) return null;
+        var order = await _orders.GetByIdAsync(marketplaceOrderId.Value, ct);
+        return order?.OrderNumber;
+    }
+
+    private async Task<string?> GetOrderNumberCachedAsync(
+        Guid? marketplaceOrderId, Dictionary<Guid, string?> cache, CancellationToken ct)
+    {
+        if (marketplaceOrderId is null) return null;
+        if (cache.TryGetValue(marketplaceOrderId.Value, out var cached)) return cached;
+        var orderNumber = await GetOrderNumberAsync(marketplaceOrderId, ct);
+        cache[marketplaceOrderId.Value] = orderNumber;
+        return orderNumber;
+    }
+
     private static SupplierSupportTicketDto ToDto(
-        SupplierSupportTicket t, string supplierName, string clientName, bool includeMessages) =>
+        SupplierSupportTicket t, string supplierName, string clientName, string? orderNumber,
+        bool includeMessages) =>
         new(
             t.Id,
             t.SupplierTenantId,
@@ -211,7 +272,8 @@ public sealed class SupplierSupportService : ISupplierSupportService
             t.UpdatedAt,
             includeMessages
                 ? t.Messages.OrderBy(m => m.CreatedAt).Select(ToMessageDto).ToList()
-                : null);
+                : null,
+            orderNumber);
 
     private static SupportTicketMessageDto ToMessageDto(SupplierSupportTicketMessage m) =>
         new(m.Id, m.TicketId, m.SenderTenantId, m.SenderUserId, m.Body, m.IsRead, m.CreatedAt);

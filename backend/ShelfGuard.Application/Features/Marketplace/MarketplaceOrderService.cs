@@ -29,7 +29,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string OnlyShippedCanHaveDelayReasonError = "Причину затримки можна вказати лише для відправленого замовлення.";
     public const string DestinationStoreRequiredError = "Оберіть магазин-призначення для замовлення.";
 
-    // ── TASK-597: marketplace catalog auto-provisioning ─────────────────────────
+    // ── TASK-598: marketplace catalog auto-provisioning ─────────────────────────
     public const string BarcodeCollisionError =
         "Штрихкод товару вже існує у вашому каталозі — потрібно вирішити конфлікт перед оформленням.";
     public const string LinkedItemRequiredError = "Оберіть товар каталогу для прив'язки.";
@@ -113,7 +113,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         // created or linked yet). Only once every line clears this pass do we execute the plans
         // (pass 2, below). This ordering matters: without it, a failure on line 3 could leave
         // lines 1-2's auto-provisioned Items already committed to the DB even though the whole
-        // order creation failed, and a client retry would then duplicate them (TASK-597).
+        // order creation failed, and a client retry would then duplicate them (TASK-598).
         var orderItems = new List<MarketplaceOrderItem>(request.Items.Count);
         var plans = new List<CatalogPlan>(request.Items.Count);
         foreach (var line in request.Items)
@@ -179,7 +179,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     }
 
     /// <summary>
-    /// TASK-597 read-only pre-flight: same per-line supplier-catalog validation as
+    /// TASK-598 read-only pre-flight: same per-line supplier-catalog validation as
     /// <see cref="CreateOrderAsync"/> (via <see cref="ValidateLine"/>) plus a barcode-collision
     /// check against the calling client tenant's own Item catalog. Never creates or links
     /// anything — CreateOrderAsync re-runs the collision check itself and is the sole source of
@@ -377,7 +377,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
 
     /// <summary>
     /// Shared per-line validation used by both <see cref="CreateOrderAsync"/> and
-    /// <see cref="CheckCatalogConflictsAsync"/> (TASK-597): supplier item exists in the given
+    /// <see cref="CheckCatalogConflictsAsync"/> (TASK-598): supplier item exists in the given
     /// catalog, is available, and Qty is within MinQty/MaxQty bounds.
     /// </summary>
     private static (SupplierItem? Item, string? Error) ValidateLine(
@@ -404,7 +404,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     }
 
     /// <summary>
-    /// TASK-597: what CreateOrderAsync's pass 2 (<see cref="ExecuteCatalogPlanAsync"/>) should do
+    /// TASK-598: what CreateOrderAsync's pass 2 (<see cref="ExecuteCatalogPlanAsync"/>) should do
     /// for one order line once planning has decided it's safe to proceed. "Create" builds a new
     /// client Item from the SupplierItem snapshot; "Link" attaches SourceSupplierItemId to an
     /// already-validated existing client Item instead.
@@ -412,7 +412,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     private sealed record CatalogPlan(SupplierItem SupplierItem, bool IsLink, Item? LinkedItem);
 
     /// <summary>
-    /// Read-only planning step (TASK-597): resolves what CatalogAction means for this line
+    /// Read-only planning step (TASK-598): resolves what CatalogAction means for this line
     /// without writing anything. "link" validates LinkedItemId belongs to this client tenant
     /// (ambient RLS on GetByIdAsync already enforces this — a foreign-tenant id resolves to null)
     /// and genuinely shares a barcode with the SupplierItem (defence against a forged/stale
@@ -461,7 +461,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     }
 
     /// <summary>
-    /// Write step (TASK-597), only ever called after every line in the order has already been
+    /// Write step (TASK-598), only ever called after every line in the order has already been
     /// planned successfully (see CreateOrderAsync pass 2). Link: sets SourceSupplierItemId on the
     /// already-validated existing Item. Create: provisions a brand-new client Item from the
     /// SupplierItem snapshot — no client-catalog category mapping, no supplier-side stock policy

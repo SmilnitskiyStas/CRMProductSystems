@@ -82,7 +82,7 @@ public record UpsertContractSettingsDto(
 
 /// <summary>
 /// CatalogAction resolves a barcode collision between this line's SupplierItem and the client's
-/// own Item catalog (TASK-597): null/"auto" (default) — auto-provision a new Item unless a
+/// own Item catalog (TASK-598): null/"auto" (default) — auto-provision a new Item unless a
 /// collision is found, in which case the whole order is rejected; "link" — attach provenance
 /// (SourceSupplierItemId) to an existing client Item instead of creating a new one, requires
 /// LinkedItemId; "create_new" — create a new Item anyway even though a collision exists (the
@@ -118,7 +118,7 @@ public record MarketplaceOrderConflictingItemDto(
 
 /// <summary>
 /// One order line whose SupplierItem shares a barcode with an Item already in the client's
-/// catalog (TASK-597). Frontend renders this as a "this barcode already exists on item X"
+/// catalog (TASK-598). Frontend renders this as a "this barcode already exists on item X"
 /// comparison card and asks the user to choose a CatalogAction ("link" or "create_new") before
 /// resubmitting the order. An empty conflicts list is safe to submit as-is.
 /// </summary>
@@ -195,7 +195,20 @@ public record MarketplaceOrderReceiptItemDto(
     /// <summary>True once ProductId, QuantityReceived, and ExpiryDate are all set — the exact
     /// per-item condition the finalize gate checks. Lets callers show per-item progress without
     /// re-implementing the gate logic client-side.</summary>
-    bool IsResolved);
+    bool IsResolved,
+    /// <summary>
+    /// Frozen purchase price from the order line (MarketplaceOrderItem.Price) — always available,
+    /// unrelated to scan/receive progress (TASK-599, Wave 2).
+    /// </summary>
+    decimal Price,
+    /// <summary>
+    /// Reference photo so the employee can visually confirm the physical item before/while
+    /// scanning (TASK-599, Wave 2). Once ProductId resolves, this is the client's own catalog
+    /// Item.ImageUrl (may be null if that item has no photo — no fallback once scanned). Before
+    /// that, it falls back to the order line's linked SupplierItem's primary image (Kind ==
+    /// "main", else the lowest SortOrder) — null when neither is available.
+    /// </summary>
+    string? ReferenceImageUrl);
 
 public record MarketplaceOrderReceiptDto(
     Guid Id,
@@ -255,7 +268,12 @@ public record SupplierSupportTicketDto(
     string Status,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<SupportTicketMessageDto>? Messages = null);
+    IReadOnlyList<SupportTicketMessageDto>? Messages = null,
+    /// <summary>
+    /// Resolved order number (MarketplaceOrder.OrderNumber) when this ticket was auto-opened from
+    /// a receipt discrepancy (TASK-599, Wave 2). Null for a regular, manually-opened ticket.
+    /// </summary>
+    string? OrderNumber = null);
 
 public record AddSupportTicketMessageDto(string Body);
 

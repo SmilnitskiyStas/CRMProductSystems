@@ -1,6 +1,7 @@
 using NSubstitute;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -12,6 +13,8 @@ namespace ShelfGuard.Tests.Marketplace;
 /// TASK-586, ADR-033: client-confirmed marketplace order receiving — draft creation/pre-population,
 /// per-item scan/count update, and the finalize gate (ProductId + QuantityReceived + ExpiryDate
 /// on every item) that creates ProductStock/StockMovement and sets the order to Delivered.
+/// TASK-599, Wave 2: receipt-item Price/ReferenceImageUrl enrichment, and the discrepancy-notes
+/// -> auto-opened supplier support ticket + notification side effect on ReceiveAsync.
 /// </summary>
 public sealed class MarketplaceOrderReceiptServiceTests
 {
@@ -19,6 +22,10 @@ public sealed class MarketplaceOrderReceiptServiceTests
     private readonly IMarketplaceOrderRepository _orders = Substitute.For<IMarketplaceOrderRepository>();
     private readonly IMarketplaceOrderService _orderService = Substitute.For<IMarketplaceOrderService>();
     private readonly IItemRepository _items = Substitute.For<IItemRepository>();
+    private readonly IMarketplaceRepository _marketplace = Substitute.For<IMarketplaceRepository>();
+    private readonly ISupplierSupportService _supplierSupport = Substitute.For<ISupplierSupportService>();
+    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
+    private readonly ITenantSessionOverride _tenantSessionOverride = Substitute.For<ITenantSessionOverride>();
     private readonly MarketplaceOrderReceiptService _sut;
 
     private readonly Guid _supplierTenantId = Guid.NewGuid();
@@ -28,7 +35,27 @@ public sealed class MarketplaceOrderReceiptServiceTests
 
     public MarketplaceOrderReceiptServiceTests()
     {
-        _sut = new MarketplaceOrderReceiptService(_receipts, _orders, _orderService, _items);
+        _sut = new MarketplaceOrderReceiptService(
+            _receipts, _orders, _orderService, _items, _marketplace, _supplierSupport,
+            _notifications, _tenantSessionOverride);
+
+        // No images by default — tests that care about the reference-photo fallback override this.
+        _marketplace.GetSupplierItemImagesByIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, IReadOnlyList<SupplierItemImage>>());
+
+        // Same pure pass-through convention as MarketplaceOrderServiceTests (TASK-584): invokes
+        // the delegate immediately instead of opening a real transaction/RLS override.
+        _tenantSessionOverride
+            .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<bool>>>()());
+
+        _supplierSupport.CreateSystemTicketAsync(
+                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(new SupplierSupportTicketDto(
+                Guid.NewGuid(), ci.ArgAt<Guid>(1), ci.ArgAt<Guid>(0), "Supplier", "Client",
+                ci.ArgAt<string>(3), SupplierSupportTicketStatus.Open, DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow)));
     }
 
     // ── ListAwaitingReceiptAsync ─────────────────────────────────────────────────
@@ -412,6 +439,157 @@ public sealed class MarketplaceOrderReceiptServiceTests
         Assert.NotNull(order.DeliveredAt);
 
         await _receipts.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // Regression guard (TASK-599, Wave 2): no discrepancy notes on any item -> no ticket,
+        // no notification, no tenant-session override, and exactly one SaveChangesAsync call
+        // total (asserted above) — the discrepancy side effect must not add a second one.
+        await _supplierSupport.DidNotReceive().CreateSystemTicketAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), Arg.Any<CancellationToken>());
+        await _tenantSessionOverride.DidNotReceive().ExecuteAsync(
+            Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Receive_WithDiscrepancyNotes_OpensSystemTicketAndEnqueuesNotification()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var receipt = Receipt(order, "draft");
+        var okItem = ReceiptItem(receipt);
+        okItem.ProductId = Guid.NewGuid();
+        okItem.QuantityReceived = 5m;
+        okItem.ExpiryDate = new DateOnly(2026, 12, 31);
+        var damagedItem = ReceiptItem(receipt);
+        damagedItem.ItemNameSnapshot = "Хліб житній";
+        damagedItem.ProductId = Guid.NewGuid();
+        damagedItem.QuantityReceived = 3m;
+        damagedItem.ExpiryDate = new DateOnly(2026, 11, 30);
+        damagedItem.DiscrepancyNotes = "Пошкоджена упаковка";
+        receipt.Items.Add(okItem);
+        receipt.Items.Add(damagedItem);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(receipt);
+
+        var (dto, error) = await _sut.ReceiveAsync(_clientTenantId, order.Id, _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            _supplierTenantId, Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+
+        await _supplierSupport.Received(1).CreateSystemTicketAsync(
+            _clientTenantId, _supplierTenantId, order.Id,
+            Arg.Is<string>(s => s.Contains(order.OrderNumber)),
+            Arg.Is<string>(b => b.Contains("Хліб житній") && b.Contains("Пошкоджена упаковка")),
+            _userId, Arg.Any<CancellationToken>());
+
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n =>
+                n.TenantId == _supplierTenantId
+                && n.EventType == "supplier_support_ticket.opened"
+                && n.Channel == "system"
+                && n.Status == "pending"),
+            Arg.Any<CancellationToken>());
+
+        // Finalize itself must still have gone through (2 SaveChanges: the finalize commit, then
+        // the discrepancy-ticket commit inside the override).
+        await _receipts.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
+        Assert.Equal("received", receipt.Status);
+        Assert.Equal(MarketplaceOrderStatus.Delivered, order.Status);
+    }
+
+    // ── Receipt-item enrichment: Price / ReferenceImageUrl (TASK-599, Wave 2) ──────
+
+    [Fact]
+    public async Task Get_ResolvedItem_UsesItemImageUrlNotSupplierFallback()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var supplierItemId = Guid.NewGuid();
+        var orderLine = OrderItem(order, "Молоко 2.5%", 5m);
+        orderLine.SupplierItemId = supplierItemId;
+        var product = new Item { Id = Guid.NewGuid(), Name = "Молоко 2.5%", ImageUrl = "https://cdn/item.jpg" };
+
+        var receipt = Receipt(order, "draft");
+        var item = ReceiptItem(receipt, orderLine, product);
+        item.ProductId = product.Id;
+        receipt.Items.Add(item);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(receipt);
+
+        // Even if a supplier image happens to be registered, a resolved item must not use it.
+        _marketplace.GetSupplierItemImagesByIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, IReadOnlyList<SupplierItemImage>>
+            {
+                [supplierItemId] = new List<SupplierItemImage>
+                {
+                    new() { SupplierItemId = supplierItemId, Url = "https://cdn/supplier.jpg", Kind = "main", SortOrder = 0 },
+                },
+            });
+
+        var (dto, error) = await _sut.GetAsync(_clientTenantId, order.Id);
+
+        Assert.Null(error);
+        var itemDto = Assert.Single(dto!.Items);
+        Assert.Equal(10m, itemDto.Price); // frozen order-line price from the OrderItem helper
+        Assert.Equal("https://cdn/item.jpg", itemDto.ReferenceImageUrl);
+    }
+
+    [Fact]
+    public async Task Get_UnresolvedItem_FallsBackToSupplierPrimaryImage()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var supplierItemId = Guid.NewGuid();
+        var orderLine = OrderItem(order, "Хліб житній", 10m);
+        orderLine.SupplierItemId = supplierItemId;
+
+        var receipt = Receipt(order, "draft");
+        var item = ReceiptItem(receipt, orderLine); // ProductId still null -> not yet scanned
+        receipt.Items.Add(item);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(receipt);
+
+        _marketplace.GetSupplierItemImagesByIdsAsync(
+                Arg.Is<IReadOnlyList<Guid>>(ids => ids.Contains(supplierItemId)), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, IReadOnlyList<SupplierItemImage>>
+            {
+                [supplierItemId] = new List<SupplierItemImage>
+                {
+                    new() { SupplierItemId = supplierItemId, Url = "https://cdn/gallery.jpg", Kind = "gallery", SortOrder = 1 },
+                    new() { SupplierItemId = supplierItemId, Url = "https://cdn/main.jpg", Kind = "main", SortOrder = 0 },
+                },
+            });
+
+        var (dto, error) = await _sut.GetAsync(_clientTenantId, order.Id);
+
+        Assert.Null(error);
+        var itemDto = Assert.Single(dto!.Items);
+        Assert.Equal(10m, itemDto.Price);
+        Assert.Equal("https://cdn/main.jpg", itemDto.ReferenceImageUrl);
+    }
+
+    [Fact]
+    public async Task Get_UnresolvedItemWithNoSupplierImage_ReferenceImageUrlIsNullNotThrow()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var orderLine = OrderItem(order, "Хліб житній", 10m); // no SupplierItemId at all
+        var receipt = Receipt(order, "draft");
+        var item = ReceiptItem(receipt, orderLine);
+        receipt.Items.Add(item);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(receipt);
+
+        var (dto, error) = await _sut.GetAsync(_clientTenantId, order.Id);
+
+        Assert.Null(error);
+        var itemDto = Assert.Single(dto!.Items);
+        Assert.Equal(10m, itemDto.Price);
+        Assert.Null(itemDto.ReferenceImageUrl);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -446,10 +624,13 @@ public sealed class MarketplaceOrderReceiptServiceTests
         Status = status,
     };
 
-    private MarketplaceOrderReceiptItem ReceiptItem(MarketplaceOrderReceipt receipt) => new()
+    private MarketplaceOrderReceiptItem ReceiptItem(
+        MarketplaceOrderReceipt receipt, MarketplaceOrderItem? orderItem = null, Item? product = null) => new()
     {
         ReceiptId = receipt.Id,
-        MarketplaceOrderItemId = Guid.NewGuid(),
+        MarketplaceOrderItemId = orderItem?.Id ?? Guid.NewGuid(),
+        OrderItem = orderItem,
+        Product = product,
         ClientTenantId = _clientTenantId,
         SupplierTenantId = _supplierTenantId,
         ItemNameSnapshot = "Молоко 2.5%",

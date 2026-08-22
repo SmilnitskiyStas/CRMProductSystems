@@ -1,6 +1,8 @@
+using System.Text.Json;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Receipts;
 using ShelfGuard.Application.Features.Stock;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -14,10 +16,10 @@ namespace ShelfGuard.Application.Features.Marketplace;
 /// finalize gate additionally requires ProductId (resolved at scan time, unlike Receipts where
 /// ProductId is fixed at creation).
 ///
-/// No supplier notification is enqueued on finalize — ADR-033's Consequences section explicitly
-/// scopes that out of this design (the plan only asked for a read-only supplier-cabinet display
-/// after Delivered, not a push/outbox event); this deliberately does NOT mirror
-/// MarketplaceOrderService's Shipped/delay-reason ITenantSessionOverride notification pattern.
+/// TASK-599, Wave 2: <see cref="ReceiveAsync"/> now DOES enqueue a cross-tenant side effect —
+/// auto-opening a <see cref="SupplierSupportTicket"/> (+ notification) when any item was flagged
+/// with DiscrepancyNotes during scanning. This updates the ADR-033 Consequences note above (that
+/// note described the v1/TASK-586 scope, not the current one).
 /// </summary>
 public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptService
 {
@@ -37,17 +39,29 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
     private readonly IMarketplaceOrderRepository _orders;
     private readonly IMarketplaceOrderService _orderService;
     private readonly IItemRepository _items;
+    private readonly IMarketplaceRepository _marketplace;
+    private readonly ISupplierSupportService _supplierSupport;
+    private readonly INotificationRepository _notifications;
+    private readonly ITenantSessionOverride _tenantSessionOverride;
 
     public MarketplaceOrderReceiptService(
         IMarketplaceOrderReceiptRepository receipts,
         IMarketplaceOrderRepository orders,
         IMarketplaceOrderService orderService,
-        IItemRepository items)
+        IItemRepository items,
+        IMarketplaceRepository marketplace,
+        ISupplierSupportService supplierSupport,
+        INotificationRepository notifications,
+        ITenantSessionOverride tenantSessionOverride)
     {
         _receipts = receipts;
         _orders = orders;
         _orderService = orderService;
         _items = items;
+        _marketplace = marketplace;
+        _supplierSupport = supplierSupport;
+        _notifications = notifications;
+        _tenantSessionOverride = tenantSessionOverride;
     }
 
     public Task<IReadOnlyList<MarketplaceOrderDto>> ListAwaitingReceiptAsync(
@@ -65,7 +79,7 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
         // resumes an interrupted receiving session, never errors on a repeat call.
         var existing = await _receipts.GetByOrderIdAsync(orderId, ct);
         if (existing is not null)
-            return (ToDto(existing), null);
+            return (await ToDtoAsync(existing, ct), null);
 
         if (order.Status != MarketplaceOrderStatus.Shipped)
             return (null, OrderNotShippedError);
@@ -102,7 +116,7 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
         await _receipts.SaveChangesAsync(ct);
 
         var saved = await _receipts.GetByIdAsync(receipt.Id, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await ToDtoAsync(saved, ct), null);
     }
 
     public async Task<(MarketplaceOrderReceiptDto? Receipt, string? Error)> GetAsync(
@@ -113,7 +127,7 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
             return (null, OrderNotFoundError);
 
         var receipt = await _receipts.GetByOrderIdAsync(orderId, ct);
-        return receipt is null ? (null, ReceiptNotFoundError) : (ToDto(receipt), null);
+        return receipt is null ? (null, ReceiptNotFoundError) : (await ToDtoAsync(receipt, ct), null);
     }
 
     public async Task<(MarketplaceOrderReceiptDto? Receipt, string? Error)> UpdateItemAsync(
@@ -160,7 +174,7 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
         await _receipts.SaveChangesAsync(ct);
 
         var saved = await _receipts.GetByOrderIdAsync(orderId, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await ToDtoAsync(saved, ct), null);
     }
 
     public async Task<(MarketplaceOrderReceiptDto? Receipt, string? Error)> ReceiveAsync(
@@ -252,28 +266,129 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
         // inserts and the order's status change together, atomically.
         await _receipts.SaveChangesAsync(ct);
 
+        // TASK-599, Wave 2: auto-open a supplier support ticket when any item was flagged with a
+        // discrepancy note during scanning. Deliberately a SECOND SaveChangesAsync call, not
+        // folded into the one above, despite the original brief asking for a single atomic write
+        // covering finalize + ticket + notification: product_stocks/stock_movements (just written
+        // above) carry TenantId = clientTenantId under the plain single-tenant tenant_isolation
+        // RLS policy those tables use — they can only be written while the ambient session is the
+        // CLIENT tenant. The notification_queue row below must land with TenantId =
+        // receipt.SupplierTenantId under the SAME plain single-tenant policy, which requires the
+        // opposite: the ambient session overridden to the SUPPLIER tenant
+        // (ITenantSessionOverride). No single ambient tenant satisfies both at once, so the two
+        // phases cannot share one SaveChangesAsync call without breaking RLS on one side. Splitting
+        // into two calls (this one already durably committed, the discrepancy side effect right
+        // after) is the closest safe equivalent: finalize is never blocked by a downstream
+        // notification hiccup, at the cost of not being a single DB transaction end-to-end.
+        var discrepantItems = receipt.Items
+            .Where(i => !string.IsNullOrWhiteSpace(i.DiscrepancyNotes))
+            .ToList();
+
+        if (discrepantItems.Count > 0)
+        {
+            await _tenantSessionOverride.ExecuteAsync(receipt.SupplierTenantId, async () =>
+            {
+                var subject = $"Розбіжності при прийомці замовлення {order.OrderNumber}";
+                var body = BuildDiscrepancyTicketBody(discrepantItems);
+
+                var ticket = await _supplierSupport.CreateSystemTicketAsync(
+                    clientTenantId, receipt.SupplierTenantId, order.Id, subject, body, receivedByUserId, ct);
+
+                await EnqueueDiscrepancyTicketNotificationAsync(receipt, order, ticket, ct);
+                await _receipts.SaveChangesAsync(ct);
+                return true;
+            }, ct);
+        }
+
         var saved = await _receipts.GetByOrderIdAsync(orderId, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await ToDtoAsync(saved, ct), null);
+    }
+
+    // ── Discrepancy-ticket helpers (TASK-599, Wave 2) ───────────────────────────
+
+    private static string BuildDiscrepancyTicketBody(IReadOnlyList<MarketplaceOrderReceiptItem> items)
+    {
+        var body = string.Join("\n", items.Select(i =>
+            $"{i.Product?.Name ?? i.ItemNameSnapshot}: {i.DiscrepancyNotes}"));
+        return body.Length > SupplierSupportService.MaxBodyLength
+            ? body[..SupplierSupportService.MaxBodyLength]
+            : body;
+    }
+
+    /// <summary>
+    /// Postgres outbox row (EventType = "supplier_support_ticket.opened") for the supplier
+    /// tenant, picked up by worker/src/jobs/notification-dispatch.job.ts. Mirrors the shape of
+    /// MarketplaceOrderService.EnqueueShippedNotificationAsync.
+    /// </summary>
+    private async Task EnqueueDiscrepancyTicketNotificationAsync(
+        MarketplaceOrderReceipt receipt, MarketplaceOrder order, SupplierSupportTicketDto ticket,
+        CancellationToken ct)
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            ticketId = ticket.Id,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = receipt.SupplierTenantId,
+            UserId    = null,
+            StoreId   = null,
+            Title     = $"Розбіжності при прийомці замовлення {order.OrderNumber}",
+            Channel   = "system",
+            EventType = "supplier_support_ticket.opened",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
     }
 
     // ── mapping ────────────────────────────────────────────────────────────────
 
-    private static MarketplaceOrderReceiptDto ToDto(MarketplaceOrderReceipt r) => new(
-        r.Id,
-        r.MarketplaceOrderId,
-        r.ClientTenantId,
-        r.SupplierTenantId,
-        r.DestinationStoreId,
-        r.DestinationStore?.Name ?? "—",
-        r.Status,
-        r.CreatedByUserId,
-        r.ReceivedByUserId,
-        r.ReceivedAt,
-        r.CreatedAt,
-        r.UpdatedAt,
-        r.Items.Select(ToItemDto).ToList());
+    private async Task<MarketplaceOrderReceiptDto> ToDtoAsync(MarketplaceOrderReceipt r, CancellationToken ct)
+    {
+        // Batch-fetch fallback reference images for every not-yet-scanned line in one round trip
+        // (provider-bypass read — supplier_items RLS has no client-read policy, see
+        // MarketplaceRepository.GetSupplierItemImagesByIdsAsync).
+        var supplierItemIds = r.Items
+            .Where(i => i.ProductId is null && i.OrderItem?.SupplierItemId is not null)
+            .Select(i => i.OrderItem!.SupplierItemId!.Value)
+            .Distinct()
+            .ToList();
 
-    private static MarketplaceOrderReceiptItemDto ToItemDto(MarketplaceOrderReceiptItem i) => new(
+        var imagesBySupplierItem = await _marketplace.GetSupplierItemImagesByIdsAsync(supplierItemIds, ct);
+
+        return new(
+            r.Id,
+            r.MarketplaceOrderId,
+            r.ClientTenantId,
+            r.SupplierTenantId,
+            r.DestinationStoreId,
+            r.DestinationStore?.Name ?? "—",
+            r.Status,
+            r.CreatedByUserId,
+            r.ReceivedByUserId,
+            r.ReceivedAt,
+            r.CreatedAt,
+            r.UpdatedAt,
+            r.Items.Select(i => ToItemDto(i, imagesBySupplierItem)).ToList());
+    }
+
+    private static string? PrimarySupplierItemImageUrl(
+        Guid? supplierItemId, IReadOnlyDictionary<Guid, IReadOnlyList<SupplierItemImage>> imagesBySupplierItem)
+    {
+        if (supplierItemId is null) return null;
+        if (!imagesBySupplierItem.TryGetValue(supplierItemId.Value, out var images) || images.Count == 0)
+            return null;
+
+        // Same "main, else lowest SortOrder" convention MarketplaceService/SupplierCabinetService
+        // already use for supplier item images.
+        return (images.FirstOrDefault(img => img.Kind == "main") ?? images.OrderBy(img => img.SortOrder).First()).Url;
+    }
+
+    private static MarketplaceOrderReceiptItemDto ToItemDto(
+        MarketplaceOrderReceiptItem i, IReadOnlyDictionary<Guid, IReadOnlyList<SupplierItemImage>> imagesBySupplierItem) => new(
         i.Id,
         i.MarketplaceOrderItemId,
         i.ProductId,
@@ -284,5 +399,9 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
         i.ExpiryDate,
         i.BatchNumber,
         i.DiscrepancyNotes,
-        IsResolved: i.ProductId.HasValue && i.QuantityReceived.HasValue && i.ExpiryDate.HasValue);
+        IsResolved: i.ProductId.HasValue && i.QuantityReceived.HasValue && i.ExpiryDate.HasValue,
+        Price: i.OrderItem?.Price ?? 0m,
+        ReferenceImageUrl: i.ProductId.HasValue
+            ? i.Product?.ImageUrl
+            : PrimarySupplierItemImageUrl(i.OrderItem?.SupplierItemId, imagesBySupplierItem));
 }

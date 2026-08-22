@@ -3586,7 +3586,8 @@
         "updatedLabel": "Updated {date}",
         "selectPrompt": "Select a request from the list",
         "statusUpdated": "Status updated",
-        "replyPlaceholder": "Write a reply..."
+        "replyPlaceholder": "Write a reply...",
+        "orderReference": "Regarding order {orderNumber}"
       },
       "clientChatPanel": {
         "emptyMessages": "No messages yet. Write the first one.",

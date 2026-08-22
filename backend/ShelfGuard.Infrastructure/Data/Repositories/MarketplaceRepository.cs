@@ -85,6 +85,25 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<SupplierItemImage>>> GetSupplierItemImagesByIdsAsync(
+        IReadOnlyList<Guid> supplierItemIds, CancellationToken ct = default)
+    {
+        if (supplierItemIds.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<SupplierItemImage>>();
+
+        await SetProviderRoleAsync(ct);
+
+        var rows = await _db.SupplierItemImages
+            .AsNoTracking()
+            .Where(img => supplierItemIds.Contains(img.SupplierItemId))
+            .OrderBy(img => img.SortOrder)
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(img => img.SupplierItemId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SupplierItemImage>)g.ToList());
+    }
+
     public async Task<IReadOnlyList<(SupplierProfile Profile, Supplier Supplier, SupplierMetrics? Metrics)>>
         SearchSuppliersAsync(string itemName, string? region, CancellationToken ct = default)
     {

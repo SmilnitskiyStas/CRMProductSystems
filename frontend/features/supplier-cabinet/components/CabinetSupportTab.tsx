@@ -185,6 +185,11 @@ export function CabinetSupportTab() {
                   {ticket.subject}
                 </div>
                 <div style={{ color: "#6B7280", fontSize: 12 }}>{ticket.clientName}</div>
+                {ticket.orderNumber && (
+                  <div style={{ color: "#F59E0B", fontSize: 11, marginTop: 2 }}>
+                    {t("orderReference", { orderNumber: ticket.orderNumber })}
+                  </div>
+                )}
               </div>
               <select
                 value={ticket.status}

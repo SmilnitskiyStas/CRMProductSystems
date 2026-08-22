@@ -52,7 +52,7 @@ public sealed class MarketplaceOrderServiceTests
             .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<bool>>>()());
 
-        // TASK-597: no barcodes set up on CatalogItem() by default → PlanCatalogOutcomeAsync's
+        // TASK-598: no barcodes set up on CatalogItem() by default → PlanCatalogOutcomeAsync's
         // collision check short-circuits (empty list), so every pre-existing CreateOrderAsync test
         // below hits the auto-create path. Stub it to always succeed so those tests don't need to
         // know anything about catalog auto-provisioning; dedicated tests further down override
@@ -242,7 +242,7 @@ public sealed class MarketplaceOrderServiceTests
         await _orders.DidNotReceive().AddAsync(Arg.Any<MarketplaceOrder>(), Arg.Any<CancellationToken>());
     }
 
-    // ── TASK-597: marketplace catalog auto-provisioning ─────────────────────────
+    // ── TASK-598: marketplace catalog auto-provisioning ─────────────────────────
 
     [Fact]
     public async Task CheckCatalogConflicts_NoCollision_ReturnsEmptyList()

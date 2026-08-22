@@ -46,6 +46,15 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
     roles: ["network_manager", "enterprise_admin"],
     channels: ["telegram", "email"],
   },
+  // TASK-599, Wave 2: MarketplaceOrderReceiptService.ReceiveAsync auto-opens a supplier support
+  // ticket when a receipt has discrepancy notes. Recipient is the SUPPLIER tenant's own staff
+  // (unlike "supplier.message", which also targets whichever tenant is on the receiving end —
+  // same role/channel shape reused here since it's the same "someone on staff should look at
+  // this ticket" urgency).
+  "supplier_support_ticket.opened": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
 };
 
 // TASK-342 / ADR-019 §5: default channel set for targeted (UserId IS NOT NULL) outbox rows,
@@ -94,6 +103,7 @@ function formatText(row: PendingIntentRow): string {
     "receipt.created": "📦",
     "supplier.message": "💬",
     "supplier_agreement.signed": "✍️",
+    "supplier_support_ticket.opened": "⚠️",
     "access.temporary_expiring_soon": "⏳",
     "access.temporary_expired": "🔒",
   };
