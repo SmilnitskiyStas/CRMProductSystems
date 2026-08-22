@@ -17,3 +17,10 @@ worker
 .claude
 .git
 **/node_modules
+
+# Unrelated local projects and runtime-only service sockets must never enter
+# the mobile EAS archive. Windows cannot lstat an active Unix-domain socket.
+PchilkaPosAnalytics
+Portfolio
+img
+**/*.sock

@@ -179,6 +179,8 @@ export default function AppLayout() {
       {/* Marketplace — hidden routes (no tab) */}
       <Tabs.Screen name="marketplace/index" options={{ href: null }} />
       <Tabs.Screen name="marketplace/[id]" options={{ href: null }} />
+      <Tabs.Screen name="marketplace-orders/index" options={{ href: null }} />
+      <Tabs.Screen name="marketplace-orders/[orderId]" options={{ href: null }} />
       {/* Production — hidden routes (no tab) */}
       <Tabs.Screen name="production/index" options={{ href: null }} />
       <Tabs.Screen name="production/[id]" options={{ href: null }} />

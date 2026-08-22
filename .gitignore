@@ -35,3 +35,6 @@ Thumbs.db
 
 # Private credentials - NEVER commit
 .claude/private/
+
+# Local-only scratch working directories (not source code — e.g. local DB data dirs)
+/PchilkaPosAnalytics/
