@@ -427,6 +427,8 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.VatRate).HasColumnType("decimal(5,2)").HasDefaultValue(20m);
             e.Property(p => p.PricePurchase).HasColumnType("decimal(12,2)");
             e.Property(p => p.PriceRetail).HasColumnType("decimal(12,2)");
+            e.Property(p => p.DefaultReimbursementType).HasMaxLength(10);
+            e.Property(p => p.DefaultReimbursementValue).HasColumnType("decimal(12,2)");
             e.Property(p => p.IsActive).HasDefaultValue(true);
             e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW()");
             // Catalog browse: filter by category + segment + active status
@@ -667,6 +669,8 @@ public sealed class AppDbContext : DbContext
             e.Property(w => w.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(w => w.Reason).HasMaxLength(50);
             e.Property(w => w.TotalLossAmount).HasColumnType("decimal(12,2)");
+            e.Property(w => w.TotalLossAmountPurchase).HasColumnType("decimal(12,2)");
+            e.Property(w => w.TotalReimbursementAmount).HasColumnType("decimal(12,2)");
             e.Property(w => w.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(w => w.StoreId).HasColumnName("LocationId");
             e.HasIndex(w => new { w.TenantId, w.StoreId, w.Status, w.CreatedAt })
@@ -683,6 +687,12 @@ public sealed class AppDbContext : DbContext
             e.Property(i => i.Quantity).HasColumnType("decimal(10,2)").IsRequired();
             e.Property(i => i.UnitPrice).HasColumnType("decimal(12,2)");
             e.Property(i => i.LossAmount).HasColumnType("decimal(12,2)");
+            e.Property(i => i.UnitPricePurchase).HasColumnType("decimal(12,2)");
+            e.Property(i => i.LossAmountPurchase).HasColumnType("decimal(12,2)");
+            e.Property(i => i.IsReturnedToSupplier).HasDefaultValue(false);
+            e.Property(i => i.ReimbursementType).HasMaxLength(10);
+            e.Property(i => i.ReimbursementValue).HasColumnType("decimal(12,2)");
+            e.Property(i => i.ReimbursementAmount).HasColumnType("decimal(12,2)");
             e.HasOne(i => i.WriteOff).WithMany(w => w.Items)
              .HasForeignKey(i => i.WriteOffId).OnDelete(DeleteBehavior.Cascade);
         });

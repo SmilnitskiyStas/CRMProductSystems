@@ -11,9 +11,16 @@ public sealed class WriteOffService : IWriteOffService
     private static readonly HashSet<string> ValidReasons =
         ["expired", "damaged", "theft", "production_loss", "other"];
 
-    private readonly IWriteOffRepository _repo;
+    private static readonly HashSet<string> ValidReimbursementTypes = ["fixed", "percent"];
 
-    public WriteOffService(IWriteOffRepository repo) => _repo = repo;
+    private readonly IWriteOffRepository _repo;
+    private readonly IItemRepository _items;
+
+    public WriteOffService(IWriteOffRepository repo, IItemRepository items)
+    {
+        _repo = repo;
+        _items = items;
+    }
 
     public async Task<List<WriteOffDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
     {
@@ -56,6 +63,30 @@ public sealed class WriteOffService : IWriteOffService
                 return (null, "All item quantities must be greater than 0.");
         }
 
+        foreach (var itemReq in request.Items)
+        {
+            if (!itemReq.IsReturnedToSupplier)
+                continue;
+
+            if (itemReq.ReimbursementType is not null && !ValidReimbursementTypes.Contains(itemReq.ReimbursementType))
+                return (null, $"Invalid reimbursement type '{itemReq.ReimbursementType}'. Valid: {string.Join(", ", ValidReimbursementTypes)}.");
+
+            if (itemReq.ReimbursementValue.HasValue)
+            {
+                if (itemReq.ReimbursementValue.Value <= 0)
+                    return (null, "Reimbursement value must be greater than 0.");
+
+                if (itemReq.ReimbursementType == "percent" && itemReq.ReimbursementValue.Value > 100)
+                    return (null, "Reimbursement percent value cannot exceed 100.");
+            }
+        }
+
+        var distinctProductIds = request.Items.Select(i => i.ProductId).Distinct().ToList();
+        var (fetchedItems, _) = await _items.GetPagedAsync(
+            categoryId: null, segmentId: null, managementType: null, search: null,
+            ids: distinctProductIds, page: 1, pageSize: distinctProductIds.Count, ct: ct);
+        var itemsById = fetchedItems.ToDictionary(i => i.Id);
+
         var writeOff = new WriteOff
         {
             TenantId = tenantId,
@@ -67,9 +98,47 @@ public sealed class WriteOffService : IWriteOffService
 
         foreach (var itemReq in request.Items)
         {
-            var lossAmount = itemReq.UnitPrice.HasValue
-                ? itemReq.UnitPrice.Value * itemReq.Quantity
+            if (!itemsById.TryGetValue(itemReq.ProductId, out var item))
+                return (null, $"Product {itemReq.ProductId} not found.");
+
+            var unitPrice = itemReq.UnitPrice ?? item.PriceRetail;
+            var unitPricePurchase = item.PricePurchase;
+
+            var lossAmount = unitPrice.HasValue
+                ? unitPrice.Value * itemReq.Quantity
                 : (decimal?)null;
+            var lossAmountPurchase = unitPricePurchase.HasValue
+                ? unitPricePurchase.Value * itemReq.Quantity
+                : (decimal?)null;
+
+            string? reimbType = null;
+            decimal? reimbValue = null;
+            decimal? reimbAmount = null;
+
+            if (itemReq.IsReturnedToSupplier)
+            {
+                reimbType = itemReq.ReimbursementType ?? item.DefaultReimbursementType;
+                reimbValue = itemReq.ReimbursementValue ?? item.DefaultReimbursementValue;
+                reimbAmount = reimbType switch
+                {
+                    "fixed" when reimbValue.HasValue => reimbValue.Value * itemReq.Quantity,
+                    "percent" when reimbValue.HasValue && lossAmountPurchase.HasValue
+                                 => lossAmountPurchase.Value * (reimbValue.Value / 100m),
+                    _ => null
+                };
+
+                // Upsert-back: an explicit client-supplied type+value that differs from the
+                // item's current default becomes the new default, so the next write-off for
+                // this product auto-fills without the user re-entering it.
+                if (itemReq.ReimbursementType is not null && itemReq.ReimbursementValue.HasValue &&
+                    (item.DefaultReimbursementType != itemReq.ReimbursementType ||
+                     item.DefaultReimbursementValue != itemReq.ReimbursementValue))
+                {
+                    item.DefaultReimbursementType = itemReq.ReimbursementType;
+                    item.DefaultReimbursementValue = itemReq.ReimbursementValue;
+                    _items.Update(item);
+                }
+            }
 
             writeOff.Items.Add(new WriteOffItem
             {
@@ -77,14 +146,26 @@ public sealed class WriteOffService : IWriteOffService
                 ProductStockId = itemReq.ProductStockId,
                 ProductId = itemReq.ProductId,
                 Quantity = itemReq.Quantity,
-                UnitPrice = itemReq.UnitPrice,
+                UnitPrice = unitPrice,
                 LossAmount = lossAmount,
+                UnitPricePurchase = unitPricePurchase,
+                LossAmountPurchase = lossAmountPurchase,
+                IsReturnedToSupplier = itemReq.IsReturnedToSupplier,
+                ReimbursementType = reimbType,
+                ReimbursementValue = reimbValue,
+                ReimbursementAmount = reimbAmount,
             });
         }
 
         writeOff.TotalLossAmount = writeOff.Items
             .Where(i => i.LossAmount.HasValue)
             .Sum(i => i.LossAmount!.Value);
+        writeOff.TotalLossAmountPurchase = writeOff.Items
+            .Where(i => i.LossAmountPurchase.HasValue)
+            .Sum(i => i.LossAmountPurchase!.Value);
+        writeOff.TotalReimbursementAmount = writeOff.Items
+            .Where(i => i.ReimbursementAmount.HasValue)
+            .Sum(i => i.ReimbursementAmount!.Value);
 
         await _repo.AddAsync(writeOff, ct);
         await _repo.SaveChangesAsync(ct);
@@ -233,6 +314,11 @@ public sealed class WriteOffService : IWriteOffService
         w.Status,
         w.Reason,
         w.TotalLossAmount,
+        w.TotalLossAmountPurchase,
+        w.TotalReimbursementAmount,
+        w.TotalLossAmountPurchase.HasValue || w.TotalReimbursementAmount.HasValue
+            ? (w.TotalLossAmountPurchase ?? 0m) - (w.TotalReimbursementAmount ?? 0m)
+            : null,
         w.PdfUrl,
         w.CreatedAt,
         w.ApprovedAt,
@@ -245,7 +331,13 @@ public sealed class WriteOffService : IWriteOffService
             i.ProductStock?.ExpiryDate,
             i.Quantity,
             i.UnitPrice,
-            i.LossAmount
+            i.LossAmount,
+            i.UnitPricePurchase,
+            i.LossAmountPurchase,
+            i.IsReturnedToSupplier,
+            i.ReimbursementType,
+            i.ReimbursementValue,
+            i.ReimbursementAmount
         )).ToList()
     );
 }

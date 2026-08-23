@@ -7,6 +7,9 @@ public sealed record WriteOffDto(
     string Status,
     string? Reason,
     decimal? TotalLossAmount,
+    decimal? TotalLossAmountPurchase,
+    decimal? TotalReimbursementAmount,
+    decimal? NetLossAmount,
     string? PdfUrl,
     DateTime CreatedAt,
     DateTime? ApprovedAt,
@@ -22,7 +25,13 @@ public sealed record WriteOffItemDto(
     DateOnly? ExpiryDate,
     decimal Quantity,
     decimal? UnitPrice,
-    decimal? LossAmount
+    decimal? LossAmount,
+    decimal? UnitPricePurchase,
+    decimal? LossAmountPurchase,
+    bool IsReturnedToSupplier,
+    string? ReimbursementType,
+    decimal? ReimbursementValue,
+    decimal? ReimbursementAmount
 );
 
 public sealed record CreateWriteOffRequest(
@@ -36,5 +45,8 @@ public sealed record CreateWriteOffItemRequest(
     Guid? ProductStockId,
     Guid ProductId,
     decimal Quantity,
-    decimal? UnitPrice
+    decimal? UnitPrice,
+    bool IsReturnedToSupplier = false,
+    string? ReimbursementType = null,
+    decimal? ReimbursementValue = null
 );

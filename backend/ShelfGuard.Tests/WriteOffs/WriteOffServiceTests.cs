@@ -10,13 +10,44 @@ namespace ShelfGuard.Tests.WriteOffs;
 public sealed class WriteOffServiceTests
 {
     private readonly IWriteOffRepository _repo = Substitute.For<IWriteOffRepository>();
+    private readonly IItemRepository _items = Substitute.For<IItemRepository>();
     private readonly WriteOffService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly Guid _userId = Guid.NewGuid();
     private readonly Guid _storeId = Guid.NewGuid();
     private readonly Guid _productId = Guid.NewGuid();
 
-    public WriteOffServiceTests() => _sut = new WriteOffService(_repo);
+    public WriteOffServiceTests()
+    {
+        _sut = new WriteOffService(_repo, _items);
+
+        // Default stub: any product lookup returns a bare Item with no prices/defaults set,
+        // matching the pre-existing tests below which pass an explicit UnitPrice per item and
+        // don't rely on catalog auto-fill. Tests that need PriceRetail/PricePurchase/defaults
+        // override this per-test with StubItem(...).
+        _items.GetPagedAsync(
+                Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var ids = ci.ArgAt<IReadOnlyList<Guid>?>(4) ?? [];
+                var items = ids.Select(id => new Item { Id = id, TenantId = _tenantId, Name = "Test item" }).ToList();
+                return (items, items.Count);
+            });
+    }
+
+    private void StubItem(Item item) =>
+        _items.GetPagedAsync(
+                Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var ids = ci.ArgAt<IReadOnlyList<Guid>?>(4) ?? [];
+                var items = ids.Select(id => id == item.Id
+                    ? item
+                    : new Item { Id = id, TenantId = _tenantId, Name = "Test item" }).ToList();
+                return (items, items.Count);
+            });
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -104,6 +135,200 @@ public sealed class WriteOffServiceTests
         await _repo.Received(1).AddAsync(
             Arg.Is<WriteOff>(w => w.TotalLossAmount == 350m && w.Status == "pending_approval"),
             Arg.Any<CancellationToken>());
+    }
+
+    // ── Auto-fill price + purchase loss ───────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_UnitPriceOmitted_AutoFillsFromItemPriceRetail()
+    {
+        var item = new Item { Id = _productId, TenantId = _tenantId, Name = "Milk", PriceRetail = 42m, PricePurchase = 30m };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, null)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<WriteOff>(w => w.Items.First().UnitPrice == 42m && w.Items.First().LossAmount == 210m),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_UnitPriceSupplied_OverridesItemPriceRetail()
+    {
+        var item = new Item { Id = _productId, TenantId = _tenantId, Name = "Milk", PriceRetail = 42m };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 15m)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<WriteOff>(w => w.Items.First().UnitPrice == 15m),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_ComputesLossAmountPurchaseFromItemPricePurchase()
+    {
+        var item = new Item { Id = _productId, TenantId = _tenantId, Name = "Milk", PricePurchase = 20m };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 30m)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<WriteOff>(w =>
+                w.Items.First().UnitPricePurchase == 20m &&
+                w.Items.First().LossAmountPurchase == 100m &&
+                w.TotalLossAmountPurchase == 100m),
+            Arg.Any<CancellationToken>());
+    }
+
+    // ── Reimbursement ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_FixedReimbursement_ComputesAmountAsValueTimesQuantity()
+    {
+        var item = new Item { Id = _productId, TenantId = _tenantId, Name = "Milk", PricePurchase = 20m };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 30m, IsReturnedToSupplier: true, ReimbursementType: "fixed", ReimbursementValue: 4m)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<WriteOff>(w => w.Items.First().ReimbursementAmount == 20m), // 4 * 5
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_PercentReimbursement_ComputesAmountAsPercentOfPurchaseLoss()
+    {
+        var item = new Item { Id = _productId, TenantId = _tenantId, Name = "Milk", PricePurchase = 20m };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        // lossAmountPurchase = 20 * 5 = 100; reimbursement = 100 * 50% = 50
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 30m, IsReturnedToSupplier: true, ReimbursementType: "percent", ReimbursementValue: 50m)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<WriteOff>(w => w.Items.First().ReimbursementAmount == 50m),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReturnedToSupplierWithoutExplicitReimbursement_FallsBackToItemDefaults()
+    {
+        var item = new Item
+        {
+            Id = _productId, TenantId = _tenantId, Name = "Milk", PricePurchase = 20m,
+            DefaultReimbursementType = "fixed", DefaultReimbursementValue = 3m,
+        };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 30m, IsReturnedToSupplier: true)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<WriteOff>(w =>
+                w.Items.First().ReimbursementType == "fixed" &&
+                w.Items.First().ReimbursementValue == 3m &&
+                w.Items.First().ReimbursementAmount == 15m), // 3 * 5
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_NotReturnedToSupplier_AllReimbursementFieldsStayNull()
+    {
+        var item = new Item
+        {
+            Id = _productId, TenantId = _tenantId, Name = "Milk", PricePurchase = 20m,
+            DefaultReimbursementType = "fixed", DefaultReimbursementValue = 3m,
+        };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 30m, IsReturnedToSupplier: false)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<WriteOff>(w =>
+                !w.Items.First().IsReturnedToSupplier &&
+                w.Items.First().ReimbursementType == null &&
+                w.Items.First().ReimbursementValue == null &&
+                w.Items.First().ReimbursementAmount == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_InvalidReimbursementType_ReturnsErrorAndDoesNotCreate()
+    {
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 30m, IsReturnedToSupplier: true, ReimbursementType: "half", ReimbursementValue: 5m)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(wo);
+        Assert.NotNull(error);
+        Assert.Contains("reimbursement type", error, StringComparison.OrdinalIgnoreCase);
+        await _repo.DidNotReceive().AddAsync(Arg.Any<WriteOff>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_ExplicitReimbursementDifferingFromDefault_UpsertsItemDefault()
+    {
+        var item = new Item
+        {
+            Id = _productId, TenantId = _tenantId, Name = "Milk", PricePurchase = 20m,
+            DefaultReimbursementType = "fixed", DefaultReimbursementValue = 3m,
+        };
+        StubItem(item);
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => BuildWriteOff());
+
+        var req = new CreateWriteOffRequest(_storeId, "expired", null, [
+            new(null, _productId, 5, 30m, IsReturnedToSupplier: true, ReimbursementType: "percent", ReimbursementValue: 40m)
+        ]);
+
+        var (wo, error) = await _sut.CreateAsync(_tenantId, _userId, req);
+
+        Assert.Null(error);
+        Assert.Equal("percent", item.DefaultReimbursementType);
+        Assert.Equal(40m, item.DefaultReimbursementValue);
+        _items.Received(1).Update(item);
     }
 
     // ── Approve ────────────────────────────────────────────────────────────

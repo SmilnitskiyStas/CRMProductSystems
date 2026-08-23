@@ -8,6 +8,8 @@ public sealed class WriteOff
     public string Status { get; set; } = "draft";
     public string? Reason { get; set; }
     public decimal? TotalLossAmount { get; set; }
+    public decimal? TotalLossAmountPurchase { get; set; }
+    public decimal? TotalReimbursementAmount { get; set; }
     public string? PdfUrl { get; set; }
     public Guid? CreatedBy { get; init; }
     public Guid? ApprovedBy { get; set; }

@@ -33,6 +33,10 @@ export interface ProductStockDto {
   sourceType: string | null;
   addedAt: string;
   lastCheckedAt: string;
+  pricePurchase: number | null;
+  priceRetail: number | null;
+  defaultReimbursementType: "fixed" | "percent" | null;
+  defaultReimbursementValue: number | null;
 }
 
 export interface SuggestionDto {

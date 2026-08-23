@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useStock } from "@/features/shelf/hooks/useStock";
-import type { ProductStockDto } from "@/features/shelf/types";
+import type { BatchStatus, ProductStockDto } from "@/features/shelf/types";
 import { WRITE_OFF_REASON_VALUES } from "../types";
+import type { ReimbursementType } from "../types";
 import { useCreateWriteOff } from "../hooks/useWriteOffs";
 import { Btn } from "@/components/ui/Btn";
 
@@ -22,7 +23,11 @@ interface WriteOffRow {
   expiryDate: string;
   availableQty: number;
   quantity: string; // controlled input, parseFloat on submit
-  unitPrice: string; // controlled input, optional, parseFloat on submit or omit if blank
+  unitPrice: string; // controlled input, auto-filled from batch.priceRetail but still editable
+  unitPricePurchase: number; // display-only snapshot from batch.pricePurchase
+  isReturnedToSupplier: boolean;
+  reimbursementType: ReimbursementType | ""; // pre-filled from item default, editable once checked
+  reimbursementValue: string; // controlled input, parseFloat on submit
 }
 
 const inputStyle: React.CSSProperties = {
@@ -115,6 +120,18 @@ const removeBtnStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+const CRITICAL_STATUSES: BatchStatus[] = ["critical", "expired"];
+
+const checkboxLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  color: "#9CA3AF",
+  fontSize: 12,
+  cursor: "pointer",
+  marginBottom: 8,
+};
+
 const errorBoxStyle: React.CSSProperties = {
   background: "#2D0F0F",
   border: "1px solid #7F1D1D",
@@ -137,6 +154,7 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
   const [storeId, setStoreId] = useState("");
   const [reason, setReason] = useState("");
   const [batchFilterQuery, setBatchFilterQuery] = useState("");
+  const [criticalOnly, setCriticalOnly] = useState(false);
   const [rows, setRows] = useState<WriteOffRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,12 +163,16 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
     !!storeId,
   );
 
+  const addedIds = useMemo(() => new Set(rows.map((r) => r.productStockId)), [rows]);
+
   const availableBatches = useMemo(
     () =>
       [...stockBatches]
         .filter((b) => b.quantity > 0)
+        .filter((b) => !addedIds.has(b.id))
+        .filter((b) => !criticalOnly || CRITICAL_STATUSES.includes(b.status))
         .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
-    [stockBatches],
+    [stockBatches, addedIds, criticalOnly],
   );
 
   const filteredBatches = useMemo(() => {
@@ -187,7 +209,12 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
         expiryDate: batch.expiryDate,
         availableQty: batch.quantity,
         quantity: "",
-        unitPrice: "",
+        unitPrice: batch.priceRetail != null ? String(batch.priceRetail) : "",
+        unitPricePurchase: batch.pricePurchase ?? 0,
+        isReturnedToSupplier: false,
+        reimbursementType: batch.defaultReimbursementType ?? "",
+        reimbursementValue:
+          batch.defaultReimbursementValue != null ? String(batch.defaultReimbursementValue) : "",
       },
     ]);
   }
@@ -198,11 +225,19 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
 
   function setRowField(
     productStockId: string,
-    field: "quantity" | "unitPrice",
+    field: "quantity" | "unitPrice" | "reimbursementType" | "reimbursementValue",
     value: string,
   ) {
     setRows((prev) =>
       prev.map((r) => (r.productStockId === productStockId ? { ...r, [field]: value } : r)),
+    );
+  }
+
+  function setRowReturnedToSupplier(productStockId: string, value: boolean) {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.productStockId === productStockId ? { ...r, isReturnedToSupplier: value } : r,
+      ),
     );
   }
 
@@ -241,6 +276,10 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
           productId: r.productId,
           quantity: parseFloat(r.quantity),
           unitPrice: r.unitPrice ? parseFloat(r.unitPrice) : null,
+          isReturnedToSupplier: r.isReturnedToSupplier,
+          reimbursementType: r.isReturnedToSupplier && r.reimbursementType ? r.reimbursementType : null,
+          reimbursementValue:
+            r.isReturnedToSupplier && r.reimbursementValue ? parseFloat(r.reimbursementValue) : null,
         })),
       });
       onSuccess();
@@ -302,6 +341,14 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
               placeholder={t("batchSearchPlaceholder")}
               style={{ ...inputStyle, marginBottom: 8 }}
             />
+            <label style={checkboxLabelStyle}>
+              <input
+                type="checkbox"
+                checked={criticalOnly}
+                onChange={(e) => setCriticalOnly(e.target.checked)}
+              />
+              {t("criticalOnlyLabel")}
+            </label>
             <div style={batchListStyle}>
               {isLoadingBatches ? (
                 <div style={emptyHintStyle}>{tCommon("loading")}</div>
@@ -310,42 +357,33 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
               ) : filteredBatches.length === 0 ? (
                 <div style={emptyHintStyle}>{t("batchSearchEmpty")}</div>
               ) : (
-                filteredBatches.map((b) => {
-                  const added = isRowAdded(b.id);
-                  return (
-                    <div
-                      key={b.id}
-                      onClick={() => addRow(b)}
-                      style={{
-                        ...batchRowStyle,
-                        opacity: added ? 0.5 : 1,
-                        cursor: added ? "default" : "pointer",
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            color: "#E8EDF5",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {b.productName}
-                        </div>
-                        <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>
-                          {b.batchNumber ? `${b.batchNumber} · ` : ""}
-                          {new Date(b.expiryDate).toLocaleDateString(intlLocale)}
-                        </div>
+                filteredBatches.map((b) => (
+                  <div
+                    key={b.id}
+                    onClick={() => addRow(b)}
+                    style={{ ...batchRowStyle, cursor: "pointer" }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          color: "#E8EDF5",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {b.productName}
                       </div>
-                      <span style={badgeStyle}>
-                        {added ? t("alreadyAdded") : t("availableLabel", { qty: b.quantity })}
-                      </span>
+                      <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>
+                        {b.batchNumber ? `${b.batchNumber} · ` : ""}
+                        {new Date(b.expiryDate).toLocaleDateString(intlLocale)}
+                      </div>
                     </div>
-                  );
-                })
+                    <span style={badgeStyle}>{t("availableLabel", { qty: b.quantity })}</span>
+                  </div>
+                ))
               )}
             </div>
           </>
@@ -421,6 +459,116 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
                     />
                   </div>
                 </div>
+
+                {(() => {
+                  const qty = parseFloat(r.quantity) || 0;
+                  const retailLoss = (parseFloat(r.unitPrice) || 0) * qty;
+                  const purchaseLoss = r.unitPricePurchase * qty;
+                  const reimbursementValueNum = parseFloat(r.reimbursementValue) || 0;
+                  const reimbursementAmount =
+                    r.reimbursementType === "fixed"
+                      ? reimbursementValueNum * qty
+                      : r.reimbursementType === "percent"
+                        ? purchaseLoss * (reimbursementValueNum / 100)
+                        : 0;
+
+                  return (
+                    <>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 8,
+                          marginTop: 8,
+                        }}
+                      >
+                        <div>
+                          <span style={miniLabelStyle}>{t("retailLossLabel")}</span>
+                          <div style={{ color: "#F87171", fontSize: 12, fontFamily: "monospace" }}>
+                            {retailLoss.toFixed(2)} ₴
+                          </div>
+                        </div>
+                        <div>
+                          <span style={miniLabelStyle}>{t("purchaseLossLabel")}</span>
+                          <div style={{ color: "#FBBF24", fontSize: 12, fontFamily: "monospace" }}>
+                            {purchaseLoss.toFixed(2)} ₴
+                          </div>
+                          <div style={{ color: "#4B5563", fontSize: 10, marginTop: 1 }}>
+                            {t("unitPricePurchaseLabel")}: {r.unitPricePurchase.toFixed(2)} ₴
+                          </div>
+                        </div>
+                      </div>
+
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 10,
+                          color: "#9CA3AF",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={r.isReturnedToSupplier}
+                          onChange={(e) =>
+                            setRowReturnedToSupplier(r.productStockId, e.target.checked)
+                          }
+                        />
+                        {t("returnedToSupplierLabel")}
+                      </label>
+
+                      {r.isReturnedToSupplier && (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 8,
+                            marginTop: 8,
+                          }}
+                        >
+                          <div>
+                            <label style={miniLabelStyle}>{t("reimbursementTypeLabel")}</label>
+                            <select
+                              value={r.reimbursementType}
+                              onChange={(e) =>
+                                setRowField(r.productStockId, "reimbursementType", e.target.value)
+                              }
+                              style={compactInputStyle}
+                            >
+                              <option value="">—</option>
+                              <option value="fixed">{t("reimbursementTypeFixed")}</option>
+                              <option value="percent">{t("reimbursementTypePercent")}</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={miniLabelStyle}>{t("reimbursementValueLabel")}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={r.reimbursementType === "percent" ? 100 : undefined}
+                              step="any"
+                              value={r.reimbursementValue}
+                              onChange={(e) =>
+                                setRowField(r.productStockId, "reimbursementValue", e.target.value)
+                              }
+                              placeholder={t("reimbursementValuePlaceholder")}
+                              style={compactInputStyle}
+                            />
+                          </div>
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            <span style={miniLabelStyle}>{t("reimbursementAmountLabel")}</span>
+                            <div style={{ color: "#4ADE80", fontSize: 12, fontFamily: "monospace" }}>
+                              {reimbursementAmount.toFixed(2)} ₴
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>

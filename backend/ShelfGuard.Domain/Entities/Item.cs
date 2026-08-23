@@ -33,6 +33,8 @@ public sealed class Item
     public decimal VatRate { get; set; } = 20;
     public decimal? PricePurchase { get; set; }
     public decimal? PriceRetail { get; set; }
+    public string? DefaultReimbursementType { get; set; }   // "fixed" | "percent"
+    public decimal? DefaultReimbursementValue { get; set; }  // per-unit currency if "fixed"; 0-100 if "percent"
     public string? ImageUrl { get; set; }
     public string ItemType { get; set; } = "product";
     public bool IsActive { get; set; } = true;

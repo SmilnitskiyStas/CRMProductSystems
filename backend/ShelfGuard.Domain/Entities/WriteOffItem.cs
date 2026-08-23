@@ -9,6 +9,12 @@ public sealed class WriteOffItem
     public decimal Quantity { get; init; }
     public decimal? UnitPrice { get; init; }
     public decimal? LossAmount { get; init; }
+    public decimal? UnitPricePurchase { get; init; }   // snapshot of Item.PricePurchase at write-off time
+    public decimal? LossAmountPurchase { get; init; }   // UnitPricePurchase * Quantity
+    public bool IsReturnedToSupplier { get; init; }
+    public string? ReimbursementType { get; init; }     // "fixed" | "percent"
+    public decimal? ReimbursementValue { get; init; }
+    public decimal? ReimbursementAmount { get; init; }  // computed reimbursement total
 
     public WriteOff? WriteOff { get; init; }
     public Item? Product { get; set; }

@@ -356,6 +356,8 @@ public sealed class ItemService : IItemService
         p.VatRate,
         p.PricePurchase,
         p.PriceRetail,
+        p.DefaultReimbursementType,
+        p.DefaultReimbursementValue,
         p.ImageUrl,
         p.IsActive,
         p.CreatedAt,

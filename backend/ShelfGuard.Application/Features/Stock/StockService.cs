@@ -344,7 +344,11 @@ public sealed class StockService : IStockService
         StockStatus.Compute(s.Quantity, s.ExpiryDate, s.LastCheckedAt),
         s.SourceType,
         s.AddedAt,
-        s.LastCheckedAt
+        s.LastCheckedAt,
+        s.Product?.PricePurchase,
+        s.Product?.PriceRetail,
+        s.Product?.DefaultReimbursementType,
+        s.Product?.DefaultReimbursementValue
     );
 
     private static SuggestionDto ToSuggestionDto(ProductStock s, List<StockAction> actions) => new(

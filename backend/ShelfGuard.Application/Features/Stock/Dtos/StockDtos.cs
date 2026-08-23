@@ -18,7 +18,11 @@ public sealed record ProductStockDto(
     string Status,
     string? SourceType,
     DateTime AddedAt,
-    DateTime LastCheckedAt
+    DateTime LastCheckedAt,
+    decimal? PricePurchase,
+    decimal? PriceRetail,
+    string? DefaultReimbursementType,
+    decimal? DefaultReimbursementValue
 );
 
 public sealed record CreateStockRequest(

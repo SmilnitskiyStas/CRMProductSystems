@@ -101,6 +101,31 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
             color="#F87171"
           />
           <DrawerField
+            label={t("lossAmountPurchase")}
+            value={
+              w.totalLossAmountPurchase != null
+                ? `${w.totalLossAmountPurchase.toLocaleString(intlLocale)} ₴`
+                : "—"
+            }
+            color="#FBBF24"
+          />
+          {w.totalReimbursementAmount != null && w.totalReimbursementAmount !== 0 && (
+            <>
+              <DrawerField
+                label={t("reimbursementAmount")}
+                value={`${w.totalReimbursementAmount.toLocaleString(intlLocale)} ₴`}
+                color="#4ADE80"
+              />
+              <DrawerField
+                label={t("netLossAmount")}
+                value={
+                  w.netLossAmount != null ? `${w.netLossAmount.toLocaleString(intlLocale)} ₴` : "—"
+                }
+                color="#F87171"
+              />
+            </>
+          )}
+          <DrawerField
             label={t("createdAt")}
             value={new Date(w.createdAt).toLocaleDateString(intlLocale)}
           />
@@ -140,6 +165,8 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
                     t("itemHeaders.batch"),
                     t("itemHeaders.qty"),
                     t("itemHeaders.loss"),
+                    t("itemHeaders.lossPurchase"),
+                    t("itemHeaders.reimbursement"),
                     t("itemHeaders.actions"),
                   ].map((h) => (
                     <th
@@ -175,6 +202,20 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
                       }}
                     >
                       {item.productName}
+                      {item.isReturnedToSupplier && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            color: "#4ADE80",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.03em",
+                          }}
+                        >
+                          {t("returnedToSupplierBadge")}
+                        </span>
+                      )}
                     </td>
                     <td
                       style={{
@@ -207,11 +248,40 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
                         color: "#F87171",
                         fontFamily: "monospace",
                         borderBottom: "1px solid #1F2937",
+                        borderRight: "1px solid #1F2937",
                         textAlign: "center",
                       }}
                     >
                       {item.lossAmount != null
                         ? `${item.lossAmount.toLocaleString(intlLocale)} ₴`
+                        : "—"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "7px 10px",
+                        color: "#FBBF24",
+                        fontFamily: "monospace",
+                        borderBottom: "1px solid #1F2937",
+                        borderRight: "1px solid #1F2937",
+                        textAlign: "center",
+                      }}
+                    >
+                      {item.lossAmountPurchase != null
+                        ? `${item.lossAmountPurchase.toLocaleString(intlLocale)} ₴`
+                        : "—"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "7px 10px",
+                        color: "#4ADE80",
+                        fontFamily: "monospace",
+                        borderBottom: "1px solid #1F2937",
+                        borderRight: "1px solid #1F2937",
+                        textAlign: "center",
+                      }}
+                    >
+                      {item.isReturnedToSupplier && item.reimbursementAmount != null
+                        ? `${item.reimbursementAmount.toLocaleString(intlLocale)} ₴`
                         : "—"}
                     </td>
                     <td style={{ padding: "7px 10px", borderBottom: "1px solid #1F2937", textAlign: "center" }}>

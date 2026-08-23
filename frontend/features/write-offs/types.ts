@@ -1,5 +1,6 @@
 export type WriteOffStatus = "draft" | "pending_approval" | "approved" | "rejected";
 export type WriteOffReason = "expired" | "damaged" | "theft" | "production_loss" | "other";
+export type ReimbursementType = "fixed" | "percent";
 
 export interface WriteOffItemDto {
   id: string;
@@ -11,6 +12,12 @@ export interface WriteOffItemDto {
   quantity: number;
   unitPrice: number | null;
   lossAmount: number | null;
+  unitPricePurchase: number | null;
+  lossAmountPurchase: number | null;
+  isReturnedToSupplier: boolean;
+  reimbursementType: ReimbursementType | null;
+  reimbursementValue: number | null;
+  reimbursementAmount: number | null;
 }
 
 export interface WriteOffDto {
@@ -20,6 +27,9 @@ export interface WriteOffDto {
   status: WriteOffStatus;
   reason: WriteOffReason | null;
   totalLossAmount: number | null;
+  totalLossAmountPurchase: number | null;
+  totalReimbursementAmount: number | null;
+  netLossAmount: number | null;
   pdfUrl: string | null;
   createdAt: string;
   approvedAt: string | null;
@@ -35,6 +45,9 @@ export interface CreateWriteOffRequest {
     productId: string;
     quantity: number;
     unitPrice?: number | null;
+    isReturnedToSupplier?: boolean;
+    reimbursementType?: ReimbursementType | null;
+    reimbursementValue?: number | null;
   }[];
 }
 

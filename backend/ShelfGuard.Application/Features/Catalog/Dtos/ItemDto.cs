@@ -22,6 +22,8 @@ public sealed record ItemDto(
     decimal VatRate,
     decimal? PricePurchase,
     decimal? PriceRetail,
+    string? DefaultReimbursementType,
+    decimal? DefaultReimbursementValue,
     string? ImageUrl,
     bool IsActive,
     DateTime CreatedAt,

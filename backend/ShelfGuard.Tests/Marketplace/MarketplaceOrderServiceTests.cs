@@ -807,5 +807,5 @@ public sealed class MarketplaceOrderServiceTests
 
     private static ItemDto FakeItemDto(string name, Guid? id = null) => new(
         id ?? Guid.NewGuid(), [], name, null, null, null, null, "шт", "NA", "product",
-        0, 0, 0, null, null, null, null, null, 0, null, null, null, true, DateTime.UtcNow, null, null, "standard");
+        0, 0, 0, null, null, null, null, null, 0, null, null, null, null, null, true, DateTime.UtcNow, null, null, "standard");
 }
