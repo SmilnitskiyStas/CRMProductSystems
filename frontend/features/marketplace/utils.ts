@@ -51,3 +51,41 @@ export function getShippingEta(
     isOverdue: daysElapsed > estimatedDeliveryDays,
   };
 }
+
+// ─── Delivery outcome (TASK-587) ────────────────────────────────────────────
+// Retrospective counterpart to getShippingEta above: once an order is
+// actually delivered, compares the real shippedAt→deliveredAt duration
+// against the supplier's estimatedDeliveryDays. getShippingEta stays focused
+// on the live "still in transit" case (today vs. ETA); this covers the "how
+// did it actually go" fact once deliveredAt is known. Used by the supplier
+// cabinet's own order table (features/supplier-cabinet/components/
+// CabinetOrdersTab.tsx) to show a per-order transit-duration/on-time column.
+
+export interface DeliveryOutcome {
+  /** Calendar days actually spent in transit (deliveredAt - shippedAt). */
+  transitDays: number;
+  /** transitDays <= estimatedDeliveryDays; null when estimatedDeliveryDays
+   *  wasn't captured (legacy orders shipped before TASK-584 have no ETA). */
+  isOnTime: boolean | null;
+}
+
+/** Null when the order hasn't shipped yet, or hasn't been delivered yet —
+ *  nothing to report in either case. */
+export function getDeliveryOutcome(
+  shippedAt: string | null | undefined,
+  deliveredAt: string | null | undefined,
+  estimatedDeliveryDays: number | null | undefined
+): DeliveryOutcome | null {
+  if (!shippedAt || !deliveredAt) return null;
+
+  const shippedDate = new Date(shippedAt);
+  const deliveredDate = new Date(deliveredAt);
+  const transitDays = Math.round(
+    (startOfDay(deliveredDate).getTime() - startOfDay(shippedDate).getTime()) / MS_PER_DAY
+  );
+
+  return {
+    transitDays,
+    isOnTime: estimatedDeliveryDays == null ? null : transitDays <= estimatedDeliveryDays,
+  };
+}

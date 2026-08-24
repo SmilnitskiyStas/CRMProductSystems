@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
 import { OrderStatusBadge } from "@/features/marketplace/components/CooperationBadges";
-import { getShippingEta } from "@/features/marketplace/utils";
+import { getShippingEta, getDeliveryOutcome } from "@/features/marketplace/utils";
 import type { MarketplaceOrderDto } from "@/features/marketplace/types";
 import { EstimateDeliveryModal } from "./EstimateDeliveryModal";
 import {
@@ -158,6 +158,7 @@ export function CabinetOrdersTab() {
             <th style={headerCellStyle}>{t("headerClient")}</th>
             <th style={headerCellStyle}>{t("headerDate")}</th>
             <th style={headerCellStyle}>{t("headerStatus")}</th>
+            <th style={headerCellStyle}>{t("headerDelivery")}</th>
             <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerTotal")}</th>
             <th style={headerCellStyle}>{t("headerActions")}</th>
           </tr>
@@ -278,6 +279,9 @@ function OrderRow({
           <OrderStatusBadge status={order.status} />
           <ShippingEtaHint order={order} />
         </td>
+        <td style={{ ...cellStyle, whiteSpace: "nowrap" }}>
+          <DeliveryOutcomeCell order={order} />
+        </td>
         <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
           {money(order.totalAmount, intlLocale)}
         </td>
@@ -287,7 +291,7 @@ function OrderRow({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={7} style={{ padding: 0, borderBottom: "1px solid #1A2235" }}>
+          <td colSpan={8} style={{ padding: 0, borderBottom: "1px solid #1A2235" }}>
             <div style={{ background: "#0D1117", padding: "12px 24px 16px 44px" }}>
               {order.comment && (
                 <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
@@ -366,6 +370,44 @@ function ShippingEtaHint({ order }: { order: MarketplaceOrderDto }) {
             daysElapsed: eta.daysElapsed,
             estimatedDeliveryDays: order.estimatedDeliveryDays,
           })}
+    </div>
+  );
+}
+
+/**
+ * Retrospective transit-duration + on-time indicator column (TASK-587) —
+ * distinct from the live in-progress ShippingEtaHint above (which only
+ * applies while status === "shipped", comparing today against the ETA).
+ * This compares the actual deliveredAt against shippedAt/estimatedDeliveryDays
+ * once an order has been delivered, so renders "—" for anything not yet
+ * delivered (not shipped, still in transit, or cancelled).
+ */
+function DeliveryOutcomeCell({ order }: { order: MarketplaceOrderDto }) {
+  const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
+  const outcome = getDeliveryOutcome(
+    order.shippedAt,
+    order.deliveredAt,
+    order.estimatedDeliveryDays
+  );
+  if (!outcome) return <span style={{ color: "#4B5563" }}>—</span>;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <span style={{ color: "#9CA3AF", fontSize: 12 }}>
+        {t("deliveryTransitDays", { days: outcome.transitDays })}
+      </span>
+      {outcome.isOnTime === true && (
+        <span style={{ color: "#4ADE80", fontSize: 11, fontWeight: 600 }}>
+          {t("deliveryOnTime")}
+        </span>
+      )}
+      {outcome.isOnTime === false && (
+        <span style={{ color: "#F87171", fontSize: 11, fontWeight: 600 }}>
+          {t("deliveryLate", {
+            days: outcome.transitDays - (order.estimatedDeliveryDays ?? 0),
+          })}
+        </span>
+      )}
     </div>
   );
 }
