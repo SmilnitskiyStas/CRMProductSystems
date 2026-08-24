@@ -16,11 +16,13 @@ public sealed class AiOrdersController : ControllerBase
 
     public AiOrdersController(IAiOrderService aiOrders) => _aiOrders = aiOrders;
 
+    // TASK-610: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) — omitted
+    // or empty means "all stores" (same convention as TASK-608's Analytics/Stock endpoints).
     [HttpGet]
     [Authorize(Policy = AppPolicies.AiOrdersViewOrCapability)]
     [ProducesResponseType(typeof(List<AiOrderListItemDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetList([FromQuery] Guid? store_id, CancellationToken ct)
-        => Ok(await _aiOrders.GetListAsync(store_id, ct));
+    public async Task<IActionResult> GetList([FromQuery] Guid[]? storeIds, CancellationToken ct)
+        => Ok(await _aiOrders.GetListAsync(storeIds, ct));
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = AppPolicies.AiOrdersViewOrCapability)]

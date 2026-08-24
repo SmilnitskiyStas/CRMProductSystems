@@ -39,14 +39,17 @@ interface ProductStockDto {
   lastCheckedAt: string;
 }
 
-function withStore(path: string, storeId: string | null): string {
-  if (!storeId) return path;
+/** Appends one repeated `storeIds=<id>` query param per array entry. Empty array = all stores
+ * (nothing appended), matching today's `store_id == null` semantics on the backend. */
+function withStores(path: string, storeIds: string[]): string {
+  if (storeIds.length === 0) return path;
   const sep = path.includes("?") ? "&" : "?";
-  return `${path}${sep}store_id=${encodeURIComponent(storeId)}`;
+  const qs = storeIds.map((id) => `storeIds=${encodeURIComponent(id)}`).join("&");
+  return `${path}${sep}${qs}`;
 }
 
-async function getDashboardStats(storeId: string | null): Promise<DashboardStats> {
-  const summary = await api.get<StockSummaryDto>(withStore("/api/stock/summary", storeId));
+async function getDashboardStats(storeIds: string[]): Promise<DashboardStats> {
+  const summary = await api.get<StockSummaryDto>(withStores("/api/stock/summary", storeIds));
   return {
     safe: summary.safe,
     warning: summary.warning,
@@ -55,9 +58,9 @@ async function getDashboardStats(storeId: string | null): Promise<DashboardStats
   };
 }
 
-async function getAttentionItems(storeId: string | null): Promise<AttentionItem[]> {
+async function getAttentionItems(storeIds: string[]): Promise<AttentionItem[]> {
   const { items: batches } = await api.get<PagedResult<ProductStockDto>>(
-    withStore("/api/stock?pageSize=200", storeId),
+    withStores("/api/stock?pageSize=200", storeIds),
   );
   return batches
     // sold_out batches have nothing left to act on (no qty to reorder-check/expiry-track) —
@@ -90,8 +93,8 @@ interface ZoneSummaryDto {
   expired: number;
 }
 
-async function getStoreZones(storeId: string | null): Promise<StoreZone[]> {
-  const zones = await api.get<ZoneSummaryDto[]>(withStore("/api/stock/zones-summary", storeId));
+async function getStoreZones(storeIds: string[]): Promise<StoreZone[]> {
+  const zones = await api.get<ZoneSummaryDto[]>(withStores("/api/stock/zones-summary", storeIds));
   return zones.map((z) => ({
     id: z.zoneId,
     name: z.name,
@@ -106,19 +109,18 @@ async function getStoreZones(storeId: string | null): Promise<StoreZone[]> {
 // ── Period comparison (ADR-016) ─────────────────────────────────────────────
 
 async function getExpirySummaryCompare(
-  storeId: string | null,
+  storeIds: string[],
   compareWeeksAgo = 1,
 ): Promise<ExpirySummaryCompareDto> {
   const qs = new URLSearchParams();
-  // Note: unlike the rest of this file, this endpoint's query key is camelCase (`storeId`).
-  if (storeId) qs.set("storeId", storeId);
+  for (const id of storeIds) qs.append("storeIds", id);
   if (compareWeeksAgo !== 1) qs.set("compareWeeksAgo", String(compareWeeksAgo));
   const q = qs.toString();
   return api.get<ExpirySummaryCompareDto>(`/api/analytics/expiry-summary/compare${q ? `?${q}` : ""}`);
 }
 
-async function getWeeklyKpi(storeId: string | null): Promise<WeeklyKpiDto> {
-  return api.get<WeeklyKpiDto>(withStore("/api/analytics/dashboard/weekly-kpi", storeId));
+async function getWeeklyKpi(storeIds: string[]): Promise<WeeklyKpiDto> {
+  return api.get<WeeklyKpiDto>(withStores("/api/analytics/dashboard/weekly-kpi", storeIds));
 }
 
 export const dashboardApi = {

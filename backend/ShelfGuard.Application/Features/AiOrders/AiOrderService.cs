@@ -27,7 +27,10 @@ public sealed record UpdateAiOrderItemRequest(decimal QuantityFinal, string? Edi
 
 public interface IAiOrderService
 {
-    Task<List<AiOrderListItemDto>> GetListAsync(Guid? storeId, CancellationToken ct = default);
+    /// <summary>
+    /// TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
+    /// </summary>
+    Task<List<AiOrderListItemDto>> GetListAsync(Guid[]? storeIds, CancellationToken ct = default);
     Task<(AiOrderDto? Order, string? Error)> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>Full §7 pipeline: context → base formula → Claude → persist.</summary>
@@ -68,12 +71,12 @@ public sealed class AiOrderService : IAiOrderService
         _promos = promos;
     }
 
-    public async Task<List<AiOrderListItemDto>> GetListAsync(Guid? storeId, CancellationToken ct = default)
+    public async Task<List<AiOrderListItemDto>> GetListAsync(Guid[]? storeIds, CancellationToken ct = default)
     {
         // GetListAsync now eager-loads Items, so Items.Count is free — previously this looped
         // and called GetByIdAsync per suggestion (N+1: up to 30 extra full round-trips just to
         // count items). Fixed as part of the Block 7 AI Orders/Assistant audit.
-        var list = await _repo.GetListAsync(storeId, limit: 30, ct);
+        var list = await _repo.GetListAsync(storeIds, limit: 30, ct);
         return list.Select(s => new AiOrderListItemDto(
             s.Id, s.StoreId, s.Store?.Name ?? "", s.GeneratedAt, s.OrderDate.ToString("yyyy-MM-dd"),
             s.Status, s.Items.Count, s.AiModel, s.TokensUsed)).ToList();

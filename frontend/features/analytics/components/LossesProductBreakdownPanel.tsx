@@ -18,14 +18,15 @@ interface Props {
    * immediately so the header doesn't flash empty while this panel's own fetch is in flight;
    * overridden by the fetch's own `totalLoss` once it resolves (the two should always agree). */
   totalLoss: number;
-  /** storeId and reason are independent filters on the same `losses/by-product` endpoint (backend
+  /** storeIds and reason are independent filters on the same `losses/by-product` endpoint (backend
    * applies both together when both are set — see PosAnalyticsServiceTests's
    * GetLossesByProductAsync_store_and_reason_filters_are_forwarded_unchanged). The losses-by-store
-   * drill-down sets only storeId (from the clicked row, overriding any page-wide store filter for
-   * that one store's data). The losses-by-reason and by-day drill-downs pass the page's current
-   * header-selected store (if any) as storeId alongside reason/from-to, so this panel stays scoped
-   * to whatever store the rest of /analytics is currently showing. */
-  storeId?: string;
+   * drill-down passes a single-element array (the clicked row's store id), overriding any
+   * page-wide store selection for that one store's data. The losses-by-reason and by-day
+   * drill-downs pass the page's current header-selected stores (TASK-611: full array, not just
+   * the primary one) as storeIds alongside reason/from-to, so this panel stays scoped to whatever
+   * store(s) the rest of /analytics is currently showing. */
+  storeIds?: string[];
   reason?: string;
   /** Current (never compare-period) range — snapshot detail view, not a trend. */
   from: string;
@@ -84,13 +85,13 @@ const productNameButton: React.CSSProperties = {
  * (ADR-027 §1 — losses aren't margin-gated, LossAmount is already shown unrestricted in
  * aggregate elsewhere on this page for every store_manager+).
  */
-export function LossesProductBreakdownPanel({ title, totalLoss, storeId, reason, from, to, onClose, onProductClick }: Props) {
+export function LossesProductBreakdownPanel({ title, totalLoss, storeIds, reason, from, to, onClose, onProductClick }: Props) {
   const t = useTranslations("Dashboard.analytics.lossesProductBreakdownPanel");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
 
-  const { data, isLoading } = useLossesByProduct({ store_id: storeId, reason, from, to });
+  const { data, isLoading } = useLossesByProduct({ storeIds, reason, from, to });
 
   const [sortKey, setSortKey] = useState<SortKey>("lossAmount");
   const [sortDescending, setSortDescending] = useState(true);

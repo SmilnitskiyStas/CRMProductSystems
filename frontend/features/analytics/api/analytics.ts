@@ -20,14 +20,24 @@ interface CompareParams {
 }
 
 interface WriteOffParams {
-  store_id?: string;
+  /** Repeated `storeIds=<id>` query params, one per entry — empty/undefined = all stores (no
+   * param appended), same "all stores" semantics as the pre-widening singular `store_id`. Mirrors
+   * frontend/features/dashboard/api/dashboard.ts's withStores convention (TASK-608/610). */
+  storeIds?: string[];
   from?: string;
   to?: string;
 }
 
+/** Appends one repeated `storeIds=<id>` param per array entry. undefined/empty = all stores
+ * (nothing appended). */
+function appendStoreIds(qs: URLSearchParams, storeIds?: string[]): void {
+  if (!storeIds) return;
+  for (const id of storeIds) qs.append("storeIds", id);
+}
+
 function buildCompareQs(params: (WriteOffParams & CompareParams) | undefined): string {
   const qs = new URLSearchParams();
-  if (params?.store_id) qs.set("store_id", params.store_id);
+  appendStoreIds(qs, params?.storeIds);
   if (params?.from) qs.set("from", params.from);
   if (params?.to) qs.set("to", params.to);
   if (params?.compare) qs.set("compare", "true");
@@ -60,13 +70,13 @@ interface CategoryProductBreakdownParams {
    * omitted from the querystring is how the backend's `Guid? category_id` reads "uncategorized",
    * same as leaving it out entirely). Only a real id is ever put on the wire. */
   category_id?: string | null;
-  store_id?: string;
+  storeIds?: string[];
   from?: string;
   to?: string;
 }
 
 interface LossesByProductParams {
-  store_id?: string;
+  storeIds?: string[];
   reason?: string;
   from?: string;
   to?: string;
@@ -75,7 +85,7 @@ interface LossesByProductParams {
 function getCategoryProductBreakdown(params?: CategoryProductBreakdownParams): Promise<CategoryProductBreakdownDto> {
   const qs = new URLSearchParams();
   if (params?.category_id) qs.set("category_id", params.category_id);
-  if (params?.store_id) qs.set("store_id", params.store_id);
+  appendStoreIds(qs, params?.storeIds);
   if (params?.from) qs.set("from", params.from);
   if (params?.to) qs.set("to", params.to);
   const q = qs.toString();
@@ -84,7 +94,7 @@ function getCategoryProductBreakdown(params?: CategoryProductBreakdownParams): P
 
 function getLossesByProduct(params?: LossesByProductParams): Promise<LossesByProductDto> {
   const qs = new URLSearchParams();
-  if (params?.store_id) qs.set("store_id", params.store_id);
+  appendStoreIds(qs, params?.storeIds);
   if (params?.reason) qs.set("reason", params.reason);
   if (params?.from) qs.set("from", params.from);
   if (params?.to) qs.set("to", params.to);
@@ -95,7 +105,7 @@ function getLossesByProduct(params?: LossesByProductParams): Promise<LossesByPro
 // ── Losses/write-offs trend over time (TASK-489/492) ────────────────────────
 
 interface LossesTrendParams {
-  store_id?: string;
+  storeIds?: string[];
   from?: string;
   to?: string;
   group_by?: "day" | "week";
@@ -103,7 +113,7 @@ interface LossesTrendParams {
 
 function getLossesTrend(params?: LossesTrendParams): Promise<LossesTrendDto> {
   const qs = new URLSearchParams();
-  if (params?.store_id) qs.set("store_id", params.store_id);
+  appendStoreIds(qs, params?.storeIds);
   if (params?.from) qs.set("from", params.from);
   if (params?.to) qs.set("to", params.to);
   if (params?.group_by) qs.set("group_by", params.group_by);
@@ -112,9 +122,9 @@ function getLossesTrend(params?: LossesTrendParams): Promise<LossesTrendDto> {
 }
 
 export const analyticsApi = {
-  getExpirySummary: (params?: { store_id?: string; network?: boolean }) => {
+  getExpirySummary: (params?: { storeIds?: string[]; network?: boolean }) => {
     const qs = new URLSearchParams();
-    if (params?.store_id) qs.set("store_id", params.store_id);
+    appendStoreIds(qs, params?.storeIds);
     if (params?.network) qs.set("network", "true");
     const q = qs.toString();
     return api.get<ExpirySummaryDto>(`/api/analytics/expiry-summary${q ? `?${q}` : ""}`);
@@ -122,6 +132,8 @@ export const analyticsApi = {
 
   getWriteOffs,
 
+  // Untouched (TASK-610): /movements stays on the singular store_id contract, not one of the
+  // 8 endpoints widened to storeIds.
   getMovements: (params?: { store_id?: string; type?: string; from?: string; to?: string }) => {
     const qs = new URLSearchParams();
     if (params?.store_id) qs.set("store_id", params.store_id);
@@ -132,14 +144,18 @@ export const analyticsApi = {
     return api.get<MovementAnalyticsDto>(`/api/analytics/movements${q ? `?${q}` : ""}`);
   },
 
-  getByZone: (store_id?: string) => {
-    const qs = store_id ? `?store_id=${store_id}` : "";
-    return api.get<ZoneAnalyticsDto[]>(`/api/analytics/by-zone${qs}`);
+  getByZone: (storeIds?: string[]) => {
+    const qs = new URLSearchParams();
+    appendStoreIds(qs, storeIds);
+    const q = qs.toString();
+    return api.get<ZoneAnalyticsDto[]>(`/api/analytics/by-zone${q ? `?${q}` : ""}`);
   },
 
-  getByCategory: (store_id?: string) => {
-    const qs = store_id ? `?store_id=${store_id}` : "";
-    return api.get<CategoryAnalyticsDto[]>(`/api/analytics/by-category${qs}`);
+  getByCategory: (storeIds?: string[]) => {
+    const qs = new URLSearchParams();
+    appendStoreIds(qs, storeIds);
+    const q = qs.toString();
+    return api.get<CategoryAnalyticsDto[]>(`/api/analytics/by-category${q ? `?${q}` : ""}`);
   },
 
   getLosses,

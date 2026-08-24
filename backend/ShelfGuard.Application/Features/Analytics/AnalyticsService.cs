@@ -15,39 +15,39 @@ public sealed class AnalyticsService : IAnalyticsService
         _snapshots = snapshots;
     }
 
-    public Task<ExpirySummaryDto> GetExpirySummaryAsync(Guid? tenantId, Guid? storeId, bool network, CancellationToken ct = default)
-        => _repo.GetExpirySummaryAsync(tenantId, storeId, network, ct);
+    public Task<ExpirySummaryDto> GetExpirySummaryAsync(Guid? tenantId, Guid[]? storeIds, bool network, CancellationToken ct = default)
+        => _repo.GetExpirySummaryAsync(tenantId, storeIds, network, ct);
 
-    public Task<WriteOffAnalyticsDto> GetWriteOffAnalyticsAsync(Guid? tenantId, Guid? storeId, DateOnly? from, DateOnly? to, CancellationToken ct = default)
-        => _repo.GetWriteOffAnalyticsAsync(tenantId, storeId, from, to, ct);
+    public Task<WriteOffAnalyticsDto> GetWriteOffAnalyticsAsync(Guid? tenantId, Guid[]? storeIds, DateOnly? from, DateOnly? to, CancellationToken ct = default)
+        => _repo.GetWriteOffAnalyticsAsync(tenantId, storeIds, from, to, ct);
 
     public Task<MovementAnalyticsDto> GetMovementAnalyticsAsync(Guid? tenantId, Guid? storeId, string? type, DateOnly? from, DateOnly? to, CancellationToken ct = default)
         => _repo.GetMovementAnalyticsAsync(tenantId, storeId, type, from, to, ct);
 
-    public Task<IReadOnlyList<ZoneAnalyticsDto>> GetByZoneAsync(Guid? tenantId, Guid? storeId, CancellationToken ct = default)
-        => _repo.GetByZoneAsync(tenantId, storeId, ct);
+    public Task<IReadOnlyList<ZoneAnalyticsDto>> GetByZoneAsync(Guid? tenantId, Guid[]? storeIds, CancellationToken ct = default)
+        => _repo.GetByZoneAsync(tenantId, storeIds, ct);
 
-    public Task<IReadOnlyList<CategoryAnalyticsDto>> GetByCategoryAsync(Guid? tenantId, Guid? storeId, CancellationToken ct = default)
-        => _repo.GetByCategoryAsync(tenantId, storeId, ct);
+    public Task<IReadOnlyList<CategoryAnalyticsDto>> GetByCategoryAsync(Guid? tenantId, Guid[]? storeIds, CancellationToken ct = default)
+        => _repo.GetByCategoryAsync(tenantId, storeIds, ct);
 
-    public Task<LossesDto> GetLossesAsync(Guid? tenantId, Guid? storeId, DateOnly? from, DateOnly? to, CancellationToken ct = default)
-        => _repo.GetLossesAsync(tenantId, storeId, from, to, ct);
+    public Task<LossesDto> GetLossesAsync(Guid? tenantId, Guid[]? storeIds, DateOnly? from, DateOnly? to, CancellationToken ct = default)
+        => _repo.GetLossesAsync(tenantId, storeIds, from, to, ct);
 
     // ── TASK-481: category/losses product drill-down ─────────────────────────
 
-    public Task<CategoryProductBreakdownDto> GetCategoryProductBreakdownAsync(Guid? tenantId, Guid? storeId, Guid? categoryId, DateOnly from, DateOnly to, bool includeMargin, CancellationToken ct = default)
-        => _repo.GetCategoryProductBreakdownAsync(tenantId, storeId, categoryId, from, to, includeMargin, ct);
+    public Task<CategoryProductBreakdownDto> GetCategoryProductBreakdownAsync(Guid? tenantId, Guid[]? storeIds, Guid? categoryId, DateOnly from, DateOnly to, bool includeMargin, CancellationToken ct = default)
+        => _repo.GetCategoryProductBreakdownAsync(tenantId, storeIds, categoryId, from, to, includeMargin, ct);
 
-    public Task<LossesByProductDto> GetLossesByProductAsync(Guid? tenantId, Guid? storeId, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default)
-        => _repo.GetLossesByProductAsync(tenantId, storeId, reason, from, to, ct);
+    public Task<LossesByProductDto> GetLossesByProductAsync(Guid? tenantId, Guid[]? storeIds, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default)
+        => _repo.GetLossesByProductAsync(tenantId, storeIds, reason, from, to, ct);
 
     // ── TASK-489: losses/write-offs trend over time ─────────────────────────
 
-    public Task<LossesTrendDto> GetLossesTrendAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
-        => _repo.GetLossesTrendAsync(tenantId, storeId, from, to, groupBy, ct);
+    public Task<LossesTrendDto> GetLossesTrendAsync(Guid? tenantId, Guid[]? storeIds, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
+        => _repo.GetLossesTrendAsync(tenantId, storeIds, from, to, groupBy, ct);
 
     public Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
-        => _repo.GetPosSummaryAsync(tenantId, storeId, from, to, ct);
+        => _repo.GetPosSummaryAsync(tenantId, AsArray(storeId), from, to, ct);
 
     public Task<PosRevenueTrendDto> GetPosRevenueTrendAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
         => _repo.GetPosRevenueTrendAsync(tenantId, storeId, from, to, groupBy, ct);
@@ -100,18 +100,18 @@ public sealed class AnalyticsService : IAnalyticsService
 
     // ── TASK-336: period comparison ─────────────────────────────────────────
 
-    public async Task<WeeklyKpiDto> GetWeeklyKpiAsync(Guid? tenantId, Guid? storeId, CancellationToken ct = default)
+    public async Task<WeeklyKpiDto> GetWeeklyKpiAsync(Guid? tenantId, Guid[]? storeIds, CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var currentFrom = today.AddDays(-6);
         var previousFrom = currentFrom.AddDays(-7);
         var previousTo = today.AddDays(-7);
 
-        var currentPos = await _repo.GetPosSummaryAsync(tenantId, storeId, currentFrom, today, ct);
-        var previousPos = await _repo.GetPosSummaryAsync(tenantId, storeId, previousFrom, previousTo, ct);
+        var currentPos = await _repo.GetPosSummaryAsync(tenantId, storeIds, currentFrom, today, ct);
+        var previousPos = await _repo.GetPosSummaryAsync(tenantId, storeIds, previousFrom, previousTo, ct);
 
-        var currentWriteOffs = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeId, currentFrom, today, ct);
-        var previousWriteOffs = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeId, previousFrom, previousTo, ct);
+        var currentWriteOffs = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeIds, currentFrom, today, ct);
+        var previousWriteOffs = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeIds, previousFrom, previousTo, ct);
 
         return new WeeklyKpiDto(
             Sales: PeriodMetricDto.Of(currentPos.TransactionCount, previousPos.TransactionCount),
@@ -121,9 +121,10 @@ public sealed class AnalyticsService : IAnalyticsService
     }
 
     public async Task<ExpirySummaryComparisonDto> GetExpirySummaryComparisonAsync(
-        Guid? tenantId, Guid? storeId, int compareWeeksAgo, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, int compareWeeksAgo, CancellationToken ct = default)
     {
-        var current = await GetExpirySummaryAsync(tenantId, storeId, network: !storeId.HasValue, ct);
+        var hasStoreFilter = storeIds is { Length: > 0 };
+        var current = await _repo.GetExpirySummaryAsync(tenantId, storeIds, network: !hasStoreFilter, ct);
 
         // Snapshots are per-tenant; a cross-tenant provider call (tenantId == null) has no
         // single snapshot row to compare against, so there's nothing meaningful to return.
@@ -133,42 +134,41 @@ public sealed class AnalyticsService : IAnalyticsService
         var weeksAgo = compareWeeksAgo < 1 ? 1 : compareWeeksAgo;
         var compareDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-7 * weeksAgo);
 
-        ExpirySummaryDto? previous;
-        if (storeId.HasValue)
-        {
-            var snapshot = await _snapshots.GetAsync(tenantId.Value, storeId.Value, compareDate, ct);
-            previous = snapshot is null ? null : MapSnapshot(snapshot);
-        }
-        else
-        {
-            var snapshots = await _snapshots.GetByTenantAndDateAsync(tenantId.Value, compareDate, ct);
-            previous = snapshots.Count == 0 ? null : MapSnapshots(snapshots);
-        }
+        // Snapshot storage is single-store only (no bulk-by-storeIds lookup) — for a multi-store
+        // selection, pull every store's snapshot for the tenant/date and filter to the requested
+        // set in memory (store counts per tenant are small, so this is a single cheap round-trip
+        // rather than one GetAsync call per requested store).
+        var snapshots = await _snapshots.GetByTenantAndDateAsync(tenantId.Value, compareDate, ct);
+        if (hasStoreFilter)
+            snapshots = snapshots.Where(s => storeIds!.Contains(s.StoreId)).ToList();
+
+        var previous = snapshots.Count == 0 ? null : MapSnapshots(snapshots);
 
         return new ExpirySummaryComparisonDto(current, previous);
     }
 
     public async Task<WriteOffsComparisonDto> GetWriteOffAnalyticsComparisonAsync(
-        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, DateOnly compareFrom, DateOnly compareTo, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, DateOnly from, DateOnly to, DateOnly compareFrom, DateOnly compareTo, CancellationToken ct = default)
     {
-        var current = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeId, from, to, ct);
-        var comparison = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeId, compareFrom, compareTo, ct);
+        var current = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeIds, from, to, ct);
+        var comparison = await _repo.GetWriteOffAnalyticsAsync(tenantId, storeIds, compareFrom, compareTo, ct);
         return new WriteOffsComparisonDto(current, comparison, PercentChange(current.TotalLoss, comparison.TotalLoss));
     }
 
     public async Task<LossesComparisonDto> GetLossesComparisonAsync(
-        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, DateOnly compareFrom, DateOnly compareTo, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, DateOnly from, DateOnly to, DateOnly compareFrom, DateOnly compareTo, CancellationToken ct = default)
     {
-        var current = await _repo.GetLossesAsync(tenantId, storeId, from, to, ct);
-        var comparison = await _repo.GetLossesAsync(tenantId, storeId, compareFrom, compareTo, ct);
+        var current = await _repo.GetLossesAsync(tenantId, storeIds, from, to, ct);
+        var comparison = await _repo.GetLossesAsync(tenantId, storeIds, compareFrom, compareTo, ct);
         return new LossesComparisonDto(current, comparison, PercentChange(current.TotalLoss, comparison.TotalLoss));
     }
 
     public async Task<PosSummaryComparisonDto> GetPosSummaryComparisonAsync(
         Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, DateOnly compareFrom, DateOnly compareTo, CancellationToken ct = default)
     {
-        var current = await _repo.GetPosSummaryAsync(tenantId, storeId, from, to, ct);
-        var comparison = await _repo.GetPosSummaryAsync(tenantId, storeId, compareFrom, compareTo, ct);
+        var storeIds = AsArray(storeId);
+        var current = await _repo.GetPosSummaryAsync(tenantId, storeIds, from, to, ct);
+        var comparison = await _repo.GetPosSummaryAsync(tenantId, storeIds, compareFrom, compareTo, ct);
         return new PosSummaryComparisonDto(
             current,
             comparison,
@@ -209,6 +209,13 @@ public sealed class AnalyticsService : IAnalyticsService
         Stores: snapshots
             .Select(s => new ExpirySummaryStoreDto(s.StoreId, s.Store?.Name ?? "Unknown", s.SafeCount, s.WarningCount, s.CriticalCount, s.ExpiredCount))
             .ToList());
+
+    // TASK-608: wraps a singular storeId into the one-element array the (now Guid[]?-based)
+    // repository methods expect. Still used by GetPosSummaryAsync/GetPosSummaryComparisonAsync
+    // (pos/summary controller action — out of TASK-610's scope, unchanged single-store HTTP
+    // contract). null in -> null out (no filter = all stores), matching the pre-widening
+    // Guid? storeId == null convention exactly.
+    private static Guid[]? AsArray(Guid? storeId) => storeId.HasValue ? new[] { storeId.Value } : null;
 
     private static decimal? PercentChange(decimal current, decimal previous) =>
         previous == 0m ? null : Math.Round((current - previous) / previous * 100m, 2);

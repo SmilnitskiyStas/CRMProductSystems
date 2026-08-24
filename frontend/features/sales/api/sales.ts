@@ -3,7 +3,9 @@ import type { CsvImportResult, DailySale, SalesFilters, UpsertDailySalePayload }
 
 function query(filters: SalesFilters): string {
   const params = new URLSearchParams();
-  if (filters.storeId) params.set("store_id", filters.storeId);
+  if (filters.storeIds) {
+    for (const id of filters.storeIds) params.append("storeIds", id);
+  }
   if (filters.productId) params.set("product_id", filters.productId);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);

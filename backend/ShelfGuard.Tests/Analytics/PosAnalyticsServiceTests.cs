@@ -48,7 +48,7 @@ public sealed class PosAnalyticsServiceTests
             CashRevenue: 0, CardRevenue: 0, ShiftCount: 0,
             From: From30, To: Today);
 
-        _repo.GetPosSummaryAsync(Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
+        _repo.GetPosSummaryAsync(Arg.Any<Guid?>(), Arg.Any<Guid[]?>(), Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
              .Returns(empty);
 
         var result = await _sut.GetPosSummaryAsync(Guid.NewGuid(), null, From30, Today);
@@ -288,14 +288,17 @@ public sealed class PosAnalyticsServiceTests
                     DaysOfStockRemaining: 12.5m),
             });
 
-        _repo.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, false, default)
+        // NSubstitute matches array arguments by reference by default, not by value -- Arg.Is
+        // with an element-wise predicate is this codebase's established pattern for a Guid[]
+        // argument (see AiOrderServiceTests' _events.GetAsync setup).
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == storeId), categoryId, From30, Today, false, default)
              .Returns(expected);
 
-        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, includeMargin: false);
+        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, new[] { storeId }, categoryId, From30, Today, includeMargin: false);
 
         var row = Assert.Single(result.Products);
         Assert.Equal(12.5m, row.DaysOfStockRemaining);
-        await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, false, default);
+        await _repo.Received(1).GetCategoryProductBreakdownAsync(_tenantId, Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == storeId), categoryId, From30, Today, false, default);
     }
 
     // No store_id on the request -- ProductAdu is per-(product, store), so a network-wide/
@@ -346,10 +349,10 @@ public sealed class PosAnalyticsServiceTests
                     DaysOfStockRemaining: null),
             });
 
-        _repo.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, false, default)
+        _repo.GetCategoryProductBreakdownAsync(_tenantId, Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == storeId), categoryId, From30, Today, false, default)
              .Returns(expected);
 
-        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, storeId, categoryId, From30, Today, includeMargin: false);
+        var result = await _sut.GetCategoryProductBreakdownAsync(_tenantId, new[] { storeId }, categoryId, From30, Today, includeMargin: false);
 
         var row = Assert.Single(result.Products);
         Assert.Null(row.DaysOfStockRemaining);
@@ -386,13 +389,13 @@ public sealed class PosAnalyticsServiceTests
         var storeId = Guid.NewGuid();
         var expected = new LossesByProductDto(TotalLoss: 0m, Products: []);
 
-        _repo.GetLossesByProductAsync(_tenantId, storeId, "expired", From30, Today, default)
+        _repo.GetLossesByProductAsync(_tenantId, Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == storeId), "expired", From30, Today, default)
              .Returns(expected);
 
-        var result = await _sut.GetLossesByProductAsync(_tenantId, storeId, "expired", From30, Today);
+        var result = await _sut.GetLossesByProductAsync(_tenantId, new[] { storeId }, "expired", From30, Today);
 
         Assert.Empty(result.Products);
-        await _repo.Received(1).GetLossesByProductAsync(_tenantId, storeId, "expired", From30, Today, default);
+        await _repo.Received(1).GetLossesByProductAsync(_tenantId, Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == storeId), "expired", From30, Today, default);
     }
 
     // No margin gate (ADR-027 §1): LossByProductRowDto carries no MarginAmount/MarginPercent
@@ -471,14 +474,14 @@ public sealed class PosAnalyticsServiceTests
             Points: new List<LossesTrendPointDto> { new(Today, TotalLoss: 40m, Count: 1) },
             GroupBy: "day");
 
-        _repo.GetLossesTrendAsync(_tenantId, storeId, From30, Today, "day", default)
+        _repo.GetLossesTrendAsync(_tenantId, Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == storeId), From30, Today, "day", default)
              .Returns(expected);
 
-        var result = await _sut.GetLossesTrendAsync(_tenantId, storeId, From30, Today, "day");
+        var result = await _sut.GetLossesTrendAsync(_tenantId, new[] { storeId }, From30, Today, "day");
 
         var point = Assert.Single(result.Points);
         Assert.Equal(40m, point.TotalLoss);
-        await _repo.Received(1).GetLossesTrendAsync(_tenantId, storeId, From30, Today, "day", default);
+        await _repo.Received(1).GetLossesTrendAsync(_tenantId, Arg.Is<Guid[]>(a => a.Length == 1 && a[0] == storeId), From30, Today, "day", default);
     }
 
     // Empty-range / no-write-offs case: repository returns an empty points list rather than
@@ -488,7 +491,7 @@ public sealed class PosAnalyticsServiceTests
     {
         var expected = new LossesTrendDto(Points: [], GroupBy: "day");
 
-        _repo.GetLossesTrendAsync(Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _repo.GetLossesTrendAsync(Arg.Any<Guid?>(), Arg.Any<Guid[]?>(), Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(expected);
 
         var result = await _sut.GetLossesTrendAsync(Guid.NewGuid(), null, Today, Today, "day");

@@ -13,7 +13,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     public AnalyticsRepository(AppDbContext db) => _db = db;
 
     public async Task<ExpirySummaryDto> GetExpirySummaryAsync(
-        Guid? tenantId, Guid? storeId, bool network, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, bool network, CancellationToken ct = default)
     {
         var query = _db.ProductStocks
             .Where(s => s.Quantity > 0);
@@ -21,8 +21,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (tenantId.HasValue)
             query = query.Where(s => s.TenantId == tenantId.Value);
 
-        if (storeId.HasValue && !network)
-            query = query.Where(s => s.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 } && !network)
+            query = query.Where(s => storeIds.Contains(s.StoreId));
 
         var rows = await query
             .Select(s => new { s.ExpiryDate, s.LastCheckedAt, s.StoreId })
@@ -35,9 +35,9 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
             Status = ComputeStatus(r.ExpiryDate, r.LastCheckedAt, thresholds)
         }).ToList();
 
-        var storeIds = batches.Select(b => b.StoreId).Distinct().ToHashSet();
+        var involvedStoreIds = batches.Select(b => b.StoreId).Distinct().ToHashSet();
         var stores = await _db.Locations
-            .Where(s => storeIds.Contains(s.Id))
+            .Where(s => involvedStoreIds.Contains(s.Id))
             .Select(s => new { s.Id, s.Name })
             .ToListAsync(ct);
 
@@ -67,15 +67,15 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     }
 
     public async Task<WriteOffAnalyticsDto> GetWriteOffAnalyticsAsync(
-        Guid? tenantId, Guid? storeId, DateOnly? from, DateOnly? to, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, DateOnly? from, DateOnly? to, CancellationToken ct = default)
     {
         var query = _db.WriteOffs.Where(w => w.Status == "approved");
 
         if (tenantId.HasValue)
             query = query.Where(w => w.TenantId == tenantId.Value);
 
-        if (storeId.HasValue)
-            query = query.Where(w => w.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            query = query.Where(w => storeIds.Contains(w.StoreId));
         if (from.HasValue)
             query = query.Where(w => w.CreatedAt >= ToUtcStart(from.Value));
         if (to.HasValue)
@@ -152,7 +152,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     }
 
     public async Task<IReadOnlyList<ZoneAnalyticsDto>> GetByZoneAsync(
-        Guid? tenantId, Guid? storeId, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, CancellationToken ct = default)
     {
         var query = _db.ProductStocks
             .Where(s => s.ZoneId.HasValue && s.Quantity > 0
@@ -161,8 +161,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (tenantId.HasValue)
             query = query.Where(s => s.TenantId == tenantId.Value);
 
-        if (storeId.HasValue)
-            query = query.Where(s => s.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            query = query.Where(s => storeIds.Contains(s.StoreId));
 
         // Single query: join zone and store via navigation properties
         var rows = await query
@@ -212,7 +212,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     }
 
     public async Task<IReadOnlyList<CategoryAnalyticsDto>> GetByCategoryAsync(
-        Guid? tenantId, Guid? storeId, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, CancellationToken ct = default)
     {
         var stockQuery = _db.ProductStocks
             .Where(s => s.Quantity > 0 && s.Status != "sold_out" && s.Status != "archived");
@@ -220,8 +220,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         if (tenantId.HasValue)
             stockQuery = stockQuery.Where(s => s.TenantId == tenantId.Value);
 
-        if (storeId.HasValue)
-            stockQuery = stockQuery.Where(s => s.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            stockQuery = stockQuery.Where(s => storeIds.Contains(s.StoreId));
 
         // Single query: join product and category via navigation properties
         var rows = await stockQuery
@@ -269,15 +269,15 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     }
 
     public async Task<LossesDto> GetLossesAsync(
-        Guid? tenantId, Guid? storeId, DateOnly? from, DateOnly? to, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, DateOnly? from, DateOnly? to, CancellationToken ct = default)
     {
         var query = _db.WriteOffs.Where(w => w.Status == "approved");
 
         if (tenantId.HasValue)
             query = query.Where(w => w.TenantId == tenantId.Value);
 
-        if (storeId.HasValue)
-            query = query.Where(w => w.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            query = query.Where(w => storeIds.Contains(w.StoreId));
         if (from.HasValue)
             query = query.Where(w => w.CreatedAt >= ToUtcStart(from.Value));
         if (to.HasValue)
@@ -318,7 +318,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     // ── TASK-481: category/losses product drill-down ────────────────────────
 
     public async Task<CategoryProductBreakdownDto> GetCategoryProductBreakdownAsync(
-        Guid? tenantId, Guid? storeId, Guid? categoryId, DateOnly from, DateOnly to, bool includeMargin, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, Guid? categoryId, DateOnly from, DateOnly to, bool includeMargin, CancellationToken ct = default)
     {
         // ── Stock side: same rollup as GetByCategoryAsync, scoped to one category and grouped
         // by product instead of by category. ────────────────────────────────────────────────
@@ -327,8 +327,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
 
         if (tenantId.HasValue)
             stockQuery = stockQuery.Where(s => s.TenantId == tenantId.Value);
-        if (storeId.HasValue)
-            stockQuery = stockQuery.Where(s => s.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            stockQuery = stockQuery.Where(s => storeIds.Contains(s.StoreId));
 
         // null category_id means the "uncategorized" bucket (mirrors GetByCategoryAsync's own
         // null-key group), not "all categories".
@@ -363,7 +363,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         // ── Sales side: same rollup as GetPosTopProductsAsync, scoped to one category. ───────
         var fromDt = ToUtcStart(from);
         var toDt   = ToUtcEnd(to);
-        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
+        var txQuery = BuildPosTransactionQuery(tenantId, storeIds, fromDt, toDt);
 
         var salesItemsQuery = _db.PosTransactionItems
             .Where(i => txQuery.Select(t => t.Id).Contains(i.TransactionId));
@@ -405,17 +405,20 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
                 .ToDictionaryAsync(x => x.Id, x => x.PricePurchase, ct)
             : new Dictionary<Guid, decimal?>();
 
-        // ── ADU (TASK-491): bulk-fetched in one extra query, only when the request is
-        // store-scoped -- ProductAdu is per-(product, store), so a network-wide/multi-store
+        // ── ADU (TASK-491): bulk-fetched in one extra query, only when the request is scoped to
+        // exactly one store -- ProductAdu is per-(product, store), so a network-wide/multi-store
         // rollup has no single meaningful ADU to divide by (DaysOfStockRemaining stays null for
-        // every row below in that case). Keyed by ProductId via ToDictionaryAsync -- same
-        // bulk-fetch-then-Dictionary-lookup shape as purchasePrices just above, deliberately not
-        // one query per product (N+1).
+        // every row below in that case). TASK-610: storeIds can now carry 2+ entries (an explicit
+        // multi-store selection), which gets the same "no single meaningful ADU" treatment as
+        // zero stores (network-wide) -- only a one-element array still populates this. Keyed by
+        // ProductId via ToDictionaryAsync -- same bulk-fetch-then-Dictionary-lookup shape as
+        // purchasePrices just above, deliberately not one query per product (N+1).
         var aduByProduct = new Dictionary<Guid, decimal?>();
-        if (storeId.HasValue && productIds.Count > 0)
+        if (storeIds is { Length: 1 } && productIds.Count > 0)
         {
+            var singleStoreId = storeIds[0];
             var aduQuery = _db.ProductAdus
-                .Where(a => a.StoreId == storeId.Value && productIds.Contains(a.ProductId));
+                .Where(a => a.StoreId == singleStoreId && productIds.Contains(a.ProductId));
             if (tenantId.HasValue)
                 aduQuery = aduQuery.Where(a => a.TenantId == tenantId.Value);
 
@@ -479,7 +482,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     }
 
     public async Task<LossesByProductDto> GetLossesByProductAsync(
-        Guid? tenantId, Guid? storeId, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, string? reason, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var writeOffQuery = _db.WriteOffs
             .Where(w => w.Status == "approved"
@@ -488,8 +491,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
 
         if (tenantId.HasValue)
             writeOffQuery = writeOffQuery.Where(w => w.TenantId == tenantId.Value);
-        if (storeId.HasValue)
-            writeOffQuery = writeOffQuery.Where(w => w.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            writeOffQuery = writeOffQuery.Where(w => storeIds.Contains(w.StoreId));
 
         if (!string.IsNullOrEmpty(reason))
         {
@@ -538,7 +541,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     // "approved" + date-range filter mirrors GetLossesAsync/GetLossesByProductAsync above) ────
 
     public async Task<LossesTrendDto> GetLossesTrendAsync(
-        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default)
     {
         var fromDt = ToUtcStart(from);
         var toDt   = ToUtcEnd(to);
@@ -550,8 +553,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
 
         if (tenantId.HasValue)
             query = query.Where(w => w.TenantId == tenantId.Value);
-        if (storeId.HasValue)
-            query = query.Where(w => w.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            query = query.Where(w => storeIds.Contains(w.StoreId));
 
         var resolvedGroupBy = groupBy == "week" ? "week" : "day";
 
@@ -605,12 +608,12 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
     // ── POS analytics ─────────────────────────────────────────────────────
 
     public async Task<PosAnalyticsSummaryDto> GetPosSummaryAsync(
-        Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
+        Guid? tenantId, Guid[]? storeIds, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var fromDt = ToUtcStart(from);
         var toDt   = ToUtcEnd(to);
 
-        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt);
+        var txQuery = BuildPosTransactionQuery(tenantId, storeIds, fromDt, toDt);
 
         var txData = await txQuery
             .Select(t => new { t.TotalAmount, t.PaymentType })
@@ -619,8 +622,8 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         var shiftQuery = _db.PosShifts.AsQueryable();
         if (tenantId.HasValue)
             shiftQuery = shiftQuery.Where(s => s.TenantId == tenantId.Value);
-        if (storeId.HasValue)
-            shiftQuery = shiftQuery.Where(s => s.StoreId == storeId.Value);
+        if (storeIds is { Length: > 0 })
+            shiftQuery = shiftQuery.Where(s => storeIds.Contains(s.StoreId));
         shiftQuery = shiftQuery.Where(s => s.OpenedAt >= fromDt && s.OpenedAt <= toDt);
 
         var shiftCount = await shiftQuery.CountAsync(ct);
@@ -986,6 +989,26 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
 
         if (storeId.HasValue)
             query = query.Where(t => t.StoreId == storeId.Value);
+
+        return query;
+    }
+
+    // TASK-608: array overload used only by GetPosSummaryAsync (backs dashboard/weekly-kpi) —
+    // every other BuildPosTransactionQuery caller above stays on the single-storeId overload
+    // since their controller actions are unchanged single-store endpoints.
+    private IQueryable<Domain.Entities.PosTransaction> BuildPosTransactionQuery(
+        Guid? tenantId, Guid[]? storeIds, DateTime fromDt, DateTime toDt)
+    {
+        var query = _db.PosTransactions
+            .Where(t => t.Status != "fiscalization_failed"
+                     && t.CreatedAt >= fromDt
+                     && t.CreatedAt <= toDt);
+
+        if (tenantId.HasValue)
+            query = query.Where(t => t.TenantId == tenantId.Value);
+
+        if (storeIds is { Length: > 0 })
+            query = query.Where(t => storeIds.Contains(t.StoreId));
 
         return query;
     }

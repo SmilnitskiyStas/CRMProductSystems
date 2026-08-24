@@ -4,8 +4,13 @@ namespace ShelfGuard.Domain.Interfaces;
 
 public interface IDailySalesRepository
 {
+    /// <summary>
+    /// TASK-610: storeIds is a repeated query param (Guid[]?) — null/empty means "all stores"
+    /// (Contains-filter), same convention as EventRepository.GetAsync / TASK-608's Analytics
+    /// widening.
+    /// </summary>
     Task<List<DailySale>> GetAsync(
-        Guid? storeId,
+        Guid[]? storeIds,
         Guid? productId,
         DateOnly? from,
         DateOnly? to,

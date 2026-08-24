@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { analyticsApi } from "../api/analytics";
 
-export function useExpirySummary(params?: { store_id?: string; network?: boolean }, enabled = true) {
+export function useExpirySummary(params?: { storeIds?: string[]; network?: boolean }, enabled = true) {
   return useQuery({
     queryKey: ["analytics-expiry", params],
     queryFn: () => analyticsApi.getExpirySummary(params),
@@ -9,7 +9,7 @@ export function useExpirySummary(params?: { store_id?: string; network?: boolean
   });
 }
 
-export function useWriteOffAnalytics(params?: { store_id?: string; from?: string; to?: string }, enabled = true) {
+export function useWriteOffAnalytics(params?: { storeIds?: string[]; from?: string; to?: string }, enabled = true) {
   return useQuery({
     queryKey: ["analytics-writeoffs", params],
     queryFn: () => analyticsApi.getWriteOffs(params),
@@ -28,23 +28,23 @@ export function useMovementAnalytics(
   });
 }
 
-export function useZoneAnalytics(store_id?: string, enabled = true) {
+export function useZoneAnalytics(storeIds?: string[], enabled = true) {
   return useQuery({
-    queryKey: ["analytics-zone", store_id],
-    queryFn: () => analyticsApi.getByZone(store_id),
+    queryKey: ["analytics-zone", storeIds],
+    queryFn: () => analyticsApi.getByZone(storeIds),
     enabled,
   });
 }
 
-export function useCategoryAnalytics(store_id?: string, enabled = true) {
+export function useCategoryAnalytics(storeIds?: string[], enabled = true) {
   return useQuery({
-    queryKey: ["analytics-category", store_id],
-    queryFn: () => analyticsApi.getByCategory(store_id),
+    queryKey: ["analytics-category", storeIds],
+    queryFn: () => analyticsApi.getByCategory(storeIds),
     enabled,
   });
 }
 
-export function useLosses(params?: { store_id?: string; from?: string; to?: string }, enabled = true) {
+export function useLosses(params?: { storeIds?: string[]; from?: string; to?: string }, enabled = true) {
   return useQuery({
     queryKey: ["analytics-losses", params],
     queryFn: () => analyticsApi.getLosses(params),
@@ -55,7 +55,7 @@ export function useLosses(params?: { store_id?: string; from?: string; to?: stri
 // ── Period comparison (ADR-016) ─────────────────────────────────────────────
 
 export function useWriteOffAnalyticsCompare(
-  params: { store_id?: string; from?: string; to?: string; compareFrom?: string; compareTo?: string },
+  params: { storeIds?: string[]; from?: string; to?: string; compareFrom?: string; compareTo?: string },
   enabled = true,
 ) {
   return useQuery({
@@ -66,7 +66,7 @@ export function useWriteOffAnalyticsCompare(
 }
 
 export function useLossesCompare(
-  params: { store_id?: string; from?: string; to?: string; compareFrom?: string; compareTo?: string },
+  params: { storeIds?: string[]; from?: string; to?: string; compareFrom?: string; compareTo?: string },
   enabled = true,
 ) {
   return useQuery({
@@ -84,7 +84,7 @@ export function useLossesCompare(
 // rows on screen.
 
 export function useCategoryProductBreakdown(
-  params: { category_id: string | null; store_id?: string; from?: string; to?: string },
+  params: { category_id: string | null; storeIds?: string[]; from?: string; to?: string },
   enabled = true,
 ) {
   return useQuery({
@@ -95,7 +95,7 @@ export function useCategoryProductBreakdown(
 }
 
 export function useLossesByProduct(
-  params: { store_id?: string; reason?: string; from?: string; to?: string },
+  params: { storeIds?: string[]; reason?: string; from?: string; to?: string },
   enabled = true,
 ) {
   return useQuery({
@@ -109,7 +109,7 @@ export function useLossesByProduct(
 // No `keepPreviousData`/`placeholderData` — same discipline as every other hook in this file.
 
 export function useLossesTrend(
-  params?: { store_id?: string; from?: string; to?: string; group_by?: "day" | "week" },
+  params?: { storeIds?: string[]; from?: string; to?: string; group_by?: "day" | "week" },
   enabled = true,
 ) {
   return useQuery({

@@ -23,7 +23,10 @@ export interface UpsertDailySalePayload {
 }
 
 export interface SalesFilters {
-  storeId?: string;
+  /** Repeated `storeIds=<id>` query params (TASK-611) — empty/undefined = all stores. Read-list
+   * filter only; the separate single-store `storeId` on UpsertDailySalePayload/importCsv is
+   * unaffected (writes stay single-store per TASK-610's backend contract). */
+  storeIds?: string[];
   productId?: string;
   from?: string;
   to?: string;

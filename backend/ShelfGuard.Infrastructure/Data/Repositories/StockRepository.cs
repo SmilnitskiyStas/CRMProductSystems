@@ -39,7 +39,7 @@ public sealed class StockRepository : IStockRepository
     }
 
     public async Task<(List<ProductStock> Items, int Total)> GetPagedAsync(
-        Guid? storeId, string? status, Guid? zoneId, Guid? productId,
+        Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId,
         int page, int pageSize,
         CancellationToken ct = default)
     {
@@ -49,8 +49,8 @@ public sealed class StockRepository : IStockRepository
             .Include(s => s.Zone)
             .AsQueryable();
 
-        if (storeId.HasValue)
-            query = query.Where(s => s.StoreId == storeId);
+        if (storeIds is { Length: > 0 })
+            query = query.Where(s => storeIds.Contains(s.StoreId));
         query = ApplyStatusFilter(query, status);
         if (zoneId.HasValue)
             query = query.Where(s => s.ZoneId == zoneId);
@@ -194,11 +194,11 @@ public sealed class StockRepository : IStockRepository
             .Where(s => s.IsActive && (s.Type == "production" || s.Type == "distribution"))
             .ToListAsync(ct);
 
-    public async Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default)
+    public async Task<Dictionary<string, int>> GetStatusCountsAsync(Guid[]? storeIds, CancellationToken ct = default)
     {
         var baseQuery = _db.ProductStocks.Where(s => s.Quantity > 0).AsQueryable();
-        if (storeId.HasValue)
-            baseQuery = baseQuery.Where(s => s.StoreId == storeId);
+        if (storeIds is { Length: > 0 })
+            baseQuery = baseQuery.Where(s => storeIds.Contains(s.StoreId));
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var criticalCutoff = today.AddDays(StockStatus.CriticalDays);
@@ -221,7 +221,7 @@ public sealed class StockRepository : IStockRepository
     }
 
     public async Task<List<(Guid? ZoneId, string ZoneName, string ZoneType, string Status)>> GetStockByZoneRawAsync(
-        Guid? storeId, CancellationToken ct = default)
+        Guid[]? storeIds, CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var criticalCutoff = today.AddDays(StockStatus.CriticalDays);
@@ -233,8 +233,8 @@ public sealed class StockRepository : IStockRepository
             .Include(s => s.Zone)
             .AsQueryable();
 
-        if (storeId.HasValue)
-            query = query.Where(s => s.StoreId == storeId);
+        if (storeIds is { Length: > 0 })
+            query = query.Where(s => storeIds.Contains(s.StoreId));
 
         var rows = await query
             .Select(s => new

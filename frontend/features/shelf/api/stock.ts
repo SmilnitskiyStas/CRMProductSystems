@@ -16,7 +16,9 @@ export const stockApi = {
     product_id?: string;
   }) => {
     const qs = new URLSearchParams();
-    if (params?.store_id) qs.set("store_id", params.store_id);
+    // Wire param renamed store_id -> storeIds (backend now takes Guid[]? storeIds on GET
+    // /api/stock); this call site still only ever sends zero-or-one id, unchanged behavior.
+    if (params?.store_id) qs.set("storeIds", params.store_id);
     if (params?.status) qs.set("status", params.status);
     if (params?.zone_id) qs.set("zone_id", params.zone_id);
     if (params?.product_id) qs.set("product_id", params.product_id);

@@ -19,26 +19,30 @@ public sealed class AnalyticsController : ControllerBase
 
     public AnalyticsController(IAnalyticsService analytics) => _analytics = analytics;
 
+    // TASK-610: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) — omitted
+    // or empty means "all stores" (same convention as TASK-608's other multi-store endpoints).
     [HttpGet("expiry-summary")]
     [ProducesResponseType(typeof(ExpirySummaryDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetExpirySummary(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] bool network = false,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
-        var result = await _analytics.GetExpirySummaryAsync(tenantId, store_id, network, ct);
+        var result = await _analytics.GetExpirySummaryAsync(tenantId, storeIds, network, ct);
         return Ok(result);
     }
 
     // TASK-336: current live Safe/Warning/Critical/Expired vs. a persisted snapshot
     // from `compareWeeksAgo` weeks back (dashboard status cards).
+    // TASK-608: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) —
+    // omitted or empty means "all stores" (same convention as MarketingAnalyticsController).
     [HttpGet("expiry-summary/compare")]
     [ProducesResponseType(typeof(ExpirySummaryComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetExpirySummaryComparison(
-        [FromQuery] Guid? storeId,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] int compareWeeksAgo = 1,
         CancellationToken ct = default)
     {
@@ -47,29 +51,31 @@ public sealed class AnalyticsController : ControllerBase
 
         if (compareWeeksAgo < 1) compareWeeksAgo = 1;
 
-        var result = await _analytics.GetExpirySummaryComparisonAsync(tenantId, storeId, compareWeeksAgo, ct);
+        var result = await _analytics.GetExpirySummaryComparisonAsync(tenantId, storeIds, compareWeeksAgo, ct);
         return Ok(result);
     }
 
     // TASK-336: dashboard week-over-week KPI (sales count / revenue / write-off loss).
+    // TASK-608: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("dashboard/weekly-kpi")]
     [ProducesResponseType(typeof(WeeklyKpiDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetWeeklyKpi(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
-        var result = await _analytics.GetWeeklyKpiAsync(tenantId, store_id, ct);
+        var result = await _analytics.GetWeeklyKpiAsync(tenantId, storeIds, ct);
         return Ok(result);
     }
 
+    // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("write-offs")]
     [ProducesResponseType(typeof(WriteOffAnalyticsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(WriteOffsComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetWriteOffAnalytics(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] bool compare = false,
@@ -83,13 +89,13 @@ public sealed class AnalyticsController : ControllerBase
         // Backward-compatible: unwrapped shape unless comparison is explicitly requested.
         if (!compare)
         {
-            var result = await _analytics.GetWriteOffAnalyticsAsync(tenantId, store_id, from, to, ct);
+            var result = await _analytics.GetWriteOffAnalyticsAsync(tenantId, storeIds, from, to, ct);
             return Ok(result);
         }
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
         var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
-        var comparison = await _analytics.GetWriteOffAnalyticsComparisonAsync(tenantId, store_id, resolvedFrom, resolvedTo, cFrom, cTo, ct);
+        var comparison = await _analytics.GetWriteOffAnalyticsComparisonAsync(tenantId, storeIds, resolvedFrom, resolvedTo, cFrom, cTo, ct);
         return Ok(comparison);
     }
 
@@ -109,39 +115,45 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
+    // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("by-zone")]
     [ProducesResponseType(typeof(IReadOnlyList<ZoneAnalyticsDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByZone(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
-        var result = await _analytics.GetByZoneAsync(tenantId, store_id, ct);
+        var result = await _analytics.GetByZoneAsync(tenantId, storeIds, ct);
         return Ok(result);
     }
 
+    // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("by-category")]
     [ProducesResponseType(typeof(IReadOnlyList<CategoryAnalyticsDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByCategory(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         CancellationToken ct = default)
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null && !IsProvider()) return Forbid();
 
-        var result = await _analytics.GetByCategoryAsync(tenantId, store_id, ct);
+        var result = await _analytics.GetByCategoryAsync(tenantId, storeIds, ct);
         return Ok(result);
     }
 
     // TASK-481: category drill-down — products within one category (or the "uncategorized"
     // bucket when category_id is omitted), stock rollup + sales rollup + margin (ADR-027).
+    // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores". The
+    // DaysOfStockRemaining field on each row stays populated only when exactly one store is
+    // selected (see AnalyticsRepository.GetCategoryProductBreakdownAsync) — a multi-store rollup
+    // has no single meaningful ADU to divide by.
     [HttpGet("by-category/products")]
     [ProducesResponseType(typeof(CategoryProductBreakdownDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByCategoryProducts(
         [FromQuery] Guid? category_id,
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         CancellationToken ct = default)
@@ -153,15 +165,16 @@ public sealed class AnalyticsController : ControllerBase
         var includeMargin = AnalyticsAuthorization.CanViewMargin(User);
 
         var result = await _analytics.GetCategoryProductBreakdownAsync(
-            tenantId, store_id, category_id, resolvedFrom, resolvedTo, includeMargin, ct);
+            tenantId, storeIds, category_id, resolvedFrom, resolvedTo, includeMargin, ct);
         return Ok(result);
     }
 
+    // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("losses")]
     [ProducesResponseType(typeof(LossesDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(LossesComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLosses(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] bool compare = false,
@@ -174,23 +187,24 @@ public sealed class AnalyticsController : ControllerBase
 
         if (!compare)
         {
-            var result = await _analytics.GetLossesAsync(tenantId, store_id, from, to, ct);
+            var result = await _analytics.GetLossesAsync(tenantId, storeIds, from, to, ct);
             return Ok(result);
         }
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
         var (cFrom, cTo) = ResolveCompareRange(resolvedFrom, resolvedTo, compareFrom, compareTo);
-        var comparison = await _analytics.GetLossesComparisonAsync(tenantId, store_id, resolvedFrom, resolvedTo, cFrom, cTo, ct);
+        var comparison = await _analytics.GetLossesComparisonAsync(tenantId, storeIds, resolvedFrom, resolvedTo, cFrom, cTo, ct);
         return Ok(comparison);
     }
 
     // TASK-481: losses drill-down by product — a single endpoint serves both the by-store and
     // by-reason drill-downs via independent optional AND-filters. No margin gate: LossAmount is
     // already shown in aggregate to every store_manager+ caller today (ADR-027 §1).
+    // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("losses/by-product")]
     [ProducesResponseType(typeof(LossesByProductDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLossesByProduct(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] string? reason,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
@@ -201,7 +215,7 @@ public sealed class AnalyticsController : ControllerBase
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
 
-        var result = await _analytics.GetLossesByProductAsync(tenantId, store_id, reason, resolvedFrom, resolvedTo, ct);
+        var result = await _analytics.GetLossesByProductAsync(tenantId, storeIds, reason, resolvedFrom, resolvedTo, ct);
         return Ok(result);
     }
 
@@ -209,10 +223,11 @@ public sealed class AnalyticsController : ControllerBase
     // store_id/from/to/group_by params and day|week values). No compare-mode variant (not asked
     // for in this follow-up batch). No margin gate: same reasoning as losses/by-product above —
     // LossAmount is already shown in aggregate to every store_manager+ caller today (ADR-027 §1).
+    // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("losses/trend")]
     [ProducesResponseType(typeof(LossesTrendDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLossesTrend(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] string group_by = "day",
@@ -223,7 +238,7 @@ public sealed class AnalyticsController : ControllerBase
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
 
-        var result = await _analytics.GetLossesTrendAsync(tenantId, store_id, resolvedFrom, resolvedTo, group_by, ct);
+        var result = await _analytics.GetLossesTrendAsync(tenantId, storeIds, resolvedFrom, resolvedTo, group_by, ct);
         return Ok(result);
     }
 

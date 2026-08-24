@@ -20,11 +20,11 @@ public sealed class StockService : IStockService
     }
 
     public async Task<PagedResult<ProductStockDto>> GetPagedAsync(
-        Guid? storeId, string? status, Guid? zoneId, Guid? productId,
+        Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId,
         int page, int pageSize,
         CancellationToken ct = default)
     {
-        var (batches, total) = await _repo.GetPagedAsync(storeId, status, zoneId, productId, page, pageSize, ct);
+        var (batches, total) = await _repo.GetPagedAsync(storeIds, status, zoneId, productId, page, pageSize, ct);
         return new PagedResult<ProductStockDto>
         {
             Items = batches.Select(ToDto).ToList(),
@@ -58,9 +58,9 @@ public sealed class StockService : IStockService
         return batches.Select(ToDto).ToList();
     }
 
-    public async Task<StockSummaryDto> GetSummaryAsync(Guid? storeId, CancellationToken ct = default)
+    public async Task<StockSummaryDto> GetSummaryAsync(Guid[]? storeIds, CancellationToken ct = default)
     {
-        var counts = await _repo.GetStatusCountsAsync(storeId, ct);
+        var counts = await _repo.GetStatusCountsAsync(storeIds, ct);
         counts.TryGetValue("safe", out var safe);
         counts.TryGetValue("warning", out var warning);
         counts.TryGetValue("critical", out var critical);
@@ -70,9 +70,9 @@ public sealed class StockService : IStockService
             safe + warning + critical + expired + needsVerification);
     }
 
-    public async Task<List<ZoneSummaryDto>> GetZonesSummaryAsync(Guid? storeId, CancellationToken ct = default)
+    public async Task<List<ZoneSummaryDto>> GetZonesSummaryAsync(Guid[]? storeIds, CancellationToken ct = default)
     {
-        var rows = await _repo.GetStockByZoneRawAsync(storeId, ct);
+        var rows = await _repo.GetStockByZoneRawAsync(storeIds, ct);
         return rows
             .GroupBy(r => new { r.ZoneId, r.ZoneName, r.ZoneType })
             .Select(g => new ZoneSummaryDto(

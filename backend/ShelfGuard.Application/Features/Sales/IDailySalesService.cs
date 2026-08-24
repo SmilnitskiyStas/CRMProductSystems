@@ -4,8 +4,11 @@ namespace ShelfGuard.Application.Features.Sales;
 
 public interface IDailySalesService
 {
+    /// <summary>
+    /// TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
+    /// </summary>
     Task<List<DailySaleDto>> GetAsync(
-        Guid? storeId,
+        Guid[]? storeIds,
         Guid? productId,
         DateOnly? from,
         DateOnly? to,

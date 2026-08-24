@@ -14,10 +14,10 @@ public sealed class DailySalesService : IDailySalesService
     public DailySalesService(IDailySalesRepository repo) => _repo = repo;
 
     public async Task<List<DailySaleDto>> GetAsync(
-        Guid? storeId, Guid? productId, DateOnly? from, DateOnly? to,
+        Guid[]? storeIds, Guid? productId, DateOnly? from, DateOnly? to,
         CancellationToken ct = default)
     {
-        var sales = await _repo.GetAsync(storeId, productId, from, to, ct);
+        var sales = await _repo.GetAsync(storeIds, productId, from, to, ct);
         return sales.Select(ToDto).ToList();
     }
 

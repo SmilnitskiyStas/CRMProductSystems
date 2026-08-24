@@ -7,17 +7,20 @@ import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { AiOrderReview } from "@/features/ai-orders/components/AiOrderReview";
 import { useAiOrder, useAiOrders, useGenerateAiOrder } from "@/features/ai-orders/hooks/useAiOrders";
-import { usePrimaryStoreId } from "@/lib/useStoreContext";
+import { usePrimaryStoreId, useStoreContext } from "@/lib/useStoreContext";
 import { STATUS_META } from "@/features/ai-orders/types";
 
 export default function AiOrdersPage() {
   const t = useTranslations("Dashboard.aiOrders.page");
   const tCommon = useTranslations("Common");
   const tStatus = useTranslations("Dashboard.aiOrders.status");
+  // History list (read) uses the full multi-store selection (TASK-611); primaryStoreId is kept
+  // for generate, which stays a single-store write (unchanged per TASK-610's backend contract).
   const primaryStoreId = usePrimaryStoreId();
+  const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data: list = [], isLoading } = useAiOrders(primaryStoreId);
+  const { data: list = [], isLoading } = useAiOrders(selectedStoreIds);
   const { data: selected } = useAiOrder(selectedId);
   const generate = useGenerateAiOrder();
 
@@ -25,7 +28,7 @@ export default function AiOrdersPage() {
   // clears the selected review panel, since it belonged to the previous store's history.
   useEffect(() => {
     setSelectedId(null);
-  }, [primaryStoreId]);
+  }, [selectedStoreIds]);
 
   const handleGenerate = () => {
     if (!primaryStoreId) return;

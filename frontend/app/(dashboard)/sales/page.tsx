@@ -15,7 +15,7 @@ import {
   useUpsertSale,
 } from "@/features/sales/hooks/useSales";
 import { useProducts } from "@/features/inventory/hooks/useProducts";
-import { usePrimaryStoreId } from "@/lib/useStoreContext";
+import { usePrimaryStoreId, useStoreContext } from "@/lib/useStoreContext";
 import type { UpsertDailySalePayload } from "@/features/sales/types";
 
 function daysAgo(n: number): string {
@@ -36,7 +36,11 @@ const selectStyle: React.CSSProperties = {
 export default function SalesPage() {
   const t = useTranslations("Dashboard.sales.page");
   const tCommon = useTranslations("Common");
+  // Read-list filter (TASK-611) uses the full multi-store selection; primaryStoreId is kept for
+  // the entry form / CSV import below, which stay single-store writes per TASK-610's backend
+  // contract (upsert/import endpoints were not widened).
   const primaryStoreId = usePrimaryStoreId();
+  const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
   const [from, setFrom] = useState(daysAgo(30));
   const [to, setTo] = useState(daysAgo(0));
   const [entryOpen, setEntryOpen] = useState(false);
@@ -44,8 +48,8 @@ export default function SalesPage() {
 
   const { data: products = [] } = useProducts();
   const filters = useMemo(
-    () => ({ storeId: primaryStoreId, from, to }),
-    [primaryStoreId, from, to],
+    () => ({ storeIds: selectedStoreIds, from, to }),
+    [selectedStoreIds, from, to],
   );
   const { data: sales = [], isLoading, isError } = useDailySales(filters);
 

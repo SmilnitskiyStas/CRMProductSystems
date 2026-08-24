@@ -10,7 +10,7 @@ public sealed class AiOrderRepository : IAiOrderRepository
 
     public AiOrderRepository(AppDbContext db) => _db = db;
 
-    public Task<List<AiOrderSuggestion>> GetListAsync(Guid? storeId, int limit, CancellationToken ct = default)
+    public Task<List<AiOrderSuggestion>> GetListAsync(Guid[]? storeIds, int limit, CancellationToken ct = default)
     {
         // Items included (no ThenInclude Product) so the list DTO can read Items.Count
         // without a per-row GetByIdAsync round-trip (was a real N+1 — TASK-355/Block 7 audit).
@@ -19,7 +19,7 @@ public sealed class AiOrderRepository : IAiOrderRepository
             .Include(s => s.Items)
             .AsQueryable();
 
-        if (storeId.HasValue) query = query.Where(s => s.StoreId == storeId);
+        if (storeIds is { Length: > 0 }) query = query.Where(s => storeIds.Contains(s.StoreId));
 
         return query
             .OrderByDescending(s => s.GeneratedAt)

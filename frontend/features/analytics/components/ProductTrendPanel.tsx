@@ -66,8 +66,9 @@ export function ProductTrendPanel({ productId, productName, storeId, onClose }: 
 
   const aduQuery = useAdu(storeId, productId, hasStore);
 
-  // Reuses the existing features/shelf stockApi (GET /api/stock, already supports store_id +
-  // product_id filters) directly via useQuery here rather than the shelf feature's own useStock
+  // Reuses the existing features/shelf stockApi (GET /api/stock, filters via the `store_id` TS
+  // param — sent on the wire as `storeIds` since the backend rename) directly via useQuery here
+  // rather than the shelf feature's own useStock
   // hook — that hook has no `enabled` param, and adding one is out of this task's scope (a
   // shared hook used across many unrelated features). Default page size (50) is plenty for one
   // product's batches at one store.

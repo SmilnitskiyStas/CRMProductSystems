@@ -275,10 +275,10 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
         public Task<List<ProductStock>> GetActionRequiredAsync(Guid? storeId, CancellationToken ct = default) => Inner.GetActionRequiredAsync(storeId, ct);
         public Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default) => Inner.GetDeficitStocksAsync(productId, excludeStoreId, ct);
         public Task<Dictionary<Guid, List<ProductStock>>> GetDeficitStocksBulkAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default) => Inner.GetDeficitStocksBulkAsync(productIds, ct);
-        public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid? storeId, string? status, Guid? zoneId, Guid? productId, int page, int pageSize, CancellationToken ct = default) => Inner.GetPagedAsync(storeId, status, zoneId, productId, page, pageSize, ct);
+        public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId, int page, int pageSize, CancellationToken ct = default) => Inner.GetPagedAsync(storeIds, status, zoneId, productId, page, pageSize, ct);
         public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) => Inner.GetProductionStoresAsync(ct);
-        public Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default) => Inner.GetStatusCountsAsync(storeId, ct);
-        public Task<List<(Guid? ZoneId, string ZoneName, string ZoneType, string Status)>> GetStockByZoneRawAsync(Guid? storeId, CancellationToken ct = default) => Inner.GetStockByZoneRawAsync(storeId, ct);
+        public Task<Dictionary<string, int>> GetStatusCountsAsync(Guid[]? storeIds, CancellationToken ct = default) => Inner.GetStatusCountsAsync(storeIds, ct);
+        public Task<List<(Guid? ZoneId, string ZoneName, string ZoneType, string Status)>> GetStockByZoneRawAsync(Guid[]? storeIds, CancellationToken ct = default) => Inner.GetStockByZoneRawAsync(storeIds, ct);
         public Task AddAsync(ProductStock stock, CancellationToken ct = default) => Inner.AddAsync(stock, ct);
         public Task AddMovementAsync(StockMovement movement, CancellationToken ct = default) => Inner.AddMovementAsync(movement, ct);
         public Task SaveChangesAsync(CancellationToken ct = default) => Inner.SaveChangesAsync(ct);

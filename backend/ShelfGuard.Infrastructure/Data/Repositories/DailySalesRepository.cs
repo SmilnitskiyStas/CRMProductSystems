@@ -11,7 +11,7 @@ public sealed class DailySalesRepository : IDailySalesRepository
     public DailySalesRepository(AppDbContext db) => _db = db;
 
     public async Task<List<DailySale>> GetAsync(
-        Guid? storeId, Guid? productId, DateOnly? from, DateOnly? to,
+        Guid[]? storeIds, Guid? productId, DateOnly? from, DateOnly? to,
         CancellationToken ct = default)
     {
         var query = _db.DailySales
@@ -19,7 +19,7 @@ public sealed class DailySalesRepository : IDailySalesRepository
             .Include(s => s.Store)
             .AsQueryable();
 
-        if (storeId.HasValue) query = query.Where(s => s.StoreId == storeId);
+        if (storeIds is { Length: > 0 }) query = query.Where(s => storeIds.Contains(s.StoreId));
         if (productId.HasValue) query = query.Where(s => s.ProductId == productId);
         if (from.HasValue) query = query.Where(s => s.Date >= from);
         if (to.HasValue) query = query.Where(s => s.Date <= to);

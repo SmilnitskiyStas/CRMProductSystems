@@ -17,7 +17,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
-import { usePrimaryStoreId } from "@/lib/useStoreContext";
+import { usePrimaryStoreId, useStoreContext } from "@/lib/useStoreContext";
 import { ExpiryDonut } from "@/features/analytics/components/ExpiryDonut";
 import { LossesByReasonChart } from "@/features/analytics/components/LossesByReasonChart";
 import { LossesByStoreChart } from "@/features/analytics/components/LossesByStoreChart";
@@ -173,7 +173,11 @@ export default function AnalyticsPage() {
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const roleAccess = me ? hasRole(me.role, CAN_VIEW_ANALYTICS) : null;
+  // Report/read filters (TASK-611) use the full multi-store selection; primaryStoreId is kept
+  // only for the ProductTrendPanel drill-down below, whose underlying ADU/stock lookup is
+  // inherently single-store (out of scope for this widening — see TASK-610's backend log).
   const primaryStoreId = usePrimaryStoreId();
+  const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
 
   // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397; per-item
   // granularity as of TASK-399): mirrors Sidebar.tsx's /analytics NavItem gate (roles:
@@ -202,25 +206,25 @@ export default function AnalyticsPage() {
   const compareActive = enabled && compareEnabled && !!compareRange;
 
   const { data: expiry, isLoading: expiryLoading } = useExpirySummary(
-    { store_id: primaryStoreId ?? undefined },
+    { storeIds: selectedStoreIds },
     enabled,
   );
   const { data: writeoffsFlat, isLoading: writeoffsLoading } = useWriteOffAnalytics(
-    { from, to, store_id: primaryStoreId ?? undefined },
+    { from, to, storeIds: selectedStoreIds },
     enabled && !compareEnabled,
   );
   const { data: writeoffsCompare, isLoading: writeoffsCompareLoading } = useWriteOffAnalyticsCompare(
-    { from, to, compareFrom, compareTo, store_id: primaryStoreId ?? undefined },
+    { from, to, compareFrom, compareTo, storeIds: selectedStoreIds },
     compareActive,
   );
-  const { data: zones } = useZoneAnalytics(primaryStoreId ?? undefined, enabled);
-  const { data: categories } = useCategoryAnalytics(primaryStoreId ?? undefined, enabled);
+  const { data: zones } = useZoneAnalytics(selectedStoreIds, enabled);
+  const { data: categories } = useCategoryAnalytics(selectedStoreIds, enabled);
   const { data: lossesFlat, isLoading: lossesLoading } = useLosses(
-    { from, to, store_id: primaryStoreId ?? undefined },
+    { from, to, storeIds: selectedStoreIds },
     enabled && !compareEnabled,
   );
   const { data: lossesCompare, isLoading: lossesCompareLoading } = useLossesCompare(
-    { from, to, compareFrom, compareTo, store_id: primaryStoreId ?? undefined },
+    { from, to, compareFrom, compareTo, storeIds: selectedStoreIds },
     compareActive,
   );
   // No compare-mode variant on this endpoint (TASK-489) — always the page's CURRENT from/to,
@@ -228,7 +232,7 @@ export default function AnalyticsPage() {
   // LossesProductBreakdownPanel's own queries, and ungated by compareEnabled entirely (matches
   // useExpirySummary above, the other hook on this page with no compare variant at all).
   const { data: lossesTrend, isLoading: lossesTrendLoading } = useLossesTrend(
-    { from, to, store_id: primaryStoreId ?? undefined },
+    { from, to, storeIds: selectedStoreIds },
     enabled,
   );
 
@@ -492,7 +496,7 @@ export default function AnalyticsPage() {
                     }),
                   })}
                   totalLoss={lossesTrend.points.find((p) => p.date === selectedLossDay)?.totalLoss ?? 0}
-                  storeId={primaryStoreId ?? undefined}
+                  storeIds={selectedStoreIds}
                   from={selectedLossDay}
                   to={selectedLossDay}
                   onClose={() => setSelectedLossDay(null)}
@@ -553,7 +557,7 @@ export default function AnalyticsPage() {
               })}
               totalLoss={writeoffs.byReason.find((r) => r.reason === selectedLossDimension.value)?.totalLoss ?? 0}
               reason={selectedLossDimension.value}
-              storeId={primaryStoreId ?? undefined}
+              storeIds={selectedStoreIds}
               from={from}
               to={to}
               onClose={() => setSelectedLossDimension(null)}
@@ -682,7 +686,7 @@ export default function AnalyticsPage() {
           {selectedCategoryId !== undefined && (
             <CategoryDetailPanel
               categoryId={selectedCategoryId}
-              storeId={primaryStoreId ?? undefined}
+              storeIds={selectedStoreIds}
               from={from}
               to={to}
               onClose={() => setSelectedCategoryId(undefined)}
@@ -782,7 +786,7 @@ export default function AnalyticsPage() {
                 value: losses.byStore.find((s) => s.storeId === selectedLossDimension.value)?.storeName ?? selectedLossDimension.value,
               })}
               totalLoss={losses.byStore.find((s) => s.storeId === selectedLossDimension.value)?.totalLoss ?? 0}
-              storeId={selectedLossDimension.value}
+              storeIds={[selectedLossDimension.value]}
               from={from}
               to={to}
               onClose={() => setSelectedLossDimension(null)}

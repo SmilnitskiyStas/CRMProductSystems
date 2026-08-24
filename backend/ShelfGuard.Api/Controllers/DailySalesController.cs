@@ -16,16 +16,18 @@ public sealed class DailySalesController : ControllerBase
 
     public DailySalesController(IDailySalesService sales) => _sales = sales;
 
+    // TASK-610: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) — omitted
+    // or empty means "all stores" (same convention as TASK-608's Analytics/Stock endpoints).
     [HttpGet]
     [ProducesResponseType(typeof(List<DailySaleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] Guid? product_id,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         CancellationToken ct)
     {
-        var sales = await _sales.GetAsync(store_id, product_id, from, to, ct);
+        var sales = await _sales.GetAsync(storeIds, product_id, from, to, ct);
         return Ok(sales);
     }
 

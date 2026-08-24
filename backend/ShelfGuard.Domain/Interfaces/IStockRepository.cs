@@ -12,7 +12,7 @@ public interface IStockRepository
         CancellationToken ct = default);
 
     Task<(List<ProductStock> Items, int Total)> GetPagedAsync(
-        Guid? storeId,
+        Guid[]? storeIds,
         string? status,
         Guid? zoneId,
         Guid? productId,
@@ -49,9 +49,9 @@ public interface IStockRepository
     /// <summary>Returns locations of type 'production' or 'distribution' for the tenant.</summary>
     Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default);
 
-    Task<Dictionary<string, int>> GetStatusCountsAsync(Guid? storeId, CancellationToken ct = default);
+    Task<Dictionary<string, int>> GetStatusCountsAsync(Guid[]? storeIds, CancellationToken ct = default);
 
-    Task<List<(Guid? ZoneId, string ZoneName, string ZoneType, string Status)>> GetStockByZoneRawAsync(Guid? storeId, CancellationToken ct = default);
+    Task<List<(Guid? ZoneId, string ZoneName, string ZoneType, string Status)>> GetStockByZoneRawAsync(Guid[]? storeIds, CancellationToken ct = default);
 
     Task AddAsync(ProductStock stock, CancellationToken ct = default);
     Task AddMovementAsync(StockMovement movement, CancellationToken ct = default);

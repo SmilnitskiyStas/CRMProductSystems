@@ -17,10 +17,12 @@ public sealed class StockController : ControllerBase
 
     public StockController(IStockService stock) => _stock = stock;
 
+    // TASK-608: `storeIds` is a repeated query param (`?storeIds=guid1&storeIds=guid2`) —
+    // omitted or empty means "all stores" (same convention as MarketingAnalyticsController).
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<ProductStockDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
-        [FromQuery] Guid? store_id,
+        [FromQuery] Guid[]? storeIds,
         [FromQuery] string? status,
         [FromQuery] Guid? zone_id,
         [FromQuery] Guid? product_id,
@@ -29,7 +31,7 @@ public sealed class StockController : ControllerBase
         CancellationToken ct = default)
     {
         var query = new PagedQuery { Page = page, PageSize = pageSize };
-        var result = await _stock.GetPagedAsync(store_id, status, zone_id, product_id, query.ClampedPage, query.ClampedPageSize, ct);
+        var result = await _stock.GetPagedAsync(storeIds, status, zone_id, product_id, query.ClampedPage, query.ClampedPageSize, ct);
         return Ok(result);
     }
 
@@ -44,17 +46,17 @@ public sealed class StockController : ControllerBase
 
     [HttpGet("summary")]
     [ProducesResponseType(typeof(ShelfGuard.Application.Features.Stock.Dtos.StockSummaryDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSummary([FromQuery] Guid? store_id, CancellationToken ct)
+    public async Task<IActionResult> GetSummary([FromQuery] Guid[]? storeIds, CancellationToken ct)
     {
-        var summary = await _stock.GetSummaryAsync(store_id, ct);
+        var summary = await _stock.GetSummaryAsync(storeIds, ct);
         return Ok(summary);
     }
 
     [HttpGet("zones-summary")]
     [ProducesResponseType(typeof(List<ShelfGuard.Application.Features.Stock.Dtos.ZoneSummaryDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetZonesSummary([FromQuery] Guid? store_id, CancellationToken ct)
+    public async Task<IActionResult> GetZonesSummary([FromQuery] Guid[]? storeIds, CancellationToken ct)
     {
-        var zones = await _stock.GetZonesSummaryAsync(store_id, ct);
+        var zones = await _stock.GetZonesSummaryAsync(storeIds, ct);
         return Ok(zones);
     }
 

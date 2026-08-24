@@ -4,7 +4,10 @@ namespace ShelfGuard.Domain.Interfaces;
 
 public interface IAiOrderRepository
 {
-    Task<List<AiOrderSuggestion>> GetListAsync(Guid? storeId, int limit, CancellationToken ct = default);
+    /// <summary>
+    /// TASK-610: storeIds is a repeated query param (Guid[]?) — null/empty means "all stores".
+    /// </summary>
+    Task<List<AiOrderSuggestion>> GetListAsync(Guid[]? storeIds, int limit, CancellationToken ct = default);
     Task<AiOrderSuggestion?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<AiOrderSuggestionItem?> GetItemAsync(Guid suggestionId, Guid itemId, CancellationToken ct = default);
 

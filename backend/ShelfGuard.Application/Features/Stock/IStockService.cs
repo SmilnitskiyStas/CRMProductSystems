@@ -14,7 +14,7 @@ public interface IStockService
         CancellationToken ct = default);
 
     Task<PagedResult<ProductStockDto>> GetPagedAsync(
-        Guid? storeId,
+        Guid[]? storeIds,
         string? status,
         Guid? zoneId,
         Guid? productId,
@@ -48,9 +48,9 @@ public interface IStockService
         Guid performedBy,
         CancellationToken ct = default);
 
-    Task<StockSummaryDto> GetSummaryAsync(Guid? storeId, CancellationToken ct = default);
+    Task<StockSummaryDto> GetSummaryAsync(Guid[]? storeIds, CancellationToken ct = default);
 
-    Task<List<ZoneSummaryDto>> GetZonesSummaryAsync(Guid? storeId, CancellationToken ct = default);
+    Task<List<ZoneSummaryDto>> GetZonesSummaryAsync(Guid[]? storeIds, CancellationToken ct = default);
 
     Task<FefoConsumeResult> FefoConsumeAsync(
         Guid tenantId,

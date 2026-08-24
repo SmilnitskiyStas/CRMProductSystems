@@ -3,10 +3,10 @@ import { aiOrdersApi } from "../api/aiOrders";
 
 const KEY = ["ai-orders"] as const;
 
-export function useAiOrders(storeId?: string) {
+export function useAiOrders(storeIds?: string[]) {
   return useQuery({
-    queryKey: [...KEY, storeId ?? "all"],
-    queryFn: () => aiOrdersApi.getList(storeId),
+    queryKey: [...KEY, storeIds ?? []],
+    queryFn: () => aiOrdersApi.getList(storeIds),
   });
 }
 
