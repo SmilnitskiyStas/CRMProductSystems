@@ -2425,7 +2425,9 @@
         "safe": "Safe",
         "warning": "Warning",
         "critical": "Critical",
-        "expired": "Expired"
+        "expired": "Expired",
+        "sold_out": "Sold Out",
+        "needs_verification": "Verification"
       },
       "page": {
         "title": "Dashboard",

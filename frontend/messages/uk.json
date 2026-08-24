@@ -2425,7 +2425,9 @@
         "safe": "Норма",
         "warning": "Попередження",
         "critical": "Критично",
-        "expired": "Прострочено"
+        "expired": "Прострочено",
+        "sold_out": "Продано",
+        "needs_verification": "Перевірка"
       },
       "page": {
         "title": "Дашборд",

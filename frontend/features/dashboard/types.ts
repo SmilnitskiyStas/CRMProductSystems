@@ -1,4 +1,10 @@
-export type ItemStatus = "safe" | "warning" | "critical" | "expired";
+export type ItemStatus =
+  | "safe"
+  | "warning"
+  | "critical"
+  | "expired"
+  | "sold_out"
+  | "needs_verification";
 
 export interface DashboardStats {
   safe: number;

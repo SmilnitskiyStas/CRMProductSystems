@@ -12,9 +12,21 @@ const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string }> = {
   warning: { color: "#f59e0b", bg: "#261c05" },
   critical: { color: "#ef4444", bg: "#2a0a0a" },
   expired: { color: "#9ca3af", bg: "#1a1a1a" },
+  sold_out: { color: "#6B7280", bg: "#111827" },
+  needs_verification: { color: "#A78BFA", bg: "#1E1B2E" },
 };
 
-const FILTER_VALUES: (ItemStatus | "all")[] = ["all", "expired", "critical", "warning"];
+// Fallback for any status value the backend emits that isn't mapped above yet —
+// the API boundary cast (`b.status as ItemStatus` in api/dashboard.ts) isn't
+// actually guaranteed to match the type, so this keeps unmapped values from
+// crashing the render (see AGREEMENT_STATUS_COLORS ?? GRAY pattern in
+// features/marketplace/components/CooperationBadges.tsx).
+const DEFAULT_STATUS_CONFIG = { color: "#6B7280", bg: "#111827" };
+
+// Narrower than ItemStatus on purpose: `stats` (DashboardStats) only has counts for
+// these 4 keys, and the filter bar intentionally doesn't expose sold_out /
+// needs_verification as filter buttons (out of scope — see dashboard status widening).
+const FILTER_VALUES: ("all" | "expired" | "critical" | "warning")[] = ["all", "expired", "critical", "warning"];
 
 const VISIBLE_ROWS = 10;
 
@@ -152,7 +164,7 @@ export function AttentionTable({ items = [], isLoading, stats }: Props) {
             </thead>
             <tbody>
               {visible.map((item, idx) => {
-                const cfg = STATUS_CONFIG[item.status];
+                const cfg = STATUS_CONFIG[item.status] ?? DEFAULT_STATUS_CONFIG;
                 return (
                   <tr
                     key={item.id}

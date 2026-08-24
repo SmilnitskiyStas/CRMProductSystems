@@ -8,7 +8,13 @@ const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string; border: str
   warning: { color: "#f59e0b", bg: "#261c05", border: "#854d0e" },
   critical: { color: "#ef4444", bg: "#2a0a0a", border: "#991b1b" },
   expired: { color: "#6b7280", bg: "#141414", border: "#374151" },
+  sold_out: { color: "#6B7280", bg: "#111827", border: "#4B5563" },
+  needs_verification: { color: "#A78BFA", bg: "#1E1B2E", border: "#7C3AED" },
 };
+
+// Fallback for any status value the backend emits that isn't mapped above yet —
+// mirrors the same defensive pattern in AttentionTable.tsx / CooperationBadges.tsx.
+const DEFAULT_STATUS_CONFIG = { color: "#6B7280", bg: "#111827", border: "#4B5563" };
 
 const ZONE_TYPE_ICONS: Record<string, string> = {
   refrigerated: "❄️",
@@ -41,7 +47,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
         <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: 0 }}>{t("title")}</h2>
         <div style={{ display: "flex", gap: 12 }}>
           {(["safe", "warning", "critical"] as ItemStatus[]).map((s) => {
-            const cfg = STATUS_CONFIG[s];
+            const cfg = STATUS_CONFIG[s] ?? DEFAULT_STATUS_CONFIG;
             return (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <span
@@ -76,7 +82,7 @@ export function StoreMap({ zones = [], isLoading }: Props) {
             }}
           >
             {zones.map((zone) => {
-              const cfg = STATUS_CONFIG[zone.status];
+              const cfg = STATUS_CONFIG[zone.status] ?? DEFAULT_STATUS_CONFIG;
               const icon = ZONE_TYPE_ICONS[zone.type] ?? "🗂️";
               const total = zone.safe + zone.warning + zone.critical;
               return (
