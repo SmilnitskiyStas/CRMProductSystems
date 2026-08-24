@@ -60,7 +60,9 @@ async function getAttentionItems(storeId: string | null): Promise<AttentionItem[
     withStore("/api/stock?pageSize=200", storeId),
   );
   return batches
-    .filter((b) => b.status !== "safe")
+    // sold_out batches have nothing left to act on (no qty to reorder-check/expiry-track) —
+    // exclude them so they don't take up space in the "needs attention" list.
+    .filter((b) => b.status !== "safe" && b.status !== "sold_out")
     .map((b) => ({
       id: b.id,
       productId: b.productId,
