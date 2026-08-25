@@ -79,7 +79,8 @@ public sealed record LoyaltyLedgerEntryDto(
     decimal Amount,
     decimal BalanceAfter,
     string? Note,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    Guid? PosTransactionId);
 
 // ── Tier ladder (TASK-615) ───────────────────────────────────────────────────
 

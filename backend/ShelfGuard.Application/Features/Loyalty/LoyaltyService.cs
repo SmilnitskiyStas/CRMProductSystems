@@ -1047,7 +1047,7 @@ public sealed class LoyaltyService : ILoyaltyService
         m.PreferredStoreId, preferredStore?.Name, preferredStore?.Address);
 
     private static LoyaltyLedgerEntryDto ToLedgerDto(LoyaltyLedgerEntry e) => new(
-        e.Id, e.EntryType, e.Amount, e.BalanceAfter, e.Note, e.CreatedAt);
+        e.Id, e.EntryType, e.Amount, e.BalanceAfter, e.Note, e.CreatedAt, e.PosTransactionId);
 
     private static LoyaltyProgramSettingsDto ToSettingsDto(LoyaltyProgramSettings s, bool isNew = false) => new(
         s.IsEnabled, s.AccrualRatePercent, s.RedemptionCapPercent, s.MinRedemptionBalance, s.CodeTtlSeconds,

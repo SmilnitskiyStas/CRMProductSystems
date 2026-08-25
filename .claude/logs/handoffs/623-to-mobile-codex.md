@@ -118,6 +118,27 @@ just catch the 409) to decide whether to show "Leave a review" vs. "View your re
 `ReplyText`/`RepliedAt` on the returned/listed `PurchaseReviewDto` are read-only from the mobile
 side — only staff can reply (`PUT /api/reviews/{id}/reply`, not a consumer-facing route).
 
+### e. Update (2026-08-25, TASK-624) — `posTransactionId` on the wallet history endpoint
+
+`GET api/consumer/loyalty/{tenantId}/history?page=&pageSize=` — this endpoint predates this
+feature wave (original Loyalty ledger, not new), so it wasn't covered above. It's the actual
+purchase-history feed behind `history.tsx`. Its `LoyaltyLedgerEntryDto` now includes
+`posTransactionId` (nullable, added in TASK-624 specifically for this "Leave a review" wiring):
+
+```ts
+type LoyaltyLedgerEntryDto = {
+  id: string; entryType: "accrual" | "redemption" | "manual_adjustment" | "expiry";
+  amount: number; balanceAfter: number; note: string | null; createdAt: string;
+  posTransactionId: string | null;
+};
+```
+
+Show "Leave a review" only when `entryType === "accrual"` and `posTransactionId` is non-null
+(other entry types, and legacy accrual rows recorded before this field existed, will have it
+null — hide the action rather than sending `posTransactionId: null` to `POST
+/api/consumer/reviews`, which would 400). Then follow §d above (check `GET .../reviews` or
+catch 409 to distinguish "leave a review" vs. "view your review").
+
 ## DTO shapes (camelCase over the wire) — copied verbatim from `api-contracts.md`
 
 ```ts

@@ -637,8 +637,12 @@ only while the wallet screen has focus (recommended ~20-25s, matches `CodeTtlSec
 #### LoyaltyLedgerEntryDto
 ```json
 { "id": "uuid", "entryType": "accrual|redemption|manual_adjustment|expiry",
-  "amount": 0.00, "balanceAfter": 0.00, "note": "string|null", "createdAt": "ISO8601" }
+  "amount": 0.00, "balanceAfter": 0.00, "note": "string|null", "createdAt": "ISO8601",
+  "posTransactionId": "uuid|null" }
 ```
+`posTransactionId` (TASK-624) is set only on `accrual` entries created at checkout (and only
+going forward — entries recorded before TASK-624 shipped have it null). Consumer clients use
+it to offer "leave a review" (`POST /api/consumer/reviews`) on the underlying purchase.
 
 ---
 
