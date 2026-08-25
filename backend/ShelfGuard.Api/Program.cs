@@ -12,6 +12,7 @@ using ShelfGuard.Application;
 using ShelfGuard.Infrastructure;
 using ShelfGuard.Infrastructure.Authorization;
 using ShelfGuard.Infrastructure.Data;
+using ShelfGuard.Infrastructure.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -177,6 +178,11 @@ builder.Services.AddRateLimiter(options =>
 var jwtSecret = builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
 
+// TASK-625: single source of truth for the realtime Hub's route — read both here (query-string
+// bearer-token fallback below) and at the MapHub call near the bottom of this file, so the two
+// can never drift apart.
+const string ConsumerSupportHubPath = "/api/hubs/consumer-support";
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -191,6 +197,26 @@ builder.Services
             ValidAudience            = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
             ClockSkew                = TimeSpan.Zero,
+        };
+
+        // TASK-625: browser/RN SignalR clients cannot set an Authorization header on the
+        // WebSocket handshake request, so the client library instead appends
+        // "?access_token=..." to the connection URL (standard SignalR pattern). Restricted to
+        // exactly the Hub path — without the PathStartsWithSegments guard this would accept a
+        // bearer token via query string on every endpoint in the API, which is a token-leakage
+        // risk (query strings land in access logs, proxy logs, and browser history).
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments(ConsumerSupportHubPath))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            },
         };
     });
 
@@ -305,5 +331,11 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// TASK-625: realtime transport for consumer support ticket threads (see ConsumerSupportHub's
+// own doc for the Join/LeaveTicket authorization model). WebSocket is the primary transport;
+// SignalR falls back to Server-Sent Events / long polling automatically when WebSocket isn't
+// available, per the default AddSignalR() transport list — no extra config needed for that.
+app.MapHub<ConsumerSupportHub>(ConsumerSupportHubPath);
 
 app.Run();

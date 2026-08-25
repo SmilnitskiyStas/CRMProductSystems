@@ -1531,6 +1531,88 @@ UpdateConsumerSupportTicketStatusRequest{ status: string }
 `tenantId` travels in the body, not the route, on ticket creation — a consumer session is
 cross-tenant by design (same shape `ConsumerLoyaltyController`'s `SetPreferredStoreRequest` uses).
 
+#### Realtime — SignalR Hub (TASK-625)
+
+Delivery-only transport layered on top of the REST channel above. **Message creation always
+stays on REST** (`POST .../messages`, `POST .../reply`) — the Hub never accepts a message write,
+it only pushes an event after the REST call's `SaveChangesAsync` has already committed. Not a
+guaranteed-delivery transport: the backend keeps no outbox/redelivery queue, so a client must
+still treat REST (`GET` the ticket) as the source of truth on every reconnect.
+
+**Hub URL (final):** `/api/hubs/consumer-support` — under the `/api` prefix, consistent with
+every REST route in this document. (No alternate `/hubs/...` mapping exists; the spec that
+produced this task allowed either, `/api/hubs/consumer-support` was chosen and is the only one
+registered in `Program.cs`.)
+
+**Auth:** same JWT bearer token as the REST endpoints above (`[Authorize]`, no extra policy —
+both a consumer token and a staff token connect to the same Hub). A WebSocket/SSE/long-polling
+handshake can't set an `Authorization` header, so the SignalR client library instead appends
+`?access_token=<jwt>` to the Hub URL — the API's `JwtBearerEvents.OnMessageReceived` accepts the
+token from that query parameter, but **only** on requests to `/api/hubs/consumer-support`; every
+other route still requires a real `Authorization: Bearer` header. Transport: WebSocket first,
+falling back to SignalR's other built-in transports (Server-Sent Events, then long polling) —
+default `HubConnectionBuilder` behavior, no client-side transport pinning needed.
+`KeepAliveInterval`/`ClientTimeoutInterval`/`HandshakeTimeout` are 15s/30s/15s server-side
+(`AddSignalR()` in `ShelfGuard.Infrastructure/DependencyInjection.cs`) — the framework defaults,
+set explicitly rather than left implicit.
+
+**Hub methods (client → server):**
+```
+JoinTicket(ticketId: string)   // adds this connection to group "consumer-support-ticket:{ticketId}"
+LeaveTicket(ticketId: string)  // explicit exit — disconnect also drops every group automatically
+```
+`JoinTicket` re-validates access server-side on every call — the client-supplied `ticketId` is
+never trusted on its own:
+- **Consumer token:** allowed only if `ticket.consumerAccountId` (looked up server-side from the
+  ticket row, not from anything the client sent) equals the JWT's own `consumer_account_id` claim.
+- **Staff token:** allowed only if the JWT carries a role at or above `store_manager`
+  (`AppPolicies.AtLeastStoreManagerRoles` — same floor as `GET /api/customer-support/tickets/{id}`)
+  **and** `ticket.tenantId` equals the JWT's `tenant_id` claim.
+- Any other case (ticket not found, wrong owner, wrong tenant, role below the floor, a token with
+  neither claim) throws a SignalR `HubException` ("Access denied.") and the connection is **not**
+  added to the group — no partial/silent failure state to handle client-side, just catch the
+  exception from the `.invoke("JoinTicket", ticketId)` call.
+- On reconnect (SignalR auto-reconnect or a fresh connection after a drop), the client must call
+  `JoinTicket` again for every ticket thread it still has open — group membership does not
+  survive a connection change — and should follow up with `GET
+  api/consumer/support/tickets/{id}` (or the staff equivalent) to pick up anything sent while
+  disconnected, since SignalR itself replays nothing.
+
+**Server events (server → client), both sent only to group `consumer-support-ticket:{ticketId}`:**
+
+`SupportMessageCreated` — after a successful `POST .../messages` or `POST .../reply`:
+```json
+{
+  "ticketId": "uuid",
+  "message": {
+    "id": "uuid",
+    "ticketId": "uuid",
+    "senderConsumerAccountId": "uuid|null",
+    "senderUserId": "uuid|null",
+    "body": "string",
+    "isRead": false,
+    "createdAt": "ISO8601"
+  }
+}
+```
+`message` is the exact same `ConsumerSupportTicketMessageDto` (§ above) already returned in the
+triggering HTTP response — `message.id` is guaranteed to equal that response's `id`. The event
+can arrive back to whichever party sent the message (they're typically still joined to the group
+themselves) — de-duplicate client-side on `message.id`, don't assume the sender is excluded.
+
+`SupportTicketStatusChanged` — after a successful `PUT api/customer-support/tickets/{id}/status`:
+```json
+{ "ticketId": "uuid", "status": "open|in_progress|resolved|closed", "updatedAt": "ISO8601" }
+```
+Note: a consumer reply that server-side auto-reopens a Resolved/Closed ticket (see above) does
+**not** publish this event — that implicit status flip is only visible via the ticket's own
+`status` field on the next `GET`, same as any other REST-only field change before this task.
+
+**Cross-tenant/cross-consumer isolation:** enforced entirely server-side inside `JoinTicket`
+(never by trusting a client-supplied `tenantId`/`consumerAccountId`) — see the access rules
+above. A connection that never successfully joined a ticket's group receives no events for it,
+regardless of what it may already know (e.g. a valid ticket id guessed or seen elsewhere).
+
 ---
 
 ### Purchase reviews (TASK-613/617)

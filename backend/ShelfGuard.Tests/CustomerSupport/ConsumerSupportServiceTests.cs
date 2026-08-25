@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
 using ShelfGuard.Application.Features.CustomerSupport;
+using ShelfGuard.Application.Features.CustomerSupport.Dtos;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
@@ -18,12 +19,13 @@ public sealed class ConsumerSupportServiceTests
     private readonly ILoyaltyRepository _loyalty = Substitute.For<ILoyaltyRepository>();
     private readonly ITenantRepository _tenants = Substitute.For<ITenantRepository>();
     private readonly ITenantSessionOverride _tenantScope = Substitute.For<ITenantSessionOverride>();
+    private readonly IConsumerSupportRealtimeNotifier _realtime = Substitute.For<IConsumerSupportRealtimeNotifier>();
     private readonly ConsumerSupportService _sut;
 
     public ConsumerSupportServiceTests()
     {
         _sut = new ConsumerSupportService(
-            _tickets, _consumerAccounts, _customers, _loyalty, _tenants, _tenantScope,
+            _tickets, _consumerAccounts, _customers, _loyalty, _tenants, _tenantScope, _realtime,
             NullLogger<ConsumerSupportService>.Instance);
 
         // Pure pass-through, same convention LoyaltyServiceTests uses for every
@@ -477,5 +479,170 @@ public sealed class ConsumerSupportServiceTests
 
         Assert.Null(result);
         Assert.Equal(404, statusCode);
+    }
+
+    // ── TASK-625: realtime notifications ───────────────────────────────────
+
+    [Fact]
+    public async Task AddConsumerMessageAsync_success_publishes_SupportMessageCreated_with_matching_dto()
+    {
+        var consumerId = Guid.NewGuid();
+        var ticket = MakeTicket(consumerAccountId: consumerId);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+
+        var (message, error, statusCode) = await _sut.AddConsumerMessageAsync(consumerId, ticket.Id, "Привіт");
+
+        Assert.Null(error);
+        Assert.NotNull(message);
+        await _tickets.Received(1).AddMessageAsync(Arg.Any<ConsumerSupportTicketMessage>(), default);
+        // message.Id must equal the id the notifier publishes — the mobile client de-dupes on it.
+        await _realtime.Received(1).MessageCreatedAsync(
+            ticket.Id, Arg.Is<ConsumerSupportTicketMessageDto>(d => d.Id == message!.Id && d.Body == "Привіт"), default);
+    }
+
+    [Fact]
+    public async Task AddConsumerMessageAsync_blank_body_does_not_publish()
+    {
+        var consumerId = Guid.NewGuid();
+        var ticket = MakeTicket(consumerAccountId: consumerId);
+
+        await _sut.AddConsumerMessageAsync(consumerId, ticket.Id, "   ");
+
+        await _realtime.DidNotReceive().MessageCreatedAsync(
+            Arg.Any<Guid>(), Arg.Any<ConsumerSupportTicketMessageDto>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AddConsumerMessageAsync_wrong_owner_does_not_publish()
+    {
+        var owner = Guid.NewGuid();
+        var stranger = Guid.NewGuid();
+        var ticket = MakeTicket(consumerAccountId: owner);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+
+        await _sut.AddConsumerMessageAsync(stranger, ticket.Id, "Body");
+
+        await _realtime.DidNotReceive().MessageCreatedAsync(
+            Arg.Any<Guid>(), Arg.Any<ConsumerSupportTicketMessageDto>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AddConsumerMessageAsync_does_not_publish_when_db_save_fails()
+    {
+        var consumerId = Guid.NewGuid();
+        var ticket = MakeTicket(consumerAccountId: consumerId);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+        _tickets.SaveChangesAsync(default).Returns(Task.FromException(new InvalidOperationException("db down")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.AddConsumerMessageAsync(consumerId, ticket.Id, "Body"));
+
+        await _realtime.DidNotReceive().MessageCreatedAsync(
+            Arg.Any<Guid>(), Arg.Any<ConsumerSupportTicketMessageDto>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AddStaffReplyAsync_success_publishes_SupportMessageCreated_and_writes_exactly_one_message()
+    {
+        var tenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+        var ticket = MakeTicket(tenantId: tenantId);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+
+        var (message, error, statusCode) = await _sut.AddStaffReplyAsync(tenantId, ticket.Id, staffUserId, "Відповідь");
+
+        Assert.Null(error);
+        await _tickets.Received(1).AddMessageAsync(Arg.Any<ConsumerSupportTicketMessage>(), default);
+        await _realtime.Received(1).MessageCreatedAsync(
+            ticket.Id, Arg.Is<ConsumerSupportTicketMessageDto>(d => d.Id == message!.Id), default);
+    }
+
+    [Fact]
+    public async Task AddStaffReplyAsync_wrong_tenant_does_not_publish()
+    {
+        var tenantId = Guid.NewGuid();
+        var otherTenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+        var ticket = MakeTicket(tenantId: otherTenantId);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+
+        await _sut.AddStaffReplyAsync(tenantId, ticket.Id, staffUserId, "Відповідь");
+
+        await _realtime.DidNotReceive().MessageCreatedAsync(
+            Arg.Any<Guid>(), Arg.Any<ConsumerSupportTicketMessageDto>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AddStaffReplyAsync_does_not_publish_when_db_save_fails()
+    {
+        var tenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+        var ticket = MakeTicket(tenantId: tenantId);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+        _tickets.SaveChangesAsync(default).Returns(Task.FromException(new InvalidOperationException("db down")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.AddStaffReplyAsync(tenantId, ticket.Id, staffUserId, "Відповідь"));
+
+        await _realtime.DidNotReceive().MessageCreatedAsync(
+            Arg.Any<Guid>(), Arg.Any<ConsumerSupportTicketMessageDto>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_success_publishes_SupportTicketStatusChanged()
+    {
+        var tenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+        var ticket = MakeTicket(tenantId: tenantId, status: ConsumerSupportTicketStatus.Open);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+        _consumerAccounts.GetByIdAsync(ticket.ConsumerAccountId, default).Returns(MakeConsumer(ticket.ConsumerAccountId));
+
+        await _sut.UpdateStatusAsync(tenantId, ticket.Id, staffUserId, ConsumerSupportTicketStatus.InProgress);
+
+        await _realtime.Received(1).StatusChangedAsync(
+            ticket.Id, ConsumerSupportTicketStatus.InProgress, ticket.UpdatedAt, default);
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_wrong_tenant_does_not_publish()
+    {
+        var tenantId = Guid.NewGuid();
+        var otherTenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+        var ticket = MakeTicket(tenantId: otherTenantId);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+
+        await _sut.UpdateStatusAsync(tenantId, ticket.Id, staffUserId, ConsumerSupportTicketStatus.Resolved);
+
+        await _realtime.DidNotReceive().StatusChangedAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_invalid_status_does_not_publish()
+    {
+        var tenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+
+        await _sut.UpdateStatusAsync(tenantId, Guid.NewGuid(), staffUserId, "bogus");
+
+        await _realtime.DidNotReceive().StatusChangedAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_does_not_publish_when_db_save_fails()
+    {
+        var tenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+        var ticket = MakeTicket(tenantId: tenantId, status: ConsumerSupportTicketStatus.Open);
+        _tickets.GetByIdAsync(ticket.Id, default).Returns(ticket);
+        _tickets.SaveChangesAsync(default).Returns(Task.FromException(new InvalidOperationException("db down")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateStatusAsync(tenantId, ticket.Id, staffUserId, ConsumerSupportTicketStatus.Resolved));
+
+        await _realtime.DidNotReceive().StatusChangedAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 }

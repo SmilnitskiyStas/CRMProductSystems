@@ -5918,3 +5918,28 @@ glossary terms (tier ladder, composite score). All six files' `Updated` headers 
 Wrote `.claude/logs/handoffs/623-to-mobile-codex.md` (curated extract of the 4 consumer-facing
 endpoint groups for the separate mobile Codex agent), following the `586-to-mobile-codex.md`
 precedent — the only prior example of this repo handing a finished feature to that agent.
+
+# TASK-625 — Realtime SignalR transport for consumer support tickets
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-25
+Plan: `goofy-bubbling-naur.md` §2 (extends TASK-616). Read TASK-616 log first.
+Log: `.claude/logs/tasks/625_2026-08-25_consumer-support-signalr-realtime_backend-developer.md`
+
+SignalR Hub `/api/hubs/consumer-support` (`ConsumerSupportHub`, `Infrastructure/Realtime/`) on
+top of TASK-616's REST-only ticket channel — REST stays the only write path, SignalR only pushes
+`SupportMessageCreated`/`SupportTicketStatusChanged` post-commit to group
+`consumer-support-ticket:{ticketId}`. `JoinTicket`/`LeaveTicket` re-derive identity from the JWT
+(never trust client-supplied ids): consumer must own the ticket, staff must be role ≥
+store_manager and match tenant. `IConsumerSupportRealtimeNotifier` (Application) keeps
+`ConsumerSupportService` free of a direct `IHubContext` dependency, implemented by
+`ConsumerSupportRealtimeNotifier` (Infrastructure) which swallows/logs its own publish failures
+(never fails an already-committed REST write). JWT via query-string `access_token` accepted only
+on the Hub path (`Program.cs` `OnMessageReceived`).
+
+`dotnet test`: **1946/1946 passing** (21 new — 11 service-layer publish/no-publish tests, 10 Hub
+access-control unit tests — up from TASK-624's 1925/1925 baseline, zero regressions).
+
+Updated `api-contracts.md` (new Realtime subsection under Consumer support tickets — Hub URL,
+JWT/query-token rule, method/event names, exact payloads, access rules, reconnect behavior).
+Wrote `.claude/logs/handoffs/625-to-mobile-codex.md`. `mobile/`, `frontend/`, and REST DTO shapes
+untouched (spec constraints).

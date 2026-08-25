@@ -304,6 +304,19 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IPurchaseReviewRepository,
             Data.Repositories.PurchaseReviewRepository>();
 
+        // TASK-625 - Realtime SignalR transport for consumer support ticket threads
+        // (ConsumerSupportHub, mapped in Program.cs at /api/hubs/consumer-support). Keep-alive/
+        // client-timeout set explicitly (spec §5 "бажано додати keep-alive") — these values match
+        // the framework defaults, made explicit so the choice is documented rather than implicit.
+        services.AddSignalR(options =>
+        {
+            options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+            options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+            options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+        });
+        services.AddScoped<Application.Features.CustomerSupport.IConsumerSupportRealtimeNotifier,
+            Realtime.ConsumerSupportRealtimeNotifier>();
+
         return services;
     }
 }

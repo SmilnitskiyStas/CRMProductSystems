@@ -26,6 +26,7 @@ public sealed class ConsumerSupportService : IConsumerSupportService
     private readonly ILoyaltyRepository _loyalty;
     private readonly ITenantRepository _tenants;
     private readonly ITenantSessionOverride _tenantScope;
+    private readonly IConsumerSupportRealtimeNotifier _realtime;
     private readonly ILogger<ConsumerSupportService> _logger;
 
     public ConsumerSupportService(
@@ -35,6 +36,7 @@ public sealed class ConsumerSupportService : IConsumerSupportService
         ILoyaltyRepository loyalty,
         ITenantRepository tenants,
         ITenantSessionOverride tenantScope,
+        IConsumerSupportRealtimeNotifier realtime,
         ILogger<ConsumerSupportService> logger)
     {
         _tickets = tickets;
@@ -43,6 +45,7 @@ public sealed class ConsumerSupportService : IConsumerSupportService
         _loyalty = loyalty;
         _tenants = tenants;
         _tenantScope = tenantScope;
+        _realtime = realtime;
         _logger = logger;
     }
 
@@ -167,7 +170,15 @@ public sealed class ConsumerSupportService : IConsumerSupportService
         _tickets.Update(ticket);
         await _tickets.SaveChangesAsync(ct);
 
-        return (ToMessageDto(message), null, null);
+        // TASK-625: realtime event — post-commit only (SaveChangesAsync above already
+        // succeeded), best-effort (the notifier swallows its own failures, see its doc).
+        // Deliberately NOT publishing SupportTicketStatusChanged for the reopen-on-reply side
+        // effect above — spec §4 ties that event exclusively to the PUT .../status endpoint;
+        // a reconnecting client picks up an implicit reopen via its own GET refetch instead.
+        var dto = ToMessageDto(message);
+        await _realtime.MessageCreatedAsync(ticket.Id, dto, ct);
+
+        return (dto, null, null);
     }
 
     // ── Staff side ────────────────────────────────────────────────────────────
@@ -240,7 +251,11 @@ public sealed class ConsumerSupportService : IConsumerSupportService
             "Staff user {UserId} replied on support ticket {TicketId} (tenant {TenantId}).",
             staffUserId, ticket.Id, tenantId);
 
-        return (ToMessageDto(message), null, null);
+        // TASK-625: realtime event — post-commit only, best-effort (see AddConsumerMessageAsync).
+        var dto = ToMessageDto(message);
+        await _realtime.MessageCreatedAsync(ticket.Id, dto, ct);
+
+        return (dto, null, null);
     }
 
     public async Task<(ConsumerSupportTicketDto? Ticket, string? Error, int? StatusCode)> UpdateStatusAsync(
@@ -261,6 +276,9 @@ public sealed class ConsumerSupportService : IConsumerSupportService
         _logger.LogInformation(
             "Staff user {UserId} set support ticket {TicketId} (tenant {TenantId}) to status {Status}.",
             staffUserId, ticket.Id, tenantId, newStatus);
+
+        // TASK-625: realtime event — post-commit only, best-effort (see AddConsumerMessageAsync).
+        await _realtime.StatusChangedAsync(ticket.Id, ticket.Status, ticket.UpdatedAt, ct);
 
         return (await ToDtoForStaffAsync(ticket, includeMessages: false, ct), null, null);
     }
