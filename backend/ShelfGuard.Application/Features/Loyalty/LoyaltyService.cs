@@ -820,6 +820,14 @@ public sealed class LoyaltyService : ILoyaltyService
             Balance = 0m,
             Status = LoyaltyMembershipStatus.Active,
         };
+
+        // TASK-627: JoinAsStaffAsync creates its own LoyaltyMembership row directly rather than
+        // delegating to CreateMembershipCoreAsync (its Customer resolution is staff-specific, and
+        // it also sets LinkedUserId, which the consumer flow has no equivalent for) — same
+        // entry-tier assignment applies, since this is still a brand-new membership. See
+        // AssignEntryTierAsync's doc for the full rationale.
+        await AssignEntryTierAsync(membership, tenantId, ct);
+
         await _loyalty.AddMembershipAsync(membership, ct);
         await _loyalty.SaveChangesAsync(ct);
 
@@ -982,9 +990,58 @@ public sealed class LoyaltyService : ILoyaltyService
             Status = LoyaltyMembershipStatus.Active,
         };
 
+        await AssignEntryTierAsync(membership, tenantId, ct);
+
         await _loyalty.AddMembershipAsync(membership, ct);
         await _loyalty.SaveChangesAsync(ct);
         return membership;
+    }
+
+    /// <summary>
+    /// TASK-627: assigns the ladder's entry-level (lowest <see cref="LoyaltyTierDefinition.SortOrder"/>)
+    /// tier to a brand-new <see cref="LoyaltyMembership"/> at creation time, instead of leaving it
+    /// tierless until the next 04:00 nightly recompute
+    /// (<c>worker/src/jobs/loyalty-tier-recompute.job.ts</c>) — up to 24h with no tier/benefits for
+    /// a fresh member. Safe to write <see cref="LoyaltyMembership.CurrentTierId"/>/
+    /// <see cref="LoyaltyMembership.CompositeScore"/> here despite those properties' own doc
+    /// comments calling them nightly-job-only: that constraint exists solely to stop the job's
+    /// UPDATE of an EXISTING row from racing PosService's concurrency-tokened Balance UPDATE on
+    /// that same row. It does not apply to setting initial values on a brand-new row as part of
+    /// its own INSERT — no existing row, no concurrent writer. <see cref="LoyaltyMembership.Balance"/>
+    /// is never touched here.
+    ///
+    /// Only stages fields on <paramref name="membership"/> and the history row — does not call
+    /// <see cref="ILoyaltyRepository.SaveChangesAsync"/> itself, so the caller's own
+    /// AddMembershipAsync + SaveChangesAsync commits both atomically in the membership's own
+    /// creation transaction (never as a separate save). No-op when the tenant has no configured
+    /// ladder (empty list): every field is left at today's default (null tier, 0 score) — no
+    /// behavior change for tenants not using this feature.
+    ///
+    /// Deliberately reads <see cref="ILoyaltyRepository.GetTierLadderAsync"/> directly rather than
+    /// through <see cref="ITenantSessionOverride"/> — both call sites (<see cref="CreateMembershipCoreAsync"/>
+    /// via <see cref="JoinAsync"/>'s <c>_tenantScope.ExecuteAsync</c> wrapper, and
+    /// <see cref="JoinAsStaffAsync"/>'s ambient staff-session tenant context) already run with the
+    /// right app.tenant_id in scope by the time this helper executes.
+    /// </summary>
+    private async Task AssignEntryTierAsync(LoyaltyMembership membership, Guid tenantId, CancellationToken ct)
+    {
+        var ladder = await _loyalty.GetTierLadderAsync(tenantId, ct);
+        if (ladder.Count == 0) return;
+
+        var entryTier = ladder[0];
+        membership.CurrentTierId = entryTier.Id;
+        membership.CompositeScore = 0m;
+        membership.TierScoreUpdatedAt = DateTimeOffset.UtcNow;
+
+        await _loyalty.AddTierHistoryAsync(new LoyaltyTierChangeHistory
+        {
+            TenantId = tenantId,
+            MembershipId = membership.Id,
+            FromTierId = null,
+            ToTierId = entryTier.Id,
+            FromScore = 0m,
+            ToScore = 0m,
+        }, ct);
     }
 
     private async Task<Customer> FindOrCreateCustomerAsync(

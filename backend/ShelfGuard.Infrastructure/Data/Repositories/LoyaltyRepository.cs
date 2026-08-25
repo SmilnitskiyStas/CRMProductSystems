@@ -143,6 +143,9 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
         return (items, total);
     }
 
+    public Task AddTierHistoryAsync(LoyaltyTierChangeHistory history, CancellationToken ct = default) =>
+        _db.LoyaltyTierChangeHistories.AddAsync(history, ct).AsTask();
+
     // ── Unit-of-work ─────────────────────────────────────────────────────────
 
     public async Task SaveChangesAsync(CancellationToken ct = default)

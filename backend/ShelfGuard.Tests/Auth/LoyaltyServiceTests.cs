@@ -99,6 +99,16 @@ public sealed class LoyaltyServiceTests
         _tenantScope.ExecuteAsync(
                 Arg.Any<Guid>(), Arg.Any<Func<Task<List<LoyaltyTierDefinition>>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<List<LoyaltyTierDefinition>>>>()());
+
+        // TASK-627: CreateMembershipCoreAsync/JoinAsStaffAsync now read the tier ladder directly
+        // (not through ITenantSessionOverride) to assign an entry tier on membership creation.
+        // Default every tenant to "no ladder configured" so every pre-existing JoinAsync/
+        // ResolveOrCreateMembershipByPhoneAsync/JoinAsStaffAsync test in this file keeps its
+        // pre-TASK-627 behavior (null CurrentTierId, no history row) unless a test explicitly
+        // configures a ladder for its own tenantId — same "safe default" pattern as
+        // _locations.GetAllAsync above.
+        _loyalty.GetTierLadderAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new List<LoyaltyTierDefinition>());
     }
 
     private static Tenant MakeTenant(params string[] modules)
@@ -249,6 +259,60 @@ public sealed class LoyaltyServiceTests
         await _customers.DidNotReceive().CreateAsync(Arg.Any<Customer>(), default);
         await _loyalty.Received(1).AddMembershipAsync(
             Arg.Is<LoyaltyMembership>(m => m.CustomerId == existingCustomer.Id), default);
+    }
+
+    // ── JoinAsync — entry-tier assignment on creation (TASK-627) ───────────
+
+    [Fact]
+    public async Task JoinAsync_new_member_with_configured_ladder_assigns_entry_tier()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var bronze = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Bronze", SortOrder = 0 };
+        var gold = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Gold", SortOrder = 1 };
+        _consumerAccounts.GetByIdAsync(consumerId, default)
+            .Returns(new ConsumerAccount { Phone = "+380501234567", FullName = "X", IsActive = true });
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+        _customers.FindByPhoneAsync("+380501234567", tenantId, default).ReturnsNull();
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { bronze, gold });
+
+        var (membership, error, statusCode) = await _sut.JoinAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(membership);
+        await _loyalty.Received(1).AddMembershipAsync(
+            Arg.Is<LoyaltyMembership>(m => m.CurrentTierId == bronze.Id && m.CompositeScore == 0m
+                && m.TierScoreUpdatedAt != null),
+            default);
+        await _loyalty.Received(1).AddTierHistoryAsync(
+            Arg.Is<LoyaltyTierChangeHistory>(h =>
+                h.TenantId == tenantId && h.FromTierId == null && h.ToTierId == bronze.Id
+                && h.FromScore == 0m && h.ToScore == 0m),
+            default);
+    }
+
+    [Fact]
+    public async Task JoinAsync_new_member_with_no_ladder_leaves_tier_unassigned()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _consumerAccounts.GetByIdAsync(consumerId, default)
+            .Returns(new ConsumerAccount { Phone = "+380501234567", FullName = "X", IsActive = true });
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+        _customers.FindByPhoneAsync("+380501234567", tenantId, default).ReturnsNull();
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition>());
+
+        var (membership, error, statusCode) = await _sut.JoinAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(membership);
+        await _loyalty.Received(1).AddMembershipAsync(
+            Arg.Is<LoyaltyMembership>(m => m.CurrentTierId == null && m.CompositeScore == 0m
+                && m.TierScoreUpdatedAt == null),
+            default);
+        await _loyalty.DidNotReceive().AddTierHistoryAsync(Arg.Any<LoyaltyTierChangeHistory>(), default);
     }
 
     // ── GetConsumerCodeAsync ───────────────────────────────────────────────
@@ -905,6 +969,32 @@ public sealed class LoyaltyServiceTests
         await _loyalty.Received(1).AddMembershipAsync(
             Arg.Is<LoyaltyMembership>(m => m.TenantId == tenantId && m.ConsumerAccountId == consumerId), default);
         await _loyalty.Received(1).SaveChangesAsync(default);
+    }
+
+    /// <summary>TASK-627: ResolveOrCreateMembershipByPhoneAsync's auto-enroll path goes through
+    /// CreateMembershipCoreAsync just like JoinAsync, so it gets the same entry-tier treatment.</summary>
+    [Fact]
+    public async Task ResolveOrCreateMembershipByPhoneAsync_new_consumer_with_configured_ladder_assigns_entry_tier()
+    {
+        var tenantId = Guid.NewGuid();
+        var consumerId = Guid.NewGuid();
+        var bronze = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Bronze", SortOrder = 0 };
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _consumerAccounts.GetByPhoneAsync("+380501234567", default)
+            .Returns(new ConsumerAccount { Id = consumerId, Phone = "+380501234567", FullName = "Ірина", IsActive = true });
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+        _customers.FindByPhoneAsync("+380501234567", tenantId, default).ReturnsNull();
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { bronze });
+
+        var (result, error, statusCode) = await _sut.ResolveOrCreateMembershipByPhoneAsync(tenantId, "0501234567");
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.True(result.IsNewMembership);
+        await _loyalty.Received(1).AddMembershipAsync(
+            Arg.Is<LoyaltyMembership>(m => m.CurrentTierId == bronze.Id && m.CompositeScore == 0m), default);
+        await _loyalty.Received(1).AddTierHistoryAsync(
+            Arg.Is<LoyaltyTierChangeHistory>(h => h.ToTierId == bronze.Id && h.FromTierId == null), default);
     }
 
     [Fact]
@@ -1603,6 +1693,43 @@ public sealed class LoyaltyServiceTests
 
         _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
         await _loyalty.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    /// <summary>TASK-627: rejoining a "left" membership must never assign/reset the entry tier,
+    /// even when the tenant has a configured ladder — that branch reactivates a row that may
+    /// already carry real tier history from before the consumer left, and entry-tier assignment
+    /// is scoped to brand-new membership creation only (CreateMembershipCoreAsync/
+    /// JoinAsStaffAsync), not this reactivation branch.</summary>
+    [Fact]
+    public async Task JoinAsync_rejoining_a_left_membership_does_not_touch_tier_even_with_ladder_configured()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var earnedTierId = Guid.NewGuid();
+        var existing = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId,
+            Status = LoyaltyMembershipStatus.Left, Balance = 15m,
+            CurrentTierId = earnedTierId, CompositeScore = 7.5m,
+        };
+        var bronze = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Bronze", SortOrder = 0 };
+        _consumerAccounts.GetByIdAsync(consumerId, default)
+            .Returns(new ConsumerAccount { Phone = "+380501234567", FullName = "X", IsActive = true });
+        _tenants.GetByIdAsync(tenantId, default).Returns(MakeTenant("loyalty"));
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(existing);
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { bronze });
+
+        var (membership, error, statusCode) = await _sut.JoinAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(membership);
+        // LoyaltyMembershipSummaryDto doesn't surface tier fields — assert against the entity
+        // instance itself (the same object GetMembershipByTenantConsumerAsync returned, which
+        // JoinAsync's rejoin branch mutates in place if it touches it at all).
+        Assert.Equal(earnedTierId, existing.CurrentTierId); // untouched, not reset to bronze
+        Assert.Equal(7.5m, existing.CompositeScore); // untouched
+        await _loyalty.DidNotReceive().AddTierHistoryAsync(Arg.Any<LoyaltyTierChangeHistory>(), default);
+        await _loyalty.DidNotReceive().GetTierLadderAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     // ── Tier ladder — admin CRUD (TASK-615) ───────────────────────────────

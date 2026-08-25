@@ -237,6 +237,9 @@ file sealed class FakeLoyaltyRepo : ILoyaltyRepository
         Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default) =>
         Task.FromResult((new List<LoyaltyTierChangeHistory>(), 0));
 
+    public Task AddTierHistoryAsync(LoyaltyTierChangeHistory history, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 

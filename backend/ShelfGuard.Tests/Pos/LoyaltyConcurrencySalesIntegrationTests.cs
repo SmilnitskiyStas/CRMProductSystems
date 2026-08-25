@@ -336,6 +336,8 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
         public void RemoveTier(LoyaltyTierDefinition tier) => Inner.RemoveTier(tier);
         public Task<(List<LoyaltyTierChangeHistory> Items, int Total)> GetTierHistoryPagedAsync(Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default) =>
             Inner.GetTierHistoryPagedAsync(tenantId, membershipId, page, pageSize, ct);
+        public Task AddTierHistoryAsync(LoyaltyTierChangeHistory history, CancellationToken ct = default) =>
+            Inner.AddTierHistoryAsync(history, ct);
         public Task SaveChangesAsync(CancellationToken ct = default) => Inner.SaveChangesAsync(ct);
     }
 }

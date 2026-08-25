@@ -102,6 +102,16 @@ public interface ILoyaltyRepository
     Task<(List<LoyaltyTierChangeHistory> Items, int Total)> GetTierHistoryPagedAsync(
         Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-627: stages one append-only <see cref="LoyaltyTierChangeHistory"/> row. Before this,
+    /// the table was only ever written by the nightly tier-recompute worker job's own raw SQL
+    /// (TypeScript) — this is the first C#-side writer, used when a brand-new
+    /// <see cref="LoyaltyMembership"/> is created directly onto the ladder's entry tier instead
+    /// of staying tierless until the next recompute run. Mirrors <see cref="AddTierAsync"/>'s
+    /// stage-only contract — the caller's own <see cref="SaveChangesAsync"/> commits it.
+    /// </summary>
+    Task AddTierHistoryAsync(LoyaltyTierChangeHistory history, CancellationToken ct = default);
+
     // ── Unit-of-work ─────────────────────────────────────────────────────────
 
     Task SaveChangesAsync(CancellationToken ct = default);

@@ -5966,3 +5966,31 @@ baseline, zero regressions).
 
 Updated `api-contracts.md` (new route under Consumer-facing loyalty). Wrote
 `.claude/logs/handoffs/626-to-mobile-codex.md`. `mobile/`/`frontend/` untouched.
+
+# TASK-627 — Assign entry-level tier immediately on loyalty membership creation
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-25
+Extends TASK-615/TASK-619. Previously a new member stayed tierless until the 04:00 nightly
+recompute job — up to 24h with no tier/benefits.
+Log: `.claude/logs/tasks/627_2026-08-25_entry-tier-on-join_backend-developer.md`
+
+New `LoyaltyService.AssignEntryTierAsync` helper: on brand-new membership creation, reads the
+tenant's tier ladder and sets `CurrentTierId`/`CompositeScore = 0m`/`TierScoreUpdatedAt` to the
+lowest-`SortOrder` tier, plus stages a `LoyaltyTierChangeHistory` row (new
+`ILoyaltyRepository.AddTierHistoryAsync`, the table's first C#-side writer). No-op when the
+tenant has no configured ladder. Wired into both fresh-membership paths:
+`CreateMembershipCoreAsync` (shared by `JoinAsync`/`ResolveOrCreateMembershipByPhoneAsync`) and
+`JoinAsStaffAsync` (creates its own membership row directly, needed the same fix separately).
+Deliberately does NOT touch `JoinAsync`'s rejoin-a-left-membership branch — that reactivates a
+row that may carry real earned tier history.
+
+Safe despite `CurrentTierId`/`CompositeScore` being documented "nightly-job-only": that
+constraint is about the job's UPDATE of an EXISTING row racing PosService's concurrency-tokened
+Balance UPDATE — doesn't apply to setting initial values as part of a brand-new row's own
+INSERT. `Balance` itself is never touched by this change.
+
+No `api-contracts.md`/`domain-model.md` update: `LoyaltyMembershipSummaryDto` never surfaced
+`CurrentTierId`/tier fields at all, so the join response shape is unchanged.
+
+`dotnet build`: 0 errors. `dotnet test`: **1953/1953 passing** (4 new, up from TASK-626's
+1949/1949 baseline, zero regressions). `mobile/`/`frontend/` untouched.
