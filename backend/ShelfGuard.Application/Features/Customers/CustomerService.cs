@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 using ShelfGuard.Application.Common;
+using ShelfGuard.Application.Features.ConsumerProfile;
+using ShelfGuard.Application.Features.ConsumerProfile.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -7,9 +9,28 @@ namespace ShelfGuard.Application.Features.Customers;
 
 public sealed partial class CustomerService : ICustomerService
 {
-    private readonly ICustomerRepository _repo;
+    // TASK-618: how many of a customer's most recent PurchaseReviews the detail view shows.
+    private const int RecentReviewsTake = 5;
 
-    public CustomerService(ICustomerRepository repo) => _repo = repo;
+    private readonly ICustomerRepository _repo;
+    private readonly ILoyaltyRepository _loyaltyRepo;
+    private readonly IConsumerSupportTicketRepository _supportRepo;
+    private readonly IPurchaseReviewRepository _reviewRepo;
+    private readonly IConsumerProfileService _consumerProfile;
+
+    public CustomerService(
+        ICustomerRepository repo,
+        ILoyaltyRepository loyaltyRepo,
+        IConsumerSupportTicketRepository supportRepo,
+        IPurchaseReviewRepository reviewRepo,
+        IConsumerProfileService consumerProfile)
+    {
+        _repo = repo;
+        _loyaltyRepo = loyaltyRepo;
+        _supportRepo = supportRepo;
+        _reviewRepo = reviewRepo;
+        _consumerProfile = consumerProfile;
+    }
 
     public async Task<PagedResult<CustomerDto>> GetPagedAsync(
         Guid tenantId, int page, int pageSize, string? search, CancellationToken ct = default)
@@ -27,7 +48,87 @@ public sealed partial class CustomerService : ICustomerService
     public async Task<CustomerDetailDto?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default)
     {
         var customer = await _repo.GetByIdWithTransactionsAsync(id, tenantId, ct);
-        return customer is null ? null : ToDetailDto(customer);
+        if (customer is null)
+            return null;
+
+        // Three independent reads beyond the customer itself — acceptable for a single-customer
+        // detail page (not a list), same reasoning CustomerTransactionDto's own 20-row cap
+        // already accepts. None depend on each other's result, so no reason to serialize them,
+        // but repositories here share the request's AppDbContext (not thread-safe for concurrent
+        // use), so they run sequentially rather than via Task.WhenAll.
+        var membership = await _loyaltyRepo.GetMembershipByCustomerIdAsync(id, tenantId, ct);
+        var (tierName, compositeScore, tierProgressPercent) = await ResolveTierProgressAsync(membership, tenantId, ct);
+        var openTicketCount = await _supportRepo.CountOpenByCustomerIdAsync(id, tenantId, ct);
+        var recentReviews = await _reviewRepo.GetRecentForCustomerAsync(id, tenantId, RecentReviewsTake, ct) ?? [];
+
+        return ToDetailDto(customer, tierName, compositeScore, tierProgressPercent, openTicketCount, recentReviews);
+    }
+
+    /// <summary>
+    /// TASK-618. Null membership (never joined loyalty) → all three null. A membership with no
+    /// <see cref="LoyaltyMembership.CurrentTierId"/> yet (not recomputed, or hasn't cleared even
+    /// the lowest tier's threshold) → CompositeScore still reported (it's a real, always-present
+    /// number on the entity), but CurrentTierName/TierProgressPercent stay null — "no tier
+    /// assigned yet" per the task brief. Progress is reported relative to the next tier's
+    /// MinCompositeScore (null when already at the top tier).
+    /// </summary>
+    private async Task<(string? TierName, decimal? CompositeScore, decimal? ProgressPercent)> ResolveTierProgressAsync(
+        LoyaltyMembership? membership, Guid tenantId, CancellationToken ct)
+    {
+        if (membership is null)
+            return (null, null, null);
+
+        if (membership.CurrentTierId is null || membership.CurrentTier is null)
+            return (null, membership.CompositeScore, null);
+
+        var ladder = await _loyaltyRepo.GetTierLadderAsync(tenantId, ct);
+        var nextTier = ladder
+            .Where(t => t.SortOrder > membership.CurrentTier.SortOrder)
+            .OrderBy(t => t.SortOrder)
+            .FirstOrDefault();
+
+        decimal? progressPercent = nextTier switch
+        {
+            null => null,
+            { MinCompositeScore: <= 0 } => 100m,
+            _ => Math.Clamp(membership.CompositeScore / nextTier.MinCompositeScore * 100m, 0m, 100m),
+        };
+
+        return (membership.CurrentTier.Name, membership.CompositeScore, progressPercent);
+    }
+
+    /// <summary>
+    /// TASK-621b. Resolves the customer's linked <see cref="LoyaltyMembership"/> (if any) and
+    /// delegates to <see cref="IConsumerProfileService.GetProfileChangeHistoryAsync"/> for its
+    /// <c>ConsumerAccountId</c>. Every <see cref="LoyaltyMembership"/> row carries a required
+    /// (non-nullable) <c>ConsumerAccountId</c>, so the only "no data" case here is no membership
+    /// at all — a customer who never joined this tenant's loyalty program has no consumer-side
+    /// profile to show history for, which returns an empty page rather than propagating whatever
+    /// error <see cref="IConsumerProfileService"/> would otherwise surface (e.g. a deactivated
+    /// consumer account) — same "no membership = no data, not a failure" convention as the rest
+    /// of the TASK-618 detail-view fields.
+    /// </summary>
+    public async Task<PagedResult<ConsumerProfileChangeDto>> GetProfileChangeHistoryAsync(
+        Guid customerId, Guid tenantId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var clampedPage = Math.Max(1, page);
+        var clampedPageSize = Math.Clamp(pageSize, 1, 200);
+        var empty = new PagedResult<ConsumerProfileChangeDto>
+        {
+            Items = [],
+            TotalCount = 0,
+            Page = clampedPage,
+            PageSize = clampedPageSize,
+        };
+
+        var membership = await _loyaltyRepo.GetMembershipByCustomerIdAsync(customerId, tenantId, ct);
+        if (membership is null)
+            return empty;
+
+        var (history, _, _) = await _consumerProfile.GetProfileChangeHistoryAsync(
+            membership.ConsumerAccountId, clampedPage, clampedPageSize, ct);
+
+        return history ?? empty;
     }
 
     public async Task<(CustomerDto? Customer, string? Error)> CreateAsync(
@@ -138,7 +239,13 @@ public sealed partial class CustomerService : ICustomerService
         c.CreatedAt.UtcDateTime
     );
 
-    private static CustomerDetailDto ToDetailDto(Customer c) => new(
+    private static CustomerDetailDto ToDetailDto(
+        Customer c,
+        string? tierName,
+        decimal? compositeScore,
+        decimal? tierProgressPercent,
+        int openTicketCount,
+        List<PurchaseReview> recentReviews) => new(
         c.Id,
         c.Name,
         c.Phone,
@@ -157,6 +264,13 @@ public sealed partial class CustomerService : ICustomerService
                 t.PaymentType,
                 t.CreatedAt,
                 t.Status))
+            .ToList(),
+        tierName,
+        compositeScore,
+        tierProgressPercent,
+        openTicketCount,
+        recentReviews
+            .Select(r => new CustomerReviewSummaryDto(r.Rating, r.Comment, r.CreatedAt, r.ReplyText))
             .ToList()
     );
 }

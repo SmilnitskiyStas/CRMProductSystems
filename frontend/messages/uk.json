@@ -339,6 +339,7 @@
         "consumerApp": {
           "label": "Застосунок",
           "bonusProgram": "Бонусна програма",
+          "loyaltyTiers": "Рівні лояльності",
           "banners": "Банери",
           "promotions": "Акції",
           "catalog": "Каталог",
@@ -357,7 +358,8 @@
         },
         "support": {
           "label": "Підтримка",
-          "serviceDesk": "Service Desk"
+          "serviceDesk": "Service Desk",
+          "customerSupport": "Звернення та відгуки"
         },
         "admin": {
           "label": "Адмін",
@@ -2903,7 +2905,41 @@
         "txHeaderDate": "Дата",
         "txHeaderAmount": "Сума",
         "txHeaderPayment": "Оплата",
-        "txHeaderStatus": "Статус"
+        "txHeaderStatus": "Статус",
+        "tabs": {
+          "info": "Інфо",
+          "loyalty": "Лояльність",
+          "tickets": "Звернення",
+          "reviews": "Відгуки",
+          "history": "Історія профілю"
+        }
+      },
+      "tier": {
+        "notEnrolled": "Клієнт не приєднався до програми лояльності",
+        "noTierYetBadge": "Ранг ще не присвоєно",
+        "scoreLabel": "Композитний бал",
+        "noTierYetNote": "Ранг ще не присвоєно — з'явиться після наступного перерахунку.",
+        "topTierNote": "Максимальний ранг",
+        "progressLabel": "Прогрес до наступного рангу"
+      },
+      "tickets": {
+        "openCountLabel": "Відкритих звернень",
+        "openInboxButton": "Відкрити у вхідних"
+      },
+      "reviews": {
+        "empty": "Відгуків ще немає",
+        "replyLabel": "Відповідь"
+      },
+      "profileHistory": {
+        "loading": "Завантаження…",
+        "empty": "Історія змін відсутня",
+        "prevButton": "← Назад",
+        "nextButton": "Вперед →",
+        "fields": {
+          "fullName": "Ім'я",
+          "email": "Email",
+          "phone": "Телефон"
+        }
       },
       "paymentType": {
         "cash": "Готівка",
@@ -2915,6 +2951,61 @@
         "pending": "Очікує",
         "cancelled": "Скасовано",
         "refunded": "Повернення"
+      }
+    },
+    "customerSupport": {
+      "page": {
+        "title": "Звернення та відгуки",
+        "subtitle": "Вхідні звернення клієнтів і відгуки на покупки",
+        "tabTickets": "Звернення",
+        "tabReviews": "Відгуки"
+      },
+      "statuses": {
+        "open": "Відкрите",
+        "inProgress": "В роботі",
+        "resolved": "Вирішено",
+        "closed": "Закрито"
+      },
+      "ticketList": {
+        "allStatusesOption": "Всі статуси",
+        "countLabel": "{count, plural, one {# звернення} few {# звернення} many {# звернень} other {# звернень}}",
+        "loading": "Завантаження…",
+        "empty": "Звернень не знайдено",
+        "prevButton": "← Назад",
+        "nextButton": "Вперед →",
+        "customerFilterActive": "Показано звернення тільки цього клієнта",
+        "clearFilter": "Скинути фільтр"
+      },
+      "ticketDetail": {
+        "loading": "Завантаження…",
+        "consumerLabel": "Клієнт",
+        "phoneLabel": "Телефон",
+        "statusLabel": "Статус",
+        "messagesTitle": "Листування",
+        "noMessages": "Повідомлень ще немає",
+        "replyPlaceholder": "Напишіть відповідь…",
+        "sendingButton": "Надсилання…",
+        "sendButton": "Надіслати",
+        "toastReplySent": "Відповідь надіслано",
+        "toastStatusUpdated": "Статус оновлено",
+        "unknownStaff": "Співробітник"
+      },
+      "reviewList": {
+        "allRatingsOption": "Всі оцінки",
+        "ratingOption": "{rating} ★",
+        "countLabel": "{count, plural, one {# відгук} few {# відгуки} many {# відгуків} other {# відгуків}}",
+        "loading": "Завантаження…",
+        "empty": "Відгуків не знайдено",
+        "replyFromStaff": "Відповідь магазину",
+        "reply": "Відповісти",
+        "replyPlaceholder": "Напишіть відповідь на відгук…",
+        "sending": "Надсилання…",
+        "send": "Надіслати",
+        "cancel": "Скасувати",
+        "toastReplySent": "Відповідь надіслано",
+        "prevPage": "← Назад",
+        "nextPage": "Вперед →",
+        "pageOf": "Сторінка {page} з {total}"
       }
     },
     "marketplace": {
@@ -4416,6 +4507,10 @@
         "title": "Застосунок",
         "subtitle": "Керування бонусною програмою та іншими можливостями клієнтського застосунку"
       },
+      "tierLadderPage": {
+        "title": "Рівні лояльності",
+        "subtitle": "Щаблі на кшталт Бронза/Срібло/Золото — пороги, множник нарахування та знижка на касі"
+      },
       "bannersPage": {
         "title": "Банери",
         "subtitle": "Промо-банери на головному екрані клієнтського застосунку — активні, минулі та чернетки"
@@ -4696,6 +4791,36 @@
         "saveSuccess": "Налаштування бонусної програми збережено",
         "saveError": "Не вдалося зберегти налаштування",
         "lastUpdatedPrefix": "Оновлено:"
+      },
+      "tierLadder": {
+        "loading": "Завантаження…",
+        "loadError": "Не вдалося завантажити драбину рангів",
+        "sectionLabel": "Драбина рангів",
+        "hint": "Щаблі перелічені від найнижчого до найвищого рангу. Перетягніть за маркер, щоб змінити порядок, або додайте/видаліть щабель нижче.",
+        "emptyHint": "Ще немає жодного рангу. Натисніть «Додати ранг», щоб створити перший щабель.",
+        "nameLabel": "Назва",
+        "namePlaceholder": "напр. Бронза",
+        "minScoreLabel": "Мін. бал",
+        "multiplierLabel": "Множник ×",
+        "discountLabel": "Знижка %",
+        "nameRequiredError": "Введіть назву",
+        "nameMaxLengthError": "Максимальна довжина: {max} символів",
+        "numberRequiredError": "Введіть число",
+        "nonNegativeError": "Введіть невід'ємне число",
+        "multiplierRangeError": "Введіть число від 0 до 999.99",
+        "percentRangeError": "Введіть число від 0 до 100",
+        "addButton": "Додати ранг",
+        "removeButton": "Видалити",
+        "reorderConfirmTitle": "Змінити порядок рангів?",
+        "reorderConfirmDescription": "Зміна порядку (або додавання/видалення щабля вище наявного) переприв'язує, який збережений запис рангу відповідає зсунутим рядкам. Значення після збереження виглядатимуть так само, але клієнт, який зараз має один із цих рангів, може бути переоцінений відносно іншого щабля. Це безпечно, просто варто про це знати перед збереженням.",
+        "reorderConfirmButton": "Зберегти попри це",
+        "reorderCancelButton": "Скасувати",
+        "unsavedChangesWarning": "У вас є незбережені зміни. Покинути сторінку без збереження?",
+        "saveButton": "Зберегти",
+        "savingButton": "Збереження…",
+        "saveSuccess": "Драбину рангів збережено",
+        "saveError": "Не вдалося зберегти драбину рангів",
+        "noChanges": "Немає незбережених змін"
       },
       "banners": {
         "title": "Банери",

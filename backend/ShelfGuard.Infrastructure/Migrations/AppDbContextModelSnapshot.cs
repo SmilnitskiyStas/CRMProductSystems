@@ -810,6 +810,133 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("consumer_accounts", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerAccountProfileChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FieldName")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("NewValue")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OldValue")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConsumerAccountId")
+                        .HasDatabaseName("idx_consumer_account_profile_changes_account");
+
+                    b.ToTable("consumer_account_profile_changes", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerSupportTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("open");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConsumerAccountId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("consumer_support_tickets", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerSupportTicketMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid?>("SenderConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SenderUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("SenderConsumerAccountId");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("consumer_support_ticket_messages", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1703,7 +1830,15 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasDefaultValue(0m);
 
+                    b.Property<decimal>("CompositeScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,4)")
+                        .HasDefaultValue(0m);
+
                     b.Property<Guid>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CurrentTierId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("CustomerId")
@@ -1733,6 +1868,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("TierScoreUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("TotpSecret")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1746,6 +1884,8 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ConsumerAccountId");
+
+                    b.HasIndex("CurrentTierId");
 
                     b.HasIndex("CustomerId");
 
@@ -1816,6 +1956,101 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasDatabaseName("uq_loyalty_program_settings_tenant");
 
                     b.ToTable("loyalty_program_settings", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyTierChangeHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<decimal>("FromScore")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid?>("FromTierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ToScore")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid?>("ToTierId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromTierId");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("ToTierId");
+
+                    b.HasIndex("TenantId", "MembershipId", "ChangedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("idx_loyalty_tier_change_history_membership_changed");
+
+                    b.ToTable("loyalty_tier_change_history", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyTierDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("AccrualMultiplier")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(1.0m);
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<decimal>("DiscountPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("MinCompositeScore")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SortOrder")
+                        .IsUnique()
+                        .HasDatabaseName("uq_loyalty_tier_definitions_tenant_sort_order");
+
+                    b.ToTable("loyalty_tier_definitions", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MarketplaceOrder", b =>
@@ -2429,6 +2664,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("CashRegisterId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("CashierId")
                         .HasColumnType("uuid");
@@ -3284,6 +3522,57 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("provider_schedule_slots", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PurchaseReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("PosTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Rating")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("RepliedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RepliedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReplyText")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConsumerAccountId");
+
+                    b.HasIndex("PosTransactionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_purchase_reviews_pos_transaction");
+
+                    b.HasIndex("RepliedByUserId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("purchase_reviews", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Recipe", b =>
@@ -5847,6 +6136,58 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Session");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerAccountProfileChange", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", "ConsumerAccount")
+                        .WithMany()
+                        .HasForeignKey("ConsumerAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ConsumerAccount");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerSupportTicket", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ConsumerAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerSupportTicketMessage", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("SenderConsumerAccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerSupportTicket", "Ticket")
+                        .WithMany("Messages")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Customer", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
@@ -6079,6 +6420,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyTierDefinition", "CurrentTier")
+                        .WithMany()
+                        .HasForeignKey("CurrentTierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ShelfGuard.Domain.Entities.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -6102,6 +6448,8 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.Navigation("ConsumerAccount");
 
+                    b.Navigation("CurrentTier");
+
                     b.Navigation("Customer");
 
                     b.Navigation("LinkedUser");
@@ -6110,6 +6458,42 @@ namespace ShelfGuard.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyProgramSettings", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyTierChangeHistory", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyTierDefinition", "FromTier")
+                        .WithMany()
+                        .HasForeignKey("FromTierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyMembership", "Membership")
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyTierDefinition", "ToTier")
+                        .WithMany()
+                        .HasForeignKey("ToTierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("FromTier");
+
+                    b.Navigation("Membership");
+
+                    b.Navigation("ToTier");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyTierDefinition", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
                         .WithMany()
@@ -6595,6 +6979,40 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PurchaseReview", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", "ConsumerAccount")
+                        .WithMany()
+                        .HasForeignKey("ConsumerAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.PosTransaction", "PosTransaction")
+                        .WithMany()
+                        .HasForeignKey("PosTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "RepliedByUser")
+                        .WithMany()
+                        .HasForeignKey("RepliedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ConsumerAccount");
+
+                    b.Navigation("PosTransaction");
+
+                    b.Navigation("RepliedByUser");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Recipe", b =>
@@ -7332,6 +7750,11 @@ namespace ShelfGuard.Infrastructure.Migrations
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerAccount", b =>
                 {
                     b.Navigation("Memberships");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerSupportTicket", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Customer", b =>

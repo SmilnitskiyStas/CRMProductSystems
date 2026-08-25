@@ -176,6 +176,9 @@ file sealed class FakeLoyaltyRepo : ILoyaltyRepository
     public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) =>
         Task.FromResult(Memberships.FirstOrDefault(m => m.TenantId == tenantId && m.ConsumerAccountId == consumerAccountId));
 
+    public Task<LoyaltyMembership?> GetMembershipByCustomerIdAsync(Guid customerId, Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult(Memberships.FirstOrDefault(m => m.CustomerId == customerId && m.TenantId == tenantId));
+
     public Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(Guid tenantId, Guid linkedUserId, CancellationToken ct = default) =>
         Task.FromResult(Memberships.FirstOrDefault(m => m.TenantId == tenantId && m.LinkedUserId == linkedUserId));
 
@@ -222,6 +225,17 @@ file sealed class FakeLoyaltyRepo : ILoyaltyRepository
     }
 
     public void UpdateSettings(LoyaltyProgramSettings settings) { }
+
+    // Stubs for unused methods (TASK-615 tier ladder — not exercised by PosService tests,
+    // which set LoyaltyMembership.CurrentTier directly since fakes don't run EF Include).
+    public Task<List<LoyaltyTierDefinition>> GetTierLadderAsync(Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult(new List<LoyaltyTierDefinition>());
+    public Task AddTierAsync(LoyaltyTierDefinition tier, CancellationToken ct = default) => Task.CompletedTask;
+    public void UpdateTier(LoyaltyTierDefinition tier) { }
+    public void RemoveTier(LoyaltyTierDefinition tier) { }
+    public Task<(List<LoyaltyTierChangeHistory> Items, int Total)> GetTierHistoryPagedAsync(
+        Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default) =>
+        Task.FromResult((new List<LoyaltyTierChangeHistory>(), 0));
 
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
@@ -1222,6 +1236,129 @@ public sealed class PosServiceTests
         Assert.Null(sale.LoyaltyAccrued);
         Assert.Equal(0m, membership.Balance);
         Assert.Empty(loyalty.LedgerEntries);
+    }
+
+    // ── Create Sale — Loyalty tier ladder (TASK-615) ──────────────────────
+
+    /// <summary>Regression pin: a membership with no CurrentTier assigned yet (nightly
+    /// recompute hasn't run) must behave exactly as before tier support existed — accrual
+    /// multiplier 1.0, discount 0%.</summary>
+    [Fact]
+    public async Task CreateSale_membership_without_tier_behaves_exactly_as_before()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("NO_TIER", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        // CurrentTierId/CurrentTier both left unset — same as every membership before TASK-613.
+        var membership = new LoyaltyMembership { TenantId = TenantId, Balance = 0m, Status = LoyaltyMembershipStatus.Active };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = TenantId, IsEnabled = true, AccrualRatePercent = 10m });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("NO_TIER", 1)], "Cash", 100m, LoyaltyMembershipId: membership.Id));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(100m, sale.Subtotal);   // no tier discount
+        Assert.Equal(10m, sale.LoyaltyAccrued); // 10% of 100, multiplier 1.0
+        Assert.Equal(10m, membership.Balance);
+        var item = Assert.Single(sale.Items);
+        Assert.Equal(0m, item.DiscountAmount);
+    }
+
+    [Fact]
+    public async Task CreateSale_tier_accrual_multiplier_scales_bonus()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("TIER_MULTIPLIER", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var tier = new LoyaltyTierDefinition
+        {
+            TenantId = TenantId, Name = "Gold", SortOrder = 1, AccrualMultiplier = 1.5m, DiscountPercent = 0m,
+        };
+        var membership = new LoyaltyMembership
+        {
+            TenantId = TenantId, Balance = 0m, Status = LoyaltyMembershipStatus.Active,
+            CurrentTierId = tier.Id, CurrentTier = tier,
+        };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = TenantId, IsEnabled = true, AccrualRatePercent = 10m });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("TIER_MULTIPLIER", 1)], "Cash", 100m, LoyaltyMembershipId: membership.Id));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        // Base accrual would be 10 (10% of 100); ×1.5 tier multiplier = 15.
+        Assert.Equal(15m, sale.LoyaltyAccrued);
+        Assert.Equal(15m, membership.Balance);
+    }
+
+    [Fact]
+    public async Task CreateSale_tier_discount_reduces_item_total_and_accrual_base()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+
+        var product = MakeProduct("TIER_DISCOUNT", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+
+        var tier = new LoyaltyTierDefinition
+        {
+            TenantId = TenantId, Name = "Platinum", SortOrder = 1, AccrualMultiplier = 1.0m, DiscountPercent = 10m,
+        };
+        var membership = new LoyaltyMembership
+        {
+            TenantId = TenantId, Balance = 0m, Status = LoyaltyMembershipStatus.Active,
+            CurrentTierId = tier.Id, CurrentTier = tier,
+        };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = TenantId, IsEnabled = true, AccrualRatePercent = 10m });
+
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("TIER_DISCOUNT", 1)], "Cash", 90m, LoyaltyMembershipId: membership.Id));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+
+        var item = Assert.Single(sale.Items);
+        Assert.Equal(10m, item.DiscountAmount);  // 10% of 100
+        Assert.Equal(90m, item.Total);
+        Assert.Equal(90m, sale.Subtotal);        // tx.TotalAmount already net of the tier discount
+
+        // Accrual base is the discounted total: 10% of 90 = 9.
+        Assert.Equal(9m, sale.LoyaltyAccrued);
+        Assert.Equal(9m, membership.Balance);
     }
 
     // ── List Sales ─────────────────────────────────────────────────────────

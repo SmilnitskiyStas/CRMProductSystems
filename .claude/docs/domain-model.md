@@ -1,7 +1,7 @@
 # Domain Model
 
 **Owner:** project-architect
-**Updated:** 2026-08-06
+**Updated:** 2026-08-24
 **Source:** v1-spec.md
 
 ## Core Entities
@@ -153,8 +153,19 @@ optimistic-concurrency token (TASK-414) — the authoritative audit trail is `Lo
 The "live" rotating QR/barcode is backed by `totp_secret` (Base32) — reuses the same TOTP
 infrastructure as `User` 2FA (`ITotpService`); the secret never leaves the server, the client only
 ever receives the current rotating code.
+
+**Tier ladder extension (TASK-613/615/619):** `CurrentTierId` (nullable FK→`LoyaltyTierDefinition`,
+SetNull), `CompositeScore`, `TierScoreUpdatedAt` — see `LoyaltyTierDefinition` below. These three
+columns are written **only** by the nightly `loyalty-tier-recompute.job.ts` worker job, never at
+request time — the same `xmin` token above is why: `PosService`/`LoyaltyService` update `Balance`
+under that concurrency check on every sale, and a request-time write to these three columns would
+risk racing it. `PosService.CreateSaleAsync` only ever *reads* `CurrentTier`
+(`.Include(m => m.CurrentTier)`) to apply its `AccrualMultiplier`/`DiscountPercent` — it never
+assigns a tier itself. See `decisions.md` ADR-034.
+
 Fields: id, tenant_id, consumer_account_id, customer_id?, linked_user_id?, totp_secret,
-last_redeemed_timestep? (anti-replay high-water mark), balance, status (active/blocked), joined_at
+last_redeemed_timestep? (anti-replay high-water mark), balance, status (active/blocked), joined_at,
+current_tier_id?, composite_score (default 0), tier_score_updated_at?
 Unique (tenant_id, consumer_account_id).
 
 ### LoyaltyLedgerEntry
@@ -447,6 +458,90 @@ in-code static catalog instead:
   get this prop — they already resolve from `ctx.promotions` (active-`Discount` items), a separately
   curated data source, out of scope for this feature.
 
+### ConsumerAccountProfileChange
+Append-only audit row for a `ConsumerAccount`'s self-service profile edits (TASK-613/614) — name,
+email, or phone. **No `tenant_id`, no RLS** — same precedent as `ConsumerAccount` itself (a
+`ConsumerAccount` is global, not tenant-scoped, so neither is its edit history); queried purely by
+`ConsumerAccountId`, protected only by `ConsumerProfileController` never exposing a lookup by
+anything but the caller's own JWT-derived id (same posture `ConsumerAccount` itself already has). A
+row is written in the **same** `SaveChangesAsync()` call as the `ConsumerAccount` field update —
+one atomic commit, never a separate write.
+Fields: id, consumer_account_id, field_name (`ConsumerAccountProfileChangeField`:
+phone/email/full_name), old_value?, new_value?, changed_at
+
+### LoyaltyTierDefinition
+One rung of a tenant's loyalty tier ladder (TASK-613/615) — admin-configured via
+`GET`/`PUT api/settings/loyalty/tiers` (`AtLeastEnterpriseAdmin`). `AccrualMultiplier` scales the
+existing bonus-accrual formula in `PosService.CreateSaleAsync`; `DiscountPercent` applies a
+per-item discount on the same sale (see the `PosService` note under Relationships below). A tenant
+with no ladder configured behaves exactly as before this feature shipped — every membership's
+`CurrentTier` is simply null, multiplier 1.0, discount 0.
+Fields: id, tenant_id, name, sort_order, min_composite_score, accrual_multiplier (default 1.0),
+discount_percent (default 0), created_at, updated_at
+Unique (tenant_id, sort_order). **The PUT endpoint bulk-replaces the whole ladder, matching
+submitted rows to existing ones by `sort_order`** (not id — the request carries no id), so a tier
+whose `sort_order` doesn't change keeps its database id and any `LoyaltyMembership.CurrentTierId`
+already pointing at it stays valid. A `sort_order` dropped from the request deletes that row (the
+`CurrentTierId` FK's `SetNull` cascades harmlessly — the nightly job re-evaluates every membership
+anyway). Reordering an existing tier (same tier, new `sort_order`) is therefore a delete+insert
+under the hood — a documented limitation, not a bug; see
+`.claude/logs/handoffs/615-to-frontend_backend-developer.md`.
+
+### LoyaltyTierChangeHistory
+Append-only audit trail of tier transitions, written only by the nightly recompute worker job
+(TASK-619) alongside its `LoyaltyMembership.CurrentTierId`/`CompositeScore` update — mirrors
+`LoyaltyLedgerEntry`'s "insert a row, update the parent, same write" discipline. A row is only
+written when the assigned tier actually changes; a composite-score drift with no tier change
+updates the membership's score/timestamp with no history row.
+Fields: id, tenant_id, membership_id, from_tier_id?, to_tier_id?, from_score, to_score, changed_at
+
+### ConsumerSupportTicket / ConsumerSupportTicketMessage
+Consumer↔tenant support channel (TASK-613/616), a deliberate mirror of the existing
+`SupplierSupportTicket`/`SupplierSupportTicketMessage` pair (tenant↔supplier) — **not** the
+ServiceDesk module (tenant↔SaaS-provider, a different relationship entirely). Auto-links
+`CustomerId` two ways, in order: (1) reuse the `CustomerId` already resolved on the consumer's
+`LoyaltyMembership` at this tenant, if one exists; (2) fall back to a phone match
+(`ICustomerRepository.FindByPhoneAsync`, the same lookup `LoyaltyService` itself uses). **Never
+creates** a `Customer` row — opening a ticket isn't consent to create a CRM record, unlike
+`LoyaltyService.JoinAsync`'s find-or-create. A consumer's reply after staff marks a ticket
+Resolved/Closed reopens it to Open (deliberate — nothing else changes status automatically).
+`ConsumerSupportTicket` fields: id, tenant_id, consumer_account_id, customer_id? (auto-link
+target), subject, status (`ConsumerSupportTicketStatus`: open/in_progress/resolved/closed),
+created_at, updated_at
+`ConsumerSupportTicketMessage` fields: id, ticket_id, sender_consumer_account_id?,
+sender_user_id? (**exactly one of these two set per row**), body, is_read, created_at
+
+### PurchaseReview
+A consumer's review of one completed purchase (TASK-613/617), a deliberate mirror of the existing
+`SupplierReview` (rating 1-5, comment, one staff reply). Keyed to `PosTransactionId`, **not**
+`Customer` — `PosTransaction` has no direct `ConsumerAccountId` FK, so ownership is resolved via
+the loyalty ledger join: `LoyaltyLedgerEntry.PosTransactionId → MembershipId →
+LoyaltyMembership.ConsumerAccountId` (`ReviewService.IsOwnPurchaseAsync`). **Limitation this
+implies:** a walk-in or otherwise unlinked purchase (no loyalty ledger entry at all) can never be
+reviewed — rejected with the same generic 403 as "this is someone else's purchase," never
+disclosing which. One reply per review is enforced at the service layer (409 on a second attempt)
+— a deliberate divergence from `SupplierReview`'s own reply endpoint, which silently overwrites.
+See `decisions.md` ADR-034.
+Fields: id, tenant_id, consumer_account_id, pos_transaction_id (**unique** — one review per
+purchase), rating (1-5), comment?, created_at, reply_text?, replied_at?, replied_by_user_id?
+
+#### Relationships to existing entities (TASK-613..618 cluster)
+- **`LoyaltyMembership`** — gains `current_tier_id?`/`composite_score`/`tier_score_updated_at` (see
+  the `LoyaltyMembership` entry above); `PosService.CreateSaleAsync` reads `CurrentTier` to scale
+  bonus accrual and apply a per-item checkout discount, never writes it.
+- **`PosTransaction`** — gains `cash_register_id?` (Guid, no FK) — schema-ready placeholder for a
+  future POS register-hardware registry, unwired, no business logic reads or writes it yet. Also
+  the join target `PurchaseReview` ownership resolves through (via `LoyaltyLedgerEntry`), not a
+  direct FK.
+- **`Customer`** — `CustomerDetailDto` (staff customer card, TASK-618/621b) now surfaces this
+  cluster's data with no new stored FK on `Customer` itself: `CurrentTierName`/`CompositeScore`/
+  `TierProgressPercent` (via the customer's `LoyaltyMembership`), `OpenTicketCount` (via
+  `ConsumerSupportTicket.CustomerId`), `RecentReviews` (via `PurchaseReview` → `PosTransaction` →
+  `CustomerId`, since `PurchaseReview` itself carries no `CustomerId`), and a separate paged
+  `GET /api/customers/{id}/profile-history` reads `ConsumerAccountProfileChange` through the same
+  membership link. A customer who never joined the tenant's loyalty program shows nulls/empty
+  arrays across all of these — never an error.
+
 ---
 
 ## Key Business Rules
@@ -456,3 +551,7 @@ in-code static catalog instead:
 4. **Safety buffer** — reserved quantity for shelf presentation; not available for sale
 5. **Soft delete** — all business entities use `is_active = false`, never hard DELETE
 6. **Tenant isolation** — enforced at DB level via RLS; application layer never filters by tenant_id manually
+7. **Loyalty tier score is nightly-only** — `LoyaltyMembership.CurrentTierId`/`CompositeScore`/
+   `TierScoreUpdatedAt` are written exclusively by the nightly `loyalty-tier-recompute.job.ts`
+   worker job; no request-time code path may write them (avoids a concurrency-token conflict with
+   `Balance` — same "computed by a job, never on-the-fly in queries" shape as rule 3 above)

@@ -339,6 +339,7 @@
         "consumerApp": {
           "label": "App",
           "bonusProgram": "Bonus Program",
+          "loyaltyTiers": "Loyalty Tiers",
           "banners": "Banners",
           "promotions": "Promotions",
           "catalog": "Catalog",
@@ -357,7 +358,8 @@
         },
         "support": {
           "label": "Support",
-          "serviceDesk": "Service Desk"
+          "serviceDesk": "Service Desk",
+          "customerSupport": "Tickets & Reviews"
         },
         "admin": {
           "label": "Admin",
@@ -2903,7 +2905,41 @@
         "txHeaderDate": "Date",
         "txHeaderAmount": "Amount",
         "txHeaderPayment": "Payment",
-        "txHeaderStatus": "Status"
+        "txHeaderStatus": "Status",
+        "tabs": {
+          "info": "Info",
+          "loyalty": "Loyalty",
+          "tickets": "Tickets",
+          "reviews": "Reviews",
+          "history": "Profile history"
+        }
+      },
+      "tier": {
+        "notEnrolled": "Customer hasn't joined the loyalty program",
+        "noTierYetBadge": "No tier assigned yet",
+        "scoreLabel": "Composite score",
+        "noTierYetNote": "No tier assigned yet — will appear after the next recompute.",
+        "topTierNote": "Top tier",
+        "progressLabel": "Progress to next tier"
+      },
+      "tickets": {
+        "openCountLabel": "Open tickets",
+        "openInboxButton": "Open in inbox"
+      },
+      "reviews": {
+        "empty": "No reviews yet",
+        "replyLabel": "Reply"
+      },
+      "profileHistory": {
+        "loading": "Loading…",
+        "empty": "No change history yet",
+        "prevButton": "← Previous",
+        "nextButton": "Next →",
+        "fields": {
+          "fullName": "Full name",
+          "email": "Email",
+          "phone": "Phone"
+        }
       },
       "paymentType": {
         "cash": "Cash",
@@ -2915,6 +2951,61 @@
         "pending": "Pending",
         "cancelled": "Cancelled",
         "refunded": "Refunded"
+      }
+    },
+    "customerSupport": {
+      "page": {
+        "title": "Tickets & Reviews",
+        "subtitle": "Inbox for customer support tickets and purchase reviews",
+        "tabTickets": "Tickets",
+        "tabReviews": "Reviews"
+      },
+      "statuses": {
+        "open": "Open",
+        "inProgress": "In progress",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      },
+      "ticketList": {
+        "allStatusesOption": "All statuses",
+        "countLabel": "{count, plural, one {# ticket} other {# tickets}}",
+        "loading": "Loading…",
+        "empty": "No tickets found",
+        "prevButton": "← Previous",
+        "nextButton": "Next →",
+        "customerFilterActive": "Showing tickets for this customer only",
+        "clearFilter": "Clear filter"
+      },
+      "ticketDetail": {
+        "loading": "Loading…",
+        "consumerLabel": "Customer",
+        "phoneLabel": "Phone",
+        "statusLabel": "Status",
+        "messagesTitle": "Thread",
+        "noMessages": "No messages yet",
+        "replyPlaceholder": "Write a reply…",
+        "sendingButton": "Sending…",
+        "sendButton": "Send",
+        "toastReplySent": "Reply sent",
+        "toastStatusUpdated": "Status updated",
+        "unknownStaff": "Staff member"
+      },
+      "reviewList": {
+        "allRatingsOption": "All ratings",
+        "ratingOption": "{rating} ★",
+        "countLabel": "{count, plural, one {# review} other {# reviews}}",
+        "loading": "Loading…",
+        "empty": "No reviews found",
+        "replyFromStaff": "Store reply",
+        "reply": "Reply",
+        "replyPlaceholder": "Write a reply to the review…",
+        "sending": "Sending…",
+        "send": "Send",
+        "cancel": "Cancel",
+        "toastReplySent": "Reply sent",
+        "prevPage": "← Previous",
+        "nextPage": "Next →",
+        "pageOf": "Page {page} of {total}"
       }
     },
     "marketplace": {
@@ -4416,6 +4507,10 @@
         "title": "App",
         "subtitle": "Manage the bonus program and other consumer-facing mobile app features"
       },
+      "tierLadderPage": {
+        "title": "Loyalty Tiers",
+        "subtitle": "Bronze/Silver/Gold-style rungs — thresholds, accrual multiplier, and checkout discount"
+      },
       "bannersPage": {
         "title": "Banners",
         "subtitle": "Promotional banners on the consumer app's home feed — running, past, and drafts"
@@ -4696,6 +4791,36 @@
         "saveSuccess": "Bonus program settings saved",
         "saveError": "Failed to save settings",
         "lastUpdatedPrefix": "Updated:"
+      },
+      "tierLadder": {
+        "loading": "Loading…",
+        "loadError": "Failed to load the tier ladder",
+        "sectionLabel": "Tier ladder",
+        "hint": "Rungs are listed from lowest to highest tier. Drag the handle to reorder, or add/remove rungs below.",
+        "emptyHint": "No tiers configured yet. Click \"Add tier\" to create the first rung.",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. Bronze",
+        "minScoreLabel": "Min. score",
+        "multiplierLabel": "Accrual ×",
+        "discountLabel": "Discount %",
+        "nameRequiredError": "Enter a name",
+        "nameMaxLengthError": "Maximum length: {max} characters",
+        "numberRequiredError": "Enter a number",
+        "nonNegativeError": "Enter a non-negative number",
+        "multiplierRangeError": "Enter a number between 0 and 999.99",
+        "percentRangeError": "Enter a number between 0 and 100",
+        "addButton": "Add tier",
+        "removeButton": "Remove",
+        "reorderConfirmTitle": "Reorder tiers?",
+        "reorderConfirmDescription": "Reordering (or adding/removing a rung above an existing one) reassigns which saved tier record the shifted rows represent. Values look the same after saving, but any customer currently holding one of those tiers may be re-evaluated against a different rung's rank. This is safe to proceed with, just worth knowing before you save.",
+        "reorderConfirmButton": "Save anyway",
+        "reorderCancelButton": "Cancel",
+        "unsavedChangesWarning": "You have unsaved changes. Leave this page without saving?",
+        "saveButton": "Save",
+        "savingButton": "Saving…",
+        "saveSuccess": "Tier ladder saved",
+        "saveError": "Failed to save the tier ladder",
+        "noChanges": "No unsaved changes"
       },
       "banners": {
         "title": "Banners",

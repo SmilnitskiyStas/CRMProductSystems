@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 
 namespace ShelfGuard.Infrastructure.Data;
@@ -183,6 +184,16 @@ public sealed class AppDbContext : DbContext
     public DbSet<MobileConfiguration> MobileConfigurations => Set<MobileConfiguration>();
     public DbSet<MobileConfigurationVersion> MobileConfigurationVersions => Set<MobileConfigurationVersion>();
     public DbSet<MobileTheme> MobileThemes => Set<MobileTheme>();
+
+    // Customer/loyalty domain expansion (TASK-613): profile-change history (no RLS,
+    // mirrors ConsumerAccount), loyalty tier ladder + append-only tier-change history,
+    // consumer support tickets, purchase reviews.
+    public DbSet<ConsumerAccountProfileChange> ConsumerAccountProfileChanges => Set<ConsumerAccountProfileChange>();
+    public DbSet<LoyaltyTierDefinition> LoyaltyTierDefinitions => Set<LoyaltyTierDefinition>();
+    public DbSet<LoyaltyTierChangeHistory> LoyaltyTierChangeHistories => Set<LoyaltyTierChangeHistory>();
+    public DbSet<ConsumerSupportTicket> ConsumerSupportTickets => Set<ConsumerSupportTicket>();
+    public DbSet<ConsumerSupportTicketMessage> ConsumerSupportTicketMessages => Set<ConsumerSupportTicketMessage>();
+    public DbSet<PurchaseReview> PurchaseReviews => Set<PurchaseReview>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -2265,6 +2276,8 @@ public sealed class AppDbContext : DbContext
             e.Property(m => m.Balance).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
             e.Property(m => m.Status).HasMaxLength(20).HasDefaultValue(LoyaltyMembershipStatus.Active);
             e.Property(m => m.JoinedAt).HasDefaultValueSql("NOW()");
+            // TASK-613: tier ladder — set only by the nightly tier-recompute worker job.
+            e.Property(m => m.CompositeScore).HasColumnType("decimal(18,4)").HasDefaultValue(0m);
             // TASK-414 (security review TASK-412, finding B): same xmin optimistic-concurrency
             // pattern as ProductStock above (TASK-356) — no schema change needed, xmin already
             // exists on every row. Without this, two concurrent writers to the same
@@ -2295,6 +2308,10 @@ public sealed class AppDbContext : DbContext
             // cross-tenant consumer-session reads), not through EF Include.
             e.HasOne<Location>().WithMany()
              .HasForeignKey(m => m.PreferredStoreId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // TASK-613: SetNull, same convention as Customer/LinkedUser/PreferredStoreId above —
+            // deleting a tier definition must not drag memberships down with it.
+            e.HasOne(m => m.CurrentTier).WithMany()
+             .HasForeignKey(m => m.CurrentTierId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasMany(m => m.LedgerEntries).WithOne(l => l.Membership)
              .HasForeignKey(l => l.MembershipId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -2351,6 +2368,150 @@ public sealed class AppDbContext : DbContext
              .HasDatabaseName("uq_loyalty_program_settings_tenant");
             e.HasOne(s => s.Tenant).WithMany()
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── ConsumerAccountProfileChange (TASK-613) ───────────────────────────
+        // NO RLS at all, same precedent as ConsumerAccount itself — see class remarks.
+        builder.Entity<ConsumerAccountProfileChange>(e =>
+        {
+            e.ToTable("consumer_account_profile_changes");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.ConsumerAccountId).IsRequired();
+            e.Property(x => x.FieldName).HasMaxLength(20).IsRequired();
+            e.Property(x => x.OldValue).HasColumnType("text");
+            e.Property(x => x.NewValue).HasColumnType("text");
+            e.Property(x => x.ChangedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.ConsumerAccountId)
+             .HasDatabaseName("idx_consumer_account_profile_changes_account");
+            e.HasOne(x => x.ConsumerAccount).WithMany()
+             .HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── LoyaltyTierDefinition (Loyalty tier ladder, TASK-613) ─────────────
+        // Tenant-scoped, canonical RLS triad only (staff config, no consumer_self_access on
+        // this table itself — same posture as LoyaltyProgramSettings above).
+        builder.Entity<LoyaltyTierDefinition>(e =>
+        {
+            e.ToTable("loyalty_tier_definitions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            e.Property(x => x.MinCompositeScore).HasColumnType("decimal(18,4)");
+            e.Property(x => x.AccrualMultiplier).HasColumnType("decimal(5,2)").HasDefaultValue(1.0m);
+            e.Property(x => x.DiscountPercent).HasColumnType("decimal(5,2)").HasDefaultValue(0m);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.SortOrder })
+             .IsUnique()
+             .HasDatabaseName("uq_loyalty_tier_definitions_tenant_sort_order");
+            e.HasOne(x => x.Tenant).WithMany()
+             .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── LoyaltyTierChangeHistory (Loyalty tier ladder, TASK-613) ──────────
+        // Append-only — MembershipId uses Restrict, same precedent as LoyaltyLedgerEntry
+        // above (audit trail must never be silently destroyed by deleting its parent).
+        // FromTierId/ToTierId use SetNull so deleting a tier definition never breaks old
+        // history rows.
+        builder.Entity<LoyaltyTierChangeHistory>(e =>
+        {
+            e.ToTable("loyalty_tier_change_history");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.MembershipId).IsRequired();
+            e.Property(x => x.FromScore).HasColumnType("decimal(18,4)");
+            e.Property(x => x.ToScore).HasColumnType("decimal(18,4)");
+            e.Property(x => x.ChangedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.MembershipId, x.ChangedAt })
+             .IsDescending(false, false, true)
+             .HasDatabaseName("idx_loyalty_tier_change_history_membership_changed");
+            e.HasOne(x => x.Membership).WithMany()
+             .HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.FromTier).WithMany()
+             .HasForeignKey(x => x.FromTierId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne(x => x.ToTier).WithMany()
+             .HasForeignKey(x => x.ToTierId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── ConsumerSupportTicket (Consumer support channel, TASK-613) ────────
+        // Mirrors SupplierSupportTicket's shape (see that entity's remarks) but for
+        // consumer↔tenant instead of tenant↔supplier.
+        builder.Entity<ConsumerSupportTicket>(e =>
+        {
+            e.ToTable("consumer_support_tickets");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.ConsumerAccountId).IsRequired();
+            e.Property(x => x.Subject).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue(ConsumerSupportTicketStatus.Open).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.TenantId);
+            e.HasIndex(x => x.ConsumerAccountId);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ConsumerAccount>().WithMany()
+             .HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Customer>().WithMany()
+             .HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(x => x.Messages)
+             .WithOne(x => x.Ticket)
+             .HasForeignKey(x => x.TicketId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ConsumerSupportTicketMessage (Consumer support channel, TASK-613) ─
+        builder.Entity<ConsumerSupportTicketMessage>(e =>
+        {
+            e.ToTable("consumer_support_ticket_messages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TicketId).IsRequired();
+            e.Property(x => x.Body).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.IsRead).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.TicketId);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasOne<ConsumerAccount>().WithMany()
+             .HasForeignKey(x => x.SenderConsumerAccountId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne<User>().WithMany()
+             .HasForeignKey(x => x.SenderUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── PurchaseReview (Purchase reviews, TASK-613) ───────────────────────
+        // Mirrors SupplierReview's shape (see that entity's remarks) but keyed to a
+        // PosTransaction instead of a Supplier. Restrict on PosTransactionId — a sale is
+        // never cascade-deleted by a review.
+        builder.Entity<PurchaseReview>(e =>
+        {
+            e.ToTable("purchase_reviews");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.ConsumerAccountId).IsRequired();
+            e.Property(x => x.PosTransactionId).IsRequired();
+            e.Property(x => x.Rating).IsRequired();
+            e.Property(x => x.Comment).HasColumnType("text");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.ReplyText).HasColumnType("text");
+            e.HasIndex(x => x.TenantId);
+            e.HasIndex(x => x.ConsumerAccountId);
+            // One review per purchase — confirmed product decision (plan §1d).
+            e.HasIndex(x => x.PosTransactionId)
+             .IsUnique()
+             .HasDatabaseName("uq_purchase_reviews_pos_transaction");
+            e.HasOne(x => x.Tenant).WithMany()
+             .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ConsumerAccount).WithMany()
+             .HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.PosTransaction).WithMany()
+             .HasForeignKey(x => x.PosTransactionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.RepliedByUser).WithMany()
+             .HasForeignKey(x => x.RepliedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── PriceSegmentSettings (Marketing Analytics Фаза 2, TASK-419) ───────

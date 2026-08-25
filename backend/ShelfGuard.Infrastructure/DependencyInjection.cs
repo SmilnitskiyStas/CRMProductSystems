@@ -296,6 +296,14 @@ public static class DependencyInjection
         services.AddSingleton<Application.Common.IExcelImportService,
             Export.ExcelImportService>();
 
+        // TASK-616 - Consumer↔tenant support tickets (async channel, mirrors SupplierSupportTicketRepository)
+        services.AddScoped<Domain.Interfaces.IConsumerSupportTicketRepository,
+            Data.Repositories.ConsumerSupportTicketRepository>();
+
+        // TASK-617 - Consumer purchase reviews (rating + comment on a PosTransaction, one staff reply)
+        services.AddScoped<Domain.Interfaces.IPurchaseReviewRepository,
+            Data.Repositories.PurchaseReviewRepository>();
+
         return services;
     }
 }

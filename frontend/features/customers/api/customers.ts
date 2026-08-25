@@ -5,6 +5,7 @@ import type {
   CustomersPage,
   CreateCustomerPayload,
   UpdateCustomerPayload,
+  ConsumerProfileChangePage,
 } from "../types";
 
 export const customersApi = {
@@ -18,6 +19,14 @@ export const customersApi = {
 
   getById(id: string): Promise<CustomerDetail> {
     return api.get<CustomerDetail>(`/api/customers/${id}`);
+  },
+
+  // TASK-621b — lazy-loaded only when the "Історія профілю" tab opens.
+  getProfileHistory(id: string, page: number, pageSize: number): Promise<ConsumerProfileChangePage> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(pageSize));
+    return api.get<ConsumerProfileChangePage>(`/api/customers/${id}/profile-history?${params.toString()}`);
   },
 
   create(data: CreateCustomerPayload): Promise<Customer> {

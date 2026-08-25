@@ -81,6 +81,60 @@ public sealed record LoyaltyLedgerEntryDto(
     string? Note,
     DateTimeOffset CreatedAt);
 
+// ── Tier ladder (TASK-615) ───────────────────────────────────────────────────
+
+/// <summary>One rung of a tenant's loyalty tier ladder, as returned to admins and consumers.</summary>
+public sealed record LoyaltyTierDefinitionDto(
+    Guid Id,
+    string Name,
+    int SortOrder,
+    decimal MinCompositeScore,
+    decimal AccrualMultiplier,
+    decimal DiscountPercent);
+
+/// <summary>
+/// One rung in a bulk-replace request body for <c>PUT api/settings/loyalty/tiers</c>. Carries
+/// no <c>Id</c> — <see cref="ILoyaltyService.UpsertTierLadderAsync"/> matches submitted rows
+/// against existing ones by <see cref="SortOrder"/> (the ladder's natural unique key) so a tier
+/// whose SortOrder doesn't change keeps its database Id, and thus any
+/// <see cref="LoyaltyMembership.CurrentTierId"/> already pointing at it stays valid until the
+/// next nightly recompute. See the method's own doc for the full rationale.
+/// </summary>
+public sealed record UpsertTierRequest(
+    string Name,
+    int SortOrder,
+    decimal MinCompositeScore,
+    decimal AccrualMultiplier,
+    decimal DiscountPercent);
+
+/// <summary>
+/// Consumer-facing tier progress for <c>GET /api/consumer/loyalty/{tenantId}/tiers</c>. All
+/// "current tier" fields are null/default (multiplier 1.0, discount 0) when the membership has
+/// no <see cref="LoyaltyMembership.CurrentTierId"/> yet (nightly job hasn't run, or the tenant
+/// has no ladder configured) — matches how <c>PosService</c> itself treats a tierless
+/// membership. <see cref="NextTierId"/>/<see cref="NextTierName"/>/<see cref="ScoreToNextTier"/>
+/// are all null when the membership already holds the top rung, or the tenant has no tiers above
+/// its current one (including when the ladder is empty).
+/// </summary>
+public sealed record LoyaltyTierProgressDto(
+    Guid? CurrentTierId,
+    string? CurrentTierName,
+    decimal AccrualMultiplier,
+    decimal DiscountPercent,
+    decimal CompositeScore,
+    Guid? NextTierId,
+    string? NextTierName,
+    decimal? ScoreToNextTier);
+
+/// <summary>One append-only row from <see cref="LoyaltyTierChangeHistory"/>, tier names resolved for display.</summary>
+public sealed record LoyaltyTierChangeHistoryDto(
+    Guid Id,
+    string? FromTierName,
+    string? ToTierName,
+    decimal FromScore,
+    decimal ToScore,
+    DateTimeOffset ChangedAt);
+
 // ── Staff-facing (POS / settings) ────────────────────────────────────────────
 
 /// <summary>Full scanned/typed payload, e.g. "SGLOY1.{membershipId}.{6-digit-code}".</summary>

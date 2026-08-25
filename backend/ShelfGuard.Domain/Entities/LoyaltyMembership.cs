@@ -43,10 +43,29 @@ public sealed class LoyaltyMembership
     public string Status { get; set; } = "active";
     public DateTimeOffset JoinedAt { get; init; } = DateTimeOffset.UtcNow;
 
+    /// <summary>
+    /// TASK-613: the highest <see cref="LoyaltyTierDefinition"/> this membership currently
+    /// qualifies for, per the nightly tier-recompute worker job (never written at request
+    /// time — see <see cref="CompositeScore"/>). Null until the first recompute run, or when
+    /// the membership doesn't clear even the lowest tier's threshold. Nullable/SetNull — a
+    /// tenant can delete a tier definition without dragging memberships down with it.
+    /// </summary>
+    public Guid? CurrentTierId { get; set; }
+    /// <summary>
+    /// RFM-like composite score computed by the nightly tier-recompute worker job (plan
+    /// §3), independent of <see cref="Balance"/> — never written by <c>PosService</c> or any
+    /// other request-time code path, only by that job, to avoid conflicting with the
+    /// concurrency token (xmin) PosService/LoyaltyService use for Balance updates.
+    /// </summary>
+    public decimal CompositeScore { get; set; }
+    /// <summary>When <see cref="CompositeScore"/>/<see cref="CurrentTierId"/> were last recomputed. Null until the first run.</summary>
+    public DateTimeOffset? TierScoreUpdatedAt { get; set; }
+
     public Tenant? Tenant { get; init; }
     public ConsumerAccount? ConsumerAccount { get; init; }
     public Customer? Customer { get; init; }
     public User? LinkedUser { get; init; }
+    public LoyaltyTierDefinition? CurrentTier { get; init; }
     public ICollection<LoyaltyLedgerEntry> LedgerEntries { get; init; } = new List<LoyaltyLedgerEntry>();
 }
 

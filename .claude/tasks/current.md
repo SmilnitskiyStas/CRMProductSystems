@@ -5435,3 +5435,486 @@ backend DTOs in `CooperationDtos.cs` — exact match; the controller route itsel
 yet at verification time, so the conflict step's live behavior is unverified (no-conflict path
 and compile/typecheck are). `tsc`/`eslint` clean on all 4 touched files; `uk.json`/`en.json`
 valid JSON. Log: `.claude/logs/tasks/597_2026-08-22_marketplace-checkout-barcode-conflict-ui_frontend-developer.md`.
+
+# TASK-613 — Customer/loyalty domain expansion: schema (profile history, tier ladder, support tickets, purchase reviews)
+
+**Status:** done · **Agent:** database-engineer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §1. Log: `.claude/logs/tasks/613_2026-08-24_crm-loyalty-tier-schema_database-engineer.md`
+
+Schema/domain layer only (backend service/controller layer is a separate follow-up task).
+Five new entities: `ConsumerAccountProfileChange` (append-only, **no RLS/no TenantId** —
+same precedent as `ConsumerAccount`), `LoyaltyTierDefinition` (per-tenant ladder rung —
+name/threshold/accrual multiplier/discount%), `LoyaltyTierChangeHistory` (append-only
+progression audit), `ConsumerSupportTicket`+`ConsumerSupportTicketMessage` (mirrors
+`SupplierSupportTicket`/`...Message` for consumer↔tenant instead of tenant↔supplier),
+`PurchaseReview` (mirrors `SupplierReview`, keyed to `PosTransactionId`, **unique index**
+— one review per purchase). `LoyaltyMembership` extended with `CurrentTierId`/
+`CompositeScore`/`TierScoreUpdatedAt` (written only by the future nightly tier-recompute
+worker job, never at request time). `PosTransaction.CashRegisterId` added — nullable
+Guid, no FK, intentionally unwired (register hardware doesn't exist yet).
+
+RLS: `consumer_account_profile_changes` has RLS fully disabled (verified via
+`pg_class.relrowsecurity`); the other five tenant-scoped tables all got the canonical
+`tenant_isolation`/`provider_bypass`(`IN ('provider','provider_admin')`)/`worker_bypass`
+triad, plus a `consumer_self_access` policy (direct-column on tables that have
+`ConsumerAccountId`, EXISTS-through-parent on the two child tables —
+`loyalty_tier_change_history` via membership, `consumer_support_ticket_messages` via
+ticket) on every table except `loyalty_tier_definitions` (staff-only config, same
+posture as `loyalty_program_settings`). Five separate EF Core migrations generated (not
+hand-written) via staged `#if`-guarded builds so each captures only its own slice:
+`AddConsumerAccountProfileChanges`, `AddLoyaltyTierLadder`, `AddConsumerSupportTickets`,
+`AddPurchaseReviews`, `AddPosTransactionCashRegisterId`. Hit and fixed one EF pitfall:
+using `HasOne<ConsumerAccount>().WithMany()` where the entity also had a `ConsumerAccount`
+nav property created a phantom second FK/shadow-property relationship — fixed by using
+`HasOne(x => x.ConsumerAccount)` instead (2 occurrences).
+
+All 5 migrations applied to dev DB (`crmproductsystems-postgres-1`, port 5435); RLS
+verified both structurally (`pg_policies`) and functionally (live `SET app.tenant_id`/
+`app.role`/`app.consumer_account_id` session-var tests inside rolled-back transactions —
+tenant isolation, worker bypass, and consumer self-access all behave correctly). `dotnet
+build` clean (0 warnings/errors); full `dotnet test` suite: **1837/1837 passing** (no
+regressions). Not implemented here (per scope): `Features/ConsumerProfile`,
+`Features/CustomerSupport`, `Features/Reviews`, loyalty-ladder CRUD/consumer endpoints,
+`PosService.cs` accrual-multiplier/discount integration, worker recompute job, frontend —
+all separate follow-up tasks per the plan's §5 sequencing. `mobile/` untouched (owned by a
+separate concurrent agent).
+
+# TASK-614 — Consumer self-service profile editing (name/email/phone + audit history)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §2. Handoff read: `.claude/logs/handoffs/613-to-backend_database-engineer.md`.
+Log: `.claude/logs/tasks/614_2026-08-24_consumer-profile-self-edit_backend-developer.md`
+
+New `Features/ConsumerProfile` (`IConsumerProfileService`/`ConsumerProfileService` +
+`Dtos/ConsumerProfileDtos.cs`) — get profile, update name/email, change phone (password
+re-entry gate, no SMS/OTP), paged change history. Every write appends a
+`ConsumerAccountProfileChange` audit row in the same `SaveChangesAsync` call as the
+`ConsumerAccount` update. `IConsumerAccountRepository`/`ConsumerAccountRepository`
+extended with `AddProfileChangeAsync`/`GetProfileChangesPagedAsync` (same
+combined-repository precedent as `ILoyaltyRepository` pairing membership + ledger) —
+`ConsumerAccountProfileChange` has no RLS, queried purely by `ConsumerAccountId`, no
+tenant-scoping logic added. New `ConsumerProfileController` at `api/consumer/profile`
+(GET, PUT, PUT /phone, GET /history), authorization copied exactly from
+`ConsumerLoyaltyController`'s `consumer_account_id` claim pattern. Registered in
+`ShelfGuard.Application/DependencyInjection.cs` next to `ILoyaltyService` (re-read fresh
+before editing, no conflicts found).
+
+15 new unit tests in `ShelfGuard.Tests/ConsumerProfile/ConsumerProfileServiceTests.cs`
+(NSubstitute, mirrors `LoyaltyServiceTests`/`ConsumerAuthServiceTests` style): audit rows
+on name/email/phone change, no-op writes nothing, wrong password rejected before any
+duplicate-phone lookup, duplicate email/phone rejected, unknown/inactive account 404s.
+
+Judgment calls: (1) email update allows clearing via empty string, duplicate-checked
+case-insensitively same as registration (no DB unique constraint on Email, app-level
+check only, matching `ConsumerAuthService.RegisterAsync`'s existing precedent); (2)
+wrong-current-password and malformed-phone both return 400 (matches this repo's existing
+`UserService.ChangePasswordAsync`/`AuthController` convention — no 401 precedent exists
+here) rather than inventing a new status code; (3) setting phone to its own current
+(normalized) value is a silent no-op success, writes no audit row.
+
+`dotnet build`: 0 errors, 1 pre-existing unrelated warning (Marketplace tests). `dotnet
+test` full suite: **1852/1852 passing** (15 new, no regressions).
+
+Not implemented here (separate follow-up tasks per plan §5): `Features/Loyalty` tier
+ladder CRUD/consumer endpoints, `PosService.cs` accrual/discount integration,
+`Features/CustomerSupport`, `Features/Reviews`, `Features/Customers` extension, worker
+recompute job, frontend. `mobile/` untouched (owned by a separate concurrent agent).
+
+# TASK-615 — Loyalty tier ladder CRUD/consumer endpoints + PosService accrual/discount integration
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §2. Handoff read: `.claude/logs/handoffs/613-to-backend_database-engineer.md`.
+Log: `.claude/logs/tasks/615_2026-08-24_loyalty-tier-ladder-pos-integration_backend-developer.md`
+
+Extended `Features/Loyalty` (`ILoyaltyRepository`/`LoyaltyRepository`,
+`ILoyaltyService`/`LoyaltyService`, `Dtos/LoyaltyDtos.cs`): admin tier ladder CRUD
+(`GetTierLadderAsync`/`UpsertTierLadderAsync`, mirrors `GetSettingsAsync`/
+`UpsertSettingsAsync`'s shape; bulk-replace matches submitted rows to existing ones **by
+SortOrder** so an unchanged tier keeps its Id and any `LoyaltyMembership.CurrentTierId`
+pointing at it survives the edit) and consumer-facing tier progress/history
+(`GetTierProgressAsync`/`GetTierHistoryAsync`). `loyalty_tier_definitions` has no
+`consumer_self_access` RLS (staff-only config), so the progress read goes through
+`ITenantSessionOverride` — same mechanism `ResolveCustomerCodeFormatAsync` already uses for
+`loyalty_program_settings`; the history read is ambient since that table does carry
+`consumer_self_access`. `GetMembershipByIdAsync` now `.Include(m => m.CurrentTier)`.
+
+New `LoyaltyTierSettingsController` (`api/settings/loyalty/tiers`, GET/PUT,
+`AppPolicies.AtLeastEnterpriseAdmin`, copied from `LoyaltySettingsController`).
+`ConsumerLoyaltyController` gained `GET {tenantId}/tiers` and `GET {tenantId}/tiers/history`.
+
+**`PosService.CreateSaleAsync`** — the core of this task: accrual now multiplies by
+`membership.CurrentTier?.AccrualMultiplier ?? 1.0m`; tier discount applied **per item**
+(not a lump-sum reduction on `tx.TotalAmount`) so `PriceFinal`/`DiscountAmount` per line stay
+consistent with the total — same principle the existing critical-batch auto-discount already
+follows, and matters for how the Checkbox fiscal receipt builds its line items. Rejected
+alternative (one lump-sum subtraction from the total, mirroring redemption): would leave
+per-item fields out of sync with the total. Both gated identically to accrual/redemption
+(membership present + program enabled); a membership with no `CurrentTier` yet behaves exactly
+as before this change. One-line comment added at the discount site flagging that both
+redemption and tier discount reduce `tx.TotalAmount`, the base the future RFM/tier
+composite-score job will read.
+
+`dotnet build`: 0 errors, 1 pre-existing unrelated warning. `dotnet test` full suite:
+**1871/1871 passing** (19 new: 3 in `PosServiceTests.cs` — no-tier regression pin, 1.5×
+multiplier, 10% discount reducing both item total and accrual base; 16 in
+`LoyaltyServiceTests.cs` for the new ladder/progress/history methods). Also updated two other
+manual `ILoyaltyRepository` fakes (`FiscalizationRetryTests.cs`,
+`LoyaltyConcurrencySalesIntegrationTests.cs`) with no-op stubs for the extended interface.
+
+Not implemented here (separate follow-up tasks per plan §5): `Features/CustomerSupport`,
+`Features/Reviews`, `Features/Customers` extension, worker tier-recompute job, frontend (tier
+ladder admin page, customer card tabs). `mobile/` untouched (owned by a separate concurrent
+agent).
+
+# TASK-616 — Consumer support ticket channel (Features/CustomerSupport)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §2. Handoff read: `.claude/logs/handoffs/613-to-backend_database-engineer.md`.
+Log: `.claude/logs/tasks/616_2026-08-24_consumer-support-tickets_backend-developer.md`
+
+New `Features/CustomerSupport` (`IConsumerSupportService`/`ConsumerSupportService` +
+`Dtos/ConsumerSupportDtos.cs`), mirroring `SupplierSupportService`'s ticket+message-thread
+pattern but for consumer↔tenant instead of tenant↔supplier, on the `ConsumerSupportTicket`/
+`ConsumerSupportTicketMessage` entities TASK-613 already landed. New
+`IConsumerSupportTicketRepository`/`ConsumerSupportTicketRepository` (tracked `GetByIdAsync`
+with Messages; paged consumer/tenant queries with status filter).
+
+Consumer side: `CreateTicketAsync` (ticket + first message in one commit), `GetMyTicketsAsync`,
+`GetTicketAsync` (404 uniformly for "not found" and "not yours" — never discloses which),
+`AddConsumerMessageAsync` (reopens Resolved/Closed → Open on reply — judgment call, documented
+in the task log). Staff side: `GetInboxAsync`, `GetTicketForStaffAsync` (marks unread consumer
+messages read as a side effect; named separately from the consumer `GetTicketAsync` since both
+would otherwise share an identical C# signature), `AddStaffReplyAsync`, `UpdateStatusAsync`.
+
+CustomerId auto-link reuses two existing lookups, no new mechanism: an existing
+`LoyaltyMembership.CustomerId` at this tenant if one exists, else `ICustomerRepository
+.FindByPhoneAsync` (same phone-match LoyaltyService itself uses) through
+`ITenantSessionOverride` — never creates a Customer here, only links to one that already
+exists. Ticket insert itself needs no override — `consumer_support_tickets`' own
+`consumer_self_access` RLS policy already covers the consumer session's write.
+
+`ConsumerSupportController` (`api/consumer/support`, `[Authorize]`, `consumer_account_id`
+claim, copied from `ConsumerLoyaltyController`): `POST /tickets` (TenantId in body, not the
+route — consumer session is cross-tenant), `GET /tickets?tenantId=`, `GET /tickets/{id}`,
+`POST /tickets/{id}/messages`. `CustomerSupportInboxController` (`api/customer-support`,
+`AppPolicies.AtLeastStoreManager` — same tier as `CustomersController`, not admin-only): `GET
+/tickets`, `GET /tickets/{id}`, `POST /tickets/{id}/reply`, `PUT /tickets/{id}/status`.
+Registered in both `DependencyInjection.cs` files (re-read fresh before editing; TASK-614/615
+registrations untouched, appended after them).
+
+25 new unit tests in `ShelfGuard.Tests/CustomerSupport/ConsumerSupportServiceTests.cs`
+(NSubstitute, mirrors `ConsumerProfileServiceTests` style): both auto-link paths + no-match
+case, cross-consumer access blocked, reopen-on-reply (Resolved and Closed), staff reply bumps
+UpdatedAt, status transition + invalid-status 400, staff read-marking (consumer messages only,
+no-op save when nothing unread).
+
+`dotnet build`: 0 errors, 1 pre-existing unrelated warning. `dotnet test` full suite:
+**1896/1896 passing** (25 new, no regressions).
+
+Not implemented here (separate follow-up tasks per plan §5): `Features/Reviews`,
+`Features/Customers` extension, worker tier-recompute job, frontend (`/customer-support`
+inbox page, mobile screens). `mobile/` untouched (owned by a separate concurrent agent).
+
+# TASK-617 — Consumer purchase review channel (Features/Reviews)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §2. Handoff read: `.claude/logs/handoffs/613-to-backend_database-engineer.md`.
+Log: `.claude/logs/tasks/617_2026-08-24_purchase-reviews_backend-developer.md`
+
+New `Features/Reviews` (`IReviewService`/`ReviewService` + `Dtos/ReviewDtos.cs`), mirroring
+`SupplierReview`'s rating+comment+one-reply shape but keyed to a `PosTransaction` instead of a
+`Supplier`, on the `PurchaseReview` entity TASK-613 already landed. New
+`IPurchaseReviewRepository`/`PurchaseReviewRepository` (tracked `GetByIdAsync`;
+`GetByTransactionAsync` for the duplicate pre-check; paged consumer/tenant queries, tenant one
+with an optional rating filter).
+
+Core design problem: `PosTransaction` has no direct `ConsumerAccountId` FK. Resolved via
+`LoyaltyLedgerEntry.PosTransactionId → MembershipId → LoyaltyMembership.ConsumerAccountId` —
+reused `ILoyaltyRepository.GetLedgerEntriesForTransactionsAsync` as-is (its own doc already
+calls this "the only persisted signal that loyalty activity happened on that sale", added for
+TASK-410) rather than joining through `PosTransaction.CustomerId`. A transaction with zero
+matching ledger entries (walk-in, never enrolled) or one resolving to a different consumer's
+membership both return a uniform 403 — never discloses which. No `ITenantSessionOverride`
+needed anywhere in this feature: `purchase_reviews`/`loyalty_memberships`/
+`loyalty_ledger_entries` all carry `consumer_self_access` RLS already, and `tenants` has none to
+override.
+
+Duplicate guard is two-layered: a pre-check (`GetByTransactionAsync`) returns 409 for the common
+case, and a new `DuplicateReviewException` (Domain, mirrors `ConcurrencyConflictException`'s
+translation pattern) catches the Npgsql unique-violation on `uq_purchase_reviews_pos_transaction`
+as the DB-level backstop for a genuine race — never a raw 500.
+
+Consumer side: `CreateReviewAsync` (ownership resolution + rating 1-5 validation + duplicate
+guard), `GetMyReviewsAsync`. Staff side: `GetInboxAsync` (optional rating filter, paged),
+`ReplyAsync` — one reply only, rejects 409 on a second attempt (entity's own documented intent;
+SupplierReview's own reply endpoint has no such guard, deliberately diverged per the brief).
+
+`ConsumerReviewsController` (`api/consumer/reviews`, `[Authorize]`, `consumer_account_id` claim,
+copied from `ConsumerSupportController`): `POST /` (TenantId in body), `GET /?tenantId=`.
+`ReviewsInboxController` (`api/reviews`, `AppPolicies.AtLeastStoreManager` — same tier as
+`CustomerSupportInboxController`): `GET /?rating=`, `PUT /{id}/reply`. Registered in both
+`DependencyInjection.cs` files (re-read fresh before editing; TASK-614/615/616 registrations
+untouched, appended after them).
+
+14 new unit tests in `ShelfGuard.Tests/Reviews/ReviewServiceTests.cs` (NSubstitute, mirrors
+`ConsumerSupportServiceTests` style): owned-transaction success, different-consumer's
+transaction rejected, no-loyalty-link transaction rejected, duplicate rejected both at the
+service pre-check and the DB unique-constraint backstop, rating validation (0/6/-1), unknown
+consumer/tenant 404s, staff reply succeeds once then rejected on a second attempt, wrong-tenant
+reply 404, blank-reply 400.
+
+`dotnet build`: 0 errors, 1 pre-existing unrelated warning. `dotnet test` full suite:
+**1910/1910 passing** (14 new, no regressions; baseline was 1896/1896 after TASK-616).
+
+Not implemented here (separate follow-up tasks per plan §5): `Features/Customers` extension,
+worker tier-recompute job, frontend (`/customer-support` reviews tab, mobile "Leave a review"
+screen). `mobile/` untouched (owned by a separate concurrent agent).
+
+# TASK-618 — Customer detail view: tier/progress, open tickets, recent reviews (Features/Customers extension)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §2 "Features/Customers (розширення)". Read task logs 613–617.
+Log: `.claude/logs/tasks/618_2026-08-24_customer-detail-tier-tickets-reviews_backend-developer.md`
+
+Extended the existing `Features/Customers` (`CustomerDetailDto`, `CustomerService.GetByIdAsync`)
+so the staff-facing customer detail view gets loyalty tier/progress, open-ticket count, and
+recent reviews in one response — no N+1 from the frontend. Read-only dependency on
+`Features/Loyalty`, `Features/CustomerSupport`, `Features/Reviews`; none of their internals
+touched.
+
+`CustomerDetailDto` gained `CurrentTierName`/`CompositeScore`/`TierProgressPercent` (all null
+together when the customer never joined loyalty; `CurrentTierName`/`TierProgressPercent` null but
+`CompositeScore` populated when a membership exists with no tier assigned yet), `OpenTicketCount`
+(always a number), `RecentReviews` (`List<CustomerReviewSummaryDto>`, always an array, newest
+first, capped at 5).
+
+New narrow repository methods (nothing existing fit — all prior lookups were keyed by membership
+Id/ConsumerAccountId, not CRM `CustomerId`): `ILoyaltyRepository.GetMembershipByCustomerIdAsync`,
+`IConsumerSupportTicketRepository.CountOpenByCustomerIdAsync` (Open/InProgress only),
+`IPurchaseReviewRepository.GetRecentForCustomerAsync` (explicit scalar-FK join through
+`PosTransaction.CustomerId` — `PurchaseReview` itself carries no `CustomerId`, see TASK-617's own
+ownership-resolution note). Updated three manual `ILoyaltyRepository` test fakes/wrappers
+(`PosServiceTests.cs`, `FiscalizationRetryTests.cs`, `LoyaltyConcurrencySalesIntegrationTests.cs`)
+to satisfy the extended interface.
+
+Tier-progress formula: `CompositeScore / nextTier.MinCompositeScore * 100`, clamped 0–100, where
+`nextTier` is the lowest `SortOrder` above the membership's current tier; null when already at
+the top tier. Read literally from the brief ("progress toward the next tier's MinCompositeScore")
+rather than as a within-band progress bar — documented as the interpretation taken, not the only
+possible one.
+
+Tests: 7 new in `CustomerServiceTests.cs` (service-layer wiring/DTO-mapping, NSubstitute) + 2 new
+InMemory-DB repository test files (`ConsumerSupportTicketRepositoryCountOpenTests.cs`,
+`PurchaseReviewRepositoryGetRecentForCustomerTests.cs`) pinning the actual EF filtering/join/order
+that mocking the repository interface can't exercise.
+
+`dotnet build`: 0 errors, 1 pre-existing unrelated warning. `dotnet test` full suite:
+**1923/1923 passing** (13 new, no regressions; baseline was 1910/1910 after TASK-617). Built/ran
+tests under `-c Release` — a concurrent session's stray `dotnet run` process held a file lock on
+the Debug output; worked around rather than killing a process that wasn't this task's to stop.
+
+Handoff written: `.claude/logs/handoffs/618-to-frontend_backend-developer.md` (final
+`CustomerDetailDto` shape + null-handling notes for TASK-621).
+
+Not implemented here (separate follow-up task per plan §5 step 8): frontend consumption
+(`CustomerDetail.tsx` tabs). `mobile/` untouched (owned by a separate concurrent agent).
+
+# TASK-619 — Loyalty tier-recompute nightly worker job
+
+**Status:** done · **Agent:** devops-engineer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §3 "Worker-задача". Handoffs read:
+`.claude/logs/handoffs/613-to-backend_database-engineer.md`,
+`.claude/logs/handoffs/615-to-frontend_backend-developer.md`.
+Log: `.claude/logs/tasks/619_2026-08-24_loyalty-tier-recompute-worker-job_devops-engineer.md`
+
+New `worker/src/jobs/loyalty-tier-recompute.job.ts` — nightly cron `0 4 * * *` (after
+`cleanup` 03:00, before `weather-fetch`/`ai-order`), structured exactly like
+`weekly-report.job.ts`: direct `pg` SQL via the shared `db` pool, `SET app.role = 'worker'` up
+front for the `worker_bypass` RLS policies on `loyalty_tier_definitions`/
+`loyalty_tier_change_history`. Deliberately not the callback-into-API pattern `ai-order.job.ts`
+uses (that file's comments document a history of bugs from that indirection).
+
+Composite score is the plan's confirmed equal-weight `(R+F+M)/3`, rounded to 4 decimals. RFM
+quintiles mirror `MarketingAnalyticsRepository.GetScoredCustomersAsync`'s `NTILE(5)` shape.
+Population per tenant: active `loyalty_memberships` with ≥1 `loyalty_ledger_entries` row where
+`EntryType = 'accrual'`; Recency = days since last accrual `CreatedAt`, Frequency = accrual-entry
+count, Monetary = sum of linked `pos_transactions.TotalAmount`. Tier = highest
+`loyalty_tier_definitions` rung (ordered `SortOrder DESC`) whose `MinCompositeScore` the score
+clears, or null. Writes only `CurrentTierId`/`CompositeScore`/`TierScoreUpdatedAt` — never
+`Balance` (avoids the `xmin` concurrency token PosService/LoyaltyService use for `Balance`).
+Tier change → update + `loyalty_tier_change_history` insert; score-only drift → update, no
+history row; nothing changed → no write. Pure scoring/tier-matching logic factored into
+exported `computeCompositeScore`/`pickQualifyingTier` functions (no test harness exists
+anywhere in `worker/` today, so none was invented, but the logic is now isolated for one).
+
+Registered in `worker/src/index.ts` (import, `Queue`/`upsertJobScheduler`, startup list).
+
+`npx tsc --noEmit` and `npm run build` in `worker/`: clean. Manual SQL dry-run against dev
+Postgres (`crmproductsystems-postgres-1`, port 5435): the real tenant/tier/RFM query ran
+error-free (2 loyalty-enabled tenants, 0 tier definitions/qualifying memberships in dev data
+today). Followed up with a synthetic `BEGIN`/`ROLLBACK` end-to-end run — inserted a fake accrual
+entry + tier definition, re-ran the RFM query (sane scores), executed the actual
+UPDATE-membership + INSERT-history write path, confirmed both rows correct, then rolled back
+(dev DB untouched).
+
+Not implemented here (later waves per plan §5): frontend loyalty-tiers admin page,
+`CustomerDetail.tsx` tier tab, `/customer-support` inbox page. `mobile/` untouched.
+
+# TASK-620 — Loyalty tier ladder admin page (frontend)
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §4 "Драбина рангів". Handoff read:
+`.claude/logs/handoffs/615-to-frontend_backend-developer.md`.
+Log: `.claude/logs/tasks/620_2026-08-24_loyalty-tier-ladder-frontend_frontend-developer.md`
+
+New route `/consumer-app/loyalty-tiers` (`frontend/app/(dashboard)/consumer-app/loyalty-tiers/page.tsx`),
+gated `AT_LEAST_ENTERPRISE_ADMIN` exactly like `/consumer-app/page.tsx`. New
+`frontend/features/consumer-app/{api/loyaltyTiers.ts, hooks/useLoyaltyTiers.ts}` mirroring
+`loyaltySettings.ts`/`useLoyaltySettings.ts` 1:1, plus `LoyaltyTierDefinitionDto`/
+`UpsertTierRequest` added to `types.ts`. New
+`frontend/features/consumer-app/components/TierLadderSection.tsx` — editable reorderable list
+(react-hook-form + `useFieldArray` + `@dnd-kit/sortable`, same pattern as
+`NavigationBuilderSection.tsx`), add/remove rows, client-side validation mirroring
+`LoyaltyService.UpsertTierLadderAsync`'s server rules (name required/≤100 chars, multiplier
+0–999.99, discount 0–100). `sortOrder` is never a user-facing field — always derived from a
+row's 0-based position on save (backend orders `GET` by `sortOrder`, so this keeps the list
+WYSIWYG after reload).
+
+Handled the handoff's identity-reassignment warning concretely: since the backend matches
+submitted rows to existing ones by `sortOrder` value, a drag (or add/remove above an existing
+row) changes what an existing row's `sortOrder` resolves to on save, which can silently
+reassign which database record a row's edits land on. Added `hasIdentityShiftingReorder`
+(compares each persisted row's on-load `sortOrder` to its final index) — when true, Save opens
+`ConfirmDialog` (existing component, reused as-is) explaining the consequence before the PUT
+fires; a reorder-free save skips the dialog. Reuses `useUnsavedChangesGuard` as-is for the
+unsaved-changes affordance. Sidebar: one entry added in `frontend/components/layout/Sidebar.tsx`
+(`Award` icon, right after "Bonus Program", same role gate) — re-read the file immediately
+before editing per the collision warning; nothing else in that file touched. i18n: `tierLadder`/
+`tierLadderPage`/`sidebar.groups.consumerApp.loyaltyTiers` keys added to both `en.json` and
+`uk.json`.
+
+`tsc --noEmit` and `npm run lint`: clean. Manual browser verification (backend + frontend dev
+servers started locally, dev DB `crmproductsystems-postgres-1`:5435, migrations already applied):
+logged in as seeded `ea@demo.local` (enterprise_admin) — empty-state renders correctly; a
+`store_manager` session gets `AccessDenied`. Added Bronze (0/1.0×/0%) and Silver (50/1.5×/5%)
+rows, saved, confirmed `PUT` persisted both with sequential `sortOrder`, reloaded the page from
+scratch and confirmed both rows rehydrate with correct values. Removed the first row (forcing
+the remaining row's `sortOrder` to shift from 1→0) and saved: the reorder-confirmation dialog
+appeared with the expected copy, blocked the request until confirmed, then on confirm the `PUT`
+fired and the response showed the surviving row had in fact inherited the removed row's database
+`Id` — exactly the identity-reassignment the dialog warns about, confirming the detection logic
+and copy are both accurate. No console errors from this feature (the only 401s seen were
+artifacts of the manual token-swap used to switch test users, unrelated to the new code).
+
+Not implemented here (later waves per plan §5, step 8): `CustomerDetail.tsx` tier/progress tab,
+`/customer-support` inbox page, marketing-analytics tier segmentation. `mobile/` untouched.
+
+# TASK-621b — Staff-facing customer profile-change history endpoint (small addition, discovered wiring TASK-621)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §2/§4. Gap found while starting TASK-621 (frontend customer-detail
+drawer): only a consumer self-service history endpoint existed (TASK-614), no staff-authorized one.
+Log: `.claude/logs/tasks/621b_2026-08-24_staff-profile-history-endpoint_backend-developer.md`
+
+Added `ICustomerService.GetProfileChangeHistoryAsync(customerId, tenantId, page, pageSize, ct)` —
+resolves the customer's `LoyaltyMembership` via the already-injected `ILoyaltyRepository`
+(TASK-618), then delegates to the already-registered `IConsumerProfileService.GetProfileChangeHistoryAsync`
+(TASK-614) for its `ConsumerAccountId`. New `GET api/customers/{id}/profile-history` action on
+`CustomersController`, same `AppPolicies.AtLeastStoreManager` gate as the rest of that controller,
+paged (`?page=&pageSize=`), returns `PagedResult<ConsumerProfileChangeDto>`. No membership → empty
+page, not an error/404 — same convention TASK-618 established. Did not touch `CustomerDetailDto`
+(separate lazy-loaded endpoint, not an inline field, since history can be long).
+
+Tests: 2 new in `CustomerServiceTests.cs` (linked membership → delegates and returns the consumer's
+actual history; no membership → empty page, no call to `IConsumerProfileService`).
+
+`dotnet build`: 0 errors, 1 pre-existing unrelated warning. `dotnet test` full suite:
+**1925/1925 passing** (2 new, no regressions; baseline was 1923/1923 after TASK-618).
+
+Handoff written: `.claude/logs/handoffs/621b-to-frontend_backend-developer.md` (route + response
+shape for TASK-621).
+
+# TASK-621 — Customer detail drawer tabs + `/customer-support` staff inbox (frontend)
+
+**Status:** done · **Agent:** frontend-developer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §4 "Картка клієнта" + "Вхідні звернень і відгуків". Handoffs read:
+`.claude/logs/handoffs/618-to-frontend_backend-developer.md`,
+`.claude/logs/handoffs/621b-to-frontend_backend-developer.md`. Task logs read: 616, 617.
+Log: `.claude/logs/tasks/621_2026-08-24_customer-detail-tabs-support-reviews-inbox_frontend-developer.md`
+
+`CustomerDetail.tsx` restructured into 5 tabs (Info unchanged; new `CustomerTierCard.tsx`
+handling the three loyalty null-states, `CustomerTicketsTab.tsx` — count + deep link,
+`CustomerReviewsTab.tsx` — `recentReviews[]` preview, `CustomerProfileHistoryTab.tsx` — lazy
+`GET /api/customers/{id}/profile-history`, `enabled` keyed to the active tab). No shadcn `Tabs`
+component exists in the repo, so a small local tab-bar matches the existing `service-desk/page.tsx`
+`tabStyle` pattern rather than adding a dependency.
+
+New route `/customer-support` (`frontend/app/(dashboard)/customer-support/page.tsx`, gated
+`AT_LEAST_STORE_MANAGER` via the `AccessDenied`+`hasRole` shell TASK-620 used) and new feature
+`frontend/features/customer-support/` — two tabs (tickets: list/filter/detail sheet/reply/status,
+mirrors `service-desk/`; reviews: rating filter + one-shot reply, mirrors
+`supplier-cabinet/components/CabinetReviews.tsx` but read-only once replied, matching
+`ReviewService.ReplyAsync`'s 409-on-second-reply). `?customerId=` deep link filters client-side
+over a widened (`pageSize=200`) fetch — `GetInboxAsync` (TASK-616) has no customer-filter param;
+limitation noted in the task log rather than adding a backend change (frontend-only scope). One
+sidebar entry added next to `/service-desk` (re-read file fresh before editing, TASK-620's entry
+untouched). i18n added to both `uk.json`/`en.json`, validated as JSON after editing.
+
+`tsc --noEmit` and `npm run lint`: clean. Manual browser verification (dev servers via
+`.claude/launch.json`, existing dev Postgres): all 5 drawer tabs render correct states for a
+real non-enrolled customer (lazy-load of profile-history confirmed via network panel — fetches
+exactly once, only after that tab opens). Seeded one test ticket + review via direct SQL insert
+(dev DB had none for this tenant) and exercised the full staff flow end-to-end through the real
+API: reply + status change on the ticket (201/200, staff name resolved via `useUsers`, ticket
+count in the drawer dropped to 0 after resolving), reply on the review (200, reply now read-only,
+no second-reply option), and the drawer's "Open in inbox" → `/customer-support?customerId=...`
+→ correctly pre-filtered list → "Clear filter" round-trip. No console errors from new code.
+
+Not implemented (out of scope per plan §4): marketing-analytics tier segmentation (explicitly an
+optional later wave). `mobile/` untouched.
+
+# TASK-622 — End-to-end QA: loyalty tier ladder, consumer profile, support tickets, purchase reviews
+
+**Status:** done · **Agent:** qa-tester · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md` §9. Read all of TASK-613..621b logs first.
+Log: `.claude/logs/tasks/622_2026-08-24_crm-loyalty-tier-qa_qa-tester.md`
+
+No bugs found. All 7 priority areas confirmed-working; one already-documented limitation
+(`?customerId=` inbox deep link capped at the backend's 200-row page-size ceiling) confirmed real
+but low-risk — flagged as a follow-up, not a blocker.
+
+- `dotnet test`: **1925/1925 passing**, matches TASK-621b's baseline exactly, no drift.
+- `PosService.cs` tier-multiplier/discount arithmetic read end-to-end — no double-counting, no
+  compounding-order bug; the 3 dedicated `PosServiceTests.cs` cases assert real amounts, not just
+  no-throw.
+- RLS on all 6 new tables verified functionally via direct SQL (rolled-back transaction, seeded
+  fixtures): `consumer_self_access` correctly isolates consumer A from consumer B's
+  tickets/reviews; `tenant_isolation`/`worker_bypass` behave correctly; unscoped queries fail
+  closed (0 rows) by default.
+- Review authorization edge cases (cross-consumer transaction, walk-in/no-loyalty-link
+  transaction) both cleanly 403, no path to 500 — confirmed in code and by existing tests.
+- Frontend smoke test (`/customer-support` both tabs, customer drawer's 5 tabs, `?customerId=`
+  deep link): all render correctly, no console errors from new code.
+- Worker tier-recompute job: went beyond a code read — ran the job's exact SQL (RFM scoring query
+  + the `UPDATE membership` / `INSERT tier_change_history` write path) against dev Postgres with
+  seeded fixture data inside rolled-back transactions; both produced correct results.
+
+# TASK-623 — CRM/loyalty tier expansion: documentation pass
+
+**Status:** done · **Agent:** documentation-writer · **Updated:** 2026-08-24
+Plan: `goofy-bubbling-naur.md`. Read all of TASK-613..622/621b logs + handoffs first. Docs-only,
+no code touched.
+Log: `.claude/logs/tasks/623_2026-08-24_crm-loyalty-tier-docs_documentation-writer.md`
+
+Updated `database-schema.md` (6 new tables + RLS table + `LoyaltyMembership`/
+`PosTransaction.CashRegisterId` extensions + the EF phantom-FK bug note), `domain-model.md` (6 new
+entity sections + extended `LoyaltyMembership` + new Key Business Rule #7), `api-contracts.md` (6
+new endpoint-group sections, DTO shapes pulled from the actual C# DTO records since the task logs
+didn't always give exact JSON field names), `decisions.md` (new ADR-034, 6 decisions), and
+`known-issues.md` (new KI-034, the `?customerId=` deep-link limitation, low severity). Added two
+glossary terms (tier ladder, composite score). All six files' `Updated` headers bumped to
+2026-08-24.
+
+Wrote `.claude/logs/handoffs/623-to-mobile-codex.md` (curated extract of the 4 consumer-facing
+endpoint groups for the separate mobile Codex agent), following the `586-to-mobile-codex.md`
+precedent — the only prior example of this repo handing a finished feature to that agent.

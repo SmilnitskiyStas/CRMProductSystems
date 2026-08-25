@@ -124,6 +124,38 @@ public sealed class ConsumerLoyaltyController : ControllerBase
         return Ok(history);
     }
 
+    /// <summary>TASK-615: current tier, composite score, and progress toward the next rung.</summary>
+    [HttpGet("{tenantId:guid}/tiers")]
+    [ProducesResponseType(typeof(LoyaltyTierProgressDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTierProgress(Guid tenantId, CancellationToken ct)
+    {
+        var consumerId = ResolveConsumerAccountId();
+        if (consumerId is null) return Forbid();
+
+        var (progress, error, statusCode) = await _loyalty.GetTierProgressAsync(consumerId.Value, tenantId, ct);
+        if (error is not null)
+            return StatusCode(statusCode ?? 400, new { error });
+
+        return Ok(progress);
+    }
+
+    /// <summary>TASK-615: paged, newest-first tier change history for this consumer's membership.</summary>
+    [HttpGet("{tenantId:guid}/tiers/history")]
+    public async Task<IActionResult> GetTierHistory(
+        Guid tenantId, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)
+    {
+        var consumerId = ResolveConsumerAccountId();
+        if (consumerId is null) return Forbid();
+
+        var (history, error, statusCode) = await _loyalty.GetTierHistoryAsync(consumerId.Value, tenantId, page, pageSize, ct);
+        if (error is not null)
+            return StatusCode(statusCode ?? 400, new { error });
+
+        return Ok(history);
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
 
     /// <summary>

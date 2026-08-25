@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Common;
+using ShelfGuard.Application.Features.ConsumerProfile.Dtos;
 using ShelfGuard.Application.Features.Customers;
 using ShelfGuard.Infrastructure.Authorization;
 
@@ -41,6 +42,29 @@ public sealed class CustomersController : ControllerBase
 
         var customer = await _customers.GetByIdAsync(id, tenantId.Value, ct);
         return customer is null ? NotFound() : Ok(customer);
+    }
+
+    /// <summary>
+    /// TASK-621b. Staff-facing view of a customer's linked <c>ConsumerAccountProfileChange</c>
+    /// history — separate paged endpoint (not folded into <see cref="CustomerDetailDto"/>) since
+    /// history can be long and the customer-detail drawer only loads it when that tab opens.
+    /// Empty page (not 404) when the customer has no linked loyalty membership.
+    /// </summary>
+    [HttpGet("{id:guid}/profile-history")]
+    [ProducesResponseType(typeof(PagedResult<ConsumerProfileChangeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetProfileHistory(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+
+        var query = new PagedQuery { Page = page, PageSize = pageSize };
+        var result = await _customers.GetProfileChangeHistoryAsync(
+            id, tenantId.Value, query.ClampedPage, query.ClampedPageSize, ct);
+        return Ok(result);
     }
 
     [HttpPost]

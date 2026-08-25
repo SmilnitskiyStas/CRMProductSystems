@@ -306,6 +306,8 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
 
         public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) =>
             Inner.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        public Task<LoyaltyMembership?> GetMembershipByCustomerIdAsync(Guid customerId, Guid tenantId, CancellationToken ct = default) =>
+            Inner.GetMembershipByCustomerIdAsync(customerId, tenantId, ct);
         public Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(Guid tenantId, Guid linkedUserId, CancellationToken ct = default) =>
             Inner.GetMembershipByLinkedUserAsync(tenantId, linkedUserId, ct);
         public Task<List<LoyaltyMembership>> GetMembershipsForConsumerAsync(Guid consumerAccountId, CancellationToken ct = default) =>
@@ -326,6 +328,14 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
         public Task AddSettingsAsync(LoyaltyProgramSettings settings, CancellationToken ct = default) =>
             Inner.AddSettingsAsync(settings, ct);
         public void UpdateSettings(LoyaltyProgramSettings settings) => Inner.UpdateSettings(settings);
+        public Task<List<LoyaltyTierDefinition>> GetTierLadderAsync(Guid tenantId, CancellationToken ct = default) =>
+            Inner.GetTierLadderAsync(tenantId, ct);
+        public Task AddTierAsync(LoyaltyTierDefinition tier, CancellationToken ct = default) =>
+            Inner.AddTierAsync(tier, ct);
+        public void UpdateTier(LoyaltyTierDefinition tier) => Inner.UpdateTier(tier);
+        public void RemoveTier(LoyaltyTierDefinition tier) => Inner.RemoveTier(tier);
+        public Task<(List<LoyaltyTierChangeHistory> Items, int Total)> GetTierHistoryPagedAsync(Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default) =>
+            Inner.GetTierHistoryPagedAsync(tenantId, membershipId, page, pageSize, ct);
         public Task SaveChangesAsync(CancellationToken ct = default) => Inner.SaveChangesAsync(ct);
     }
 }

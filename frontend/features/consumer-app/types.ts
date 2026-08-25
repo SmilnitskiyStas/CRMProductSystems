@@ -32,6 +32,45 @@ export interface UpdateLoyaltyProgramSettingsRequest {
   customerCodeFormat: CustomerCodeFormat;
 }
 
+// ── Loyalty tier ladder (TASK-615 backend, TASK-620 this admin UI) ─────────
+// GET/PUT /api/settings/loyalty/tiers (LoyaltyTierSettingsController, same
+// AtLeastEnterpriseAdmin tier as LoyaltySettingsController above). Mirrors
+// LoyaltyDtos.cs's LoyaltyTierDefinitionDto / UpsertTierRequest records field-for-field.
+
+/**
+ * GET /api/settings/loyalty/tiers response item — one rung of the tenant's ladder, ordered
+ * by `sortOrder` ascending (lowest tier first). Empty array (never null) when the tenant has
+ * no ladder configured yet.
+ */
+export interface LoyaltyTierDefinitionDto {
+  id: string;
+  name: string;
+  sortOrder: number;
+  minCompositeScore: number;
+  accrualMultiplier: number;
+  discountPercent: number;
+}
+
+/**
+ * One rung in the PUT /api/settings/loyalty/tiers request body — a full bulk-replace of the
+ * whole ladder, matched server-side against existing rows by `sortOrder` (the ladder's natural
+ * unique key, see LoyaltyService.UpsertTierLadderAsync's remarks). No `id` — a row whose
+ * `sortOrder` matches an existing tier's keeps that tier's database Id; a `sortOrder` that
+ * matches nothing existing creates a new tier; an existing `sortOrder` missing from this array
+ * gets deleted. TierLadderSection.tsx always renumbers `sortOrder` to the row's 0-based position
+ * in the on-screen list before submitting, and warns the admin first (via ConfirmDialog) when
+ * that renumbering would change an already-saved row's `sortOrder` — see that component's
+ * `reordered` check for why a drag (or an add/remove above an existing row) can silently
+ * reassign which tier's data a given database row now represents.
+ */
+export interface UpsertTierRequest {
+  name: string;
+  sortOrder: number;
+  minCompositeScore: number;
+  accrualMultiplier: number;
+  discountPercent: number;
+}
+
 // ── Banners (TASK-522, second section of the Consumer App page) ────────────
 // BannersController (enterprise_admin+, TASK-521) — promotional banners shown on the
 // consumer app's home feed. Body/Terms are the entity's raw "\n"-joined text at this admin

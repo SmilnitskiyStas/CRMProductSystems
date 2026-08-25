@@ -12,6 +12,7 @@ import { startMqttListener } from "./jobs/mqtt-listener";
 import { startFiscalizationRetryWorker } from "./jobs/fiscalization-retry.job";
 import { startNotificationDispatchWorker } from "./jobs/notification-dispatch.job";
 import { startPermissionGrantExpiryWorker } from "./jobs/permission-grant-expiry.job";
+import { startLoyaltyTierRecomputeWorker } from "./jobs/loyalty-tier-recompute.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -30,6 +31,15 @@ async function scheduleRecurringJobs(): Promise<void> {
 
   const cleanupQueue = new Queue("cleanup", { connection: redisConnection });
   await cleanupQueue.upsertJobScheduler("cleanup-cron", { pattern: "0 3 * * *" }, { name: "cleanup" });
+
+  // TASK-619 / plan §3: daily 04:00 — recompute loyalty tier ladder RFM scores per tenant with
+  // loyalty enabled, after cleanup (03:00), before weather-fetch/ai-order (05:00-06:00).
+  const loyaltyTierRecomputeQueue = new Queue("loyalty-tier-recompute", { connection: redisConnection });
+  await loyaltyTierRecomputeQueue.upsertJobScheduler(
+    "loyalty-tier-recompute-cron",
+    { pattern: "0 4 * * *" },
+    { name: "loyalty-tier-recompute" }
+  );
 
   // v2-spec §6: daily 06:00 — fetch 7-day forecast for every store with coordinates
   const weatherQueue = new Queue("weather-fetch", { connection: redisConnection });
@@ -77,6 +87,7 @@ async function main(): Promise<void> {
   startNotificationWorker();
   startWeeklyReportWorker();
   startCleanupWorker();
+  startLoyaltyTierRecomputeWorker();
   startWeatherFetchWorker();
   startAiOrderWorker();
   startTelegramListener();

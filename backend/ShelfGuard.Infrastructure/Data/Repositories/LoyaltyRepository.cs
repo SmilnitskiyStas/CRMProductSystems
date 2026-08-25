@@ -14,12 +14,18 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
     // ── Memberships ──────────────────────────────────────────────────────────
 
     public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
-        _db.LoyaltyMemberships.FirstOrDefaultAsync(m => m.Id == id && m.TenantId == tenantId, ct);
+        _db.LoyaltyMemberships.Include(m => m.CurrentTier)
+            .FirstOrDefaultAsync(m => m.Id == id && m.TenantId == tenantId, ct);
 
     public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(
         Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) =>
         _db.LoyaltyMemberships.FirstOrDefaultAsync(
             m => m.TenantId == tenantId && m.ConsumerAccountId == consumerAccountId, ct);
+
+    public Task<LoyaltyMembership?> GetMembershipByCustomerIdAsync(
+        Guid customerId, Guid tenantId, CancellationToken ct = default) =>
+        _db.LoyaltyMemberships.Include(m => m.CurrentTier)
+            .FirstOrDefaultAsync(m => m.CustomerId == customerId && m.TenantId == tenantId, ct);
 
     public Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(
         Guid tenantId, Guid linkedUserId, CancellationToken ct = default) =>
@@ -103,6 +109,39 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
         _db.LoyaltyProgramSettings.AddAsync(settings, ct).AsTask();
 
     public void UpdateSettings(LoyaltyProgramSettings settings) => _db.LoyaltyProgramSettings.Update(settings);
+
+    // ── Tier ladder (TASK-613 schema, TASK-615 service) ─────────────────────
+
+    public Task<List<LoyaltyTierDefinition>> GetTierLadderAsync(Guid tenantId, CancellationToken ct = default) =>
+        _db.LoyaltyTierDefinitions
+            .Where(t => t.TenantId == tenantId)
+            .OrderBy(t => t.SortOrder)
+            .ToListAsync(ct);
+
+    public Task AddTierAsync(LoyaltyTierDefinition tier, CancellationToken ct = default) =>
+        _db.LoyaltyTierDefinitions.AddAsync(tier, ct).AsTask();
+
+    public void UpdateTier(LoyaltyTierDefinition tier) => _db.LoyaltyTierDefinitions.Update(tier);
+
+    public void RemoveTier(LoyaltyTierDefinition tier) => _db.LoyaltyTierDefinitions.Remove(tier);
+
+    public async Task<(List<LoyaltyTierChangeHistory> Items, int Total)> GetTierHistoryPagedAsync(
+        Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.LoyaltyTierChangeHistories
+            .Include(h => h.FromTier)
+            .Include(h => h.ToTier)
+            .Where(h => h.TenantId == tenantId && h.MembershipId == membershipId);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(h => h.ChangedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 
     // ── Unit-of-work ─────────────────────────────────────────────────────────
 

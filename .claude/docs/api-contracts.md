@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-08-06
+**Updated:** 2026-08-24
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -1368,6 +1368,253 @@ Both GETs return `200` with empty/zeroed data for a tenant/period with no migrat
 `404` (same "empty state is still a valid DTO" convention as the rest of this file). Single-store
 tenants always get `flows: [], netFlowByStore: [], migratedCustomerCount: 0` (no cross-store data
 to detect).
+
+---
+
+### Consumer Profile self-service (`/api/consumer/profile`, TASK-613/614)
+
+ConsumerAccount session only (`[Authorize]`, claim `consumer_account_id` — same posture as every
+other `/api/consumer/*` controller in this file; a staff JWT is rejected with 403 before any DB
+call). `ConsumerAccountProfileChange` carries no RLS at all (`database-schema.md`), so this claim
+check is the whole app-level boundary for the history endpoint, not a backstop on top of RLS.
+```
+GET api/consumer/profile                              -> 200 ConsumerProfileDto | 403 | 404
+PUT api/consumer/profile           Body: UpdateConsumerProfileRequest -> 200 ConsumerProfileDto | 400 { error } | 403 | 404 | 409 { error }
+PUT api/consumer/profile/phone     Body: ChangeConsumerPhoneRequest   -> 200 ConsumerProfileDto | 400 { error } | 403 | 404 | 409 { error }
+GET api/consumer/profile/history?page=1&pageSize=50   -> 200 PagedResult<ConsumerProfileChangeDto>
+```
+`409` — duplicate email/phone (app-level check, case-insensitive for email; no DB unique
+constraint on `Email`).
+
+#### ConsumerProfileDto
+```json
+{ "consumerAccountId": "uuid", "fullName": "string", "email": "string|null",
+  "phone": "string", "registeredAt": "ISO8601" }
+```
+
+#### UpdateConsumerProfileRequest
+```json
+{ "fullName": "string|null", "email": "string|null" }
+```
+Each field independently optional — `null` leaves it unchanged. Empty/whitespace `email` clears it
+(sets null); `fullName` may not be blank if provided.
+
+#### ChangeConsumerPhoneRequest
+```json
+{ "newPhone": "string", "currentPassword": "string" }
+```
+Gated by password re-entry, not SMS/OTP — no SMS gateway exists in this repo, and registration
+itself never verifies phone either (see `decisions.md` ADR-034). Setting the phone to its own
+current normalized value succeeds silently and writes no audit row.
+
+#### ConsumerProfileChangeDto
+```json
+{ "fieldName": "phone|email|full_name", "oldValue": "string|null", "newValue": "string|null",
+  "changedAt": "ISO8601" }
+```
+Same shape as the staff-facing `GET /api/customers/{id}/profile-history` response below — both
+read the same underlying data, just reached via a different id.
+
+---
+
+### Loyalty tier ladder — admin CRUD (`/api/settings/loyalty/tiers`, TASK-615)
+
+`[AtLeastEnterpriseAdmin]`, mirrors `LoyaltySettingsController`'s upsert shape.
+```
+GET api/settings/loyalty/tiers   -> 200 LoyaltyTierDefinitionDto[]   -- ordered by sortOrder, [] not null
+PUT api/settings/loyalty/tiers   Body: UpsertTierRequest[] -> 200 LoyaltyTierDefinitionDto[] | 400 { error }
+```
+
+#### LoyaltyTierDefinitionDto
+```json
+{ "id": "uuid", "name": "string", "sortOrder": 0, "minCompositeScore": 0.0,
+  "accrualMultiplier": 1.0, "discountPercent": 0.0 }
+```
+
+#### UpsertTierRequest (PUT body — array, no `id`)
+```json
+{ "name": "string", "sortOrder": 0, "minCompositeScore": 0.0,
+  "accrualMultiplier": 1.0, "discountPercent": 0.0 }
+```
+**Bulk-replace, matched by `sortOrder`** — see `domain-model.md`'s `LoyaltyTierDefinition` entry
+for the identity-preservation/reordering implications. `400` validation: duplicate `sortOrder`,
+empty `name`, `accrualMultiplier` outside `[0, 999.99]`, `discountPercent` outside `[0, 100]`.
+
+---
+
+### Loyalty tier ladder — consumer-facing (`/api/consumer/loyalty/{tenantId}/tiers*`, TASK-615)
+
+Same `ConsumerLoyaltyController` as the existing wallet/code/history endpoints above — `[Authorize]`
++ `consumer_account_id` claim.
+```
+GET api/consumer/loyalty/{tenantId}/tiers                              -> 200 LoyaltyTierProgressDto | 403 | 404
+GET api/consumer/loyalty/{tenantId}/tiers/history?page=1&pageSize=50   -> 200 PagedResult<LoyaltyTierChangeHistoryDto> | 403 | 404
+```
+
+#### LoyaltyTierProgressDto
+```json
+{ "currentTierId": "uuid|null", "currentTierName": "string|null",
+  "accrualMultiplier": 1.0, "discountPercent": 0.0, "compositeScore": 0.0,
+  "nextTierId": "uuid|null", "nextTierName": "string|null", "scoreToNextTier": 0.0 }
+```
+`currentTierId`/`currentTierName` null + `accrualMultiplier`/`discountPercent` at their neutral
+defaults (1.0/0) means no tier assigned yet — matches exactly how `PosService` treats a tierless
+membership. `nextTier*`/`scoreToNextTier` are null at the top rung, or when no ladder is configured
+at all.
+
+#### LoyaltyTierChangeHistoryDto
+```json
+{ "id": "uuid", "fromTierName": "string|null", "toTierName": "string|null",
+  "fromScore": 0.0, "toScore": 0.0, "changedAt": "ISO8601" }
+```
+
+---
+
+### Consumer support tickets (TASK-613/616)
+
+Two controllers, one shared `ConsumerSupportTicketDto` (`messages` is `null` on list endpoints,
+populated oldest-first only on the single-ticket read).
+
+**Consumer-facing** (`/api/consumer/support`, `[Authorize]` + `consumer_account_id` claim):
+```
+POST api/consumer/support/tickets                 Body: CreateConsumerSupportTicketRequest -> 201 ConsumerSupportTicketDto | 400 { error } | 404
+GET  api/consumer/support/tickets?tenantId=&page=&pageSize=   -> 200 PagedResult<ConsumerSupportTicketDto>   -- tenantId required
+GET  api/consumer/support/tickets/{id}             -> 200 ConsumerSupportTicketDto | 404   -- 404 for both "doesn't exist" and "not yours", never distinguished
+POST api/consumer/support/tickets/{id}/messages    Body: AddConsumerSupportTicketMessageRequest -> 201 ConsumerSupportTicketMessageDto | 400 { error } | 404
+```
+
+**Staff-facing** (`/api/customer-support`, `[AtLeastStoreManager]`, not `[RequireModule]`-gated —
+matches `CustomersController`'s own unconditional access):
+```
+GET  api/customer-support/tickets?status=&page=&pageSize=   -> 200 PagedResult<ConsumerSupportTicketDto>   -- status optional filter, newest-first
+GET  api/customer-support/tickets/{id}             -> 200 ConsumerSupportTicketDto   -- marks unread consumer messages read as a side effect
+POST api/customer-support/tickets/{id}/reply       Body: AddStaffSupportReplyRequest -> 201 ConsumerSupportTicketMessageDto | 400 { error } | 404
+PUT  api/customer-support/tickets/{id}/status      Body: UpdateConsumerSupportTicketStatusRequest -> 200 ConsumerSupportTicketDto | 400 { error } | 404
+```
+`status` ∈ `open | in_progress | resolved | closed`. A consumer reply on a Resolved/Closed ticket
+flips it back to `open` automatically (server-side, not a client choice).
+
+**⚠️ `GetInboxAsync` has no `customerId` filter param** — the web `/customer-support?customerId=`
+deep link filters client-side over a widened page instead of a true backend filter. See
+`known-issues.md` KI-034.
+
+#### ConsumerSupportTicketDto
+```json
+{ "id": "uuid", "tenantId": "uuid", "consumerAccountId": "uuid", "consumerName": "string",
+  "consumerPhone": "string", "customerId": "uuid|null", "customerName": "string|null",
+  "subject": "string", "status": "open|in_progress|resolved|closed",
+  "createdAt": "ISO8601", "updatedAt": "ISO8601",
+  "messages": null }
+```
+`messages` is `ConsumerSupportTicketMessageDto[]` (oldest-first) on the two single-ticket GETs,
+`null` on both list endpoints.
+
+#### ConsumerSupportTicketMessageDto
+```json
+{ "id": "uuid", "ticketId": "uuid", "senderConsumerAccountId": "uuid|null",
+  "senderUserId": "uuid|null", "body": "string", "isRead": false, "createdAt": "ISO8601" }
+```
+Exactly one of `senderConsumerAccountId`/`senderUserId` is set per message — the client derives
+"mine vs. theirs" from that.
+
+#### Request bodies
+```ts
+CreateConsumerSupportTicketRequest      { tenantId: string; subject: string; body: string }
+AddConsumerSupportTicketMessageRequest  { body: string }
+AddStaffSupportReplyRequest             { body: string }
+UpdateConsumerSupportTicketStatusRequest{ status: string }
+```
+`tenantId` travels in the body, not the route, on ticket creation — a consumer session is
+cross-tenant by design (same shape `ConsumerLoyaltyController`'s `SetPreferredStoreRequest` uses).
+
+---
+
+### Purchase reviews (TASK-613/617)
+
+Two controllers, one shared `PurchaseReviewDto`.
+
+**Consumer-facing** (`/api/consumer/reviews`, `[Authorize]` + `consumer_account_id` claim):
+```
+POST api/consumer/reviews   Body: CreatePurchaseReviewRequest -> 201 PurchaseReviewDto | 400 { error } | 403 { error } | 404 | 409 { error }
+GET  api/consumer/reviews?tenantId=&page=&pageSize=   -> 200 PagedResult<PurchaseReviewDto>   -- tenantId required
+```
+`403` — the transaction belongs to a different consumer, **or** has no loyalty-ledger link at all
+(walk-in sale) — both cases return the same generic message, never disclosing which (see
+`domain-model.md`'s `PurchaseReview` entry for the ownership-resolution mechanism and its
+walk-in-purchase limitation). `409` — a review already exists for this `posTransactionId` (checked
+pre-insert, backstopped by the DB's own unique constraint).
+
+**Staff-facing** (`/api/reviews`, `[AtLeastStoreManager]`, not `[RequireModule]`-gated):
+```
+GET api/reviews?rating=&page=&pageSize=   -> 200 PagedResult<PurchaseReviewDto>   -- rating optional filter, newest-first
+PUT api/reviews/{id}/reply   Body: ReplyToPurchaseReviewRequest -> 200 PurchaseReviewDto | 400 { error } | 404 | 409 { error }
+```
+`409` on a second reply attempt — **one reply per review, enforced here even though the older,
+analogous `SupplierReview`/`SupplierCabinetService.ReplyToReviewAsync` silently allows
+overwriting** (deliberate divergence, see `decisions.md` ADR-034).
+
+#### PurchaseReviewDto
+```json
+{ "id": "uuid", "tenantId": "uuid", "consumerAccountId": "uuid", "consumerName": "string",
+  "consumerPhone": "string", "posTransactionId": "uuid", "rating": 5, "comment": "string|null",
+  "createdAt": "ISO8601", "replyText": "string|null", "repliedAt": "ISO8601|null",
+  "repliedByUserId": "uuid|null" }
+```
+
+#### Request bodies
+```ts
+CreatePurchaseReviewRequest    { tenantId: string; posTransactionId: string; rating: number; comment?: string }
+ReplyToPurchaseReviewRequest   { replyText: string }
+```
+`tenantId` travels in the body on create, same reasoning as `CreateConsumerSupportTicketRequest`
+above. `rating` outside `1..5` is `400`, rejected before any repository call.
+
+---
+
+### Customer detail extension + staff profile-change history (`/api/customers`, TASK-618/621b)
+
+`GET /api/customers/{id}` (unchanged route/auth, `AtLeastStoreManager`) — `CustomerDetailDto`
+gained:
+```json
+{
+  "currentTierName": "string|null",
+  "compositeScore": 0.0,
+  "tierProgressPercent": 0.0,
+  "openTicketCount": 0,
+  "recentReviews": [ { "rating": 5, "comment": "string|null", "createdAt": "ISO8601",
+                        "replyText": "string|null" } ]
+}
+```
+Null-state semantics (**not** all-or-nothing as a group):
+- No `LoyaltyMembership` at all → `currentTierName`/`compositeScore`/`tierProgressPercent` all
+  null — "not enrolled," not a 0% bar.
+- Membership exists, no tier assigned yet → `compositeScore` is a real number,
+  `currentTierName`/`tierProgressPercent` both null — "enrolled, no tier yet," a distinct UI state.
+- Membership at the top tier → `tierProgressPercent` null (no next tier to progress toward),
+  `currentTierName`/`compositeScore` populated.
+- `openTicketCount`/`recentReviews` are always populated (`0`/`[]`), never null.
+- `tierProgressPercent` (when non-null) = `compositeScore / nextTier.minCompositeScore * 100`,
+  clamped 0–100.
+
+New, separate, lazily-fetched endpoint — not inlined into the DTO above, since profile history can
+be arbitrarily long:
+```
+GET api/customers/{id}/profile-history?page=1&pageSize=50 -> 200 PagedResult<ConsumerProfileChangeDto>
+```
+`{id}` is the CRM `Customer.Id` (same id used everywhere else under `/customers`), not a
+`consumerAccountId` — the backend resolves the link internally via the customer's
+`LoyaltyMembership`. A customer never enrolled in loyalty gets `200` with an empty page
+(`items: []`, `totalCount: 0`), never `404`. `ConsumerProfileChangeDto` shape is identical to the
+consumer's own self-service history endpoint above.
+
+---
+
+**Mobile hand-off note:** the four consumer-facing groups above —
+`api/consumer/profile*`, `api/consumer/loyalty/{tenantId}/tiers*`, `api/consumer/support*`, and
+`api/consumer/reviews` — are the complete backend surface for the mobile screens described in the
+plan's mobile-handoff section (`goofy-bubbling-naur.md` §4): profile editing, tier/progress
+display, support-ticket creation, and review submission. None of these have a mobile UI yet — see
+`.claude/logs/handoffs/623-to-mobile-codex.md`.
 
 **⚠️ Known data-correctness gap for non-exempt roles (store_manager/network_manager) — see
 `known-issues.md` KI-033.** The `pos_transactions` `store_scope` RLS policy silently narrows what

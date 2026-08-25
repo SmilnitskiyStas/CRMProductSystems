@@ -19,10 +19,23 @@ public interface ILoyaltyRepository
 {
     // ── Memberships ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// TASK-615: includes <see cref="LoyaltyMembership.CurrentTier"/> so callers (PosService's
+    /// sale flow above all) always have tier data on hand without a second round-trip.
+    /// </summary>
     Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default);
 
     /// <summary>The "does this consumer already have a card at this tenant" / join lookup.</summary>
     Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-618: staff-facing "does this CRM Customer have a loyalty card at all" lookup —
+    /// backs the Customers detail view's tier/progress card. Includes
+    /// <see cref="LoyaltyMembership.CurrentTier"/>, same as <see cref="GetMembershipByIdAsync"/>.
+    /// Returns null when the customer never joined the program (walk-in) — the caller's job to
+    /// treat that as "no tier data", not an error.
+    /// </summary>
+    Task<LoyaltyMembership?> GetMembershipByCustomerIdAsync(Guid customerId, Guid tenantId, CancellationToken ct = default);
 
     /// <summary>Case 2 (plan §"Кейс 2"): staff member's own membership in their employer's program.</summary>
     Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(Guid tenantId, Guid linkedUserId, CancellationToken ct = default);
@@ -73,6 +86,21 @@ public interface ILoyaltyRepository
     Task<LoyaltyProgramSettings?> GetSettingsAsync(Guid tenantId, CancellationToken ct = default);
     Task AddSettingsAsync(LoyaltyProgramSettings settings, CancellationToken ct = default);
     void UpdateSettings(LoyaltyProgramSettings settings);
+
+    // ── Tier ladder (TASK-613 schema, TASK-615 service) ─────────────────────
+
+    /// <summary>Ordered ascending by <see cref="LoyaltyTierDefinition.SortOrder"/>.</summary>
+    Task<List<LoyaltyTierDefinition>> GetTierLadderAsync(Guid tenantId, CancellationToken ct = default);
+    Task AddTierAsync(LoyaltyTierDefinition tier, CancellationToken ct = default);
+    void UpdateTier(LoyaltyTierDefinition tier);
+    void RemoveTier(LoyaltyTierDefinition tier);
+
+    /// <summary>
+    /// Paged, newest-first read of one membership's <see cref="LoyaltyTierChangeHistory"/>.
+    /// Includes <c>FromTier</c>/<c>ToTier</c> for display-name resolution.
+    /// </summary>
+    Task<(List<LoyaltyTierChangeHistory> Items, int Total)> GetTierHistoryPagedAsync(
+        Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default);
 
     // ── Unit-of-work ─────────────────────────────────────────────────────────
 

@@ -503,6 +503,68 @@ public sealed class LoyaltyService : ILoyaltyService
         return (result, null, null);
     }
 
+    // ── Tier ladder — consumer-facing (TASK-615) ──────────────────────────────
+
+    /// <summary>See <see cref="ILoyaltyService.GetTierProgressAsync"/>.</summary>
+    public async Task<(LoyaltyTierProgressDto? Progress, string? Error, int? StatusCode)> GetTierProgressAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default)
+    {
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null)
+            return (null, "You are not a member of this loyalty program.", 404);
+
+        // loyalty_tier_definitions is staff-only config (no consumer_self_access RLS policy —
+        // see the TASK-613 handoff), so a consumer session's ambient (null) app.tenant_id needs
+        // the same override ResolveCustomerCodeFormatAsync uses for loyalty_program_settings.
+        var ladder = await _tenantScope.ExecuteAsync(
+            tenantId, () => _loyalty.GetTierLadderAsync(tenantId, ct), ct);
+
+        var currentTier = membership.CurrentTierId is Guid currentId
+            ? ladder.FirstOrDefault(t => t.Id == currentId)
+            : null;
+
+        // Next rung up: the first ladder entry (in ascending SortOrder) above the current tier
+        // — or the lowest rung of all when the membership doesn't hold any tier yet.
+        var currentIndex = currentTier is null ? -1 : ladder.IndexOf(currentTier);
+        var nextTier = ladder.Count > currentIndex + 1 ? ladder[currentIndex + 1] : null;
+
+        var progress = new LoyaltyTierProgressDto(
+            currentTier?.Id,
+            currentTier?.Name,
+            currentTier?.AccrualMultiplier ?? 1.0m,
+            currentTier?.DiscountPercent ?? 0m,
+            membership.CompositeScore,
+            nextTier?.Id,
+            nextTier?.Name,
+            nextTier is null ? null : Math.Max(0, nextTier.MinCompositeScore - membership.CompositeScore));
+
+        return (progress, null, null);
+    }
+
+    /// <summary>See <see cref="ILoyaltyService.GetTierHistoryAsync"/>.</summary>
+    public async Task<(PagedResult<LoyaltyTierChangeHistoryDto>? History, string? Error, int? StatusCode)> GetTierHistoryAsync(
+        Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null)
+            return (null, "You are not a member of this loyalty program.", 404);
+
+        var clampedPage = Math.Max(1, page);
+        var clampedPageSize = Math.Clamp(pageSize, 1, 200);
+
+        var (items, total) = await _loyalty.GetTierHistoryPagedAsync(
+            tenantId, membership.Id, clampedPage, clampedPageSize, ct);
+
+        var result = new PagedResult<LoyaltyTierChangeHistoryDto>
+        {
+            Items = items.Select(ToTierHistoryDto).ToList(),
+            TotalCount = total,
+            Page = clampedPage,
+            PageSize = clampedPageSize,
+        };
+        return (result, null, null);
+    }
+
     // ── Staff-facing (POS / cabinet) ──────────────────────────────────────────
 
     public async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveCodeAsync(
@@ -799,6 +861,85 @@ public sealed class LoyaltyService : ILoyaltyService
         return (ToSettingsDto(settings), null);
     }
 
+    // ── Tier ladder — admin CRUD (TASK-615) ───────────────────────────────────
+
+    public async Task<IReadOnlyList<LoyaltyTierDefinitionDto>> GetTierLadderAsync(
+        Guid tenantId, CancellationToken ct = default)
+    {
+        var ladder = await _loyalty.GetTierLadderAsync(tenantId, ct);
+        return ladder.Select(ToTierDefinitionDto).ToList();
+    }
+
+    public async Task<(IReadOnlyList<LoyaltyTierDefinitionDto>? Tiers, string? Error)> UpsertTierLadderAsync(
+        Guid tenantId, List<UpsertTierRequest> tiers, CancellationToken ct = default)
+    {
+        if (tiers is null)
+            return (null, "Tiers is required.");
+
+        foreach (var tier in tiers)
+        {
+            if (string.IsNullOrWhiteSpace(tier.Name))
+                return (null, "Tier name is required.");
+            if (tier.Name.Trim().Length > 100)
+                return (null, "Tier name cannot exceed 100 characters.");
+            if (tier.SortOrder < 0)
+                return (null, "SortOrder cannot be negative.");
+            if (tier.MinCompositeScore < 0)
+                return (null, "MinCompositeScore cannot be negative.");
+            if (tier.AccrualMultiplier is < 0 or > 999.99m)
+                return (null, "AccrualMultiplier must be between 0 and 999.99.");
+            if (tier.DiscountPercent is < 0 or > 100)
+                return (null, "DiscountPercent must be between 0 and 100.");
+        }
+
+        if (tiers.Select(t => t.SortOrder).Distinct().Count() != tiers.Count)
+            return (null, "SortOrder values must be unique.");
+
+        // TASK-615: match submitted rows against existing ones by SortOrder — the ladder's
+        // natural unique key — rather than blind delete-then-recreate, so a tier whose
+        // SortOrder is unchanged keeps its database Id (see ILoyaltyService.UpsertTierLadderAsync
+        // doc for the full rationale: preserves any LoyaltyMembership.CurrentTierId already
+        // pointing at it until the next nightly recompute).
+        var existing = await _loyalty.GetTierLadderAsync(tenantId, ct);
+        var existingBySortOrder = existing.ToDictionary(t => t.SortOrder);
+        var submittedSortOrders = tiers.Select(t => t.SortOrder).ToHashSet();
+
+        foreach (var stale in existing.Where(t => !submittedSortOrders.Contains(t.SortOrder)))
+            _loyalty.RemoveTier(stale);
+
+        var result = new List<LoyaltyTierDefinition>(tiers.Count);
+        foreach (var request in tiers)
+        {
+            if (existingBySortOrder.TryGetValue(request.SortOrder, out var tier))
+            {
+                tier.Name = request.Name.Trim();
+                tier.MinCompositeScore = request.MinCompositeScore;
+                tier.AccrualMultiplier = request.AccrualMultiplier;
+                tier.DiscountPercent = request.DiscountPercent;
+                tier.UpdatedAt = DateTimeOffset.UtcNow;
+                _loyalty.UpdateTier(tier);
+            }
+            else
+            {
+                tier = new LoyaltyTierDefinition
+                {
+                    TenantId = tenantId,
+                    Name = request.Name.Trim(),
+                    SortOrder = request.SortOrder,
+                    MinCompositeScore = request.MinCompositeScore,
+                    AccrualMultiplier = request.AccrualMultiplier,
+                    DiscountPercent = request.DiscountPercent,
+                };
+                await _loyalty.AddTierAsync(tier, ct);
+            }
+            result.Add(tier);
+        }
+
+        await _loyalty.SaveChangesAsync(ct);
+
+        return (result.OrderBy(t => t.SortOrder).Select(ToTierDefinitionDto).ToList(), null);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -911,4 +1052,10 @@ public sealed class LoyaltyService : ILoyaltyService
     private static LoyaltyProgramSettingsDto ToSettingsDto(LoyaltyProgramSettings s, bool isNew = false) => new(
         s.IsEnabled, s.AccrualRatePercent, s.RedemptionCapPercent, s.MinRedemptionBalance, s.CodeTtlSeconds,
         s.CustomerCodeFormat, isNew ? null : s.UpdatedAt);
+
+    private static LoyaltyTierDefinitionDto ToTierDefinitionDto(LoyaltyTierDefinition t) => new(
+        t.Id, t.Name, t.SortOrder, t.MinCompositeScore, t.AccrualMultiplier, t.DiscountPercent);
+
+    private static LoyaltyTierChangeHistoryDto ToTierHistoryDto(LoyaltyTierChangeHistory h) => new(
+        h.Id, h.FromTier?.Name, h.ToTier?.Name, h.FromScore, h.ToScore, h.ChangedAt);
 }

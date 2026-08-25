@@ -125,6 +125,29 @@ public interface ILoyaltyService
     Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
         Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-615: this consumer's current tier (name, multiplier, discount), composite score,
+    /// and the next tier up (name + remaining score gap), for <paramref name="tenantId"/>'s
+    /// ladder. Reads <c>loyalty_tier_definitions</c> — a staff-only table with no
+    /// <c>consumer_self_access</c> RLS policy — through <see cref="Services.ITenantSessionOverride"/>,
+    /// same pattern as <see cref="ResolveCustomerCodeFormatAsync"/> uses for
+    /// <see cref="LoyaltyProgramSettings"/>. Status codes: 404 the consumer has no membership at
+    /// this tenant.
+    /// </summary>
+    Task<(LoyaltyTierProgressDto? Progress, string? Error, int? StatusCode)> GetTierProgressAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-615: paged, newest-first <see cref="LoyaltyTierChangeHistory"/> for this consumer's
+    /// membership at <paramref name="tenantId"/>. That table carries a <c>consumer_self_access</c>
+    /// RLS policy (unlike the ladder itself), so this reads through the caller's ambient
+    /// (consumer) session — no <see cref="Services.ITenantSessionOverride"/> needed, same as
+    /// <see cref="GetHistoryAsync"/> above. Status codes: 404 the consumer has no membership at
+    /// this tenant.
+    /// </summary>
+    Task<(PagedResult<LoyaltyTierChangeHistoryDto>? History, string? Error, int? StatusCode)> GetTierHistoryAsync(
+        Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default);
+
     // ── Staff-facing (POS / cabinet) ──────────────────────────────────────────
 
     /// <summary>
@@ -170,4 +193,28 @@ public interface ILoyaltyService
 
     Task<(LoyaltyProgramSettingsDto? Settings, string? Error)> UpsertSettingsAsync(
         Guid tenantId, UpsertLoyaltyProgramSettingsRequest request, CancellationToken ct = default);
+
+    // ── Tier ladder (enterprise_admin, TASK-615) ──────────────────────────────
+
+    /// <summary>Ordered ascending by <see cref="LoyaltyTierDefinition.SortOrder"/>. Empty (never null) when the tenant has no ladder yet.</summary>
+    Task<IReadOnlyList<LoyaltyTierDefinitionDto>> GetTierLadderAsync(Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Bulk-replaces the tenant's whole tier ladder. Matches each submitted row against an
+    /// existing one by <see cref="UpsertTierRequest.SortOrder"/> (the ladder's natural unique
+    /// key) rather than blind delete-then-recreate: a row whose SortOrder is unchanged keeps its
+    /// database Id, so any <see cref="LoyaltyMembership.CurrentTierId"/> already pointing at it
+    /// stays valid (functional benefits — multiplier/discount — keep applying) until the next
+    /// nightly recompute. A SortOrder present before but absent from <paramref name="tiers"/> is
+    /// deleted; any membership whose <c>CurrentTierId</c> pointed at it is set null by the FK's
+    /// SetNull behavior (safe — the nightly job re-evaluates every membership from scratch).
+    /// Reordering (same conceptual tier, different SortOrder) is therefore treated as
+    /// delete+insert, a documented limitation, not a hidden bug. Validates: non-empty
+    /// <see cref="UpsertTierRequest.Name"/> (max 100 chars), unique
+    /// <see cref="UpsertTierRequest.SortOrder"/> values within the request, non-negative
+    /// <see cref="UpsertTierRequest.MinCompositeScore"/>, <see cref="UpsertTierRequest.AccrualMultiplier"/>
+    /// in [0, 999.99], <see cref="UpsertTierRequest.DiscountPercent"/> in [0, 100].
+    /// </summary>
+    Task<(IReadOnlyList<LoyaltyTierDefinitionDto>? Tiers, string? Error)> UpsertTierLadderAsync(
+        Guid tenantId, List<UpsertTierRequest> tiers, CancellationToken ct = default);
 }

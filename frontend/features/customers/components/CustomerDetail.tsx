@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useCustomer } from "../hooks/useCustomers";
 import type { Customer, CustomerTransaction } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { CustomerTierCard } from "./CustomerTierCard";
+import { CustomerTicketsTab } from "./CustomerTicketsTab";
+import { CustomerReviewsTab } from "./CustomerReviewsTab";
+import { CustomerProfileHistoryTab } from "./CustomerProfileHistoryTab";
 
 function formatDate(iso: string, intlLocale: string) {
   return new Date(iso).toLocaleDateString(intlLocale, {
@@ -91,13 +95,30 @@ interface Props {
   onEdit: () => void;
 }
 
+type DetailTab = "info" | "loyalty" | "tickets" | "reviews" | "history";
+
+const TAB_STYLE = (active: boolean): React.CSSProperties => ({
+  background: "transparent",
+  border: "none",
+  borderBottom: `2px solid ${active ? "#3B82F6" : "transparent"}`,
+  color: active ? "#93C5FD" : "#4B5563",
+  fontSize: 12,
+  fontWeight: active ? 600 : 400,
+  padding: "9px 12px",
+  cursor: "pointer",
+  transition: "color 0.15s, border-color 0.15s",
+  whiteSpace: "nowrap",
+});
+
 export function CustomerDetail({ customer, onClose, onEdit }: Props) {
   const t = useTranslations("Dashboard.customers.detail");
+  const tTabs = useTranslations("Dashboard.customers.detail.tabs");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const uah = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "UAH" });
   const { data: detail, isLoading } = useCustomer(customer.id);
+  const [tab, setTab] = useState<DetailTab>("info");
 
   // Close on Escape
   useEffect(() => {
@@ -172,103 +193,179 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
           </div>
         </div>
 
-        {/* Info card */}
+        {/* Tabs */}
         <div
           style={{
-            margin: "18px 22px 0",
-            background: "#0A1020",
-            border: "1px solid #1F2937",
-            borderRadius: 10,
-            padding: 16,
+            display: "flex",
+            gap: 2,
+            padding: "0 22px",
+            borderBottom: "1px solid #1F2937",
+            flexShrink: 0,
+            overflowX: "auto",
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "14px 20px",
-            }}
-          >
-            <InfoField label={t("phoneLabel")}     value={customer.phone  ?? "—"} />
-            <InfoField label={t("emailLabel")}       value={customer.email  ?? "—"} />
-            <InfoField label={t("ordersLabel")}   value={String(customer.totalOrders)} />
-            <InfoField label={t("spentLabel")}   value={uah.format(customer.totalSpent)} valueColor="#4ADE80" />
-            <InfoField label={t("registeredLabel")} value={formatDate(customer.createdAt, intlLocale)} />
-            {customer.notes && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <InfoField label={t("notesLabel")} value={customer.notes} />
-              </div>
-            )}
-          </div>
-
-          {/* Tags */}
-          {customer.tags.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ color: "#6B7280", fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-                {t("tagsLabel")}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {customer.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    style={{
-                      background: "#0a1628",
-                      border: "1px solid #1D4ED8",
-                      borderRadius: 20,
-                      padding: "2px 10px",
-                      color: "#60A5FA",
-                      fontSize: 12,
-                    }}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Recent transactions */}
-        <div style={{ margin: "18px 22px 22px" }}>
-          <h3 style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 10px" }}>
-            {t("recentTransactionsTitle")}
-          </h3>
-
-          {isLoading ? (
-            <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>{tCommon("loading")}</div>
-          ) : !detail || detail.recentTransactions.length === 0 ? (
-            <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>{t("noTransactions")}</div>
-          ) : (
-            <div
-              style={{
-                background: "#0A1020",
-                border: "1px solid #1F2937",
-                borderRadius: 10,
-                overflow: "hidden",
-              }}
-            >
-              {/* Tx header */}
-              <div
+          <button style={TAB_STYLE(tab === "info")} onClick={() => setTab("info")}>
+            {tTabs("info")}
+          </button>
+          <button style={TAB_STYLE(tab === "loyalty")} onClick={() => setTab("loyalty")}>
+            {tTabs("loyalty")}
+          </button>
+          <button style={TAB_STYLE(tab === "tickets")} onClick={() => setTab("tickets")}>
+            {tTabs("tickets")}
+            {!!detail?.openTicketCount && (
+              <span
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 120px 100px 130px",
-                  padding: "8px 14px",
-                  borderBottom: "1px solid #1F2937",
-                  background: "#060D18",
+                  marginLeft: 6,
+                  background: "#78350F",
+                  color: "#FCD34D",
+                  borderRadius: 999,
+                  padding: "1px 6px",
+                  fontSize: 10,
+                  fontWeight: 700,
                 }}
               >
-                {[t("txHeaderDate"), t("txHeaderAmount"), t("txHeaderPayment"), t("txHeaderStatus")].map((h, i) => (
-                  <div key={i} style={{ color: "#374151", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {h}
-                  </div>
-                ))}
-              </div>
-              {detail.recentTransactions.map((tx) => (
-                <TransactionRow key={tx.id} tx={tx} />
-              ))}
-            </div>
-          )}
+                {detail.openTicketCount}
+              </span>
+            )}
+          </button>
+          <button style={TAB_STYLE(tab === "reviews")} onClick={() => setTab("reviews")}>
+            {tTabs("reviews")}
+          </button>
+          <button style={TAB_STYLE(tab === "history")} onClick={() => setTab("history")}>
+            {tTabs("history")}
+          </button>
         </div>
+
+        {/* Tab content */}
+        {isLoading ? (
+          <div style={{ color: "#374151", fontSize: 13, padding: "20px 22px" }}>{tCommon("loading")}</div>
+        ) : !detail ? null : (
+          <>
+            {tab === "info" && (
+              <>
+                {/* Info card */}
+                <div
+                  style={{
+                    margin: "18px 22px 0",
+                    background: "#0A1020",
+                    border: "1px solid #1F2937",
+                    borderRadius: 10,
+                    padding: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "14px 20px",
+                    }}
+                  >
+                    <InfoField label={t("phoneLabel")}     value={customer.phone  ?? "—"} />
+                    <InfoField label={t("emailLabel")}       value={customer.email  ?? "—"} />
+                    <InfoField label={t("ordersLabel")}   value={String(customer.totalOrders)} />
+                    <InfoField label={t("spentLabel")}   value={uah.format(customer.totalSpent)} valueColor="#4ADE80" />
+                    <InfoField label={t("registeredLabel")} value={formatDate(customer.createdAt, intlLocale)} />
+                    {customer.notes && (
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <InfoField label={t("notesLabel")} value={customer.notes} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tags */}
+                  {customer.tags.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ color: "#6B7280", fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                        {t("tagsLabel")}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {customer.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              background: "#0a1628",
+                              border: "1px solid #1D4ED8",
+                              borderRadius: 20,
+                              padding: "2px 10px",
+                              color: "#60A5FA",
+                              fontSize: 12,
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent transactions */}
+                <div style={{ margin: "18px 22px 22px" }}>
+                  <h3 style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 10px" }}>
+                    {t("recentTransactionsTitle")}
+                  </h3>
+
+                  {detail.recentTransactions.length === 0 ? (
+                    <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>{t("noTransactions")}</div>
+                  ) : (
+                    <div
+                      style={{
+                        background: "#0A1020",
+                        border: "1px solid #1F2937",
+                        borderRadius: 10,
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* Tx header */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 120px 100px 130px",
+                          padding: "8px 14px",
+                          borderBottom: "1px solid #1F2937",
+                          background: "#060D18",
+                        }}
+                      >
+                        {[t("txHeaderDate"), t("txHeaderAmount"), t("txHeaderPayment"), t("txHeaderStatus")].map((h, i) => (
+                          <div key={i} style={{ color: "#374151", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            {h}
+                          </div>
+                        ))}
+                      </div>
+                      {detail.recentTransactions.map((tx) => (
+                        <TransactionRow key={tx.id} tx={tx} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {tab === "loyalty" && (
+              <div style={{ margin: "18px 22px 22px" }}>
+                <CustomerTierCard detail={detail} />
+              </div>
+            )}
+
+            {tab === "tickets" && (
+              <div style={{ margin: "18px 22px 22px" }}>
+                <CustomerTicketsTab customerId={customer.id} openTicketCount={detail.openTicketCount} />
+              </div>
+            )}
+
+            {tab === "reviews" && (
+              <div style={{ margin: "18px 22px 22px" }}>
+                <CustomerReviewsTab reviews={detail.recentReviews} />
+              </div>
+            )}
+
+            {tab === "history" && (
+              <div style={{ margin: "18px 22px 22px" }}>
+                <CustomerProfileHistoryTab customerId={customer.id} active={tab === "history"} />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </>
   );

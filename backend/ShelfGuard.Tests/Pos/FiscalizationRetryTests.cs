@@ -172,6 +172,7 @@ file sealed class RetryFakeLoyaltyRepo : ILoyaltyRepository
 {
     public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
+    public Task<LoyaltyMembership?> GetMembershipByCustomerIdAsync(Guid customerId, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(Guid tenantId, Guid linkedUserId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<List<LoyaltyMembership>> GetMembershipsForConsumerAsync(Guid consumerAccountId, CancellationToken ct = default) => Task.FromResult(new List<LoyaltyMembership>());
     public Task AddMembershipAsync(LoyaltyMembership membership, CancellationToken ct = default) => Task.CompletedTask;
@@ -183,6 +184,11 @@ file sealed class RetryFakeLoyaltyRepo : ILoyaltyRepository
     public Task<LoyaltyProgramSettings?> GetSettingsAsync(Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyProgramSettings?>(null);
     public Task AddSettingsAsync(LoyaltyProgramSettings settings, CancellationToken ct = default) => Task.CompletedTask;
     public void UpdateSettings(LoyaltyProgramSettings settings) { }
+    public Task<List<LoyaltyTierDefinition>> GetTierLadderAsync(Guid tenantId, CancellationToken ct = default) => Task.FromResult(new List<LoyaltyTierDefinition>());
+    public Task AddTierAsync(LoyaltyTierDefinition tier, CancellationToken ct = default) => Task.CompletedTask;
+    public void UpdateTier(LoyaltyTierDefinition tier) { }
+    public void RemoveTier(LoyaltyTierDefinition tier) { }
+    public Task<(List<LoyaltyTierChangeHistory> Items, int Total)> GetTierHistoryPagedAsync(Guid tenantId, Guid membershipId, int page, int pageSize, CancellationToken ct = default) => Task.FromResult((new List<LoyaltyTierChangeHistory>(), 0));
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 

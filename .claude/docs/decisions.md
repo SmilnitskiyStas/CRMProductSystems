@@ -1,7 +1,117 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-21
+**Updated:** 2026-08-24
+
+## ADR-034: CRM loyalty tier ladder, consumer self-service, support tickets, reviews — phone-change verification, composite-score formula/timing, per-item tier discount, worker-job write boundary, ticket/review pattern reuse, review-ownership resolution path
+Date: 2026-08-24
+Status: accepted
+
+Context: TASK-613..622 (plan `C:\Users\stass\.claude\plans\goofy-bubbling-naur.md`) extended the
+customer/loyalty domain: self-service profile editing with audit history, a per-tenant loyalty
+tier ladder with functional accrual/discount benefits, a consumer↔tenant support-ticket channel,
+and a per-purchase review channel. Several implementation-time judgment calls were made across the
+database-engineer/backend-developer/devops-engineer waves that a future reader is likely to
+question without this record — consolidated here by documentation-writer (TASK-623) from the
+individual task logs (613-622, 621b) rather than authored upfront as a single design session,
+since this was an already-approved, already-executing plan, not a from-scratch architecture
+decision.
+
+Decision:
+
+### Decision 1 — Phone-change verification: password re-entry only, no SMS/OTP
+`PUT /api/consumer/profile/phone` (TASK-614) gates a phone change behind the caller's current
+password, not an SMS one-time code. No SMS gateway exists anywhere in this repo, and — the
+decisive point — registration itself (`POST /api/consumer-auth/register`) never verifies phone
+ownership either. Requiring OTP only on *change* would make editing a phone number a stronger
+security bar than establishing one in the first place, which is backwards. If an SMS gateway is
+ever added for another reason, this decision should be revisited.
+
+### Decision 2 — Tier discount applied per item, not as a lump-sum total reduction
+`PosService.CreateSaleAsync` (TASK-615) computes the tier discount per `PosTransactionItem` (off
+`priceRetail`, additively combined with any existing critical-batch auto-discount, capped at the
+item's price), not as one subtraction from `tx.TotalAmount` the way loyalty-balance redemption
+already works. Reason: Checkbox fiscal receipt line items are built from `PosTransactionItem` rows,
+never backfilled from the transaction total — a lump-sum reduction would leave per-item
+`PriceFinal`/`DiscountAmount` inconsistent with what actually printed on the fiscal receipt. Same
+reasoning the pre-existing critical-batch auto-discount already follows. No live ПРРО-compliance
+owner was available to confirm synchronously at implementation time; this is the accepted default,
+not a compliance-verified sign-off — revisit if fiscal integration surfaces a conflict.
+
+### Decision 3 — Composite score: equal-weight `(R+F+M)/3`, computed nightly, never live
+`worker/src/jobs/loyalty-tier-recompute.job.ts` (TASK-619) computes each active membership's
+Recency/Frequency/Monetary scores via the same `NTILE(5)` quintile approach
+`MarketingAnalyticsRepository` already uses for RFM, then averages them with equal weight — no
+tenant-configurable weighting exists (default only; revisit if a tenant asks for a different mix).
+Computed once nightly (04:00, after `cleanup`, before `weather-fetch`/`ai-order`), never at request
+time — because tier assignment has a real functional consequence (accrual multiplier, checkout
+discount) the moment it changes, batch computation makes that a predictable, auditable daily event
+rather than a mid-shopping-session surprise.
+
+### Decision 4 — Worker job: direct-SQL, and a hard rule that it only ever writes 3 columns
+Structured like `weekly-report.job.ts` (raw `pg` queries, `SET app.role = 'worker'` for
+`worker_bypass` RLS) rather than the callback-into-API pattern `ai-order.job.ts` uses — that file's
+own history of silent bugs (missing `SET app.role`, a stale table name surviving the v4 rename)
+made the callback indirection the wrong template to copy here.
+
+**Load-bearing rule, worth restating outside the code comments:** this job writes exactly
+`LoyaltyMembership.CurrentTierId`/`CompositeScore`/`TierScoreUpdatedAt` and nothing else on that
+table — never `Balance`. `Balance` is protected by an `xmin` optimistic-concurrency token
+(TASK-414) that `PosService`/`LoyaltyService` rely on for every sale/redemption/manual-adjustment
+write; a nightly batch job touching `Balance` (or touching the row in a way that bumps `xmin`
+unnecessarily) would produce spurious concurrency-conflict retries on completely unrelated,
+concurrent point-of-sale writes. Any future change to this job — or any other job that touches
+`loyalty_memberships` — must preserve this boundary. See `database-schema.md` TASK-613 and
+`domain-model.md`'s `LoyaltyMembership` entry.
+
+### Decision 5 — Review ownership resolved via the loyalty-ledger join, not `PosTransaction.CustomerId`
+`PurchaseReview` (TASK-617) has no direct link to `PosTransaction.CustomerId` — deliberately.
+`ReviewService.IsOwnPurchaseAsync` instead walks
+`LoyaltyLedgerEntry.PosTransactionId → MembershipId → LoyaltyMembership.ConsumerAccountId`
+(`ILoyaltyRepository.GetLedgerEntriesForTransactionsAsync`, already existing since TASK-410).
+Reason: that method's own doc comment already states the ledger link is "the only persisted signal
+that loyalty activity happened on that sale" — a stronger, documented invariant than assuming
+`CustomerId` maps to exactly one `ConsumerAccount` (true in practice via the phone-match
+find-or-create, but never stated as a guarantee anywhere).
+
+**Resulting limitation, accepted, not a bug:** a walk-in or otherwise loyalty-unlinked purchase can
+never be reviewed — `IsOwnPurchaseAsync` returns false for it (no ledger entry to walk), and the
+consumer gets the same generic 403 as "this is someone else's purchase." A purchase must have
+produced at least one loyalty ledger entry (accrual or redemption) to become reviewable.
+
+### Decision 6 — `ConsumerSupportTicket`/`PurchaseReview` mirror the Supplier-side patterns, not ServiceDesk
+Both new features (TASK-616/617) are structural mirrors of the already-shipped
+`SupplierSupportTicket`/`SupplierSupportTicketMessage` and `SupplierReview` — not the pre-existing
+`ServiceDesk` module. ServiceDesk models tenant↔SaaS-provider support (a ShelfGuard customer asking
+the platform's own support team for help); this feature models consumer↔tenant support (an end
+shopper asking a retail tenant's own staff a question) — a different relationship on both ends,
+despite the surface-level similarity of "ticket with messages." Reusing the Supplier-side entities
+as the template (rather than either ServiceDesk or inventing a third pattern from scratch) keeps
+the codebase to two proven ticket/review shapes instead of three near-duplicates.
+
+Consequences:
++ No SMS/phone-verification infrastructure had to be built to ship Decision 1 — deferred cleanly to
+  whenever (if ever) an SMS gateway becomes a real capability of this platform.
++ Fiscal-receipt correctness (Decision 2) is preserved with no special-casing in the Checkbox
+  integration itself — the discount is already "just another line-item discount" by the time it
+  reaches fiscalization.
++ The nightly job (Decisions 3/4) can never corrupt a concurrent sale's `Balance` update — verified
+  live by QA (TASK-622) via a direct SQL dry-run of the job's exact write path.
+- Decision 5's limitation is real and by design, not merely deferred: it is not possible today to
+  let a walk-in customer review a purchase after the fact, even if staff later link a `Customer`
+  record to that transaction retroactively. A future fix would need a direct, first-class
+  purchase↔reviewer link rather than routing through the loyalty ledger.
+- Composite-score weighting (Decision 3) has no per-tenant override — every tenant using the tier
+  ladder gets the same `(R+F+M)/3` formula. Flagged in the plan as needing confirmation before
+  implementation; no alternative weighting was requested, so the default shipped as-is.
+
+Task breakdown: TASK-613 (schema, database-engineer) → TASK-614/615/616/617/618/621b (backend,
+backend-developer) → TASK-619 (worker job, devops-engineer) → TASK-620/621 (frontend,
+frontend-developer) → TASK-622 (QA, qa-tester, no bugs found) → TASK-623 (this documentation pass,
+documentation-writer). Mobile screens (profile edit, tier/progress display, review submission,
+support-ticket screen) are explicitly out of scope — see the plan §4 mobile hand-off note and
+`api-contracts.md`'s new consumer-facing endpoint groups, which the mobile team's (Codex) agent can
+build against directly. Mobile hand-off doc: `.claude/logs/handoffs/623-to-mobile-codex.md`.
 
 ## ADR-033: Marketplace order receiving — client-confirmed receipt (scan/qty/expiry) replaces the supplier one-click Deliver; new `MarketplaceOrderReceipt`/`Item` entities, `MarketplaceOrder.DestinationStoreId`, split client-write/supplier-read RLS
 Date: 2026-08-21

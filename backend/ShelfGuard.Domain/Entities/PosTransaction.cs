@@ -27,6 +27,9 @@ public sealed class PosTransaction
     /// <summary>Optional CRM customer linked to this transaction.</summary>
     public Guid? CustomerId { get; set; }
 
+    /// <summary>TASK-613: reserved for future register-hardware integration. No FK (no register entity exists yet) — intentionally unwired.</summary>
+    public Guid? CashRegisterId { get; set; }
+
     public ICollection<PosTransactionItem> Items { get; init; } = new List<PosTransactionItem>();
 
     // Navigation properties

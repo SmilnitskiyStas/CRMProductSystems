@@ -1,7 +1,7 @@
 # Database Schema
 
 **Owner:** database-engineer
-**Updated:** 2026-08-06
+**Updated:** 2026-08-24
 **Source:** v1-spec.md section 4
 
 ## Multi-Tenancy
@@ -914,6 +914,61 @@ Physical FK target for "store" is `locations`, not `stores` — `V2EventsWeather
 `demand_events.StoreId → stores` FK predates the v4 Store→Location table rename; the C#
 navigation property is still named `Store`/`StoreId` (mapped to column `LocationId`) but
 the physical table has been `locations` since v4.
+
+## TASK-613 — Customer/loyalty domain expansion: profile-change audit, tier ladder, support
+tickets, purchase reviews (`AddConsumerAccountProfileChanges`/`AddLoyaltyTierLadder`/
+`AddConsumerSupportTickets`/`AddPurchaseReviews`/`AddPosTransactionCashRegisterId`, 2026-08-24)
+
+Six new/extended pieces of schema for the CRM/loyalty expansion (plan `goofy-bubbling-naur.md`,
+TASK-613..622 — see `decisions.md` ADR-034 for the judgment calls, `domain-model.md` for the
+entity relationships). Five separate migrations, generated one at a time behind temporary `#if`
+staging guards later removed — the shipped code has zero preprocessor directives, each migration
+just landed as its own reviewable unit.
+
+| Table | RLS | Purpose | Key fields |
+|---|---|---|---|
+| `consumer_account_profile_changes` | **none** — same precedent as `consumer_accounts` itself (see TASK-404 above) | Append-only audit trail of self-service name/email/phone edits | `ConsumerAccountId`, `FieldName` (`ConsumerAccountProfileChangeField`: `phone`/`email`/`full_name`), `OldValue`, `NewValue`, `ChangedAt` — all `init`-only |
+| `loyalty_tier_definitions` | tenant_isolation / provider_bypass / worker_bypass | Per-tenant tier ladder rung, admin-configured | `TenantId`, `Name`, `SortOrder`, `MinCompositeScore`, `AccrualMultiplier` (default 1.0), `DiscountPercent` (default 0), `CreatedAt`/`UpdatedAt`. Unique `(TenantId, SortOrder)` |
+| `loyalty_tier_change_history` | + `consumer_self_access` (EXISTS via membership) | Append-only tier-progression audit, written only by the nightly recompute worker job (TASK-619) | `TenantId`, `MembershipId`, `FromTierId?`/`ToTierId?`, `FromScore`, `ToScore`, `ChangedAt` — all `init`, mirrors `LoyaltyLedgerEntry`'s discipline |
+| `consumer_support_tickets` | + `consumer_self_access` (direct `ConsumerAccountId` column) | Consumer↔tenant support ticket, mirrors `SupplierSupportTicket` | `TenantId`, `ConsumerAccountId`, `CustomerId?` (auto-link target, nullable, never force-created), `Subject`, `Status` (`ConsumerSupportTicketStatus`: open/in_progress/resolved/closed), `CreatedAt`/`UpdatedAt`, nav `Messages` |
+| `consumer_support_ticket_messages` | tenant_isolation + `consumer_self_access`, both via EXISTS-through-`TicketId` | One message in a ticket thread | `TicketId`, `SenderConsumerAccountId?`/`SenderUserId?` (**exactly one set per row**), `Body`, `IsRead`, `CreatedAt` |
+| `purchase_reviews` | + `consumer_self_access` (direct `ConsumerAccountId` column) | One review per completed purchase, mirrors `SupplierReview` | `TenantId`, `ConsumerAccountId`, `PosTransactionId` (**unique** — one review per purchase), `Rating` (short, 1-5), `Comment`, `CreatedAt`, `ReplyText`/`RepliedAt`/`RepliedByUserId` (one reply, enforced app-side) |
+
+**`LoyaltyMembership` extension** (same migration wave as `loyalty_tier_definitions`):
+`CurrentTierId` (Guid?, FK→`loyalty_tier_definitions`, **SetNull**), `CompositeScore` (decimal,
+default 0), `TierScoreUpdatedAt` (DateTimeOffset?), nav `CurrentTier`. **Nothing writes these
+three columns except the nightly `loyalty-tier-recompute.job.ts` worker job (TASK-619)** —
+request-time code (`PosService`, `LoyaltyService`) must never touch them, by design: they'd
+otherwise conflict with the `xmin` optimistic-concurrency token TASK-414 put on `Balance`. See
+`decisions.md` ADR-034 and `domain-model.md`'s `LoyaltyMembership` entry.
+
+**`PosTransaction.CashRegisterId`** (same wave, its own migration): nullable `Guid`, **no FK, no
+business logic** — schema-ready only, register hardware doesn't exist in this codebase yet. Do
+not wire this up without a fresh task; it is deliberately inert.
+
+All 6 tenant-scoped tables got `worker_bypass` from creation (past-incident lesson, see the
+`worker_bypass` note in the RLS Template above); `provider_bypass` written as
+`IN ('provider', 'provider_admin')` (current convention).
+
+**EF phantom-FK bug caught during migration generation** — worth knowing for any future entity
+with both a scalar FK id and its own navigation property: writing
+`e.HasOne<ConsumerAccount>().WithMany().HasForeignKey(x => x.ConsumerAccountId)` on an entity that
+*also* declares a `ConsumerAccount` navigation property makes EF Core create a second, phantom
+relationship — a shadow `ConsumerAccountId1` FK/column appears in the generated migration
+alongside the real one. Hit on both `ConsumerAccountProfileChange` and `PurchaseReview`; fixed by
+using `e.HasOne(x => x.ConsumerAccount).WithMany()` (binding the FK to the actual nav property)
+instead. Regenerated migrations have no shadow properties.
+
+Live-verified (dev DB, non-superuser `shelfguard_app_dev` role, inside rolled-back transactions):
+`pg_class.relrowsecurity/relforcerowsecurity` — `f/f` on `consumer_account_profile_changes`,
+`t/t` on the other 5; tenant isolation and `worker_bypass` on `loyalty_tier_definitions`;
+`consumer_self_access` on `purchase_reviews` (wrong `app.consumer_account_id` → 0 rows, owning
+consumer → 1 row). Independently re-verified by QA (TASK-622): consumer-A/consumer-B isolation,
+staff sees all tenant rows regardless of owner, cross-tenant staff sees 0 rows, `worker_bypass`
+sees everything — and, worth remembering if this class of result ever looks like a data-loss false
+alarm again, an unscoped query with **no** session vars set returns 0 rows on every policy
+(fail-closed default), which briefly looked like wiped dev data during TASK-622's own verification
+pass before the RLS explanation was confirmed.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

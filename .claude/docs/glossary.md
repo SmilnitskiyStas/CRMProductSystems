@@ -1,7 +1,7 @@
 # Glossary
 
 **Owner:** documentation-writer
-**Updated:** 2026-08-06
+**Updated:** 2026-08-24
 
 ## Business Terms
 
@@ -68,6 +68,10 @@
 **Loyalty membership** — `LoyaltyMembership`: a `ConsumerAccount`'s enrollment in one tenant's bonus program (balance, TOTP-backed rotating QR/barcode, status active/blocked). Tenant-scoped, standard RLS. One `ConsumerAccount` can hold many memberships, one per tenant it has joined.
 
 **Consumer account** — `ConsumerAccount`: the global, cross-tenant identity of an end customer (phone+password login) — completely separate from the tenant-scoped `Customer` (CRM record) and `User` (staff account). One `ConsumerAccount` JWT reads every `LoyaltyMembership` it holds across every tenant ("wallet of cards," no re-login per network). See `database-schema.md` for why this is the one table in the project with no RLS at all.
+
+**Tier ladder (рангова драбина)** — `LoyaltyTierDefinition` (TASK-613/615): a per-tenant, admin-configured ordered list of loyalty rungs (name, minimum composite score, accrual multiplier, discount percent). Crossing into a rung is not just a badge — it changes real checkout math (`PosService`'s bonus-accrual multiplier and a per-item discount) starting with the next nightly recompute. Configured at `api/settings/loyalty/tiers`; a tenant with no ladder behaves exactly as it did before this feature shipped (every membership stays tierless, multiplier 1.0, discount 0).
+
+**Composite score** — `LoyaltyMembership.CompositeScore` (TASK-613/619): equal-weight average of a membership's Recency/Frequency/Monetary quintile scores (`(R+F+M)/3`, the same `NTILE(5)` quintile machinery as the RFM dashboard above), computed **only** by the nightly `loyalty-tier-recompute.job.ts` worker job — never live, never at request time. Compared against each tier's `MinCompositeScore` (highest-`SortOrder` qualifying rung wins) to decide `LoyaltyMembership.CurrentTierId`. See `decisions.md` ADR-034 for why this must never be written outside that one nightly job.
 
 ## Price Segments & Frequency/Reactivation (Фаза 2)
 

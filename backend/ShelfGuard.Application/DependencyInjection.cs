@@ -133,6 +133,9 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.ConsumerAuth.IConsumerAuthService, Features.ConsumerAuth.ConsumerAuthService>();
         services.AddScoped<Features.Loyalty.ILoyaltyService, Features.Loyalty.LoyaltyService>();
 
+        // TASK-614 - Consumer self-service profile editing (name/email/phone + audit history)
+        services.AddScoped<Features.ConsumerProfile.IConsumerProfileService, Features.ConsumerProfile.ConsumerProfileService>();
+
         // TASK-406 - Marketing analytics Фаза 1 (RFM engine + dashboard)
         services.AddScoped<Features.MarketingAnalytics.IMarketingAnalyticsService, Features.MarketingAnalytics.MarketingAnalyticsService>();
 
@@ -183,6 +186,12 @@ services.AddScoped<IAuthService, AuthService>();
 
         // TASK-547 - Consumer app-builder platform: staff-only draft Preview API (Stage D ЕТАП 13)
         services.AddScoped<Features.MobileConfig.IMobileConfigPreviewService, Features.MobileConfig.MobileConfigPreviewService>();
+
+        // TASK-616 - Consumer↔tenant support tickets (async channel, mirrors SupplierSupportService)
+        services.AddScoped<Features.CustomerSupport.IConsumerSupportService, Features.CustomerSupport.ConsumerSupportService>();
+
+        // TASK-617 - Consumer purchase reviews (rating + comment on a PosTransaction, one staff reply)
+        services.AddScoped<Features.Reviews.IReviewService, Features.Reviews.ReviewService>();
 
         return services;
     }

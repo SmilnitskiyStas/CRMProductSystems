@@ -24,5 +24,26 @@ public sealed class ConsumerAccountRepository : IConsumerAccountRepository
 
     public void Update(ConsumerAccount account) => _db.ConsumerAccounts.Update(account);
 
+    // TASK-614: ConsumerAccountProfileChange — see IConsumerAccountRepository's combined-repository doc.
+
+    public Task AddProfileChangeAsync(ConsumerAccountProfileChange change, CancellationToken ct = default) =>
+        _db.ConsumerAccountProfileChanges.AddAsync(change, ct).AsTask();
+
+    public async Task<(List<ConsumerAccountProfileChange> Items, int Total)> GetProfileChangesPagedAsync(
+        Guid consumerAccountId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.ConsumerAccountProfileChanges
+            .Where(c => c.ConsumerAccountId == consumerAccountId)
+            .OrderByDescending(c => c.ChangedAt);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

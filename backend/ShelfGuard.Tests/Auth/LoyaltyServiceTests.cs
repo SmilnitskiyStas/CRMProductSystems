@@ -92,6 +92,13 @@ public sealed class LoyaltyServiceTests
         // Default: no locations for any tenant unless a test overrides it — keeps
         // GetAvailableNetworksAsync's Stores empty-but-non-null by default.
         _locations.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Location>());
+
+        // TASK-615: GetTierProgressAsync reads loyalty_tier_definitions (staff-only, no
+        // consumer_self_access RLS policy) through this same override — pure pass-through for
+        // the List<LoyaltyTierDefinition> closed generic, same pattern as the setups above.
+        _tenantScope.ExecuteAsync(
+                Arg.Any<Guid>(), Arg.Any<Func<Task<List<LoyaltyTierDefinition>>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<List<LoyaltyTierDefinition>>>>()());
     }
 
     private static Tenant MakeTenant(params string[] modules)
@@ -1596,5 +1603,251 @@ public sealed class LoyaltyServiceTests
 
         _loyalty.DidNotReceive().UpdateMembership(Arg.Any<LoyaltyMembership>());
         await _loyalty.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    // ── Tier ladder — admin CRUD (TASK-615) ───────────────────────────────
+
+    [Fact]
+    public async Task GetTierLadderAsync_returns_tiers_ordered_by_service_from_repo()
+    {
+        var tenantId = Guid.NewGuid();
+        var tiers = new List<LoyaltyTierDefinition>
+        {
+            new() { TenantId = tenantId, Name = "Bronze", SortOrder = 0, AccrualMultiplier = 1.0m },
+            new() { TenantId = tenantId, Name = "Gold", SortOrder = 1, AccrualMultiplier = 1.5m, DiscountPercent = 10m },
+        };
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(tiers);
+
+        var result = await _sut.GetTierLadderAsync(tenantId);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Bronze", result[0].Name);
+        Assert.Equal("Gold", result[1].Name);
+        Assert.Equal(1.5m, result[1].AccrualMultiplier);
+    }
+
+    [Theory]
+    [InlineData("", 0, 0, 1, 0)]          // empty name
+    [InlineData("Gold", -1, 0, 1, 0)]     // negative SortOrder
+    [InlineData("Gold", 0, -1, 1, 0)]     // negative MinCompositeScore
+    [InlineData("Gold", 0, 0, -1, 0)]     // negative AccrualMultiplier
+    [InlineData("Gold", 0, 0, 1, 150)]    // DiscountPercent out of range
+    public async Task UpsertTierLadderAsync_invalid_row_returns_error(
+        string name, int sortOrder, decimal minScore, decimal multiplier, decimal discount)
+    {
+        var (result, error) = await _sut.UpsertTierLadderAsync(Guid.NewGuid(),
+            [new UpsertTierRequest(name, sortOrder, minScore, multiplier, discount)]);
+
+        Assert.Null(result);
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public async Task UpsertTierLadderAsync_duplicate_sortOrder_returns_error()
+    {
+        var (result, error) = await _sut.UpsertTierLadderAsync(Guid.NewGuid(),
+        [
+            new UpsertTierRequest("Bronze", 0, 0, 1, 0),
+            new UpsertTierRequest("Silver", 0, 10, 1.2m, 5),
+        ]);
+
+        Assert.Null(result);
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public async Task UpsertTierLadderAsync_no_existing_ladder_adds_all_tiers()
+    {
+        var tenantId = Guid.NewGuid();
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition>());
+
+        var (result, error) = await _sut.UpsertTierLadderAsync(tenantId,
+        [
+            new UpsertTierRequest("Bronze", 0, 0, 1.0m, 0),
+            new UpsertTierRequest("Gold", 1, 100, 1.5m, 10),
+        ]);
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.Count);
+        await _loyalty.Received(2).AddTierAsync(Arg.Any<LoyaltyTierDefinition>(), default);
+        await _loyalty.Received(1).SaveChangesAsync(default);
+    }
+
+    /// <summary>
+    /// A tier row whose SortOrder is unchanged between requests keeps its database Id (matched,
+    /// not recreated) — so any LoyaltyMembership.CurrentTierId already pointing at it stays
+    /// valid. See ILoyaltyService.UpsertTierLadderAsync's doc for the full rationale.
+    /// </summary>
+    [Fact]
+    public async Task UpsertTierLadderAsync_matches_existing_row_by_sortOrder_and_preserves_id()
+    {
+        var tenantId = Guid.NewGuid();
+        var existingGold = new LoyaltyTierDefinition
+        {
+            TenantId = tenantId, Name = "Gold", SortOrder = 1, AccrualMultiplier = 1.5m, DiscountPercent = 5m,
+        };
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { existingGold });
+
+        var (result, error) = await _sut.UpsertTierLadderAsync(tenantId,
+        [
+            new UpsertTierRequest("Gold Plus", 1, 200, 2.0m, 15), // same SortOrder, new values
+        ]);
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        var updated = Assert.Single(result!);
+        Assert.Equal(existingGold.Id, updated.Id); // Id preserved
+        Assert.Equal("Gold Plus", updated.Name);
+        Assert.Equal(2.0m, updated.AccrualMultiplier);
+        _loyalty.Received(1).UpdateTier(existingGold);
+        await _loyalty.DidNotReceive().AddTierAsync(Arg.Any<LoyaltyTierDefinition>(), default);
+    }
+
+    [Fact]
+    public async Task UpsertTierLadderAsync_removes_tiers_whose_sortOrder_is_no_longer_submitted()
+    {
+        var tenantId = Guid.NewGuid();
+        var stale = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Stale", SortOrder = 5 };
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { stale });
+
+        var (result, error) = await _sut.UpsertTierLadderAsync(tenantId,
+            [new UpsertTierRequest("Bronze", 0, 0, 1, 0)]);
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        _loyalty.Received(1).RemoveTier(stale);
+    }
+
+    // ── GetTierProgressAsync (TASK-615) ───────────────────────────────────
+
+    [Fact]
+    public async Task GetTierProgressAsync_no_membership_returns_404()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+
+        var (progress, error, statusCode) = await _sut.GetTierProgressAsync(consumerId, tenantId);
+
+        Assert.Null(progress);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetTierProgressAsync_membership_without_tier_returns_default_multiplier_and_lowest_tier_as_next()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var membership = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, CompositeScore = 20m,
+        };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(membership);
+
+        var bronze = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Bronze", SortOrder = 0, MinCompositeScore = 50m };
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { bronze });
+
+        var (progress, error, statusCode) = await _sut.GetTierProgressAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(progress);
+        Assert.Null(progress!.CurrentTierId);
+        Assert.Equal(1.0m, progress.AccrualMultiplier);
+        Assert.Equal(0m, progress.DiscountPercent);
+        Assert.Equal("Bronze", progress.NextTierName);
+        Assert.Equal(30m, progress.ScoreToNextTier); // 50 - 20
+    }
+
+    [Fact]
+    public async Task GetTierProgressAsync_current_tier_reports_next_rung_gap()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var bronze = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Bronze", SortOrder = 0, MinCompositeScore = 0m, AccrualMultiplier = 1.0m };
+        var gold = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Gold", SortOrder = 1, MinCompositeScore = 100m, AccrualMultiplier = 1.5m, DiscountPercent = 10m };
+        var membership = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, CompositeScore = 40m, CurrentTierId = bronze.Id,
+        };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(membership);
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { bronze, gold });
+
+        var (progress, error, statusCode) = await _sut.GetTierProgressAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(progress);
+        Assert.Equal(bronze.Id, progress!.CurrentTierId);
+        Assert.Equal("Bronze", progress.CurrentTierName);
+        Assert.Equal("Gold", progress.NextTierName);
+        Assert.Equal(60m, progress.ScoreToNextTier); // 100 - 40
+    }
+
+    [Fact]
+    public async Task GetTierProgressAsync_top_tier_has_no_next_tier()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var gold = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Gold", SortOrder = 0, AccrualMultiplier = 1.5m, DiscountPercent = 10m };
+        var membership = new LoyaltyMembership
+        {
+            TenantId = tenantId, ConsumerAccountId = consumerId, CompositeScore = 500m, CurrentTierId = gold.Id,
+        };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(membership);
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { gold });
+
+        var (progress, error, statusCode) = await _sut.GetTierProgressAsync(consumerId, tenantId);
+
+        Assert.Null(error);
+        Assert.NotNull(progress);
+        Assert.Equal(1.5m, progress!.AccrualMultiplier);
+        Assert.Equal(10m, progress.DiscountPercent);
+        Assert.Null(progress.NextTierId);
+        Assert.Null(progress.ScoreToNextTier);
+    }
+
+    // ── GetTierHistoryAsync (TASK-615) ────────────────────────────────────
+
+    [Fact]
+    public async Task GetTierHistoryAsync_no_membership_returns_404()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).ReturnsNull();
+
+        var (history, error, statusCode) = await _sut.GetTierHistoryAsync(consumerId, tenantId, 1, 50);
+
+        Assert.Null(history);
+        Assert.Equal(404, statusCode);
+    }
+
+    [Fact]
+    public async Task GetTierHistoryAsync_maps_paged_entries()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var membership = new LoyaltyMembership { TenantId = tenantId, ConsumerAccountId = consumerId };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerId, default).Returns(membership);
+
+        var bronze = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Bronze" };
+        var gold = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Gold" };
+        var entries = new List<LoyaltyTierChangeHistory>
+        {
+            new()
+            {
+                TenantId = tenantId, MembershipId = membership.Id,
+                FromTier = bronze, ToTier = gold, FromScore = 40m, ToScore = 110m,
+            },
+        };
+        _loyalty.GetTierHistoryPagedAsync(tenantId, membership.Id, 1, 50, default).Returns((entries, 1));
+
+        var (history, error, statusCode) = await _sut.GetTierHistoryAsync(consumerId, tenantId, 1, 50);
+
+        Assert.Null(error);
+        Assert.NotNull(history);
+        var entry = Assert.Single(history!.Items);
+        Assert.Equal("Bronze", entry.FromTierName);
+        Assert.Equal("Gold", entry.ToTierName);
+        Assert.Equal(1, history.TotalCount);
     }
 }

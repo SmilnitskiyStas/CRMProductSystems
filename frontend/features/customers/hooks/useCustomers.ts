@@ -20,6 +20,20 @@ export function useCustomer(id: string) {
   });
 }
 
+/**
+ * TASK-621b. `enabled` is driven by the drawer's active tab (the "Історія профілю" tab), not
+ * mount — the handoff explicitly asks for lazy-load-on-open since history can be long for an
+ * old account.
+ */
+export function useCustomerProfileHistory(customerId: string, page: number, pageSize: number, enabled: boolean) {
+  return useQuery({
+    queryKey: [...CUSTOMERS_KEY, customerId, "profile-history", page, pageSize],
+    queryFn: () => customersApi.getProfileHistory(customerId, page, pageSize),
+    enabled: enabled && !!customerId,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useCreateCustomer() {
   const queryClient = useQueryClient();
   return useMutation({

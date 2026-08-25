@@ -250,6 +250,15 @@ public sealed class PosService : IPosService
             return (null, "LoyaltyMembershipId is required when RedeemAmount is set.", 400);
         }
 
+        // TASK-615: tier discount percent applied per item in the loop below, gated the same
+        // way as accrual/redemption (membership present + program enabled) so a disabled
+        // program never grants tier benefits even when the membership carries a CurrentTier.
+        // A membership with no CurrentTier yet (nightly recompute job hasn't run, or the
+        // feature was just enabled) behaves exactly as before this change (0% discount).
+        var tierDiscountPercent = membership is not null && loyaltySettings is { IsEnabled: true }
+            ? membership.CurrentTier?.DiscountPercent ?? 0m
+            : 0m;
+
         // 2. Resolve products + stock
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var resolvedItems = new List<ResolvedSaleItem>();
@@ -299,6 +308,19 @@ public sealed class PosService : IPosService
                     discountAmount = Math.Max(0, discountAmount);
                 }
             }
+
+            // TASK-615: tier discount applied per item (not as a lump-sum reduction against
+            // tx.TotalAmount) so each line's DiscountAmount/PriceFinal already reflects it and
+            // the transaction total stays internally consistent with the sum of item totals —
+            // same principle the critical-batch auto-discount above already follows. Computed
+            // off priceRetail independently of that auto-discount, then combined into one
+            // DiscountAmount per item (capped so a line's discount can never exceed its price).
+            if (tierDiscountPercent > 0m)
+            {
+                var tierDiscountAmount = Math.Round(priceRetail * tierDiscountPercent / 100m, 2);
+                discountAmount = Math.Min(priceRetail, discountAmount + tierDiscountAmount);
+            }
+            // Like redemption below, this discount reduces tx.TotalAmount, the monetary base the (not-yet-built) RFM/tier composite-score job will read — a pre-existing, accepted pattern.
 
             resolvedItems.Add(new ResolvedSaleItem(
                 Product: product,
@@ -423,8 +445,11 @@ public sealed class PosService : IPosService
                 }, ct);
             }
 
-            // Accrual reads tx.TotalAmount AFTER the possible reduction above.
-            var accrual = Math.Round(tx.TotalAmount * loyaltySettings.AccrualRatePercent / 100m, 2);
+            // Accrual reads tx.TotalAmount AFTER the possible reduction above. TASK-615: scaled
+            // by the membership's current tier accrual multiplier — 1.0 (no change) when the
+            // membership has no CurrentTier yet, so this behaves exactly as before that feature.
+            var tierMultiplier = membership.CurrentTier?.AccrualMultiplier ?? 1.0m;
+            var accrual = Math.Round(tx.TotalAmount * loyaltySettings.AccrualRatePercent / 100m * tierMultiplier, 2);
             if (accrual > 0m)
             {
                 membership.Balance += accrual;

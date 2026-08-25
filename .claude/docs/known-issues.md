@@ -1,9 +1,32 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-08-11
+**Updated:** 2026-08-24
 
 ## Active Issues
+
+### KI-034: `/customer-support?customerId=` deep link filters client-side over a widened page instead of a true backend filter
+Severity: low (functionally correct today at realistic ticket volumes — genuinely capped by the
+backend's own 200-row page-size ceiling, not an oversight the frontend could work around; the
+silent-miss risk only appears at a ticket volume this platform hasn't reached yet)
+Status: open — flagged by qa-tester during TASK-622's end-to-end QA of the CRM/loyalty expansion
+(2026-08-24), originally noted by frontend-developer during TASK-621's own implementation.
+Description: `IConsumerSupportService.GetInboxAsync(tenantId, status, page, pageSize, ct)`
+(TASK-616) has no `customerId` filter parameter. When the customer-detail drawer's Tickets tab
+links to `/customer-support?customerId=<id>` (TASK-621), `TicketList.tsx` handles the deep link
+entirely client-side: it fetches one widened page (`pageSize=200`, matching the backend's own
+`PagedQuery.ClampedPageSize` ceiling — the frontend genuinely cannot ask for more) instead of the
+normal 30-per-page, then filters the fetched array by `customerId` in the browser; pagination
+controls are hidden in this mode. Confirmed correct for any realistic per-customer ticket volume
+(QA re-verified the 200-row ceiling matches `Pagination.cs`'s `ClampedPageSize` exactly). The
+theoretical gap: a customer whose own tickets are all older than the tenant's 200 newest tickets
+*across every customer* (newest-first order) would have some of their own older tickets silently
+missing from the filtered view, with no error or "more results" indicator — would require a single
+tenant accumulating 200+ tickets ahead of that specific customer's oldest ticket.
+Resolution: add a `customerId` parameter to `IConsumerSupportService.GetInboxAsync` and its
+repository method, and have `TicketList.tsx` pass it as a real server-side filter instead of the
+widened-page workaround — straightforward, not urgent at today's ticket volumes. Worth doing if/
+when a tenant's support-ticket volume grows.
 
 ### KI-033: `pos_transactions` `store_scope` RLS policy silently corrupts marketing-analytics results (store-migration + RFM overview) for store_manager/network_manager ✅ resolved (2026-08-11, TASK-508..511)
 Severity: high (silent wrong data, not a crash/403 — the policy behaves exactly as designed for
