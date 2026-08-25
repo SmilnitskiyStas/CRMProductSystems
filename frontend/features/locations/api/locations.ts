@@ -1,14 +1,5 @@
 import { api } from "@/lib/api";
-import type { PagedResult } from "@/lib/api-types";
 import type { LocationDto, LocationType, LocationZoneDto } from "../types";
-
-// Minimal stock shape needed for per-zone status counts on the floor plan
-export interface StockBatchSlim {
-  locationId: string;
-  zoneId: string | null;
-  status: string;
-  quantity: number;
-}
 
 export interface CreateLocationDto {
   name: string;
@@ -45,8 +36,4 @@ export const locationsApi = {
     api.post<LocationZoneDto>(`/api/locations/${locationId}/zones`, data),
   updateZone: (locationId: string, zoneId: string, data: Partial<CreateZoneDto> & { isActive?: boolean; name?: string; position?: string }) =>
     api.put<LocationZoneDto>(`/api/locations/${locationId}/zones/${zoneId}`, data),
-  getStock: () =>
-    api
-      .get<PagedResult<StockBatchSlim>>("/api/stock")
-      .then((r) => r.items),
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, ExternalLink, Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useReceipts } from "@/features/receipts/hooks/useReceipts";
@@ -8,11 +8,13 @@ import { ReceiptStatusBadge } from "@/features/receipts/components/ReceiptStatus
 import { CreateReceiptForm } from "@/features/receipts/components/CreateReceiptForm";
 import type { ReceiptDto, ReceiptStatus } from "@/features/receipts/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { Pagination } from "@/components/ui/Pagination";
 import {
   DetailDrawer,
   DrawerField,
@@ -205,10 +207,21 @@ export default function ReceiptsPage() {
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
 
   const [statusFilter, setStatusFilter] = useState("");
-  const { data: receipts = [], isLoading } = useReceipts(
-    statusFilter ? { status: statusFilter } : undefined,
+  const primaryStoreId = usePrimaryStoreId();
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+  const { data, isLoading } = useReceipts(
+    { store_id: primaryStoreId, status: statusFilter || undefined, page, pageSize: PAGE_SIZE },
     access === true,
   );
+  const receipts = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = data?.totalPages ?? Math.ceil(totalCount / PAGE_SIZE);
+
+  // Reset to page 1 whenever a filter changes underneath the current page.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, primaryStoreId]);
 
   const [selected, setSelected] = useState<ReceiptDto | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -341,6 +354,10 @@ export default function ReceiptsPage() {
           </table>
         )}
       </div>
+
+      {!isLoading && receipts.length > 0 && (
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
+      )}
 
       {/* Detail drawer */}
       <DetailDrawer

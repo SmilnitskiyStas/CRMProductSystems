@@ -158,10 +158,11 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
   const [rows, setRows] = useState<WriteOffRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: stockBatches = [], isLoading: isLoadingBatches } = useStock(
+  const { data: stockPage, isLoading: isLoadingBatches } = useStock(
     { store_id: storeId },
     !!storeId,
   );
+  const stockBatches = stockPage?.items ?? [];
 
   const addedIds = useMemo(() => new Set(rows.map((r) => r.productStockId)), [rows]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -13,6 +13,7 @@ import { StockFilters } from "@/features/shelf/components/StockFilters";
 import { AddBatchForm } from "@/features/shelf/components/AddBatchForm";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
 
 interface Filters {
   status: string;
@@ -38,11 +39,24 @@ function StockPageContent() {
   // selected in the header StoreSelector so stock changes when the user switches stores.
   const effectiveStoreId = filters.store_id || primaryStoreId || undefined;
 
-  const { data: batches = [], isLoading } = useStock({
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+  const { data, isLoading } = useStock({
     status: filters.status || undefined,
     store_id: effectiveStoreId,
     zone_id: filters.zone_id || undefined,
+    page,
+    pageSize: PAGE_SIZE,
   });
+  const batches = useMemo(() => data?.items ?? [], [data]);
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = data?.totalPages ?? Math.ceil(totalCount / PAGE_SIZE);
+
+  // Reset to page 1 whenever a filter changes underneath the current page.
+  useEffect(() => {
+    setPage(1);
+  }, [filters.status, effectiveStoreId, filters.zone_id, filters.search]);
+
   const { data: stores = [] } = useStores();
   const { data: products = [] } = useCatalogProducts();
   const verify = useVerifyStock();
@@ -225,6 +239,10 @@ function StockPageContent() {
           onVerify={(id) => verify.mutate(id)}
         />
       </div>
+
+      {!isLoading && batches.length > 0 && (
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
+      )}
 
       {/* Add batch modal */}
       {showAddModal && (

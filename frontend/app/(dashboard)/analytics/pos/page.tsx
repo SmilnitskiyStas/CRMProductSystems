@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
-import { usePrimaryStoreId } from "@/lib/useStoreContext";
+import { usePrimaryStoreId, useStoreScopeReady } from "@/lib/useStoreContext";
 import {
   usePosSummary,
   usePosSummaryCompare,
@@ -142,7 +142,8 @@ export default function PosAnalyticsPage() {
   const compareFrom = compareRange ? toDateInputValue(compareRange.from) : undefined;
   const compareTo = compareRange ? toDateInputValue(compareRange.to) : undefined;
 
-  const enabled = access === true;
+  const ready = useStoreScopeReady();
+  const enabled = access === true && ready;
   const compareActive = enabled && compareEnabled && !!compareRange;
 
   const { data: summary, isLoading: summaryLoading } = usePosSummary(

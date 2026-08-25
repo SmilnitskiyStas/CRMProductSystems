@@ -11,7 +11,8 @@ export function StoreSelector() {
   const t = useTranslations("Dashboard.storeSelector");
   const { data: stores = [] } = useStores();
   const { data: user } = useMe();
-  const { selectedStoreIds, setSelectedStoreIds, initialized, setInitialized } = useStoreContext();
+  const { selectedStoreIds, setSelectedStoreIds, initialized, setInitialized, hasHydrated } =
+    useStoreContext();
   const [open, setOpen] = useState(false);
   const [draftStoreIds, setDraftStoreIds] = useState<string[]>(selectedStoreIds);
   const ref = useRef<HTMLDivElement>(null);
@@ -20,6 +21,10 @@ export function StoreSelector() {
   // but only once, ever. After that, an explicit "all stores" (empty array) selection is left
   // alone instead of being clobbered back to a single store on every stores refetch.
   useEffect(() => {
+    // Wait for persist to rehydrate from localStorage first — otherwise `initialized` can
+    // still read its in-memory default (false) before the real persisted value lands, and
+    // this would clobber an explicit "all stores" choice back to a single store.
+    if (!hasHydrated) return;
     if (stores.length === 0) return;
     if (!initialized) {
       const preferred = user?.storeId;
@@ -32,7 +37,7 @@ export function StoreSelector() {
     const pruned = selectedStoreIds.filter((id) => stores.some((s) => s.id === id));
     if (pruned.length !== selectedStoreIds.length) setSelectedStoreIds(pruned);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stores, user?.storeId, initialized]);
+  }, [stores, user?.storeId, initialized, hasHydrated]);
 
   // Sync the draft selection whenever the popover opens.
   useEffect(() => {

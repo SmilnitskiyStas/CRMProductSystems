@@ -8,7 +8,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole, canExportMarketingAnalyticsPii } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { usePostCampaignStore } from "@/features/marketing-analytics/post-campaign/store/usePostCampaignStore";
 import {
@@ -65,7 +65,8 @@ export default function PostCampaignPage() {
   const { data: modulesData } = useModules(access === true);
   const moduleActive = !modulesData || modulesData.modules.includes("marketing_analytics");
   const canExportPii = canExportMarketingAnalyticsPii(me?.role, me?.permissions);
-  const enabled = access === true && moduleActive;
+  const ready = useStoreScopeReady();
+  const enabled = access === true && moduleActive && ready;
 
   // ── Store filter — reads the header's global multi-select StoreSelector (TASK-515), same
   // as every sibling phase now does. ─────────────────────────────────────────────────────────

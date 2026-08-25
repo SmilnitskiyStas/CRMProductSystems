@@ -360,7 +360,11 @@
     "send": "Send",
     "sending": "Sending…",
     "statusActive": "Active",
-    "statusClosed": "Closed"
+    "statusClosed": "Closed",
+    "prev": "Prev",
+    "next": "Next",
+    "pageOf": "{page} / {totalPages}",
+    "totalLabel": "Total: {count}"
   },
   "Dashboard": {
     "layout": {

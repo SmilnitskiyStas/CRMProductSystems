@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Eye, CheckCircle, XCircle, BarChart2, Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
@@ -14,11 +14,13 @@ import { TRANSFER_STATUS_COLOR } from "@/features/transfers/types";
 import { CreateTransferForm } from "@/features/transfers/components/CreateTransferForm";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { Pagination } from "@/components/ui/Pagination";
 import {
   DetailDrawer,
   DrawerField,
@@ -227,10 +229,22 @@ export default function TransfersPage() {
   const access = me ? hasRole(me.role, CAN_RECEIVE_STOCK) : null;
 
   const [statusFilter, setStatusFilter] = useState("");
-  const { data: transfers = [], isLoading } = useTransfers(
-    statusFilter ? { status: statusFilter } : undefined,
+  const primaryStoreId = usePrimaryStoreId();
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+  const { data, isLoading } = useTransfers(
+    { store_id: primaryStoreId, status: statusFilter || undefined, page, pageSize: PAGE_SIZE },
     access === true,
   );
+  const transfers = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = data?.totalPages ?? Math.ceil(totalCount / PAGE_SIZE);
+
+  // Reset to page 1 whenever a filter changes underneath the current page.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, primaryStoreId]);
+
   const { data: locations = [] } = useLocations();
   const myLocationIds = useMemo(() => new Set(locations.map((l) => l.id)), [locations]);
   const confirm = useConfirmTransfer();
@@ -382,6 +396,10 @@ export default function TransfersPage() {
           </table>
         )}
       </div>
+
+      {!isLoading && transfers.length > 0 && (
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
+      )}
 
       {/* Detail drawer */}
       <DetailDrawer

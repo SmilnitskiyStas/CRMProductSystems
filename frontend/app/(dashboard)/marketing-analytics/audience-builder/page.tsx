@@ -7,7 +7,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole, canExportMarketingAnalyticsPii } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useAudienceBuilderStore } from "@/features/marketing-analytics/audience-builder/store/useAudienceBuilderStore";
 import {
@@ -99,7 +99,8 @@ export default function AudienceBuilderPage() {
   const competitorTerms = useAudienceBuilderStore((s) => s.competitorTerms);
   const horizon = useAudienceBuilderStore((s) => s.horizon);
 
-  const enabled = access === true && moduleActive;
+  const ready = useStoreScopeReady();
+  const enabled = access === true && moduleActive && ready;
 
   // ── Result tab + per-table pagination/sort ──────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<AudienceResultTab>("buyers");

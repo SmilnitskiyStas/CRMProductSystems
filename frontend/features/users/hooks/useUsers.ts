@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usersApi } from "../api/users";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import type {
   ActivityLogDto,
   InviteUserRequest,
@@ -24,13 +24,16 @@ const grantsKey = (id: string) => ["users", id, "permission-grants"] as const;
  * Query matches keys by exact array equality, and this hook's key now includes
  * `selectedStoreIds`. Acceptable known limitation: switching stores triggers a fresh
  * fetch anyway, so stale optimistic data doesn't linger. */
-export function useUsers() {
+export function useUsers(enabled = true) {
   const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
-  return useQuery({
+  const ready = useStoreScopeReady();
+  const query = useQuery({
     queryKey: [...USERS_KEY, selectedStoreIds] as const,
     queryFn: () => usersApi.getAll(selectedStoreIds),
     staleTime: 2 * 60_000,
+    enabled: enabled && ready,
   });
+  return { ...query, isLoading: !ready || query.isLoading };
 }
 
 /** Fetch a single user */

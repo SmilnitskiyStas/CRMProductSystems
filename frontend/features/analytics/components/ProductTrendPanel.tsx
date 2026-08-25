@@ -93,7 +93,7 @@ export function ProductTrendPanel({ productId, productName, storeId, onClose }: 
 
     // Same on-hand definition AnalyticsRepository.cs uses everywhere else (Quantity > 0,
     // excluding sold_out/archived batches) — see GetByCategoryAsync/GetWorstProductsAsync.
-    const currentStock = (stockQuery.data ?? [])
+    const currentStock = (stockQuery.data?.items ?? [])
       .filter((s) => s.quantity > 0 && s.status !== "sold_out" && s.status !== "archived")
       .reduce((sum, s) => sum + s.quantity, 0);
 

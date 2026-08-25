@@ -360,7 +360,11 @@
     "send": "Надіслати",
     "sending": "Надсилання…",
     "statusActive": "Активний",
-    "statusClosed": "Закритий"
+    "statusClosed": "Закритий",
+    "prev": "Назад",
+    "next": "Вперед",
+    "pageOf": "{page} / {totalPages}",
+    "totalLabel": "Усього: {count}"
   },
   "Dashboard": {
     "layout": {

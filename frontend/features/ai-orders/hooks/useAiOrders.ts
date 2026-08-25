@@ -1,13 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiOrdersApi } from "../api/aiOrders";
+import { useStoreScopeReady } from "@/lib/useStoreContext";
 
 const KEY = ["ai-orders"] as const;
 
-export function useAiOrders(storeIds?: string[]) {
-  return useQuery({
+export function useAiOrders(storeIds?: string[], enabled = true) {
+  const ready = useStoreScopeReady();
+  const query = useQuery({
     queryKey: [...KEY, storeIds ?? []],
     queryFn: () => aiOrdersApi.getList(storeIds),
+    enabled: enabled && ready,
   });
+  return { ...query, isLoading: !ready || query.isLoading };
 }
 
 export function useAiOrder(id: string | null) {

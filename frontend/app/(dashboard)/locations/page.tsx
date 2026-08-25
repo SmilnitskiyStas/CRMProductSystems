@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Map } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import {
 import { LocationFormDialog } from "@/features/locations/components/LocationFormDialog";
 import type { LocationDto, LocationType } from "@/features/locations/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -23,6 +24,17 @@ export default function LocationsPage() {
   const tTypes = useTranslations("Dashboard.locations.types");
   const tCommon = useTranslations("Common");
   const { data: locations, isLoading } = useLocations();
+  const ready = useStoreScopeReady();
+  const showLoading = isLoading || !ready;
+  const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
+  // Locations IS the store list — the header selector's ids ARE Location ids — so
+  // "filter by selected store(s)" is a pure client-side id filter, no backend involved.
+  const filteredLocations = useMemo(() => {
+    if (!locations) return locations;
+    if (selectedStoreIds.length === 0) return locations;
+    const selected = new Set(selectedStoreIds);
+    return locations.filter((loc) => selected.has(loc.id));
+  }, [locations, selectedStoreIds]);
   const [dialog, setDialog] = useState<"create" | LocationDto | null>(null);
   const { data: me } = useMe();
   // Create/Update are AtLeastEnterpriseAdmin-only on the backend (ADR-020/ADR-022 —
@@ -90,11 +102,11 @@ export default function LocationsPage() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
+      {showLoading ? (
         <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
           {tCommon("loading")}
         </div>
-      ) : !locations?.length ? (
+      ) : !filteredLocations?.length ? (
         <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
           {t("empty")}
         </div>
@@ -136,7 +148,7 @@ export default function LocationsPage() {
               </tr>
             </thead>
             <tbody>
-              {locations.map((loc) => (
+              {filteredLocations.map((loc) => (
                 <tr
                   key={loc.id}
                   style={{ borderBottom: "1px solid #1F2937" }}

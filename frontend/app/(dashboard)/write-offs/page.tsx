@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import {
@@ -16,10 +16,12 @@ import type { WriteOffDto, WriteOffStatus } from "@/features/write-offs/types";
 import { WRITE_OFF_STATUS_COLOR } from "@/features/write-offs/types";
 import { CreateWriteOffForm } from "@/features/write-offs/components/CreateWriteOffForm";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { Pagination } from "@/components/ui/Pagination";
 import {
   DetailDrawer,
   DrawerField,
@@ -321,28 +323,37 @@ function WriteOffsPageContent() {
 
   const [statusFilter, setStatusFilter] = useState("");
   const [reasonFilter] = useState(searchParams.get("reason") ?? "");
-  const [storeIdFilter, setStoreIdFilter] = useState(searchParams.get("store_id") ?? "");
+  const primaryStoreId = usePrimaryStoreId();
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
 
-  const { data: writeOffs = [], isLoading } = useWriteOffs(
-    statusFilter ? { status: statusFilter } : undefined,
-  );
+  const { data, isLoading } = useWriteOffs({
+    store_id: primaryStoreId,
+    status: statusFilter || undefined,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const writeOffs = useMemo(() => data?.items ?? [], [data]);
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = data?.totalPages ?? Math.ceil(totalCount / PAGE_SIZE);
+
+  // Reset to page 1 whenever a filter changes underneath the current page.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, reasonFilter, primaryStoreId]);
+
   const approve = useApproveWriteOff();
   const reject = useRejectWriteOff();
 
   const [selected, setSelected] = useState<WriteOffDto | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Client-side filtering for reason and store_id
+  // Client-side filtering for reason (store filtering now happens server-side via
+  // the global header selector — see usePrimaryStoreId() above)
   const filteredWriteOffs = useMemo(() => {
-    let result = writeOffs;
-    if (reasonFilter) {
-      result = result.filter((w) => w.reason === reasonFilter);
-    }
-    if (storeIdFilter) {
-      result = result.filter((w) => w.storeId === storeIdFilter);
-    }
-    return result;
-  }, [writeOffs, reasonFilter, storeIdFilter]);
+    if (!reasonFilter) return writeOffs;
+    return writeOffs.filter((w) => w.reason === reasonFilter);
+  }, [writeOffs, reasonFilter]);
 
   const chipStyle: React.CSSProperties = {
     background: "#1D3461",
@@ -354,16 +365,6 @@ function WriteOffsPageContent() {
     display: "flex",
     alignItems: "center",
     gap: 6,
-  };
-
-  const chipBtnStyle: React.CSSProperties = {
-    background: "none",
-    border: "none",
-    color: "#93C5FD",
-    cursor: "pointer",
-    fontSize: 14,
-    padding: 0,
-    lineHeight: 1,
   };
 
   const statusTabLabel = (value: string) =>
@@ -433,26 +434,13 @@ function WriteOffsPageContent() {
       </div>
 
       {/* Active filter chips */}
-      {(reasonFilter || storeIdFilter) && (
+      {reasonFilter && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {reasonFilter && (
-            <span style={chipStyle}>
-              {tPage("filterChips.reason", {
-                value: tReason.has(reasonFilter) ? tReason(reasonFilter) : reasonFilter,
-              })}
-            </span>
-          )}
-          {storeIdFilter && (
-            <span style={chipStyle}>
-              {tPage("filterChips.store", { value: storeIdFilter })}
-              <button
-                onClick={() => setStoreIdFilter("")}
-                style={chipBtnStyle}
-              >
-                ×
-              </button>
-            </span>
-          )}
+          <span style={chipStyle}>
+            {tPage("filterChips.reason", {
+              value: tReason.has(reasonFilter) ? tReason(reasonFilter) : reasonFilter,
+            })}
+          </span>
         </div>
       )}
 
@@ -564,6 +552,10 @@ function WriteOffsPageContent() {
           </table>
         )}
       </div>
+
+      {!isLoading && filteredWriteOffs.length > 0 && (
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
+      )}
 
       {/* Detail drawer */}
       <DetailDrawer

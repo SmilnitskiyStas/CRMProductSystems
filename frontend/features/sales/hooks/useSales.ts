@@ -1,14 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { salesApi } from "../api/sales";
+import { useStoreScopeReady } from "@/lib/useStoreContext";
 import type { SalesFilters, UpsertDailySalePayload } from "../types";
 
 const SALES_KEY = ["daily-sales"] as const;
 
-export function useDailySales(filters: SalesFilters) {
-  return useQuery({
+export function useDailySales(filters: SalesFilters, enabled = true) {
+  const ready = useStoreScopeReady();
+  const query = useQuery({
     queryKey: [...SALES_KEY, filters],
     queryFn: () => salesApi.getAll(filters),
+    enabled: enabled && ready,
   });
+  return { ...query, isLoading: !ready || query.isLoading };
 }
 
 export function useUpsertSale() {

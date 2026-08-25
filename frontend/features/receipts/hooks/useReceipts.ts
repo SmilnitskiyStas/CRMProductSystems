@@ -1,13 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { receiptsApi } from "../api/receipts";
+import { useStoreScopeReady } from "@/lib/useStoreContext";
 import type { CreateReceiptRequest, UpdateItemPayload } from "../types";
 
-export function useReceipts(params?: { store_id?: string; status?: string }, enabled = true) {
-  return useQuery({
-    queryKey: ["receipts", params],
-    queryFn: () => receiptsApi.getAll(params),
-    enabled,
+export function useReceipts(
+  params?: { store_id?: string; status?: string; page?: number; pageSize?: number },
+  enabled = true,
+) {
+  const ready = useStoreScopeReady();
+  const page = params?.page ?? 1;
+  const pageSize = params?.pageSize ?? 50;
+  const query = useQuery({
+    queryKey: ["receipts", { ...params, page, pageSize }],
+    queryFn: () => receiptsApi.getAll({ ...params, page, pageSize }),
+    enabled: enabled && ready,
+    placeholderData: (prev) => prev,
   });
+  return { ...query, isLoading: !ready || query.isLoading };
 }
 
 export function useReceiptDetail(id: string | null) {

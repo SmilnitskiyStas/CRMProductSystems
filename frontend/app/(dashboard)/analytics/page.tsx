@@ -17,7 +17,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
-import { usePrimaryStoreId, useStoreContext } from "@/lib/useStoreContext";
+import { usePrimaryStoreId, useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { ExpiryDonut } from "@/features/analytics/components/ExpiryDonut";
 import { LossesByReasonChart } from "@/features/analytics/components/LossesByReasonChart";
 import { LossesByStoreChart } from "@/features/analytics/components/LossesByStoreChart";
@@ -193,7 +193,8 @@ export default function AnalyticsPage() {
   const effectiveAccess = useRequireTab("/analytics", "analytics", roleAccess === true);
   const access = roleAccess === null ? null : effectiveAccess;
 
-  const enabled = access === true;
+  const ready = useStoreScopeReady();
+  const enabled = access === true && ready;
 
   const [range, setRange] = useState<SimpleDateRange>(defaultRange);
   const [compareEnabled, setCompareEnabled] = useState(false);

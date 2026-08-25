@@ -1,14 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { eventsApi } from "../api/events";
+import { useStoreScopeReady } from "@/lib/useStoreContext";
 import type { CreateCoefficientPayload, UpsertEventPayload } from "../types";
 
 const EVENTS_KEY = ["demand-events"] as const;
 
-export function useEvents(from: string, to: string, storeIds?: string[]) {
-  return useQuery({
+export function useEvents(from: string, to: string, storeIds?: string[], enabled = true) {
+  const ready = useStoreScopeReady();
+  const query = useQuery({
     queryKey: [...EVENTS_KEY, from, to, storeIds],
     queryFn: () => eventsApi.getAll(from, to, storeIds),
+    enabled: enabled && ready,
   });
+  return { ...query, isLoading: !ready || query.isLoading };
 }
 
 function useInvalidate() {

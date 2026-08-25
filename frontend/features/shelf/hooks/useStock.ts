@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { stockApi } from "../api/stock";
+import { useStoreScopeReady } from "@/lib/useStoreContext";
 import type { CreateStockRequest } from "../types";
 
 export function useStock(
@@ -8,14 +9,21 @@ export function useStock(
     status?: string;
     zone_id?: string;
     product_id?: string;
+    page?: number;
+    pageSize?: number;
   },
   enabled = true,
 ) {
-  return useQuery({
-    queryKey: ["stock", params],
-    queryFn: () => stockApi.getAll(params),
-    enabled,
+  const ready = useStoreScopeReady();
+  const page = params?.page ?? 1;
+  const pageSize = params?.pageSize ?? 50;
+  const query = useQuery({
+    queryKey: ["stock", { ...params, page, pageSize }],
+    queryFn: () => stockApi.getAll({ ...params, page, pageSize }),
+    enabled: enabled && ready,
+    placeholderData: (prev) => prev,
   });
+  return { ...query, isLoading: !ready || query.isLoading };
 }
 
 export function useStockById(id: string | null) {

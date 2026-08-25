@@ -3,14 +3,14 @@ import type { PagedResult } from "@/lib/api-types";
 import type { TransferDto, CreateTransferRequest } from "../types";
 
 export const transfersApi = {
-  getAll: (params?: { store_id?: string; status?: string }) => {
+  getAll: (params?: { store_id?: string; status?: string; page?: number; pageSize?: number }) => {
     const qs = new URLSearchParams();
     if (params?.store_id) qs.set("store_id", params.store_id);
     if (params?.status) qs.set("status", params.status);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const q = qs.toString();
-    return api
-      .get<PagedResult<TransferDto>>(`/api/transfers${q ? `?${q}` : ""}`)
-      .then((r) => r.items);
+    return api.get<PagedResult<TransferDto>>(`/api/transfers${q ? `?${q}` : ""}`);
   },
 
   getById: (id: string) => api.get<TransferDto>(`/api/transfers/${id}`),

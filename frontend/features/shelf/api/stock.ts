@@ -14,6 +14,8 @@ export const stockApi = {
     status?: string;
     zone_id?: string;
     product_id?: string;
+    page?: number;
+    pageSize?: number;
   }) => {
     const qs = new URLSearchParams();
     // Wire param renamed store_id -> storeIds (backend now takes Guid[]? storeIds on GET
@@ -22,10 +24,10 @@ export const stockApi = {
     if (params?.status) qs.set("status", params.status);
     if (params?.zone_id) qs.set("zone_id", params.zone_id);
     if (params?.product_id) qs.set("product_id", params.product_id);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const query = qs.toString();
-    return api
-      .get<PagedResult<ProductStockDto>>(`/api/stock${query ? `?${query}` : ""}`)
-      .then((r) => r.items);
+    return api.get<PagedResult<ProductStockDto>>(`/api/stock${query ? `?${query}` : ""}`);
   },
 
   getById: (id: string) => api.get<ProductStockDto>(`/api/stock/${id}`),

@@ -8,7 +8,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useMarketingAnalyticsOverview } from "@/features/marketing-analytics/hooks/useMarketingAnalytics";
 import { PeriodStoreFilterBar } from "@/features/marketing-analytics/components/PeriodStoreFilterBar";
@@ -100,7 +100,8 @@ export default function MarketingAnalyticsPage() {
     [period, customFrom, customTo, storeIds],
   );
 
-  const enabled = access === true && moduleActive;
+  const ready = useStoreScopeReady();
+  const enabled = access === true && moduleActive && ready;
   const { data: overview, isLoading, isFetching } = useMarketingAnalyticsOverview(filters, enabled);
 
   function handleRefresh() {

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { locationsApi, type CreateZoneDto } from "../api/locations";
+import { stockApi } from "@/features/shelf/api/stock";
 import type { FloorPlanLayout, LocationZoneDto, ShelfPlanLayout, ZoneStatusCounts } from "../types";
 
 export function parseFloorPlan(raw: string | null): FloorPlanLayout {
@@ -72,15 +73,20 @@ export function useUpdateZonePosition(locationId: string) {
   });
 }
 
-// Per-zone safe/warning/critical/expired counts for one location, derived from /api/stock
+// Per-zone safe/warning/critical/expired counts for one location, derived from /api/stock.
+// Scoped server-side to exactly this location (store_id param) — no tenant-wide overfetch, and
+// no dependency on the global header store selector (this page's scope is the URL's locationId).
+// pageSize is bumped to the backend's max clamp (200, see api-contracts.md) rather than left at
+// the 50 default — a single location's batch count can exceed 50, which would otherwise silently
+// truncate the counts computed below.
 export function useZoneStatusCounts(locationId: string | null) {
   return useQuery({
     queryKey: ["locations", locationId, "zone-status"],
     queryFn: async () => {
-      const batches = await locationsApi.getStock();
+      const page = await stockApi.getAll({ store_id: locationId!, pageSize: 200 });
       const byZone = new Map<string, ZoneStatusCounts>();
-      for (const b of batches) {
-        if (b.locationId !== locationId || !b.zoneId || b.quantity <= 0) continue;
+      for (const b of page.items) {
+        if (b.storeId !== locationId || !b.zoneId || b.quantity <= 0) continue;
         let counts = byZone.get(b.zoneId);
         if (!counts) {
           counts = { safe: 0, warning: 0, critical: 0, expired: 0 };

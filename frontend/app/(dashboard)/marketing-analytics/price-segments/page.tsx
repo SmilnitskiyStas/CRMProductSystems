@@ -8,7 +8,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_VIEW_ANALYTICS, hasRole, canExportMarketingAnalyticsPii } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
-import { useStoreContext } from "@/lib/useStoreContext";
+import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
 import {
   usePriceSegmentsOverview,
@@ -112,7 +112,8 @@ export default function PriceSegmentsPage() {
     [period, customFrom, customTo, storeIds],
   );
 
-  const enabled = access === true && moduleActive;
+  const ready = useStoreScopeReady();
+  const enabled = access === true && moduleActive && ready;
 
   // ── Comparison ("Суми покупок") ────────────────────────────────────────────────────────────
   const [selectedAudience, setSelectedAudience] = useState<PriceAudienceKey | null>(null);

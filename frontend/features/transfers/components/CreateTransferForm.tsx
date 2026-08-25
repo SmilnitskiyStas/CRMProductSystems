@@ -122,10 +122,11 @@ export function CreateTransferForm({ onSuccess, onCancel }: Props) {
   const [rows, setRows] = useState<TransferRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: stockBatches = [], isLoading: isLoadingBatches } = useStock(
+  const { data: stockPage, isLoading: isLoadingBatches } = useStock(
     { store_id: fromStoreId },
     !!fromStoreId,
   );
+  const stockBatches = stockPage?.items ?? [];
 
   const toStoreOptions = useMemo(
     () => locations.filter((l) => l.id !== fromStoreId),
