@@ -148,6 +148,19 @@ public interface ILoyaltyService
     Task<(PagedResult<LoyaltyTierChangeHistoryDto>? History, string? Error, int? StatusCode)> GetTierHistoryAsync(
         Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-626: the full configured tier ladder for <paramref name="tenantId"/>, for the
+    /// mobile rank-progress screen (the existing <see cref="GetTierProgressAsync"/> only
+    /// returns current + next tier). Same membership check and <see
+    /// cref="Services.ITenantSessionOverride"/> read as <see cref="GetTierProgressAsync"/> —
+    /// <c>loyalty_tier_definitions</c> is staff-only config with no <c>consumer_self_access</c>
+    /// RLS policy. Ordered ascending by <see cref="LoyaltyTierDefinition.SortOrder"/>; empty
+    /// (never null) when the tenant has no ladder configured. Status codes: 404 the consumer
+    /// has no membership at this tenant.
+    /// </summary>
+    Task<(IReadOnlyList<LoyaltyTierDefinitionDto>? Ladder, string? Error, int? StatusCode)> GetTierLadderForConsumerAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default);
+
     // ── Staff-facing (POS / cabinet) ──────────────────────────────────────────
 
     /// <summary>

@@ -5943,3 +5943,26 @@ Updated `api-contracts.md` (new Realtime subsection under Consumer support ticke
 JWT/query-token rule, method/event names, exact payloads, access rules, reconnect behavior).
 Wrote `.claude/logs/handoffs/625-to-mobile-codex.md`. `mobile/`, `frontend/`, and REST DTO shapes
 untouched (spec constraints).
+
+# TASK-626 — Consumer loyalty tier ladder endpoint (mobile contract gap)
+
+**Status:** done · **Agent:** backend-developer · **Updated:** 2026-08-25
+Extends TASK-615's tier ladder feature. Reported by the mobile Codex agent as a contract gap: the
+rank-progress screen needs the full ladder, not just current+next.
+Log: `.claude/logs/tasks/626_2026-08-25_consumer-tier-ladder-endpoint_backend-developer.md`
+
+New `GET /api/consumer/loyalty/{tenantId}/tiers/ladder` on `ConsumerLoyaltyController` — mirrors
+`GetTierProgress`'s structure exactly. New `ILoyaltyService.GetTierLadderForConsumerAsync`: same
+membership check (404 if not a member) and `ITenantSessionOverride`-scoped
+`GetTierLadderAsync(tenantId)` read as `GetTierProgressAsync` (loyalty_tier_definitions has no
+consumer_self_access RLS policy), but returns the full `IReadOnlyList<LoyaltyTierDefinitionDto>`
+instead of computing current/next. Reuses the existing admin-facing `GetTierLadderAsync`/
+`ToTierDefinitionDto` mapper — already ordered by SortOrder, already the exact DTO shape the
+mobile spec asked for.
+
+`dotnet test`: **1949/1949 passing** (3 new — active member gets full ladder ordered by
+SortOrder, non-member 404, empty ladder returns `[]` not null — up from TASK-625's 1946/1946
+baseline, zero regressions).
+
+Updated `api-contracts.md` (new route under Consumer-facing loyalty). Wrote
+`.claude/logs/handoffs/626-to-mobile-codex.md`. `mobile/`/`frontend/` untouched.

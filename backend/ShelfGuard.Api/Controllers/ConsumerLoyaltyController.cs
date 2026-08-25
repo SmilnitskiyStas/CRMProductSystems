@@ -156,6 +156,26 @@ public sealed class ConsumerLoyaltyController : ControllerBase
         return Ok(history);
     }
 
+    /// <summary>
+    /// TASK-626: the full configured tier ladder, ordered by SortOrder, for the mobile
+    /// rank-progress screen — <see cref="GetTierProgress"/> only exposes current + next tier.
+    /// </summary>
+    [HttpGet("{tenantId:guid}/tiers/ladder")]
+    [ProducesResponseType(typeof(IReadOnlyList<LoyaltyTierDefinitionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTierLadder(Guid tenantId, CancellationToken ct)
+    {
+        var consumerId = ResolveConsumerAccountId();
+        if (consumerId is null) return Forbid();
+
+        var (ladder, error, statusCode) = await _loyalty.GetTierLadderForConsumerAsync(consumerId.Value, tenantId, ct);
+        if (error is not null)
+            return StatusCode(statusCode ?? 400, new { error });
+
+        return Ok(ladder);
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
 
     /// <summary>

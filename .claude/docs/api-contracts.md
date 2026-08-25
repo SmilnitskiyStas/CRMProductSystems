@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-08-24
+**Updated:** 2026-08-25
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -1446,14 +1446,20 @@ empty `name`, `accrualMultiplier` outside `[0, 999.99]`, `discountPercent` outsi
 
 ---
 
-### Loyalty tier ladder — consumer-facing (`/api/consumer/loyalty/{tenantId}/tiers*`, TASK-615)
+### Loyalty tier ladder — consumer-facing (`/api/consumer/loyalty/{tenantId}/tiers*`, TASK-615, TASK-626)
 
 Same `ConsumerLoyaltyController` as the existing wallet/code/history endpoints above — `[Authorize]`
 + `consumer_account_id` claim.
 ```
 GET api/consumer/loyalty/{tenantId}/tiers                              -> 200 LoyaltyTierProgressDto | 403 | 404
 GET api/consumer/loyalty/{tenantId}/tiers/history?page=1&pageSize=50   -> 200 PagedResult<LoyaltyTierChangeHistoryDto> | 403 | 404
+GET api/consumer/loyalty/{tenantId}/tiers/ladder                       -> 200 LoyaltyTierDefinitionDto[] | 403 | 404
 ```
+`tiers/ladder` (TASK-626) returns the full configured ladder — same DTO shape and `sortOrder`
+ordering as the admin `GET api/settings/loyalty/tiers` above, `[]` (never null) when the tenant has
+no ladder configured. Access rule matches `tiers`: 404 when the consumer has no active membership
+at `tenantId`. Added because `tiers` only exposes current+next tier, which wasn't enough for the
+mobile rank-progress screen (it needs to render every rung).
 
 #### LoyaltyTierProgressDto
 ```json

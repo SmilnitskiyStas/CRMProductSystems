@@ -565,6 +565,22 @@ public sealed class LoyaltyService : ILoyaltyService
         return (result, null, null);
     }
 
+    /// <summary>See <see cref="ILoyaltyService.GetTierLadderForConsumerAsync"/>.</summary>
+    public async Task<(IReadOnlyList<LoyaltyTierDefinitionDto>? Ladder, string? Error, int? StatusCode)> GetTierLadderForConsumerAsync(
+        Guid consumerAccountId, Guid tenantId, CancellationToken ct = default)
+    {
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null)
+            return (null, "You are not a member of this loyalty program.", 404);
+
+        // Same ITenantSessionOverride read as GetTierProgressAsync — loyalty_tier_definitions
+        // is staff-only config with no consumer_self_access RLS policy.
+        var ladder = await _tenantScope.ExecuteAsync(
+            tenantId, () => _loyalty.GetTierLadderAsync(tenantId, ct), ct);
+
+        return (ladder.Select(ToTierDefinitionDto).ToList(), null, null);
+    }
+
     // ── Staff-facing (POS / cabinet) ──────────────────────────────────────────
 
     public async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveCodeAsync(
