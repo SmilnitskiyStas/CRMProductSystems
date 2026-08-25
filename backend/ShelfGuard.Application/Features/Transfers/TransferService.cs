@@ -42,10 +42,11 @@ public sealed class TransferService : ITransferService
     }
 
     public async Task<PagedResult<TransferDto>> GetPagedAsync(
-        Guid? storeId, string? status, int page, int pageSize,
+        Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
+        int page, int pageSize,
         CancellationToken ct = default)
     {
-        var (transfers, total) = await _repo.GetPagedAsync(storeId, status, page, pageSize, ct);
+        var (transfers, total) = await _repo.GetPagedAsync(storeId, status, search, sortBy, sortDescending, page, pageSize, ct);
         return new PagedResult<TransferDto>
         {
             Items = transfers.Select(ToDto).ToList(),

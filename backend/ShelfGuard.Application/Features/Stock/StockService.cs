@@ -21,10 +21,11 @@ public sealed class StockService : IStockService
 
     public async Task<PagedResult<ProductStockDto>> GetPagedAsync(
         Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId,
+        string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
         CancellationToken ct = default)
     {
-        var (batches, total) = await _repo.GetPagedAsync(storeIds, status, zoneId, productId, page, pageSize, ct);
+        var (batches, total) = await _repo.GetPagedAsync(storeIds, status, zoneId, productId, search, sortBy, sortDescending, page, pageSize, ct);
         return new PagedResult<ProductStockDto>
         {
             Items = batches.Select(ToDto).ToList(),

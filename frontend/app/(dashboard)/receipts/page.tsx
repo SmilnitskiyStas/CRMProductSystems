@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, ExternalLink, Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useReceipts } from "@/features/receipts/hooks/useReceipts";
 import { ReceiptStatusBadge } from "@/features/receipts/components/ReceiptStatusBadge";
 import { CreateReceiptForm } from "@/features/receipts/components/CreateReceiptForm";
-import type { ReceiptDto, ReceiptStatus } from "@/features/receipts/types";
+import type { ReceiptDto, ReceiptStatus, ReceiptSortBy } from "@/features/receipts/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { AccessDenied } from "@/components/AccessDenied";
@@ -15,6 +15,7 @@ import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 import {
   DetailDrawer,
   DrawerField,
@@ -210,8 +211,38 @@ export default function ReceiptsPage() {
   const primaryStoreId = usePrimaryStoreId();
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
+
+  // Debounced search (300ms) — mirrors features/customers/components/CustomerTable.tsx's
+  // handleSearchInput pattern, inlined here since this page has no dedicated filter component.
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleSearchInput(v: string) {
+    setSearchInput(v);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setSearch(v), 300);
+  }
+
+  const [sortBy, setSortBy] = useState<ReceiptSortBy>("createdat");
+  const [sortDescending, setSortDescending] = useState(true);
+  function handleSort(key: ReceiptSortBy) {
+    if (key === sortBy) setSortDescending((d) => !d);
+    else {
+      setSortBy(key);
+      setSortDescending(true);
+    }
+  }
+
   const { data, isLoading } = useReceipts(
-    { store_id: primaryStoreId, status: statusFilter || undefined, page, pageSize: PAGE_SIZE },
+    {
+      store_id: primaryStoreId,
+      status: statusFilter || undefined,
+      page,
+      pageSize: PAGE_SIZE,
+      search: search || undefined,
+      sortBy,
+      sortDescending,
+    },
     access === true,
   );
   const receipts = data?.items ?? [];
@@ -221,7 +252,7 @@ export default function ReceiptsPage() {
   // Reset to page 1 whenever a filter changes underneath the current page.
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, primaryStoreId]);
+  }, [statusFilter, primaryStoreId, search, sortBy, sortDescending]);
 
   const [selected, setSelected] = useState<ReceiptDto | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -247,31 +278,49 @@ export default function ReceiptsPage() {
         </Btn>
       </div>
 
-      {/* Status tabs */}
-      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937", paddingBottom: 0 }}>
-        {STATUS_TAB_VALUES.map((value) => {
-          const active = value === statusFilter;
-          return (
-            <button
-              key={value}
-              onClick={() => setStatusFilter(value)}
-              style={{
-                background: "transparent",
-                border: "none",
-                borderBottom: active ? "2px solid #3B82F6" : "2px solid transparent",
-                color: active ? "#60A5FA" : "#6B7280",
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                padding: "8px 14px",
-                cursor: "pointer",
-                marginBottom: -1,
-                transition: "color 0.1s",
-              }}
-            >
-              {statusTabLabel(value)}
-            </button>
-          );
-        })}
+      {/* Status tabs + search */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937", paddingBottom: 0, flex: 1, minWidth: 200 }}>
+          {STATUS_TAB_VALUES.map((value) => {
+            const active = value === statusFilter;
+            return (
+              <button
+                key={value}
+                onClick={() => setStatusFilter(value)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: active ? "2px solid #3B82F6" : "2px solid transparent",
+                  color: active ? "#60A5FA" : "#6B7280",
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 400,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  marginBottom: -1,
+                  transition: "color 0.1s",
+                }}
+              >
+                {statusTabLabel(value)}
+              </button>
+            );
+          })}
+        </div>
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => handleSearchInput(e.target.value)}
+          placeholder={tPage("searchPlaceholder")}
+          style={{
+            background: "#111827",
+            border: "1px solid #1F2937",
+            borderRadius: 8,
+            color: "#E8EDF5",
+            fontSize: 13,
+            padding: "7px 12px",
+            outline: "none",
+            width: 260,
+          }}
+        />
       </div>
 
       {/* Table */}
@@ -295,19 +344,21 @@ export default function ReceiptsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {[
-                  tPage("headers.id"),
-                  tPage("headers.store"),
-                  tPage("headers.supplier"),
-                  tPage("headers.expected"),
-                  tPage("headers.status"),
-                  tPage("headers.items"),
-                  tPage("headers.actions"),
-                ].map((h) => (
-                  <th key={h} style={thStyle}>
-                    {h}
-                  </th>
-                ))}
+                <th style={thStyle}>{tPage("headers.id")}</th>
+                <th style={thStyle}>
+                  <SortableHeader label={tPage("headers.store")} sortKey="destination" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
+                </th>
+                <th style={thStyle}>
+                  <SortableHeader label={tPage("headers.supplier")} sortKey="supplier" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
+                </th>
+                <th style={thStyle}>
+                  <SortableHeader label={tPage("headers.expected")} sortKey="expectedat" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
+                </th>
+                <th style={thStyle}>
+                  <SortableHeader label={tPage("headers.status")} sortKey="status" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
+                </th>
+                <th style={thStyle}>{tPage("headers.items")}</th>
+                <th style={thStyle}>{tPage("headers.actions")}</th>
               </tr>
             </thead>
             <tbody>

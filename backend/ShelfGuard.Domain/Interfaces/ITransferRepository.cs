@@ -5,7 +5,9 @@ namespace ShelfGuard.Domain.Interfaces;
 public interface ITransferRepository
 {
     Task<List<StockTransfer>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default);
-    Task<(List<StockTransfer> Items, int Total)> GetPagedAsync(Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default);
+    Task<(List<StockTransfer> Items, int Total)> GetPagedAsync(
+        Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
+        int page, int pageSize, CancellationToken ct = default);
     Task<StockTransfer?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<ProductStock?> GetStockByIdAsync(Guid stockId, CancellationToken ct = default);
 

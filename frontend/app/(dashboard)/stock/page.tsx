@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -14,6 +14,7 @@ import { AddBatchForm } from "@/features/shelf/components/AddBatchForm";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import { Pagination } from "@/components/ui/Pagination";
+import type { StockSortBy } from "@/features/shelf/types";
 
 interface Filters {
   status: string;
@@ -39,6 +40,34 @@ function StockPageContent() {
   // selected in the header StoreSelector so stock changes when the user switches stores.
   const effectiveStoreId = filters.store_id || primaryStoreId || undefined;
 
+  // Debounced search (300ms) — `filters.search` stays the immediately-typed value bound to
+  // StockFilters' input for instant UI feedback; `debouncedSearch` is what actually reaches the
+  // query. Search is now server-side (GET /api/stock's `search` param) — see the removed
+  // post-fetch `.filter()` below, which only ever matched within the current page and silently
+  // missed hits on other pages (known correctness bug, fixed by this change).
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(filters.search), 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [filters.search]);
+
+  // expirydate ascending (soonest-expiring first) matches StockRepository's existing default
+  // OrderBy(s => s.ExpiryDate) — FEFO-first — so the default sort direction here is ascending,
+  // not the descending-by-default convention used elsewhere for a "createdat" default.
+  const [sortBy, setSortBy] = useState<StockSortBy>("expirydate");
+  const [sortDescending, setSortDescending] = useState(false);
+  function handleSort(key: StockSortBy) {
+    if (key === sortBy) setSortDescending((d) => !d);
+    else {
+      setSortBy(key);
+      setSortDescending(true);
+    }
+  }
+
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
   const { data, isLoading } = useStock({
@@ -47,6 +76,9 @@ function StockPageContent() {
     zone_id: filters.zone_id || undefined,
     page,
     pageSize: PAGE_SIZE,
+    search: debouncedSearch || undefined,
+    sortBy,
+    sortDescending,
   });
   const batches = useMemo(() => data?.items ?? [], [data]);
   const totalCount = data?.totalCount ?? 0;
@@ -55,22 +87,11 @@ function StockPageContent() {
   // Reset to page 1 whenever a filter changes underneath the current page.
   useEffect(() => {
     setPage(1);
-  }, [filters.status, effectiveStoreId, filters.zone_id, filters.search]);
+  }, [filters.status, effectiveStoreId, filters.zone_id, debouncedSearch, sortBy, sortDescending]);
 
   const { data: stores = [] } = useStores();
   const { data: products = [] } = useCatalogProducts();
   const verify = useVerifyStock();
-
-  const filtered = useMemo(() => {
-    if (!filters.search) return batches;
-    const q = filters.search.toLowerCase();
-    return batches.filter(
-      (b) =>
-        b.productName.toLowerCase().includes(q) ||
-        (b.productBarcode ?? "").toLowerCase().includes(q) ||
-        (b.batchNumber ?? "").toLowerCase().includes(q),
-    );
-  }, [batches, filters.search]);
 
   function handleSelectId(id: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -82,7 +103,7 @@ function StockPageContent() {
   }
 
   function handleSelectAll(checked: boolean) {
-    if (checked) setSelectedIds(new Set(filtered.map((b) => b.id)));
+    if (checked) setSelectedIds(new Set(batches.map((b) => b.id)));
     else setSelectedIds(new Set());
   }
 
@@ -98,10 +119,7 @@ function StockPageContent() {
     barcode: p.barcode ?? null,
   }));
 
-  const countLabel =
-    filtered.length !== batches.length
-      ? t("countOfTotal", { filtered: filtered.length, total: batches.length })
-      : String(filtered.length);
+  const countLabel = String(batches.length);
 
   const chipStyle: React.CSSProperties = {
     background: "#1D3461",
@@ -231,12 +249,15 @@ function StockPageContent() {
         </div>
 
         <StockTable
-          items={filtered}
+          items={batches}
           isLoading={isLoading}
           selectedIds={selectedIds}
           onSelectId={handleSelectId}
           onSelectAll={handleSelectAll}
           onVerify={(id) => verify.mutate(id)}
+          sortBy={sortBy}
+          sortDescending={sortDescending}
+          onSort={handleSort}
         />
       </div>
 

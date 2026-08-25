@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Domain.Entities;
@@ -40,6 +41,7 @@ public sealed class StockRepository : IStockRepository
 
     public async Task<(List<ProductStock> Items, int Total)> GetPagedAsync(
         Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId,
+        string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
         CancellationToken ct = default)
     {
@@ -56,16 +58,55 @@ public sealed class StockRepository : IStockRepository
             query = query.Where(s => s.ZoneId == zoneId);
         if (productId.HasValue)
             query = query.Where(s => s.ProductId == productId);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            // Same convention as ItemRepository.GetPagedAsync (TASK-601): name ILike OR'd with
+            // an exact-barcode match via EF.Functions.JsonContains — a plain `Contains` over the
+            // jsonb-mapped Barcodes column does not translate against real Postgres (see
+            // ItemRepository.GetByBarcodeAsync's comment for the confirmed failure mode).
+            var barcodeNeedle = JsonSerializer.Serialize(new[] { term });
+            query = query.Where(s =>
+                (s.Product != null && EF.Functions.ILike(s.Product.Name, $"%{term}%")) ||
+                (s.Product != null && EF.Functions.JsonContains(s.Product.Barcodes, barcodeNeedle)) ||
+                (s.BatchNumber != null && EF.Functions.ILike(s.BatchNumber, $"%{term}%")));
+        }
 
         var total = await query.CountAsync(ct);
+        query = ApplySort(query, sortBy, sortDescending);
         var items = await query
-            .OrderBy(s => s.ExpiryDate)
-            .ThenBy(s => s.Product!.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
         return (items, total);
+    }
+
+    private static IQueryable<ProductStock> ApplySort(
+        IQueryable<ProductStock> query, string? sortBy, bool? sortDescending)
+    {
+        var key = StockSortKeys.Normalize(sortBy);
+
+        // FEFO-relevant default ("expirydate", nearest-first ascending) is the pre-existing
+        // implicit order — preserved when the caller omits sortDescending entirely. Any other
+        // explicit sort key defaults to descending when sortDescending is omitted, matching the
+        // other 3 paginated list endpoints (Receipts/Transfers/WriteOffs all default newest-first
+        // i.e. descending). Only the default key's own direction inherits the old behavior so
+        // existing Stock-list callers that never touch the new sort params keep seeing the exact
+        // same soonest-expiring-first order as before this task.
+        var descending = sortDescending ?? key != StockSortKeys.Default;
+
+        return (key, descending) switch
+        {
+            ("productname", false) => query.OrderBy(s => s.Product != null ? s.Product.Name : null),
+            ("productname", true) => query.OrderByDescending(s => s.Product != null ? s.Product.Name : null),
+            ("quantity", false) => query.OrderBy(s => s.Quantity),
+            ("quantity", true) => query.OrderByDescending(s => s.Quantity),
+            ("status", false) => query.OrderBy(s => s.Status),
+            ("status", true) => query.OrderByDescending(s => s.Status),
+            (_, false) => query.OrderBy(s => s.ExpiryDate).ThenBy(s => s.Product != null ? s.Product.Name : null),
+            (_, true) => query.OrderByDescending(s => s.ExpiryDate).ThenBy(s => s.Product != null ? s.Product.Name : null),
+        };
     }
 
     public Task<ProductStock?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

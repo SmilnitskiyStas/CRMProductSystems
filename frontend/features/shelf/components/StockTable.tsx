@@ -4,10 +4,11 @@ import { useState } from "react";
 import { Eye, ShieldCheck, BarChart2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
-import type { ProductStockDto, BatchStatus } from "../types";
+import type { ProductStockDto, BatchStatus, StockSortBy } from "../types";
 import { STATUS_COLOR } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 import {
   DetailDrawer,
   DrawerField,
@@ -22,6 +23,9 @@ interface Props {
   onSelectId: (id: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
   onVerify?: (id: string) => void;
+  sortBy: StockSortBy;
+  sortDescending: boolean;
+  onSort: (key: StockSortBy) => void;
 }
 
 const CRITICAL_STATUSES: BatchStatus[] = ["critical", "expired"];
@@ -197,6 +201,9 @@ export function StockTable({
   onSelectId,
   onSelectAll,
   onVerify,
+  sortBy,
+  sortDescending,
+  onSort,
 }: Props) {
   const router = useRouter();
   const t = useTranslations("Dashboard.shelf.stockTable");
@@ -242,14 +249,22 @@ export function StockTable({
                   style={{ cursor: "pointer", accentColor: "#3B82F6" }}
                 />
               </th>
-              <th style={thStyle}>{t("headers.name")}</th>
+              <th style={thStyle}>
+                <SortableHeader label={t("headers.name")} sortKey="productname" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
+              </th>
               <th style={thStyle}>{t("headers.barcode")}</th>
               <th style={thStyle}>{t("headers.zone")}</th>
               <th style={thStyle}>{t("headers.batch")}</th>
-              <th style={thStyle}>{t("headers.qty")}</th>
-              <th style={thStyle}>{t("headers.expiry")}</th>
+              <th style={thStyle}>
+                <SortableHeader label={t("headers.qty")} sortKey="quantity" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
+              </th>
+              <th style={thStyle}>
+                <SortableHeader label={t("headers.expiry")} sortKey="expirydate" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
+              </th>
               <th style={{ ...thStyle, fontFamily: "monospace" }}>{t("headers.days")}</th>
-              <th style={thStyle}>{t("headers.status")}</th>
+              <th style={thStyle}>
+                <SortableHeader label={t("headers.status")} sortKey="status" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
+              </th>
               <th style={{ ...thStyle, borderRight: "none" }}>{t("headers.actions")}</th>
             </tr>
           </thead>

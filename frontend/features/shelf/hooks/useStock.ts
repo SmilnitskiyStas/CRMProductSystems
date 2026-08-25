@@ -11,6 +11,9 @@ export function useStock(
     product_id?: string;
     page?: number;
     pageSize?: number;
+    search?: string;
+    sortBy?: string;
+    sortDescending?: boolean;
   },
   enabled = true,
 ) {

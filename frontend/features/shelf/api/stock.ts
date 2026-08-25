@@ -16,6 +16,9 @@ export const stockApi = {
     product_id?: string;
     page?: number;
     pageSize?: number;
+    search?: string;
+    sortBy?: string;
+    sortDescending?: boolean;
   }) => {
     const qs = new URLSearchParams();
     // Wire param renamed store_id -> storeIds (backend now takes Guid[]? storeIds on GET
@@ -26,6 +29,9 @@ export const stockApi = {
     if (params?.product_id) qs.set("product_id", params.product_id);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
+    if (params?.sortDescending !== undefined) qs.set("sortDescending", String(params.sortDescending));
     const query = qs.toString();
     return api.get<PagedResult<ProductStockDto>>(`/api/stock${query ? `?${query}` : ""}`);
   },

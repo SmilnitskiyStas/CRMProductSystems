@@ -7,6 +7,10 @@ export type BatchStatus =
   | "archived"
   | "needs_verification";
 
+// Opaque sort keys passed straight through to GET /api/stock's `sortBy` query param —
+// must match the backend contract's sort-key strings exactly (TASK-628-frontend brief).
+export type StockSortBy = "expirydate" | "productname" | "quantity" | "status";
+
 export interface StockAction {
   type: string;
   label: string;

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShelfGuard.Application.Features.WriteOffs;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -28,7 +29,8 @@ public sealed class WriteOffRepository : IWriteOffRepository
     }
 
     public async Task<(List<WriteOff> Items, int Total)> GetPagedAsync(
-        Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default)
+        Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
+        int page, int pageSize, CancellationToken ct = default)
     {
         var query = _db.WriteOffs
             .Include(w => w.Items).ThenInclude(i => i.Product)
@@ -40,15 +42,45 @@ public sealed class WriteOffRepository : IWriteOffRepository
             query = query.Where(w => w.StoreId == storeId);
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(w => w.Status == status);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(w =>
+                (w.Store != null && EF.Functions.ILike(w.Store.Name, $"%{term}%")) ||
+                (w.Reason != null && EF.Functions.ILike(w.Reason, $"%{term}%")));
+        }
 
         var total = await query.CountAsync(ct);
+        query = ApplySort(query, sortBy, sortDescending);
         var items = await query
-            .OrderByDescending(w => w.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
         return (items, total);
+    }
+
+    private static IQueryable<WriteOff> ApplySort(
+        IQueryable<WriteOff> query, string? sortBy, bool? sortDescending)
+    {
+        var key = WriteOffSortKeys.Normalize(sortBy);
+        var descending = sortDescending ?? true; // newest-first is the pre-existing default
+
+        return (key, descending) switch
+        {
+            ("status", false) => query.OrderBy(w => w.Status),
+            ("status", true) => query.OrderByDescending(w => w.Status),
+            ("reason", false) => query.OrderBy(w => w.Reason),
+            ("reason", true) => query.OrderByDescending(w => w.Reason),
+            ("netloss", false) => query.OrderBy(w => w.TotalLossAmountPurchase.HasValue || w.TotalReimbursementAmount.HasValue
+                ? (w.TotalLossAmountPurchase ?? 0m) - (w.TotalReimbursementAmount ?? 0m)
+                : (decimal?)null),
+            ("netloss", true) => query.OrderByDescending(w => w.TotalLossAmountPurchase.HasValue || w.TotalReimbursementAmount.HasValue
+                ? (w.TotalLossAmountPurchase ?? 0m) - (w.TotalReimbursementAmount ?? 0m)
+                : (decimal?)null),
+            (_, false) => query.OrderBy(w => w.CreatedAt),
+            (_, true) => query.OrderByDescending(w => w.CreatedAt),
+        };
     }
 
     public Task<WriteOff?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

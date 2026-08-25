@@ -2,6 +2,10 @@ export type WriteOffStatus = "draft" | "pending_approval" | "approved" | "reject
 export type WriteOffReason = "expired" | "damaged" | "theft" | "production_loss" | "other";
 export type ReimbursementType = "fixed" | "percent";
 
+// Opaque sort keys passed straight through to GET /api/write-offs's `sortBy` query param —
+// must match the backend contract's sort-key strings exactly (TASK-628-frontend brief).
+export type WriteOffSortBy = "createdat" | "status" | "reason" | "netloss";
+
 export interface WriteOffItemDto {
   id: string;
   productStockId: string | null;

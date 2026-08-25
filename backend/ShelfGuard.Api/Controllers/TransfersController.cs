@@ -23,12 +23,15 @@ public sealed class TransfersController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] Guid? store_id,
         [FromQuery] string? status,
+        [FromQuery] string? search,
+        [FromQuery] string? sortBy,
+        [FromQuery] bool? sortDescending,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
     {
         var query = new PagedQuery { Page = page, PageSize = pageSize };
-        var result = await _transfers.GetPagedAsync(store_id, status, query.ClampedPage, query.ClampedPageSize, ct);
+        var result = await _transfers.GetPagedAsync(store_id, status, search, sortBy, sortDescending, query.ClampedPage, query.ClampedPageSize, ct);
         return Ok(result);
     }
 

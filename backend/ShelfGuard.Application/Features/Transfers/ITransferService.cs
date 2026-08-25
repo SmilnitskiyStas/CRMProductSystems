@@ -6,7 +6,9 @@ namespace ShelfGuard.Application.Features.Transfers;
 public interface ITransferService
 {
     Task<List<TransferDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default);
-    Task<PagedResult<TransferDto>> GetPagedAsync(Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default);
+    Task<PagedResult<TransferDto>> GetPagedAsync(
+        Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
+        int page, int pageSize, CancellationToken ct = default);
     Task<TransferDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<(TransferDto? Transfer, string? Error)> CreateAsync(

@@ -1,5 +1,9 @@
 export type TransferStatus = "draft" | "in_transit" | "received" | "cancelled";
 
+// Opaque sort keys passed straight through to GET /api/transfers's `sortBy` query param —
+// must match the backend contract's sort-key strings exactly (TASK-628-frontend brief).
+export type TransferSortBy = "createdat" | "status" | "from" | "to";
+
 export interface TransferItemDto {
   id: string;
   productStockId: string;

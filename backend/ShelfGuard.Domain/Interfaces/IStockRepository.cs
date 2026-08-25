@@ -16,6 +16,9 @@ public interface IStockRepository
         string? status,
         Guid? zoneId,
         Guid? productId,
+        string? search,
+        string? sortBy,
+        bool? sortDescending,
         int page,
         int pageSize,
         CancellationToken ct = default);

@@ -6,6 +6,10 @@ export type LocationType =
   | "production"
   | "restaurant";
 
+// Client-side-only sort key for the Locations page's already-fetched-full-list table
+// (no pagination on this page, so no backend sort contract — see TASK-628-frontend brief).
+export type LocationSortKey = "name" | "type";
+
 // Display labels moved to i18n messages under `Dashboard.locations.types` (i18n Block 2b,
 // TASK-380) — this Record<LocationType, string> is intentionally gone. Components render
 // the label via `useTranslations("Dashboard.locations.types")` keyed by the type value

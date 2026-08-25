@@ -121,7 +121,7 @@ file sealed class RetryFakeStockRepo : IStockRepository
     public Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<Dictionary<Guid, List<ProductStock>>> GetDeficitStocksBulkAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default) =>
         Task.FromResult(productIds.ToDictionary(id => id, _ => new List<ProductStock>()));
-    public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId, int page, int pageSize, CancellationToken ct = default) =>
+    public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId, string? search, string? sortBy, bool? sortDescending, int page, int pageSize, CancellationToken ct = default) =>
         Task.FromResult((new List<ProductStock>(), 0));
     public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) => Task.FromResult(new List<Location>());
     public Task<Dictionary<string, int>> GetStatusCountsAsync(Guid[]? storeIds, CancellationToken ct = default) => Task.FromResult(new Dictionary<string, int>());

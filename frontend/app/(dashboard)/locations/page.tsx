@@ -12,10 +12,11 @@ import {
   useUpdateLocation,
 } from "@/features/locations/hooks/useLocations";
 import { LocationFormDialog } from "@/features/locations/components/LocationFormDialog";
-import type { LocationDto, LocationType } from "@/features/locations/types";
+import type { LocationDto, LocationType, LocationSortKey } from "@/features/locations/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
@@ -27,14 +28,47 @@ export default function LocationsPage() {
   const ready = useStoreScopeReady();
   const showLoading = isLoading || !ready;
   const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
+
+  // No pagination on this page at all — it already fetches its full list — so search and sort
+  // are both pure client-side stages here, no backend round trip needed (unlike the 4
+  // server-paginated sibling pages this same task touches).
+  const [searchText, setSearchText] = useState("");
+  const [sortBy, setSortBy] = useState<LocationSortKey>("name");
+  const [sortDescending, setSortDescending] = useState(false);
+  function handleSort(key: LocationSortKey) {
+    if (key === sortBy) setSortDescending((d) => !d);
+    else {
+      setSortBy(key);
+      setSortDescending(true);
+    }
+  }
+
   // Locations IS the store list — the header selector's ids ARE Location ids — so
   // "filter by selected store(s)" is a pure client-side id filter, no backend involved.
+  // Chain: store filter -> text search -> sort. Order doesn't affect correctness here (small
+  // list), only which stage does less work first.
   const filteredLocations = useMemo(() => {
     if (!locations) return locations;
-    if (selectedStoreIds.length === 0) return locations;
-    const selected = new Set(selectedStoreIds);
-    return locations.filter((loc) => selected.has(loc.id));
-  }, [locations, selectedStoreIds]);
+    let result = locations;
+    if (selectedStoreIds.length > 0) {
+      const selected = new Set(selectedStoreIds);
+      result = result.filter((loc) => selected.has(loc.id));
+    }
+    const q = searchText.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (loc) => loc.name.toLowerCase().includes(q) || (loc.address ?? "").toLowerCase().includes(q),
+      );
+    }
+    // Copy before sorting — `result` may still be the exact `locations` reference from the
+    // query cache when neither filter above matched anything, and Array.prototype.sort mutates
+    // in place, which would corrupt React Query's cached data.
+    const dir = sortDescending ? -1 : 1;
+    result = [...result].sort((a, b) =>
+      sortBy === "name" ? a.name.localeCompare(b.name) * dir : a.locationType.localeCompare(b.locationType) * dir,
+    );
+    return result;
+  }, [locations, selectedStoreIds, searchText, sortBy, sortDescending]);
   const [dialog, setDialog] = useState<"create" | LocationDto | null>(null);
   const { data: me } = useMe();
   // Create/Update are AtLeastEnterpriseAdmin-only on the backend (ADR-020/ADR-022 —
@@ -101,6 +135,24 @@ export default function LocationsPage() {
         )}
       </div>
 
+      {/* Search */}
+      <input
+        type="text"
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+        placeholder={t("searchPlaceholder")}
+        style={{
+          background: "#111827",
+          border: "1px solid #1F2937",
+          borderRadius: 8,
+          color: "#E8EDF5",
+          fontSize: 13,
+          padding: "7px 12px",
+          outline: "none",
+          width: 260,
+        }}
+      />
+
       {/* Table */}
       {showLoading ? (
         <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
@@ -122,29 +174,16 @@ export default function LocationsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1F2937" }}>
-                {[
-                  t("headers.name"),
-                  t("headers.type"),
-                  t("headers.address"),
-                  t("headers.zones"),
-                  t("headers.status"),
-                  "",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      color: "#4B5563",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      padding: "12px 16px",
-                      textAlign: "left",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
+                <th style={locHeaderStyle}>
+                  <SortableHeader label={t("headers.name")} sortKey="name" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
+                </th>
+                <th style={locHeaderStyle}>
+                  <SortableHeader label={t("headers.type")} sortKey="type" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
+                </th>
+                <th style={locHeaderStyle}>{t("headers.address")}</th>
+                <th style={locHeaderStyle}>{t("headers.zones")}</th>
+                <th style={locHeaderStyle}>{t("headers.status")}</th>
+                <th style={locHeaderStyle}></th>
               </tr>
             </thead>
             <tbody>
@@ -238,4 +277,14 @@ export default function LocationsPage() {
 const tdStyle: React.CSSProperties = {
   padding: "14px 16px",
   verticalAlign: "middle",
+};
+
+const locHeaderStyle: React.CSSProperties = {
+  color: "#4B5563",
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  padding: "12px 16px",
+  textAlign: "left",
 };

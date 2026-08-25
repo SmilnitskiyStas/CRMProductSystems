@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShelfGuard.Application.Features.Receipts;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -30,7 +31,8 @@ public sealed class ReceiptRepository : IReceiptRepository
     }
 
     public async Task<(List<StockReceipt> Items, int Total)> GetPagedAsync(
-        Guid? storeId, string? status, int page, int pageSize, CancellationToken ct = default)
+        Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
+        int page, int pageSize, CancellationToken ct = default)
     {
         var query = _db.StockReceipts
             .Include(r => r.Items).ThenInclude(i => i.Product)
@@ -42,15 +44,43 @@ public sealed class ReceiptRepository : IReceiptRepository
             query = query.Where(r => r.DestinationStoreId == storeId);
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(r => r.Status == status);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(r =>
+                (r.Supplier != null && EF.Functions.ILike(r.Supplier.Name, $"%{term}%")) ||
+                (r.DestinationStore != null && EF.Functions.ILike(r.DestinationStore.Name, $"%{term}%")));
+        }
 
         var total = await query.CountAsync(ct);
+        query = ApplySort(query, sortBy, sortDescending);
         var items = await query
-            .OrderByDescending(r => r.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
         return (items, total);
+    }
+
+    private static IQueryable<StockReceipt> ApplySort(
+        IQueryable<StockReceipt> query, string? sortBy, bool? sortDescending)
+    {
+        var key = ReceiptSortKeys.Normalize(sortBy);
+        var descending = sortDescending ?? true; // newest-first is the pre-existing default
+
+        return (key, descending) switch
+        {
+            ("status", false) => query.OrderBy(r => r.Status),
+            ("status", true) => query.OrderByDescending(r => r.Status),
+            ("supplier", false) => query.OrderBy(r => r.Supplier != null ? r.Supplier.Name : null),
+            ("supplier", true) => query.OrderByDescending(r => r.Supplier != null ? r.Supplier.Name : null),
+            ("destination", false) => query.OrderBy(r => r.DestinationStore != null ? r.DestinationStore.Name : null),
+            ("destination", true) => query.OrderByDescending(r => r.DestinationStore != null ? r.DestinationStore.Name : null),
+            ("expectedat", false) => query.OrderBy(r => r.ExpectedAt),
+            ("expectedat", true) => query.OrderByDescending(r => r.ExpectedAt),
+            (_, false) => query.OrderBy(r => r.CreatedAt),
+            (_, true) => query.OrderByDescending(r => r.CreatedAt),
+        };
     }
 
     public Task<StockReceipt?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

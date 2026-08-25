@@ -26,12 +26,15 @@ public sealed class StockController : ControllerBase
         [FromQuery] string? status,
         [FromQuery] Guid? zone_id,
         [FromQuery] Guid? product_id,
+        [FromQuery] string? search,
+        [FromQuery] string? sortBy,
+        [FromQuery] bool? sortDescending,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
     {
         var query = new PagedQuery { Page = page, PageSize = pageSize };
-        var result = await _stock.GetPagedAsync(storeIds, status, zone_id, product_id, query.ClampedPage, query.ClampedPageSize, ct);
+        var result = await _stock.GetPagedAsync(storeIds, status, zone_id, product_id, search, sortBy, sortDescending, query.ClampedPage, query.ClampedPageSize, ct);
         return Ok(result);
     }
 

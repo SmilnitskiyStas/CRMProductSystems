@@ -4,7 +4,15 @@ import { useStoreScopeReady } from "@/lib/useStoreContext";
 import type { CreateReceiptRequest, UpdateItemPayload } from "../types";
 
 export function useReceipts(
-  params?: { store_id?: string; status?: string; page?: number; pageSize?: number },
+  params?: {
+    store_id?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    sortBy?: string;
+    sortDescending?: boolean;
+  },
   enabled = true,
 ) {
   const ready = useStoreScopeReady();
