@@ -7,6 +7,10 @@ import { HeroSection } from "@/features/landing/components/HeroSection";
 import { ProblemSection } from "@/features/landing/components/ProblemSection";
 import { FeaturesSection } from "@/features/landing/components/FeaturesSection";
 import { ShowcaseSection } from "@/features/landing/components/ShowcaseSection";
+import { LoyaltySection } from "@/features/landing/components/LoyaltySection";
+import { MarketingAnalyticsSection } from "@/features/landing/components/MarketingAnalyticsSection";
+import { ProductionSection } from "@/features/landing/components/ProductionSection";
+import { AiAssistantSection } from "@/features/landing/components/AiAssistantSection";
 import { HowItWorksSection } from "@/features/landing/components/HowItWorksSection";
 import { AudienceSection } from "@/features/landing/components/AudienceSection";
 import { PricingSection } from "@/features/landing/components/PricingSection";
@@ -67,6 +71,10 @@ export default async function LandingPage({
         <ProblemSection />
         <FeaturesSection />
         <ShowcaseSection />
+        <LoyaltySection />
+        <MarketingAnalyticsSection />
+        <ProductionSection />
+        <AiAssistantSection />
         <HowItWorksSection />
         <AudienceSection />
         <PricingSection />

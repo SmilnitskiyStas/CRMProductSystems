@@ -143,6 +143,93 @@
         }
       ]
     },
+    "loyalty": {
+      "heading": "A loyalty program with a dedicated customer app",
+      "subheading": "Not just a loyalty card inside the CRM — a real mobile app for your customers, running on the same backend as the POS.",
+      "mainBadge": "Customer app",
+      "mainTitle": "A personal account with a loyalty card",
+      "mainText": "At checkout, the customer shows a QR or barcode and bonuses are credited instantly — no separate terminal needed. The app shows their balance, loyalty tier, and the store's catalog; one account can hold memberships in several retail chains at once.",
+      "secondary": [
+        {
+          "title": "Loyalty tiers",
+          "text": "A customer's tier is calculated from RFM scores. A higher tier means a bigger bonus multiplier and a personal discount."
+        },
+        {
+          "title": "Accrual and redemption",
+          "text": "Every operation is logged: bonuses earned on a purchase, bonuses redeemed at checkout, manual adjustments made by staff."
+        },
+        {
+          "title": "Purchase history and reviews",
+          "text": "Customers see every receipt and can leave a review for a purchase right inside the app."
+        }
+      ],
+      "footer": "Same backend as the CRM: bonuses, tiers, and history stay in sync with the POS in real time."
+    },
+    "marketingAnalytics": {
+      "heading": "Marketing analytics and customer segmentation",
+      "subheading": "RFM analysis of your customer base, ready-made audiences for a campaign, and post-campaign effectiveness — no spreadsheets, no manual exports.",
+      "items": [
+        {
+          "title": "RFM segmentation",
+          "text": "The customer base is automatically split into 11 segments — from \"Champions\" to \"Lost\". Each one comes with top products, purchase behavior, and ready-made recommendations."
+        },
+        {
+          "title": "Audience builder",
+          "text": "Build an audience for a specific campaign: by product, category, or a competitor's buyers. The buyer list is ready to export."
+        },
+        {
+          "title": "Campaign effectiveness",
+          "text": "Upload the list of campaign participants and see how customers migrated between segments before and after, plus revenue lift and day-by-day trends."
+        },
+        {
+          "title": "Price segments",
+          "text": "Customers grouped by average check and purchase frequency: who's growing, who's slowing down, who's gone quiet — each with a recommended action."
+        }
+      ]
+    },
+    "production": {
+      "heading": "Production: recipes and finished-goods batches",
+      "subheading": "From a recipe to a finished product on the shelf — with the same batch tracking and expiry rules as the rest of the system.",
+      "items": [
+        {
+          "title": "Recipes",
+          "text": "A finished item plus a list of ingredients with the quantity each unit consumes. One recipe can drive any number of production orders."
+        },
+        {
+          "title": "Production orders",
+          "text": "Plan a run, start production, close the order — status is visible at every step: planned, in progress, done."
+        },
+        {
+          "title": "Batch consumption (FEFO)",
+          "text": "Ingredients are deducted from specific batches following FEFO — you can see exactly which batch, and how much, went into each production order."
+        },
+        {
+          "title": "Finished-goods expiry",
+          "text": "Once production is complete, the system creates a new batch for the finished item with its own expiry date — from there it follows the same FEFO rules as everything else."
+        }
+      ]
+    },
+    "aiAssistant": {
+      "heading": "An AI business assistant for owners and managers",
+      "subheading": "Not to be confused with auto-ordering — this is a conversational advisor powered by Claude that answers questions about your business in plain chat.",
+      "mainBadge": "Chat with AI",
+      "mainTitle": "Ask in your own words, get an answer grounded in your data",
+      "mainText": "The assistant sees the current state of your business — critical batches, open orders, last week's sales, active suppliers — and answers an owner's or manager's question in plain language, no reports or filters required.",
+      "secondary": [
+        {
+          "title": "Stock and expiry",
+          "text": "\"Which batches expire this week?\" — the assistant flags what's critical, and where."
+        },
+        {
+          "title": "Sales and orders",
+          "text": "\"How are sales trending lately?\" — an answer grounded in the numbers already in the system, no separate report needed."
+        },
+        {
+          "title": "Suppliers",
+          "text": "\"Which suppliers are active right now?\" — context is pulled in automatically from the marketplace."
+        }
+      ]
+    },
     "howItWorks": {
       "heading": "How it works",
       "subheading": "There's no self-service signup — we onboard you personally, step by step.",
