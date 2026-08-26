@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -11,6 +12,15 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useTranslations } from "next-intl";
+import { Pagination } from "@/components/ui/Pagination";
+
+// One page of bars per render (TASK-632: this tenant's demo data has ~90 categories, which used
+// to render as ~90 rotated X-axis labels crossing into unreadable mush). 20 keeps each bar's
+// label slot wide enough at this chart's usual dashboard-column width (~900-1200px) for the
+// -20deg rotated labels below to stay legible without touching, while still only needing ~5
+// clicks through the tail of a 90-category tenant. The full unpaginated list stays one scroll
+// down in the by-category `<table>` on the analytics page for anyone who wants all rows at once.
+const PAGE_SIZE = 20;
 
 interface CategoryStat {
   categoryId: string | null;
@@ -38,9 +48,23 @@ interface Props {
 export function CategoryStatusChart({ data, onCategoryClick, selectedCategoryId }: Props) {
   const t = useTranslations("Dashboard.analytics.categoryStatusChart");
   const tStatus = useTranslations("Dashboard.analytics.status");
+  // Hooks must run unconditionally, so this sits above the `data.length === 0` early return below.
+  const [page, setPage] = useState(1);
+
   if (!data || data.length === 0) return null;
 
-  const chartData = data.map((c) => ({
+  // Backend (AnalyticsRepository.GetByCategoryAsync) already returns categories
+  // OrderByDescending(critical + expired) -- worst-first. That's exactly the framing we want as
+  // this chart's default "page 1", so we paginate over `data` as-is rather than re-sorting it.
+  const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
+  // Clamp instead of resetting via effect: if a filter change shrinks the list below the current
+  // page, fall back to the last valid page; a same-size refetch (e.g. window refocus) doesn't
+  // yank the user back to page 1.
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = data.slice(pageStart, pageStart + PAGE_SIZE);
+
+  const chartData = pageItems.map((c) => ({
     categoryId: c.categoryId,
     name: c.categoryName,
     safe: c.safe,
@@ -161,6 +185,12 @@ export function CategoryStatusChart({ data, onCategoryClick, selectedCategoryId 
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      <Pagination
+        page={currentPage}
+        totalPages={totalPages}
+        totalCount={data.length}
+        onPageChange={setPage}
+      />
     </div>
   );
 }
