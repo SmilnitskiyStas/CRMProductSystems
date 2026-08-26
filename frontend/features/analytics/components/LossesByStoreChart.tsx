@@ -88,6 +88,7 @@ export function LossesByStoreChart({ data, onStoreClick, selectedStoreId }: Prop
           />
           <Bar
             dataKey="loss"
+            fill="#E8EDF5"
             radius={[4, 4, 0, 0]}
             maxBarSize={48}
             onClick={onStoreClick ? (entry) => onStoreClick(entry.payload.storeId as string) : undefined}

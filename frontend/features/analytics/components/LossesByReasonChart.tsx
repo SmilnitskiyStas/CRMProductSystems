@@ -85,6 +85,7 @@ export function LossesByReasonChart({ data, onReasonClick, selectedReason }: Pro
           />
           <Bar
             dataKey="loss"
+            fill="#E8EDF5"
             radius={[0, 4, 4, 0]}
             maxBarSize={24}
             onClick={onReasonClick ? (entry) => onReasonClick(entry.payload.reasonKey as string) : undefined}

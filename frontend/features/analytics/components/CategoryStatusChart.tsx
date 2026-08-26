@@ -109,6 +109,7 @@ export function CategoryStatusChart({ data, onCategoryClick, selectedCategoryId 
             dataKey="safe"
             name={tStatus("safe")}
             stackId="a"
+            fill="#4ADE80"
             radius={[0, 0, 0, 0]}
             maxBarSize={40}
             onClick={onCategoryClick ? (entry) => onCategoryClick(entry.payload.categoryId as string | null) : undefined}
@@ -122,6 +123,7 @@ export function CategoryStatusChart({ data, onCategoryClick, selectedCategoryId 
             dataKey="warning"
             name={tStatus("warning")}
             stackId="a"
+            fill="#FBBF24"
             maxBarSize={40}
             onClick={onCategoryClick ? (entry) => onCategoryClick(entry.payload.categoryId as string | null) : undefined}
             style={onCategoryClick ? { cursor: "pointer" } : undefined}
@@ -134,6 +136,7 @@ export function CategoryStatusChart({ data, onCategoryClick, selectedCategoryId 
             dataKey="critical"
             name={tStatus("critical")}
             stackId="a"
+            fill="#F87171"
             maxBarSize={40}
             onClick={onCategoryClick ? (entry) => onCategoryClick(entry.payload.categoryId as string | null) : undefined}
             style={onCategoryClick ? { cursor: "pointer" } : undefined}
@@ -146,6 +149,7 @@ export function CategoryStatusChart({ data, onCategoryClick, selectedCategoryId 
             dataKey="expired"
             name={tStatus("expired")}
             stackId="a"
+            fill="#DC2626"
             radius={[4, 4, 0, 0]}
             maxBarSize={40}
             onClick={onCategoryClick ? (entry) => onCategoryClick(entry.payload.categoryId as string | null) : undefined}
