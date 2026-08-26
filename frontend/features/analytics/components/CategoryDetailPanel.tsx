@@ -153,10 +153,15 @@ export function CategoryDetailPanel({ categoryId, from, to, storeIds, onClose, o
   // is NOT margin-gated — it's operational data, visible to the same audience as every other
   // column here — so its 100px is appended unconditionally in both branches below, always the
   // last column.
+  // Status columns are 100px, not a tighter fit-the-data width, because their headers are the
+  // longest words on this page ("ПОПЕРЕДЖЕННЯ" — 12 chars) — a narrower column let the header
+  // text bleed into its neighbors (unreadable overlap), even though the cell values themselves
+  // (small counts) would fit in far less space. Margin columns are 150px for the same reason —
+  // "Маржа % (оцінна)" is 16 characters, longer than any status header.
   const GRID = canViewMargin
-    ? "minmax(160px,1.4fr) 56px 56px 56px 56px 90px 110px 90px 110px 90px 100px"
-    : "minmax(160px,1.4fr) 56px 56px 56px 56px 90px 110px 90px 100px";
-  const gridMinWidth = canViewMargin ? 1080 : 860;
+    ? "minmax(160px,1.4fr) 100px 100px 100px 100px 90px 110px 90px 150px 150px 100px"
+    : "minmax(160px,1.4fr) 100px 100px 100px 100px 90px 110px 90px 100px";
+  const gridMinWidth = canViewMargin ? 1356 : 1036;
 
   return (
     <div
