@@ -227,42 +227,25 @@ function StockPageContent() {
         </div>
       )}
 
-      {/* Table card */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
-        {/* Table header bar */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "14px 16px",
-            borderBottom: "1px solid #1F2937",
-          }}
-        >
-          <span style={{ color: "#4B5563", fontSize: 12 }}>
-            {t("batchesLabel")} <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{countLabel}</span>
-          </span>
-        </div>
-
-        <StockTable
-          items={batches}
-          isLoading={isLoading}
-          selectedIds={selectedIds}
-          onSelectId={handleSelectId}
-          onSelectAll={handleSelectAll}
-          onVerify={(id) => verify.mutate(id)}
-          sortBy={sortBy}
-          sortDescending={sortDescending}
-          onSort={handleSort}
-        />
+      {/* Batches count label — StockTable now renders its own card shell (shared Table
+          component), so this no longer wraps it in a second bordered box like it used to. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ color: "#4B5563", fontSize: 12 }}>
+          {t("batchesLabel")} <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{countLabel}</span>
+        </span>
       </div>
+
+      <StockTable
+        items={batches}
+        isLoading={isLoading}
+        selectedIds={selectedIds}
+        onSelectId={handleSelectId}
+        onSelectAll={handleSelectAll}
+        onVerify={(id) => verify.mutate(id)}
+        sortBy={sortBy}
+        sortDescending={sortDescending}
+        onSort={handleSort}
+      />
 
       {!isLoading && batches.length > 0 && (
         <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />

@@ -3,6 +3,24 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-636 — Shared `Table` component: Batch A foundation + pilot (frontend)
+
+**Status:** done · **Agent:** frontend-developer · Batch A of 9 (46-file table-unification
+initiative). Batches B–I (38 remaining files) are a separate follow-up, not started.
+Log: `.claude/logs/tasks/636_2026-08-26_shared-table-component-batch-a_frontend-developer.md`
+
+New `frontend/components/ui/Table.tsx` — dark-theme table, sortable headers rendered
+internally (not `SortableHeader.tsx`), reuses `Pagination.tsx`. Product rule (column 0
+left-aligned, every other column center-aligned) is a structural default derived from
+column index, overridable via `column.align` only when justified. Migrated the 8 pilot
+files: `ProductsTable`/inventory, `StockTable`/stock, write-offs, transfers, receipts,
+locations. Deleted dead `components/ui/table.tsx` (shadcn primitive, 0 imports) — hit and
+fixed the Windows case-insensitive-rename trap (git silently kept the old blob staged
+under the new path; fixed with an explicit `git add`, verified clean `A`/`D` pair).
+`SortableHeader.tsx` still used by 11 non-pilot files, left in place for a later batch.
+`tsc`/`lint` clean; verified all 6 pages live (alignment via computed styles, sorting,
+search, pagination, row tinting, drawer-open) against the running dev servers.
+
 ## TASK-632 — Catalog search/filter/sort: Categories endpoint + Items sortBy (backend)
 
 **Status:** done · **Agent:** backend-developer · Parallel: frontend-developer (disjoint files), same contract.

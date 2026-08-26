@@ -8,7 +8,7 @@ import type { ProductStockDto, BatchStatus, StockSortBy } from "../types";
 import { STATUS_COLOR } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { ActionMenu } from "@/components/ui/ActionMenu";
-import { SortableHeader } from "@/components/ui/SortableHeader";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
   DrawerField,
@@ -41,30 +41,6 @@ function getDaysColor(days: number): string {
   if (days <= 7) return STATUS_COLOR.warning.text;
   return "#6B7280";
 }
-
-const thStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textAlign: "center",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: "1px solid #374151",
-  borderRight: "1px solid #374151",
-  background: "#0A0F1A",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  color: "#9CA3AF",
-  fontSize: 12,
-  borderBottom: "1px solid #1F2937",
-  borderRight: "1px solid #1F2937",
-  textAlign: "center",
-  whiteSpace: "nowrap",
-};
 
 // ── Detail drawer ────────────────────────────────────────────────────────────
 function StockDetail({ item }: { item: ProductStockDto }) {
@@ -210,7 +186,6 @@ export function StockTable({
   const tStatus = useTranslations("Dashboard.shelf.status");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
-  const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<ProductStockDto | null>(null);
 
   if (isLoading) {
@@ -232,159 +207,158 @@ export function StockTable({
   const allSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
   const someSelected = items.some((i) => selectedIds.has(i.id)) && !allSelected;
 
+  // Checkbox occupies index 0 structurally, so the product-name column (the real "name/label"
+  // column) sits at index 1 — an explicit `align: "left"` override is the "genuinely good
+  // reason" case the shared Table's docs call out, since the default would otherwise center it.
+  const columns: TableColumn<ProductStockDto>[] = [
+    {
+      key: "select",
+      width: 36,
+      align: "center",
+      header: (
+        <input
+          type="checkbox"
+          checked={allSelected}
+          ref={(el) => {
+            if (el) el.indeterminate = someSelected;
+          }}
+          onChange={(e) => onSelectAll(e.target.checked)}
+          style={{ cursor: "pointer", accentColor: "#3B82F6" }}
+        />
+      ),
+      render: (item) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(item.id)}
+          onChange={(e) => onSelectId(item.id, e.target.checked)}
+          style={{ cursor: "pointer", accentColor: "#3B82F6" }}
+        />
+      ),
+    },
+    {
+      key: "name",
+      align: "left",
+      header: t("headers.name"),
+      sortKey: "productname",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500, maxWidth: 240 },
+      render: (item) => (
+        <>
+          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.productName}>
+            {item.productName}
+          </div>
+          <div style={{ color: "#4B5563", fontSize: 11, marginTop: 1 }}>{item.storeName}</div>
+        </>
+      ),
+    },
+    {
+      key: "barcode",
+      header: t("headers.barcode"),
+      cellStyle: { fontFamily: "monospace", fontSize: 11, whiteSpace: "nowrap" },
+      render: (item) => item.productBarcode ?? "—",
+    },
+    {
+      key: "zone",
+      header: t("headers.zone"),
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (item) => item.zoneName ?? "—",
+    },
+    {
+      key: "batch",
+      header: t("headers.batch"),
+      cellStyle: { fontFamily: "monospace", fontSize: 11, whiteSpace: "nowrap" },
+      render: (item) => item.batchNumber ?? "—",
+    },
+    {
+      key: "qty",
+      header: t("headers.qty"),
+      sortKey: "quantity",
+      cellStyle: { color: "#E8EDF5", whiteSpace: "nowrap" },
+      render: (item) => item.quantity.toLocaleString(intlLocale),
+    },
+    {
+      key: "expiry",
+      header: t("headers.expiry"),
+      sortKey: "expirydate",
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (item) => formatDate(item.expiryDate),
+    },
+    {
+      key: "days",
+      header: t("headers.days"),
+      cellStyle: { fontFamily: "monospace", whiteSpace: "nowrap" },
+      render: (item) => (
+        <span style={{ color: getDaysColor(item.daysLeft), fontWeight: 600 }}>
+          {item.daysLeft <= 0 ? (
+            <span style={{ color: STATUS_COLOR.expired.text }}>−{Math.abs(item.daysLeft)}</span>
+          ) : (
+            item.daysLeft
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: t("headers.status"),
+      sortKey: "status",
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (item) => <StatusBadge status={item.status} />,
+    },
+    {
+      key: "actions",
+      header: t("headers.actions"),
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (item) => (
+        <ActionMenu
+          items={[
+            {
+              label: t("actionMenu.viewDetails"),
+              icon: <Eye size={13} />,
+              onClick: () => setSelected(item),
+            },
+            { separator: true },
+            ...(item.status === "needs_verification" && onVerify
+              ? [
+                  {
+                    label: t("actionMenu.markVerified"),
+                    icon: <ShieldCheck size={13} />,
+                    variant: "success" as const,
+                    onClick: () => onVerify(item.id),
+                  },
+                ]
+              : []),
+            {
+              label: t("actionMenu.statusLabel", { status: tStatus(item.status) }),
+              variant: "warning" as const,
+              disabled: true,
+            },
+            { separator: true },
+            {
+              label: t("actionMenu.analytics"),
+              icon: <BarChart2 size={13} />,
+              onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
-          <thead>
-            <tr>
-              <th style={{ ...thStyle, width: 36 }}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected;
-                  }}
-                  onChange={(e) => onSelectAll(e.target.checked)}
-                  style={{ cursor: "pointer", accentColor: "#3B82F6" }}
-                />
-              </th>
-              <th style={thStyle}>
-                <SortableHeader label={t("headers.name")} sortKey="productname" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              </th>
-              <th style={thStyle}>{t("headers.barcode")}</th>
-              <th style={thStyle}>{t("headers.zone")}</th>
-              <th style={thStyle}>{t("headers.batch")}</th>
-              <th style={thStyle}>
-                <SortableHeader label={t("headers.qty")} sortKey="quantity" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              </th>
-              <th style={thStyle}>
-                <SortableHeader label={t("headers.expiry")} sortKey="expirydate" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              </th>
-              <th style={{ ...thStyle, fontFamily: "monospace" }}>{t("headers.days")}</th>
-              <th style={thStyle}>
-                <SortableHeader label={t("headers.status")} sortKey="status" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              </th>
-              <th style={{ ...thStyle, borderRight: "none" }}>{t("headers.actions")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => {
-              const isCritical = CRITICAL_STATUSES.includes(item.status);
-              const isSelected = selectedIds.has(item.id);
-              const isHovered = hovered === item.id;
-              const rowBg = isSelected
-                ? "#1D3461"
-                : isCritical
-                ? "rgba(239,68,68,0.04)"
-                : isHovered
-                ? "#0D1117"
-                : "transparent";
-
-              return (
-                <tr
-                  key={item.id}
-                  style={{ background: rowBg, transition: "background 0.1s" }}
-                  onMouseEnter={() => setHovered(item.id)}
-                  onMouseLeave={() => setHovered(null)}
-                >
-                  <td style={{ ...tdStyle, width: 36 }}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => onSelectId(item.id, e.target.checked)}
-                      style={{ cursor: "pointer", accentColor: "#3B82F6" }}
-                    />
-                  </td>
-
-                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500, maxWidth: 240 }}>
-                    <div
-                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      title={item.productName}
-                    >
-                      {item.productName}
-                    </div>
-                    <div style={{ color: "#4B5563", fontSize: 11, marginTop: 1 }}>
-                      {item.storeName}
-                    </div>
-                  </td>
-
-                  <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11 }}>
-                    {item.productBarcode ?? "—"}
-                  </td>
-
-                  <td style={tdStyle}>{item.zoneName ?? "—"}</td>
-
-                  <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11 }}>
-                    {item.batchNumber ?? "—"}
-                  </td>
-
-                  <td style={{ ...tdStyle, color: "#E8EDF5" }}>
-                    {item.quantity.toLocaleString(intlLocale)}
-                  </td>
-
-                  <td style={tdStyle}>{formatDate(item.expiryDate)}</td>
-
-                  <td
-                    style={{
-                      ...tdStyle,
-                      fontFamily: "monospace",
-                      color: getDaysColor(item.daysLeft),
-                      fontWeight: 600,
-                    }}
-                  >
-                    {item.daysLeft <= 0 ? (
-                      <span style={{ color: STATUS_COLOR.expired.text }}>
-                        −{Math.abs(item.daysLeft)}
-                      </span>
-                    ) : (
-                      item.daysLeft
-                    )}
-                  </td>
-
-                  <td style={tdStyle}>
-                    <StatusBadge status={item.status} />
-                  </td>
-
-                  <td style={{ ...tdStyle, borderRight: "none" }}>
-                    <ActionMenu
-                      items={[
-                        {
-                          label: t("actionMenu.viewDetails"),
-                          icon: <Eye size={13} />,
-                          onClick: () => setSelected(item),
-                        },
-                        { separator: true },
-                        ...(item.status === "needs_verification" && onVerify
-                          ? [
-                              {
-                                label: t("actionMenu.markVerified"),
-                                icon: <ShieldCheck size={13} />,
-                                variant: "success" as const,
-                                onClick: () => onVerify(item.id),
-                              },
-                            ]
-                          : []),
-                        {
-                          label: t("actionMenu.statusLabel", { status: tStatus(item.status) }),
-                          variant: "warning" as const,
-                          disabled: true,
-                        },
-                        { separator: true },
-                        {
-                          label: t("actionMenu.analytics"),
-                          icon: <BarChart2 size={13} />,
-                          onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
-                        },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={columns}
+        rows={items}
+        rowKey={(item) => item.id}
+        sortBy={sortBy}
+        sortDescending={sortDescending}
+        onSort={onSort}
+        minWidth={900}
+        rowStyle={(item) => {
+          if (selectedIds.has(item.id)) return { background: "#1D3461" };
+          if (CRITICAL_STATUSES.includes(item.status)) return { background: "rgba(239,68,68,0.04)" };
+          return {};
+        }}
+      />
 
       {/* Detail drawer */}
       <DetailDrawer

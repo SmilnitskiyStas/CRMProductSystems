@@ -21,8 +21,7 @@ import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
-import { Pagination } from "@/components/ui/Pagination";
-import { SortableHeader } from "@/components/ui/SortableHeader";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
   DrawerField,
@@ -51,28 +50,6 @@ function StatusBadge({ status }: { status: WriteOffStatus }) {
     </span>
   );
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#9CA3AF",
-  fontSize: 13,
-  borderBottom: "1px solid #1F2937",
-  borderRight: "1px solid #1F2937",
-  textAlign: "center",
-};
-
-const thStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: "1px solid #374151",
-  borderRight: "1px solid #374151",
-  background: "#0A0F1A",
-  textAlign: "center",
-};
 
 // ── Detail drawer content ────────────────────────────────────────────────────
 function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytics: (productId: string) => void }) {
@@ -395,6 +372,89 @@ function WriteOffsPageContent() {
   const statusTabLabel = (value: string) =>
     value === "" ? tPage("statusTabs.all") : t(`status.${value}`);
 
+  const writeOffColumns: TableColumn<WriteOffDto>[] = [
+    {
+      key: "store",
+      header: tPage("headers.store"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (w) => w.storeName,
+    },
+    {
+      key: "reason",
+      header: tPage("headers.reason"),
+      sortKey: "reason",
+      render: (w) => (w.reason ? (tReason.has(w.reason) ? tReason(w.reason) : w.reason) : "—"),
+    },
+    {
+      key: "items",
+      header: tPage("headers.items"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (w) => w.items.length,
+    },
+    {
+      key: "lossAmount",
+      header: tPage("headers.lossAmount"),
+      sortKey: "netloss",
+      cellStyle: { fontFamily: "monospace", color: "#F87171" },
+      render: (w) => (w.totalLossAmount != null ? `${w.totalLossAmount.toLocaleString(intlLocale)} ₴` : "—"),
+    },
+    {
+      key: "date",
+      header: tPage("headers.date"),
+      sortKey: "createdat",
+      render: (w) => new Date(w.createdAt).toLocaleDateString(intlLocale),
+    },
+    {
+      key: "status",
+      header: tPage("headers.status"),
+      sortKey: "status",
+      render: (w) => <StatusBadge status={w.status as WriteOffStatus} />,
+    },
+    {
+      key: "actions",
+      header: tPage("headers.actions"),
+      render: (w) => (
+        <ActionMenu
+          items={[
+            {
+              label: tPage("actionMenu.view"),
+              icon: <Eye size={13} />,
+              onClick: () => setSelected(w),
+            },
+            { separator: true },
+            ...(w.status === "pending_approval"
+              ? [
+                  {
+                    label: tPage("actionMenu.approve"),
+                    icon: <CheckCircle size={13} />,
+                    variant: "success" as const,
+                    disabled: approve.isPending,
+                    onClick: () => approve.mutate(w.id),
+                  },
+                  {
+                    label: tPage("actionMenu.reject"),
+                    icon: <XCircle size={13} />,
+                    variant: "danger" as const,
+                    disabled: reject.isPending,
+                    onClick: () => reject.mutate(w.id),
+                  },
+                ]
+              : []),
+            ...(w.status === "approved" && w.pdfUrl
+              ? [
+                  {
+                    label: tPage("actionMenu.downloadPdf"),
+                    icon: <FileDown size={13} />,
+                    href: w.pdfUrl,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
@@ -488,119 +548,21 @@ function WriteOffsPageContent() {
       )}
 
       {/* Table */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
-        {isLoading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            {tCommon("loading")}
-          </div>
-        ) : filteredWriteOffs.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            {tPage("empty")}
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>{tPage("headers.store")}</th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.reason")} sortKey="reason" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>{tPage("headers.items")}</th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.lossAmount")} sortKey="netloss" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.date")} sortKey="createdat" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.status")} sortKey="status" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>{tPage("headers.actions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredWriteOffs.map((w) => (
-                <tr
-                  key={w.id}
-                  style={{
-                    background:
-                      w.status === "pending_approval"
-                        ? "rgba(251,191,36,0.03)"
-                        : "transparent",
-                  }}
-                >
-                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
-                    {w.storeName}
-                  </td>
-                  <td style={tdStyle}>
-                    {w.reason ? (tReason.has(w.reason) ? tReason(w.reason) : w.reason) : "—"}
-                  </td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{w.items.length}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", color: "#F87171" }}>
-                    {w.totalLossAmount != null
-                      ? `${w.totalLossAmount.toLocaleString(intlLocale)} ₴`
-                      : "—"}
-                  </td>
-                  <td style={tdStyle}>{new Date(w.createdAt).toLocaleDateString(intlLocale)}</td>
-                  <td style={tdStyle}>
-                    <StatusBadge status={w.status as WriteOffStatus} />
-                  </td>
-                  <td style={{ ...tdStyle, borderRight: "none" }}>
-                    <ActionMenu
-                      items={[
-                        {
-                          label: tPage("actionMenu.view"),
-                          icon: <Eye size={13} />,
-                          onClick: () => setSelected(w),
-                        },
-                        { separator: true },
-                        ...(w.status === "pending_approval"
-                          ? [
-                              {
-                                label: tPage("actionMenu.approve"),
-                                icon: <CheckCircle size={13} />,
-                                variant: "success" as const,
-                                disabled: approve.isPending,
-                                onClick: () => approve.mutate(w.id),
-                              },
-                              {
-                                label: tPage("actionMenu.reject"),
-                                icon: <XCircle size={13} />,
-                                variant: "danger" as const,
-                                disabled: reject.isPending,
-                                onClick: () => reject.mutate(w.id),
-                              },
-                            ]
-                          : []),
-                        ...(w.status === "approved" && w.pdfUrl
-                          ? [
-                              {
-                                label: tPage("actionMenu.downloadPdf"),
-                                icon: <FileDown size={13} />,
-                                href: w.pdfUrl,
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {!isLoading && filteredWriteOffs.length > 0 && (
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
-      )}
+      <Table
+        columns={writeOffColumns}
+        rows={filteredWriteOffs}
+        rowKey={(w) => w.id}
+        sortBy={sortBy}
+        sortDescending={sortDescending}
+        onSort={handleSort}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? tCommon("loading") : tPage("empty")}
+        rowStyle={(w) => (w.status === "pending_approval" ? { background: "rgba(251,191,36,0.03)" } : {})}
+        page={page}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        onPageChange={setPage}
+      />
 
       {/* Detail drawer */}
       <DetailDrawer

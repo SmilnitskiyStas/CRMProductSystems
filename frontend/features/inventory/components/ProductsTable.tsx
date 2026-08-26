@@ -6,7 +6,7 @@ import { Eye, Pencil, Trash2, BarChart2, ExternalLink } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import type { Product, ProductSortBy } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
-import { SortableHeader } from "@/components/ui/SortableHeader";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
   DrawerField,
@@ -24,28 +24,6 @@ interface Props {
   sortDescending: boolean;
   onSort: (key: ProductSortBy) => void;
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#9CA3AF",
-  fontSize: 13,
-  borderBottom: "1px solid #1F2937",
-  borderRight: "1px solid #1F2937",
-  textAlign: "center",
-};
-
-const thStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: "1px solid #374151",
-  borderRight: "1px solid #374151",
-  background: "#0A0F1A",
-  textAlign: "center",
-};
 
 // ── Perishability class badge ────────────────────────────────────────────────
 const PERISHABILITY_BADGE: Record<string, { label: string; bg: string; color: string }> = {
@@ -348,171 +326,152 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
 
   const pendingProduct = products.find((p) => p.id === pendingDeleteId) ?? null;
 
-  // `sortKey` maps a column onto the backend's `sortBy` allowlist (see `ProductSortBy` in
-  // types.ts). Columns without one (class, itemType, unit, status, actions) render as plain,
-  // non-clickable headers.
-  const headers: { key: string; label: string; sortKey?: ProductSortBy }[] = [
-    { key: "barcode", label: tFields("barcode"), sortKey: "barcode" },
-    { key: "name", label: tFields("name"), sortKey: "name" },
-    { key: "class", label: t("headers.class") },
-    { key: "category", label: tFields("category"), sortKey: "category" },
-    { key: "itemType", label: tFields("itemType") },
-    { key: "unit", label: tFields("unit") },
-    { key: "purchase", label: t("headers.purchase"), sortKey: "purchaseprice" },
-    { key: "retail", label: t("headers.retail"), sortKey: "retailprice" },
-    { key: "min", label: t("headers.min"), sortKey: "minstock" },
-    { key: "max", label: t("headers.max"), sortKey: "maxstock" },
-    { key: "status", label: tFields("statusLabel") },
-    { key: "actions", label: t("headers.actions") },
-  ];
-
   function openProduct(product: Product, tab: DrawerTab = "info") {
     setSelected(product);
     setDrawerTab(tab);
   }
 
+  // Column 0 is `name` (not `barcode`) so it gets the product-rule left-align for free from
+  // Table's `column.align ?? (index === 0 ? "left" : "center")` default — this reorders the
+  // pre-migration baseline's barcode-first layout, the one deliberate visual change called out
+  // for this file in the Batch A migration brief.
+  const columns: TableColumn<Product>[] = [
+    {
+      key: "name",
+      header: tFields("name"),
+      sortKey: "name",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (product) => product.name,
+    },
+    {
+      key: "barcode",
+      header: tFields("barcode"),
+      sortKey: "barcode",
+      cellStyle: { fontFamily: "monospace", fontSize: 12, color: "#4B5563" },
+      render: (product) => product.barcodes?.[0] ?? "—",
+    },
+    {
+      key: "class",
+      header: t("headers.class"),
+      render: (product) => <PerishabilityBadge value={product.perishabilityClass ?? "standard"} />,
+    },
+    {
+      key: "category",
+      header: tFields("category"),
+      sortKey: "category",
+      render: (product) => product.categoryName ?? "—",
+    },
+    {
+      key: "itemType",
+      header: tFields("itemType"),
+      render: (product) =>
+        (product.itemType && tItemTypes.has(product.itemType) ? tItemTypes(product.itemType) : product.itemType) ?? "—",
+    },
+    {
+      key: "unit",
+      header: tFields("unit"),
+      render: (product) => product.unit,
+    },
+    {
+      key: "purchase",
+      header: t("headers.purchase"),
+      sortKey: "purchaseprice",
+      cellStyle: { fontFamily: "monospace" },
+      render: (product) =>
+        product.pricePurchase != null ? product.pricePurchase.toLocaleString(intlLocale) + " ₴" : "—",
+    },
+    {
+      key: "retail",
+      header: t("headers.retail"),
+      sortKey: "retailprice",
+      cellStyle: { fontFamily: "monospace" },
+      render: (product) =>
+        product.priceRetail != null ? product.priceRetail.toLocaleString(intlLocale) + " ₴" : "—",
+    },
+    {
+      key: "min",
+      header: t("headers.min"),
+      sortKey: "minstock",
+      cellStyle: { fontFamily: "monospace" },
+      render: (product) => product.minStock,
+    },
+    {
+      key: "max",
+      header: t("headers.max"),
+      sortKey: "maxstock",
+      cellStyle: { fontFamily: "monospace" },
+      render: (product) => product.maxStock,
+    },
+    {
+      key: "status",
+      header: tFields("statusLabel"),
+      render: (product) => (
+        <span
+          style={{
+            display: "inline-block",
+            padding: "3px 8px",
+            borderRadius: 20,
+            background: product.isActive ? "#052e16" : "#111827",
+            color: product.isActive ? "#4ADE80" : "#6B7280",
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          {product.isActive ? tFields("statusActive") : tFields("statusInactive")}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: t("headers.actions"),
+      render: (product) => (
+        <ActionMenu
+          items={[
+            {
+              label: t("actionMenu.view"),
+              icon: <Eye size={13} />,
+              onClick: () => openProduct(product, "info"),
+            },
+            {
+              label: t("actionMenu.analytics"),
+              icon: <BarChart2 size={13} />,
+              onClick: () => openProduct(product, "analytics"),
+            },
+            {
+              label: t("actionMenu.openPage"),
+              icon: <ExternalLink size={13} />,
+              onClick: () => router.push(`/inventory/${product.id}`),
+            },
+            { separator: true },
+            {
+              label: t("actionMenu.edit"),
+              icon: <Pencil size={13} />,
+              onClick: () => onEdit(product),
+            },
+            {
+              label: t("actionMenu.delete"),
+              icon: <Trash2 size={13} />,
+              variant: "danger",
+              onClick: () => setPendingDeleteId(product.id),
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <>
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "auto",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
-          <thead>
-            <tr>
-              {headers.map((h) => (
-                <th key={h.key} style={h.key === "actions" ? { ...thStyle, borderRight: "none" } : thStyle}>
-                  {h.sortKey ? (
-                    <SortableHeader
-                      label={h.label}
-                      sortKey={h.sortKey}
-                      activeSort={sortBy}
-                      activeDescending={sortDescending}
-                      onSort={onSort}
-                    />
-                  ) : (
-                    h.label
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {products.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={12}
-                  style={{
-                    padding: "40px 0",
-                    textAlign: "center",
-                    color: "#4B5563",
-                    fontSize: 13,
-                  }}
-                >
-                  {t("empty")}
-                </td>
-              </tr>
-            ) : (
-              products.map((product) => (
-                <tr
-                  key={product.id}
-                  style={{ transition: "background 0.1s" }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = "#0A1628";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = "transparent";
-                  }}
-                >
-                  <td
-                    style={{
-                      ...tdStyle,
-                      fontFamily: "monospace",
-                      fontSize: 12,
-                      color: "#4B5563",
-                    }}
-                  >
-                    {product.barcodes?.[0] ?? "—"}
-                  </td>
-                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
-                    {product.name}
-                  </td>
-                  <td style={tdStyle}>
-                    <PerishabilityBadge value={product.perishabilityClass ?? "standard"} />
-                  </td>
-                  <td style={tdStyle}>{product.categoryName ?? "—"}</td>
-                  <td style={tdStyle}>{(product.itemType && tItemTypes.has(product.itemType) ? tItemTypes(product.itemType) : product.itemType) ?? "—"}</td>
-                  <td style={tdStyle}>{product.unit}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>
-                    {product.pricePurchase != null
-                      ? product.pricePurchase.toLocaleString(intlLocale) + " ₴"
-                      : "—"}
-                  </td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>
-                    {product.priceRetail != null
-                      ? product.priceRetail.toLocaleString(intlLocale) + " ₴"
-                      : "—"}
-                  </td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{product.minStock}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{product.maxStock}</td>
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "3px 8px",
-                        borderRadius: 20,
-                        background: product.isActive ? "#052e16" : "#111827",
-                        color: product.isActive ? "#4ADE80" : "#6B7280",
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {product.isActive ? tFields("statusActive") : tFields("statusInactive")}
-                    </span>
-                  </td>
-                  <td style={{ ...tdStyle, borderRight: "none" }}>
-                    <ActionMenu
-                      items={[
-                        {
-                          label: t("actionMenu.view"),
-                          icon: <Eye size={13} />,
-                          onClick: () => openProduct(product, "info"),
-                        },
-                        {
-                          label: t("actionMenu.analytics"),
-                          icon: <BarChart2 size={13} />,
-                          onClick: () => openProduct(product, "analytics"),
-                        },
-                        {
-                          label: t("actionMenu.openPage"),
-                          icon: <ExternalLink size={13} />,
-                          onClick: () => router.push(`/inventory/${product.id}`),
-                        },
-                        { separator: true },
-                        {
-                          label: t("actionMenu.edit"),
-                          icon: <Pencil size={13} />,
-                          onClick: () => onEdit(product),
-                        },
-                        {
-                          label: t("actionMenu.delete"),
-                          icon: <Trash2 size={13} />,
-                          variant: "danger",
-                          onClick: () => setPendingDeleteId(product.id),
-                        },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={columns}
+        rows={products}
+        rowKey={(product) => product.id}
+        sortBy={sortBy}
+        sortDescending={sortDescending}
+        onSort={onSort}
+        minWidth={800}
+        emptyMessage={t("empty")}
+      />
 
       {/* Delete confirm */}
       {pendingProduct && (

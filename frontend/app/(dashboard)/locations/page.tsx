@@ -16,7 +16,7 @@ import type { LocationDto, LocationType, LocationSortKey } from "@/features/loca
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
-import { SortableHeader } from "@/components/ui/SortableHeader";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
@@ -118,6 +118,87 @@ export default function LocationsPage() {
 
   const isPending = create.isPending || update.isPending;
 
+  const columns: TableColumn<LocationDto>[] = [
+    {
+      key: "name",
+      header: t("headers.name"),
+      sortKey: "name",
+      render: (loc) => <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 13 }}>{loc.name}</span>,
+    },
+    {
+      key: "type",
+      header: t("headers.type"),
+      sortKey: "type",
+      render: (loc) => (
+        <span
+          style={{
+            background: "#1D2D4A",
+            color: "#60A5FA",
+            borderRadius: 6,
+            padding: "2px 8px",
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          {tTypes(loc.locationType)}
+        </span>
+      ),
+    },
+    {
+      key: "address",
+      header: t("headers.address"),
+      cellStyle: { color: "#6B7280", fontSize: 13 },
+      render: (loc) => loc.address ?? "—",
+    },
+    {
+      key: "zones",
+      header: t("headers.zones"),
+      cellStyle: { color: "#9CA3AF", fontSize: 13 },
+      render: (loc) => loc.zones.length,
+    },
+    {
+      key: "status",
+      header: t("headers.status"),
+      render: (loc) => (
+        <span style={{ color: loc.isActive ? "#22c55e" : "#6B7280", fontSize: 12, fontWeight: 600 }}>
+          {loc.isActive ? t("statusActive") : t("statusInactive")}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (loc) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+          <Link
+            href={`/locations/${loc.id}/floor-plan`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              background: "#0D2137",
+              color: "#60A5FA",
+              border: "1px solid #1D3461",
+              borderRadius: 6,
+              padding: "5px 10px",
+              fontSize: 12,
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            <Map size={13} />
+            {t("planLink")}
+          </Link>
+          {canManageLocations && (
+            <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
+              {t("edit")}
+            </Btn>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
@@ -153,113 +234,19 @@ export default function LocationsPage() {
         }}
       />
 
-      {/* Table */}
-      {showLoading ? (
-        <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-          {tCommon("loading")}
-        </div>
-      ) : !filteredLocations?.length ? (
-        <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-          {t("empty")}
-        </div>
-      ) : (
-        <div
-          style={{
-            background: "#161B26",
-            border: "1px solid #1F2937",
-            borderRadius: 12,
-            overflow: "hidden",
-          }}
-        >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #1F2937" }}>
-                <th style={locHeaderStyle}>
-                  <SortableHeader label={t("headers.name")} sortKey="name" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={locHeaderStyle}>
-                  <SortableHeader label={t("headers.type")} sortKey="type" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={locHeaderStyle}>{t("headers.address")}</th>
-                <th style={locHeaderStyle}>{t("headers.zones")}</th>
-                <th style={locHeaderStyle}>{t("headers.status")}</th>
-                <th style={locHeaderStyle}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLocations.map((loc) => (
-                <tr
-                  key={loc.id}
-                  style={{ borderBottom: "1px solid #1F2937" }}
-                >
-                  <td style={tdStyle}>
-                    <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 13 }}>{loc.name}</span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        background: "#1D2D4A",
-                        color: "#60A5FA",
-                        borderRadius: 6,
-                        padding: "2px 8px",
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {tTypes(loc.locationType)}
-                    </span>
-                  </td>
-                  <td style={{ ...tdStyle, color: "#6B7280", fontSize: 13 }}>
-                    {loc.address ?? "—"}
-                  </td>
-                  <td style={{ ...tdStyle, color: "#9CA3AF", fontSize: 13 }}>
-                    {loc.zones.length}
-                  </td>
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        color: loc.isActive ? "#22c55e" : "#6B7280",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {loc.isActive ? t("statusActive") : t("statusInactive")}
-                    </span>
-                  </td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
-                      <Link
-                        href={`/locations/${loc.id}/floor-plan`}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          background: "#0D2137",
-                          color: "#60A5FA",
-                          border: "1px solid #1D3461",
-                          borderRadius: 6,
-                          padding: "5px 10px",
-                          fontSize: 12,
-                          textDecoration: "none",
-                          fontWeight: 500,
-                        }}
-                      >
-                        <Map size={13} />
-                        {t("planLink")}
-                      </Link>
-                      {canManageLocations && (
-                        <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
-                          {t("edit")}
-                        </Btn>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Table — no pagination here on purpose: Locations fetches its full list and both
+          search and sort are pure client-side stages (see the comment above `searchText`
+          state), so `onPageChange` stays unset and the shared Table renders no footer. */}
+      <Table
+        columns={columns}
+        rows={filteredLocations ?? []}
+        rowKey={(loc) => loc.id}
+        sortBy={sortBy}
+        sortDescending={sortDescending}
+        onSort={handleSort}
+        isLoading={showLoading}
+        emptyMessage={showLoading ? tCommon("loading") : t("empty")}
+      />
 
       {/* Dialog */}
       {dialog !== null && (
@@ -273,18 +260,3 @@ export default function LocationsPage() {
     </div>
   );
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "14px 16px",
-  verticalAlign: "middle",
-};
-
-const locHeaderStyle: React.CSSProperties = {
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-  padding: "12px 16px",
-  textAlign: "left",
-};

@@ -20,8 +20,7 @@ import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
-import { Pagination } from "@/components/ui/Pagination";
-import { SortableHeader } from "@/components/ui/SortableHeader";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
   DrawerField,
@@ -50,28 +49,6 @@ function StatusBadge({ status }: { status: TransferStatus }) {
     </span>
   );
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#9CA3AF",
-  fontSize: 13,
-  borderBottom: "1px solid #1F2937",
-  borderRight: "1px solid #1F2937",
-  textAlign: "center",
-};
-
-const thStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: "1px solid #374151",
-  borderRight: "1px solid #374151",
-  background: "#0A0F1A",
-  textAlign: "center",
-};
 
 // ── Detail drawer content ────────────────────────────────────────────────────
 function TransferDetail({ t: transfer, onViewAnalytics }: { t: TransferDto; onViewAnalytics: (productId: string) => void }) {
@@ -290,6 +267,85 @@ export default function TransfersPage() {
   const statusTabLabel = (value: string) =>
     value === "" ? tPage("statusTabs.all") : t(`status.${value}`);
 
+  const transferColumns: TableColumn<TransferDto>[] = [
+    {
+      key: "from",
+      header: tPage("headers.from"),
+      sortKey: "from",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (tr) => tr.fromStoreName,
+    },
+    {
+      key: "arrow",
+      header: "",
+      cellStyle: { color: "#4B5563" },
+      render: () => <ArrowLeftRight size={14} />,
+    },
+    {
+      key: "to",
+      header: tPage("headers.to"),
+      sortKey: "to",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (tr) => tr.toStoreName,
+    },
+    {
+      key: "items",
+      header: tPage("headers.items"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (tr) => tr.items.length,
+    },
+    {
+      key: "date",
+      header: tPage("headers.date"),
+      sortKey: "createdat",
+      render: (tr) => new Date(tr.createdAt).toLocaleDateString(intlLocale),
+    },
+    {
+      key: "status",
+      header: tPage("headers.status"),
+      sortKey: "status",
+      render: (tr) => <StatusBadge status={tr.status as TransferStatus} />,
+    },
+    {
+      key: "actions",
+      header: tPage("headers.actions"),
+      render: (tr) => (
+        <ActionMenu
+          items={[
+            {
+              label: tPage("actionMenu.view"),
+              icon: <Eye size={13} />,
+              onClick: () => setSelected(tr),
+            },
+            { separator: true },
+            ...(tr.status === "in_transit" && myLocationIds.has(tr.toStoreId)
+              ? [
+                  {
+                    label: tPage("actionMenu.confirm"),
+                    icon: <CheckCircle size={13} />,
+                    variant: "success" as const,
+                    disabled: confirm.isPending,
+                    onClick: () => confirm.mutate(tr.id),
+                  },
+                ]
+              : []),
+            ...(tr.status === "draft" || tr.status === "in_transit"
+              ? [
+                  {
+                    label: tCommon("cancel"),
+                    icon: <XCircle size={13} />,
+                    variant: "danger" as const,
+                    disabled: cancel.isPending,
+                    onClick: () => cancel.mutate(tr.id),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
@@ -351,106 +407,20 @@ export default function TransfersPage() {
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
-        {isLoading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            {tCommon("loading")}
-          </div>
-        ) : transfers.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            {tPage("empty")}
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.from")} sortKey="from" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}></th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.to")} sortKey="to" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>{tPage("headers.items")}</th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.date")} sortKey="createdat" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.status")} sortKey="status" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>{tPage("headers.actions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transfers.map((tr) => (
-                <tr key={tr.id}>
-                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
-                    {tr.fromStoreName}
-                  </td>
-                  <td style={{ ...tdStyle, color: "#4B5563" }}>
-                    <ArrowLeftRight size={14} />
-                  </td>
-                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
-                    {tr.toStoreName}
-                  </td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{tr.items.length}</td>
-                  <td style={tdStyle}>
-                    {new Date(tr.createdAt).toLocaleDateString(intlLocale)}
-                  </td>
-                  <td style={tdStyle}>
-                    <StatusBadge status={tr.status as TransferStatus} />
-                  </td>
-                  <td style={{ ...tdStyle, borderRight: "none" }}>
-                    <ActionMenu
-                      items={[
-                        {
-                          label: tPage("actionMenu.view"),
-                          icon: <Eye size={13} />,
-                          onClick: () => setSelected(tr),
-                        },
-                        { separator: true },
-                        ...(tr.status === "in_transit" && myLocationIds.has(tr.toStoreId)
-                          ? [
-                              {
-                                label: tPage("actionMenu.confirm"),
-                                icon: <CheckCircle size={13} />,
-                                variant: "success" as const,
-                                disabled: confirm.isPending,
-                                onClick: () => confirm.mutate(tr.id),
-                              },
-                            ]
-                          : []),
-                        ...(tr.status === "draft" || tr.status === "in_transit"
-                          ? [
-                              {
-                                label: tCommon("cancel"),
-                                icon: <XCircle size={13} />,
-                                variant: "danger" as const,
-                                disabled: cancel.isPending,
-                                onClick: () => cancel.mutate(tr.id),
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {!isLoading && transfers.length > 0 && (
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
-      )}
+      <Table
+        columns={transferColumns}
+        rows={transfers}
+        rowKey={(tr) => tr.id}
+        sortBy={sortBy}
+        sortDescending={sortDescending}
+        onSort={handleSort}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? tCommon("loading") : tPage("empty")}
+        page={page}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        onPageChange={setPage}
+      />
 
       {/* Detail drawer */}
       <DetailDrawer

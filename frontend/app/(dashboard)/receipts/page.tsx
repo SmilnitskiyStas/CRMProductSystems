@@ -14,8 +14,7 @@ import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
-import { Pagination } from "@/components/ui/Pagination";
-import { SortableHeader } from "@/components/ui/SortableHeader";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
   DrawerField,
@@ -29,28 +28,6 @@ function formatDate(s: string | null, intlLocale: string) {
   if (!s) return "—";
   return new Date(s).toLocaleDateString(intlLocale);
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#9CA3AF",
-  fontSize: 13,
-  borderBottom: "1px solid #1F2937",
-  borderRight: "1px solid #1F2937",
-  textAlign: "center",
-};
-
-const thStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: "1px solid #374151",
-  borderRight: "1px solid #374151",
-  background: "#0A0F1A",
-  textAlign: "center",
-};
 
 // ── Detail drawer content ────────────────────────────────────────────────────
 function ReceiptDetail({ r }: { r: ReceiptDto }) {
@@ -263,6 +240,66 @@ export default function ReceiptsPage() {
   const statusTabLabel = (value: string) =>
     value === "" ? tPage("statusTabs.all") : t(`status.${value}`);
 
+  const receiptColumns: TableColumn<ReceiptDto>[] = [
+    {
+      key: "id",
+      header: tPage("headers.id"),
+      cellStyle: { fontFamily: "monospace", fontSize: 11, color: "#4B5563" },
+      render: (r) => `${r.id.slice(0, 8)}…`,
+    },
+    {
+      key: "store",
+      header: tPage("headers.store"),
+      sortKey: "destination",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (r) => r.destinationStoreName,
+    },
+    {
+      key: "supplier",
+      header: tPage("headers.supplier"),
+      sortKey: "supplier",
+      render: (r) => r.supplierName ?? "—",
+    },
+    {
+      key: "expected",
+      header: tPage("headers.expected"),
+      sortKey: "expectedat",
+      render: (r) => formatDate(r.expectedAt, intlLocale),
+    },
+    {
+      key: "status",
+      header: tPage("headers.status"),
+      sortKey: "status",
+      render: (r) => <ReceiptStatusBadge status={r.status as ReceiptStatus} />,
+    },
+    {
+      key: "items",
+      header: tPage("headers.items"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (r) => r.items.length,
+    },
+    {
+      key: "actions",
+      header: tPage("headers.actions"),
+      render: (r) => (
+        <ActionMenu
+          items={[
+            {
+              label: tPage("actionMenu.view"),
+              icon: <Eye size={13} />,
+              onClick: () => setSelected(r),
+            },
+            {
+              label: tPage("actionMenu.openPage"),
+              icon: <ExternalLink size={13} />,
+              href: `/receipts/${r.id}`,
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
@@ -324,91 +361,20 @@ export default function ReceiptsPage() {
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
-        {isLoading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            {tCommon("loading")}
-          </div>
-        ) : receipts.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            {tPage("empty")}
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>{tPage("headers.id")}</th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.store")} sortKey="destination" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.supplier")} sortKey="supplier" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.expected")} sortKey="expectedat" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>
-                  <SortableHeader label={tPage("headers.status")} sortKey="status" activeSort={sortBy} activeDescending={sortDescending} onSort={handleSort} />
-                </th>
-                <th style={thStyle}>{tPage("headers.items")}</th>
-                <th style={thStyle}>{tPage("headers.actions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {receipts.map((r) => (
-                <tr key={r.id}>
-                  <td
-                    style={{
-                      ...tdStyle,
-                      fontFamily: "monospace",
-                      fontSize: 11,
-                      color: "#4B5563",
-                    }}
-                  >
-                    {r.id.slice(0, 8)}…
-                  </td>
-                  <td style={{ ...tdStyle, color: "#E8EDF5", fontWeight: 500 }}>
-                    {r.destinationStoreName}
-                  </td>
-                  <td style={tdStyle}>{r.supplierName ?? "—"}</td>
-                  <td style={tdStyle}>{formatDate(r.expectedAt, intlLocale)}</td>
-                  <td style={tdStyle}>
-                    <ReceiptStatusBadge status={r.status as ReceiptStatus} />
-                  </td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{r.items.length}</td>
-                  <td style={{ ...tdStyle, borderRight: "none" }}>
-                    <ActionMenu
-                      items={[
-                        {
-                          label: tPage("actionMenu.view"),
-                          icon: <Eye size={13} />,
-                          onClick: () => setSelected(r),
-                        },
-                        {
-                          label: tPage("actionMenu.openPage"),
-                          icon: <ExternalLink size={13} />,
-                          href: `/receipts/${r.id}`,
-                        },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {!isLoading && receipts.length > 0 && (
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
-      )}
+      <Table
+        columns={receiptColumns}
+        rows={receipts}
+        rowKey={(r) => r.id}
+        sortBy={sortBy}
+        sortDescending={sortDescending}
+        onSort={handleSort}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? tCommon("loading") : tPage("empty")}
+        page={page}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        onPageChange={setPage}
+      />
 
       {/* Detail drawer */}
       <DetailDrawer
