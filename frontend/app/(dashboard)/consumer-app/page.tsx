@@ -5,6 +5,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
 import { BonusProgramSection } from "@/features/consumer-app/components/BonusProgramSection";
+import { TierLadderSection } from "@/features/consumer-app/components/TierLadderSection";
 
 /**
  * TASK-500: standalone "Consumer App" management area (product decision — deliberately its own
@@ -32,7 +33,7 @@ export default function ConsumerAppPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 720, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: "28px 32px", maxWidth: 1040, display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
           {t("title")}
@@ -43,6 +44,7 @@ export default function ConsumerAppPage() {
       </div>
 
       <BonusProgramSection />
+      <TierLadderSection />
     </div>
   );
 }

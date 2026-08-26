@@ -18,6 +18,10 @@ public sealed class LoyaltyTierDefinition
     public Guid TenantId { get; init; }
 
     public string Name { get; set; } = string.Empty;
+    /// <summary>Retailer-authored explanation shown to consumers on the rank screen.</summary>
+    public string? Description { get; set; }
+    /// <summary>Optional tenant-owned rank artwork uploaded by an enterprise administrator.</summary>
+    public string? ImageUrl { get; set; }
     /// <summary>Ascending rank within the tenant's ladder — unique per (TenantId, SortOrder).</summary>
     public int SortOrder { get; set; }
     /// <summary>Minimum composite RFM-like score required to hold this tier.</summary>
@@ -26,6 +30,17 @@ public sealed class LoyaltyTierDefinition
     public decimal AccrualMultiplier { get; set; } = 1.0m;
     /// <summary>Automatic checkout discount percent granted while a membership holds this tier.</summary>
     public decimal DiscountPercent { get; set; } = 0m;
+
+    // Explicit, independently selectable promotion requirements. Null means the retailer did
+    // not select that metric; every non-null requirement must be satisfied. The legacy
+    // MinCompositeScore remains available for existing ladders and as an optional RFM metric.
+    public bool RequireCompletedProfile { get; set; }
+    public int? MinMembershipDays { get; set; }
+    public decimal? MinEarnedBonuses { get; set; }
+    public decimal? MinCashSpend { get; set; }
+    public decimal? MinBonusSpend { get; set; }
+    public int? MinPurchaseCount { get; set; }
+    public int? MinReviewCount { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

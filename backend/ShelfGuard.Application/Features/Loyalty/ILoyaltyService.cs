@@ -230,4 +230,7 @@ public interface ILoyaltyService
     /// </summary>
     Task<(IReadOnlyList<LoyaltyTierDefinitionDto>? Tiers, string? Error)> UpsertTierLadderAsync(
         Guid tenantId, List<UpsertTierRequest> tiers, CancellationToken ct = default);
+
+    Task<(string? Url, string? Error)> UploadTierImageAsync(
+        Guid tenantId, Guid tierId, Stream imageStream, string fileName, CancellationToken ct = default);
 }

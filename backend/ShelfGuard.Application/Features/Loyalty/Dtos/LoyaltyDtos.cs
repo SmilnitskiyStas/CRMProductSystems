@@ -91,7 +91,16 @@ public sealed record LoyaltyTierDefinitionDto(
     int SortOrder,
     decimal MinCompositeScore,
     decimal AccrualMultiplier,
-    decimal DiscountPercent);
+    decimal DiscountPercent,
+    string? Description = null,
+    string? ImageUrl = null,
+    bool RequireCompletedProfile = false,
+    int? MinMembershipDays = null,
+    decimal? MinEarnedBonuses = null,
+    decimal? MinCashSpend = null,
+    decimal? MinBonusSpend = null,
+    int? MinPurchaseCount = null,
+    int? MinReviewCount = null);
 
 /// <summary>
 /// One rung in a bulk-replace request body for <c>PUT api/settings/loyalty/tiers</c>. Carries
@@ -106,7 +115,16 @@ public sealed record UpsertTierRequest(
     int SortOrder,
     decimal MinCompositeScore,
     decimal AccrualMultiplier,
-    decimal DiscountPercent);
+    decimal DiscountPercent,
+    string? Description = null,
+    string? ImageUrl = null,
+    bool RequireCompletedProfile = false,
+    int? MinMembershipDays = null,
+    decimal? MinEarnedBonuses = null,
+    decimal? MinCashSpend = null,
+    decimal? MinBonusSpend = null,
+    int? MinPurchaseCount = null,
+    int? MinReviewCount = null);
 
 /// <summary>
 /// Consumer-facing tier progress for <c>GET /api/consumer/loyalty/{tenantId}/tiers</c>. All
@@ -125,7 +143,17 @@ public sealed record LoyaltyTierProgressDto(
     decimal CompositeScore,
     Guid? NextTierId,
     string? NextTierName,
-    decimal? ScoreToNextTier);
+    decimal? ScoreToNextTier,
+    LoyaltyTierProgressMetricsDto? Metrics = null,
+    LoyaltyTierRequirementsDto? NextTierRequirements = null);
+
+public sealed record LoyaltyTierProgressMetricsDto(
+    bool ProfileCompleted, int MembershipDays, decimal EarnedBonuses, decimal CashSpend,
+    decimal BonusSpend, int PurchaseCount, int ReviewCount);
+
+public sealed record LoyaltyTierRequirementsDto(
+    bool RequireCompletedProfile, int? MinMembershipDays, decimal? MinEarnedBonuses,
+    decimal? MinCashSpend, decimal? MinBonusSpend, int? MinPurchaseCount, int? MinReviewCount);
 
 /// <summary>One append-only row from <see cref="LoyaltyTierChangeHistory"/>, tier names resolved for display.</summary>
 public sealed record LoyaltyTierChangeHistoryDto(

@@ -38,6 +38,13 @@ type TierRow = {
   id: string;
   sort_order: number;
   min_composite_score: string; // numeric → pg returns as string
+  require_completed_profile: boolean;
+  min_membership_days: number | null;
+  min_earned_bonuses: string | null;
+  min_cash_spend: string | null;
+  min_bonus_spend: string | null;
+  min_purchase_count: number | null;
+  min_review_count: number | null;
 };
 
 type MembershipScoreRow = {
@@ -47,9 +54,38 @@ type MembershipScoreRow = {
   recencyScore: number;
   frequencyScore: number;
   monetaryScore: number;
+  profileCompleted: boolean;
+  membershipDays: number;
+  earnedBonuses: string;
+  cashSpend: string;
+  bonusSpend: string;
+  purchaseCount: number;
+  reviewCount: number;
 };
 
-export type TierRung = { id: string; sortOrder: number; minCompositeScore: number };
+export type TierRung = {
+  id: string;
+  sortOrder: number;
+  minCompositeScore: number;
+  requireCompletedProfile: boolean;
+  minMembershipDays: number | null;
+  minEarnedBonuses: number | null;
+  minCashSpend: number | null;
+  minBonusSpend: number | null;
+  minPurchaseCount: number | null;
+  minReviewCount: number | null;
+};
+
+export type MembershipProgressMetrics = {
+  compositeScore: number;
+  profileCompleted: boolean;
+  membershipDays: number;
+  earnedBonuses: number;
+  cashSpend: number;
+  bonusSpend: number;
+  purchaseCount: number;
+  reviewCount: number;
+};
 
 // ── Pure logic (DB-free, kept separate for testability — worker/ has no test harness today,
 //    per TASK-619's brief; these two functions are exported so one can be added later without
@@ -72,17 +108,25 @@ export function computeCompositeScore(
  */
 export function pickQualifyingTier(
   tiersDescBySortOrder: TierRung[],
-  compositeScore: number
+  metrics: MembershipProgressMetrics
 ): TierRung | null {
   for (const tier of tiersDescBySortOrder) {
-    if (compositeScore >= tier.minCompositeScore) return tier;
+    if (tier.requireCompletedProfile && !metrics.profileCompleted) continue;
+    if (tier.minMembershipDays !== null && metrics.membershipDays < tier.minMembershipDays) continue;
+    if (tier.minEarnedBonuses !== null && metrics.earnedBonuses < tier.minEarnedBonuses) continue;
+    if (tier.minCashSpend !== null && metrics.cashSpend < tier.minCashSpend) continue;
+    if (tier.minBonusSpend !== null && metrics.bonusSpend < tier.minBonusSpend) continue;
+    if (tier.minPurchaseCount !== null && metrics.purchaseCount < tier.minPurchaseCount) continue;
+    if (tier.minReviewCount !== null && metrics.reviewCount < tier.minReviewCount) continue;
+
+    const hasExplicitRequirements = tier.requireCompletedProfile || tier.minMembershipDays !== null ||
+      tier.minEarnedBonuses !== null || tier.minCashSpend !== null || tier.minBonusSpend !== null ||
+      tier.minPurchaseCount !== null || tier.minReviewCount !== null;
+    if (!hasExplicitRequirements && metrics.compositeScore < tier.minCompositeScore) continue;
+    return tier;
   }
   return null;
 }
-
-// A score difference smaller than half the DB column's smallest unit (decimal(18,4)) is
-// treated as "unchanged" — avoids float round-trip noise causing a pointless write every night.
-const SCORE_EPSILON = 0.00005;
 
 async function runLoyaltyTierRecompute(): Promise<void> {
   const client = await db.connect();
@@ -104,7 +148,12 @@ async function runLoyaltyTierRecompute(): Promise<void> {
 
     for (const tenant of tenantsRes.rows) {
       const tiersRes = await client.query<TierRow>(
-        `SELECT "Id" AS id, "SortOrder" AS sort_order, "MinCompositeScore" AS min_composite_score
+        `SELECT "Id" AS id, "SortOrder" AS sort_order, "MinCompositeScore" AS min_composite_score,
+                "RequireCompletedProfile" AS require_completed_profile,
+                "MinMembershipDays" AS min_membership_days,
+                "MinEarnedBonuses" AS min_earned_bonuses,
+                "MinCashSpend" AS min_cash_spend, "MinBonusSpend" AS min_bonus_spend,
+                "MinPurchaseCount" AS min_purchase_count, "MinReviewCount" AS min_review_count
          FROM loyalty_tier_definitions
          WHERE "TenantId" = $1
          ORDER BY "SortOrder" DESC`,
@@ -114,6 +163,13 @@ async function runLoyaltyTierRecompute(): Promise<void> {
         id: t.id,
         sortOrder: t.sort_order,
         minCompositeScore: Number(t.min_composite_score),
+        requireCompletedProfile: t.require_completed_profile,
+        minMembershipDays: t.min_membership_days,
+        minEarnedBonuses: t.min_earned_bonuses === null ? null : Number(t.min_earned_bonuses),
+        minCashSpend: t.min_cash_spend === null ? null : Number(t.min_cash_spend),
+        minBonusSpend: t.min_bonus_spend === null ? null : Number(t.min_bonus_spend),
+        minPurchaseCount: t.min_purchase_count,
+        minReviewCount: t.min_review_count,
       }));
 
       const scoresRes = await client.query<MembershipScoreRow>(
@@ -136,14 +192,29 @@ async function runLoyaltyTierRecompute(): Promise<void> {
            FROM accrual_entries
            GROUP BY membership_id
          )
-         SELECT a.membership_id                                                    AS "membershipId",
+         SELECT m."Id"                                                            AS "membershipId",
                 m."CurrentTierId"                                                  AS "currentTierId",
                 m."CompositeScore"                                                 AS "currentCompositeScore",
-                (6 - NTILE(5) OVER (ORDER BY a.days_since_last_accrual ASC))::int  AS "recencyScore",
-                (NTILE(5) OVER (ORDER BY a.frequency ASC))::int                    AS "frequencyScore",
-                (NTILE(5) OVER (ORDER BY a.monetary ASC))::int                     AS "monetaryScore"
-         FROM agg a
-         JOIN loyalty_memberships m ON m."Id" = a.membership_id`,
+                (6 - NTILE(5) OVER (ORDER BY COALESCE(a.days_since_last_accrual, 999999) ASC))::int AS "recencyScore",
+                (NTILE(5) OVER (ORDER BY COALESCE(a.frequency, 0) ASC))::int        AS "frequencyScore",
+                (NTILE(5) OVER (ORDER BY COALESCE(a.monetary, 0) ASC))::int         AS "monetaryScore",
+                (NULLIF(BTRIM(c."FullName"), '') IS NOT NULL AND c."Email" IS NOT NULL) AS "profileCompleted",
+                GREATEST(0, CURRENT_DATE - m."JoinedAt"::date)::int                AS "membershipDays",
+                COALESCE((SELECT SUM(le."Amount") FROM loyalty_ledger_entries le
+                          WHERE le."MembershipId" = m."Id" AND le."EntryType" = 'accrual'), 0) AS "earnedBonuses",
+                COALESCE((SELECT SUM(pt."TotalAmount") FROM pos_transactions pt
+                          WHERE pt."Id" IN (SELECT DISTINCT le."PosTransactionId" FROM loyalty_ledger_entries le
+                                            WHERE le."MembershipId" = m."Id" AND le."PosTransactionId" IS NOT NULL)), 0) AS "cashSpend",
+                COALESCE(ABS((SELECT SUM(le."Amount") FROM loyalty_ledger_entries le
+                              WHERE le."MembershipId" = m."Id" AND le."EntryType" = 'redemption')), 0) AS "bonusSpend",
+                (SELECT COUNT(DISTINCT le."PosTransactionId")::int FROM loyalty_ledger_entries le
+                 WHERE le."MembershipId" = m."Id" AND le."PosTransactionId" IS NOT NULL) AS "purchaseCount",
+                (SELECT COUNT(*)::int FROM purchase_reviews pr
+                 WHERE pr."TenantId" = $1 AND pr."ConsumerAccountId" = m."ConsumerAccountId") AS "reviewCount"
+         FROM loyalty_memberships m
+         LEFT JOIN agg a ON a.membership_id = m."Id"
+         JOIN consumer_accounts c ON c."Id" = m."ConsumerAccountId"
+         WHERE m."TenantId" = $1 AND m."Status" = 'active'`,
         [tenant.id]
       );
 
@@ -156,19 +227,32 @@ async function runLoyaltyTierRecompute(): Promise<void> {
           row.monetaryScore
         );
         const currentCompositeScore = Number(row.currentCompositeScore);
-        const newTier = pickQualifyingTier(tiers, compositeScore);
+        const newTier = pickQualifyingTier(tiers, {
+          compositeScore,
+          profileCompleted: row.profileCompleted,
+          membershipDays: row.membershipDays,
+          earnedBonuses: Number(row.earnedBonuses),
+          cashSpend: Number(row.cashSpend),
+          bonusSpend: Number(row.bonusSpend),
+          purchaseCount: row.purchaseCount,
+          reviewCount: row.reviewCount,
+        });
         const newTierId = newTier?.id ?? null;
 
         const tierChanged = newTierId !== row.currentTierId;
-        const scoreChanged = Math.abs(compositeScore - currentCompositeScore) > SCORE_EPSILON;
+        await client.query(
+          `UPDATE loyalty_memberships
+           SET "CurrentTierId" = $1, "CompositeScore" = $2, "TierScoreUpdatedAt" = NOW(),
+               "TierProfileCompleted" = $3, "TierMembershipDays" = $4,
+               "TierEarnedBonuses" = $5, "TierCashSpend" = $6, "TierBonusSpend" = $7,
+               "TierPurchaseCount" = $8, "TierReviewCount" = $9
+           WHERE "Id" = $10`,
+          [newTierId, compositeScore.toFixed(4), row.profileCompleted, row.membershipDays,
+           Number(row.earnedBonuses).toFixed(2), Number(row.cashSpend).toFixed(2),
+           Number(row.bonusSpend).toFixed(2), row.purchaseCount, row.reviewCount, row.membershipId]
+        );
 
         if (tierChanged) {
-          await client.query(
-            `UPDATE loyalty_memberships
-             SET "CurrentTierId" = $1, "CompositeScore" = $2, "TierScoreUpdatedAt" = NOW()
-             WHERE "Id" = $3`,
-            [newTierId, compositeScore.toFixed(4), row.membershipId]
-          );
           await client.query(
             `INSERT INTO loyalty_tier_change_history
                ("TenantId", "MembershipId", "FromTierId", "ToTierId", "FromScore", "ToScore", "ChangedAt")
@@ -183,18 +267,7 @@ async function runLoyaltyTierRecompute(): Promise<void> {
             ]
           );
           tierChanges++;
-        } else if (scoreChanged) {
-          // Score drifted within the same tier band (matters for progress-to-next-tier
-          // display) — update the score/timestamp only, no history row (that's for tier
-          // transitions only).
-          await client.query(
-            `UPDATE loyalty_memberships
-             SET "CompositeScore" = $1, "TierScoreUpdatedAt" = NOW()
-             WHERE "Id" = $2`,
-            [compositeScore.toFixed(4), row.membershipId]
-          );
         }
-        // else: nothing changed — skip the write entirely.
       }
     }
 

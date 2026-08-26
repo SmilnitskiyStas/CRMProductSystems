@@ -54,4 +54,19 @@ public sealed class LoyaltyTierSettingsController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpPost("{id:guid}/image")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)
+    {
+        var tenantId = _tenantContext.TenantId;
+        if (tenantId is null) return Forbid();
+        if (file is null || file.Length == 0) return BadRequest(new { error = "No file uploaded." });
+        if (file.Length > 5 * 1024 * 1024) return BadRequest(new { error = "File too large. Max 5 MB." });
+
+        using var stream = file.OpenReadStream();
+        var (url, error) = await _loyalty.UploadTierImageAsync(tenantId.Value, id, stream, file.FileName, ct);
+        if (error == "Tier not found.") return NotFound(new { error });
+        return error is null ? Ok(new { imageUrl = url }) : BadRequest(new { error });
+    }
 }

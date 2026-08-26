@@ -45,10 +45,19 @@ export interface UpdateLoyaltyProgramSettingsRequest {
 export interface LoyaltyTierDefinitionDto {
   id: string;
   name: string;
+  description: string | null;
+  imageUrl: string | null;
   sortOrder: number;
   minCompositeScore: number;
   accrualMultiplier: number;
   discountPercent: number;
+  requireCompletedProfile: boolean;
+  minMembershipDays: number | null;
+  minEarnedBonuses: number | null;
+  minCashSpend: number | null;
+  minBonusSpend: number | null;
+  minPurchaseCount: number | null;
+  minReviewCount: number | null;
 }
 
 /**
@@ -65,10 +74,19 @@ export interface LoyaltyTierDefinitionDto {
  */
 export interface UpsertTierRequest {
   name: string;
+  description: string | null;
+  imageUrl: string | null;
   sortOrder: number;
   minCompositeScore: number;
   accrualMultiplier: number;
   discountPercent: number;
+  requireCompletedProfile: boolean;
+  minMembershipDays: number | null;
+  minEarnedBonuses: number | null;
+  minCashSpend: number | null;
+  minBonusSpend: number | null;
+  minPurchaseCount: number | null;
+  minReviewCount: number | null;
 }
 
 // ── Banners (TASK-522, second section of the Consumer App page) ────────────

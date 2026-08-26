@@ -67,6 +67,13 @@ public sealed class LoyaltyMembership
     public decimal CompositeScore { get; set; }
     /// <summary>When <see cref="CompositeScore"/>/<see cref="CurrentTierId"/> were last recomputed. Null until the first run.</summary>
     public DateTimeOffset? TierScoreUpdatedAt { get; set; }
+    public bool TierProfileCompleted { get; set; }
+    public int TierMembershipDays { get; set; }
+    public decimal TierEarnedBonuses { get; set; }
+    public decimal TierCashSpend { get; set; }
+    public decimal TierBonusSpend { get; set; }
+    public int TierPurchaseCount { get; set; }
+    public int TierReviewCount { get; set; }
 
     public Tenant? Tenant { get; init; }
     public ConsumerAccount? ConsumerAccount { get; init; }

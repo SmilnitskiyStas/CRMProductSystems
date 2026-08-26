@@ -18,3 +18,10 @@ export async function updateLoyaltyTiers(
 ): Promise<LoyaltyTierDefinitionDto[]> {
   return api.put<LoyaltyTierDefinitionDto[]>("/api/settings/loyalty/tiers", body);
 }
+
+export async function uploadLoyaltyTierImage(id: string, file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const result = await api.postForm<{ imageUrl: string }>(`/api/settings/loyalty/tiers/${id}/image`, form);
+  return result.imageUrl;
+}

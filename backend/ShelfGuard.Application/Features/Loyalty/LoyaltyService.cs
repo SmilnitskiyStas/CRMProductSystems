@@ -536,7 +536,14 @@ public sealed class LoyaltyService : ILoyaltyService
             membership.CompositeScore,
             nextTier?.Id,
             nextTier?.Name,
-            nextTier is null ? null : Math.Max(0, nextTier.MinCompositeScore - membership.CompositeScore));
+            nextTier is null ? null : Math.Max(0, nextTier.MinCompositeScore - membership.CompositeScore),
+            new LoyaltyTierProgressMetricsDto(
+                membership.TierProfileCompleted, membership.TierMembershipDays,
+                membership.TierEarnedBonuses, membership.TierCashSpend, membership.TierBonusSpend,
+                membership.TierPurchaseCount, membership.TierReviewCount),
+            nextTier is null ? null : new LoyaltyTierRequirementsDto(
+                nextTier.RequireCompletedProfile, nextTier.MinMembershipDays, nextTier.MinEarnedBonuses,
+                nextTier.MinCashSpend, nextTier.MinBonusSpend, nextTier.MinPurchaseCount, nextTier.MinReviewCount));
 
         return (progress, null, null);
     }
@@ -906,6 +913,8 @@ public sealed class LoyaltyService : ILoyaltyService
                 return (null, "Tier name is required.");
             if (tier.Name.Trim().Length > 100)
                 return (null, "Tier name cannot exceed 100 characters.");
+            if (tier.Description?.Trim().Length > 1000)
+                return (null, "Tier description cannot exceed 1000 characters.");
             if (tier.SortOrder < 0)
                 return (null, "SortOrder cannot be negative.");
             if (tier.MinCompositeScore < 0)
@@ -914,6 +923,10 @@ public sealed class LoyaltyService : ILoyaltyService
                 return (null, "AccrualMultiplier must be between 0 and 999.99.");
             if (tier.DiscountPercent is < 0 or > 100)
                 return (null, "DiscountPercent must be between 0 and 100.");
+            if (tier.MinMembershipDays < 0 || tier.MinEarnedBonuses < 0 ||
+                tier.MinCashSpend < 0 || tier.MinBonusSpend < 0 ||
+                tier.MinPurchaseCount < 0 || tier.MinReviewCount < 0)
+                return (null, "Tier progression requirements cannot be negative.");
         }
 
         if (tiers.Select(t => t.SortOrder).Distinct().Count() != tiers.Count)
@@ -937,9 +950,12 @@ public sealed class LoyaltyService : ILoyaltyService
             if (existingBySortOrder.TryGetValue(request.SortOrder, out var tier))
             {
                 tier.Name = request.Name.Trim();
+                tier.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+                tier.ImageUrl = request.ImageUrl;
                 tier.MinCompositeScore = request.MinCompositeScore;
                 tier.AccrualMultiplier = request.AccrualMultiplier;
                 tier.DiscountPercent = request.DiscountPercent;
+                ApplyTierRequirements(tier, request);
                 tier.UpdatedAt = DateTimeOffset.UtcNow;
                 _loyalty.UpdateTier(tier);
             }
@@ -949,11 +965,14 @@ public sealed class LoyaltyService : ILoyaltyService
                 {
                     TenantId = tenantId,
                     Name = request.Name.Trim(),
+                    Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+                    ImageUrl = request.ImageUrl,
                     SortOrder = request.SortOrder,
                     MinCompositeScore = request.MinCompositeScore,
                     AccrualMultiplier = request.AccrualMultiplier,
                     DiscountPercent = request.DiscountPercent,
                 };
+                ApplyTierRequirements(tier, request);
                 await _loyalty.AddTierAsync(tier, ct);
             }
             result.Add(tier);
@@ -962,6 +981,40 @@ public sealed class LoyaltyService : ILoyaltyService
         await _loyalty.SaveChangesAsync(ct);
 
         return (result.OrderBy(t => t.SortOrder).Select(ToTierDefinitionDto).ToList(), null);
+    }
+
+    public async Task<(string? Url, string? Error)> UploadTierImageAsync(
+        Guid tenantId, Guid tierId, Stream imageStream, string fileName, CancellationToken ct = default)
+    {
+        var tier = (await _loyalty.GetTierLadderAsync(tenantId, ct)).FirstOrDefault(x => x.Id == tierId);
+        if (tier is null) return (null, "Tier not found.");
+
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+            return (null, "Unsupported image format.");
+
+        var uploadDir = Path.Combine("wwwroot", "uploads", "loyalty-tiers");
+        Directory.CreateDirectory(uploadDir);
+        var diskName = $"{tierId}{ext}";
+        await using (var fs = new FileStream(Path.Combine(uploadDir, diskName), FileMode.Create))
+            await imageStream.CopyToAsync(fs, ct);
+
+        tier.ImageUrl = $"/uploads/loyalty-tiers/{diskName}";
+        tier.UpdatedAt = DateTimeOffset.UtcNow;
+        _loyalty.UpdateTier(tier);
+        await _loyalty.SaveChangesAsync(ct);
+        return (tier.ImageUrl, null);
+    }
+
+    private static void ApplyTierRequirements(LoyaltyTierDefinition tier, UpsertTierRequest request)
+    {
+        tier.RequireCompletedProfile = request.RequireCompletedProfile;
+        tier.MinMembershipDays = request.MinMembershipDays;
+        tier.MinEarnedBonuses = request.MinEarnedBonuses;
+        tier.MinCashSpend = request.MinCashSpend;
+        tier.MinBonusSpend = request.MinBonusSpend;
+        tier.MinPurchaseCount = request.MinPurchaseCount;
+        tier.MinReviewCount = request.MinReviewCount;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1127,7 +1180,10 @@ public sealed class LoyaltyService : ILoyaltyService
         s.CustomerCodeFormat, isNew ? null : s.UpdatedAt);
 
     private static LoyaltyTierDefinitionDto ToTierDefinitionDto(LoyaltyTierDefinition t) => new(
-        t.Id, t.Name, t.SortOrder, t.MinCompositeScore, t.AccrualMultiplier, t.DiscountPercent);
+        t.Id, t.Name, t.SortOrder, t.MinCompositeScore, t.AccrualMultiplier, t.DiscountPercent,
+        t.Description, t.ImageUrl, t.RequireCompletedProfile,
+        t.MinMembershipDays, t.MinEarnedBonuses, t.MinCashSpend, t.MinBonusSpend,
+        t.MinPurchaseCount, t.MinReviewCount);
 
     private static LoyaltyTierChangeHistoryDto ToTierHistoryDto(LoyaltyTierChangeHistory h) => new(
         h.Id, h.FromTier?.Name, h.ToTier?.Name, h.FromScore, h.ToScore, h.ChangedAt);

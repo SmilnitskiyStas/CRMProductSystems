@@ -2278,6 +2278,9 @@ public sealed class AppDbContext : DbContext
             e.Property(m => m.JoinedAt).HasDefaultValueSql("NOW()");
             // TASK-613: tier ladder — set only by the nightly tier-recompute worker job.
             e.Property(m => m.CompositeScore).HasColumnType("decimal(18,4)").HasDefaultValue(0m);
+            e.Property(m => m.TierEarnedBonuses).HasColumnType("decimal(18,2)");
+            e.Property(m => m.TierCashSpend).HasColumnType("decimal(18,2)");
+            e.Property(m => m.TierBonusSpend).HasColumnType("decimal(18,2)");
             // TASK-414 (security review TASK-412, finding B): same xmin optimistic-concurrency
             // pattern as ProductStock above (TASK-356) — no schema change needed, xmin already
             // exists on every row. Without this, two concurrent writers to the same
@@ -2398,9 +2401,14 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(x => x.TenantId).IsRequired();
             e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.Property(x => x.ImageUrl).HasMaxLength(500);
             e.Property(x => x.MinCompositeScore).HasColumnType("decimal(18,4)");
             e.Property(x => x.AccrualMultiplier).HasColumnType("decimal(5,2)").HasDefaultValue(1.0m);
             e.Property(x => x.DiscountPercent).HasColumnType("decimal(5,2)").HasDefaultValue(0m);
+            e.Property(x => x.MinEarnedBonuses).HasColumnType("decimal(18,2)");
+            e.Property(x => x.MinCashSpend).HasColumnType("decimal(18,2)");
+            e.Property(x => x.MinBonusSpend).HasColumnType("decimal(18,2)");
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(x => new { x.TenantId, x.SortOrder })
