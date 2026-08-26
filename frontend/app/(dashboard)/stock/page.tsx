@@ -113,6 +113,9 @@ function StockPageContent() {
     zones: s.zones.map((z) => ({ id: z.id, name: z.name })),
   }));
 
+  const storeNameById = new Map(storeOptions.map((s) => [s.id, s.name]));
+  const zoneNameById = new Map(storeOptions.flatMap((s) => s.zones.map((z) => [z.id, z.name] as const)));
+
   const productOptions = products.map((p) => ({
     id: p.id,
     name: p.name,
@@ -169,7 +172,7 @@ function StockPageContent() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {filters.store_id && (
             <span style={chipStyle}>
-              {t("storeChip", { value: filters.store_id })}
+              {t("storeChip", { value: storeNameById.get(filters.store_id) ?? filters.store_id })}
               <button
                 onClick={() => setFilters((p) => ({ ...p, store_id: "" }))}
                 style={chipBtnStyle}
@@ -180,7 +183,7 @@ function StockPageContent() {
           )}
           {filters.zone_id && (
             <span style={chipStyle}>
-              {t("zoneChip", { value: filters.zone_id })}
+              {t("zoneChip", { value: zoneNameById.get(filters.zone_id) ?? filters.zone_id })}
               <button
                 onClick={() => setFilters((p) => ({ ...p, zone_id: "" }))}
                 style={chipBtnStyle}
