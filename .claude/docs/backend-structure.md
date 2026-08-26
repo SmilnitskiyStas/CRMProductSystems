@@ -1,8 +1,8 @@
 # Backend Structure
 
 **Owner:** backend-developer
-**Updated:** 2026-06-04
-**Last reviewed:** 2026-07-16 (pre-launch audit) — startup sequence, migration history and feature-status tables below refreshed to reality.
+**Updated:** 2026-08-26
+**Last reviewed:** 2026-07-16 (pre-launch audit) — startup sequence, migration history and feature-status tables below refreshed to reality. Migration Commands section expanded 2026-08-26 after a hand-written-migration incident (see section for detail).
 
 ## Layer Responsibilities
 ```
@@ -80,6 +80,33 @@ dotnet ef migrations add <Name> --project ShelfGuard.Infrastructure --startup-pr
 dotnet ef database update --project ShelfGuard.Infrastructure --startup-project ShelfGuard.Api
 ```
 > Stop the running API process before running these — DLL locking will fail the build.
+
+**Never hand-write a migration `.cs` file.** Always generate via `dotnet ef migrations add`. A
+2026-08-26 incident: a migration was hand-written (Up/Down only, a suspiciously round timestamp)
+instead of tool-generated — it was missing its paired `.Designer.cs` and had silently drifted from
+`AppDbContextModelSnapshot.cs`. Regenerating it properly via the real command produced near-identical
+`Up`/`Down` content, confirming the schema design itself was correct — the problem was purely
+skipping the tool. Hand-writing skips the model-diff-against-current-model safety net and risks
+snapshot drift that nothing catches until a later real `migrations add` breaks unexpectedly.
+
+**`dotnet ef` commands do not read `appsettings.Development.json`** — they resolve the connection
+string entirely through `ShelfGuard.Infrastructure/Data/AppDbContextFactory.cs`
+(`IDesignTimeDbContextFactory<AppDbContext>`), which reads only the `ConnectionStrings__DefaultConnection`
+env var, falling back to a hardcoded default that does **not** match this project's local dev
+Postgres. Export it first, matching `appsettings.Development.json`'s `DefaultConnection` value:
+```bash
+export ConnectionStrings__DefaultConnection="Host=localhost;Port=5435;Database=crm;Username=shelfguard_app_dev;Password=<see appsettings.Development.json DefaultConnection>"
+```
+Skipping this makes `dotnet ef database update`/`migrations list`/`migrations add` fail with a
+**misleading** `password authentication failed for user postgres` error — unrelated to the real dev
+DB's actual credentials, easy to misdiagnose as a Postgres problem.
+
+**Before pushing:** verify with `dotnet ef database update` against local dev Postgres, then run at
+least `dotnet test --filter "FullyQualifiedName~<AffectedFeature>"`. A full-suite local `dotnet test`
+run is unreliable — see KI-035 (`known-issues.md`), a pre-existing Postgres connection-pool issue.
+If `backend-ci`'s Test step fails after push with `53300: too many clients already` scattered across
+unrelated feature test classes (not your own feature's), that's very likely KI-035, not your change —
+retrigger with an empty commit rather than debugging already-correct code.
 
 ## OpenAPI Contract (TASK-552)
 `backend/openapi.json` is a **committed** snapshot of the full Swashbuckle-generated API surface

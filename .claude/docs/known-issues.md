@@ -1,9 +1,37 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-08-24
+**Updated:** 2026-08-26
 
 ## Active Issues
+
+### KI-035: Postgres connection-pool exhaustion (`53300: too many clients already`) in `ShelfGuard.Tests` integration suite — scattered failures across unrelated feature test classes
+Severity: medium (blocks CI's Test step / delays deploy when it hits, but deploy is correctly
+skipped rather than shipping bad code — the flakiness itself doesn't corrupt data)
+Status: open — found 2026-08-26 while pushing the `AddConfigurableLoyaltyTierProgression` migration.
+Root cause not yet found.
+Description: `backend-ci`'s Test step failed with `Npgsql.PostgresException: 53300: sorry, too many
+clients already` across ~17-18 integration test classes spanning Loyalty, PriceSegments,
+AudienceBuilder, MobileConfig, SupplierAgreement — no common feature, so not caused by any one
+change. Reproduced the exact CI environment locally (fresh empty `postgres:16-alpine` container,
+port 5435, same `crm`/`crm_dev_password` creds CI uses, migrations applied via the real `dotnet ef`
+tool) and got the same class of failures — confirms this is pre-existing test-infrastructure
+flakiness, not a migration or feature-correctness issue. Already ruled out: reducing/disabling
+xUnit test-collection parallelism does not fix it — an `xunit.runner.json` with
+`parallelizeTestCollections: false` (fully serialized) still produced ~39-41 failures; the change
+was reverted, do not reintroduce it. This corrects at least 2 prior task logs
+(`.claude/logs/tasks/630_...md`, `632_...md`) that called this "known flaky pool exhaustion" and
+attributed it to scheduling/parallelism without finding the actual cause — it is not a parallelism
+artifact.
+Resolution: needs a dedicated investigation into a likely genuine Npgsql connection/pool leak in one
+or more integration test classes' `IAsyncLifetime` setup/teardown under
+`backend/ShelfGuard.Tests/Infrastructure/*IntegrationTests.cs`/`*RlsIntegrationTests.cs` — audit
+every `DisposeAsync()` for a missing `NpgsqlDataSource`/connection disposal that accumulates across
+the run. Not urgent to fix immediately: the workaround (confirm your own feature's tests pass in
+isolation via `dotnet test --filter "FullyQualifiedName~YourFeature"`, then retrigger CI with an
+empty commit if the full-suite failure shows scattered `53300` errors across unrelated features) is
+cheap and CI already correctly skips deploy on Test failure — but it will keep causing this same
+confusion/misdiagnosis until someone finds the actual leak.
 
 ### KI-034: `/customer-support?customerId=` deep link filters client-side over a widened page instead of a true backend filter
 Severity: low (functionally correct today at realistic ticket volumes — genuinely capped by the
