@@ -1,19 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
 import { ProductForm } from "@/features/inventory/components/ProductForm";
 import { ProductsTable } from "@/features/inventory/components/ProductsTable";
 import {
   useCreateProduct,
   useDeleteProduct,
-  useProducts,
+  useProductsPaged,
   useUpdateProduct,
 } from "@/features/inventory/hooks/useProducts";
-import type { CreateProductPayload, Product, UpdateProductPayload } from "@/features/inventory/types";
+import { useCategories } from "@/features/inventory/hooks/useCategories";
+import type { CreateProductPayload, Product, ProductSortBy, UpdateProductPayload } from "@/features/inventory/types";
+
+const PAGE_SIZE = 50;
+
+const inputStyle: React.CSSProperties = {
+  background: "#111827",
+  border: "1px solid #1F2937",
+  borderRadius: 8,
+  color: "#E8EDF5",
+  fontSize: 13,
+  padding: "7px 12px",
+  outline: "none",
+};
 
 export default function InventoryPage() {
   const t = useTranslations("Dashboard.inventory.page");
@@ -21,7 +35,55 @@ export default function InventoryPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const { data: products = [], isLoading, isError } = useProducts();
+  const [search, setSearch] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<ProductSortBy>("name");
+  const [sortDescending, setSortDescending] = useState(false);
+
+  // Debounced search (300ms), matching Customers' handleSearchInput pattern — `search` stays
+  // the immediately-typed value bound to the input for instant UI feedback, `debouncedSearch`
+  // is what actually reaches the query.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [search]);
+
+  // Reset to page 1 whenever a filter/sort changes underneath the current page.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, categoryId, sortBy, sortDescending]);
+
+  function handleSort(key: ProductSortBy) {
+    if (key === sortBy) setSortDescending((d) => !d);
+    else {
+      // New column defaults to descending, matching the Stock/Receipts/Transfers/WriteOffs
+      // precedent (StockTable's handleSort) — only the initial "name" default (set above) is
+      // ascending, per the backend's own ItemSortKeys default-key convention.
+      setSortBy(key);
+      setSortDescending(true);
+    }
+  }
+
+  const { data, isLoading, isError } = useProductsPaged({
+    search: debouncedSearch || undefined,
+    category_id: categoryId || undefined,
+    page,
+    pageSize: PAGE_SIZE,
+    sortBy,
+    sortDescending,
+  });
+  const products = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = data?.totalPages ?? Math.ceil(totalCount / PAGE_SIZE);
+
+  const { data: categories = [] } = useCategories();
+
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -95,7 +157,7 @@ export default function InventoryPage() {
             {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {isLoading ? tCommon("loading") : t("count", { count: products.length })}
+            {isLoading ? tCommon("loading") : t("count", { count: totalCount })}
           </p>
         </div>
         <Btn icon={<Plus size={15} />} onClick={openCreate}>
@@ -103,15 +165,45 @@ export default function InventoryPage() {
         </Btn>
       </div>
 
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+        <input
+          type="text"
+          placeholder={t("searchPlaceholder")}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ ...inputStyle, width: 260 }}
+        />
+
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          style={{ ...inputStyle, cursor: "pointer" }}
+        >
+          <option value="">{t("allCategories")}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {isLoading ? (
         <p style={{ color: "#4B5563", fontSize: 13 }}>{tCommon("loading")}</p>
       ) : (
-        <ProductsTable
-          products={products}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-          isDeleting={deleteProduct.isPending}
-        />
+        <>
+          <ProductsTable
+            products={products}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+            isDeleting={deleteProduct.isPending}
+            sortBy={sortBy}
+            sortDescending={sortDescending}
+            onSort={handleSort}
+          />
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
+        </>
       )}
 
       <ProductForm

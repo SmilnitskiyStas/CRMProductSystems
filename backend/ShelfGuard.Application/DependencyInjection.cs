@@ -34,6 +34,7 @@ public static class DependencyInjection
     {
 services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IItemService, ItemService>();
+        services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IStockService, StockService>();
         services.AddScoped<ILocationService, LocationService>();
         services.AddScoped<ISupplierService, SupplierService>();

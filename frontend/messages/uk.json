@@ -702,7 +702,9 @@
         "count": "{count, plural, one {# товар} other {# товарів}}",
         "toastCreated": "Товар додано",
         "toastUpdated": "Товар оновлено",
-        "toastDeleted": "Товар видалено"
+        "toastDeleted": "Товар видалено",
+        "searchPlaceholder": "Пошук по назві або штрихкоду…",
+        "allCategories": "Всі категорії"
       },
       "itemTypes": {
         "product": "Товар",

@@ -67,3 +67,21 @@ export interface CreateProductPayload {
 export interface UpdateProductPayload extends CreateProductPayload {
   isActive: boolean;
 }
+
+export interface CategoryDto {
+  id: string;
+  name: string;
+}
+
+// Opaque sort keys passed straight through to GET /api/items's `sortBy` query param — must
+// match the backend contract's sort-key strings exactly (categories/sortBy backend task, run
+// in parallel with this frontend task — confirm against its task log under `.claude/logs/tasks/`
+// if the strings ever drift).
+export type ProductSortBy =
+  | "name"
+  | "barcode"
+  | "category"
+  | "purchaseprice"
+  | "retailprice"
+  | "minstock"
+  | "maxstock";

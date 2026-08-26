@@ -702,7 +702,9 @@
         "count": "{count, plural, one {# product} other {# products}}",
         "toastCreated": "Product added",
         "toastUpdated": "Product updated",
-        "toastDeleted": "Product deleted"
+        "toastDeleted": "Product deleted",
+        "searchPlaceholder": "Search by name or barcode…",
+        "allCategories": "All categories"
       },
       "itemTypes": {
         "product": "Product",

@@ -16,6 +16,8 @@ public interface IItemRepository
         string? managementType,
         string? search,
         IReadOnlyList<Guid>? ids,
+        string? sortBy,
+        bool? sortDescending,
         int page,
         int pageSize,
         CancellationToken ct = default);

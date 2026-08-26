@@ -27,7 +27,8 @@ public sealed class WriteOffServiceTests
         // override this per-test with StubItem(...).
         _items.GetPagedAsync(
                 Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(),
-                Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<string?>(), Arg.Any<bool?>(),
+                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 var ids = ci.ArgAt<IReadOnlyList<Guid>?>(4) ?? [];
@@ -39,7 +40,8 @@ public sealed class WriteOffServiceTests
     private void StubItem(Item item) =>
         _items.GetPagedAsync(
                 Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(),
-                Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<string?>(), Arg.Any<bool?>(),
+                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 var ids = ci.ArgAt<IReadOnlyList<Guid>?>(4) ?? [];

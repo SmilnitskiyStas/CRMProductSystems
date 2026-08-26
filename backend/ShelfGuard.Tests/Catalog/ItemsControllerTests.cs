@@ -32,27 +32,27 @@ public sealed class ItemsControllerTests
     [Fact]
     public async Task GetAll_NoSearchOrIds_BehavesByteIdenticallyToToday()
     {
-        _catalog.GetPagedAsync(Guid.Empty, null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>())
+        _catalog.GetPagedAsync(Guid.Empty, null, null, null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>())
             .Returns(new PagedResult<ItemDto>());
 
         var result = await _controller.GetAll(null, null, null, page: 1, pageSize: 50);
 
         Assert.IsType<OkObjectResult>(result);
         await _catalog.Received(1).GetPagedAsync(
-            Guid.Empty, null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>());
+            Guid.Empty, null, null, null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task GetAll_WithSearch_PassesSearchThroughUnchanged()
     {
-        _catalog.GetPagedAsync(Guid.Empty, null, null, null, "молок", null, 1, 50, Arg.Any<CancellationToken>())
+        _catalog.GetPagedAsync(Guid.Empty, null, null, null, "молок", null, null, null, 1, 50, Arg.Any<CancellationToken>())
             .Returns(new PagedResult<ItemDto>());
 
         var result = await _controller.GetAll(null, null, null, search: "молок", page: 1, pageSize: 50);
 
         Assert.IsType<OkObjectResult>(result);
         await _catalog.Received(1).GetPagedAsync(
-            Guid.Empty, null, null, null, "молок", null, 1, 50, Arg.Any<CancellationToken>());
+            Guid.Empty, null, null, null, "молок", null, null, null, 1, 50, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class ItemsControllerTests
         _catalog.GetPagedAsync(
                 Guid.Empty, null, null, null, null,
                 Arg.Is<IReadOnlyList<Guid>>(l => l.Count == 30 && l.SequenceEqual(ids.Take(30))),
-                1, 30, Arg.Any<CancellationToken>())
+                null, null, 1, 30, Arg.Any<CancellationToken>())
             .Returns(new PagedResult<ItemDto>());
 
         // Caller asks for page 3 / pageSize 10 — the ids branch must override both.
@@ -72,7 +72,7 @@ public sealed class ItemsControllerTests
         await _catalog.Received(1).GetPagedAsync(
             Guid.Empty, null, null, null, null,
             Arg.Is<IReadOnlyList<Guid>>(l => l.Count == 30 && l.SequenceEqual(ids.Take(30))),
-            1, 30, Arg.Any<CancellationToken>());
+            null, null, 1, 30, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public sealed class ItemsControllerTests
         _catalog.GetPagedAsync(
                 Guid.Empty, null, null, null, null,
                 Arg.Is<IReadOnlyList<Guid>>(l => l.SequenceEqual(ids)),
-                1, 30, Arg.Any<CancellationToken>())
+                null, null, 1, 30, Arg.Any<CancellationToken>())
             .Returns(new PagedResult<ItemDto>());
 
         var result = await _controller.GetAll(null, null, null, ids: ids, page: 1, pageSize: 50);
@@ -91,6 +91,19 @@ public sealed class ItemsControllerTests
         await _catalog.Received(1).GetPagedAsync(
             Guid.Empty, null, null, null, null,
             Arg.Is<IReadOnlyList<Guid>>(l => l.SequenceEqual(ids)),
-            1, 30, Arg.Any<CancellationToken>());
+            null, null, 1, 30, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetAll_WithSortByAndSortDescending_PassesBothThrough()
+    {
+        _catalog.GetPagedAsync(Guid.Empty, null, null, null, null, null, "retailprice", true, 1, 50, Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<ItemDto>());
+
+        var result = await _controller.GetAll(null, null, null, sortBy: "retailprice", sortDescending: true, page: 1, pageSize: 50);
+
+        Assert.IsType<OkObjectResult>(result);
+        await _catalog.Received(1).GetPagedAsync(
+            Guid.Empty, null, null, null, null, null, "retailprice", true, 1, 50, Arg.Any<CancellationToken>());
     }
 }

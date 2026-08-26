@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, Pencil, Trash2, BarChart2, ExternalLink } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
-import type { Product } from "../types";
+import type { Product, ProductSortBy } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 import {
   DetailDrawer,
   DrawerField,
@@ -19,6 +20,9 @@ interface Props {
   onEdit: (product: Product) => void;
   onDelete: (id: string) => void;
   isDeleting: boolean;
+  sortBy: ProductSortBy;
+  sortDescending: boolean;
+  onSort: (key: ProductSortBy) => void;
 }
 
 const tdStyle: React.CSSProperties = {
@@ -331,7 +335,7 @@ function ProductDetail({ p }: { p: Product }) {
 }
 
 // ── Table ────────────────────────────────────────────────────────────────────
-export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props) {
+export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, sortDescending, onSort }: Props) {
   const router = useRouter();
   const t = useTranslations("Dashboard.inventory.table");
   const tFields = useTranslations("Dashboard.inventory.fields");
@@ -344,17 +348,20 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
 
   const pendingProduct = products.find((p) => p.id === pendingDeleteId) ?? null;
 
-  const headers: { key: string; label: string }[] = [
-    { key: "barcode", label: tFields("barcode") },
-    { key: "name", label: tFields("name") },
+  // `sortKey` maps a column onto the backend's `sortBy` allowlist (see `ProductSortBy` in
+  // types.ts). Columns without one (class, itemType, unit, status, actions) render as plain,
+  // non-clickable headers.
+  const headers: { key: string; label: string; sortKey?: ProductSortBy }[] = [
+    { key: "barcode", label: tFields("barcode"), sortKey: "barcode" },
+    { key: "name", label: tFields("name"), sortKey: "name" },
     { key: "class", label: t("headers.class") },
-    { key: "category", label: tFields("category") },
+    { key: "category", label: tFields("category"), sortKey: "category" },
     { key: "itemType", label: tFields("itemType") },
     { key: "unit", label: tFields("unit") },
-    { key: "purchase", label: t("headers.purchase") },
-    { key: "retail", label: t("headers.retail") },
-    { key: "min", label: t("headers.min") },
-    { key: "max", label: t("headers.max") },
+    { key: "purchase", label: t("headers.purchase"), sortKey: "purchaseprice" },
+    { key: "retail", label: t("headers.retail"), sortKey: "retailprice" },
+    { key: "min", label: t("headers.min"), sortKey: "minstock" },
+    { key: "max", label: t("headers.max"), sortKey: "maxstock" },
     { key: "status", label: tFields("statusLabel") },
     { key: "actions", label: t("headers.actions") },
   ];
@@ -379,7 +386,17 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting }: Props)
             <tr>
               {headers.map((h) => (
                 <th key={h.key} style={h.key === "actions" ? { ...thStyle, borderRight: "none" } : thStyle}>
-                  {h.label}
+                  {h.sortKey ? (
+                    <SortableHeader
+                      label={h.label}
+                      sortKey={h.sortKey}
+                      activeSort={sortBy}
+                      activeDescending={sortDescending}
+                      onSort={onSort}
+                    />
+                  ) : (
+                    h.label
+                  )}
                 </th>
               ))}
             </tr>

@@ -24,6 +24,8 @@ public sealed class ItemsController : ControllerBase
         [FromQuery] string? management_type,
         [FromQuery] string? search = null,
         [FromQuery(Name = "ids")] Guid[]? ids = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] bool? sortDescending = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
@@ -45,7 +47,7 @@ public sealed class ItemsController : ControllerBase
 
         var query = new PagedQuery { Page = page, PageSize = pageSize };
         var result = await _catalog.GetPagedAsync(
-            tenantId, category_id, segment_id, management_type, search, clampedIds,
+            tenantId, category_id, segment_id, management_type, search, clampedIds, sortBy, sortDescending,
             query.ClampedPage, query.ClampedPageSize, ct);
         return Ok(result);
     }

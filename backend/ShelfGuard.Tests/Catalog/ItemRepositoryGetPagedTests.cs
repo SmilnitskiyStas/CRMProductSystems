@@ -40,7 +40,7 @@ public sealed class ItemRepositoryGetPagedTests
         var repo = new ItemRepository(db);
         var (items, total) = await repo.GetPagedAsync(
             categoryId: null, segmentId: null, managementType: null, search: null,
-            ids: [wanted.Id, alsoWanted.Id], page: 1, pageSize: 30);
+            ids: [wanted.Id, alsoWanted.Id], sortBy: null, sortDescending: null, page: 1, pageSize: 30);
 
         Assert.Equal(2, total);
         Assert.Equal(2, items.Count);
@@ -61,7 +61,7 @@ public sealed class ItemRepositoryGetPagedTests
         var repo = new ItemRepository(db);
         var (items, total) = await repo.GetPagedAsync(
             categoryId: null, segmentId: null, managementType: null, search: null,
-            ids: [existing.Id, Guid.NewGuid()], page: 1, pageSize: 30);
+            ids: [existing.Id, Guid.NewGuid()], sortBy: null, sortDescending: null, page: 1, pageSize: 30);
 
         Assert.Equal(1, total);
         Assert.Equal(existing.Id, items.Single().Id);
@@ -80,7 +80,7 @@ public sealed class ItemRepositoryGetPagedTests
         var repo = new ItemRepository(db);
         var (items, total) = await repo.GetPagedAsync(
             categoryId: null, segmentId: null, managementType: null, search: null,
-            ids: null, page: 1, pageSize: 50);
+            ids: null, sortBy: null, sortDescending: null, page: 1, pageSize: 50);
 
         Assert.Equal(2, total);
         Assert.Equal(2, items.Count);

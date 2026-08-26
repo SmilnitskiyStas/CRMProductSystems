@@ -3,6 +3,23 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-632 — Catalog search/filter/sort: Categories endpoint + Items sortBy (backend)
+
+**Status:** done · **Agent:** backend-developer · Parallel: frontend-developer (disjoint files), same contract.
+Log: `.claude/logs/tasks/632_2026-08-26_catalog-categories-endpoint-items-sort_backend-developer.md`
+
+New read-only `GET /api/categories` (flat `CategoryDto(Id, Name)` list, active-only, ordered by
+name, `CanViewStock` policy, RLS-scoped same as Items/Locations). `GET /api/items` gained
+`sortBy`/`sortDescending` — allowlist keys `name` (default) / `barcode` / `category` /
+`purchaseprice` / `retailprice` / `minstock` / `maxstock` via new `ItemSortKeys` (same pattern as
+this week's Receipt/Transfer/WriteOff/Stock sort keys). `barcode` falls back to `name` order
+(jsonb array has no sortable scalar — documented judgment call); `category` sorts null last
+regardless of direction. `dotnet build` clean; targeted test filter (Catalog/ItemRepository/
+WriteOffService, 94 tests incl. new live-Postgres sort integration tests) — 0 failures. Full
+suite has pre-existing unrelated Postgres connection-pool flakiness (`53300: too many clients`)
+on 3 other integration test classes, reproduced with varying counts across runs — confirmed
+unrelated to this change.
+
 ## TASK-600 — Marketplace order receiving: API reference update (docs)
 
 **Status:** done · **Agent:** documentation-writer

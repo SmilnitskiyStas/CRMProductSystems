@@ -49,6 +49,7 @@ public static class DependencyInjection
 
         // Catalog (v1 tenant-aware)
         services.AddScoped<IItemRepository, ItemRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
 
         // Stock
         services.AddScoped<IStockRepository, StockRepository>();

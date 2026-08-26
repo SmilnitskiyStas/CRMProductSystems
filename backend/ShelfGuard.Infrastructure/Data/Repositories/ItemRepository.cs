@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using ShelfGuard.Application.Features.Catalog;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -39,6 +40,7 @@ public sealed class ItemRepository : IItemRepository
 
     public async Task<(List<Item> Items, int Total)> GetPagedAsync(
         Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids,
+        string? sortBy, bool? sortDescending,
         int page, int pageSize, CancellationToken ct = default)
     {
         var query = _db.Items
@@ -54,18 +56,71 @@ public sealed class ItemRepository : IItemRepository
         if (!string.IsNullOrWhiteSpace(managementType))
             query = query.Where(p => p.ManagementType == managementType.ToUpperInvariant());
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+        {
+            // Also match an exact barcode, not just a name substring — the mobile receiving
+            // screen's manual "знайти вручну" fallback routes typed input through this same
+            // search endpoint (it has no separate barcode field), so a scanned/typed barcode
+            // that fails camera resolution must still be findable by pasting it here.
+            var barcodeNeedle = JsonSerializer.Serialize(new[] { search.Trim() });
+            query = query.Where(p =>
+                EF.Functions.ILike(p.Name, $"%{search}%") ||
+                EF.Functions.JsonContains(p.Barcodes, barcodeNeedle));
+        }
         if (ids is { Count: > 0 })
             query = query.Where(p => ids.Contains(p.Id));
 
         var total = await query.CountAsync(ct);
+        query = ApplySort(query, sortBy, sortDescending);
         var items = await query
-            .OrderBy(p => p.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
         return (items, total);
+    }
+
+    private static IQueryable<Item> ApplySort(IQueryable<Item> query, string? sortBy, bool? sortDescending)
+    {
+        var key = ItemSortKeys.Normalize(sortBy);
+
+        // "name" (the pre-existing default, previously a bare OrderBy(Name) here) stays ascending
+        // when the caller omits sortDescending — byte-identical to the old behavior. Any other
+        // explicit key defaults to descending on omission, matching the Receipts/Transfers/
+        // WriteOffs/Stock convention from this same week (TASK-630/631) — those precedents
+        // (Stock's "productname", Receipts' "supplier"/"destination") default text columns to
+        // descending too rather than special-casing by data type, so no per-key override here.
+        var descending = sortDescending ?? key != ItemSortKeys.Default;
+
+        return (key, descending) switch
+        {
+            // "barcode": Barcodes is a jsonb-mapped List<string> with no natural single sortable
+            // scalar (first element, longest, etc. are all arbitrary) — and this exact column has
+            // a documented history of LINQ shapes that build fine but throw against real Postgres
+            // (see GetByBarcodeAsync's comment above). Extracting a raw jsonb array element via a
+            // Postgres-specific SQL fragment is possible but not worth the complexity for a
+            // "sort by barcode" nicety, so this key falls back to the same order as "name"
+            // (documented judgment call, TASK-632) rather than risk a repeat of that failure mode.
+            ("barcode", false) => query.OrderBy(p => p.Name),
+            ("barcode", true) => query.OrderByDescending(p => p.Name),
+            // Null category sorts last regardless of direction (typical UI expectation for an
+            // "uncategorized" bucket) — achieved via a primary always-ascending "is null" key
+            // (0 = has category, 1 = uncategorized) so only the secondary Name comparison flips
+            // with the requested direction.
+            ("category", false) => query.OrderBy(p => p.Category == null ? 1 : 0)
+                .ThenBy(p => p.Category != null ? p.Category.Name : null),
+            ("category", true) => query.OrderBy(p => p.Category == null ? 1 : 0)
+                .ThenByDescending(p => p.Category != null ? p.Category.Name : null),
+            ("purchaseprice", false) => query.OrderBy(p => p.PricePurchase),
+            ("purchaseprice", true) => query.OrderByDescending(p => p.PricePurchase),
+            ("retailprice", false) => query.OrderBy(p => p.PriceRetail),
+            ("retailprice", true) => query.OrderByDescending(p => p.PriceRetail),
+            ("minstock", false) => query.OrderBy(p => p.MinStock),
+            ("minstock", true) => query.OrderByDescending(p => p.MinStock),
+            ("maxstock", false) => query.OrderBy(p => p.MaxStock),
+            ("maxstock", true) => query.OrderByDescending(p => p.MaxStock),
+            (_, false) => query.OrderBy(p => p.Name),
+            (_, true) => query.OrderByDescending(p => p.Name),
+        };
     }
 
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

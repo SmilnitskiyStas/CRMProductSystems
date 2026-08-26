@@ -85,7 +85,8 @@ public sealed class WriteOffService : IWriteOffService
         var distinctProductIds = request.Items.Select(i => i.ProductId).Distinct().ToList();
         var (fetchedItems, _) = await _items.GetPagedAsync(
             categoryId: null, segmentId: null, managementType: null, search: null,
-            ids: distinctProductIds, page: 1, pageSize: distinctProductIds.Count, ct: ct);
+            ids: distinctProductIds, sortBy: null, sortDescending: null,
+            page: 1, pageSize: distinctProductIds.Count, ct: ct);
         var itemsById = fetchedItems.ToDictionary(i => i.Id);
 
         var writeOff = new WriteOff
