@@ -25,9 +25,10 @@ export function SortableHeader<TKey extends string>({
   activeSort: TKey;
   activeDescending: boolean;
   onSort: (key: TKey) => void;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }) {
   const active = sortKey === activeSort;
+  const justifyContent = align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start";
   return (
     <button
       onClick={() => onSort(sortKey)}
@@ -35,7 +36,7 @@ export function SortableHeader<TKey extends string>({
         display: "flex",
         alignItems: "center",
         gap: 3,
-        justifyContent: align === "right" ? "flex-end" : "flex-start",
+        justifyContent,
         width: "100%",
         background: "transparent",
         border: "none",

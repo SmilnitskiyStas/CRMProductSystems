@@ -55,7 +55,7 @@ function compareRows(a: CategoryProductRowDto, b: CategoryProductRowDto, key: So
 const numCell: React.CSSProperties = {
   color: "#9CA3AF",
   fontSize: 12,
-  textAlign: "right",
+  textAlign: "center",
   fontFamily: "monospace",
 };
 
@@ -227,20 +227,20 @@ export function CategoryDetailPanel({ categoryId, from, to, storeIds, onClose, o
               }}
             >
               <SortableHeader label={t("headers.product")} sortKey="name" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} />
-              <SortableHeader label={tStatus("safe")} sortKey="safe" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={tStatus("warning")} sortKey="warning" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={tStatus("critical")} sortKey="critical" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={tStatus("expired")} sortKey="expired" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={t("headers.totalQuantity")} sortKey="totalQuantity" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={t("headers.salesRevenue")} sortKey="salesRevenue" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={t("headers.unitsSold")} sortKey="unitsSold" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
+              <SortableHeader label={tStatus("safe")} sortKey="safe" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
+              <SortableHeader label={tStatus("warning")} sortKey="warning" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
+              <SortableHeader label={tStatus("critical")} sortKey="critical" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
+              <SortableHeader label={tStatus("expired")} sortKey="expired" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
+              <SortableHeader label={t("headers.totalQuantity")} sortKey="totalQuantity" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
+              <SortableHeader label={t("headers.salesRevenue")} sortKey="salesRevenue" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
+              <SortableHeader label={t("headers.unitsSold")} sortKey="unitsSold" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
               {canViewMargin && (
                 <>
-                  <SortableHeader label={t("headers.marginAmount")} sortKey="marginAmount" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-                  <SortableHeader label={t("headers.marginPercent")} sortKey="marginPercent" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
+                  <SortableHeader label={t("headers.marginAmount")} sortKey="marginAmount" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
+                  <SortableHeader label={t("headers.marginPercent")} sortKey="marginPercent" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
                 </>
               )}
-              <SortableHeader label={t("headers.daysOfStockRemaining")} sortKey="daysOfStockRemaining" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
+              <SortableHeader label={t("headers.daysOfStockRemaining")} sortKey="daysOfStockRemaining" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
             </div>
 
             {pageRows.map((p) => (
