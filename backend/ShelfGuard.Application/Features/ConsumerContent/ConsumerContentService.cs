@@ -47,7 +47,7 @@ public sealed class ConsumerContentService : IConsumerContentService
     }
 
     public async Task<(bool Success, string? Error)> RecordBannerEventAsync(
-        Guid tenantId, Guid bannerId, string eventType, Guid? consumerAccountId, CancellationToken ct = default)
+        Guid tenantId, Guid bannerId, Guid storeId, string eventType, Guid? consumerAccountId, CancellationToken ct = default)
     {
         if (eventType is not (BannerEventType.View or BannerEventType.Click))
             return (false, $"Invalid eventType '{eventType}'.");
@@ -62,7 +62,7 @@ public sealed class ConsumerContentService : IConsumerContentService
             if (!await _repo.BannerExistsAsync(tenantId, bannerId, ct))
                 return false;
 
-            await _repo.RecordEventAsync(tenantId, bannerId, eventType, consumerAccountId, ct);
+            await _repo.RecordEventAsync(tenantId, bannerId, storeId, eventType, consumerAccountId, ct);
             return true;
         }, ct);
 
@@ -79,6 +79,28 @@ public sealed class ConsumerContentService : IConsumerContentService
             tenantId, () => _repo.GetActivePromotionsAsync(tenantId, storeId, DateTime.UtcNow, ct), ct);
 
         return (promotions, null);
+    }
+
+    public async Task<(IReadOnlyList<ConsumerPromotionCampaignDto>? Campaigns, string? Error)> GetActivePromotionCampaignsAsync(Guid tenantId, Guid storeId, Guid? consumerAccountId, CancellationToken ct = default)
+    {
+        if (await _tenants.GetByIdAsync(tenantId, ct) is null) return (null, "Tenant not found.");
+        var result = await _tenantScope.ExecuteAsync(tenantId, () => _repo.GetActivePromotionCampaignsAsync(tenantId, storeId, consumerAccountId, DateTime.UtcNow, ct), ct);
+        return (result, null);
+    }
+
+    public async Task<(bool Success, string? Error)> RecordPromotionCampaignEventAsync(
+        Guid tenantId, Guid campaignId, Guid storeId, string eventType, Guid? consumerAccountId,
+        CancellationToken ct = default)
+    {
+        if (!PromotionCampaignEventType.IsValid(eventType)) return (false, "Invalid promotion campaign event type.");
+        if (await _tenants.GetByIdAsync(tenantId, ct) is null) return (false, "Tenant not found.");
+        var recorded = await _tenantScope.ExecuteAsync(tenantId, async () =>
+        {
+            if (!await _repo.PromotionCampaignExistsAtStoreAsync(tenantId, campaignId, storeId, ct)) return false;
+            await _repo.RecordPromotionCampaignEventAsync(tenantId, campaignId, storeId, eventType, consumerAccountId, ct);
+            return true;
+        }, ct);
+        return recorded ? (true, null) : (false, "Promotion campaign not found for this store.");
     }
 
     public async Task<(PagedResult<ConsumerCatalogItemDto>? Catalog, string? Error)> GetCatalogAsync(

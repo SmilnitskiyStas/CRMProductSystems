@@ -49,6 +49,7 @@ import { Btn } from "@/components/ui/Btn";
 import { extractDraftValidationErrors } from "../api/mobileConfigDraft";
 import { AppPreviewPanel } from "./AppPreviewPanel";
 import { BlockPropertyEditor } from "./BlockPropertyEditor";
+import { SectionTabs } from "./SectionTabs";
 import { useBlockRegistry } from "../hooks/useBlockRegistry";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useMobileConfigDraft, useSaveMobileConfigDraft } from "../hooks/useMobileConfigDraft";
@@ -605,34 +606,7 @@ function PageTabs({
   onChange: (page: MobileConfigPageName) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  return (
-    <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937" }}>
-      {MOBILE_CONFIG_PAGE_NAMES.map((page) => {
-        const active = page === activePage;
-        return (
-          <button
-            key={page}
-            type="button"
-            onClick={() => onChange(page)}
-            style={{
-              padding: "8px 16px",
-              background: "transparent",
-              border: "none",
-              borderBottom: active ? "2px solid #3B82F6" : "2px solid transparent",
-              color: active ? "#3B82F6" : "#6B7280",
-              fontSize: 13,
-              fontWeight: active ? 600 : 400,
-              cursor: "pointer",
-              marginBottom: -1,
-              transition: "color 0.15s",
-            }}
-          >
-            {t(`pageTabs.${page}`)}
-          </button>
-        );
-      })}
-    </div>
-  );
+  return <SectionTabs items={MOBILE_CONFIG_PAGE_NAMES.map((page) => ({ key: page, label: t(`pageTabs.${page}`) }))} activeKey={activePage} onChange={onChange} ariaLabel={t("pageSelectorLabel")} marginBottom={0} />;
 }
 
 // ── Palette item (draggable + click-to-add for keyboard/pointer parity) ────────────────────

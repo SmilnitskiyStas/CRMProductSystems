@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import type { AuthUser, ConsumerUser } from './types';
 import { queryClient } from '@/lib/query-client';
-import { activateOfflineReadCache, clearActiveOfflineReadCache } from '@/features/offline-read-cache/lifecycle';
-import { clearOfflineCacheOwner, persistOfflineCacheOwner } from '@/features/offline-read-cache/owner-pointer';
+import { activateOfflineReadCache } from '@/features/offline-read-cache/lifecycle';
+import { persistOfflineCacheOwner } from '@/features/offline-read-cache/owner-pointer';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
 
 /**
  * TASK-405/407 introduced a device-holds-one-session model (`sessionKind: 'staff' |
@@ -101,7 +102,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ personalAccessToken: token });
   },
 
-  setConsumerUser: (user) => set({ consumerUser: user }),
+  setConsumerUser: (user) => {
+    // Profile self-service updates must survive an app restart just like login snapshots do.
+    void SecureStore.setItemAsync(CONSUMER_USER_KEY, JSON.stringify(user));
+    set({ consumerUser: user });
+  },
   setTwoFactorChallenge: (challengeToken, email) =>
     set({ twoFactorChallenge: { challengeToken, email } }),
   clearTwoFactorChallenge: () => set({ twoFactorChallenge: null }),
@@ -120,6 +125,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       SecureStore.deleteItemAsync(SESSION_KIND_KEY),
       SecureStore.deleteItemAsync(CONSUMER_USER_KEY),
     ]);
+    useWorkspaceLocationStore.getState().reset();
     set({
       personalAccessToken: null,
       workspaceAccessToken: null,

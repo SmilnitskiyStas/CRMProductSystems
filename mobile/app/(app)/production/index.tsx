@@ -19,12 +19,11 @@ import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
 import {
   useProductionOrders,
   useRecipes,
-  useCreateProductionOrder,
 } from '@/features/production/hooks/useProduction';
 import type { ProductionOrderListItem, ProductionStatus } from '@/features/production/types';
 import { useAuthStore } from '@/features/auth/store';
 import { useOperationalDraft } from '@/features/operational-drafts/useOperationalDraft';
-import { classifyOperationalError } from '@/features/operational-drafts/submission';
+import { enqueueOperationalMutation, syncOperationalMutations } from '@/features/offline-mutations/operationalQueue';
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -125,7 +124,7 @@ function CreateOrderModal({
   const draft = useOperationalDraft(owner, 'production');
   const netInfo = useNetInfo();
   const { data: recipes, refetch: refetchRecipes } = useRecipes();
-  const { mutateAsync, isPending } = useCreateProductionOrder();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [recipeId, setRecipeId] = useState('');
   const [plannedQty, setPlannedQty] = useState('1');
@@ -181,40 +180,35 @@ function CreateOrderModal({
       Alert.alert('Помилка', 'Локацію не призначено для вашого профілю.');
       return;
     }
-    const network = await NetInfo.fetch();
-    if (!network.isConnected || network.isInternetReachable === false) {
-      const state = { status: 'failed' as const, message: 'Немає мережі. Чернетку збережено.' };
-      await draft.transition(state, draftPayload);
-      Alert.alert('Немає мережі', state.message);
-      return;
-    }
-    let mutationStarted = false;
+    if (!owner || isSubmitting) return;
+    setIsSubmitting(true);
     try {
-      const refreshed = await refetchRecipes();
-      if (refreshed.error) throw refreshed.error;
-      if (!refreshed.data?.some((recipe) => recipe.id === recipeId && recipe.isActive)) {
-        const state = { status: 'conflict' as const, message: 'Рецепт більше недоступний. Оновіть список і перевірте чернетку.' };
-        await draft.transition(state, draftPayload);
-        Alert.alert('Дані змінилися', state.message);
-        return;
+      const network = await NetInfo.fetch();
+      if (network.isConnected && network.isInternetReachable !== false) {
+        const refreshed = await refetchRecipes();
+        if (refreshed.error) throw refreshed.error;
+        if (!refreshed.data?.some((recipe) => recipe.id === recipeId && recipe.isActive)) {
+          Alert.alert('Дані змінилися', 'Рецепт більше недоступний. Оновіть список і перевірте чернетку.');
+          return;
+        }
       }
-      mutationStarted = true;
-      await mutateAsync({
+      await enqueueOperationalMutation(owner, { kind: 'production.create', payload: {
         recipeId,
         locationId: user.locationId,
         plannedQty: qty,
         notes: notes.trim() || undefined,
-      });
+      } });
       await draft.clear();
       reset();
       onClose();
-      Alert.alert('Успішно', 'Виробничий ордер створено.');
-    } catch (error) {
-      const state = mutationStarted
-        ? classifyOperationalError(error)
-        : { status: 'failed' as const, message: 'Не вдалося оновити рецепти. Ордер не відправлявся, чернетку збережено.' };
-      await draft.transition(state, draftPayload);
-      Alert.alert(state.status === 'uncertain' ? 'Результат не підтверджено' : 'Помилка', state.message);
+      const result = network.isConnected && network.isInternetReachable !== false
+        ? await syncOperationalMutations(owner) : { synced: 0, remaining: 1 };
+      Alert.alert(result.synced > 0 ? 'Успішно' : 'Збережено офлайн', result.synced > 0
+        ? 'Виробничий ордер створено.' : 'Ордер буде передано після появи інтернету.');
+    } catch {
+      Alert.alert('Помилка', 'Не вдалося надійно зберегти ордер. Дані форми залишено.');
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -279,10 +273,10 @@ function CreateOrderModal({
 
           <TouchableOpacity
             onPress={() => void handleSubmit()}
-            disabled={isPending || netInfo.isConnected === false || draft.submission.status === 'uncertain'}
+            disabled={isSubmitting}
             className="bg-primary-600 rounded-xl py-4 items-center"
           >
-            {isPending ? (
+            {isSubmitting ? (
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-white font-semibold text-base">Створити ордер</Text>

@@ -16,5 +16,5 @@ public sealed class CategoryService : ICategoryService
         return categories.Select(ToDto).ToList();
     }
 
-    private static CategoryDto ToDto(Category c) => new(c.Id, c.Name);
+    private static CategoryDto ToDto(Category c) => new(c.Id, c.Name, c.ParentId);
 }

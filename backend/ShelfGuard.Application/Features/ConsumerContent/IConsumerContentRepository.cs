@@ -24,11 +24,16 @@ public interface IConsumerContentRepository
 
     /// <summary>Inserts one BannerEvent row and saves. consumerAccountId is null for anonymous sessions.</summary>
     Task RecordEventAsync(
-        Guid tenantId, Guid bannerId, string eventType, Guid? consumerAccountId, CancellationToken ct = default);
+        Guid tenantId, Guid bannerId, Guid storeId, string eventType, Guid? consumerAccountId, CancellationToken ct = default);
 
     /// <summary>Active Discount rows (Status=active, within ValidFrom/ValidUntil) for one store, joined with Item.</summary>
     Task<IReadOnlyList<ConsumerPromotionDto>> GetActivePromotionsAsync(
         Guid tenantId, Guid storeId, DateTime utcNow, CancellationToken ct = default);
+    Task<IReadOnlyList<ConsumerPromotionCampaignDto>> GetActivePromotionCampaignsAsync(
+        Guid tenantId, Guid storeId, Guid? consumerAccountId, DateTime utcNow, CancellationToken ct = default);
+    Task<bool> PromotionCampaignExistsAtStoreAsync(Guid tenantId, Guid campaignId, Guid storeId, CancellationToken ct = default);
+    Task RecordPromotionCampaignEventAsync(Guid tenantId, Guid campaignId, Guid storeId, string eventType,
+        Guid? consumerAccountId, CancellationToken ct = default);
 
     /// <summary>Paginated active Items for the tenant, annotated with availability at one store.</summary>
     Task<(IReadOnlyList<ConsumerCatalogItemDto> Items, int Total)> GetCatalogPagedAsync(

@@ -1,7 +1,6 @@
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useStockBatch, useVerifyBatch } from '@/features/stock/hooks/useStock';
 
 export default function StockBatchDetailScreen() {
@@ -43,12 +42,12 @@ export default function StockBatchDetailScreen() {
         </View>
 
         <View className="bg-white rounded-2xl p-4 gap-3">
-          <Row label="К-сть" value={`${batch.quantity} ${batch.unit}`} />
+          <Row label="К-сть" value={String(batch.quantity)} />
           <Row label="Термін придатності" value={expiry} />
           <Row label="Днів залишилось" value={String(batch.daysLeft)} highlight />
           {batch.batchNumber && <Row label="Номер партії" value={batch.batchNumber} />}
           {batch.zoneName && <Row label="Зона" value={batch.zoneName} />}
-          {batch.shelfNumber && <Row label="Полиця" value={batch.shelfNumber} />}
+          {batch.shelfNumber !== null && <Row label="Полиця" value={String(batch.shelfNumber)} />}
         </View>
 
         {batch.status === 'needs_verification' && (

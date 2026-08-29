@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -16,19 +17,23 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import NetInfo from '@react-native-community/netinfo';
 import { cssInterop } from 'nativewind';
 import type { AxiosError } from 'axios';
+import { resolveApiAssetUrl } from '@/lib/api-client';
 import { getProductByBarcode } from '@/features/stock/api/stockApi';
 import { searchCatalogProducts } from '@/features/marketplace-orders/api/marketplaceOrdersApi';
 import {
-  useFinalizeMarketplaceReceipt,
   useMarketplaceReceipt,
-  useUpdateMarketplaceReceiptItem,
 } from '@/features/marketplace-orders/hooks/useMarketplaceOrders';
 import type {
   CatalogProduct,
+  MarketplaceOrderReceipt,
   MarketplaceOrderReceiptItem,
 } from '@/features/marketplace-orders/types';
+import { useAuthStore } from '@/features/auth/store';
+import { enqueueOperationalMutation, syncOperationalMutations } from '@/features/offline-mutations/operationalQueue';
+import { queryClient } from '@/lib/query-client';
 
 cssInterop(CameraView, { className: 'style' });
 
@@ -45,16 +50,30 @@ function isoDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function formatPrice(value: number) {
+  return `${value.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₴`;
+}
+
 function ItemRow({ item, onPress }: { item: MarketplaceOrderReceiptItem; onPress: () => void }) {
+  const imageUrl = resolveApiAssetUrl(item.referenceImageUrl);
   return (
     <TouchableOpacity onPress={onPress} className="bg-white px-4 py-4 border-b border-gray-100">
       <View className="flex-row items-start">
-        <View className={`w-9 h-9 rounded-full items-center justify-center ${item.isResolved ? 'bg-green-100' : 'bg-gray-100'}`}>
-          <Ionicons name={item.isResolved ? 'checkmark' : 'scan-outline'} size={19} color={item.isResolved ? '#16a34a' : '#6b7280'} />
+        <View className="w-14 h-14 rounded-xl bg-gray-100 overflow-hidden items-center justify-center">
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} resizeMode="contain" className="w-full h-full" />
+          ) : (
+            <Ionicons name="cube-outline" size={27} color="#9ca3af" />
+          )}
+          <View className={`absolute right-0 bottom-0 w-5 h-5 rounded-full items-center justify-center ${item.isResolved ? 'bg-green-500' : 'bg-gray-500'}`}>
+            <Ionicons name={item.isResolved ? 'checkmark' : 'scan-outline'} size={12} color="white" />
+          </View>
         </View>
         <View className="flex-1 ml-3">
           <Text className="font-semibold text-gray-900">{item.itemNameSnapshot}</Text>
-          <Text className="text-xs text-gray-500 mt-1">Замовлено: {item.quantityOrdered}</Text>
+          <Text className="text-xs text-gray-500 mt-1">
+            Замовлено: {item.quantityOrdered} · {formatPrice(item.price)}
+          </Text>
           {item.productName ? <Text className="text-sm text-blue-700 mt-1">Зіставлено: {item.productName}</Text> : null}
           {item.isResolved ? (
             <Text className="text-xs text-gray-500 mt-1">
@@ -72,8 +91,9 @@ export default function MarketplaceReceiptScreen() {
   const { orderId = '' } = useLocalSearchParams<{ orderId: string }>();
   const router = useRouter();
   const receiptQuery = useMarketplaceReceipt(orderId);
-  const updateItem = useUpdateMarketplaceReceiptItem(orderId);
-  const finalize = useFinalizeMarketplaceReceipt(orderId);
+  const user = useAuthStore((state) => state.user);
+  const owner = user?.tenantId ? { tenantId: user.tenantId, userId: user.id } : null;
+  const [saving, setSaving] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [activeItem, setActiveItem] = useState<MarketplaceOrderReceiptItem | null>(null);
   const [product, setProduct] = useState<CatalogProduct | null>(null);
@@ -148,24 +168,45 @@ export default function MarketplaceReceiptScreen() {
     }
   }
 
-  function saveItem() {
+  async function saveItem() {
     if (!activeItem || !product) return Alert.alert('Оберіть товар', 'Відскануйте штрихкод або знайдіть товар вручну.');
     const parsedQuantity = Number(quantity.replace(',', '.'));
     if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) return Alert.alert('Некоректна кількість', 'Введіть число, не менше нуля.');
     if (!expiry) return Alert.alert('Вкажіть термін', 'Оберіть термін придатності партії.');
-    updateItem.mutate({
-      itemId: activeItem.id,
-      body: {
+    if (!owner || saving) return;
+    const body = {
         productId: product.id,
         quantityReceived: parsedQuantity,
         expiryDate: expiry,
         batchNumber: batch.trim() || null,
         discrepancyNotes: notes.trim() || null,
-      },
-    }, {
-      onSuccess: closeEditor,
-      onError: (error) => Alert.alert('Не вдалося зберегти', errorText(error, 'Перевірте дані та спробуйте ще раз.')),
-    });
+    };
+    setSaving(true);
+    try {
+      await enqueueOperationalMutation(owner, { kind: 'marketplace-receipt.item', payload: { orderId, itemId: activeItem.id, body } });
+      queryClient.setQueryData<MarketplaceOrderReceipt>(['marketplace-orders', orderId, 'receipt'], (current) => current ? {
+        ...current,
+        items: current.items.map((item) => item.id === activeItem.id ? { ...item, ...body, productName: product.name, isResolved: true } : item),
+      } : current);
+      closeEditor();
+      const network = await NetInfo.fetch();
+      if (network.isConnected && network.isInternetReachable !== false) await syncOperationalMutations(owner);
+    } catch (error) {
+      Alert.alert('Не вдалося зберегти', errorText(error, 'Локальне збереження не вдалося.'));
+    } finally { setSaving(false); }
+  }
+
+  async function finalizeLocally() {
+    if (!owner || saving) return;
+    setSaving(true);
+    try {
+      await enqueueOperationalMutation(owner, { kind: 'marketplace-receipt.finalize', payload: { orderId } });
+      const network = await NetInfo.fetch();
+      if (network.isConnected && network.isInternetReachable !== false) await syncOperationalMutations(owner);
+      router.replace('/(app)/marketplace-orders');
+    } catch (error) {
+      Alert.alert('Не вдалося підтвердити', errorText(error, 'Локальне збереження не вдалося.'));
+    } finally { setSaving(false); }
   }
 
   if (receiptQuery.isLoading) return <SafeAreaView className="flex-1 items-center justify-center"><ActivityIndicator size="large" color="#16a34a" /></SafeAreaView>;
@@ -187,14 +228,11 @@ export default function MarketplaceReceiptScreen() {
       <FlatList data={receipt.items} keyExtractor={(item) => item.id} renderItem={({ item }) => <ItemRow item={item} onPress={() => openItem(item)} />} contentContainerClassName="pb-32" />
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 pt-4 pb-8">
         <TouchableOpacity
-          disabled={!allResolved || finalize.isPending}
-          onPress={() => finalize.mutate(undefined, {
-            onSuccess: () => router.replace('/(app)/marketplace-orders'),
-            onError: (error) => Alert.alert('Не вдалося підтвердити', errorText(error, 'Спробуйте ще раз.')),
-          })}
+          disabled={!allResolved || saving}
+          onPress={() => void finalizeLocally()}
           className={`py-4 rounded-xl items-center ${allResolved ? 'bg-primary-600' : 'bg-gray-200'}`}
         >
-          {finalize.isPending ? <ActivityIndicator color="white" /> : <Text className={`font-semibold ${allResolved ? 'text-white' : 'text-gray-400'}`}>Підтвердити прийомку</Text>}
+          {saving ? <ActivityIndicator color="white" /> : <Text className={`font-semibold ${allResolved ? 'text-white' : 'text-gray-400'}`}>Підтвердити прийомку</Text>}
         </TouchableOpacity>
       </View>
 
@@ -212,7 +250,22 @@ export default function MarketplaceReceiptScreen() {
               <CameraView className="flex-1" facing="back" onBarcodeScanned={scanBusy ? undefined : handleScan} barcodeScannerSettings={{ barcodeTypes: ['ean8', 'ean13', 'qr', 'code128'] }}>
                 <SafeAreaView className="flex-1">
                   <TouchableOpacity onPress={closeEditor} className="m-4 w-10 h-10 bg-black/50 rounded-full items-center justify-center"><Ionicons name="close" size={22} color="white" /></TouchableOpacity>
-                  <View className="flex-1 items-center justify-center"><View className="w-64 h-64 border-4 border-primary-500 rounded-2xl" /><Text className="text-white mt-5">Скануйте: {activeItem?.itemNameSnapshot}</Text></View>
+                  <View className="flex-1 items-center justify-center">
+                    <View className="w-64 h-64 border-4 border-primary-500 rounded-2xl" />
+                    <View className="mt-5 mx-6 self-stretch bg-black/60 rounded-2xl p-3 flex-row items-center">
+                      <View className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden items-center justify-center">
+                        {resolveApiAssetUrl(activeItem?.referenceImageUrl) ? (
+                          <Image source={{ uri: resolveApiAssetUrl(activeItem?.referenceImageUrl) as string }} resizeMode="contain" className="w-full h-full" />
+                        ) : (
+                          <Ionicons name="cube-outline" size={30} color="#9ca3af" />
+                        )}
+                      </View>
+                      <View className="flex-1 ml-3">
+                        <Text className="text-white font-semibold" numberOfLines={2}>{activeItem?.itemNameSnapshot}</Text>
+                        {activeItem ? <Text className="text-gray-200 text-sm mt-1">{formatPrice(activeItem.price)}</Text> : null}
+                      </View>
+                    </View>
+                  </View>
                   <TouchableOpacity onPress={() => { setScanning(false); setSearchMode(true); }} className="mx-6 mb-8 bg-white/90 py-3 rounded-xl items-center"><Text className="font-semibold text-gray-900">Знайти вручну</Text></TouchableOpacity>
                 </SafeAreaView>
               </CameraView>
@@ -229,13 +282,27 @@ export default function MarketplaceReceiptScreen() {
             <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100"><TouchableOpacity onPress={closeEditor}><Ionicons name="close" size={24} /></TouchableOpacity><Text className="text-lg font-bold ml-4 flex-1">Дані позиції</Text><TouchableOpacity onPress={() => setScanning(true)}><Ionicons name="scan-outline" size={24} color="#16a34a" /></TouchableOpacity></View>
             <ScrollView contentContainerClassName="p-4 pb-12" keyboardShouldPersistTaps="handled">
               <Text className="text-xs uppercase text-gray-400">Очікується</Text><Text className="text-lg font-bold text-gray-900 mt-1">{activeItem?.itemNameSnapshot}</Text>
+              <View className="mt-4 bg-white border border-gray-100 rounded-2xl p-3 flex-row items-center">
+                <View className="w-24 h-24 rounded-xl bg-gray-100 overflow-hidden items-center justify-center">
+                  {resolveApiAssetUrl(activeItem?.referenceImageUrl) ? (
+                    <Image source={{ uri: resolveApiAssetUrl(activeItem?.referenceImageUrl) as string }} resizeMode="contain" className="w-full h-full" />
+                  ) : (
+                    <Ionicons name="cube-outline" size={44} color="#9ca3af" />
+                  )}
+                </View>
+                <View className="flex-1 ml-4">
+                  <Text className="text-xs uppercase text-gray-400">Ціна замовлення</Text>
+                  <Text className="text-xl font-bold text-gray-900 mt-1">{activeItem ? formatPrice(activeItem.price) : '—'}</Text>
+                  <Text className="text-xs text-gray-500 mt-2">Замовлено: {activeItem?.quantityOrdered}</Text>
+                </View>
+              </View>
               <View className="bg-blue-50 border border-blue-100 rounded-xl p-3 mt-4"><Text className="text-xs text-blue-600">Товар із вашого каталогу</Text><Text className="font-semibold text-blue-900 mt-1">{product?.name}</Text><Text className="text-xs text-blue-700 mt-1">Переконайтеся, що це той самий товар.</Text></View>
               <Text className="text-sm font-medium text-gray-700 mt-5 mb-2">Кількість отримано *</Text><TextInput value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-base" />
               <Text className="text-sm font-medium text-gray-700 mt-5 mb-2">Термін придатності *</Text><TouchableOpacity onPress={() => setShowDatePicker(true)} className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex-row justify-between"><Text className={expiry ? 'text-gray-900' : 'text-gray-400'}>{expiry || 'Оберіть дату'}</Text><Ionicons name="calendar-outline" size={20} color="#6b7280" /></TouchableOpacity>
               {showDatePicker ? <DateTimePicker value={selectedDate} mode="date" minimumDate={new Date()} onChange={(_, date) => { if (Platform.OS === 'android') setShowDatePicker(false); if (date) setExpiry(isoDate(date)); }} /> : null}
               <Text className="text-sm font-medium text-gray-700 mt-5 mb-2">Номер партії</Text><TextInput value={batch} onChangeText={setBatch} placeholder="Необов’язково" className="bg-white border border-gray-200 rounded-xl px-4 py-3" />
               <Text className="text-sm font-medium text-gray-700 mt-5 mb-2">Примітка про розбіжності</Text><TextInput value={notes} onChangeText={setNotes} placeholder="Необов’язково" multiline className="bg-white border border-gray-200 rounded-xl px-4 py-3 min-h-24" textAlignVertical="top" />
-              <TouchableOpacity disabled={updateItem.isPending} onPress={saveItem} className="bg-primary-600 py-4 rounded-xl items-center mt-7">{updateItem.isPending ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold">Зберегти позицію</Text>}</TouchableOpacity>
+              <TouchableOpacity disabled={saving} onPress={() => void saveItem()} className="bg-primary-600 py-4 rounded-xl items-center mt-7">{saving ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold">Зберегти позицію</Text>}</TouchableOpacity>
             </ScrollView>
           </SafeAreaView>
         )}

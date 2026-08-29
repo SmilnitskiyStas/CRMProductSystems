@@ -10,19 +10,23 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { cssInterop } from 'nativewind';
-import { useCreateWriteOff } from '@/features/write-offs/hooks/useWriteOffs';
 import { WRITE_OFF_REASON_LABELS } from '@/features/write-offs/types';
-import type { WriteOffReason } from '@/features/write-offs/types';
+import type { ReimbursementType, WriteOffReason } from '@/features/write-offs/types';
+import { calculateReimbursement, money } from '@/features/write-offs/calculations';
 import { getProductByBarcode } from '@/features/stock/api/stockApi';
 import { useAuthStore } from '@/features/auth/store';
 import { useOperationalDraft } from '@/features/operational-drafts/useOperationalDraft';
-import { classifyOperationalError } from '@/features/operational-drafts/submission';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
+import { enqueueWriteOff, syncQueuedWriteOffs } from '@/features/offline-mutations/writeOffQueue';
+import { queryClient } from '@/lib/query-client';
 
 cssInterop(CameraView, { className: 'style' });
 
@@ -32,12 +36,26 @@ interface DraftItem {
   productId: string;
   productName: string;
   quantity: number;
+  unitPrice: number | null;
+  unitPriceInput: string;
+  unitPricePurchase: number | null;
+  isReturnedToSupplier: boolean;
+  reimbursementType: ReimbursementType | null;
+  reimbursementValue: number | null;
+  reimbursementValueInput: string;
+}
+
+function parseAmount(value: string): number | null {
+  if (value.trim() === '') return null;
+  const parsed = Number(value.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export default function CreateWriteOffScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const createWriteOff = useCreateWriteOff();
+  const selectedLocationId = useWorkspaceLocationStore((s) => s.selectedLocationId);
+  const locationId = selectedLocationId === undefined ? user?.locationId : selectedLocationId;
   const netInfo = useNetInfo();
   const owner = user?.tenantId ? { tenantId: user.tenantId, userId: user.id } : null;
   const draft = useOperationalDraft(owner, 'write-off');
@@ -48,21 +66,33 @@ export default function CreateWriteOffScreen() {
   const [scanLoading, setScanLoading] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [permission, requestPermission] = useCameraPermissions();
   const draftPayload = {
     kind: 'write-off' as const,
-    locationId: user?.locationId ?? '',
+    locationId: locationId ?? '',
     reason,
     notes: '',
-    items,
+    items: items.map(({ unitPriceInput: _unitPriceInput, reimbursementValueInput: _reimbursementValueInput, ...item }) => item),
   };
 
   useEffect(() => {
     if (draft.restored?.payload.kind !== 'write-off') return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setReason(draft.restored.payload.reason as WriteOffReason);
-    setItems(draft.restored.payload.items.map(({ productId, productName, quantity }) => ({ productId, productName, quantity })));
+    setItems(draft.restored.payload.items.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice ?? null,
+      unitPriceInput: item.unitPrice == null ? '' : String(item.unitPrice),
+      unitPricePurchase: item.unitPricePurchase ?? null,
+      isReturnedToSupplier: item.isReturnedToSupplier ?? false,
+      reimbursementType: item.reimbursementType ?? null,
+      reimbursementValue: item.reimbursementValue ?? null,
+      reimbursementValueInput: item.reimbursementValue == null ? '' : String(item.reimbursementValue),
+    })));
   }, [draft.restored]);
 
   useEffect(() => {
@@ -93,7 +123,18 @@ export default function CreateWriteOffScreen() {
           next[existing] = { ...next[existing], quantity: next[existing].quantity + 1 };
           return next;
         }
-        return [...prev, { productId: product.id, productName: product.name, quantity: 1 }];
+        return [...prev, {
+          productId: product.id,
+          productName: product.name,
+          quantity: 1,
+          unitPrice: product.priceRetail,
+          unitPriceInput: product.priceRetail == null ? '' : String(product.priceRetail),
+          unitPricePurchase: product.pricePurchase,
+          isReturnedToSupplier: false,
+          reimbursementType: product.defaultReimbursementType,
+          reimbursementValue: product.defaultReimbursementValue,
+          reimbursementValueInput: product.defaultReimbursementValue == null ? '' : String(product.defaultReimbursementValue),
+        }];
       });
     } catch {
       Alert.alert('Товар не знайдено', 'Перевірте штрихкод і спробуйте знову.');
@@ -101,6 +142,10 @@ export default function CreateWriteOffScreen() {
     } finally {
       setScanLoading(false);
     }
+  }
+
+  function updateItem(productId: string, changes: Partial<DraftItem>) {
+    setItems((prev) => prev.map((item) => item.productId === productId ? { ...item, ...changes } : item));
   }
 
   function changeQty(productId: string, delta: number) {
@@ -112,34 +157,70 @@ export default function CreateWriteOffScreen() {
   }
 
   async function handleSubmit() {
-    if (!user?.locationId) {
-      Alert.alert('Помилка', 'Локацію не призначено для вашого профілю.');
+    if (!locationId) {
+      Alert.alert('Оберіть магазин', 'Для створення списання потрібно вибрати конкретний магазин, а не «Усі магазини».');
       return;
     }
     if (items.length === 0) {
       Alert.alert('Додайте хоча б один товар');
       return;
     }
-    const network = await NetInfo.fetch();
-    if (!network.isConnected || network.isInternetReachable === false) {
-      await draft.transition({ status: 'failed', message: 'Немає мережі. Чернетку збережено.' }, draftPayload);
-      Alert.alert('Немає мережі', 'Підключіться до мережі перед відправленням.');
+    const invalid = items.find((item) => item.unitPrice == null || !Number.isFinite(item.unitPrice) || item.unitPrice < 0
+      || (item.isReturnedToSupplier && (
+        !item.reimbursementType || item.reimbursementValue == null || !Number.isFinite(item.reimbursementValue) || item.reimbursementValue <= 0
+        || (item.reimbursementType === 'percent' && item.reimbursementValue > 100)
+      )));
+    if (invalid) {
+      Alert.alert('Перевірте дані', `Заповніть коректну ціну та відшкодування для «${invalid.productName}».`);
       return;
     }
+    if (!owner || isSubmitting) return;
+    setIsSubmitting(true);
     try {
-      await createWriteOff.mutateAsync({
-        locationId: user.locationId,
+      const payload = {
+        locationId,
         reason,
-        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-      });
+        items: items.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice ?? undefined,
+          isReturnedToSupplier: i.isReturnedToSupplier,
+          ...(i.isReturnedToSupplier ? {
+            reimbursementType: i.reimbursementType ?? undefined,
+            reimbursementValue: i.reimbursementValue ?? undefined,
+          } : {}),
+        })),
+      };
+      await enqueueWriteOff(owner, payload);
       await draft.clear();
-      Alert.alert('Успішно', 'Списання створено і відправлено на затвердження.', [
+      const network = await NetInfo.fetch();
+      if (!network.isConnected || network.isInternetReachable === false) {
+        Alert.alert('Збережено офлайн', 'Списання збережено на телефоні та буде передано автоматично після появи інтернету.', [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
+        return;
+      }
+      const result = await syncQueuedWriteOffs(owner);
+      if (result.synced > 0) {
+        await queryClient.invalidateQueries({ queryKey: ['write-offs'] });
+        Alert.alert('Успішно', 'Списання синхронізовано і відправлено на затвердження.', [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
+        return;
+      }
+      Alert.alert(
+        result.uncertain > 0 ? 'Очікує перевірки' : 'Збережено локально',
+        result.uncertain > 0
+          ? 'Сервер не підтвердив результат. Автоматичний повтор зупинено, щоб не створити дублікат.'
+          : 'Операція залишилась у локальній черзі та буде синхронізована пізніше.',
+        [
         { text: 'OK', onPress: () => router.back() },
-      ]);
-    } catch (error) {
-      const state = classifyOperationalError(error);
-      await draft.transition(state, draftPayload);
-      Alert.alert(state.status === 'uncertain' ? 'Результат не підтверджено' : 'Помилка', state.message);
+        ],
+      );
+    } catch {
+      Alert.alert('Помилка локального збереження', 'Не вдалося надійно зберегти операцію. Дані форми залишено.');
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -198,7 +279,8 @@ export default function CreateWriteOffScreen() {
             ) : null
           }
           renderItem={({ item }) => (
-            <View className="bg-white rounded-xl px-4 py-3 flex-row items-center">
+            <View className="bg-white rounded-xl px-4 py-3">
+              <View className="flex-row items-center">
               <View className="flex-1 mr-3">
                 <Text className="text-sm font-semibold text-gray-900" numberOfLines={2}>
                   {item.productName}
@@ -220,6 +302,65 @@ export default function CreateWriteOffScreen() {
                 >
                   <Ionicons name="add" size={16} color="#374151" />
                 </TouchableOpacity>
+              </View>
+              </View>
+              <View className="mt-3 pt-3 border-t border-gray-100 gap-2">
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Text className="text-xs text-gray-500 mb-1">Ціна продажу, ₴</Text>
+                    <TextInput
+                      value={item.unitPriceInput}
+                      onChangeText={(value) => updateItem(item.productId, { unitPriceInput: value, unitPrice: parseAmount(value) })}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-gray-900"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs text-gray-500 mb-1">Закупівельна ціна</Text>
+                    <View className="bg-gray-100 rounded-lg px-3 py-2.5"><Text>{money(item.unitPricePurchase)}</Text></View>
+                  </View>
+                </View>
+                <View className="flex-row justify-between">
+                  <Text className="text-xs text-gray-500">Збиток за продажем: {money((item.unitPrice ?? 0) * item.quantity)}</Text>
+                  <Text className="text-xs text-gray-500">За закупівлею: {money((item.unitPricePurchase ?? 0) * item.quantity)}</Text>
+                </View>
+                <View className="flex-row items-center justify-between mt-1">
+                  <Text className="text-sm font-medium text-gray-800">Повернуто постачальнику</Text>
+                  <Switch
+                    value={item.isReturnedToSupplier}
+                    onValueChange={(value) => updateItem(item.productId, { isReturnedToSupplier: value })}
+                    trackColor={{ false: '#d1d5db', true: '#86efac' }}
+                    thumbColor={item.isReturnedToSupplier ? '#16a34a' : '#f3f4f6'}
+                  />
+                </View>
+                {item.isReturnedToSupplier && (
+                  <View className="gap-2">
+                    <View className="flex-row gap-2">
+                      {(['fixed', 'percent'] as ReimbursementType[]).map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          onPress={() => updateItem(item.productId, { reimbursementType: type })}
+                          className={`flex-1 rounded-lg py-2 items-center border ${item.reimbursementType === type ? 'bg-green-50 border-primary-600' : 'border-gray-200'}`}
+                        >
+                          <Text className={item.reimbursementType === type ? 'text-primary-700 font-semibold' : 'text-gray-600'}>
+                            {type === 'fixed' ? 'Фіксовано / од.' : 'Відсоток'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TextInput
+                      value={item.reimbursementValueInput}
+                      onChangeText={(value) => updateItem(item.productId, { reimbursementValueInput: value, reimbursementValue: parseAmount(value) })}
+                      keyboardType="decimal-pad"
+                      placeholder={item.reimbursementType === 'percent' ? 'Відсоток, 0–100' : 'Сума за одиницю'}
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-gray-900"
+                    />
+                    <Text className="text-xs font-medium text-green-700">
+                      Відшкодування: {money(calculateReimbursement(item.quantity, item.unitPricePurchase, item.reimbursementType, item.reimbursementValue))}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -245,12 +386,12 @@ export default function CreateWriteOffScreen() {
 
           <TouchableOpacity
             onPress={() => void handleSubmit()}
-            disabled={createWriteOff.isPending || items.length === 0 || netInfo.isConnected === false || draft.submission.status === 'uncertain'}
+            disabled={isSubmitting || items.length === 0}
             className={`rounded-xl py-3.5 items-center ${
               items.length === 0 ? 'bg-gray-200' : 'bg-primary-600'
             }`}
           >
-            {createWriteOff.isPending ? (
+            {isSubmitting ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Text

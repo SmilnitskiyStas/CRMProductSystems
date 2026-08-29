@@ -7,12 +7,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Info } from "lucide-react";
+import { Check, Info, Palette, SlidersHorizontal } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { extractThemeValidationErrors } from "../api/mobileTheme";
 import { useMobileTheme, useUpdateMobileTheme } from "../hooks/useMobileTheme";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { PhoneFrame } from "./PhoneFrame";
+import { SectionTabs } from "./SectionTabs";
 import {
   THEME_BUTTON_RADIUS_MAX,
   THEME_BUTTON_RADIUS_MIN,
@@ -129,6 +130,15 @@ const DEFAULT_VALUES: FormValues = {
   spacingPreset: "comfortable",
 };
 
+type ThemePreset = { id: "light" | "dark" | "minimal" | "bright" | "premium"; values: Omit<FormValues, "logoUrl"> };
+const THEME_PRESETS: ThemePreset[] = [
+  { id: "light", values: { primaryColor: "#2563EB", secondaryColor: "#0F172A", backgroundColor: "#F8FAFC", surfaceColor: "#FFFFFF", textPrimaryColor: "#0F172A", textSecondaryColor: "#64748B", buttonRadius: 14, cardRadius: 18, spacingPreset: "comfortable" } },
+  { id: "dark", values: { primaryColor: "#60A5FA", secondaryColor: "#A78BFA", backgroundColor: "#090E17", surfaceColor: "#111827", textPrimaryColor: "#F8FAFC", textSecondaryColor: "#94A3B8", buttonRadius: 14, cardRadius: 18, spacingPreset: "comfortable" } },
+  { id: "minimal", values: { primaryColor: "#18181B", secondaryColor: "#52525B", backgroundColor: "#FFFFFF", surfaceColor: "#F4F4F5", textPrimaryColor: "#18181B", textSecondaryColor: "#71717A", buttonRadius: 6, cardRadius: 8, spacingPreset: "compact" } },
+  { id: "bright", values: { primaryColor: "#F97316", secondaryColor: "#EC4899", backgroundColor: "#FFF7ED", surfaceColor: "#FFFFFF", textPrimaryColor: "#431407", textSecondaryColor: "#9A3412", buttonRadius: 18, cardRadius: 22, spacingPreset: "comfortable" } },
+  { id: "premium", values: { primaryColor: "#D4AF37", secondaryColor: "#7C3AED", backgroundColor: "#100F14", surfaceColor: "#1C1924", textPrimaryColor: "#FFF8DC", textSecondaryColor: "#B8AFA1", buttonRadius: 10, cardRadius: 16, spacingPreset: "comfortable" } },
+];
+
 const THEME_FORM_FIELDS = [
   "logoUrl",
   "primaryColor",
@@ -164,6 +174,7 @@ export function ThemeEditorSection() {
   const { data: theme, isLoading, isError } = useMobileTheme();
   const update = useUpdateMobileTheme();
   const [formError, setFormError] = useState<string | null>(null);
+  const [designTab, setDesignTab] = useState<"presets" | "custom">("presets");
 
   const schema = useMemo(() => buildSchema(t), [t]);
 
@@ -204,6 +215,13 @@ export function ThemeEditorSection() {
 
   // Watched (not-yet-saved) values feed both the color-swatch inputs and the live preview panel.
   const values = watch();
+
+  function applyPreset(preset: ThemePreset) {
+    for (const [field, value] of Object.entries(preset.values) as Array<[keyof ThemePreset["values"], string | number]>) {
+      setValue(field, value as never, { shouldDirty: true, shouldValidate: true });
+    }
+    toast.success(t("presetApplied"));
+  }
 
   async function onValid(formValues: FormValues) {
     setFormError(null);
@@ -255,9 +273,25 @@ export function ThemeEditorSection() {
   }
 
   return (
-    <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
-      {/* Form */}
-      <div style={{ ...cardStyle, flex: "1 1 480px" }}>
+    <div>
+      <SectionTabs items={[
+        { key: "presets" as const, label: t("presetsTab"), icon: <Palette size={14} /> },
+        { key: "custom" as const, label: t("customTab"), icon: <SlidersHorizontal size={14} /> },
+      ]} activeKey={designTab} onChange={setDesignTab} ariaLabel={t("designTabsLabel")} />
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+      {designTab === "presets" ? <div style={{ ...cardStyle, flex: "1 1 680px" }}>
+        <div style={{ marginBottom: 16 }}><h2 style={{ color: "#E8EDF5", fontSize: 15, margin: 0 }}>{t("presetsTitle")}</h2><p style={{ ...hintStyle, marginBottom: 0 }}>{t("presetsHint")}</p></div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
+          {THEME_PRESETS.map((preset) => {
+            const selected = Object.entries(preset.values).every(([key, value]) => values[key as keyof FormValues] === value);
+            return <article key={preset.id} style={{ overflow: "hidden", border: `1px solid ${selected ? "#3B82F6" : "#293241"}`, borderRadius: 12, background: "#10151D", boxShadow: selected ? "0 0 0 1px rgba(59,130,246,.25)" : "none" }}>
+              <div style={{ height: 128, padding: 14, background: preset.values.backgroundColor, boxSizing: "border-box" }}><div style={{ height: "100%", borderRadius: preset.values.cardRadius, background: preset.values.surfaceColor, padding: 12, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between" }}><div><div style={{ width: "58%", height: 8, borderRadius: 5, background: preset.values.textPrimaryColor }} /><div style={{ width: "76%", height: 5, borderRadius: 4, background: preset.values.textSecondaryColor, marginTop: 7, opacity: .75 }} /></div><div style={{ display: "flex", gap: 6 }}><span style={{ width: 34, height: 34, borderRadius: 9, background: preset.values.primaryColor }} /><span style={{ flex: 1, height: 34, borderRadius: preset.values.buttonRadius, background: preset.values.secondaryColor }} /></div></div></div>
+              <div style={{ padding: 12 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}><div><strong style={{ color: "#E8EDF5", fontSize: 13 }}>{t(`preset_${preset.id}_name`)}</strong><p style={{ ...hintStyle, marginBottom: 0 }}>{t(`preset_${preset.id}_description`)}</p></div>{selected && <span title={t("selectedPreset")} style={{ width: 24, height: 24, borderRadius: "50%", display: "grid", placeItems: "center", background: "#2563EB", color: "white", flexShrink: 0 }}><Check size={14} /></span>}</div><button type="button" onClick={() => applyPreset(preset)} style={{ width: "100%", marginTop: 11, border: `1px solid ${selected ? "#2563EB" : "#374151"}`, borderRadius: 8, padding: "8px 10px", background: selected ? "rgba(37,99,235,.14)" : "#111827", color: selected ? "#93C5FD" : "#D1D5DB", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{selected ? t("presetSelectedButton") : t("applyPresetButton")}</button></div>
+            </article>;
+          })}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, paddingTop: 16, borderTop: "1px solid #1F2937" }}><Btn type="button" onClick={() => setDesignTab("custom")}>{t("customizePresetButton")}</Btn><span style={{ color: "#4B5563", fontSize: 11 }}>{t("presetDraftNotice")}</span></div>
+      </div> : <div style={{ ...cardStyle, flex: "1 1 680px" }}>
         <form onSubmit={handleSubmit(onValid)}>
           {/* Logo */}
           <div>
@@ -422,11 +456,12 @@ export function ThemeEditorSection() {
             )}
           </div>
         </form>
-      </div>
+      </div>}
 
       {/* Live preview */}
       <div style={{ flex: "0 1 340px", position: "sticky", top: 20 }}>
         <ThemePreview values={values} t={t} />
+      </div>
       </div>
     </div>
   );

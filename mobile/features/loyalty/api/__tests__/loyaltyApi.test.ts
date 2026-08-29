@@ -2,6 +2,7 @@ import MockAdapter from 'axios-mock-adapter';
 import { personalApiClient } from '@/lib/api-client';
 import {
   getAvailableNetworks,
+  getLoyaltyHistory,
   getLoyaltyCode,
   getPublicRetailer,
   joinRetailerBySlug,
@@ -29,6 +30,34 @@ describe('getLoyaltyCode', () => {
     });
 
     await expect(getLoyaltyCode('tenant-a')).resolves.toMatchObject({ displayFormat: 'qr' });
+  });
+});
+
+describe('getLoyaltyHistory', () => {
+  afterEach(() => mock.reset());
+
+  it('preserves the POS transaction identifier used to create a purchase review', async () => {
+    mock.onGet('/consumer/loyalty/tenant-a/history').reply((config) => {
+      expect(config.params).toEqual({ page: 1, pageSize: 20 });
+      return [200, {
+        items: [{
+          id: 'entry-a',
+          entryType: 'accrual',
+          amount: 12,
+          balanceAfter: 42,
+          note: 'Покупка',
+          createdAt: '2026-08-25T10:00:00Z',
+          posTransactionId: 'transaction-a',
+        }],
+        totalCount: 1,
+        page: 1,
+        pageSize: 20,
+      }];
+    });
+
+    await expect(getLoyaltyHistory('tenant-a', 1, 20)).resolves.toMatchObject({
+      items: [{ posTransactionId: 'transaction-a' }],
+    });
   });
 });
 

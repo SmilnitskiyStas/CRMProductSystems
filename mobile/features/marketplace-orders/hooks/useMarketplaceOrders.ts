@@ -9,8 +9,8 @@ import type { UpdateReceiptItemRequest } from '../types';
 
 const listKey = ['marketplace-orders', 'awaiting-receipt'] as const;
 
-export function useAwaitingReceiptOrders() {
-  return useQuery({ queryKey: listKey, queryFn: getAwaitingReceiptOrders });
+export function useAwaitingReceiptOrders(enabled = true) {
+  return useQuery({ queryKey: listKey, queryFn: getAwaitingReceiptOrders, enabled });
 }
 
 export function useMarketplaceReceipt(orderId: string) {

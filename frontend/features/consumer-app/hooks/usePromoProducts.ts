@@ -19,6 +19,19 @@ export function usePromoProducts(storeId: string | null) {
   });
 }
 
+/** Tenant-wide promo history filtered by the dashboard's global store selection. */
+export function usePromoProductsForStores(storeIds: string[]) {
+  return useQuery({
+    queryKey: [...PROMO_PRODUCTS_KEY, "global-store-scope", [...storeIds].sort()],
+    queryFn: async () => {
+      const items = await discountsApi.getAll({});
+      if (storeIds.length === 0) return items;
+      const selected = new Set(storeIds);
+      return items.filter((item) => selected.has(item.storeId));
+    },
+  });
+}
+
 /**
  * POST /api/discounts (reason="promo"). When `publishImmediately` is true (TASK-525's toggle,
  * default ON) this immediately follows with PUT .../approve — same behavior as before this

@@ -11,6 +11,7 @@ import {
   useConsumerBanners,
   useConsumerCatalog,
   useConsumerCatalogByIds,
+  useConsumerPromotionCampaigns,
   useConsumerPromotions,
   useSelectedConsumerContext,
 } from '@/features/consumer-content/hooks';
@@ -18,6 +19,7 @@ import type { ConsumerCatalogItem } from '@/features/consumer-content/types';
 import { useAvailableNetworks } from '@/features/loyalty/hooks/useLoyalty';
 import { resolvePage } from './resolveBlocks';
 import { useAuthStore } from '@/features/auth/store';
+import { mergeStoreNetworks } from '@/features/loyalty/selection';
 
 interface PageBlockListProps {
   page: MobilePageConfig;
@@ -64,21 +66,26 @@ function getCuratedProductIds(page: MobilePageConfig | undefined): string[] {
 export function PageRenderer({ pageKey }: { pageKey: string }) {
   const { config } = useMobileConfig();
   const hasPersonalAccess = useAuthStore((state) => state.personalAccessToken !== null);
-  const { context, membership } = useSelectedConsumerContext(hasPersonalAccess);
+  const { context, membership, membershipsQuery } = useSelectedConsumerContext(hasPersonalAccess);
   const page = config.pages[pageKey];
   const banners = useConsumerBanners(context);
   const promotions = useConsumerPromotions(context);
+  const promotionCampaigns = useConsumerPromotionCampaigns(context);
   const catalog = useConsumerCatalog(context, { page: 1, pageSize: 30 });
   const curatedIds = getCuratedProductIds(page);
   const catalogByIds = useConsumerCatalogByIds(context, curatedIds);
   const networks = useAvailableNetworks(hasPersonalAccess);
   if (!page) return null;
-  const network = networks.data?.find((item) => item.tenantId === membership?.tenantId) ?? null;
+  // Builder blocks need the same reconciled store source as the static Home. Memberships carry
+  // the persisted preferred store while the networks endpoint carries the complete store list.
+  const storeNetworks = mergeStoreNetworks(networks.data, membershipsQuery.data);
+  const network = storeNetworks.find((item) => item.tenantId === membership?.tenantId) ?? null;
   const catalogById = new Map<string, ConsumerCatalogItem>();
   for (const item of catalog.data?.items ?? []) catalogById.set(item.id, item);
   for (const item of catalogByIds.data ?? []) catalogById.set(item.id, item);
   const resolved = resolvePage(page, {
-    banners: banners.data ?? [], promotions: promotions.data ?? [],
+    banners: banners.data ?? [], promotionCampaigns: promotionCampaigns.data ?? [],
+    promotions: [...(promotions.data ?? []), ...(promotionCampaigns.data ?? []).flatMap(item => item.promotionProducts ?? [])],
     catalog: catalog.data?.items ?? [], catalogById, membership: membership ?? null, network,
   });
   return <PageBlockList page={resolved} features={config.features} />;

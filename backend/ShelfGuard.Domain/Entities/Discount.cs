@@ -7,6 +7,7 @@ public sealed class Discount
     public Guid?    ProductStockId  { get; private set; }
     public Guid     ProductId       { get; private set; }
     public Guid     StoreId         { get; private set; }
+    public Guid?    PromotionCampaignId { get; private set; }
 
     /// <summary>Percentage value — e.g. 20.00 means 20 %.</summary>
     public decimal  DiscountPercent { get; private set; }
@@ -47,7 +48,8 @@ public sealed class Discount
         DateTime? validFrom     = null,
         DateTime? validUntil    = null,
         bool     autoApplied    = false,
-        Guid?    createdBy      = null)
+        Guid?    createdBy      = null,
+        Guid?    promotionCampaignId = null)
     {
         var discounted = priceOriginal.HasValue
             ? Math.Round(priceOriginal.Value * (1m - discountPercent / 100m), 2)
@@ -69,6 +71,7 @@ public sealed class Discount
             Status          = DiscountStatus.Pending,
             AutoApplied     = autoApplied,
             CreatedBy       = createdBy,
+            PromotionCampaignId = promotionCampaignId,
             CreatedAt       = DateTime.UtcNow,
         };
     }

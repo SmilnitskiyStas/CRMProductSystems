@@ -14,7 +14,7 @@ public sealed class LoyaltyLedgerEntry
     public Guid TenantId { get; init; }
     public Guid MembershipId { get; init; }
 
-    /// <summary>accrual | redemption | manual_adjustment | expiry</summary>
+    /// <summary>accrual | reward | redemption | manual_adjustment | expiry</summary>
     public string EntryType { get; init; } = string.Empty;
     /// <summary>Signed: positive for accrual, negative for redemption/expiry.</summary>
     public decimal Amount { get; init; }
@@ -39,7 +39,8 @@ public static class LoyaltyEntryType
     public const string Redemption      = "redemption";
     public const string ManualAdjustment = "manual_adjustment";
     public const string Expiry          = "expiry";
+    public const string Reward          = "reward";
 
     public static readonly IReadOnlySet<string> All =
-        new HashSet<string> { Accrual, Redemption, ManualAdjustment, Expiry };
+        new HashSet<string> { Accrual, Reward, Redemption, ManualAdjustment, Expiry };
 }

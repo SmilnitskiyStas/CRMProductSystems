@@ -10,3 +10,7 @@ export async function updateLoyaltySettings(
 ): Promise<LoyaltyProgramSettings> {
   return api.put<LoyaltyProgramSettings>("/api/settings/loyalty", body);
 }
+
+export async function resetAllBonusBalances(): Promise<{ affectedMemberships: number }> {
+  return api.post<{ affectedMemberships: number }>("/api/settings/loyalty/reset-balances", {});
+}

@@ -1,13 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useRef, useState } from 'react';
 import { Redirect, Tabs, useSegments } from 'expo-router';
-import { ActivityIndicator, View, type ColorValue } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Animated, View, type ColorValue } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useAuthStore } from '@/features/auth/store';
 import { AuthBootstrapState } from '@/features/auth/components/AuthBootstrapState';
 import { RetailShellProviders } from '@/features/mobile-config/RetailShellProviders';
 import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
-import { personalRouteAllowed, resolveRetailNavigation } from '@/features/retail-navigation/policy';
+import { personalRouteAllowed, resolveRetailNavigation, type ResolvedNavigationItem } from '@/features/retail-navigation/policy';
 import { useRetailTheme } from '@/features/theme/RetailThemeProvider';
 import { MobileConfigOfflineBanner } from '@/features/mobile-config/MobileConfigOfflineBanner';
+import { MobileAppLoadingScreen } from '@/features/mobile-config/MobileAppLoadingScreen';
+import { useActiveTenant } from '@/features/tenant/ActiveTenantProvider';
+import { useMemberships } from '@/features/loyalty/hooks/useLoyalty';
 
 const CONFIGURABLE_SCREENS = [
   'index',
@@ -20,24 +25,89 @@ const CONFIGURABLE_SCREENS = [
   'account',
 ] as const;
 
+function PrimaryNavigationIcon({ item, navigationBackground, fallbackColor }: { item: ResolvedNavigationItem; navigationBackground: string; fallbackColor: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const duration = item.primaryGlowSpeed === 'slow' ? 2600 : item.primaryGlowSpeed === 'fast' ? 900 : 1600;
+
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    pulse.stopAnimation();
+    pulse.setValue(0);
+    if (!item.primaryGlow || !item.primaryGlowAnimated || reduceMotion) return;
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: duration / 2, useNativeDriver: false }),
+      Animated.timing(pulse, { toValue: 0, duration: duration / 2, useNativeDriver: false }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [duration, item.primaryGlow, item.primaryGlowAnimated, pulse, reduceMotion]);
+
+  const buttonSize = item.primarySize === 'xlarge' ? 68 : 58;
+  const buttonColor = item.primaryColor ?? fallbackColor;
+  return (
+    <View style={{ width: buttonSize, height: buttonSize, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: item.primaryRaised === false ? 0 : -10 }] }}>
+      <Animated.View style={{
+        width: buttonSize,
+        height: buttonSize,
+        borderRadius: buttonSize / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: buttonColor,
+        borderWidth: 4,
+        borderColor: navigationBackground,
+        shadowColor: buttonColor,
+        shadowOpacity: item.primaryGlow && item.primaryGlowAnimated && !reduceMotion ? pulse.interpolate({ inputRange: [0, 1], outputRange: [0.32, 0.88] }) : item.primaryGlow ? 0.75 : 0.28,
+        shadowRadius: item.primaryGlow ? 13 : 6,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: item.primaryGlow ? 12 : 7,
+      }}>
+        <Ionicons name={item.iconName} color="#FFFFFF" size={item.primarySize === 'xlarge' ? 29 : 25} />
+      </Animated.View>
+    </View>
+  );
+}
+
 function PersonalTabs({ hasPersonalAccess }: { hasPersonalAccess: boolean }) {
   const theme = useRetailTheme();
-  const { config } = useMobileConfig();
+  const { config, status } = useMobileConfig();
+  const activeTenant = useActiveTenant();
+  const memberships = useMemberships(hasPersonalAccess);
   const segments = useSegments();
   const navigation = resolveRetailNavigation(config.navigation, config.features, hasPersonalAccess);
+  const contourIndex = navigation.findIndex((item) => item.isPrimary && item.primaryStyle === 'raisedContour');
+  const contourCenter = contourIndex >= 0 ? ((contourIndex + 0.5) / navigation.length) * 1000 : 500;
+  const primaryNavigationItem = navigation.find((item) => item.isPrimary);
+  const navigationBackground = primaryNavigationItem?.primaryBarColor ?? theme.colors.surface;
+  const contourIsRaised = primaryNavigationItem?.primaryRaised !== false;
+  const contourSvgTop = contourIsRaised ? -25 : -12;
+  const contourSvgHeight = contourIsRaised ? 27 : 14;
 
   function optionsFor(item: (typeof navigation)[number]) {
     return {
       href: item.href,
       title: item.label,
-      tabBarIcon: ({ color, size }: { color: ColorValue; size: number }) => (
-        <Ionicons name={item.iconName} color={color} size={size} />
-      ),
+      tabBarIcon: ({ color, size }: { color: ColorValue; size: number }) => item.isPrimary ? (
+        <PrimaryNavigationIcon item={item} navigationBackground={navigationBackground} fallbackColor={theme.colors.primary} />
+      ) : <Ionicons name={item.iconName} color={color} size={size} />,
+      ...(item.isPrimary ? {
+        tabBarLabelStyle: { color: item.primaryColor ?? theme.colors.primary, fontWeight: '700' as const },
+        tabBarIconStyle: { overflow: 'visible' as const },
+      } : {}),
     };
   }
 
   const selectedScreens = new Set(navigation.map((item) => item.screen));
   const activeScreen = (segments as readonly string[])[1];
+
+  if (activeTenant.hydrationStatus !== 'ready' || (hasPersonalAccess && memberships.isLoading) || status === 'loading') {
+    return <MobileAppLoadingScreen />;
+  }
 
   if (!personalRouteAllowed(activeScreen, config.features, hasPersonalAccess, config.navigation)) {
     return <Redirect href="/(personal)" />;
@@ -53,7 +123,27 @@ function PersonalTabs({ hasPersonalAccess }: { hasPersonalAccess: boolean }) {
         headerShown: false,
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarStyle: { borderTopColor: theme.colors.surface, height: 60, paddingTop: 4, paddingBottom: 4 },
+        tabBarStyle: { backgroundColor: navigationBackground, borderTopColor: navigationBackground, borderTopWidth: contourIndex >= 0 ? 0 : 1, height: navigation.some((item) => item.isPrimary) && contourIsRaised ? 72 : 60, paddingTop: 4, paddingBottom: 4, overflow: 'visible' },
+        ...(contourIndex >= 0 ? {
+          tabBarBackground: () => (
+            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: navigationBackground }}>
+              <Svg width="100%" height={contourSvgHeight} viewBox="0 0 1000 52" preserveAspectRatio="none" style={{ position: 'absolute', top: contourSvgTop, left: 0 }}>
+                <Path
+                  d={`M 0 50 H ${contourCenter - 92} C ${contourCenter - 58} 50, ${contourCenter - 58} 2, ${contourCenter} 2 C ${contourCenter + 58} 2, ${contourCenter + 58} 50, ${contourCenter + 92} 50 H 1000 V 70 H 0 Z`}
+                  fill={navigationBackground}
+                  stroke="none"
+                />
+                <Path
+                  d={`M 0 50 H ${contourCenter - 92} C ${contourCenter - 58} 50, ${contourCenter - 58} 2, ${contourCenter} 2 C ${contourCenter + 58} 2, ${contourCenter + 58} 50, ${contourCenter + 92} 50 H 1000`}
+                  fill="none"
+                  stroke={theme.colors.textSecondary}
+                  strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </Svg>
+            </View>
+          ),
+        } : {}),
       }}
     >
       {navigation.map((item) => (
@@ -63,6 +153,9 @@ function PersonalTabs({ hasPersonalAccess }: { hasPersonalAccess: boolean }) {
         <Tabs.Screen key={screen} name={screen} options={{ href: null }} />
       ))}
       <Tabs.Screen name="history" options={{ href: null }} />
+      <Tabs.Screen name="tier-progress" options={{ href: null }} />
+      <Tabs.Screen name="support/index" options={{ href: null }} />
+      <Tabs.Screen name="support/[id]" options={{ href: null }} />
       <Tabs.Screen name="news/[id]" options={{ href: null }} />
       <Tabs.Screen name="product/[id]" options={{ href: null }} />
       <Tabs.Screen name="scan" options={{ href: null }} />

@@ -1,52 +1,68 @@
 "use client";
 
-import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useEffect, useMemo, useState } from "react";
+import { Star } from "lucide-react";
+import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
+import { useLocations } from "@/features/locations/hooks/useLocations";
+import { LocationsMultiSelectDropdown } from "@/features/users/components/LocationsMultiSelectDropdown";
+import { API_BASE } from "@/lib/api";
+import type { MobileCatalogItemSetting, MobileCatalogLayout, MobileCatalogSettings } from "../api/mobileCatalogSettings";
+import { useCatalogAnalytics, useCatalogPublicationAction, useMobileCatalogPublication, useMobileCatalogSettings, useSaveMobileCatalogSettings, useUploadMobileCatalogBanner } from "../hooks/useMobileCatalogSettings";
+import { SectionTabs } from "./SectionTabs";
 
-const cardStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 12,
-  padding: 24,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 20,
-  flexWrap: "wrap",
-};
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: "#0D1117", border: "1px solid #374151", borderRadius: 8, padding: "9px 12px", color: "#E8EDF5", fontSize: 13, outline: "none" };
+const section: React.CSSProperties = { background: "#10151D", border: "1px solid #202938", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", gap: 12 };
+const label: React.CSSProperties = { color: "#9CA3AF", fontSize: 12, display: "block", marginBottom: 6 };
+const hint: React.CSSProperties = { color: "#6B7280", fontSize: 11, margin: "4px 0 0" };
+const asset = (v: string | null) => !v ? null : /^https?:\/\//i.test(v) ? v : `${API_BASE.replace(/\/$/, "")}/${v.replace(/^\//, "")}`;
+const datePart = (value: string) => value ? value.split("T")[0] : "";
+const timePart = (value: string) => value.includes("T") ? value.split("T")[1]?.slice(0, 5) ?? "" : "";
+const joinLocalDateTime = (date: string, time: string) => date ? `${date}T${time || "00:00"}` : "";
+type Tab = "active" | "scheduled" | "draft" | "past";
+const tabOf = (x: MobileCatalogSettings): Tab => x.status === "archived" || (x.unpublishAt && new Date(x.unpublishAt) < new Date()) ? "past" : x.status === "draft" ? "draft" : x.status === "scheduled" || new Date(x.publishAt) > new Date() ? "scheduled" : "active";
 
-/**
- * TASK-522: minimal read-only status card, per the plan — the catalog already has full CRUD
- * at /catalog, so this section deliberately does not duplicate it. It just confirms the
- * catalog is automatically available to consumer-app shoppers and links to the real page.
- */
 export function CatalogSection() {
-  const t = useTranslations("Dashboard.consumerApp.catalog");
-  const { data: products, isLoading } = useCatalogProducts();
-  const activeCount = (products ?? []).filter((p) => p.isActive).length;
+  const { data: publications = [], isLoading } = useMobileCatalogSettings();
+  const [tab, setTab] = useState<Tab>("active"); const [editorId, setEditorId] = useState<string | null | undefined>(undefined); const [analyticsId, setAnalyticsId] = useState<string | null>(null);
+  const publish = useCatalogPublicationAction("publish"); const archive = useCatalogPublicationAction("archive"); const duplicate = useCatalogPublicationAction("duplicate");
+  const visible = publications.filter((x) => tabOf(x) === tab); const counts = (key: Tab) => publications.filter((x) => tabOf(x) === key).length;
+  async function act(kind: "publish" | "archive" | "duplicate", id: string) { try { await ({ publish, archive, duplicate })[kind].mutateAsync(id); toast.success(kind === "publish" ? "Каталог опубліковано" : kind === "archive" ? "Каталог перенесено в архів" : "Створено нову чернетку"); if (kind === "duplicate") setTab("draft"); } catch (e) { toast.error(e instanceof Error ? e.message : "Не вдалося виконати дію"); } }
+  if (editorId !== undefined) return <CatalogEditor id={editorId} onClose={() => setEditorId(undefined)} />;
+  if (analyticsId) return <CatalogAnalyticsPanel id={analyticsId} onClose={() => setAnalyticsId(null)} />;
+  return <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 14, padding: 24 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}><div><h2 style={{ color: "#E8EDF5", fontSize: 15, margin: 0 }}>Каталоги мобільного застосунку</h2><p style={{ color: "#6B7280", fontSize: 12, margin: "4px 0 0" }}>Кожна публікація зберігається окремо та залишається доступною в історії.</p></div><Btn icon={<span>＋</span>} onClick={() => setEditorId(null)}>Створити каталог</Btn></div>
+    <SectionTabs items={(["active", "scheduled", "draft", "past"] as Tab[]).map((key) => ({ key, label: key === "active" ? "Активні" : key === "scheduled" ? "Заплановані" : key === "draft" ? "Чернетки" : "Минулі", count: counts(key) }))} activeKey={tab} onChange={setTab} ariaLabel="Статус каталогу" />
+    {isLoading ? <p style={{ color: "#6B7280" }}>Завантаження…</p> : visible.length === 0 ? <p style={{ color: "#6B7280", fontSize: 13 }}>У цій вкладці каталогів поки немає.</p> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(100%,390px),1fr))", gap: 12 }}>{visible.map((x) => <article key={x.id} style={{ border: "1px solid #202938", borderRadius: 10, padding: 14, background: "#10151D", display: "flex", flexDirection: "column", gap: 10 }}><div style={{ height: 105, borderRadius: 8, background: "#172033", backgroundImage: x.bannerUrl ? `url("${asset(x.bannerUrl)}")` : undefined, backgroundSize: "cover", backgroundPosition: "center", padding: 12, display: "flex", alignItems: "end", boxSizing: "border-box" }}><strong style={{ color: "white" }}>{x.title}</strong></div><p style={{ color: "#9CA3AF", fontSize: 12, margin: 0 }}>{x.description || "Без опису"}</p><div style={{ display: "flex", gap: 12, flexWrap: "wrap", color: "#6B7280", fontSize: 11 }}><span>{x.items.length} товарів</span><span>{new Date(x.publishAt).toLocaleString()}</span><span>{x.layoutMode}</span></div><div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: "auto" }}>{x.status === "draft" && <Btn size="sm" variant="success" onClick={() => act("publish", x.id)}>Опублікувати</Btn>}{x.status !== "archived" && <Btn size="sm" variant="ghost" onClick={() => setEditorId(x.id)}>Редагувати</Btn>}<Btn size="sm" variant="ghost" onClick={() => setAnalyticsId(x.id)}>Статистика</Btn>{x.status !== "archived" && <Btn size="sm" variant="danger" onClick={() => act("archive", x.id)}>В архів</Btn>}<Btn size="sm" variant="ghost" onClick={() => act("duplicate", x.id)}>Дублювати</Btn></div></article>)}</div>}
+  </div>;
+}
 
-  return (
-    <div style={cardStyle}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <span style={{ fontSize: 24 }}>📖</span>
-        <div>
-          <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>{t("title")}</h2>
-          <p style={{ color: "#4B5563", fontSize: 12, margin: 0, marginTop: 3, maxWidth: 480 }}>
-            {t("description")}
-          </p>
-          <p style={{ color: "#9CA3AF", fontSize: 12, margin: 0, marginTop: 6 }}>
-            {isLoading ? t("loading") : t("activeCount", { count: activeCount })}
-          </p>
-        </div>
-      </div>
-      {/* No standalone /catalog route exists — the product catalog is managed on /inventory
-          (features/inventory's ProductForm/ProductsTable); link there instead of the plan's
-          literal /catalog path. */}
-      <Link href="/inventory" style={{ textDecoration: "none" }}>
-        <Btn variant="ghost">{t("openButton")}</Btn>
-      </Link>
-    </div>
-  );
+function CatalogAnalyticsPanel({ id, onClose }: { id: string; onClose: () => void }) {
+  const { data, isLoading, isError } = useCatalogAnalytics(id);
+  if (isLoading) return <p style={{ color: "#6B7280" }}>Завантаження статистики…</p>;
+  if (isError || !data) return <div><p style={{ color: "#F87171" }}>Не вдалося завантажити статистику.</p><Btn variant="ghost" onClick={onClose}>Назад</Btn></div>;
+  const metrics = [["Перегляди каталогу", data.catalogViews], ["Унікальні користувачі", data.uniqueUsers], ["Перегляди товарів", data.productViews], ["Сканування", data.productScans], ["Покупки", data.purchases], ["Конверсія", `${data.conversionPercent}%`], ["Дохід", `${data.revenue.toLocaleString("uk-UA")} ₴`]];
+  return <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 14, padding: 22 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><h2 style={{ color: "#E8EDF5", fontSize: 16, margin: 0 }}>Статистика каталогу</h2><p style={hint}>Покупка зараховується, коли на касі до чека додають товар каталогу та ідентифікують покупця кодом програми лояльності з мобільного застосунку.</p></div><Btn variant="ghost" onClick={onClose}>Назад</Btn></div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, margin: "18px 0" }}>{metrics.map(([name, value]) => <div key={String(name)} style={{ ...section, gap: 5 }}><strong style={{ color: "#E8EDF5", fontSize: 20 }}>{value}</strong><span style={{ color: "#6B7280", fontSize: 11 }}>{name}</span></div>)}</div><div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", color: "#D1D5DB", fontSize: 12 }}><thead><tr>{["Товар", "Перегляди", "Сканування в застосунку", "Покупки через код лояльності", "Перегляд → покупка", "Дохід"].map((x) => <th key={x} style={{ textAlign: "left", padding: 9, borderBottom: "1px solid #374151" }}>{x}</th>)}</tr></thead><tbody>{data.products.map((x) => <tr key={x.productId}><td style={{ padding: 9, borderBottom: "1px solid #202938" }}>{x.productName}</td><td>{x.views}</td><td>{x.scans}</td><td>{x.purchases}</td><td>{x.viewToPurchasePercent}%</td><td>{x.revenue.toLocaleString("uk-UA")} ₴</td></tr>)}</tbody></table></div></div>;
+}
+
+function CatalogEditor({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const { data, isLoading } = useMobileCatalogPublication(id); const save = useSaveMobileCatalogSettings(); const upload = useUploadMobileCatalogBanner();
+  const { data: locations = [] } = useLocations();
+  const [title, setTitle] = useState("Каталог"); const [description, setDescription] = useState(""); const [layout, setLayout] = useState<MobileCatalogLayout>("grid");
+  const [publishAt, setPublishAt] = useState(() => new Date().toISOString().slice(0, 16)); const [unpublishAt, setUnpublishAt] = useState(""); const [items, setItems] = useState<MobileCatalogItemSetting[]>([]);
+  const [locationIds, setLocationIds] = useState<string[]>([]);
+  const [open, setOpen] = useState(false); const [search, setSearch] = useState(""); const [image, setImage] = useState<File | null>(null); const [preview, setPreview] = useState<string | null>(null); const [ready, setReady] = useState(false);
+  const { data: products = [] } = useCatalogProducts({ search: search || undefined }, { enabled: open });
+  useEffect(() => { if (!data || ready) return; setTitle(data.title); setDescription(data.description); setLayout(data.layoutMode); setPublishAt(data.publishAt.slice(0, 16)); setUnpublishAt(data.unpublishAt?.slice(0, 16) ?? ""); setLocationIds(data.locationIds); setItems(data.items); setPreview(asset(data.bannerUrl)); setReady(true); }, [data, ready]);
+  const available = useMemo(() => products.filter((p) => p.isActive && !items.some((x) => x.productId === p.id)), [products, items]);
+  function move(index: number, delta: number) { setItems((old) => { const next = [...old], target = index + delta; if (target < 0 || target >= next.length) return old; [next[index], next[target]] = [next[target], next[index]]; return next; }); }
+  async function submit(e: React.FormEvent) { e.preventDefault(); if (!title.trim() || !publishAt || locationIds.length === 0) return toast.error("Заповніть назву, дату публікації та оберіть магазини"); if (unpublishAt && new Date(unpublishAt) <= new Date(publishAt)) return toast.error("Завершення публікації повинно бути пізніше за початок"); try { const result = await save.mutateAsync({ id, body: { title: title.trim(), description: description.trim(), layoutMode: layout, publishAt: new Date(publishAt).toISOString(), unpublishAt: unpublishAt ? new Date(unpublishAt).toISOString() : null, locationIds, items: items.map((x) => ({ productId: x.productId, isFeatured: x.isFeatured, mobileDiscountPercent: x.mobileDiscountPercent })) } }); if (image) await upload.mutateAsync({ id: result.id, file: image }); toast.success(id ? "Каталог оновлено" : "Чернетку каталогу створено"); onClose(); } catch (error) { toast.error(error instanceof Error ? error.message : "Не вдалося зберегти") } }
+  if (id && isLoading) return <p style={{ color: "#6B7280" }}>Завантаження…</p>;
+  return <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 14, overflow: "hidden" }}><div style={{ display: "flex", justifyContent: "space-between", padding: "18px 22px", borderBottom: "1px solid #1F2937" }}><h2 style={{ color: "#E8EDF5", fontSize: 15, margin: 0 }}>{id ? "Редагування каталогу" : "Новий каталог"}</h2><button type="button" onClick={onClose} style={{ background: "transparent", border: "1px solid #374151", color: "#9CA3AF", borderRadius: 8 }}>✕</button></div><form onSubmit={submit} style={{ padding: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,440px),1fr))", gap: 16 }}>
+    <section style={section}><h3 style={{ color: "#E8EDF5", fontSize: 13, margin: 0 }}>Опис і банер</h3><div><label style={label}>Назва</label><input style={input} value={title} onChange={(e) => setTitle(e.target.value)} /></div><div><label style={label}>Опис</label><textarea rows={4} style={input} value={description} onChange={(e) => setDescription(e.target.value)} /></div><div><label style={label}>Банер</label>{preview && <div style={{ height: 100, borderRadius: 8, marginBottom: 8, backgroundImage: `url("${preview}")`, backgroundSize: "cover", backgroundPosition: "center" }} />}<label style={{ ...input, display: "inline-block", width: "auto", cursor: "pointer" }}>{preview ? "Замінити" : "Завантажити"}<input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setImage(file); setPreview(URL.createObjectURL(file)); } }} /></label></div></section>
+    <section style={section}><h3 style={{ color: "#E8EDF5", fontSize: 13, margin: 0 }}>Публікація</h3><div><label style={label}>Магазини, де доступний каталог</label><LocationsMultiSelectDropdown locations={locations.filter((x) => x.isActive)} selectedIds={locationIds} onToggle={(locationId) => setLocationIds((old) => old.includes(locationId) ? old.filter((x) => x !== locationId) : [...old, locationId])} summaryLabel={`Вибрано магазинів: ${locationIds.length}`} placeholderLabel="Оберіть магазини" doneLabel="Готово" /></div><div><label style={label}>Розміщення</label><select style={input} value={layout} onChange={(e) => setLayout(e.target.value as MobileCatalogLayout)}><option value="grid">Сітка</option><option value="list">Список</option><option value="featured">Акцентні + сітка</option></select></div><div><label style={label}>Початок публікації</label><div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 120px", gap: 8 }}><input className="consumer-date-time-input" aria-label="Дата початку публікації" type="date" style={input} value={datePart(publishAt)} onChange={(e) => setPublishAt(joinLocalDateTime(e.target.value, timePart(publishAt) || "09:00"))} /><input className="consumer-date-time-input" aria-label="Час початку публікації" type="time" step={60} style={input} value={timePart(publishAt)} onChange={(e) => setPublishAt(joinLocalDateTime(datePart(publishAt), e.target.value))} /></div><p style={hint}>Дату можна вибрати в календарі або ввести вручну. Час задається окремо.</p></div><div><label style={label}>Завершення публікації (необов’язково)</label><div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 120px", gap: 8 }}><input className="consumer-date-time-input" aria-label="Дата завершення публікації" type="date" style={input} value={datePart(unpublishAt)} min={datePart(publishAt) || undefined} onChange={(e) => setUnpublishAt(joinLocalDateTime(e.target.value, timePart(unpublishAt) || "23:59"))} /><input className="consumer-date-time-input" aria-label="Час завершення публікації" type="time" step={60} style={input} value={timePart(unpublishAt)} disabled={!datePart(unpublishAt)} onChange={(e) => setUnpublishAt(joinLocalDateTime(datePart(unpublishAt), e.target.value))} /></div></div><p style={hint}>Після завершення каталог автоматично відображатиметься у вкладці «Минулі».</p></section>
+    <section style={{ ...section, gridColumn: "1/-1" }}><div style={{ display: "flex", justifyContent: "space-between" }}><div><h3 style={{ color: "#E8EDF5", fontSize: 13, margin: 0 }}>Товари</h3><p style={hint}>Вибрано: {items.length}</p></div><Btn type="button" size="sm" variant="ghost" onClick={() => setOpen((x) => !x)}>{open ? "Згорнути" : "Додати товари"}</Btn></div>{open && <div><input style={{ ...input, marginBottom: 8 }} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук товару" /><div style={{ maxHeight: 180, overflowY: "auto" }}>{available.map((p) => <button key={p.id} type="button" onClick={() => setItems((old) => [...old, { productId: p.id, productName: p.name, imageUrl: p.imageUrl, sortOrder: old.length, isFeatured: false, mobileDiscountPercent: null }])} style={{ display: "block", width: "100%", padding: 8, textAlign: "left", border: 0, borderBottom: "1px solid #202938", background: "transparent", color: "#D1D5DB" }}>{p.name}</button>)}</div></div>}<div style={{ display: "flex", flexDirection: "column", gap: 7 }}>{items.map((item, index) => <div key={item.productId} style={{ display: "grid", gridTemplateColumns: "55px minmax(160px,1fr) auto 140px auto", gap: 8, alignItems: "center", background: "#0D1117", borderRadius: 8, padding: 8 }}><div><button type="button" onClick={() => move(index, -1)}>↑</button><button type="button" onClick={() => move(index, 1)}>↓</button></div><span style={{ color: "#D1D5DB", fontSize: 13 }}>{item.productName}</span><button type="button" aria-pressed={item.isFeatured} aria-label={`${item.isFeatured ? "Прибрати" : "Додати"} акцент для ${item.productName}`} title={item.isFeatured ? "Акцентний товар" : "Зробити акцентним"} onClick={() => setItems((old) => old.map((x) => x.productId === item.productId ? { ...x, isFeatured: !x.isFeatured } : x))} style={{ height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "0 11px", borderRadius: 999, border: `1px solid ${item.isFeatured ? "#3B82F6" : "#374151"}`, background: item.isFeatured ? "rgba(37, 99, 235, 0.18)" : "#111827", color: item.isFeatured ? "#93C5FD" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "background .15s ease, border-color .15s ease, color .15s ease" }}><Star size={14} fill={item.isFeatured ? "currentColor" : "none"} />{item.isFeatured ? "Акцентний" : "Акцент"}</button><input type="number" min="0.01" max="100" step="0.01" placeholder="Знижка, %" style={input} value={item.mobileDiscountPercent ?? ""} onChange={(e) => setItems((old) => old.map((x) => x.productId === item.productId ? { ...x, mobileDiscountPercent: e.target.value ? Number(e.target.value) : null } : x))} /><button type="button" onClick={() => setItems((old) => old.filter((x) => x.productId !== item.productId))} style={{ border: 0, background: "none", color: "#F87171" }}>✕</button></div>)}</div></section>
+    <div style={{ gridColumn: "1/-1", borderTop: "1px solid #1F2937", paddingTop: 12, display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn type="button" variant="ghost" onClick={onClose}>Скасувати</Btn><Btn type="submit" disabled={save.isPending || upload.isPending}>Зберегти чернетку</Btn></div>
+  </form></div>;
 }

@@ -26,6 +26,8 @@ public sealed class PosTransaction
 
     /// <summary>Optional CRM customer linked to this transaction.</summary>
     public Guid? CustomerId { get; set; }
+    /// <summary>Present when the customer identified themselves at checkout with the loyalty code from the mobile app.</summary>
+    public Guid? LoyaltyMembershipId { get; set; }
 
     /// <summary>TASK-613: reserved for future register-hardware integration. No FK (no register entity exists yet) — intentionally unwired.</summary>
     public Guid? CashRegisterId { get; set; }
@@ -36,4 +38,5 @@ public sealed class PosTransaction
     public Location? Store { get; init; }
     public PosShift? Shift { get; init; }
     public Customer? Customer { get; init; }
+    public LoyaltyMembership? LoyaltyMembership { get; init; }
 }

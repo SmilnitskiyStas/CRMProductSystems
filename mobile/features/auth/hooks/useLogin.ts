@@ -16,7 +16,7 @@ export function useVerifyTwoFactor() {
       // personalAccessToken/consumerUser the initial login step already stored (the person
       // proved their personal password before reaching this 2FA step) survives untouched.
       await setWorkspaceAuth(accessToken, user);
-      router.replace('/(personal)');
+      router.replace('/(app)');
     },
   });
 }

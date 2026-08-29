@@ -53,4 +53,13 @@ public sealed class LoyaltySettingsController : ControllerBase
 
         return Ok(dto);
     }
+
+    [HttpPost("reset-balances")]
+    public async Task<IActionResult> ResetBalances(CancellationToken ct)
+    {
+        var tenantId = _tenantContext.TenantId;
+        if (tenantId is null) return Forbid();
+        var affected = await _loyalty.ResetAllBonusBalancesAsync(tenantId.Value, ct);
+        return Ok(new { affectedMemberships = affected });
+    }
 }

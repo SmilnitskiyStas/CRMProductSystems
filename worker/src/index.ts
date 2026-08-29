@@ -13,6 +13,8 @@ import { startFiscalizationRetryWorker } from "./jobs/fiscalization-retry.job";
 import { startNotificationDispatchWorker } from "./jobs/notification-dispatch.job";
 import { startPermissionGrantExpiryWorker } from "./jobs/permission-grant-expiry.job";
 import { startLoyaltyTierRecomputeWorker } from "./jobs/loyalty-tier-recompute.job";
+import { startLoyaltyAnnualResetWorker } from "./jobs/loyalty-annual-reset.job";
+import { startLoyaltyBonusExpiryWorker } from "./jobs/loyalty-bonus-expiry.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -40,6 +42,10 @@ async function scheduleRecurringJobs(): Promise<void> {
     { pattern: "0 4 * * *" },
     { name: "loyalty-tier-recompute" }
   );
+  const loyaltyAnnualResetQueue = new Queue("loyalty-annual-reset", { connection: redisConnection });
+  await loyaltyAnnualResetQueue.upsertJobScheduler("loyalty-annual-reset-cron", { pattern: "5 * * * *" }, { name: "loyalty-annual-reset" });
+  const loyaltyBonusExpiryQueue = new Queue("loyalty-bonus-expiry", { connection: redisConnection });
+  await loyaltyBonusExpiryQueue.upsertJobScheduler("loyalty-bonus-expiry-cron", { pattern: "35 * * * *" }, { name: "loyalty-bonus-expiry" });
 
   // v2-spec §6: daily 06:00 — fetch 7-day forecast for every store with coordinates
   const weatherQueue = new Queue("weather-fetch", { connection: redisConnection });
@@ -88,6 +94,8 @@ async function main(): Promise<void> {
   startWeeklyReportWorker();
   startCleanupWorker();
   startLoyaltyTierRecomputeWorker();
+  startLoyaltyAnnualResetWorker();
+  startLoyaltyBonusExpiryWorker();
   startWeatherFetchWorker();
   startAiOrderWorker();
   startTelegramListener();

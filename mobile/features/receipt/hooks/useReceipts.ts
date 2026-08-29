@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getReceipts, getReceipt, confirmReceipt, processItem } from '../api/receiptApi';
 
-export function useReceipts() {
+export function useReceipts(locationId?: string) {
   return useQuery({
-    queryKey: ['receipts'],
-    queryFn: getReceipts,
+    queryKey: ['receipts', locationId],
+    queryFn: () => getReceipts(locationId),
   });
 }
 

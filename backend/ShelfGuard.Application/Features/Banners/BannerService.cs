@@ -170,16 +170,21 @@ public sealed class BannerService : IBannerService
     // ── Analytics ────────────────────────────────────────────────────────────
 
     public async Task<(BannerAnalyticsDto? Analytics, string? Error)> GetAnalyticsAsync(
-        Guid tenantId, Guid id, CancellationToken ct = default)
+        Guid tenantId, Guid id, DateTime? from = null, DateTime? toExclusive = null,
+        IReadOnlyCollection<Guid>? storeIds = null,
+        CancellationToken ct = default)
     {
         var banner = await _repo.GetByIdAsync(tenantId, id, ct);
         if (banner is null) return (null, "Banner not found.");
 
-        var counts = await _repo.GetEventCountsForBannersAsync(tenantId, [id], ct);
-        var (views, clicks) = counts.GetValueOrDefault(id, (0, 0));
+        var snapshot = await _repo.GetEventAnalyticsAsync(tenantId, id, from, toExclusive, storeIds, ct);
+        var (views, clicks) = (snapshot.Views, snapshot.Clicks);
         var ctr = views > 0 ? Math.Round((decimal)clicks / views, 4) : 0m;
 
-        return (new BannerAnalyticsDto(views, clicks, ctr), null);
+        return (new BannerAnalyticsDto(views, clicks, ctr,
+            snapshot.Daily.Select(x => new BannerAnalyticsDailyDto(x.Date, x.Views, x.Clicks)).ToList(),
+            snapshot.Stores.Select(x => new BannerAnalyticsStoreDto(x.StoreId, x.StoreName, x.Views, x.Clicks,
+                x.Views > 0 ? Math.Round((decimal)x.Clicks / x.Views, 4) : 0m)).ToList()), null);
     }
 
     // ── Validation ───────────────────────────────────────────────────────────
@@ -216,7 +221,7 @@ public sealed class BannerService : IBannerService
         var ids = banners.Select(b => b.Id).ToList();
         var locationsMap = await _repo.GetLocationIdsForBannersAsync(tenantId, ids, ct);
         var productsMap = await _repo.GetProductIdsForBannersAsync(tenantId, ids, ct);
-        var countsMap = await _repo.GetEventCountsForBannersAsync(tenantId, ids, ct);
+        var countsMap = await _repo.GetEventCountsForBannersAsync(tenantId, ids, ct: ct);
         var now = DateTime.UtcNow;
 
         return banners.Select(b =>

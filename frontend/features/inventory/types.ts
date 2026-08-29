@@ -71,6 +71,7 @@ export interface UpdateProductPayload extends CreateProductPayload {
 export interface CategoryDto {
   id: string;
   name: string;
+  parentId: string | null;
 }
 
 // Opaque sort keys passed straight through to GET /api/items's `sortBy` query param — must

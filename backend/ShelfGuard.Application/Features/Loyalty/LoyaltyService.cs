@@ -531,7 +531,7 @@ public sealed class LoyaltyService : ILoyaltyService
         var progress = new LoyaltyTierProgressDto(
             currentTier?.Id,
             currentTier?.Name,
-            currentTier?.AccrualMultiplier ?? 1.0m,
+            currentTier?.AccrualMultiplier ?? 0m,
             currentTier?.DiscountPercent ?? 0m,
             membership.CompositeScore,
             nextTier?.Id,
@@ -836,6 +836,32 @@ public sealed class LoyaltyService : ILoyaltyService
         await AssignEntryTierAsync(membership, tenantId, ct);
 
         await _loyalty.AddMembershipAsync(membership, ct);
+        var settings = await _loyalty.GetSettingsAsync(tenantId, ct);
+        if (settings is { IsEnabled: true, WelcomeRewardEnabled: true, WelcomeRewardAmount: > 0m })
+        {
+            membership.Balance = settings.WelcomeRewardAmount;
+            var entry = new LoyaltyLedgerEntry
+            {
+                TenantId = tenantId,
+                MembershipId = membership.Id,
+                EntryType = LoyaltyEntryType.Reward,
+                Amount = settings.WelcomeRewardAmount,
+                BalanceAfter = membership.Balance,
+                Note = "Винагорода за приєднання до програми",
+            };
+            await _loyalty.AddLedgerEntryAsync(entry, ct);
+            await _loyalty.AddBonusLotAsync(new LoyaltyBonusLot
+            {
+                TenantId = tenantId,
+                MembershipId = membership.Id,
+                SourceLedgerEntryId = entry.Id,
+                OriginalAmount = entry.Amount,
+                RemainingAmount = entry.Amount,
+                ExpiresAt = settings.BonusLifetimeEnabled
+                    ? DateTimeOffset.UtcNow.AddDays(settings.BonusLifetimeDays)
+                    : null,
+            }, ct);
+        }
         await _loyalty.SaveChangesAsync(ct);
 
         await _activityLogs.LogAsync(new ActivityLog
@@ -874,6 +900,21 @@ public sealed class LoyaltyService : ILoyaltyService
             return (null, "CodeTtlSeconds must be between 5 and 300.");
         if (request.CustomerCodeFormat is not ("qr" or "barcode"))
             return (null, "CustomerCodeFormat must be 'qr' or 'barcode'.");
+        if (request.BonusUnitsPerCurrencyUnit is < 1 or > 1_000_000)
+            return (null, "BonusUnitsPerCurrencyUnit must be between 1 and 1000000.");
+        if (request.AnnualBonusResetMonth is < 1 or > 12 ||
+            request.AnnualBonusResetDay < 1 ||
+            request.AnnualBonusResetDay > DateTime.DaysInMonth(2000, request.AnnualBonusResetMonth))
+            return (null, "Annual bonus reset date is invalid.");
+        if (request.AnnualBonusResetHour is < 0 or > 23)
+            return (null, "Annual bonus reset hour must be between 0 and 23.");
+        if (request.BonusResetTimeZone is not ("Europe/Kyiv" or "Europe/Warsaw" or "Europe/Berlin" or "UTC"))
+            return (null, "Unsupported bonus reset time zone.");
+        if (request.WelcomeRewardAmount < 0 || request.FirstPurchaseRewardAmount < 0 ||
+            request.ProfileCompletionRewardAmount < 0 || request.ReviewRewardAmount < 0)
+            return (null, "Reward amounts cannot be negative.");
+        if (request.BonusLifetimeDays is < 1 or > 3650)
+            return (null, "BonusLifetimeDays must be between 1 and 3650.");
 
         var settings = await _loyalty.GetSettingsAsync(tenantId, ct);
         if (settings is null)
@@ -891,6 +932,9 @@ public sealed class LoyaltyService : ILoyaltyService
         await _loyalty.SaveChangesAsync(ct);
         return (ToSettingsDto(settings), null);
     }
+
+    public Task<int> ResetAllBonusBalancesAsync(Guid tenantId, CancellationToken ct = default) =>
+        _loyalty.ResetAllBalancesAsync(tenantId, "Ручне обнулення бонусів адміністратором", ct);
 
     // ── Tier ladder — admin CRUD (TASK-615) ───────────────────────────────────
 
@@ -919,8 +963,8 @@ public sealed class LoyaltyService : ILoyaltyService
                 return (null, "SortOrder cannot be negative.");
             if (tier.MinCompositeScore < 0)
                 return (null, "MinCompositeScore cannot be negative.");
-            if (tier.AccrualMultiplier is < 0 or > 999.99m)
-                return (null, "AccrualMultiplier must be between 0 and 999.99.");
+            if (tier.AccrualMultiplier is < 0 or > 100m)
+                return (null, "Tier cashback percent must be between 0 and 100.");
             if (tier.DiscountPercent is < 0 or > 100)
                 return (null, "DiscountPercent must be between 0 and 100.");
             if (tier.MinMembershipDays < 0 || tier.MinEarnedBonuses < 0 ||
@@ -1152,10 +1196,32 @@ public sealed class LoyaltyService : ILoyaltyService
     {
         settings.IsEnabled = request.IsEnabled;
         settings.AccrualRatePercent = request.AccrualRatePercent;
+        settings.BonusUnitsPerCurrencyUnit = request.BonusUnitsPerCurrencyUnit;
         settings.RedemptionCapPercent = request.RedemptionCapPercent;
         settings.MinRedemptionBalance = request.MinRedemptionBalance;
         settings.CodeTtlSeconds = request.CodeTtlSeconds;
         settings.CustomerCodeFormat = request.CustomerCodeFormat;
+        settings.AnnualBonusResetEnabled = request.AnnualBonusResetEnabled;
+        settings.AnnualBonusResetMonth = request.AnnualBonusResetMonth;
+        settings.AnnualBonusResetDay = request.AnnualBonusResetDay;
+        settings.AnnualBonusResetHour = request.AnnualBonusResetHour;
+        settings.BonusResetTimeZone = request.BonusResetTimeZone;
+        settings.BonusExclusionsEnabled = request.BonusExclusionsEnabled;
+        settings.ExclusionsApplyToAccrual = request.ExclusionsApplyToAccrual;
+        settings.ExclusionsApplyToRedemption = request.ExclusionsApplyToRedemption;
+        settings.ExcludeDiscountedItems = request.ExcludeDiscountedItems;
+        settings.ExcludedCategoryIdsJson = System.Text.Json.JsonSerializer.Serialize((request.ExcludedCategoryIds ?? []).Distinct());
+        settings.ExcludedProductIdsJson = System.Text.Json.JsonSerializer.Serialize((request.ExcludedProductIds ?? []).Distinct());
+        settings.WelcomeRewardEnabled = request.WelcomeRewardEnabled;
+        settings.WelcomeRewardAmount = request.WelcomeRewardAmount;
+        settings.FirstPurchaseRewardEnabled = request.FirstPurchaseRewardEnabled;
+        settings.FirstPurchaseRewardAmount = request.FirstPurchaseRewardAmount;
+        settings.ProfileCompletionRewardEnabled = request.ProfileCompletionRewardEnabled;
+        settings.ProfileCompletionRewardAmount = request.ProfileCompletionRewardAmount;
+        settings.ReviewRewardEnabled = request.ReviewRewardEnabled;
+        settings.ReviewRewardAmount = request.ReviewRewardAmount;
+        settings.BonusLifetimeEnabled = request.BonusLifetimeEnabled;
+        settings.BonusLifetimeDays = request.BonusLifetimeDays;
         settings.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -1176,8 +1242,19 @@ public sealed class LoyaltyService : ILoyaltyService
         e.Id, e.EntryType, e.Amount, e.BalanceAfter, e.Note, e.CreatedAt, e.PosTransactionId);
 
     private static LoyaltyProgramSettingsDto ToSettingsDto(LoyaltyProgramSettings s, bool isNew = false) => new(
-        s.IsEnabled, s.AccrualRatePercent, s.RedemptionCapPercent, s.MinRedemptionBalance, s.CodeTtlSeconds,
-        s.CustomerCodeFormat, isNew ? null : s.UpdatedAt);
+        s.IsEnabled, s.AccrualRatePercent, s.BonusUnitsPerCurrencyUnit, s.RedemptionCapPercent, s.MinRedemptionBalance, s.CodeTtlSeconds,
+        s.CustomerCodeFormat, s.AnnualBonusResetEnabled, s.AnnualBonusResetMonth,
+        s.AnnualBonusResetDay, s.AnnualBonusResetHour, s.BonusResetTimeZone,
+        s.BonusExclusionsEnabled, s.ExclusionsApplyToAccrual, s.ExclusionsApplyToRedemption,
+        s.ExcludeDiscountedItems,
+        System.Text.Json.JsonSerializer.Deserialize<Guid[]>(s.ExcludedCategoryIdsJson) ?? [],
+        System.Text.Json.JsonSerializer.Deserialize<Guid[]>(s.ExcludedProductIdsJson) ?? [],
+        s.WelcomeRewardEnabled, s.WelcomeRewardAmount,
+        s.FirstPurchaseRewardEnabled, s.FirstPurchaseRewardAmount,
+        s.ProfileCompletionRewardEnabled, s.ProfileCompletionRewardAmount,
+        s.ReviewRewardEnabled, s.ReviewRewardAmount,
+        s.BonusLifetimeEnabled, s.BonusLifetimeDays,
+        s.LastAnnualBonusResetYear, isNew ? null : s.UpdatedAt);
 
     private static LoyaltyTierDefinitionDto ToTierDefinitionDto(LoyaltyTierDefinition t) => new(
         t.Id, t.Name, t.SortOrder, t.MinCompositeScore, t.AccrualMultiplier, t.DiscountPercent,

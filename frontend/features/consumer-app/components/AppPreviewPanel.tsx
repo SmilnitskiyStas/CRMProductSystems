@@ -248,6 +248,12 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
   // screen, minus the tab bar", not an arbitrary constant.
   const scrollAreaMaxHeight =
     device.height - PHONE_FRAME_BORDER_PX * 2 - framePadding * 2 - (navigation.length > 0 ? NAV_BAR_HEIGHT_PX : 0);
+  const contourIndex = navigation.findIndex((item) => item.isPrimary && item.primaryStyle === "raisedContour");
+  const contourCenter = contourIndex >= 0 ? ((contourIndex + 0.5) / navigation.length) * 1000 : 500;
+  const primaryNavigationItem = navigation.find((item) => item.isPrimary);
+  const contourIsRaised = primaryNavigationItem?.primaryRaised !== false;
+  const contourSvgTop = contourIsRaised ? -25 : -12;
+  const contourSvgHeight = contourIsRaised ? 27 : 14;
 
   // ADR-031: App Builder has no store selector — the tenant's first location stands in for
   // preview purposes only (a preview-only convenience, not a real store-selection UI). Renders
@@ -331,6 +337,7 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
   }
 
   const tokens = buildTokens(themeQuery.data);
+  const navigationBackground = primaryNavigationItem?.primaryBarColor ?? tokens.colors.surface;
   const ctx: PreviewContext = { tokens, banners, promotions, catalog, catalogById, locations, registryByType, onResizeCommit };
 
   return (
@@ -401,10 +408,27 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
                 marginRight: -framePadding,
                 marginBottom: -framePadding,
                 display: "flex",
-                borderTop: `1px solid ${tokens.colors.border}`,
-                background: tokens.colors.surface,
+                position: "relative",
+                borderTop: contourIndex >= 0 ? "none" : `1px solid ${tokens.colors.border}`,
+                background: navigationBackground,
               }}
             >
+              {contourIndex >= 0 && (
+                <svg aria-hidden="true" viewBox="0 0 1000 52" preserveAspectRatio="none" style={{ position: "absolute", zIndex: 0, left: 0, top: contourSvgTop, width: "100%", height: contourSvgHeight, overflow: "visible", pointerEvents: "none" }}>
+                  <path
+                    d={`M 0 50 H ${contourCenter - 92} C ${contourCenter - 58} 50, ${contourCenter - 58} 2, ${contourCenter} 2 C ${contourCenter + 58} 2, ${contourCenter + 58} 50, ${contourCenter + 92} 50 H 1000 V 70 H 0 Z`}
+                    fill={navigationBackground}
+                    stroke="none"
+                  />
+                  <path
+                    d={`M 0 50 H ${contourCenter - 92} C ${contourCenter - 58} 50, ${contourCenter - 58} 2, ${contourCenter} 2 C ${contourCenter + 58} 2, ${contourCenter + 58} 50, ${contourCenter + 92} 50 H 1000`}
+                    fill="none"
+                    stroke={tokens.colors.textSecondary}
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              )}
               {navigation.map((item, index) => {
                 const Icon: LucideIcon =
                   NAVIGATION_ICON_COMPONENTS[item.icon as MobileConfigNavigationIcon] ?? Home;
@@ -413,6 +437,9 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
                   ? item.type === nonEditableNavType
                   : !!editablePage && editablePage === previewPage;
                 const color = isActive ? tokens.colors.primary : tokens.colors.textSecondary;
+                const primaryColor = item.primaryColor ?? tokens.colors.primary;
+                const primarySize = item.primarySize === "xlarge" ? 52 : 44;
+                const glowDuration = item.primaryGlowSpeed === "slow" ? 2600 : item.primaryGlowSpeed === "fast" ? 900 : 1600;
                 return (
                   <button
                     key={`${item.type}-${index}`}
@@ -424,14 +451,36 @@ export function AppPreviewPanel({ pages, navigation, activePage, registryByType,
                       flexDirection: "column",
                       alignItems: "center",
                       gap: 2,
-                      padding: "8px 4px 10px",
+                      padding: item.isPrimary ? "0 4px 6px" : "8px 4px 10px",
                       background: "transparent",
                       border: "none",
+                      position: "relative",
+                      zIndex: 1,
                       cursor: "pointer",
-                      color,
+                      color: item.isPrimary ? "#FFFFFF" : color,
+                      transform: item.isPrimary && item.primaryRaised !== false ? "translateY(-10px)" : undefined,
                     }}
                   >
-                    <Icon size={18} />
+                    <span style={item.isPrimary ? { width: primarySize, height: primarySize, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" } : undefined}>
+                      <span style={item.isPrimary ? {
+                        position: "relative",
+                        zIndex: 2,
+                        width: primarySize,
+                        height: primarySize,
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: primaryColor,
+                        boxShadow: item.primaryGlow ? `0 0 16px ${primaryColor}` : `0 4px 10px ${primaryColor}55`,
+                        animation: item.primaryGlow && item.primaryGlowAnimated ? `consumer-primary-glow-pulse ${glowDuration}ms ease-in-out infinite` : undefined,
+                        ...({ "--consumer-primary-glow-color": primaryColor } as React.CSSProperties),
+                        border: item.primaryStyle === "raisedContour" ? `4px solid ${navigationBackground}` : `3px solid ${navigationBackground}`,
+                        boxSizing: "border-box",
+                      } : undefined}>
+                        <Icon size={item.isPrimary ? (item.primarySize === "xlarge" ? 24 : 21) : 18} />
+                      </span>
+                    </span>
                     <span
                       style={{
                         fontSize: 10,

@@ -51,6 +51,44 @@ export interface LoyaltyLedgerEntry {
   balanceAfter: number;
   note: string | null;
   createdAt: string;
+  /** Present for purchase-linked ledger rows and null for non-purchase adjustments. */
+  posTransactionId: string | null;
+}
+
+export interface LoyaltyTierProgress {
+  currentTierId: string | null; currentTierName: string | null;
+  accrualMultiplier: number; discountPercent: number; compositeScore: number;
+  nextTierId: string | null; nextTierName: string | null; scoreToNextTier: number | null;
+  metrics?: LoyaltyTierProgressMetrics | null;
+  nextTierRequirements?: LoyaltyTierRequirements | null;
+}
+
+export interface LoyaltyTierProgressMetrics {
+  profileCompleted: boolean; membershipDays: number; earnedBonuses: number;
+  cashSpend: number; bonusSpend: number; purchaseCount: number; reviewCount: number;
+}
+
+export interface LoyaltyTierRequirements {
+  requireCompletedProfile: boolean; minMembershipDays: number | null; minEarnedBonuses: number | null;
+  minCashSpend: number | null; minBonusSpend: number | null; minPurchaseCount: number | null; minReviewCount: number | null;
+}
+
+export interface LoyaltyTierDefinition {
+  id: string;
+  name: string;
+  sortOrder: number;
+  minCompositeScore: number;
+  accrualMultiplier: number;
+  discountPercent: number;
+  description?: string | null;
+  imageUrl?: string | null;
+  requireCompletedProfile?: boolean;
+  minMembershipDays?: number | null;
+  minEarnedBonuses?: number | null;
+  minCashSpend?: number | null;
+  minBonusSpend?: number | null;
+  minPurchaseCount?: number | null;
+  minReviewCount?: number | null;
 }
 
 /** Matches the generic `PagedResult<T>` shape already used by mobile/features/customers. */

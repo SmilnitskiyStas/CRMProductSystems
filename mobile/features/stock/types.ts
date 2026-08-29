@@ -7,14 +7,32 @@ export interface StockBatch {
   barcode: string | null;
   batchNumber: string | null;
   quantity: number;
-  unit: string;
   expiryDate: string;
   daysLeft: number;
   status: StockStatus;
   locationId: string;
   zoneName: string | null;
-  shelfNumber: string | null;
+  shelfNumber: number | null;
   lastCheckedAt: string;
+  pricePurchase: number | null;
+  priceRetail: number | null;
+  defaultReimbursementType: 'fixed' | 'percent' | null;
+  defaultReimbursementValue: number | null;
+}
+
+export interface CatalogProductLookup {
+  id: string;
+  name: string;
+  barcodes: string[];
+  /** Compatibility aliases used by the existing POS scanner. */
+  barcode: string;
+  price?: number;
+  status?: string;
+  itemType?: string;
+  pricePurchase: number | null;
+  priceRetail: number | null;
+  defaultReimbursementType: 'fixed' | 'percent' | null;
+  defaultReimbursementValue: number | null;
 }
 
 export interface CreateStockBatchRequest {

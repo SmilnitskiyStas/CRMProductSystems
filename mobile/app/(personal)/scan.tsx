@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { findConsumerProductByBarcode } from '@/features/shopping/products';
 import type { NewsPromotionProduct } from '@/features/loyalty/news';
 import { parseRetailerInvite } from '@/features/retailer-onboarding/invite';
+import { useSelectedConsumerContext } from '@/features/consumer-content/hooks';
+import { recordConsumerCatalogEvent } from '@/features/consumer-content/api';
 
 cssInterop(CameraView, { className: 'style' });
 
@@ -28,6 +30,7 @@ function formatPrice(value: number | null) {
 
 export default function ConsumerBarcodeScannerScreen() {
   const router = useRouter();
+  const { context } = useSelectedConsumerContext();
   const [permission, requestPermission] = useCameraPermissions();
   const [consentVisible, setConsentVisible] = useState(true);
   const [requestingPermission, setRequestingPermission] = useState(false);
@@ -59,7 +62,9 @@ export default function ConsumerBarcodeScannerScreen() {
       router.replace({ pathname: '/(personal)/retailer-onboarding', params: { code: normalized } });
       return;
     }
-    setProduct(findConsumerProductByBarcode(normalized) ?? null);
+    const matchedProduct = findConsumerProductByBarcode(normalized) ?? null;
+    setProduct(matchedProduct);
+    if (context && matchedProduct?.catalogId) void recordConsumerCatalogEvent(context, { catalogId: matchedProduct.catalogId, eventType: 'product_scan', productId: matchedProduct.id });
   }
 
   function scanAgain() {

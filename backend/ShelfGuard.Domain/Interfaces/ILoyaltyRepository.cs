@@ -50,6 +50,8 @@ public interface ILoyaltyRepository
 
     Task AddMembershipAsync(LoyaltyMembership membership, CancellationToken ct = default);
     void UpdateMembership(LoyaltyMembership membership);
+    Task<int> ResetAllBalancesAsync(Guid tenantId, string note, CancellationToken ct = default) =>
+        Task.FromResult(0);
 
     /// <summary>
     /// Atomically claims a TOTP timestep for anti-replay: succeeds (returns true) only when
@@ -80,6 +82,11 @@ public interface ILoyaltyRepository
         Guid tenantId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct = default);
 
     Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default);
+    Task<List<LoyaltyBonusLot>> GetAvailableBonusLotsAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
+        Task.FromResult(new List<LoyaltyBonusLot>());
+    Task AddBonusLotAsync(LoyaltyBonusLot lot, CancellationToken ct = default) => Task.CompletedTask;
+    Task<bool> HasPurchaseAccrualAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
+        Task.FromResult(false);
 
     // ── Settings (one row per tenant) ────────────────────────────────────────
 

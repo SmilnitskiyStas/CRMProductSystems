@@ -6,10 +6,11 @@ export function useCatalogProducts(params?: {
   management_type?: string;
   search?: string;
   ids?: string[];
-}) {
+}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["catalog", params],
     queryFn: () => catalogApi.getAll(params),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -27,7 +28,7 @@ export function useCatalogProduct(id: string | null) {
  * selected-chip display and `AppPreviewPanel.tsx`'s curated-selection preview resolution (TASK-575).
  * Sorted key so re-ordering the same selection doesn't cause a spurious refetch.
  */
-export function useCatalogProductsByIds(ids: string[]) {
+export function useCatalogProductsByIds(ids: string[] = []) {
   return useQuery({
     queryKey: ["catalog", "by-ids", [...ids].sort()],
     queryFn: () => catalogApi.getAll({ ids }),

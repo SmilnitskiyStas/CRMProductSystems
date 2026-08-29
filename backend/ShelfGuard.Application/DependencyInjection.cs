@@ -48,6 +48,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IDiscountService, DiscountService>();
         services.AddScoped<Features.Banners.IBannerService, Features.Banners.BannerService>();
+        services.AddScoped<Features.PromotionCampaigns.IPromotionCampaignService, Features.PromotionCampaigns.PromotionCampaignService>();
         services.AddScoped<Features.ConsumerContent.IConsumerContentService, Features.ConsumerContent.ConsumerContentService>();
         services.AddScoped<IProviderService, ProviderService>();
         services.AddScoped<IProviderTeamService, ProviderTeamService>();

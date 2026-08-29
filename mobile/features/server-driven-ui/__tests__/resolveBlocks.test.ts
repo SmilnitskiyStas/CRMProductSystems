@@ -55,6 +55,25 @@ describe('App Builder block data resolution', () => {
     expect((resolved.props as { columns?: number }).columns).toBe(4);
   });
 
+  it('forwards the authored storeList limit to the live renderer', () => {
+    const resolved = resolveBlock({ id: 'stores', type: 'storeList', props: { limit: 3 } }, data);
+    expect((resolved.props as { limit?: number }).limit).toBe(3);
+  });
+
+  it('resolves all live stores for the selected network instead of authored placeholder items', () => {
+    const stores = [
+      { storeId: 'store-1', storeName: 'Перший', address: 'Адреса 1' },
+      { storeId: 'store-2', storeName: 'Другий', address: 'Адреса 2' },
+      { storeId: 'store-3', storeName: 'Третій', address: 'Адреса 3' },
+    ];
+    const resolved = resolveBlock(
+      { id: 'stores', type: 'storeList', props: { limit: 3, items: [{ id: 'placeholder' }] } },
+      { ...data, network: { ...data.network!, stores } },
+    );
+    expect((resolved.props as { items: { id: string }[] }).items.map((item) => item.id))
+      .toEqual(['store-1', 'store-2', 'store-3']);
+  });
+
   it('preserves static blocks authored directly in the builder', () => {
     const block = { id: 'hero', type: 'heroBanner', props: { title: 'Вітаємо' } };
     expect(resolveBlock(block, data)).toBe(block);

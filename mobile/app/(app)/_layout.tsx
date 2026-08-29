@@ -11,8 +11,10 @@ import { GuardState } from '@/features/navigation/components/GuardState';
 import { AuthBootstrapState } from '@/features/auth/components/AuthBootstrapState';
 import { offlineRouteAllowed, persistOfflineSessionSnapshot } from '@/features/auth/offlineSnapshot';
 import { retrySessionBootstrap } from '@/features/auth/bootstrap';
+import { useOfflineMutationSync } from '@/features/offline-mutations/useOfflineMutationSync';
 
 export default function AppLayout() {
+  useOfflineMutationSync();
   const workspaceAccessToken = useAuthStore((s) => s.workspaceAccessToken);
   const personalAccessToken = useAuthStore((s) => s.personalAccessToken);
   const hydrationStatus = useAuthStore((s) => s.hydrationStatus);
@@ -135,7 +137,7 @@ export default function AppLayout() {
         name="receipt/index"
         options={{
           href: !offlineMode && navigationDecision('/(app)/receipt', context).allowed ? '/(app)/receipt' : null,
-          title: 'Прийомка',
+          title: 'Приймання',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="receipt-outline" size={size} color={color} />
           ),
@@ -154,6 +156,8 @@ export default function AppLayout() {
       {/* Hidden screens (no tab) */}
       <Tabs.Screen name="profile/index" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="movements/index" options={{ href: null }} />
+      <Tabs.Screen name="movements/[id]" options={{ href: null }} />
       <Tabs.Screen name="stock/[id]" options={{ href: null }} />
       <Tabs.Screen name="receipt/[id]" options={{ href: null }} />
       <Tabs.Screen name="inventory/[zoneId]" options={{ href: null }} />

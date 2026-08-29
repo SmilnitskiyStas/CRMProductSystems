@@ -416,22 +416,26 @@ export default function SupplierProfilePage() {
       </div>
 
       {/* Tab content */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: 24,
-        }}
-      >
-        {activeTab === "catalog" && (
-          <SupplierItemsTab
-            supplierId={id}
-            onAddToCart={isClientTenant && cooperationActive ? handleAddToCart : undefined}
-          />
-        )}
-        {activeTab === "reviews" && <SupplierReviewsTab supplierId={id} />}
-      </div>
+      {activeTab === "catalog" && (
+        // No outer card here: SupplierItemsTab's shared `Table` now supplies its
+        // own card shell (TASK-637) — wrapping it again would double-border it.
+        <SupplierItemsTab
+          supplierId={id}
+          onAddToCart={isClientTenant && cooperationActive ? handleAddToCart : undefined}
+        />
+      )}
+      {activeTab === "reviews" && (
+        <div
+          style={{
+            background: "#0D1117",
+            border: "1px solid #1F2937",
+            borderRadius: 12,
+            padding: 24,
+          }}
+        >
+          <SupplierReviewsTab supplierId={id} />
+        </div>
+      )}
 
       {isClientTenant && cooperationActive && (
         <SupplierOrderCart

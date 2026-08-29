@@ -90,5 +90,10 @@ public sealed record BannerListQuery(
 public sealed record BannerAnalyticsDto(
     int ViewCount,
     int ClickCount,
-    decimal Ctr
+    decimal Ctr,
+    IReadOnlyList<BannerAnalyticsDailyDto> Daily,
+    IReadOnlyList<BannerAnalyticsStoreDto> Stores
 );
+
+public sealed record BannerAnalyticsDailyDto(DateOnly Date, int Views, int Clicks);
+public sealed record BannerAnalyticsStoreDto(Guid StoreId, string StoreName, int Views, int Clicks, decimal Ctr);

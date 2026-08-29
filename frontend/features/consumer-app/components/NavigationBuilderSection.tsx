@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useForm, useFieldArray, useWatch, type Control, type Path } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, type Control, type Path, type UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
@@ -25,6 +25,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical,
+  ChevronDown,
   Grid3x3,
   Home,
   Info,
@@ -41,6 +42,7 @@ import {
 import { Btn } from "@/components/ui/Btn";
 import { extractDraftValidationErrors } from "../api/mobileConfigDraft";
 import { useMobileConfigDraft, useSaveMobileConfigDraft } from "../hooks/useMobileConfigDraft";
+import { useBlockRegistry } from "../hooks/useBlockRegistry";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import {
   MOBILE_CONFIG_CURRENT_SCHEMA_VERSION,
@@ -56,7 +58,10 @@ import {
   type MobileConfigNavigationIcon,
   type MobileConfigPage,
   type MobileConfigPageName,
+  type MobileConfigBlockType,
+  type BlockDefinitionDto,
 } from "../types";
+import { AppPreviewPanel } from "./AppPreviewPanel";
 
 // ── Style constants (mirrors ThemeEditorSection.tsx / AppBuilderCanvas.tsx's conventions — this
 // feature area has no shadcn form primitives of its own) ──────────────────────────────────────
@@ -167,6 +172,15 @@ function buildSchema(t: ReturnType<typeof useTranslations>) {
       .min(1, t("labelRequiredError"))
       .max(MOBILE_CONFIG_NAVIGATION_LABEL_MAX_LENGTH, t("labelMaxLengthError", { max: MOBILE_CONFIG_NAVIGATION_LABEL_MAX_LENGTH })),
     icon: z.enum(MOBILE_CONFIG_NAVIGATION_ICONS, { errorMap: () => ({ message: t("iconInvalidError") }) }),
+    isPrimary: z.boolean().optional(),
+    primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, t("primaryColorError")).optional(),
+    primaryBarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, t("primaryColorError")).optional(),
+    primarySize: z.enum(["large", "xlarge"]).optional(),
+    primaryStyle: z.enum(["floating", "raisedContour"]).optional(),
+    primaryRaised: z.boolean().optional(),
+    primaryGlow: z.boolean().optional(),
+    primaryGlowAnimated: z.boolean().optional(),
+    primaryGlowSpeed: z.enum(["slow", "normal", "fast"]).optional(),
   });
 
   return z.object({
@@ -188,7 +202,7 @@ type NavFormItem = FormValues["navigation"][number];
 const NAV_ITEM_FIELD_PATTERN = /^navigation\[(\d+)]\.(type|label|icon)$/;
 
 function newItem(): NavFormItem {
-  return { type: "promotions", label: "", icon: "tag" };
+  return { type: "promotions", label: "", icon: "tag", isPrimary: false, primaryColor: "#2563EB", primaryBarColor: "#FFFFFF", primarySize: "large", primaryStyle: "floating", primaryRaised: true, primaryGlow: false, primaryGlowAnimated: false, primaryGlowSpeed: "normal" };
 }
 
 /**
@@ -210,6 +224,7 @@ export function NavigationBuilderSection() {
   const t = useTranslations("Dashboard.consumerApp.navigationBuilder");
   const draftQuery = useMobileConfigDraft();
   const save = useSaveMobileConfigDraft();
+  const registryQuery = useBlockRegistry();
 
   // Holds the full document minus `navigation` (which react-hook-form owns below) — same
   // read-modify-write shape as AppBuilderCanvas.tsx's `configDoc`, just narrower in scope.
@@ -224,6 +239,7 @@ export function NavigationBuilderSection() {
     register,
     reset,
     setError,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -231,6 +247,11 @@ export function NavigationBuilderSection() {
   });
 
   const { fields, append, remove, move } = useFieldArray({ control, name: "navigation" });
+  const liveNavigation = useWatch({ control, name: "navigation" });
+  const registryByType = useMemo(
+    () => new Map<MobileConfigBlockType, BlockDefinitionDto>((registryQuery.data ?? []).map((definition) => [definition.type, definition])),
+    [registryQuery.data],
+  );
 
   // TASK-546: warns before losing unsaved edits (tab-close/refresh always; in-app link-click
   // navigation best-effort) — see useUnsavedChangesGuard.ts's remarks for exact coverage.
@@ -252,7 +273,18 @@ export function NavigationBuilderSection() {
     // parsed), while the form's zod-inferred type narrows it to the whitelist enum. A value
     // outside the current whitelist (e.g. from a draft saved before a whitelist change) still
     // round-trips as a string here; the form's own validation catches it on submit.
-    reset({ navigation: (navigation ?? []) as FormValues["navigation"] });
+    reset({ navigation: (navigation ?? []).map((item) => ({
+      ...item,
+      isPrimary: item.isPrimary ?? false,
+      primaryColor: item.primaryColor ?? "#2563EB",
+      primaryBarColor: item.primaryBarColor ?? "#FFFFFF",
+      primarySize: item.primarySize ?? "large",
+      primaryStyle: item.primaryStyle ?? "floating",
+      primaryRaised: item.primaryRaised ?? true,
+      primaryGlow: item.primaryGlow ?? false,
+      primaryGlowAnimated: item.primaryGlowAnimated ?? false,
+      primaryGlowSpeed: item.primaryGlowSpeed ?? "normal",
+    })) as FormValues["navigation"] });
   }, [draftQuery.data, reset]);
 
   const sensors = useSensors(
@@ -317,7 +349,8 @@ export function NavigationBuilderSection() {
   const atMax = fields.length >= MOBILE_CONFIG_NAVIGATION_MAX_ITEMS;
 
   return (
-    <div style={{ ...cardStyle, maxWidth: 760 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 24, flexWrap: "wrap", width: "100%" }}>
+    <div style={{ ...cardStyle, flex: "1 1 700px", minWidth: 0 }}>
       <p style={sectionLabelStyle}>{t("sectionLabel")}</p>
       <p style={{ color: "#4B5563", fontSize: 12, margin: "0 0 16px" }}>
         {t("hint", { min: MOBILE_CONFIG_NAVIGATION_MIN_ITEMS, max: MOBILE_CONFIG_NAVIGATION_MAX_ITEMS })}
@@ -339,6 +372,7 @@ export function NavigationBuilderSection() {
                   control={control}
                   register={register}
                   errors={errors}
+                  setValue={setValue}
                   onRemove={() => handleRemove(index)}
                   removeDisabled={atMin}
                   removeDisabledHint={t("removeBlockedHint", { min: MOBILE_CONFIG_NAVIGATION_MIN_ITEMS })}
@@ -395,6 +429,15 @@ export function NavigationBuilderSection() {
         </div>
       </form>
     </div>
+    <div style={{ flex: "0 1 500px", minWidth: 340, position: "sticky", top: 20 }}>
+      <AppPreviewPanel
+        pages={restOfDoc.pages}
+        navigation={liveNavigation}
+        activePage="home"
+        registryByType={registryByType}
+      />
+    </div>
+    </div>
   );
 }
 
@@ -406,6 +449,7 @@ interface NavItemRowProps {
   control: Control<FormValues>;
   register: ReturnType<typeof useForm<FormValues>>["register"];
   errors: ReturnType<typeof useForm<FormValues>>["formState"]["errors"];
+  setValue: UseFormSetValue<FormValues>;
   onRemove: () => void;
   removeDisabled: boolean;
   removeDisabledHint: string;
@@ -418,6 +462,7 @@ function NavItemRow({
   control,
   register,
   errors,
+  setValue,
   onRemove,
   removeDisabled,
   removeDisabledHint,
@@ -425,6 +470,16 @@ function NavItemRow({
 }: NavItemRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const rowErrors = errors.navigation?.[index];
+  const navigation = useWatch({ control, name: "navigation" });
+  const item = navigation[index];
+  const [expanded, setExpanded] = useState(false);
+  const RowIcon = NAVIGATION_ICON_COMPONENTS[item?.icon as MobileConfigNavigationIcon] ?? Home;
+
+  function togglePrimary() {
+    const next = !item?.isPrimary;
+    navigation.forEach((_, itemIndex) => setValue(`navigation.${itemIndex}.isPrimary`, false, { shouldDirty: true }));
+    if (next) setValue(`navigation.${index}.isPrimary`, true, { shouldDirty: true });
+  }
 
   return (
     <div
@@ -460,7 +515,29 @@ function NavItemRow({
         <GripVertical size={16} />
       </span>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 10, flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          style={{ width: "100%", minHeight: 34, display: "flex", alignItems: "center", gap: 10, padding: "2px 0", background: "transparent", border: "none", color: "#E5E7EB", cursor: "pointer", textAlign: "left" }}
+        >
+          <span style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, background: item?.isPrimary ? (item.primaryColor ?? "#2563EB") : "#0B0E14", border: `1px solid ${item?.isPrimary ? (item.primaryColor ?? "#2563EB") : "#374151"}`, color: item?.isPrimary ? "#FFFFFF" : "#9CA3AF", flexShrink: 0 }}>
+            <RowIcon size={15} />
+          </span>
+          <span style={{ minWidth: 0, flex: 1 }}>
+            <span style={{ display: "block", fontSize: 13, fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {item?.label || t("labelPlaceholder")}
+            </span>
+            <span style={{ display: "block", color: "#6B7280", fontSize: 11, marginTop: 1 }}>
+              {item?.type ? t(`navTypes.${item.type}`) : ""}
+            </span>
+          </span>
+          {item?.isPrimary && <span style={{ padding: "3px 8px", borderRadius: 999, background: "#1E3A8A", color: "#BFDBFE", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>{t("primaryEnabled")}</span>}
+          <ChevronDown size={16} style={{ color: "#6B7280", flexShrink: 0, transform: expanded ? "rotate(180deg)" : undefined, transition: "transform 150ms ease" }} />
+        </button>
+
+        {expanded && <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid #273142" }}>
         <div>
           <select {...register(`navigation.${index}.type` as const)} style={selectStyle}>
             {MOBILE_CONFIG_NAVIGATION_TYPES.map((type) => (
@@ -489,6 +566,81 @@ function NavItemRow({
           error={rowErrors?.icon?.message}
           t={t}
         />
+
+        <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #273142", paddingTop: 10 }}>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!item?.isPrimary}
+            onClick={togglePrimary}
+            style={{ background: item?.isPrimary ? "#1D4ED8" : "#111827", border: `1px solid ${item?.isPrimary ? "#3B82F6" : "#374151"}`, color: "#E5E7EB", borderRadius: 999, padding: "6px 11px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+          >
+            {item?.isPrimary ? t("primaryEnabled") : t("makePrimary")}
+          </button>
+
+          {item?.isPrimary && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, alignItems: "end", marginTop: 10 }}>
+              <label style={{ color: "#9CA3AF", fontSize: 11 }}>
+                {t("primaryStyle")}
+                <select {...register(`navigation.${index}.primaryStyle` as const)} style={{ ...selectStyle, marginTop: 5 }}>
+                  <option value="floating">{t("primaryStyles.floating")}</option>
+                  <option value="raisedContour">{t("primaryStyles.raisedContour")}</option>
+                </select>
+              </label>
+              <label style={{ color: "#9CA3AF", fontSize: 11 }}>
+                {t("primaryColor")}
+                <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
+                  <input
+                    type="color"
+                    value={item?.primaryColor ?? "#2563EB"}
+                    onChange={(event) => setValue(
+                      `navigation.${index}.primaryColor`,
+                      event.target.value.toUpperCase(),
+                      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
+                    )}
+                    style={{ width: 40, height: 32, padding: 2, background: "#0D1117", border: "1px solid #374151", borderRadius: 7, cursor: "pointer" }}
+                  />
+                  <input {...register(`navigation.${index}.primaryColor` as const)} style={inputStyle} />
+                </div>
+                {rowErrors?.primaryColor && <p style={errorStyle}>{rowErrors.primaryColor.message}</p>}
+              </label>
+              <label style={{ color: "#9CA3AF", fontSize: 11 }}>
+                {t("primaryBarColor")}
+                <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
+                  <input
+                    type="color"
+                    value={item?.primaryBarColor ?? "#FFFFFF"}
+                    onChange={(event) => setValue(`navigation.${index}.primaryBarColor`, event.target.value.toUpperCase(), { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+                    style={{ width: 40, height: 32, padding: 2, background: "#0D1117", border: "1px solid #374151", borderRadius: 7, cursor: "pointer" }}
+                  />
+                  <input {...register(`navigation.${index}.primaryBarColor` as const)} style={inputStyle} />
+                </div>
+                {rowErrors?.primaryBarColor && <p style={errorStyle}>{rowErrors.primaryBarColor.message}</p>}
+              </label>
+              <label style={{ color: "#9CA3AF", fontSize: 11 }}>
+                {t("primarySize")}
+                <select {...register(`navigation.${index}.primarySize` as const)} style={{ ...selectStyle, marginTop: 5 }}>
+                  <option value="large">{t("primarySizes.large")}</option>
+                  <option value="xlarge">{t("primarySizes.xlarge")}</option>
+                </select>
+              </label>
+              <label style={{ color: "#D1D5DB", fontSize: 12, paddingBottom: 8 }}><input type="checkbox" {...register(`navigation.${index}.primaryRaised` as const)} /> {t("primaryRaised")}</label>
+              <label style={{ color: "#D1D5DB", fontSize: 12, paddingBottom: 8 }}><input type="checkbox" {...register(`navigation.${index}.primaryGlow` as const)} /> {t("primaryGlow")}</label>
+              {item?.primaryGlow && <label style={{ color: "#D1D5DB", fontSize: 12, paddingBottom: 8 }}><input type="checkbox" {...register(`navigation.${index}.primaryGlowAnimated` as const)} /> {t("primaryGlowAnimated")}</label>}
+              {item?.primaryGlow && item?.primaryGlowAnimated && (
+                <label style={{ color: "#9CA3AF", fontSize: 11 }}>
+                  {t("primaryGlowSpeed")}
+                  <select {...register(`navigation.${index}.primaryGlowSpeed` as const)} style={{ ...selectStyle, marginTop: 5 }}>
+                    <option value="slow">{t("primaryGlowSpeeds.slow")}</option>
+                    <option value="normal">{t("primaryGlowSpeeds.normal")}</option>
+                    <option value="fast">{t("primaryGlowSpeeds.fast")}</option>
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+        </div>
+        </div>}
       </div>
 
       <button

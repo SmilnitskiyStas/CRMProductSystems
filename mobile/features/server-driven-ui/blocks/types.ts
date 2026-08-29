@@ -107,4 +107,5 @@ export interface StoreListProps {
   items: StoreItem[];
   title?: string;
   showDistance?: boolean;
+  limit?: number;
 }

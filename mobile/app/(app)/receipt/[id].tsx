@@ -1,16 +1,51 @@
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useReceipt, useConfirmReceipt, useProcessItem } from '@/features/receipt/hooks/useReceipts';
+import { useReceipt } from '@/features/receipt/hooks/useReceipts';
 import { ReceiptItemRow } from '@/features/receipt/components/ReceiptItemRow';
 import { receiptNumber } from '@/features/receipt/types';
+import type { Receipt } from '@/features/receipt/types';
+import { useAuthStore } from '@/features/auth/store';
+import { enqueueOperationalMutation, syncOperationalMutations } from '@/features/offline-mutations/operationalQueue';
+import { queryClient } from '@/lib/query-client';
 
 export default function ReceiptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const owner = user?.tenantId ? { tenantId: user.tenantId, userId: user.id } : null;
   const { data: receipt, isLoading } = useReceipt(id);
-  const { mutate: confirm, isPending } = useConfirmReceipt();
-  const { mutate: process } = useProcessItem();
+  const [isPending, setIsPending] = useState(false);
+
+  async function queueMutation(mutation: Parameters<typeof enqueueOperationalMutation>[1]) {
+    if (!owner || isPending) return;
+    setIsPending(true);
+    try {
+      await enqueueOperationalMutation(owner, mutation);
+      const network = await NetInfo.fetch();
+      if (network.isConnected && network.isInternetReachable !== false) await syncOperationalMutations(owner);
+    } finally { setIsPending(false); }
+  }
+
+  async function processLocally(itemId: string, quantityReceived: number) {
+    if (!receipt) return;
+    await queueMutation({ kind: 'receipt.item', payload: { receiptId: receipt.id, itemId, quantityReceived } });
+    queryClient.setQueryData<Receipt>(['receipts', receipt.id], (current) => current ? {
+      ...current,
+      items: current.items.map((item) => item.id === itemId ? { ...item, quantityReceived, isProcessed: true } : item),
+    } : current);
+  }
+
+  async function confirmLocally() {
+    if (!receipt) return;
+    try {
+      await queueMutation({ kind: 'receipt.confirm', payload: { receiptId: receipt.id } });
+      Alert.alert('Прийомку збережено', 'Якщо мережі немає, дані передадуться автоматично пізніше.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch { Alert.alert('Помилка', 'Не вдалося зберегти операцію локально.'); }
+  }
 
   if (isLoading) {
     return (
@@ -72,11 +107,7 @@ export default function ReceiptDetailScreen() {
             item={item}
             onPress={
               receipt.status === 'draft' && !item.isProcessed
-                ? () => process({
-                    receiptId: receipt.id,
-                    itemId: item.id,
-                    quantityReceived: item.quantityOrdered,
-                  })
+                ? () => void processLocally(item.id, item.quantityOrdered)
                 : undefined
             }
           />
@@ -87,7 +118,7 @@ export default function ReceiptDetailScreen() {
       {receipt.status === 'draft' && (
         <View className="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-4 bg-white border-t border-gray-100">
           <TouchableOpacity
-            onPress={() => confirm(receipt.id, { onSuccess: () => router.back() })}
+            onPress={() => void confirmLocally()}
             disabled={!allProcessed || isPending}
             className={`py-4 rounded-xl items-center ${
               allProcessed ? 'bg-primary-600' : 'bg-gray-200'
@@ -110,3 +141,4 @@ export default function ReceiptDetailScreen() {
     </SafeAreaView>
   );
 }
+import { useState } from 'react';

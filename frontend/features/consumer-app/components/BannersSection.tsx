@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { API_BASE } from "@/lib/api";
 import { useBannerAnalytics, useBanners, useDeactivateBanner, usePublishBanner } from "../hooks/useBanners";
-import { BannerForm } from "./BannerForm";
 import { LifecycleTabs, type LifecycleTab } from "./LifecycleTabs";
 import type { BannerDto } from "../types";
 
@@ -19,11 +20,17 @@ const cardStyle: React.CSSProperties = {
 const rowStyle: React.CSSProperties = {
   border: "1px solid #1F2937",
   borderRadius: 10,
-  padding: "12px 14px",
+  padding: 14,
   display: "flex",
   flexDirection: "column",
   gap: 8,
 };
+
+function resolveImageUrl(value: string | null): string | null {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${API_BASE.replace(/\/$/, "")}/${value.replace(/^\//, "")}`;
+}
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -40,12 +47,11 @@ function formatDate(value: string | null): string {
  */
 export function BannersSection() {
   const t = useTranslations("Dashboard.consumerApp.banners");
+  const router = useRouter();
   const { data: banners, isLoading, isError } = useBanners();
   const deactivate = useDeactivateBanner();
   const publish = usePublishBanner();
 
-  // false = closed, "create" = create mode, otherwise the id being edited.
-  const [formTarget, setFormTarget] = useState<false | "create" | string>(false);
   const [analyticsOpenId, setAnalyticsOpenId] = useState<string | null>(null);
   const [tab, setTab] = useState<LifecycleTab>("running");
 
@@ -89,7 +95,9 @@ export function BannersSection() {
             <p style={{ color: "#4B5563", fontSize: 12, margin: 0, marginTop: 3 }}>{t("subtitle")}</p>
           </div>
         </div>
-        <Btn size="sm" onClick={() => setFormTarget("create")}>{t("createButton")}</Btn>
+        <Btn icon={<span aria-hidden="true">＋</span>} onClick={() => router.push("/consumer-app/banners/new")}>
+          {t("createButton")}
+        </Btn>
       </div>
 
       <LifecycleTabs
@@ -106,13 +114,35 @@ export function BannersSection() {
         <div style={{ color: "#4B5563", fontSize: 13 }}>{t("emptyHint")}</div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 460px), 1fr))", gap: 12 }}>
         {visibleBanners.map((banner) => {
           const isDraft = banner.lifecycleStatus === "draft";
           return (
           <div key={banner.id} style={rowStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
+              <div
+                style={{
+                  width: 116,
+                  height: 76,
+                  flexShrink: 0,
+                  overflow: "hidden",
+                  borderRadius: 8,
+                  border: "1px solid #293241",
+                  background: banner.backgroundColor || "#111827",
+                  backgroundImage: banner.imageUrl ? `url("${resolveImageUrl(banner.imageUrl)}")` : undefined,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {!banner.imageUrl && (
+                  <span style={{ color: banner.accentColor || "#9CA3AF", fontSize: 24 }}>📣</span>
+                )}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span
                   style={{
                     fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
@@ -128,8 +158,21 @@ export function BannersSection() {
                 <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {banner.title}
                 </span>
+                </div>
+                <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.45, margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  {banner.description}
+                </p>
               </div>
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            </div>
+
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", color: "#6B7280", fontSize: 12 }}>
+              <span>{t("locationsCount", { count: banner.locationIds.length })}</span>
+              <span>{formatDate(banner.validFrom)} — {formatDate(banner.validUntil)}</span>
+              <span>{t("viewCount", { count: banner.viewCount })}</span>
+              <span>{t("clickCount", { count: banner.clickCount })}</span>
+            </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: "auto" }}>
                 <Btn
                   size="sm"
                   variant="ghost"
@@ -137,7 +180,7 @@ export function BannersSection() {
                 >
                   {t("analyticsButton")}
                 </Btn>
-                <Btn size="sm" variant="ghost" onClick={() => setFormTarget(banner.id)}>
+                <Btn size="sm" variant="ghost" onClick={() => router.push(`/consumer-app/banners/${banner.id}/edit`)}>
                   {t("editButton")}
                 </Btn>
                 {isDraft && (
@@ -149,27 +192,12 @@ export function BannersSection() {
                   {t("deleteButton")}
                 </Btn>
               </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", color: "#6B7280", fontSize: 12 }}>
-              <span>{t("locationsCount", { count: banner.locationIds.length })}</span>
-              <span>{formatDate(banner.validFrom)} — {formatDate(banner.validUntil)}</span>
-              <span>{t("viewCount", { count: banner.viewCount })}</span>
-              <span>{t("clickCount", { count: banner.clickCount })}</span>
-            </div>
 
             {analyticsOpenId === banner.id && <AnalyticsPanel bannerId={banner.id} />}
           </div>
           );
         })}
       </div>
-
-      {formTarget !== false && (
-        <BannerForm
-          bannerId={formTarget === "create" ? null : formTarget}
-          onClose={() => setFormTarget(false)}
-        />
-      )}
     </div>
   );
 }

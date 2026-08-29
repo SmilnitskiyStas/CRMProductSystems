@@ -17,7 +17,10 @@ public sealed class MobileConfigValidator : IMobileConfigValidator
     // Shape whitelists — which JSON keys each object level may contain. Distinct from
     // MobileConfigWhitelists, which restricts the *values* certain fields may take.
     private static readonly HashSet<string> TopLevelKeys = new() { "schemaVersion", "features", "navigation", "pages" };
-    private static readonly HashSet<string> NavigationItemKeys = new() { "type", "label", "icon" };
+    private static readonly HashSet<string> NavigationItemKeys = new()
+    {
+        "type", "label", "icon", "isPrimary", "primaryColor", "primaryBarColor", "primarySize", "primaryStyle", "primaryRaised", "primaryGlow", "primaryGlowAnimated", "primaryGlowSpeed"
+    };
     private static readonly HashSet<string> PageKeys = new() { "blocks" };
     private static readonly HashSet<string> BlockKeys = new() { "id", "type", "order", "props" };
 
@@ -138,6 +141,7 @@ public sealed class MobileConfigValidator : IMobileConfigValidator
                 $"{MobileConfigWhitelists.NavigationMaxItems} items (got {items.Count})."));
         }
 
+        var primaryCount = 0;
         for (var i = 0; i < items.Count; i++)
         {
             var item = items[i];
@@ -172,7 +176,48 @@ public sealed class MobileConfigValidator : IMobileConfigValidator
             {
                 errors.Add(new($"{field}.icon", $"Unknown navigation icon '{iconEl.GetString()}'."));
             }
+
+            if (item.TryGetProperty("isPrimary", out var primaryEl))
+            {
+                if (primaryEl.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    errors.Add(new($"{field}.isPrimary", "isPrimary must be a boolean."));
+                else if (primaryEl.GetBoolean())
+                    primaryCount++;
+            }
+
+            ValidateOptionalBoolean(item, "primaryRaised", field, errors);
+            ValidateOptionalBoolean(item, "primaryGlow", field, errors);
+            ValidateOptionalBoolean(item, "primaryGlowAnimated", field, errors);
+
+            if (item.TryGetProperty("primaryColor", out var colorEl) &&
+                (colorEl.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(colorEl.GetString()!, "^#[0-9A-Fa-f]{6}$")))
+                errors.Add(new($"{field}.primaryColor", "primaryColor must be a hex color such as #2563EB."));
+
+            if (item.TryGetProperty("primaryBarColor", out var barColorEl) &&
+                (barColorEl.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(barColorEl.GetString()!, "^#[0-9A-Fa-f]{6}$")))
+                errors.Add(new($"{field}.primaryBarColor", "primaryBarColor must be a hex color such as #FFFFFF."));
+
+            if (item.TryGetProperty("primarySize", out var sizeEl) &&
+                (sizeEl.ValueKind != JsonValueKind.String || sizeEl.GetString() is not ("large" or "xlarge")))
+                errors.Add(new($"{field}.primarySize", "primarySize must be 'large' or 'xlarge'."));
+
+            if (item.TryGetProperty("primaryStyle", out var styleEl) &&
+                (styleEl.ValueKind != JsonValueKind.String || styleEl.GetString() is not ("floating" or "raisedContour")))
+                errors.Add(new($"{field}.primaryStyle", "primaryStyle must be 'floating' or 'raisedContour'."));
+
+            if (item.TryGetProperty("primaryGlowSpeed", out var glowSpeedEl) &&
+                (glowSpeedEl.ValueKind != JsonValueKind.String || glowSpeedEl.GetString() is not ("slow" or "normal" or "fast")))
+                errors.Add(new($"{field}.primaryGlowSpeed", "primaryGlowSpeed must be 'slow', 'normal', or 'fast'."));
         }
+
+        if (primaryCount > 1)
+            errors.Add(new("navigation", "Only one navigation item can be the primary action."));
+    }
+
+    private static void ValidateOptionalBoolean(JsonElement item, string property, string field, List<MobileConfigValidationError> errors)
+    {
+        if (item.TryGetProperty(property, out var value) && value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            errors.Add(new($"{field}.{property}", $"{property} must be a boolean."));
     }
 
     // ── pages ────────────────────────────────────────────────────────────────

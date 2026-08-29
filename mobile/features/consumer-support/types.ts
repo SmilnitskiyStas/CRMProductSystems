@@ -1,0 +1,2 @@
+export interface ConsumerSupportMessage { id: string; ticketId: string; senderConsumerAccountId: string | null; senderUserId: string | null; body: string; isRead: boolean; createdAt: string }
+export interface ConsumerSupportTicket { id: string; tenantId: string; subject: string; status: 'open'|'in_progress'|'resolved'|'closed'|string; createdAt: string; updatedAt: string; messages: ConsumerSupportMessage[] | null }

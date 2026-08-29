@@ -46,6 +46,10 @@ public sealed record ConsumerPromotionDto(
     DateTime? ValidUntil
 );
 
+public sealed record ConsumerPromotionCampaignDto(Guid Id, string Title, string? Eyebrow, string Description,
+    string[] Body, string[] Terms, string? ImageUrl, string BackgroundColor, string AccentColor,
+    DateTime StartsAt, DateTime? EndsAt, int SortOrder, IReadOnlyList<ConsumerPromotionDto> Products);
+
 public sealed record ConsumerCatalogItemDto(
     Guid Id,
     string Name,
@@ -54,5 +58,11 @@ public sealed record ConsumerCatalogItemDto(
     decimal? PriceRetail,
     Guid? CategoryId,
     string? CategoryName,
-    bool IsAvailableAtStore
+    bool IsAvailableAtStore,
+    int SortOrder = 0,
+    bool IsFeatured = false,
+    decimal? MobileDiscountPercent = null,
+    decimal? MobilePrice = null,
+    Guid? CatalogId = null,
+    string? Barcode = null
 );

@@ -17,6 +17,7 @@ import type { ScheduleShift, WorkSchedule } from '@/features/schedules/types';
 import { AT_LEAST_STORE_MANAGER_OR_PROVIDER, hasRole } from '@/lib/roles';
 import { OfflineReadStatus } from '@/features/offline-read-cache/OfflineReadStatus';
 import { useOfflineReadUx } from '@/features/offline-read-cache/ux';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
 
 const UA_DAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const UA_MONTHS = [
@@ -64,6 +65,8 @@ export default function SchedulesScreen() {
   const user = useAuthStore((s) => s.user);
   const offline = useAuthStore((s) => s.hydrationStatus === 'offline_read_ready');
   const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER_OR_PROVIDER);
+  const selectedLocationId = useWorkspaceLocationStore((state) => state.selectedLocationId);
+  const locationId = selectedLocationId === undefined ? user?.locationId : selectedLocationId;
 
   const [activeTab, setActiveTab] = useState<Tab>(offline ? 'all' : 'my');
   const [weekOffset, setWeekOffset] = useState(0);
@@ -78,7 +81,7 @@ export default function SchedulesScreen() {
   const weekLabel = formatWeekLabel(currentMonday);
 
   const myShiftsQuery = useMyShifts(weekFrom, weekTo, !offline);
-  const schedulesQuery = useSchedules(undefined, undefined, !offline);
+  const schedulesQuery = useSchedules(locationId ?? undefined, undefined, !offline);
 
   const shifts: ScheduleShift[] = useMemo(() => {
     const list = myShiftsQuery.data ?? [];
@@ -92,7 +95,7 @@ export default function SchedulesScreen() {
 
   const activeQuery = activeTab === 'my' ? myShiftsQuery : schedulesQuery;
   const { isLoading, isError, refetch } = activeQuery;
-  const schedulesOfflineState = useOfflineReadUx(['schedules', undefined, undefined], {
+  const schedulesOfflineState = useOfflineReadUx(['schedules', locationId ?? undefined, undefined], {
     hasData: schedulesQuery.data !== undefined,
     isFetching: schedulesQuery.isFetching,
     isError: schedulesQuery.isError,

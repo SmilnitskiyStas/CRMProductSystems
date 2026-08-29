@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuthStore } from '@/features/auth/store';
-import { useAutoSelectMembership, useLoyaltyCode, useMemberships } from '@/features/loyalty/hooks/useLoyalty';
+import { useAutoSelectMembership, useLoyaltyCode, useLoyaltyTierProgress, useMemberships } from '@/features/loyalty/hooks/useLoyalty';
 import { Code128Barcode } from '@/features/loyalty/components/Code128Barcode';
 import { MembershipSelector } from '@/features/loyalty/components/MembershipSelector';
 import { useLoyaltyUiStore } from '@/features/loyalty/store';
@@ -36,6 +36,8 @@ export default function WalletScreen() {
   }, []);
 
   const selectedMembership = selectMembershipForTenant(memberships, selectedTenantId);
+  const tier = useLoyaltyTierProgress(selectedMembership?.tenantId ?? null);
+  const refetchTier = tier.refetch;
   const { data: codeData, isLoading, isFetching, isError, error, refetch } = useLoyaltyCode(
     selectedMembership?.tenantId ?? null,
     isFocused && appActive
@@ -51,6 +53,12 @@ export default function WalletScreen() {
       : responseStatus === 403
         ? 'Ви більше не є учасником вибраної мережі. Оновіть список мереж.'
         : 'Не вдалося отримати код. Перевірте інтернет-з’єднання.';
+  const displayedTierName = tier.data?.currentTierName
+    ?? (tier.data?.nextTierName ? 'Ще не присвоєно' : 'Не налаштовано');
+
+  useFocusEffect(useCallback(() => {
+    if (selectedMembership?.tenantId) void refetchTier();
+  }, [selectedMembership?.tenantId, refetchTier]));
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -139,12 +147,21 @@ export default function WalletScreen() {
               <View className="flex-1 items-center">
                 <Text className="text-xs text-gray-500">Рівень</Text>
                 <Text className="mt-1 text-base font-bold text-gray-900">
-                  {selectedMembership.tier ?? 'Не налаштовано'}
+                  {tier.isLoading ? 'Завантаження…' : displayedTierName}
                 </Text>
               </View>
             </View>
           ) : null}
         </View>
+
+        {selectedMembership && tier.data ? (
+          <View className="mx-4 mt-4 rounded-2xl border border-amber-100 bg-white p-5">
+            <View className="flex-row items-center justify-between"><Text className="text-base font-bold text-gray-900">Ваш ранг</Text><View className="rounded-full bg-amber-100 px-3 py-1"><Text className="font-bold text-amber-800">{tier.data.currentTierName ?? 'Ще не присвоєно'}</Text></View></View>
+            <Text className="mt-3 text-sm text-gray-600">RFM-бали: {tier.data.compositeScore.toFixed(2)}</Text>
+            {tier.data.nextTierName ? <Text className="mt-1 text-sm text-gray-600">До рівня «{tier.data.nextTierName}»: {tier.data.scoreToNextTier?.toFixed(2)} бала</Text> : <Text className="mt-1 text-sm font-medium text-green-700">Ви досягли найвищого рівня</Text>}
+            <View className="mt-3 flex-row gap-2"><View className="flex-1 rounded-xl bg-green-50 p-3"><Text className="text-xs text-gray-500">Кешбек</Text><Text className="mt-1 font-bold text-green-700">{tier.data.accrualMultiplier.toFixed(2)}%</Text></View><View className="flex-1 rounded-xl bg-blue-50 p-3"><Text className="text-xs text-gray-500">Знижка</Text><Text className="mt-1 font-bold text-blue-700">{tier.data.discountPercent.toFixed(2)}%</Text></View></View>
+          </View>
+        ) : null}
 
         {selectedMembership ? (
           <TouchableOpacity

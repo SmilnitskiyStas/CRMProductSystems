@@ -49,6 +49,7 @@ import {
   Compass,
   ToggleLeft,
   History,
+  Activity,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -197,6 +198,7 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     items: [
       { href: "/analytics",     label: t("analytics.analytics"),    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
       { href: "/analytics/pos", label: t("analytics.posAnalytics"), icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
+      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
     ],
   },
   {

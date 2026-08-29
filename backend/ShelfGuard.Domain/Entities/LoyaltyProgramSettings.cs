@@ -15,6 +15,8 @@ public sealed class LoyaltyProgramSettings
     public bool IsEnabled { get; set; } = true;
     /// <summary>Percentage of the net (post-redemption) sale amount accrued as bonus, e.g. 3.00 means 3%.</summary>
     public decimal AccrualRatePercent { get; set; } = 3.0m;
+    /// <summary>Number of bonus units equal to one currency unit. 1 = 1 bonus per UAH; 100 = 100 bonuses per UAH.</summary>
+    public int BonusUnitsPerCurrencyUnit { get; set; } = 1;
     /// <summary>Max % of a sale's total that may be paid with bonus balance, e.g. 50.00 means 50%.</summary>
     public decimal RedemptionCapPercent { get; set; } = 50.0m;
     /// <summary>Balance floor a membership must keep after any redemption.</summary>
@@ -28,6 +30,28 @@ public sealed class LoyaltyProgramSettings
     /// (Tenant), never per individual store.
     /// </summary>
     public string CustomerCodeFormat { get; set; } = "barcode";
+    public bool AnnualBonusResetEnabled { get; set; }
+    public int AnnualBonusResetMonth { get; set; } = 1;
+    public int AnnualBonusResetDay { get; set; } = 1;
+    public int AnnualBonusResetHour { get; set; }
+    public string BonusResetTimeZone { get; set; } = "Europe/Kyiv";
+    public bool BonusExclusionsEnabled { get; set; }
+    public bool ExclusionsApplyToAccrual { get; set; } = true;
+    public bool ExclusionsApplyToRedemption { get; set; } = true;
+    public bool ExcludeDiscountedItems { get; set; }
+    public string ExcludedCategoryIdsJson { get; set; } = "[]";
+    public string ExcludedProductIdsJson { get; set; } = "[]";
+    public bool WelcomeRewardEnabled { get; set; }
+    public decimal WelcomeRewardAmount { get; set; }
+    public bool FirstPurchaseRewardEnabled { get; set; }
+    public decimal FirstPurchaseRewardAmount { get; set; }
+    public bool ProfileCompletionRewardEnabled { get; set; }
+    public decimal ProfileCompletionRewardAmount { get; set; }
+    public bool ReviewRewardEnabled { get; set; }
+    public decimal ReviewRewardAmount { get; set; }
+    public bool BonusLifetimeEnabled { get; set; }
+    public int BonusLifetimeDays { get; set; } = 365;
+    public int? LastAnnualBonusResetYear { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Tenant? Tenant { get; init; }

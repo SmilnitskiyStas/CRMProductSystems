@@ -11,11 +11,34 @@ export type CustomerCodeFormat = "qr" | "barcode";
 export interface LoyaltyProgramSettings {
   isEnabled: boolean;
   accrualRatePercent: number;
+  bonusUnitsPerCurrencyUnit: number;
   redemptionCapPercent: number;
   minRedemptionBalance: number;
   codeTtlSeconds: number;
   /** TASK-499/500: "qr" or "barcode". Defaults to "barcode" server-side when never saved. */
   customerCodeFormat: CustomerCodeFormat;
+  annualBonusResetEnabled: boolean;
+  annualBonusResetMonth: number;
+  annualBonusResetDay: number;
+  annualBonusResetHour: number;
+  bonusResetTimeZone: string;
+  bonusExclusionsEnabled: boolean;
+  exclusionsApplyToAccrual: boolean;
+  exclusionsApplyToRedemption: boolean;
+  excludeDiscountedItems: boolean;
+  excludedCategoryIds: string[];
+  excludedProductIds: string[];
+  welcomeRewardEnabled: boolean;
+  welcomeRewardAmount: number;
+  firstPurchaseRewardEnabled: boolean;
+  firstPurchaseRewardAmount: number;
+  profileCompletionRewardEnabled: boolean;
+  profileCompletionRewardAmount: number;
+  reviewRewardEnabled: boolean;
+  reviewRewardAmount: number;
+  bonusLifetimeEnabled: boolean;
+  bonusLifetimeDays: number;
+  lastAnnualBonusResetYear: number | null;
   updatedAt: string | null;
 }
 
@@ -26,10 +49,32 @@ export interface LoyaltyProgramSettings {
 export interface UpdateLoyaltyProgramSettingsRequest {
   isEnabled: boolean;
   accrualRatePercent: number;
+  bonusUnitsPerCurrencyUnit: number;
   redemptionCapPercent: number;
   minRedemptionBalance: number;
   codeTtlSeconds: number;
   customerCodeFormat: CustomerCodeFormat;
+  annualBonusResetEnabled: boolean;
+  annualBonusResetMonth: number;
+  annualBonusResetDay: number;
+  annualBonusResetHour: number;
+  bonusResetTimeZone: string;
+  bonusExclusionsEnabled: boolean;
+  exclusionsApplyToAccrual: boolean;
+  exclusionsApplyToRedemption: boolean;
+  excludeDiscountedItems: boolean;
+  excludedCategoryIds: string[];
+  excludedProductIds: string[];
+  welcomeRewardEnabled: boolean;
+  welcomeRewardAmount: number;
+  firstPurchaseRewardEnabled: boolean;
+  firstPurchaseRewardAmount: number;
+  profileCompletionRewardEnabled: boolean;
+  profileCompletionRewardAmount: number;
+  reviewRewardEnabled: boolean;
+  reviewRewardAmount: number;
+  bonusLifetimeEnabled: boolean;
+  bonusLifetimeDays: number;
 }
 
 // ── Loyalty tier ladder (TASK-615 backend, TASK-620 this admin UI) ─────────
@@ -189,6 +234,8 @@ export interface BannerAnalyticsDto {
   viewCount: number;
   clickCount: number;
   ctr: number;
+  daily: Array<{ date: string; views: number; clicks: number }>;
+  stores: Array<{ storeId: string; storeName: string; views: number; clicks: number; ctr: number }>;
 }
 
 // ── Promo products (third section) ──────────────────────────────────────────
@@ -233,6 +280,32 @@ export interface CreateDiscountRequest {
   priceOriginal?: number | null;
   validFrom?: string | null;
   validUntil?: string | null;
+}
+
+export type PromotionAudienceType = "all" | "loyalty_members" | "loyalty_tiers";
+export type PromotionCampaignStatus = "draft" | "published" | "cancelled";
+export interface PromotionCampaignProduct { productId: string; productName: string | null; imageUrl: string | null; priceRetail: number | null; discountPercent: number; }
+export interface PromotionCampaignDto {
+  id: string; title: string; eyebrow: string | null; description: string; body: string; terms: string;
+  imageUrl: string | null; backgroundColor: string; accentColor: string; audienceType: PromotionAudienceType;
+  audienceTierIds: string[]; startsAt: string; endsAt: string | null; status: PromotionCampaignStatus;
+  sortOrder: number; locationIds: string[]; products: PromotionCampaignProduct[];
+  createdAt: string; updatedAt: string; publishedAt: string | null;
+}
+export interface PromotionCampaignAnalyticsDto {
+  campaignId: string; impressions: number; opens: number; uniqueUsers: number; usedReceipts: number;
+  purchasedUnits: number; revenue: number; openRatePercent: number; conversionPercent: number;
+  daily: Array<{ date: string; impressions: number; opens: number; usedReceipts: number; revenue: number }>;
+  stores: Array<{ storeId: string; storeName: string; impressions: number; opens: number; usedReceipts: number; revenue: number }>;
+  products: Array<{ productId: string; productName: string; purchasedUnits: number; revenue: number }>;
+  audience: Array<{ key: string; label: string; tierId: string | null; reach: number; interactions: number; purchases: number; revenue: number }>;
+  attributionPolicy: { modelVersion: string; confidence: string; name: string; rules: string[]; limitation: string };
+}
+export interface UpsertPromotionCampaignRequest {
+  title: string; eyebrow: string | null; description: string; body: string; terms: string;
+  backgroundColor: string; accentColor: string; audienceType: PromotionAudienceType; audienceTierIds: string[];
+  startsAt: string; endsAt: string | null; sortOrder: number; locationIds: string[];
+  products: Array<{ productId: string; discountPercent: number }>; publishImmediately: boolean;
 }
 
 // ── Theme (TASK-536/537, Retailer Admin "Design" section) ──────────────────
@@ -366,6 +439,15 @@ export interface MobileConfigNavigationItem {
   type: MobileConfigNavigationType;
   label: string;
   icon: string;
+  isPrimary?: boolean;
+  primaryColor?: string;
+  primaryBarColor?: string;
+  primarySize?: "large" | "xlarge";
+  primaryStyle?: "floating" | "raisedContour";
+  primaryRaised?: boolean;
+  primaryGlow?: boolean;
+  primaryGlowAnimated?: boolean;
+  primaryGlowSpeed?: "slow" | "normal" | "fast";
 }
 
 /**

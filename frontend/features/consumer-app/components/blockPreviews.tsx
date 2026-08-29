@@ -754,5 +754,11 @@ const PREVIEW_COMPONENTS: Record<
 export function renderBlockPreview(block: MobileConfigBlockInstance, ctx: PreviewContext) {
   const Component = PREVIEW_COMPONENTS[block.type];
   if (!Component) return null;
-  return <Component key={block.id} block={block} ctx={ctx} />;
+  const visual = block.props._visualEffect && typeof block.props._visualEffect === "object" ? block.props._visualEffect as Record<string, unknown> : {};
+  const border = visual.border === "solid" || visual.border === "gradient" ? visual.border : "none";
+  if (border === "none") return <Component key={block.id} block={block} ctx={ctx} />;
+  const color = typeof visual.color === "string" ? visual.color : ctx.tokens.colors.primary;
+  const secondary = typeof visual.secondaryColor === "string" ? visual.secondaryColor : ctx.tokens.colors.textSecondary;
+  const duration = visual.speed === "slow" ? "5s" : visual.speed === "fast" ? "1.6s" : "3s";
+  return <div key={block.id} className="consumer-running-border" style={{ padding: 2, borderRadius: ctx.tokens.radius.card + 2, backgroundImage: border === "gradient" ? `linear-gradient(90deg, ${color}, ${secondary}, ${color})` : `linear-gradient(90deg, transparent, ${color}, transparent, ${color})`, backgroundSize: "300% 100%", animationDuration: duration }}><div style={{ borderRadius: ctx.tokens.radius.card, overflow: "hidden", background: ctx.tokens.colors.background }}><Component block={block} ctx={ctx} /></div></div>;
 }

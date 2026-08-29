@@ -36,6 +36,15 @@ export interface RetailNavigationItem {
   type: RetailNavigationRoute;
   label: string;
   icon: RetailNavigationIcon;
+  isPrimary?: boolean;
+  primaryColor?: string;
+  primaryBarColor?: string;
+  primarySize?: 'large' | 'xlarge';
+  primaryStyle?: 'floating' | 'raisedContour';
+  primaryRaised?: boolean;
+  primaryGlow?: boolean;
+  primaryGlowAnimated?: boolean;
+  primaryGlowSpeed?: 'slow' | 'normal' | 'fast';
 }
 
 export interface RetailThemeConfig {

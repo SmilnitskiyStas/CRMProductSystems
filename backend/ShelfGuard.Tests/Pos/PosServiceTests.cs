@@ -1114,6 +1114,42 @@ public sealed class PosServiceTests
     }
 
     [Fact]
+    public async Task CreateSale_applies_bonus_units_conversion_to_accrual_and_redemption()
+    {
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
+        pos.Shifts.Add(shift);
+        var product = MakeProduct("CONVERT_POINTS", price: 100m);
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+        var stock = new FakeStockRepo();
+        stock.Batches.Add(MakeBatch(product.Id, qty: 10));
+        var membership = new LoyaltyMembership { TenantId = TenantId, Balance = 1_000m, Status = LoyaltyMembershipStatus.Active };
+        var loyalty = new FakeLoyaltyRepo();
+        loyalty.Memberships.Add(membership);
+        loyalty.Settings.Add(new LoyaltyProgramSettings
+        {
+            TenantId = TenantId,
+            IsEnabled = true,
+            AccrualRatePercent = 10m,
+            RedemptionCapPercent = 100m,
+            BonusUnitsPerCurrencyUnit = 100,
+        });
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog, loyalty: loyalty);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("CONVERT_POINTS", 1)], "Cash", 99m,
+                LoyaltyMembershipId: membership.Id, RedeemAmount: 100m));
+
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(99m, sale.Subtotal);              // 100 bonusів = 1 грн знижки
+        Assert.Equal(100m, sale.LoyaltyRedeemed);     // API та баланс залишаються в бонусних одиницях
+        Assert.Equal(990m, sale.LoyaltyAccrued);      // 10% від 99 грн × 100 бонусів/грн
+        Assert.Equal(1_890m, membership.Balance);
+    }
+
+    [Fact]
     public async Task CreateSale_redemption_over_cap_returns_400()
     {
         var pos = new FakePosRepo();
@@ -1281,7 +1317,7 @@ public sealed class PosServiceTests
     }
 
     [Fact]
-    public async Task CreateSale_tier_accrual_multiplier_scales_bonus()
+    public async Task CreateSale_uses_current_tier_cashback_percent()
     {
         var pos = new FakePosRepo();
         var shift = new PosShift { TenantId = TenantId, StoreId = StoreId };
@@ -1296,7 +1332,7 @@ public sealed class PosServiceTests
 
         var tier = new LoyaltyTierDefinition
         {
-            TenantId = TenantId, Name = "Gold", SortOrder = 1, AccrualMultiplier = 1.5m, DiscountPercent = 0m,
+            TenantId = TenantId, Name = "Gold", SortOrder = 1, AccrualMultiplier = 15m, DiscountPercent = 0m,
         };
         var membership = new LoyaltyMembership
         {
@@ -1314,7 +1350,7 @@ public sealed class PosServiceTests
 
         Assert.Null(error);
         Assert.NotNull(sale);
-        // Base accrual would be 10 (10% of 100); ×1.5 tier multiplier = 15.
+        // The tier owns its cashback directly: 15% of 100 = 15.
         Assert.Equal(15m, sale.LoyaltyAccrued);
         Assert.Equal(15m, membership.Balance);
     }
@@ -1335,7 +1371,7 @@ public sealed class PosServiceTests
 
         var tier = new LoyaltyTierDefinition
         {
-            TenantId = TenantId, Name = "Platinum", SortOrder = 1, AccrualMultiplier = 1.0m, DiscountPercent = 10m,
+            TenantId = TenantId, Name = "Platinum", SortOrder = 1, AccrualMultiplier = 10m, DiscountPercent = 10m,
         };
         var membership = new LoyaltyMembership
         {

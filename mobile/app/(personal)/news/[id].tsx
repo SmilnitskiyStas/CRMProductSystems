@@ -7,7 +7,7 @@ import type { NewsPromotionProduct } from '@/features/loyalty/news';
 import { useMemberships } from '@/features/loyalty/hooks/useLoyalty';
 import { useLoyaltyUiStore } from '@/features/loyalty/store';
 import { useConsumerShoppingStore } from '@/features/shopping/store';
-import { useConsumerBanners } from '@/features/consumer-content/hooks';
+import { useConsumerBanners, useConsumerPromotionCampaigns } from '@/features/consumer-content/hooks';
 import { registerConsumerProduct } from '@/features/shopping/products';
 
 export default function ConsumerNewsDetailsScreen() {
@@ -29,7 +29,8 @@ export default function ConsumerNewsDetailsScreen() {
       ? { tenantId: selectedMembership.tenantId, storeId: selectedMembership.preferredStoreId }
       : null;
   const bannersQuery = useConsumerBanners(contentContext);
-  const news = bannersQuery.data?.find((banner) => banner.id === id);
+  const campaignsQuery = useConsumerPromotionCampaigns(contentContext);
+  const news = [...(bannersQuery.data ?? []), ...(campaignsQuery.data ?? [])].find((banner) => banner.id === id);
   const formatPrice = (value: number | null) =>
     value === null ? '—' : value.toLocaleString('uk-UA', {
       minimumFractionDigits: 2,
@@ -63,7 +64,7 @@ export default function ConsumerNewsDetailsScreen() {
     );
   }
 
-  if (bannersQuery.isLoading) {
+  if (bannersQuery.isLoading || campaignsQuery.isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color="#16a34a" />

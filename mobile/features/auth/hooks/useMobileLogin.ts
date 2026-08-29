@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { mobileLogin } from '../api/mobileAuthApi';
 import { useAuthStore } from '../store';
+import { resolveAuthLandingRoute } from '../postAuthNavigation';
 
 export function useMobileLogin() {
   const router = useRouter();
@@ -48,7 +49,10 @@ export function useMobileLogin() {
         });
       }
 
-      router.replace('/(personal)');
+      router.replace(resolveAuthLandingRoute({
+        workspaceAccessToken: result.workspaceAccessToken,
+        canAccessWorkspace: result.access.canAccessWorkspace,
+      }));
     },
   });
 }

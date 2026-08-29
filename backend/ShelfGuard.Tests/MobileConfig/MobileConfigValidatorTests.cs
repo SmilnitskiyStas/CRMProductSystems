@@ -369,6 +369,46 @@ public sealed class MobileConfigValidatorTests
         Assert.Contains(result.Errors, e => e.Field == "navigation[0].label");
     }
 
+    [Fact]
+    public void Validate_accepts_one_primary_navigation_action()
+    {
+        const string json = """
+        {
+          "schemaVersion": 1,
+          "features": {},
+          "navigation": [
+            { "type": "home", "label": "A", "icon": "home" },
+            { "type": "profile", "label": "B", "icon": "user", "isPrimary": true,
+              "primaryColor": "#2563EB", "primaryBarColor": "#FFFFFF", "primarySize": "xlarge", "primaryStyle": "raisedContour", "primaryRaised": true, "primaryGlow": true,
+              "primaryGlowAnimated": true, "primaryGlowSpeed": "fast" }
+          ],
+          "pages": {}
+        }
+        """;
+
+        Assert.True(_sut.Validate(json).IsValid);
+    }
+
+    [Fact]
+    public void Validate_rejects_more_than_one_primary_navigation_action()
+    {
+        const string json = """
+        {
+          "schemaVersion": 1,
+          "features": {},
+          "navigation": [
+            { "type": "home", "label": "A", "icon": "home", "isPrimary": true },
+            { "type": "profile", "label": "B", "icon": "user", "isPrimary": true }
+          ],
+          "pages": {}
+        }
+        """;
+
+        var result = _sut.Validate(json);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "navigation" && e.Message.Contains("Only one"));
+    }
+
     // ── pages ────────────────────────────────────────────────────────────────
 
     [Fact]
