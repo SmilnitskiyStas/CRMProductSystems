@@ -180,20 +180,12 @@ public sealed class MobileConfigPublishConcurrencyIntegrationTests : IAsyncLifet
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private AppDbContext NewContext()
-    {
-        var dataSource = new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(dataSource)
-            // Same fix as the sibling Pos/Loyalty concurrency integration test files — this file
-            // builds its own distinct NpgsqlDataSource/DbContextOptions, and enough such files
-            // exist in this test assembly to trip EF Core's
-            // ManyServiceProvidersCreatedWarning-as-error past its cumulative threshold when the
-            // full suite runs together. See TestDbContextOptionsExtensions.
-            .IgnoreManyServiceProvidersWarning()
-            .Options;
-        return new AppDbContext(options);
-    }
+    // KI-035: this used to build (and never dispose) a brand-new NpgsqlDataSource on EVERY call —
+    // each one stranding a physical Postgres backend for the rest of the run. Now one shared,
+    // process-wide pool (see TestPostgres). The two contexts this test races against each other
+    // still get two DISTINCT physical connections: a pooled connection cannot be handed to a
+    // second context while the first still holds it open, so the rendezvous is unaffected.
+    private AppDbContext NewContext() => TestPostgres.NewContext(_connectionString);
 
     private static MobileConfigPublishService BuildService(
         AppDbContext db, Func<IMobileConfigurationRepository, IMobileConfigurationRepository> wrapRepo) =>

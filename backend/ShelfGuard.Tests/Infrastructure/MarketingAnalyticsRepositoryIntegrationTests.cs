@@ -466,26 +466,12 @@ public sealed class MarketingAnalyticsRepositoryIntegrationTests : IAsyncLifetim
         Assert.Equal(1, count);
     }
 
-    // STATIC and shared across every test method (xUnit creates one class instance per [Fact],
-    // so a per-instance cache still builds one NpgsqlDataSource per test — 12 tests here plus
-    // every other integration-test class's own instances in the same run tripped EF Core's
-    // ManyServiceProvidersCreatedWarning-as-error past its cumulative ~20-instance threshold
-    // for the whole process). NpgsqlDataSource is explicitly designed to be a thread-safe,
-    // poolable, shareable connection factory (Npgsql 7+) — safe to reuse across every test here.
-    // CI FIX (2026-08-19): this class was the ONE Postgres-integration test file in the assembly
-    // missing IgnoreManyServiceProvidersWarning() — every sibling file already downgrades this
-    // diagnostic to a log line (see TestDbContextOptionsExtensions), so this class's own
-    // never-before-seen DbContextOptions was the one left to actually throw once the process-wide
-    // threshold was crossed. See
-    // .claude/logs/tasks/ci-fix_2026-08-19_ef-many-service-providers_backend-developer.md.
-    private static DbContextOptions<AppDbContext>? _options;
-
-    private AppDbContext NewContext()
-    {
-        _options ??= new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build())
-            .IgnoreManyServiceProvidersWarning()
-            .Options;
-        return new AppDbContext(_options);
-    }
+    // KI-035: the ONE process-wide pooled NpgsqlDataSource/DbContextOptions, shared with every
+    // other Postgres-backed integration-test class in this assembly (see TestPostgres). This file
+    // already cached its data source statically rather than per-[Fact], so it was the mildest of
+    // the leakers — but it still never disposed it, and sharing one pool assembly-wide is what
+    // actually keeps the total backend count bounded. Sharing one DbContextOptions also
+    // structurally removes the EF ManyServiceProvidersCreatedWarning pressure that this file's
+    // previous comment (2026-08-19 CI fix) was about.
+    private AppDbContext NewContext() => TestPostgres.NewContext(_connectionString);
 }

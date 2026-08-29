@@ -229,26 +229,12 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private AppDbContext NewContext()
-    {
-        var dataSource = new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(dataSource)
-            // TASK-417: this file builds a fresh NpgsqlDataSource/DbContextOptions per call, and
-            // the test assembly now has several such raw-Postgres integration-test files
-            // (LoyaltyRepositoryIntegrationTests, PosConcurrencySalesIntegrationTests,
-            // LoyaltyJoinRlsIntegrationTests) whose combined distinct instances trip EF Core's
-            // ManyServiceProvidersCreatedWarning-as-error past its cumulative ~20-instance
-            // process-wide threshold when the full suite runs together — this file was the one
-            // observed failing once TASK-417 added another such file. Purely an EF internal
-            // diagnostic about provider-cache growth, not a correctness signal for anything this
-            // file actually asserts (same fix LoyaltyRepositoryIntegrationTests.NewContext
-            // already applies to itself for the identical reason). See
-            // TestDbContextOptionsExtensions for the centralized helper.
-            .IgnoreManyServiceProvidersWarning()
-            .Options;
-        return new AppDbContext(options);
-    }
+    // KI-035: this used to build (and never dispose) a brand-new NpgsqlDataSource on EVERY call —
+    // each one stranding a physical Postgres backend for the rest of the run. Now one shared,
+    // process-wide pool (see TestPostgres). The two redemption contexts this test races against
+    // each other still get two DISTINCT physical connections: a pooled connection cannot be handed
+    // to a second context while the first still holds it open, so the rendezvous is unaffected.
+    private AppDbContext NewContext() => TestPostgres.NewContext(_connectionString);
 
     private static PosService BuildService(AppDbContext db, Func<ILoyaltyRepository, ILoyaltyRepository> wrapLoyalty) =>
         new(

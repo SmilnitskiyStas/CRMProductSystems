@@ -25,7 +25,6 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
     private readonly ITestOutputHelper _output;
     private string _connectionString = DefaultConnectionString;
     private bool _dbAvailable;
-    private DbContextOptions<AppDbContext>? _options;
 
     private Guid _tenantId;
     private Guid _storeId;
@@ -276,12 +275,7 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
         Assert.Equal(_matchesByNameOnly, items.Single().Id);
     }
 
-    private AppDbContext NewContext()
-    {
-        _options ??= new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build())
-            .IgnoreManyServiceProvidersWarning()
-            .Options;
-        return new AppDbContext(_options);
-    }
+    // KI-035: one shared, process-wide pooled data source instead of a per-test-instance
+    // NpgsqlDataSource that was never disposed. See TestPostgres.
+    private AppDbContext NewContext() => TestPostgres.NewContext(_connectionString);
 }

@@ -1,37 +1,72 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-08-26
+**Updated:** 2026-08-29
 
 ## Active Issues
 
-### KI-035: Postgres connection-pool exhaustion (`53300: too many clients already`) in `ShelfGuard.Tests` integration suite — scattered failures across unrelated feature test classes
-Severity: medium (blocks CI's Test step / delays deploy when it hits, but deploy is correctly
-skipped rather than shipping bad code — the flakiness itself doesn't corrupt data)
-Status: open — found 2026-08-26 while pushing the `AddConfigurableLoyaltyTierProgression` migration.
-Root cause not yet found.
+### KI-035: Postgres connection-pool exhaustion (`53300: too many clients already`) in `ShelfGuard.Tests` integration suite — scattered failures across unrelated feature test classes ✅ resolved (2026-08-29, TASK-639)
+Severity: medium (blocked CI's Test step / delayed deploy when it hit, but deploy was correctly
+skipped rather than shipping bad code — the flakiness itself never corrupted data)
+Status: ✅ resolved (2026-08-29, TASK-639) — found 2026-08-26 while pushing the
+`AddConfigurableLoyaltyTierProgression` migration; root-caused and fixed in a dedicated
+investigation.
 Description: `backend-ci`'s Test step failed with `Npgsql.PostgresException: 53300: sorry, too many
-clients already` across ~17-18 integration test classes spanning Loyalty, PriceSegments,
+clients already` across ~14-19 integration test classes spanning Loyalty, PriceSegments,
 AudienceBuilder, MobileConfig, SupplierAgreement — no common feature, so not caused by any one
-change. Reproduced the exact CI environment locally (fresh empty `postgres:16-alpine` container,
-port 5435, same `crm`/`crm_dev_password` creds CI uses, migrations applied via the real `dotnet ef`
-tool) and got the same class of failures — confirms this is pre-existing test-infrastructure
-flakiness, not a migration or feature-correctness issue. Already ruled out: reducing/disabling
-xUnit test-collection parallelism does not fix it — an `xunit.runner.json` with
-`parallelizeTestCollections: false` (fully serialized) still produced ~39-41 failures; the change
-was reverted, do not reintroduce it. This corrects at least 2 prior task logs
-(`.claude/logs/tasks/630_...md`, `632_...md`) that called this "known flaky pool exhaustion" and
-attributed it to scheduling/parallelism without finding the actual cause — it is not a parallelism
-artifact.
-Resolution: needs a dedicated investigation into a likely genuine Npgsql connection/pool leak in one
-or more integration test classes' `IAsyncLifetime` setup/teardown under
-`backend/ShelfGuard.Tests/Infrastructure/*IntegrationTests.cs`/`*RlsIntegrationTests.cs` — audit
-every `DisposeAsync()` for a missing `NpgsqlDataSource`/connection disposal that accumulates across
-the run. Not urgent to fix immediately: the workaround (confirm your own feature's tests pass in
-isolation via `dotnet test --filter "FullyQualifiedName~YourFeature"`, then retrigger CI with an
-empty commit if the full-suite failure shows scattered `53300` errors across unrelated features) is
-cheap and CI already correctly skips deploy on Test failure — but it will keep causing this same
-confusion/misdiagnosis until someone finds the actual leak.
+change. Reproduced exactly against a fresh empty `postgres:16-alpine` container with all migrations
+applied by the real `dotnet ef` tool, confirming pre-existing test-infrastructure flakiness rather
+than a migration or feature-correctness issue. Ruled out early and correctly: xUnit
+test-collection parallelism. An `xunit.runner.json` with `parallelizeTestCollections: false` (fully
+serialized) produced ~39-41 failures — worse and 2× slower; that change was reverted and must not be
+reintroduced. This corrected at least 2 prior task logs (`.claude/logs/tasks/630_...md`,
+`632_...md`) that called it "known flaky pool exhaustion" and blamed scheduling.
+Root cause: a genuine, cumulative `NpgsqlDataSource` leak in the test fixtures — not a scheduling
+artifact, which is exactly why serialization made it worse instead of better. Every
+`NpgsqlDataSource` owns its **own** connection pool, and that pool's physical Postgres backends stay
+open until the data source itself is disposed (or until the 300 s default `ConnectionIdleLifetime`
+elapses — longer than a whole suite run). Fifteen integration-test classes built
+`new NpgsqlDataSourceBuilder(cs).EnableDynamicJson().Build()` and **never disposed it**:
+- 10 cached it in an *instance* field (`private DbContextOptions<AppDbContext>? _options` +
+  `_options ??= ...`). xUnit constructs a fresh class instance **per `[Fact]`**, so this was one
+  undisposed pool per TEST, not per class — the comments in those files claiming a per-class cache
+  were wrong.
+- 1 (`MarketingAnalyticsRepositoryIntegrationTests`) cached it in a `static` field — one pool, still
+  never disposed.
+- 4 (`LoyaltyRepositoryIntegrationTests`, `MobileConfigPublishConcurrencyIntegrationTests`,
+  `Pos/PosConcurrencySalesIntegrationTests`, `Pos/LoyaltyConcurrencySalesIntegrationTests`) rebuilt
+  a brand-new data source inside `NewContext()` on **every call**.
+Summed over a full run that is ~100 stranded backends against a server whose `max_connections` is
+100 — hence failures scattered across whichever unrelated tests happened to run once the budget ran
+out, and hence total immunity to how many tests run concurrently. The 10 RLS classes tagged
+`[Collection("TENANT_ISOLATION_TESTS")]` were **not** part of the leak: they store `_dataSource` in
+a field and dispose it in `DisposeAsync()`, and their `InitializeAsync` cannot throw between
+building and assigning it. They were victims, not causes — several of the observed failures were in
+those classes.
+Fix: `backend/ShelfGuard.Tests/Infrastructure/TestPostgres.cs` (new) — ONE process-wide pooled
+`NpgsqlDataSource` per distinct connection string (`Lazy<T>` with
+`LazyThreadSafetyMode.ExecutionAndPublication`, so a race cannot build and then silently discard a
+second pool), `MaxPoolSize = 40`, `EnableDynamicJson()`, disposed on `ProcessExit`; plus the single
+shared `DbContextOptions<AppDbContext>` built on it and a `NewContext(connectionString)` helper. All
+15 leaking classes now have a one-line `private AppDbContext NewContext() =>
+TestPostgres.NewContext(_connectionString);` and their `_options` fields are gone. A pool is
+designed to be shared: it grows only to actual concurrent demand and recycles connections instead of
+stranding one per test. Sharing one `DbContextOptions` also means the assembly now creates exactly
+one EF internal service provider for these tests, structurally removing the cumulative
+`ManyServiceProvidersCreatedWarning` pressure that `TestDbContextOptionsExtensions
+.IgnoreManyServiceProvidersWarning()` had been papering over since 2026-08-19 (the helper is kept as
+a guard for the RLS classes that still build their own data sources). The RLS classes were left
+untouched: their private per-test pool is deliberate `SET ROLE` / session-GUC isolation.
+Verification: `dotnet build` clean (same single pre-existing CS8602 warning in
+`Marketplace/MarketplaceServiceTests.cs`, no new ones). Baseline on a fresh `postgres:16-alpine`
+container with migrations applied by `dotnet ef database update`: **1999 tests, 1983 passed, 16
+failed, 32 `53300` occurrences** (PriceSegments, AudienceBuilder ×5, MobileConfigDraftService ×2,
+MobileConfigPublishedRead ×4, MobileTheme ×2, SupplierAgreementMarkSigned ×2). After the fix, three
+consecutive runs, each against a **newly created and freshly migrated** container:
+**1999/1999 passed, 0 failed, 0 `53300`** in all three. Test count unchanged (1999 → 1999), no
+soft-skips (`grep "DB not available"` → 0), and the previously-failing integration tests show real
+execution times (e.g. `PosConcurrencySalesIntegrationTests` 2 s). Peak concurrent backends sampled
+during a run: **24** (was pinned at the 100 ceiling before).
 
 ### KI-034: `/customer-support?customerId=` deep link filters client-side over a widened page instead of a true backend filter
 Severity: low (functionally correct today at realistic ticket volumes — genuinely capped by the

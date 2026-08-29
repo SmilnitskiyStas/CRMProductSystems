@@ -157,21 +157,8 @@ public sealed class LoyaltyRepositoryIntegrationTests : IAsyncLifetime
         Assert.Null(persisted.LastRedeemedTimestep);
     }
 
-    private AppDbContext NewContext()
-    {
-        var dataSource = new NpgsqlDataSourceBuilder(_connectionString).EnableDynamicJson().Build();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(dataSource)
-            // TASK-406: this file builds a fresh NpgsqlDataSource per call, and the test
-            // assembly now has many raw-Postgres integration-test files whose combined distinct
-            // DbContextOptions instances trip EF Core's ManyServiceProvidersCreatedWarning-as-
-            // error past its cumulative ~20-instance process-wide threshold when the full suite
-            // runs together. Purely an EF internal diagnostic about provider-cache growth, not a
-            // correctness signal for what this test actually verifies — downgraded to a log line
-            // (test infra hygiene, zero behavior change to TryClaimTimestepAsync's own
-            // assertions). See TestDbContextOptionsExtensions for why this is centralized.
-            .IgnoreManyServiceProvidersWarning()
-            .Options;
-        return new AppDbContext(options);
-    }
+    // KI-035: this used to build (and never dispose) a brand-new NpgsqlDataSource on EVERY call —
+    // each one stranding a physical Postgres backend for the rest of the run. Now one shared,
+    // process-wide pool (see TestPostgres).
+    private AppDbContext NewContext() => TestPostgres.NewContext(_connectionString);
 }
