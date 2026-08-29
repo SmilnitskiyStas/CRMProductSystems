@@ -291,6 +291,40 @@ Agent({
 })
 ```
 
+### Model tiers (which model to spawn per task)
+
+Every `Agent()` call should pass an explicit `model` matching the task's actual difficulty —
+don't let every spawned agent silently default to inheriting the main session's model
+regardless of how simple or how hard the work is. Three tiers, mapped to Claude Code's model
+aliases:
+
+| Tier | `model` value | Use for |
+|---|---|---|
+| `cheap` | `haiku` | Routing/triage, file discovery, simple research, summarization, docs sync, mechanical find-and-replace edits, basic classification |
+| `standard` | `sonnet` (default — omit `model` to get this) | Ordinary coding: frontend, backend, DB changes, normal debugging, tests, normal review, UI implementation |
+| `reasoning` | `opus` | Architecture, hard debugging, security-sensitive design, destructive migrations, concurrency, cross-system design, hard ambiguity |
+
+Head rule: use the cheapest tier that can reliably complete the task. Escalate (never
+downgrade below `standard` for real implementation work) when the task carries a risk flag —
+security, financial flow, destructive migration, concurrency. A manual instruction from the
+user ("use reasoning tier", "keep it cheap", "don't use Opus") overrides the heuristic unless
+it breaks a safety or project rule.
+
+Example — a cheap-tier Explore-style lookup delegated to a role agent:
+```
+Agent({
+  subagent_type: "general-purpose",
+  model: "haiku",
+  description: "docs-writer: sync glossary term",
+  prompt: `Read .claude/agents/documentation-writer.md first, then: <task>`
+})
+```
+
+(Note: this project's `.agent-system/`-based agent-system-v2 migration, on branch
+`chore/agent-system-v2`, has its own richer version of this — per-agent `default_model_tier` +
+risk-escalation rules resolved via `.agent-system/adapters/*/model-map.yaml`. Until that branch
+is merged, apply the table above manually per spawn.)
+
 ### Agent → Task mapping (MANDATORY)
 
 | Task type | Agent to spawn |
