@@ -11,6 +11,7 @@ import { Eye, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { AgreementStatusBadge } from "@/features/marketplace/components/CooperationBadges";
 import type { CooperationAgreementDto, CooperationStatus } from "@/features/marketplace/types";
 import { supplierCabinetApi } from "../api/supplier-cabinet-api";
@@ -25,25 +26,6 @@ import {
 } from "../hooks/useCabinetCooperation";
 
 type FilterTab = "all" | CooperationStatus;
-
-const headerCellStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  textAlign: "left",
-  borderBottom: "1px solid #1F2937",
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "12px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  borderBottom: "1px solid #1A2235",
-  verticalAlign: "top",
-};
 
 function formatDate(iso: string, locale: string): string {
   return new Date(iso).toLocaleString(locale, {
@@ -217,6 +199,69 @@ export function CooperationRequestsTab() {
     transition: "color 0.15s",
   });
 
+  const columns: TableColumn<CooperationAgreementDto>[] = [
+    {
+      key: "client",
+      header: t("headerClient"),
+      align: "left",
+      cellStyle: { fontWeight: 600, whiteSpace: "nowrap" },
+      render: (a) => (
+        <>
+          {a.clientName}
+          {a.contractNumber && (
+            <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 400, marginTop: 4 }}>
+              {a.contractNumber}
+              {a.vchasnoDocumentId && t("vchasnoSuffix")}
+            </div>
+          )}
+          {a.signingMethod && (
+            <div style={{ color: "#60A5FA", fontSize: 11, fontWeight: 400, marginTop: 4 }}>
+              {t("clientChoseLabel")}{" "}
+              {a.signingMethod === "vchasno"
+                ? t("vchasnoChoice", { email: a.signingEmail ?? "" })
+                : t("physicalChoice")}
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "message",
+      header: t("headerMessage"),
+      cellStyle: { color: "#9CA3AF", maxWidth: 320 },
+      render: (a) => (
+        <>
+          {a.requestMessage ?? "—"}
+          {a.rejectionReason && (
+            <div style={{ color: "#F87171", fontSize: 11, marginTop: 4 }}>
+              {t("reasonPrefixLabel", { reason: a.rejectionReason })}
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "requestDate",
+      header: t("headerRequestDate"),
+      cellStyle: { color: "#9CA3AF", whiteSpace: "nowrap" },
+      render: (a) => formatDate(a.requestedAt, intlLocale),
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (a) => <AgreementStatusBadge status={a.status} />,
+    },
+    {
+      key: "actions",
+      header: t("headerActions"),
+      render: (a) => (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+          {actionsFor(a)}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <div
@@ -234,75 +279,13 @@ export function CooperationRequestsTab() {
         ))}
       </div>
 
-      {isLoading && (
-        <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>
-      )}
-
-      {!isLoading && requests.length === 0 && (
-        <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
-          {filter === "all"
-            ? t("emptyAll")
-            : t("emptyFiltered")}
-        </div>
-      )}
-
-      {!isLoading && requests.length > 0 && (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={headerCellStyle}>{t("headerClient")}</th>
-                <th style={headerCellStyle}>{t("headerMessage")}</th>
-                <th style={headerCellStyle}>{t("headerRequestDate")}</th>
-                <th style={headerCellStyle}>{t("headerStatus")}</th>
-                <th style={headerCellStyle}>{t("headerActions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((a) => (
-                <tr key={a.id}>
-                  <td style={{ ...cellStyle, fontWeight: 600, whiteSpace: "nowrap" }}>
-                    {a.clientName}
-                    {a.contractNumber && (
-                      <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 400, marginTop: 4 }}>
-                        {a.contractNumber}
-                        {a.vchasnoDocumentId && t("vchasnoSuffix")}
-                      </div>
-                    )}
-                    {a.signingMethod && (
-                      <div style={{ color: "#60A5FA", fontSize: 11, fontWeight: 400, marginTop: 4 }}>
-                        {t("clientChoseLabel")}{" "}
-                        {a.signingMethod === "vchasno"
-                          ? t("vchasnoChoice", { email: a.signingEmail ?? "" })
-                          : t("physicalChoice")}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ ...cellStyle, color: "#9CA3AF", maxWidth: 320 }}>
-                    {a.requestMessage ?? "—"}
-                    {a.rejectionReason && (
-                      <div style={{ color: "#F87171", fontSize: 11, marginTop: 4 }}>
-                        {t("reasonPrefixLabel", { reason: a.rejectionReason })}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                    {formatDate(a.requestedAt, intlLocale)}
-                  </td>
-                  <td style={cellStyle}>
-                    <AgreementStatusBadge status={a.status} />
-                  </td>
-                  <td style={cellStyle}>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {actionsFor(a)}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Table
+        columns={columns}
+        rows={requests}
+        rowKey={(a) => a.id}
+        isLoading={isLoading}
+        emptyMessage={filter === "all" ? t("emptyAll") : t("emptyFiltered")}
+      />
 
       {rejectTarget && (
         <ReasonModal

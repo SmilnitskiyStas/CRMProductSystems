@@ -11,34 +11,13 @@ import {
   useCancelReceipt,
 } from "@/features/receipts/hooks/useReceipts";
 import { ReceiptStatusBadge } from "@/features/receipts/components/ReceiptStatusBadge";
-import type { ReceiptStatus, UpdateItemPayload } from "@/features/receipts/types";
+import type { ReceiptStatus, UpdateItemPayload, ReceiptItemDto } from "@/features/receipts/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-
-const thStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  textAlign: "center",
-  borderBottom: "1px solid #374151",
-  borderRight: "1px solid #374151",
-  background: "#0A0F1A",
-  whiteSpace: "nowrap",
-};
-
-const tdBase: React.CSSProperties = {
-  padding: "10px 14px",
-  borderBottom: "1px solid #1F2937",
-  borderRight: "1px solid #1F2937",
-  textAlign: "center",
-  verticalAlign: "middle",
-};
 
 const inputStyle: React.CSSProperties = {
   background: "#111827",
@@ -213,6 +192,162 @@ export default function ReceiptDetailPage() {
     router.push("/receipts");
   }
 
+  const itemColumns: TableColumn<ReceiptItemDto>[] = [
+    {
+      key: "product",
+      header: tDetail("headers.product"),
+      width: 220,
+      render: (item) => (
+        <>
+          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, lineHeight: 1.4 }}>
+            {item.productName}
+          </div>
+          {item.discrepancyNotes && (
+            <div style={{ color: "#FBBF24", fontSize: 11, marginTop: 2 }}>
+              ⚠ {item.discrepancyNotes}
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "barcode",
+      header: tDetail("headers.barcode"),
+      cellStyle: { fontFamily: "monospace", fontSize: 11, color: "#4B5563" },
+      render: (item) => item.productBarcode ?? "—",
+    },
+    {
+      key: "ordered",
+      header: tDetail("headers.ordered"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (item) => item.quantityOrdered,
+    },
+    {
+      key: "received",
+      header: tDetail("headers.received"),
+      width: 110,
+      render: (item) => {
+        const edit = getEdit(item.id);
+        const qtyReceived =
+          edit.quantityReceived !== undefined
+            ? parseFloat(edit.quantityReceived)
+            : item.quantityReceived;
+        const hasDiscrepancy = qtyReceived != null && qtyReceived < item.quantityOrdered;
+        return isEditable && !item.isProcessed ? (
+          <input
+            type="number"
+            min="0"
+            step="any"
+            placeholder={String(item.quantityOrdered)}
+            value={edit.quantityReceived ?? ""}
+            onChange={(e) => updateEdit(item.id, { quantityReceived: e.target.value })}
+            style={inputStyle}
+          />
+        ) : (
+          <span
+            style={{
+              fontFamily: "monospace",
+              color: hasDiscrepancy ? "#FBBF24" : "#4ADE80",
+              fontWeight: 600,
+            }}
+          >
+            {item.quantityReceived ?? item.quantityOrdered}
+          </span>
+        );
+      },
+    },
+    {
+      key: "expiry",
+      header: tDetail("headers.expiry"),
+      width: 140,
+      render: (item) => {
+        const edit = getEdit(item.id);
+        return isEditable && !item.isProcessed ? (
+          <input
+            type="date"
+            value={edit.expiryDate ?? formatDate(item.expiryDate)}
+            onChange={(e) => updateEdit(item.id, { expiryDate: e.target.value })}
+            style={inputStyle}
+          />
+        ) : (
+          <span style={{ color: "#9CA3AF", fontSize: 13 }}>
+            {displayDate(item.expiryDate, intlLocale)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "batch",
+      header: tDetail("headers.batch"),
+      width: 130,
+      render: (item) => {
+        const edit = getEdit(item.id);
+        return isEditable && !item.isProcessed ? (
+          <input
+            type="text"
+            placeholder={tDetail("batchNumberPlaceholder")}
+            value={edit.batchNumber ?? (item.batchNumber ?? "")}
+            onChange={(e) => updateEdit(item.id, { batchNumber: e.target.value })}
+            style={inputStyle}
+          />
+        ) : (
+          <span style={{ color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" }}>
+            {item.batchNumber ?? "—"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "price",
+      header: tDetail("headers.price"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (item) =>
+        item.pricePurchase != null ? `${item.pricePurchase.toLocaleString(intlLocale)} ₴` : "—",
+    },
+    {
+      key: "status",
+      header: tDetail("headers.status"),
+      width: 90,
+      render: (item) => {
+        const edit = getEdit(item.id);
+        return isEditable && !item.isProcessed ? (
+          <button
+            onClick={() => updateEdit(item.id, { confirmed: true })}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              background: "#1a3a2e",
+              border: "1px solid #065F46",
+              borderRadius: 6,
+              color: "#4ADE80",
+              fontSize: 11,
+              fontWeight: 600,
+              padding: "5px 10px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Check size={11} /> {tDetail("confirmItem")}
+          </button>
+        ) : (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              color: "#4ADE80",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            <CheckCircle2 size={14} /> {tDetail("done")}
+          </span>
+        );
+      },
+    },
+  ];
+
   return (
     <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -352,233 +487,16 @@ export default function ReceiptDetailPage() {
       )}
 
       {/* ── Items table ────────────────────────────────────────────────── */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "hidden",
+      <Table
+        columns={itemColumns}
+        rows={receipt.items}
+        rowKey={(item) => item.id}
+        minWidth={700}
+        rowStyle={(item) => {
+          const processed = getEdit(item.id).confirmed || item.isProcessed;
+          return { background: processed ? "rgba(5,150,105,0.04)" : "transparent" };
         }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
-          <thead>
-            <tr>
-              <th style={{ ...thStyle, textAlign: "left", minWidth: 220 }}>{tDetail("headers.product")}</th>
-              <th style={thStyle}>{tDetail("headers.barcode")}</th>
-              <th style={thStyle}>{tDetail("headers.ordered")}</th>
-              <th style={thStyle}>{tDetail("headers.received")}</th>
-              <th style={thStyle}>{tDetail("headers.expiry")}</th>
-              <th style={thStyle}>{tDetail("headers.batch")}</th>
-              <th style={thStyle}>{tDetail("headers.price")}</th>
-              <th style={{ ...thStyle, borderRight: "none" }}>{tDetail("headers.status")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {receipt.items.map((item) => {
-              const edit = getEdit(item.id);
-              const processed = edit.confirmed || item.isProcessed;
-              const qtyReceived =
-                edit.quantityReceived !== undefined
-                  ? parseFloat(edit.quantityReceived)
-                  : item.quantityReceived;
-              const hasDiscrepancy =
-                qtyReceived != null && qtyReceived < item.quantityOrdered;
-
-              return (
-                <tr
-                  key={item.id}
-                  style={{
-                    background: processed
-                      ? "rgba(5,150,105,0.04)"
-                      : "transparent",
-                    transition: "background 0.1s",
-                  }}
-                >
-                  {/* Товар */}
-                  <td
-                    style={{
-                      ...tdBase,
-                      textAlign: "left",
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: "#E8EDF5",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {item.productName}
-                    </div>
-                    {item.discrepancyNotes && (
-                      <div
-                        style={{
-                          color: "#FBBF24",
-                          fontSize: 11,
-                          marginTop: 2,
-                        }}
-                      >
-                        ⚠ {item.discrepancyNotes}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Штрихкод */}
-                  <td
-                    style={{
-                      ...tdBase,
-                      fontFamily: "monospace",
-                      fontSize: 11,
-                      color: "#4B5563",
-                    }}
-                  >
-                    {item.productBarcode ?? "—"}
-                  </td>
-
-                  {/* Замовлено */}
-                  <td
-                    style={{
-                      ...tdBase,
-                      fontFamily: "monospace",
-                      color: "#9CA3AF",
-                    }}
-                  >
-                    {item.quantityOrdered}
-                  </td>
-
-                  {/* Отримано */}
-                  <td style={{ ...tdBase, width: 110 }}>
-                    {isEditable && !item.isProcessed ? (
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder={String(item.quantityOrdered)}
-                        value={edit.quantityReceived ?? ""}
-                        onChange={(e) =>
-                          updateEdit(item.id, { quantityReceived: e.target.value })
-                        }
-                        style={inputStyle}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          fontFamily: "monospace",
-                          color: hasDiscrepancy ? "#FBBF24" : "#4ADE80",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {item.quantityReceived ?? item.quantityOrdered}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Термін */}
-                  <td style={{ ...tdBase, width: 140 }}>
-                    {isEditable && !item.isProcessed ? (
-                      <input
-                        type="date"
-                        value={edit.expiryDate ?? formatDate(item.expiryDate)}
-                        onChange={(e) =>
-                          updateEdit(item.id, { expiryDate: e.target.value })
-                        }
-                        style={inputStyle}
-                      />
-                    ) : (
-                      <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                        {displayDate(item.expiryDate, intlLocale)}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Партія */}
-                  <td style={{ ...tdBase, width: 130 }}>
-                    {isEditable && !item.isProcessed ? (
-                      <input
-                        type="text"
-                        placeholder={tDetail("batchNumberPlaceholder")}
-                        value={edit.batchNumber ?? (item.batchNumber ?? "")}
-                        onChange={(e) =>
-                          updateEdit(item.id, { batchNumber: e.target.value })
-                        }
-                        style={inputStyle}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          color: "#9CA3AF",
-                          fontSize: 12,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {item.batchNumber ?? "—"}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Ціна */}
-                  <td
-                    style={{
-                      ...tdBase,
-                      fontFamily: "monospace",
-                      color: "#9CA3AF",
-                    }}
-                  >
-                    {item.pricePurchase != null
-                      ? `${item.pricePurchase.toLocaleString(intlLocale)} ₴`
-                      : "—"}
-                  </td>
-
-                  {/* Статус / Дія */}
-                  <td
-                    style={{
-                      ...tdBase,
-                      borderRight: "none",
-                      width: 90,
-                    }}
-                  >
-                    {isEditable && !item.isProcessed ? (
-                      <button
-                        onClick={() => updateEdit(item.id, { confirmed: true })}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          background: "#1a3a2e",
-                          border: "1px solid #065F46",
-                          borderRadius: 6,
-                          color: "#4ADE80",
-                          fontSize: 11,
-                          fontWeight: 600,
-                          padding: "5px 10px",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <Check size={11} /> {tDetail("confirmItem")}
-                      </button>
-                    ) : (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          color: "#4ADE80",
-                          fontSize: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        <CheckCircle2 size={14} /> {tDetail("done")}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      />
 
       {/* ── Notes ──────────────────────────────────────────────────────── */}
       {receipt.notes && (

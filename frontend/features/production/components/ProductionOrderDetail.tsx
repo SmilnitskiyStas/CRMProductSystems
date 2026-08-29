@@ -12,6 +12,8 @@ import {
 } from "../hooks/useProduction";
 import { OrderStatusBadge } from "./ProductionOrderTable";
 import { ApiError } from "@/lib/api";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import type { ProductionConsumptionDto } from "../types";
 
 interface Props {
   id: string;
@@ -126,6 +128,32 @@ export function ProductionOrderDetail({ id }: Props) {
 
   const anyPending =
     startOrder.isPending || completeOrder.isPending || cancelOrder.isPending;
+
+  const consumptionColumns: TableColumn<ProductionConsumptionDto>[] = [
+    {
+      key: "item",
+      header: t("consumptionsHeaderItem"),
+      cellStyle: { color: "#E8EDF5" },
+      render: (c) => c.itemName,
+    },
+    {
+      key: "qty",
+      header: t("consumptionsHeaderQty"),
+      render: (c) => c.qtyConsumed,
+    },
+    {
+      key: "batch",
+      header: t("consumptionsHeaderBatch"),
+      cellStyle: { fontFamily: "monospace", fontSize: 12, color: "#6B7280" },
+      render: (c) => c.batchNumber ?? "—",
+    },
+    {
+      key: "consumedAt",
+      header: t("consumptionsHeaderConsumedAt"),
+      cellStyle: { color: "#6B7280", fontSize: 12 },
+      render: (c) => formatDateTime(c.consumedAt, intlLocale),
+    },
+  ];
 
   return (
     <div>
@@ -332,74 +360,20 @@ export function ProductionOrderDetail({ id }: Props) {
               background: "#111827",
               border: "1px solid #1F2937",
               borderRadius: 10,
-              overflow: "hidden",
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
             }}
           >
-            <div
-              style={{
-                padding: "14px 16px",
-                borderBottom: "1px solid #1F2937",
-              }}
-            >
-              <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: 0 }}>
-                {t("consumptionsTitle")}
-              </h2>
-            </div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  {[t("consumptionsHeaderItem"), t("consumptionsHeaderQty"), t("consumptionsHeaderBatch"), t("consumptionsHeaderConsumedAt")].map((h, i) => (
-                    <th
-                      key={i}
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "left",
-                        color: "#4B5563",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em",
-                        borderBottom: "1px solid #1F2937",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {order.consumptions.map((c, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid #1F2937" }}>
-                    <td style={tdStyle}>
-                      <span style={{ color: "#E8EDF5", fontSize: 13 }}>
-                        {c.itemName}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                        {c.qtyConsumed}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      <span
-                        style={{
-                          color: "#6B7280",
-                          fontSize: 12,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {c.batchNumber ?? "—"}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      <span style={{ color: "#6B7280", fontSize: 12 }}>
-                        {formatDateTime(c.consumedAt, intlLocale)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: 0 }}>
+              {t("consumptionsTitle")}
+            </h2>
+            <Table
+              columns={consumptionColumns}
+              rows={order.consumptions}
+              rowKey={(c) => `${c.itemId}-${c.batchNumber ?? "none"}`}
+            />
           </div>
         )}
 
@@ -449,8 +423,3 @@ function btnStyle(bg: string, color: string): React.CSSProperties {
     whiteSpace: "nowrap",
   };
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  verticalAlign: "middle",
-};

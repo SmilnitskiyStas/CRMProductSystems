@@ -2,10 +2,10 @@
 
 import { useTranslations, useLocale } from "next-intl";
 import { PackageSearch } from "lucide-react";
-import { SortableHeader, TablePaginationFooter } from "@/features/marketing-analytics/price-segments/components/TableControls";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { BulkSelectionActions } from "./BulkSelectionActions";
 import { useAudienceBuilderStore } from "../../store/useAudienceBuilderStore";
-import type { MatchedItemsSortBy, MatchedItemsTableDto } from "../../types";
+import type { MatchedItemRowDto, MatchedItemsSortBy, MatchedItemsTableDto } from "../../types";
 
 interface Props {
   data: MatchedItemsTableDto | undefined;
@@ -22,8 +22,6 @@ interface Props {
   selectedCount: number | undefined;
 }
 
-const GRID = "40px minmax(160px,1fr) 160px 100px 90px 100px";
-
 /**
  * "Знайдені товари" (analysis §20) — checkbox column, ";"-joined barcodes, zero-sales SKUs
  * included (never filtered out). Unchecking a row calls `store.excludeItem`/`includeItem`; the
@@ -39,6 +37,71 @@ export function MatchedItemsTable({ data, isLoading, sortBy, sortDescending, onS
   const includeItem = useAudienceBuilderStore((s) => s.includeItem);
 
   const currentPageItemIds = data?.rows.map((r) => r.itemId) ?? [];
+
+  const columns: TableColumn<MatchedItemRowDto>[] = [
+    {
+      key: "select",
+      width: 40,
+      align: "center",
+      header: null,
+      render: (r) => (
+        <input
+          type="checkbox"
+          checked={!r.isExcluded}
+          onChange={() => (r.isExcluded ? includeItem(r.itemId) : excludeItem(r.itemId))}
+          style={{ accentColor: "#3B82F6", width: 15, height: 15, cursor: "pointer" }}
+        />
+      ),
+    },
+    {
+      key: "name",
+      align: "left",
+      header: t("headerName"),
+      sortKey: "name",
+      render: (r) => (
+        <div
+          title={r.name}
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontWeight: 500,
+            color: r.isExcluded ? "#4B5563" : "#E8EDF5",
+            textDecoration: r.isExcluded ? "line-through" : "none",
+          }}
+        >
+          {r.name}
+        </div>
+      ),
+    },
+    {
+      key: "barcode",
+      header: t("headerBarcode"),
+      cellStyle: { color: "#6B7280", fontSize: 12, whiteSpace: "nowrap" },
+      render: (r) => r.barcodesJoined ?? "—",
+    },
+    {
+      key: "sold",
+      header: t("headerSold"),
+      sortKey: "sold",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.quantitySold.toLocaleString(intlLocale, { maximumFractionDigits: 1 }),
+    },
+    {
+      key: "receipts",
+      header: t("headerReceipts"),
+      sortKey: "receipts",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.receiptCount.toLocaleString(intlLocale),
+    },
+    {
+      key: "buyers",
+      header: t("headerBuyers"),
+      sortKey: "buyers",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.buyerCount.toLocaleString(intlLocale),
+    },
+  ];
 
   return (
     <div style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -72,70 +135,19 @@ export function MatchedItemsTable({ data, isLoading, sortBy, sortDescending, onS
           <div style={{ color: "#9CA3AF", fontSize: 14, fontWeight: 600 }}>{t("empty")}</div>
         </div>
       ) : (
-        <>
-          <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "auto" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: GRID,
-                padding: "10px 16px",
-                borderBottom: "1px solid #1F2937",
-                background: "#0A1020",
-                minWidth: 700,
-                gap: 8,
-                alignItems: "center",
-              }}
-            >
-              <div />
-              <SortableHeader label={t("headerName")} sortKey="name" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>{t("headerBarcode")}</div>
-              <SortableHeader label={t("headerSold")} sortKey="sold" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerReceipts")} sortKey="receipts" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerBuyers")} sortKey="buyers" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-            </div>
-
-            {data.rows.map((r) => (
-              <div
-                key={r.itemId}
-                style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #0F1924", alignItems: "center", minWidth: 700, gap: 8 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={!r.isExcluded}
-                  onChange={() => (r.isExcluded ? includeItem(r.itemId) : excludeItem(r.itemId))}
-                  style={{ accentColor: "#3B82F6", width: 15, height: 15, cursor: "pointer" }}
-                />
-                <div
-                  style={{
-                    color: r.isExcluded ? "#4B5563" : "#E8EDF5",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    textDecoration: r.isExcluded ? "line-through" : "none",
-                  }}
-                >
-                  {r.name}
-                </div>
-                <div style={{ color: "#6B7280", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {r.barcodesJoined ?? "—"}
-                </div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.quantitySold.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}
-                </div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.receiptCount.toLocaleString(intlLocale)}
-                </div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.buyerCount.toLocaleString(intlLocale)}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <TablePaginationFooter page={page} totalPages={data.totalPages} totalLabel={t("totalCount", { count: data.totalCount })} onPageChange={onPageChange} />
-        </>
+        <Table
+          columns={columns}
+          rows={data.rows}
+          rowKey={(r) => r.itemId}
+          sortBy={sortBy}
+          sortDescending={sortDescending}
+          onSort={onSort}
+          page={page}
+          totalPages={data.totalPages}
+          totalCount={data.totalCount}
+          onPageChange={onPageChange}
+          minWidth={700}
+        />
       )}
     </div>
   );

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { X } from "lucide-react";
-import { SortableHeader, TablePaginationFooter } from "@/features/marketing-analytics/price-segments/components/TableControls";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { useLossesByProduct } from "../hooks/useAnalytics";
 import type { LossByProductRowDto } from "../types";
 
@@ -40,19 +40,11 @@ interface Props {
 }
 
 const PAGE_SIZE = 10;
-const GRID = "minmax(160px,1.4fr) 110px 130px 100px";
 
 function compareRows(a: LossByProductRowDto, b: LossByProductRowDto, key: SortKey): number {
   if (key === "name") return a.productName.localeCompare(b.productName);
   return a[key] - b[key];
 }
-
-const numCell: React.CSSProperties = {
-  color: "#9CA3AF",
-  fontSize: 12,
-  textAlign: "right",
-  fontFamily: "monospace",
-};
 
 /** TASK-488: product-name click target when onProductClick is provided — same treatment as
  * CategoryDetailPanel.tsx's own productNameButton (not the whole grid row, not styled like
@@ -84,6 +76,9 @@ const productNameButton: React.CSSProperties = {
  * single filter the caller passed. No margin columns: LossByProductRowDto carries none at all
  * (ADR-027 §1 — losses aren't margin-gated, LossAmount is already shown unrestricted in
  * aggregate elsewhere on this page for every store_manager+).
+ * Migrated to the shared `Table` component (table-unification migration, Batch B) — same
+ * sortKey/sortDescending/page state as before, wired directly into Table's props instead of
+ * SortableHeader/TablePaginationFooter.
  */
 export function LossesProductBreakdownPanel({ title, totalLoss, storeIds, reason, from, to, onClose, onProductClick }: Props) {
   const t = useTranslations("Dashboard.analytics.lossesProductBreakdownPanel");
@@ -116,6 +111,52 @@ export function LossesProductBreakdownPanel({ title, totalLoss, storeIds, reason
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const displayTotalLoss = data?.totalLoss ?? totalLoss;
+
+  const columns: TableColumn<LossByProductRowDto>[] = [
+    {
+      key: "name",
+      header: t("headers.product"),
+      sortKey: "name",
+      render: (p) =>
+        onProductClick ? (
+          <button
+            type="button"
+            onClick={() => onProductClick(p.productId, p.productName)}
+            title={p.productName}
+            style={productNameButton}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+          >
+            {p.productName}
+          </button>
+        ) : (
+          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {p.productName}
+          </div>
+        ),
+    },
+    {
+      key: "quantity",
+      header: t("headers.quantity"),
+      sortKey: "quantity",
+      cellStyle: { fontFamily: "monospace" },
+      render: (p) => p.quantity.toLocaleString(intlLocale),
+    },
+    {
+      key: "lossAmount",
+      header: t("headers.lossAmount"),
+      sortKey: "lossAmount",
+      cellStyle: { fontFamily: "monospace", color: "#F87171" },
+      render: (p) => `${p.lossAmount.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+    {
+      key: "sharePercent",
+      header: t("headers.sharePercent"),
+      sortKey: "sharePercent",
+      cellStyle: { fontFamily: "monospace" },
+      render: (p) => `${p.sharePercent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%`,
+    },
+  ];
 
   return (
     <div
@@ -163,63 +204,18 @@ export function LossesProductBreakdownPanel({ title, totalLoss, storeIds, reason
       ) : products.length === 0 ? (
         <div style={{ color: "#4B5563", fontSize: 13, padding: "12px 0", textAlign: "center" }}>{t("empty")}</div>
       ) : (
-        <>
-          <div style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 10, overflow: "auto" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: GRID,
-                padding: "10px 14px",
-                borderBottom: "1px solid #1F2937",
-                background: "#0A1020",
-                minWidth: 500,
-                gap: 8,
-              }}
-            >
-              <SortableHeader label={t("headers.product")} sortKey="name" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} />
-              <SortableHeader label={t("headers.quantity")} sortKey="quantity" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={t("headers.lossAmount")} sortKey="lossAmount" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-              <SortableHeader label={t("headers.sharePercent")} sortKey="sharePercent" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="right" />
-            </div>
-
-            {pageRows.map((p) => (
-              <div
-                key={p.productId}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: GRID,
-                  padding: "9px 14px",
-                  borderBottom: "1px solid #0F1924",
-                  alignItems: "center",
-                  minWidth: 500,
-                  gap: 8,
-                }}
-              >
-                {onProductClick ? (
-                  <button
-                    type="button"
-                    onClick={() => onProductClick(p.productId, p.productName)}
-                    title={p.productName}
-                    style={productNameButton}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                  >
-                    {p.productName}
-                  </button>
-                ) : (
-                  <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.productName}
-                  </div>
-                )}
-                <div style={numCell}>{p.quantity.toLocaleString(intlLocale)}</div>
-                <div style={{ ...numCell, color: "#F87171" }}>{p.lossAmount.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴</div>
-                <div style={numCell}>{p.sharePercent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%</div>
-              </div>
-            ))}
-          </div>
-
-          <TablePaginationFooter page={page} totalPages={totalPages} totalLabel={t("totalCount", { count: sorted.length })} onPageChange={setPage} />
-        </>
+        <Table
+          columns={columns}
+          rows={pageRows}
+          rowKey={(p) => p.productId}
+          sortBy={sortKey}
+          sortDescending={sortDescending}
+          onSort={(key) => handleSort(key as SortKey)}
+          page={page}
+          totalPages={totalPages}
+          totalCount={sorted.length}
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

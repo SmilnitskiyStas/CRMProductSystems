@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { useCustomer } from "../hooks/useCustomers";
 import type { Customer, CustomerTransaction } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { CustomerTierCard } from "./CustomerTierCard";
 import { CustomerTicketsTab } from "./CustomerTicketsTab";
 import { CustomerReviewsTab } from "./CustomerReviewsTab";
@@ -65,28 +66,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function TransactionRow({ tx }: { tx: CustomerTransaction }) {
-  const locale = useLocale();
-  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
-  const uah = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "UAH" });
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 120px 100px 130px",
-        padding: "10px 14px",
-        borderBottom: "1px solid #0F1924",
-        alignItems: "center",
-      }}
-    >
-      <div style={{ color: "#6B7280", fontSize: 12 }}>{formatDateTime(tx.createdAt, intlLocale)}</div>
-      <div style={{ color: "#4ADE80", fontSize: 13, fontWeight: 500 }}>{uah.format(tx.totalAmount)}</div>
-      <PaymentTypeBadge type={tx.paymentType} />
-      <div><StatusBadge status={tx.status} /></div>
-    </div>
-  );
-}
-
 // ── Main component ─────────────────────────────────────────────────────────────
 
 interface Props {
@@ -128,6 +107,33 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  const transactionColumns: TableColumn<CustomerTransaction>[] = [
+    {
+      key: "date",
+      header: t("txHeaderDate"),
+      render: (tx) => (
+        <span style={{ color: "#6B7280", fontSize: 12 }}>{formatDateTime(tx.createdAt, intlLocale)}</span>
+      ),
+    },
+    {
+      key: "amount",
+      header: t("txHeaderAmount"),
+      render: (tx) => (
+        <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 500 }}>{uah.format(tx.totalAmount)}</span>
+      ),
+    },
+    {
+      key: "payment",
+      header: t("txHeaderPayment"),
+      render: (tx) => <PaymentTypeBadge type={tx.paymentType} />,
+    },
+    {
+      key: "status",
+      header: t("txHeaderStatus"),
+      render: (tx) => <StatusBadge status={tx.status} />,
+    },
+  ];
 
   return (
     <>
@@ -305,38 +311,12 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
                     {t("recentTransactionsTitle")}
                   </h3>
 
-                  {detail.recentTransactions.length === 0 ? (
-                    <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>{t("noTransactions")}</div>
-                  ) : (
-                    <div
-                      style={{
-                        background: "#0A1020",
-                        border: "1px solid #1F2937",
-                        borderRadius: 10,
-                        overflow: "hidden",
-                      }}
-                    >
-                      {/* Tx header */}
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 120px 100px 130px",
-                          padding: "8px 14px",
-                          borderBottom: "1px solid #1F2937",
-                          background: "#060D18",
-                        }}
-                      >
-                        {[t("txHeaderDate"), t("txHeaderAmount"), t("txHeaderPayment"), t("txHeaderStatus")].map((h, i) => (
-                          <div key={i} style={{ color: "#374151", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                            {h}
-                          </div>
-                        ))}
-                      </div>
-                      {detail.recentTransactions.map((tx) => (
-                        <TransactionRow key={tx.id} tx={tx} />
-                      ))}
-                    </div>
-                  )}
+                  <Table
+                    columns={transactionColumns}
+                    rows={detail.recentTransactions}
+                    rowKey={(tx) => tx.id}
+                    emptyMessage={t("noTransactions")}
+                  />
                 </div>
               </>
             )}

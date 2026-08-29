@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { BarChart2 } from "lucide-react";
 import type { AttentionItem, DashboardStats, ItemStatus } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string }> = {
   safe: { color: "#22c55e", bg: "#0d2818" },
@@ -47,15 +48,95 @@ export function AttentionTable({ items = [], isLoading, stats }: Props) {
   const filtered = filter === "all" ? items : items.filter((i) => i.status === filter);
   const visible = filtered.slice(0, VISIBLE_ROWS);
   const viewAllHref = filter === "all" ? "/stock" : `/stock?status=${filter}`;
-  const headers = [
-    t("headers.name"),
-    t("headers.sku"),
-    t("headers.category"),
-    t("headers.zone"),
-    t("headers.quantity"),
-    t("headers.reorderLevel"),
-    t("headers.status"),
-    t("headers.actions"),
+
+  const columns: TableColumn<AttentionItem>[] = [
+    {
+      key: "name",
+      header: t("headers.name"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (item) => item.name,
+    },
+    {
+      key: "sku",
+      header: t("headers.sku"),
+      cellStyle: { color: "#6B7280", fontFamily: "monospace", fontSize: 12 },
+      render: (item) => item.sku,
+    },
+    {
+      key: "category",
+      header: t("headers.category"),
+      cellStyle: { color: "#8A94A8" },
+      render: (item) => item.category,
+    },
+    {
+      key: "zone",
+      header: t("headers.zone"),
+      cellStyle: { color: "#8A94A8" },
+      render: (item) => item.zone,
+    },
+    {
+      key: "quantity",
+      header: t("headers.quantity"),
+      cellStyle: { fontFamily: "monospace", fontWeight: 600 },
+      render: (item) => (
+        <span style={{ color: item.quantity === 0 ? "#EF4444" : "#E8EDF5" }}>{item.quantity}</span>
+      ),
+    },
+    {
+      key: "reorderLevel",
+      header: t("headers.reorderLevel"),
+      cellStyle: { color: "#6B7280", fontFamily: "monospace" },
+      render: (item) => item.reorderLevel,
+    },
+    {
+      key: "status",
+      header: t("headers.status"),
+      render: (item) => {
+        const cfg = STATUS_CONFIG[item.status] ?? DEFAULT_STATUS_CONFIG;
+        return (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "3px 10px",
+              borderRadius: 6,
+              background: cfg.bg,
+              border: `1px solid ${cfg.color}30`,
+              color: cfg.color,
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+          >
+            <span
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: cfg.color,
+                display: "inline-block",
+              }}
+            />
+            {tStatus(item.status)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: t("headers.actions"),
+      render: (item) => (
+        <ActionMenu
+          items={[
+            {
+              label: tProductAnalytics("title"),
+              icon: <BarChart2 size={13} />,
+              onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
+            },
+          ]}
+        />
+      ),
+    },
   ];
 
   return (
@@ -138,112 +219,7 @@ export function AttentionTable({ items = [], isLoading, stats }: Props) {
         </div>
       ) : (
         <div style={{ overflowX: "auto", flex: 1, display: "flex", flexDirection: "column" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #1F2937" }}>
-                {headers.map(
-                  (h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "7px 16px",
-                        textAlign: "left",
-                        color: "#4B5563",
-                        fontSize: 11,
-                        fontWeight: 500,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((item, idx) => {
-                const cfg = STATUS_CONFIG[item.status] ?? DEFAULT_STATUS_CONFIG;
-                return (
-                  <tr
-                    key={item.id}
-                    style={{
-                      borderBottom: idx < visible.length - 1 ? "1px solid #111827" : "none",
-                      transition: "background 0.1s",
-                    }}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#1a1f2e")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                  >
-                    <td style={{ padding: "8px 16px", color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
-                      {item.name}
-                    </td>
-                    <td style={{ padding: "8px 16px", color: "#6B7280", fontSize: 12, fontFamily: "monospace" }}>
-                      {item.sku}
-                    </td>
-                    <td style={{ padding: "8px 16px", color: "#8A94A8", fontSize: 13 }}>
-                      {item.category}
-                    </td>
-                    <td style={{ padding: "8px 16px", color: "#8A94A8", fontSize: 13 }}>
-                      {item.zone}
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 16px",
-                        color: item.quantity === 0 ? "#EF4444" : "#E8EDF5",
-                        fontSize: 13,
-                        fontFamily: "monospace",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {item.quantity}
-                    </td>
-                    <td style={{ padding: "8px 16px", color: "#6B7280", fontSize: 13, fontFamily: "monospace" }}>
-                      {item.reorderLevel}
-                    </td>
-                    <td style={{ padding: "8px 16px" }}>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          padding: "3px 10px",
-                          borderRadius: 6,
-                          background: cfg.bg,
-                          border: `1px solid ${cfg.color}30`,
-                          color: cfg.color,
-                          fontSize: 12,
-                          fontWeight: 500,
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: "50%",
-                            background: cfg.color,
-                            display: "inline-block",
-                          }}
-                        />
-                        {tStatus(item.status)}
-                      </span>
-                    </td>
-                    <td style={{ padding: "8px 16px" }}>
-                      <ActionMenu
-                        items={[
-                          {
-                            label: tProductAnalytics("title"),
-                            icon: <BarChart2 size={13} />,
-                            onClick: () => router.push(`/inventory/${item.productId}?tab=analytics`),
-                          },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <Table columns={columns} rows={visible} rowKey={(item) => item.id} />
 
           {/* View all */}
           {filtered.length > VISIBLE_ROWS && (

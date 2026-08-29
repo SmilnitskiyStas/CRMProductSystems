@@ -2,9 +2,9 @@
 
 import { useTranslations, useLocale } from "next-intl";
 import { Users } from "lucide-react";
-import { SortableHeader, TablePaginationFooter } from "@/features/marketing-analytics/price-segments/components/TableControls";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { ExportReceiptsButton } from "./ExportReceiptsButton";
-import type { AudienceBuyerTableDto, AudienceFilterState, BuyersSortBy } from "../../types";
+import type { AudienceBuyerRowDto, AudienceBuyerTableDto, AudienceFilterState, BuyersSortBy } from "../../types";
 
 interface Props {
   data: AudienceBuyerTableDto | undefined;
@@ -18,13 +18,10 @@ interface Props {
   canExportPii: boolean;
 }
 
-const GRID = "minmax(160px,1fr) 140px 120px 100px 130px";
-
 /**
  * "Знайдені покупці" (analysis §14.2/§14.3) — ПІБ / Телефон / Куплено шт / Чеків / Сума ₴, real
- * server-side pagination + sorting via the SAME SortableHeader/TablePaginationFooter price-
- * segments already built (`price-segments/components/TableControls.tsx`) — reused directly per
- * the brief, not duplicated. `row.phone` is rendered exactly as the server sent it: already
+ * server-side pagination + sorting via the shared `components/ui/Table`. `row.phone` is rendered
+ * exactly as the server sent it: already
  * masked/unmasked server-side per the viewer's own role (see AudienceBuyerRowDto's doc comment in
  * types.ts) — never re-masked here.
  */
@@ -32,6 +29,42 @@ export function BuyersTable({ data, isLoading, sortBy, sortDescending, onSort, p
   const t = useTranslations("Dashboard.audienceBuilder.buyersTable");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
+  const columns: TableColumn<AudienceBuyerRowDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      sortKey: "name",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (r) => r.name,
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      render: (r) => <span style={{ color: r.phone ? "#9CA3AF" : "#374151" }}>{r.phone ?? "—"}</span>,
+    },
+    {
+      key: "qty",
+      header: t("headerQty"),
+      sortKey: "qty",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.quantityPurchased.toLocaleString(intlLocale, { maximumFractionDigits: 1 }),
+    },
+    {
+      key: "receipts",
+      header: t("headerReceipts"),
+      sortKey: "receipts",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.receiptCount.toLocaleString(intlLocale),
+    },
+    {
+      key: "amount",
+      header: t("headerAmount"),
+      sortKey: "amount",
+      cellStyle: { color: "#4ADE80", fontSize: 13, fontFamily: "monospace" },
+      render: (r) => `${r.totalAmount.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+  ];
 
   return (
     <div style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -67,40 +100,19 @@ export function BuyersTable({ data, isLoading, sortBy, sortDescending, onSort, p
           <div style={{ color: "#9CA3AF", fontSize: 14, fontWeight: 600 }}>{t("empty")}</div>
         </div>
       ) : (
-        <>
-          <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #1F2937", background: "#0A1020", minWidth: 650, gap: 8 }}>
-              <SortableHeader label={t("headerName")} sortKey="name" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>{t("headerPhone")}</div>
-              <SortableHeader label={t("headerQty")} sortKey="qty" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerReceipts")} sortKey="receipts" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerAmount")} sortKey="amount" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-            </div>
-
-            {data.rows.map((r) => (
-              <div
-                key={r.customerId}
-                style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #0F1924", alignItems: "center", minWidth: 650, gap: 8 }}
-              >
-                <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {r.name}
-                </div>
-                <div style={{ color: r.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>{r.phone ?? "—"}</div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.quantityPurchased.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}
-                </div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.receiptCount.toLocaleString(intlLocale)}
-                </div>
-                <div style={{ color: "#4ADE80", fontSize: 13, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.totalAmount.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <TablePaginationFooter page={page} totalPages={data.totalPages} totalLabel={t("totalCount", { count: data.totalCount })} onPageChange={onPageChange} />
-        </>
+        <Table
+          columns={columns}
+          rows={data.rows}
+          rowKey={(r) => r.customerId}
+          sortBy={sortBy}
+          sortDescending={sortDescending}
+          onSort={onSort}
+          page={page}
+          totalPages={data.totalPages}
+          totalCount={data.totalCount}
+          onPageChange={onPageChange}
+          minWidth={650}
+        />
       )}
     </div>
   );

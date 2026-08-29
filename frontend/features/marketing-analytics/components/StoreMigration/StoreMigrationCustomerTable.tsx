@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { useExportStoreMigration } from "../../hooks/useMarketingAnalytics";
 import type { StoreMigrationCustomerRowDto } from "../../types";
 
@@ -57,6 +58,59 @@ export function StoreMigrationCustomerTable({ rows, isLoading, limit, exportCont
     );
   }
 
+  const columns: TableColumn<StoreMigrationCustomerRowDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      cellStyle: { color: "#E8EDF5" },
+      render: (row) => row.name,
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      cellStyle: { color: "#9CA3AF", fontFamily: "monospace", whiteSpace: "nowrap" },
+      render: (row) => row.phone ?? "—",
+    },
+    {
+      key: "email",
+      header: t("headerEmail"),
+      cellStyle: { color: "#9CA3AF", whiteSpace: "nowrap" },
+      render: (row) => row.email ?? "—",
+    },
+    {
+      key: "from",
+      header: t("headerFrom"),
+      cellStyle: { color: "#9CA3AF", whiteSpace: "nowrap" },
+      render: (row) => (
+        <>
+          {row.fromStoreName} <span style={{ color: "#4B5563" }}>({row.fromDate})</span>
+        </>
+      ),
+    },
+    {
+      key: "to",
+      header: t("headerTo"),
+      cellStyle: { color: "#9CA3AF", whiteSpace: "nowrap" },
+      render: (row) => (
+        <>
+          {row.toStoreName} <span style={{ color: "#4B5563" }}>({row.toDate})</span>
+        </>
+      ),
+    },
+    {
+      key: "checks",
+      header: t("headerChecks"),
+      cellStyle: { color: "#E8EDF5", fontFamily: "monospace" },
+      render: (row) => row.transactionCountInPeriod.toLocaleString(intlLocale),
+    },
+    {
+      key: "revenue",
+      header: t("headerRevenue"),
+      cellStyle: { color: "#4ADE80", fontFamily: "monospace" },
+      render: (row) => row.revenueInPeriod.toLocaleString(intlLocale, { maximumFractionDigits: 0 }),
+    },
+  ];
+
   return (
     <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "16px 16px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
@@ -91,60 +145,7 @@ export function StoreMigrationCustomerTable({ rows, isLoading, limit, exportCont
         <div style={{ color: "#4B5563", fontSize: 13, padding: "20px 0", textAlign: "center" }}>{t("empty")}</div>
       ) : (
         <>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
-              <thead>
-                <tr>
-                  {[
-                    t("headerName"),
-                    t("headerPhone"),
-                    t("headerEmail"),
-                    t("headerFrom"),
-                    t("headerTo"),
-                    t("headerChecks"),
-                    t("headerRevenue"),
-                  ].map((h, i) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "6px 10px",
-                        borderBottom: "1px solid #1F2937",
-                        color: "#6B7280",
-                        fontWeight: 600,
-                        textAlign: i >= 5 ? "right" : "left",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.customerId}>
-                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #0F1924", color: "#E8EDF5" }}>{row.name}</td>
-                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #0F1924", color: "#9CA3AF", fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                      {row.phone ?? "—"}
-                    </td>
-                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #0F1924", color: "#9CA3AF", whiteSpace: "nowrap" }}>{row.email ?? "—"}</td>
-                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #0F1924", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                      {row.fromStoreName} <span style={{ color: "#4B5563" }}>({row.fromDate})</span>
-                    </td>
-                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #0F1924", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                      {row.toStoreName} <span style={{ color: "#4B5563" }}>({row.toDate})</span>
-                    </td>
-                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #0F1924", color: "#E8EDF5", fontFamily: "monospace", textAlign: "right" }}>
-                      {row.transactionCountInPeriod.toLocaleString(intlLocale)}
-                    </td>
-                    <td style={{ padding: "7px 10px", borderBottom: "1px solid #0F1924", color: "#4ADE80", fontFamily: "monospace", textAlign: "right" }}>
-                      {row.revenueInPeriod.toLocaleString(intlLocale, { maximumFractionDigits: 0 })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table columns={columns} rows={rows} rowKey={(row) => row.customerId} />
           {rows.length >= limit && (
             <div style={{ color: "#4B5563", fontSize: 11.5, marginTop: 10 }}>{t("truncatedNote", { limit })}</div>
           )}

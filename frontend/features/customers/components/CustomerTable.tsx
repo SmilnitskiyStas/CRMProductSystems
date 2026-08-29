@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import type { Customer } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 function formatDate(iso: string, intlLocale: string) {
   return new Date(iso).toLocaleDateString(intlLocale, {
@@ -128,10 +129,6 @@ function ActionMenu({
   );
 }
 
-// ── Grid config ────────────────────────────────────────────────────────────────
-
-const GRID = "minmax(160px,1fr) 130px 180px 160px 80px 140px 120px 60px";
-
 // ── Main component ─────────────────────────────────────────────────────────────
 
 interface Props {
@@ -165,15 +162,81 @@ export function CustomerTable({
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const uah = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "UAH" });
-  const HEADERS = [
-    t("headerName"),
-    t("headerPhone"),
-    t("headerEmail"),
-    t("headerTags"),
-    t("headerOrders"),
-    t("headerSpent"),
-    t("headerCreatedAt"),
-    "",
+
+  const columns: TableColumn<Customer>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+      render: (c) => c.name,
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      render: (c) => (
+        <span style={{ color: c.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>
+          {c.phone ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "email",
+      header: t("headerEmail"),
+      cellStyle: { maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+      render: (c) => (
+        <span style={{ color: c.email ? "#9CA3AF" : "#374151", fontSize: 12 }}>
+          {c.email ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "tags",
+      header: t("headerTags"),
+      render: (c) => (
+        <div style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
+          {c.tags.length > 0
+            ? c.tags.slice(0, 3).map((tag) => <TagBadge key={tag} tag={tag} />)
+            : <span style={{ color: "#374151", fontSize: 12 }}>—</span>
+          }
+          {c.tags.length > 3 && (
+            <span style={{ color: "#4B5563", fontSize: 11 }}>+{c.tags.length - 3}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "orders",
+      header: t("headerOrders"),
+      render: (c) => <span style={{ color: "#9CA3AF", fontSize: 13 }}>{c.totalOrders}</span>,
+    },
+    {
+      key: "spent",
+      header: t("headerSpent"),
+      render: (c) => (
+        <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 500 }}>
+          {uah.format(c.totalSpent)}
+        </span>
+      ),
+    },
+    {
+      key: "createdAt",
+      header: t("headerCreatedAt"),
+      render: (c) => (
+        <span style={{ color: "#4B5563", fontSize: 12 }}>{formatDate(c.createdAt, intlLocale)}</span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (c) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ActionMenu
+            onEdit={() => onEdit(c)}
+            onDelete={() => onDelete(c)}
+          />
+        </div>
+      ),
+    },
   ];
 
   // Debounced search
@@ -213,120 +276,15 @@ export function CustomerTable({
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "auto",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: GRID,
-            padding: "10px 16px",
-            borderBottom: "1px solid #1F2937",
-            background: "#0A1020",
-            minWidth: 900,
-          }}
-        >
-          {HEADERS.map((h, i) => (
-            <div
-              key={i}
-              style={{
-                color: "#4B5563",
-                fontSize: 11,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              {h}
-            </div>
-          ))}
-        </div>
-
-        {/* Rows */}
-        {isLoading ? (
-          <div style={{ padding: "40px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            {t("loading")}
-          </div>
-        ) : customers.length === 0 ? (
-          <div style={{ padding: "40px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            {search ? t("emptySearch") : t("emptyNone")}
-          </div>
-        ) : (
-          customers.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => onRowClick(c)}
-              style={{
-                display: "grid",
-                gridTemplateColumns: GRID,
-                padding: "12px 16px",
-                borderBottom: "1px solid #0F1924",
-                cursor: "pointer",
-                alignItems: "center",
-                minWidth: 900,
-                transition: "background 0.1s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#0A1628"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            >
-              {/* Name */}
-              <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {c.name}
-              </div>
-
-              {/* Phone */}
-              <div style={{ color: c.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>
-                {c.phone ?? "—"}
-              </div>
-
-              {/* Email */}
-              <div style={{ color: c.email ? "#9CA3AF" : "#374151", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {c.email ?? "—"}
-              </div>
-
-              {/* Tags */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {c.tags.length > 0
-                  ? c.tags.slice(0, 3).map((tag) => <TagBadge key={tag} tag={tag} />)
-                  : <span style={{ color: "#374151", fontSize: 12 }}>—</span>
-                }
-                {c.tags.length > 3 && (
-                  <span style={{ color: "#4B5563", fontSize: 11 }}>+{c.tags.length - 3}</span>
-                )}
-              </div>
-
-              {/* Orders count */}
-              <div style={{ color: "#9CA3AF", fontSize: 13 }}>
-                {c.totalOrders}
-              </div>
-
-              {/* Total spent */}
-              <div style={{ color: "#4ADE80", fontSize: 13, fontWeight: 500 }}>
-                {uah.format(c.totalSpent)}
-              </div>
-
-              {/* Created at */}
-              <div style={{ color: "#4B5563", fontSize: 12 }}>
-                {formatDate(c.createdAt, intlLocale)}
-              </div>
-
-              {/* Actions */}
-              <div onClick={(e) => e.stopPropagation()}>
-                <ActionMenu
-                  onEdit={() => onEdit(c)}
-                  onDelete={() => onDelete(c)}
-                />
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      <Table
+        columns={columns}
+        rows={customers}
+        rowKey={(c) => c.id}
+        onRowClick={onRowClick}
+        isLoading={isLoading}
+        minWidth={900}
+        emptyMessage={isLoading ? t("loading") : (search ? t("emptySearch") : t("emptyNone"))}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
