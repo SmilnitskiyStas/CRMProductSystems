@@ -301,14 +301,30 @@ aliases:
 | Tier | `model` value | Use for |
 |---|---|---|
 | `cheap` | `haiku` | Routing/triage, file discovery, simple research, summarization, docs sync, mechanical find-and-replace edits, basic classification |
-| `standard` | `sonnet` (default — omit `model` to get this) | Ordinary coding: frontend, backend, DB changes, normal debugging, tests, normal review, UI implementation |
+| `standard` | `sonnet` (default) or `haiku` (downgrade — see below) | Ordinary coding: frontend, backend, DB changes, normal debugging, tests, normal review, UI implementation |
 | `reasoning` | `opus` | Architecture, hard debugging, security-sensitive design, destructive migrations, concurrency, cross-system design, hard ambiguity |
 
-Head rule: use the cheapest tier that can reliably complete the task. Escalate (never
-downgrade below `standard` for real implementation work) when the task carries a risk flag —
-security, financial flow, destructive migration, concurrency. A manual instruction from the
-user ("use reasoning tier", "keep it cheap", "don't use Opus") overrides the heuristic unless
-it breaks a safety or project rule.
+**`standard`-tier downgrade rule** — `standard` is not one fixed model; judge each
+implementation task's actual difficulty within the tier, not just which tier it landed in:
+- **Design / first-of-its-kind work → `sonnet`.** Building a new shared component or pattern
+  from scratch, non-trivial business logic, a task with real design decisions still open, the
+  first time this exact kind of change is made in the codebase.
+- **Mechanical repetition of an already-proven pattern → downgrade to `haiku`.** Once the hard
+  design work has been done once (by a `sonnet`/`opus` agent) and verified working, applying
+  that *exact same* pattern to more files/endpoints/components rarely needs `sonnet`'s
+  judgment. Concrete example from this project's own history: the agent that designed
+  `components/ui/Table.tsx` from scratch needed `sonnet`; the later batches that each just
+  applied that already-designed component to more files, following the identical approach,
+  could have run on `haiku`.
+- When unsure which side of the line a task falls on, default to `sonnet` — a wrong downgrade
+  produces silently-worse code with no error to catch it, while a wrong non-downgrade only
+  costs a bit more.
+
+Head rule: use the cheapest model that can reliably complete the task. Never downgrade
+`reasoning`-tier work, and escalate when the task carries a risk flag — security, financial
+flow, destructive migration, concurrency. A manual instruction from the user ("use reasoning
+tier", "keep it cheap", "don't use Opus") overrides the heuristic unless it breaks a safety or
+project rule.
 
 Example — a cheap-tier Explore-style lookup delegated to a role agent:
 ```
