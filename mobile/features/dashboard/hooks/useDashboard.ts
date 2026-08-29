@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { getStockSummary, getAiOrders, getRecentMovements } from '../api/dashboardApi';
+import { getStockSummary, getAiOrders, getMovementProduct, getRecentMovements } from '../api/dashboardApi';
 
-export function useDashboardStats() {
+export function useDashboardStats(locationId?: string) {
   return useQuery({
-    queryKey: ['dashboard', 'stock-summary'],
-    queryFn: getStockSummary,
+    queryKey: ['dashboard', 'stock-summary', locationId],
+    queryFn: () => getStockSummary(locationId),
   });
 }
 
@@ -15,9 +15,18 @@ export function useAiOrders() {
   });
 }
 
-export function useRecentMovements() {
+export function useRecentMovements(locationId?: string, limit = 5) {
   return useQuery({
-    queryKey: ['dashboard', 'recent-movements'],
-    queryFn: () => getRecentMovements(5),
+    queryKey: ['dashboard', 'recent-movements', locationId, limit],
+    queryFn: () => getRecentMovements(limit, locationId),
+  });
+}
+
+export function useMovementProduct(productId: string) {
+  return useQuery({
+    queryKey: ['items', productId],
+    queryFn: () => getMovementProduct(productId),
+    enabled: Boolean(productId),
+    staleTime: 5 * 60_000,
   });
 }

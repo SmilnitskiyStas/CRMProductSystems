@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Award, Clock3, Gift, Hourglass, ShieldOff, Trophy } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
 import { BonusProgramSection } from "@/features/consumer-app/components/BonusProgramSection";
 import { TierLadderSection } from "@/features/consumer-app/components/TierLadderSection";
+import { SectionTabs } from "@/features/consumer-app/components/SectionTabs";
 
 /**
  * TASK-500: standalone "Consumer App" management area (product decision — deliberately its own
@@ -23,6 +26,7 @@ export default function ConsumerAppPage() {
   const t = useTranslations("Dashboard.consumerApp.page");
   const { data: me } = useMe();
   const roleAccess = me ? hasRole(me.role, AT_LEAST_ENTERPRISE_ADMIN) : null;
+  const [activeSection, setActiveSection] = useState<"general" | "tiers" | "expiration" | "exclusions" | "rewards" | "lifetime">("general");
 
   if (roleAccess === false) {
     return <AccessDenied title={t("title")} />;
@@ -33,7 +37,7 @@ export default function ConsumerAppPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1040, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
           {t("title")}
@@ -43,8 +47,21 @@ export default function ConsumerAppPage() {
         </p>
       </div>
 
-      <BonusProgramSection />
-      <TierLadderSection />
+      <SectionTabs items={[
+        { key: "general", label: "Загальні правила", icon: <Gift size={15} /> },
+        { key: "tiers", label: "Рівні й прогресія", icon: <Trophy size={15} /> },
+        { key: "expiration", label: "Строк дії", icon: <Clock3 size={15} /> },
+        { key: "exclusions", label: "Винятки", icon: <ShieldOff size={15} /> },
+        { key: "rewards", label: "Винагороди", icon: <Award size={15} /> },
+        { key: "lifetime", label: "Строк життя", icon: <Hourglass size={15} /> },
+      ]} activeKey={activeSection} onChange={setActiveSection} ariaLabel="Розділи налаштування бонусної програми" marginBottom={0} />
+
+      <div role="tabpanel" hidden={activeSection === "tiers"}>
+        <BonusProgramSection section={activeSection === "tiers" ? "general" : activeSection} />
+      </div>
+      <div role="tabpanel" hidden={activeSection !== "tiers"}>
+        <TierLadderSection />
+      </div>
     </div>
   );
 }

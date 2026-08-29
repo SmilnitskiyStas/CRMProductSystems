@@ -5,6 +5,7 @@ import type { TenantDto } from "../types";
 import { PLAN_COLORS } from "../types";
 import { useActivateTenant, useDeactivateTenant } from "../hooks/useAdmin";
 import { Btn } from "@/components/ui/Btn";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 interface Props {
   tenants: TenantDto[];
@@ -59,24 +60,6 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
-const TH_STYLE: React.CSSProperties = {
-  padding: "10px 14px",
-  textAlign: "left",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  borderBottom: "1px solid #1F2937",
-  whiteSpace: "nowrap",
-};
-
-const TD_STYLE: React.CSSProperties = {
-  padding: "12px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  borderBottom: "1px solid #1F2937",
-  verticalAlign: "middle",
-};
-
 export function TenantTable({ tenants, isLoading, onRowClick }: Props) {
   const t = useTranslations("Dashboard.admin.tenantTable");
   const activate   = useActivateTenant();
@@ -99,78 +82,72 @@ export function TenantTable({ tenants, isLoading, onRowClick }: Props) {
     }
   }
 
+  const columns: TableColumn<TenantDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      render: (tenant) => (
+        <>
+          <div style={{ fontWeight: 600, color: "#E8EDF5" }}>{tenant.name}</div>
+          <div style={{ color: "#4B5563", fontSize: 11 }}>{tenant.slug}</div>
+        </>
+      ),
+    },
+    {
+      key: "plan",
+      header: t("headerPlan"),
+      render: (tenant) => <PlanBadge plan={tenant.plan} />,
+    },
+    {
+      key: "modules",
+      header: t("headerModules"),
+      cellStyle: { color: "#9CA3AF" },
+      render: (tenant) => tenant.modules.length,
+    },
+    {
+      key: "usage",
+      header: t("headerUsage"),
+      cellStyle: { color: "#9CA3AF" },
+      render: (tenant) => `${tenant.usage.usersCount} / ${tenant.usage.storesCount} / ${tenant.usage.productsCount}`,
+    },
+    {
+      key: "sales",
+      header: t("headerSales"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 600 },
+      render: (tenant) => formatNumber(tenant.usage.salesLast30Days),
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (tenant) => <StatusBadge isActive={tenant.isActive} />,
+    },
+    {
+      key: "actions",
+      header: t("headerActions"),
+      render: (tenant) => (
+        <div style={{ display: "flex", gap: 6, justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
+          <Btn size="sm" onClick={() => onRowClick(tenant)}>
+            {t("detailsButton")}
+          </Btn>
+          <Btn
+            size="sm"
+            variant={tenant.isActive ? "danger" : "success"}
+            onClick={() => { if (tenant.isActive) { deactivate.mutate(tenant.id); } else { activate.mutate(tenant.id); } }}
+            disabled={activate.isPending || deactivate.isPending}
+          >
+            {tenant.isActive ? t("deactivateShort") : t("activateShort")}
+          </Btn>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div
-      style={{
-        background: "#0D1117",
-        border: "1px solid #1F2937",
-        borderRadius: 10,
-        overflow: "hidden",
-      }}
-    >
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ background: "#080D14" }}>
-            <th style={TH_STYLE}>{t("headerName")}</th>
-            <th style={TH_STYLE}>{t("headerPlan")}</th>
-            <th style={TH_STYLE}>{t("headerModules")}</th>
-            <th style={TH_STYLE}>{t("headerUsage")}</th>
-            <th style={TH_STYLE}>{t("headerSales")}</th>
-            <th style={TH_STYLE}>{t("headerStatus")}</th>
-            <th style={TH_STYLE}>{t("headerActions")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tenants.map((tenant) => (
-            <tr
-              key={tenant.id}
-              onClick={() => onRowClick(tenant)}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "#0F1520";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "transparent";
-              }}
-            >
-              <td style={TD_STYLE}>
-                <div style={{ fontWeight: 600 }}>{tenant.name}</div>
-                <div style={{ color: "#4B5563", fontSize: 11 }}>{tenant.slug}</div>
-              </td>
-              <td style={TD_STYLE}>
-                <PlanBadge plan={tenant.plan} />
-              </td>
-              <td style={{ ...TD_STYLE, color: "#9CA3AF" }}>
-                {tenant.modules.length}
-              </td>
-              <td style={{ ...TD_STYLE, color: "#9CA3AF" }}>
-                {tenant.usage.usersCount} / {tenant.usage.storesCount} / {tenant.usage.productsCount}
-              </td>
-              <td style={{ ...TD_STYLE, color: "#E8EDF5", fontWeight: 600 }}>
-                {formatNumber(tenant.usage.salesLast30Days)}
-              </td>
-              <td style={TD_STYLE}>
-                <StatusBadge isActive={tenant.isActive} />
-              </td>
-              <td style={TD_STYLE}>
-                <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                  <Btn size="sm" onClick={() => onRowClick(tenant)}>
-                    {t("detailsButton")}
-                  </Btn>
-                  <Btn
-                    size="sm"
-                    variant={tenant.isActive ? "danger" : "success"}
-                    onClick={() => { if (tenant.isActive) { deactivate.mutate(tenant.id); } else { activate.mutate(tenant.id); } }}
-                    disabled={activate.isPending || deactivate.isPending}
-                  >
-                    {tenant.isActive ? t("deactivateShort") : t("activateShort")}
-                  </Btn>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      columns={columns}
+      rows={tenants}
+      rowKey={(tenant) => tenant.id}
+      onRowClick={(tenant) => onRowClick(tenant)}
+    />
   );
 }

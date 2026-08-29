@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm, type UseFormRegister, type UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z, type ZodTypeAny } from "zod";
@@ -476,10 +476,16 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiv
   const schemaDefs = useMemo(() => definition?.validationSchema ?? [], [definition]);
   const zodSchema = useMemo(() => buildPropsSchema(schemaDefs, t), [schemaDefs, t]);
   const defaultValues = useMemo(() => buildDefaultValues(schemaDefs, block.props), [schemaDefs, block.props]);
+  const initialVisual = block.props._visualEffect && typeof block.props._visualEffect === "object" ? block.props._visualEffect as Record<string, unknown> : {};
+  const [borderEffect, setBorderEffect] = useState<"none" | "solid" | "gradient">(initialVisual.border === "solid" || initialVisual.border === "gradient" ? initialVisual.border : "none");
+  const [effectSpeed, setEffectSpeed] = useState<"slow" | "normal" | "fast">(initialVisual.speed === "slow" || initialVisual.speed === "fast" ? initialVisual.speed : "normal");
+  const [effectColor, setEffectColor] = useState(typeof initialVisual.color === "string" ? initialVisual.color : "#3B82F6");
+  const [effectSecondaryColor, setEffectSecondaryColor] = useState(typeof initialVisual.secondaryColor === "string" ? initialVisual.secondaryColor : "#A855F7");
 
   const {
     register,
     handleSubmit,
+    getValues,
     setValue,
     watch,
     formState: { errors },
@@ -489,6 +495,7 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiv
   });
 
   const values = watch();
+  const withVisualEffect = useCallback((props: Record<string, unknown>) => ({ ...props, _visualEffect: { border: borderEffect, speed: effectSpeed, color: effectColor, secondaryColor: effectSecondaryColor } }), [borderEffect, effectSpeed, effectColor, effectSecondaryColor]);
 
   // TASK-565b (fix for TASK-566's regression): `watch()` called during render (above, still used
   // to drive this form's own controlled inputs, e.g. `StringArrayField`'s `value` prop) returns a
@@ -500,13 +507,17 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiv
   // only invokes the callback when a field actually changes, so it's safe as an effect dependency.
   useEffect(() => {
     const subscription = watch((formValues) => {
-      onLiveChange?.(formValues as Record<string, unknown>);
+      onLiveChange?.(withVisualEffect(formValues as Record<string, unknown>));
     });
     return () => subscription.unsubscribe();
-  }, [watch, onLiveChange]);
+  }, [watch, onLiveChange, withVisualEffect]);
+
+  useEffect(() => {
+    onLiveChange?.(withVisualEffect(getValues()));
+  }, [getValues, onLiveChange, withVisualEffect]);
 
   function onValid(formValues: PropFormValues) {
-    onApply(formValues);
+    onApply(withVisualEffect(formValues));
   }
 
   return (
@@ -537,6 +548,14 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiv
               <p style={{ color: "#D1D5DB", fontSize: 12, margin: 0 }}>{definition.supportedDataSource}</p>
             </div>
           )}
+
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #1F2937" }}>
+            <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 700 }}>Візуальний ефект блока</div>
+            <p style={{ ...hintStyle, marginBottom: 10 }}>Контур застосовується лише до цього блока. Користувачі зі зменшенням руху побачать статичний варіант.</p>
+            <label style={labelStyle}>Контур</label>
+            <select value={borderEffect} onChange={(e) => setBorderEffect(e.target.value as "none" | "solid" | "gradient")} style={{ ...inputStyle, cursor: "pointer" }}><option value="none">Без ефекту</option><option value="solid">Бігаючий — один колір</option><option value="gradient">Бігаючий — переливчастий</option></select>
+            {borderEffect !== "none" && <div style={{ display: "grid", gridTemplateColumns: borderEffect === "gradient" ? "1fr 1fr" : "1fr", gap: 10, marginTop: 12 }}><div><label style={labelStyle}>Основний колір</label><input type="color" value={effectColor} onChange={(e) => setEffectColor(e.target.value)} style={{ ...inputStyle, height: 38, padding: 4 }} /></div>{borderEffect === "gradient" && <div><label style={labelStyle}>Другий колір</label><input type="color" value={effectSecondaryColor} onChange={(e) => setEffectSecondaryColor(e.target.value)} style={{ ...inputStyle, height: 38, padding: 4 }} /></div>}<div><label style={labelStyle}>Швидкість</label><select value={effectSpeed} onChange={(e) => setEffectSpeed(e.target.value as "slow" | "normal" | "fast")} style={{ ...inputStyle, cursor: "pointer" }}><option value="slow">Повільна</option><option value="normal">Звичайна</option><option value="fast">Швидка</option></select></div></div>}
+          </div>
 
           {schemaDefs.length === 0 ? (
             <p style={{ ...hintStyle, marginTop: 16 }}>{t("noProps")}</p>

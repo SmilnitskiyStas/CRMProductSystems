@@ -47,6 +47,22 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
 
     public void UpdateMembership(LoyaltyMembership membership) => _db.LoyaltyMemberships.Update(membership);
 
+    public async Task<int> ResetAllBalancesAsync(Guid tenantId, string note, CancellationToken ct = default)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            INSERT INTO loyalty_ledger_entries
+              (""Id"", ""TenantId"", ""MembershipId"", ""EntryType"", ""Amount"", ""BalanceAfter"", ""Note"", ""CreatedAt"")
+            SELECT gen_random_uuid(), ""TenantId"", ""Id"", 'expiry', -""Balance"", 0, {note}, NOW()
+            FROM loyalty_memberships WHERE ""TenantId"" = {tenantId} AND ""Balance"" > 0", ct);
+        var affected = await _db.Database.ExecuteSqlInterpolatedAsync(
+            $@"UPDATE loyalty_memberships SET ""Balance"" = 0 WHERE ""TenantId"" = {tenantId} AND ""Balance"" > 0", ct);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $@"UPDATE loyalty_bonus_lots SET ""RemainingAmount"" = 0 WHERE ""TenantId"" = {tenantId} AND ""RemainingAmount"" > 0", ct);
+        await transaction.CommitAsync(ct);
+        return affected;
+    }
+
     public async Task<bool> TryClaimTimestepAsync(
         Guid membershipId, Guid tenantId, long timestep, CancellationToken ct = default)
     {
@@ -99,6 +115,22 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
 
     public Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default) =>
         _db.LoyaltyLedgerEntries.AddAsync(entry, ct).AsTask();
+
+    public Task<List<LoyaltyBonusLot>> GetAvailableBonusLotsAsync(
+        Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
+        _db.LoyaltyBonusLots
+            .Where(x => x.TenantId == tenantId && x.MembershipId == membershipId && x.RemainingAmount > 0)
+            .OrderBy(x => x.ExpiresAt == null)
+            .ThenBy(x => x.ExpiresAt)
+            .ThenBy(x => x.CreatedAt)
+            .ToListAsync(ct);
+
+    public Task AddBonusLotAsync(LoyaltyBonusLot lot, CancellationToken ct = default) =>
+        _db.LoyaltyBonusLots.AddAsync(lot, ct).AsTask();
+
+    public Task<bool> HasPurchaseAccrualAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
+        _db.LoyaltyLedgerEntries.AnyAsync(x => x.TenantId == tenantId && x.MembershipId == membershipId
+            && x.EntryType == LoyaltyEntryType.Accrual && x.PosTransactionId != null, ct);
 
     // ── Settings ─────────────────────────────────────────────────────────────
 

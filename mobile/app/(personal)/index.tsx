@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useRouter } from 'expo-router';
@@ -33,11 +33,12 @@ import type {
 import type { NewsPromotionProduct } from '@/features/loyalty/news';
 import { useConsumerShoppingStore } from '@/features/shopping/store';
 import { registerConsumerProducts } from '@/features/shopping/products';
-import { useConsumerBanners, useConsumerPromotions } from '@/features/consumer-content/hooks';
-import { recordBannerClick, recordBannerView } from '@/features/consumer-content/api';
+import { useConsumerBanners, useConsumerPromotionCampaigns, useConsumerPromotions } from '@/features/consumer-content/hooks';
+import { recordBannerClick, recordBannerView, recordPromotionCampaignEvent } from '@/features/consumer-content/api';
 import { PageRenderer } from '@/features/server-driven-ui/PageRenderer';
 import { useRetailTheme } from '@/features/theme/RetailThemeProvider';
 import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
+import { mergeStoreNetworks } from '@/features/loyalty/selection';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -91,6 +92,10 @@ export default function PersonalHomeScreen() {
   useAutoSelectMembership(membershipsQuery.data);
 
   const memberships = membershipsQuery.data ?? [];
+  const storeNetworks = useMemo(
+    () => mergeStoreNetworks(networksQuery.data, memberships),
+    [memberships, networksQuery.data]
+  );
   const selectedMembership =
     memberships.find((membership) => membership.tenantId === selectedTenantId) ??
     memberships[0];
@@ -102,14 +107,16 @@ export default function PersonalHomeScreen() {
         }
       : null;
   const bannersQuery = useConsumerBanners(contentContext);
+  const promotionCampaignsQuery = useConsumerPromotionCampaigns(contentContext);
   const promotionsQuery = useConsumerPromotions(contentContext);
-  const banners = bannersQuery.data ?? [];
+  const banners = [...(bannersQuery.data ?? []), ...(promotionCampaignsQuery.data ?? [])];
   const discountedProducts = promotionsQuery.data ?? [];
   const fullName = consumerUser?.fullName ?? staffUser?.fullName;
   const isRefreshing =
     membershipsQuery.isRefetching ||
     networksQuery.isRefetching ||
     bannersQuery.isRefetching ||
+    promotionCampaignsQuery.isRefetching ||
     promotionsQuery.isRefetching;
   const newsCardWidth = Math.max(280, screenWidth - 48);
   // A published empty Home page is intentional: the retailer removed every block. Only the
@@ -118,6 +125,11 @@ export default function PersonalHomeScreen() {
     configSource === 'published' || configSource === 'last-valid'
       ? config.pages.home !== undefined
       : Boolean(config.pages.home?.blocks.length);
+
+  useEffect(() => {
+    if (!storeSelectorOpen || !hasPersonalAccess) return;
+    void Promise.all([membershipsQuery.refetch(), networksQuery.refetch()]);
+  }, [storeSelectorOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     registerConsumerProducts(discountedProducts, contentContext?.tenantId);
@@ -133,7 +145,9 @@ export default function PersonalHomeScreen() {
     const impressionKey = `${contentContext.storeId}:${banner.id}`;
     if (viewedBannerIds.current.has(impressionKey)) return;
     viewedBannerIds.current.add(impressionKey);
-    void recordBannerView(contentContext.tenantId, banner.id).catch(() => undefined);
+    void (banner.contentType === 'promotion_campaign'
+      ? recordPromotionCampaignEvent(contentContext, banner.id, 'impression')
+      : recordBannerView(contentContext, banner.id)).catch(() => undefined);
   }, [activeNewsIndex, banners, contentContext]);
 
   function refresh() {
@@ -141,12 +155,15 @@ export default function PersonalHomeScreen() {
     void membershipsQuery.refetch();
     void networksQuery.refetch();
     void bannersQuery.refetch();
+    void promotionCampaignsQuery.refetch();
     void promotionsQuery.refetch();
   }
 
   async function openBanner(news: (typeof banners)[number]) {
     if (!contentContext) return;
-    void recordBannerClick(contentContext.tenantId, news.id).catch(() => undefined);
+    void (news.contentType === 'promotion_campaign'
+      ? recordPromotionCampaignEvent(contentContext, news.id, 'open')
+      : recordBannerClick(contentContext, news.id)).catch(() => undefined);
     if (news.detailMode === 'external' && news.externalUrl) {
       await Linking.openURL(news.externalUrl);
       return;
@@ -187,7 +204,7 @@ export default function PersonalHomeScreen() {
   }
 
   async function findNearestStore() {
-    const stores = (networksQuery.data ?? []).flatMap((network) =>
+    const stores = storeNetworks.flatMap((network) =>
       network.stores
         .filter((store) => Boolean(store.address))
         .map((store) => ({ network, store }))
@@ -798,7 +815,7 @@ export default function PersonalHomeScreen() {
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View className="gap-3 pb-3">
-                  {(networksQuery.data ?? []).map((network) => (
+                  {storeNetworks.map((network) => (
                     <View
                       key={network.tenantId}
                       className="rounded-2xl border border-gray-100 bg-white p-4"
@@ -861,10 +878,17 @@ export default function PersonalHomeScreen() {
                             </Pressable>
                           );
                         })}
+                        {network.stores.length === 0 ? (
+                          <View className="rounded-xl bg-gray-50 px-3 py-4">
+                            <Text className="text-center text-sm text-gray-500">
+                              Торгові точки цієї мережі ще завантажуються
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                     </View>
                   ))}
-                  {!networksQuery.data?.length ? (
+                  {!storeNetworks.length ? (
                     <View className="items-center rounded-2xl bg-white px-5 py-12">
                       <Ionicons name="storefront-outline" size={38} color="#d1d5db" />
                       <Text className="mt-3 text-center text-sm text-gray-500">

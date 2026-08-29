@@ -9,10 +9,15 @@ public interface IConsumerContentService
         Guid tenantId, Guid storeId, CancellationToken ct = default);
 
     Task<(bool Success, string? Error)> RecordBannerEventAsync(
-        Guid tenantId, Guid bannerId, string eventType, Guid? consumerAccountId, CancellationToken ct = default);
+        Guid tenantId, Guid bannerId, Guid storeId, string eventType, Guid? consumerAccountId, CancellationToken ct = default);
 
     Task<(IReadOnlyList<ConsumerPromotionDto>? Promotions, string? Error)> GetActivePromotionsAsync(
         Guid tenantId, Guid storeId, CancellationToken ct = default);
+    Task<(IReadOnlyList<ConsumerPromotionCampaignDto>? Campaigns, string? Error)> GetActivePromotionCampaignsAsync(
+        Guid tenantId, Guid storeId, Guid? consumerAccountId, CancellationToken ct = default);
+    Task<(bool Success, string? Error)> RecordPromotionCampaignEventAsync(
+        Guid tenantId, Guid campaignId, Guid storeId, string eventType, Guid? consumerAccountId,
+        CancellationToken ct = default);
 
     Task<(PagedResult<ConsumerCatalogItemDto>? Catalog, string? Error)> GetCatalogAsync(
         Guid tenantId, Guid storeId, string? search, Guid? categoryId, int page, int pageSize,

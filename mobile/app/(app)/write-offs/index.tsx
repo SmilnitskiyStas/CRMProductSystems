@@ -1,15 +1,52 @@
+import { useCallback, useState } from 'react';
 import { View, Text, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useWriteOffs } from '@/features/write-offs/hooks/useWriteOffs';
 import { WriteOffCard } from '@/features/write-offs/components/WriteOffCard';
 import { useAuthStore } from '@/features/auth/store';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
+import { listQueuedWriteOffs, subscribeWriteOffQueue, type QueuedWriteOff } from '@/features/offline-mutations/writeOffQueue';
+import { WRITE_OFF_REASON_LABELS } from '@/features/write-offs/types';
 
 export default function WriteOffsScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { data, isLoading, isError, refetch } = useWriteOffs(user?.locationId ?? undefined);
+  const selectedLocationId = useWorkspaceLocationStore((state) => state.selectedLocationId);
+  const locationId = selectedLocationId === undefined ? user?.locationId : selectedLocationId;
+  const { data, isLoading, isError, refetch } = useWriteOffs(locationId ?? undefined);
+  const [localItems, setLocalItems] = useState<QueuedWriteOff[]>([]);
+
+  const loadLocalItems = useCallback(() => {
+    if (!user?.tenantId) return;
+    void listQueuedWriteOffs({ tenantId: user.tenantId, userId: user.id }).then((items) => {
+      setLocalItems(items.filter((item) => !locationId || item.payload.locationId === locationId));
+    });
+  }, [locationId, user?.id, user?.tenantId]);
+
+  useFocusEffect(useCallback(() => {
+    loadLocalItems();
+    return subscribeWriteOffQueue(loadLocalItems);
+  }, [loadLocalItems]));
+
+  const localHeader = localItems.length > 0 ? (
+    <View className="mb-4 gap-2">
+      <Text className="text-xs font-semibold text-gray-500 uppercase">Збережено на телефоні ({localItems.length})</Text>
+      {localItems.map((item) => (
+        <View key={item.operationId} className={`rounded-xl border p-4 ${item.status === 'uncertain' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
+          <View className="flex-row items-center justify-between">
+            <Text className="font-semibold text-gray-900">{item.payload.items.length} поз. · {WRITE_OFF_REASON_LABELS[item.payload.reason]}</Text>
+            <Text className={`text-xs font-semibold ${item.status === 'uncertain' ? 'text-amber-700' : 'text-blue-700'}`}>
+              {item.status === 'uncertain' ? 'Потребує перевірки' : item.status === 'failed' ? 'Очікує повтору' : 'Очікує синхронізації'}
+            </Text>
+          </View>
+          <Text className="text-xs text-gray-500 mt-1">{new Date(item.createdAt).toLocaleString('uk-UA')}</Text>
+          {item.message && <Text className="text-xs text-amber-800 mt-2">{item.message}</Text>}
+        </View>
+      ))}
+    </View>
+  ) : null;
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -32,11 +69,11 @@ export default function WriteOffsScreen() {
         </TouchableOpacity>
       </View>
 
-      {isLoading ? (
+      {isLoading && localItems.length === 0 ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#16a34a" />
         </View>
-      ) : isError ? (
+      ) : isError && localItems.length === 0 ? (
         <View className="flex-1 items-center justify-center px-4">
           <Text className="text-red-500 text-center">Помилка завантаження</Text>
           <TouchableOpacity onPress={() => { void refetch(); }} className="mt-4">
@@ -45,7 +82,7 @@ export default function WriteOffsScreen() {
         </View>
       ) : (
         <FlatList
-          data={data}
+          data={data ?? []}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <WriteOffCard
@@ -55,10 +92,11 @@ export default function WriteOffsScreen() {
           )}
           ItemSeparatorComponent={() => <View className="h-2" />}
           contentContainerClassName="px-4 pb-6 pt-2"
+          ListHeaderComponent={localHeader}
           refreshing={false}
-          onRefresh={() => { void refetch(); }}
+          onRefresh={() => { loadLocalItems(); void refetch(); }}
           ListEmptyComponent={
-            <View className="items-center justify-center py-20">
+            localItems.length === 0 ? <View className="items-center justify-center py-20">
               <Ionicons name="document-outline" size={48} color="#d1d5db" />
               <Text className="text-gray-400 text-base mt-3">Списань немає</Text>
               <TouchableOpacity
@@ -67,7 +105,7 @@ export default function WriteOffsScreen() {
               >
                 <Text className="text-white font-semibold">Створити перше</Text>
               </TouchableOpacity>
-            </View>
+            </View> : null
           }
         />
       )}

@@ -548,6 +548,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("NOW()");
 
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -557,8 +560,13 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasIndex("ConsumerAccountId");
 
+                    b.HasIndex("StoreId");
+
                     b.HasIndex("TenantId", "BannerId", "EventType")
                         .HasDatabaseName("idx_banner_events_tenant_banner_type");
+
+                    b.HasIndex("TenantId", "BannerId", "StoreId", "OccurredAt")
+                        .HasDatabaseName("idx_banner_events_analytics_store_date");
 
                     b.ToTable("banner_events", (string)null);
                 });
@@ -1229,6 +1237,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid?>("ProductStockId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("PromotionCampaignId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1266,6 +1277,8 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("ApprovedBy");
 
                     b.HasIndex("CreatedBy");
+
+                    b.HasIndex("PromotionCampaignId");
 
                     b.HasIndex("TenantId", "Status", "ValidFrom", "ValidUntil")
                         .HasDatabaseName("idx_discounts_active")
@@ -1763,6 +1776,45 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("location_zones", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyBonusLot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("OriginalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RemainingAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("SourceLedgerEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("SourceLedgerEntryId");
+
+                    b.HasIndex("TenantId", "MembershipId", "ExpiresAt");
+
+                    b.ToTable("loyalty_bonus_lots", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyLedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1936,6 +1988,47 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("decimal(5,2)")
                         .HasDefaultValue(3.0m);
 
+                    b.Property<int>("AnnualBonusResetDay")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<bool>("AnnualBonusResetEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("AnnualBonusResetHour")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("AnnualBonusResetMonth")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<bool>("BonusExclusionsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("BonusLifetimeDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(365);
+
+                    b.Property<bool>("BonusLifetimeEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("BonusResetTimeZone")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("Europe/Kyiv");
+
+                    b.Property<int>("BonusUnitsPerCurrencyUnit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("CodeTtlSeconds")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -1947,20 +2040,72 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("varchar(20)")
                         .HasDefaultValue("barcode");
 
+                    b.Property<bool>("ExcludeDiscountedItems")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ExcludedCategoryIdsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("ExcludedProductIdsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
+
+                    b.Property<bool>("ExclusionsApplyToAccrual")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ExclusionsApplyToRedemption")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal>("FirstPurchaseRewardAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<bool>("FirstPurchaseRewardEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<int?>("LastAnnualBonusResetYear")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("MinRedemptionBalance")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(18,2)")
                         .HasDefaultValue(0m);
 
+                    b.Property<decimal>("ProfileCompletionRewardAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<bool>("ProfileCompletionRewardEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<decimal>("RedemptionCapPercent")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(5,2)")
                         .HasDefaultValue(50.0m);
+
+                    b.Property<decimal>("ReviewRewardAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<bool>("ReviewRewardEnabled")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
@@ -1969,6 +2114,14 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("NOW()");
+
+                    b.Property<decimal>("WelcomeRewardAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<bool>("WelcomeRewardEnabled")
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -2349,6 +2502,217 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("ReceiptId");
 
                     b.ToTable("marketplace_order_receipt_items", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CatalogId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CatalogId");
+
+                    b.HasIndex("ConsumerAccountId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("TenantId", "CatalogId", "EventType", "OccurredAt")
+                        .HasDatabaseName("idx_mobile_catalog_events_analytics");
+
+                    b.HasIndex("TenantId", "ConsumerAccountId", "ProductId", "OccurredAt")
+                        .HasDatabaseName("idx_mobile_catalog_events_attribution");
+
+                    b.ToTable("mobile_catalog_events", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ImageUrlSnapshot")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsFeatured")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("MobileDiscountPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("MobilePriceSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<decimal?>("RegularPriceSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("SettingsId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UnitSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("SettingsId", "ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mobile_catalog_items_settings_product");
+
+                    b.HasIndex("TenantId", "SortOrder")
+                        .HasDatabaseName("idx_mobile_catalog_items_tenant_order");
+
+                    b.ToTable("mobile_catalog_items", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SettingsId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("SettingsId", "LocationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mobile_catalog_locations_settings_location");
+
+                    b.HasIndex("TenantId", "LocationId")
+                        .HasDatabaseName("idx_mobile_catalog_locations_tenant_location");
+
+                    b.ToTable("mobile_catalog_locations", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BannerUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("character varying(1200)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LayoutMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("PublishAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime?>("UnpublishAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Status", "PublishAt")
+                        .HasDatabaseName("idx_mobile_catalog_settings_tenant_status_publish");
+
+                    b.ToTable("mobile_catalog_settings", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfiguration", b =>
@@ -2733,6 +3097,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("LoyaltyMembershipId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PaymentType")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -2776,6 +3143,10 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("CustomerId")
                         .HasDatabaseName("idx_pos_tx_customer")
                         .HasFilter("\"CustomerId\" IS NOT NULL");
+
+                    b.HasIndex("LoyaltyMembershipId")
+                        .HasDatabaseName("idx_pos_tx_loyalty_membership")
+                        .HasFilter("\"LoyaltyMembershipId\" IS NOT NULL");
 
                     b.HasIndex("ShiftId");
 
@@ -3497,6 +3868,197 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("promo_cannibalization", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AccentColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("AudienceTierIdsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("AudienceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("BackgroundColor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Eyebrow")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Terms")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Status", "StartsAt");
+
+                    b.ToTable("promotion_campaigns", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaignEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("ConsumerAccountId");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("TenantId", "StoreId", "OccurredAt")
+                        .HasDatabaseName("idx_promotion_campaign_events_store");
+
+                    b.HasIndex("TenantId", "CampaignId", "EventType", "OccurredAt")
+                        .HasDatabaseName("idx_promotion_campaign_events_analytics");
+
+                    b.ToTable("promotion_campaign_events", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaignLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("CampaignId", "LocationId")
+                        .IsUnique();
+
+                    b.ToTable("promotion_campaign_locations", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaignProduct", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("DiscountPercent")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("CampaignId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("promotion_campaign_products", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ProviderRole", b =>
@@ -6125,6 +6687,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("ConsumerAccountId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", null)
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.BannerLocation", b =>
@@ -6318,6 +6885,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasForeignKey("CreatedBy")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("ShelfGuard.Domain.Entities.PromotionCampaign", null)
+                        .WithMany()
+                        .HasForeignKey("PromotionCampaignId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -6435,6 +7007,25 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyBonusLot", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyMembership", "Membership")
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyLedgerEntry", "SourceLedgerEntry")
+                        .WithMany()
+                        .HasForeignKey("SourceLedgerEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Membership");
+
+                    b.Navigation("SourceLedgerEntry");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.LoyaltyLedgerEntry", b =>
@@ -6658,6 +7249,78 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Receipt");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogEvent", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.MobileCatalogSettings", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ConsumerAccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", null)
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogItem", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Item", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.MobileCatalogSettings", "Settings")
+                        .WithMany("Items")
+                        .HasForeignKey("SettingsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Settings");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogLocation", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.MobileCatalogSettings", "Settings")
+                        .WithMany("Locations")
+                        .HasForeignKey("SettingsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Location");
+
+                    b.Navigation("Settings");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogSettings", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfiguration", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.MobileConfigurationVersion", "DraftVersion")
@@ -6748,6 +7411,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("ShelfGuard.Domain.Entities.LoyaltyMembership", "LoyaltyMembership")
+                        .WithMany()
+                        .HasForeignKey("LoyaltyMembershipId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ShelfGuard.Domain.Entities.PosShift", "Shift")
                         .WithMany()
                         .HasForeignKey("ShiftId")
@@ -6760,6 +7428,8 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+
+                    b.Navigation("LoyaltyMembership");
 
                     b.Navigation("Shift");
 
@@ -7018,6 +7688,64 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("AffectedProduct");
 
                     b.Navigation("Discount");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaignEvent", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.PromotionCampaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ConsumerAccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", null)
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaignLocation", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.PromotionCampaign", "Campaign")
+                        .WithMany("Locations")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaignProduct", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.PromotionCampaign", "Campaign")
+                        .WithMany("Products")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Item", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ProviderScheduleSlot", b =>
@@ -7839,6 +8567,13 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Items");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileCatalogSettings", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Locations");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.MobileConfiguration", b =>
                 {
                     b.Navigation("Theme");
@@ -7857,6 +8592,13 @@ namespace ShelfGuard.Infrastructure.Migrations
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionOrder", b =>
                 {
                     b.Navigation("Consumptions");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaign", b =>
+                {
+                    b.Navigation("Locations");
+
+                    b.Navigation("Products");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Recipe", b =>

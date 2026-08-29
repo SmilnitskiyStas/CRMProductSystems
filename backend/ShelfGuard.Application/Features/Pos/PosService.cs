@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Application.Features.Stock;
@@ -344,6 +345,7 @@ public sealed class PosService : IPosService
             Status = "pending_fiscalization",
             CreatedAt = DateTime.UtcNow,
             CustomerId = customer?.Id,
+            LoyaltyMembershipId = request.LoyaltyMembershipId,
         };
 
         var txItemDtos = new List<SaleItemDto>();
@@ -408,6 +410,17 @@ public sealed class PosService : IPosService
         // Set totals
         tx.TotalAmount = txItemDtos.Sum(i => i.Total);
 
+        var excludedProductIds = loyaltySettings?.BonusExclusionsEnabled == true
+            ? JsonSerializer.Deserialize<HashSet<Guid>>(loyaltySettings.ExcludedProductIdsJson) ?? [] : [];
+        var excludedCategoryIds = loyaltySettings?.BonusExclusionsEnabled == true
+            ? JsonSerializer.Deserialize<HashSet<Guid>>(loyaltySettings.ExcludedCategoryIdsJson) ?? [] : [];
+        bool IsBonusExcluded(ResolvedSaleItem item) => loyaltySettings?.BonusExclusionsEnabled == true &&
+            (excludedProductIds.Contains(item.Product.Id) ||
+             (item.Product.CategoryId is Guid categoryId && excludedCategoryIds.Contains(categoryId)) ||
+             (loyaltySettings.ExcludeDiscountedItems && item.DiscountAmount > 0));
+        var eligibleBonusTotal = resolvedItems.Select((item, index) => new { item, total = txItemDtos[index].Total })
+            .Where(x => !IsBonusExcluded(x.item)).Sum(x => x.total);
+
         // TASK-405 (Loyalty Фаза 0): redemption/accrual computed on the NET (post-redemption)
         // amount — matches the plan's "чиста сума, від якої далі рахується нарахування", and
         // means VAT below is also computed on what the customer actually ends up paying.
@@ -420,20 +433,37 @@ public sealed class PosService : IPosService
 
         if (membership is not null && loyaltySettings is { IsEnabled: true })
         {
+            var qualifiesForFirstPurchaseReward = loyaltySettings.FirstPurchaseRewardEnabled
+                && loyaltySettings.FirstPurchaseRewardAmount > 0m
+                && !await _loyalty.HasPurchaseAccrualAsync(tenantId, membership.Id, ct);
             if (request.RedeemAmount is > 0m)
             {
                 var redeem = request.RedeemAmount.Value;
-                var cap = Math.Round(tx.TotalAmount * loyaltySettings.RedemptionCapPercent / 100m, 2);
-                if (redeem > cap)
+                var bonusUnitsPerCurrencyUnit = loyaltySettings.BonusUnitsPerCurrencyUnit;
+                var redeemedCurrencyAmount = Math.Round(
+                    redeem / bonusUnitsPerCurrencyUnit, 2, MidpointRounding.AwayFromZero);
+                var redemptionBase = loyaltySettings.BonusExclusionsEnabled && loyaltySettings.ExclusionsApplyToRedemption
+                    ? eligibleBonusTotal : tx.TotalAmount;
+                var capInCurrency = Math.Round(redemptionBase * loyaltySettings.RedemptionCapPercent / 100m, 2);
+                var capInBonusUnits = Math.Floor(capInCurrency * bonusUnitsPerCurrencyUnit * 100m) / 100m;
+                if (redeem > capInBonusUnits)
                     return (null, $"Redeem amount exceeds the redemption cap ({loyaltySettings.RedemptionCapPercent:0.##}% of the sale).", 400);
                 if (redeem > membership.Balance)
                     return (null, "Insufficient loyalty balance.", 400);
                 if (membership.Balance - redeem < loyaltySettings.MinRedemptionBalance)
                     return (null, "Redemption would drop the balance below the minimum allowed.", 400);
 
-                tx.TotalAmount -= redeem;
+                tx.TotalAmount -= redeemedCurrencyAmount;
                 membership.Balance -= redeem;
                 loyaltyRedeemed = redeem;
+                var remainingToAllocate = redeem;
+                foreach (var lot in await _loyalty.GetAvailableBonusLotsAsync(tenantId, membership.Id, ct))
+                {
+                    if (remainingToAllocate <= 0) break;
+                    var consumed = Math.Min(lot.RemainingAmount, remainingToAllocate);
+                    lot.RemainingAmount -= consumed;
+                    remainingToAllocate -= consumed;
+                }
                 await _loyalty.AddLedgerEntryAsync(new LoyaltyLedgerEntry
                 {
                     TenantId = tenantId,
@@ -445,16 +475,22 @@ public sealed class PosService : IPosService
                 }, ct);
             }
 
-            // Accrual reads tx.TotalAmount AFTER the possible reduction above. TASK-615: scaled
-            // by the membership's current tier accrual multiplier — 1.0 (no change) when the
-            // membership has no CurrentTier yet, so this behaves exactly as before that feature.
-            var tierMultiplier = membership.CurrentTier?.AccrualMultiplier ?? 1.0m;
-            var accrual = Math.Round(tx.TotalAmount * loyaltySettings.AccrualRatePercent / 100m * tierMultiplier, 2);
+            // Each configured tier owns its cashback percentage directly. The legacy global
+            // rate remains only as a safe fallback until a membership receives its first tier.
+            var cashbackPercent = membership.CurrentTier?.AccrualMultiplier
+                ?? loyaltySettings.AccrualRatePercent;
+            var accrualBase = loyaltySettings.BonusExclusionsEnabled && loyaltySettings.ExclusionsApplyToAccrual
+                ? Math.Max(0m, eligibleBonusTotal - ((loyaltyRedeemed ?? 0m) / loyaltySettings.BonusUnitsPerCurrencyUnit))
+                : tx.TotalAmount;
+            var accrual = Math.Round(
+                accrualBase * cashbackPercent / 100m * loyaltySettings.BonusUnitsPerCurrencyUnit,
+                2,
+                MidpointRounding.AwayFromZero);
             if (accrual > 0m)
             {
                 membership.Balance += accrual;
                 loyaltyAccrued = accrual;
-                await _loyalty.AddLedgerEntryAsync(new LoyaltyLedgerEntry
+                var accrualEntry = new LoyaltyLedgerEntry
                 {
                     TenantId = tenantId,
                     MembershipId = membership.Id,
@@ -462,7 +498,34 @@ public sealed class PosService : IPosService
                     Amount = accrual,
                     BalanceAfter = membership.Balance,
                     PosTransactionId = tx.Id,
+                };
+                await _loyalty.AddLedgerEntryAsync(accrualEntry, ct);
+                await _loyalty.AddBonusLotAsync(new LoyaltyBonusLot
+                {
+                    TenantId = tenantId,
+                    MembershipId = membership.Id,
+                    SourceLedgerEntryId = accrualEntry.Id,
+                    OriginalAmount = accrual,
+                    RemainingAmount = accrual,
+                    ExpiresAt = loyaltySettings.BonusLifetimeEnabled
+                        ? DateTimeOffset.UtcNow.AddDays(loyaltySettings.BonusLifetimeDays)
+                        : null,
                 }, ct);
+            }
+
+            if (qualifiesForFirstPurchaseReward)
+            {
+                var reward = loyaltySettings.FirstPurchaseRewardAmount;
+                membership.Balance += reward;
+                var rewardEntry = new LoyaltyLedgerEntry { TenantId = tenantId, MembershipId = membership.Id,
+                    EntryType = LoyaltyEntryType.Reward, Amount = reward, BalanceAfter = membership.Balance,
+                    PosTransactionId = tx.Id, Note = "Винагорода за першу покупку" };
+                await _loyalty.AddLedgerEntryAsync(rewardEntry, ct);
+                await _loyalty.AddBonusLotAsync(new LoyaltyBonusLot { TenantId = tenantId,
+                    MembershipId = membership.Id, SourceLedgerEntryId = rewardEntry.Id,
+                    OriginalAmount = reward, RemainingAmount = reward,
+                    ExpiresAt = loyaltySettings.BonusLifetimeEnabled
+                        ? DateTimeOffset.UtcNow.AddDays(loyaltySettings.BonusLifetimeDays) : null }, ct);
             }
 
             _loyalty.UpdateMembership(membership);
@@ -839,4 +902,3 @@ public sealed class PosService : IPosService
         decimal PriceRetail,
         decimal DiscountAmount);
 }
-

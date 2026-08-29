@@ -1,5 +1,5 @@
 import type { LoyaltyMembershipSummary } from '../types';
-import { selectMembershipForTenant } from '../selection';
+import { mergeStoreNetworks, selectMembershipForTenant } from '../selection';
 
 function membership(tenantId: string, balance: number, status = 'active'): LoyaltyMembershipSummary {
   return {
@@ -28,4 +28,12 @@ describe('retailer-specific loyalty selection', () => {
     expect(selectMembershipForTenant(memberships, null)).toBeNull();
     expect(selectMembershipForTenant([membership('a', 10, 'blocked')], 'a')).toBeNull();
   });
+});
+
+test('keeps joined networks and their preferred stores in the home store selector', () => {
+  const joined = { ...membership('a', 10), preferredStoreId: 'store-a', preferredStoreName: 'Центр', preferredStoreAddress: 'Хрещатик 1' };
+  expect(mergeStoreNetworks([], [joined])).toEqual([expect.objectContaining({
+    tenantId: joined.tenantId,
+    stores: [{ storeId: 'store-a', storeName: 'Центр', address: 'Хрещатик 1' }],
+  })]);
 });

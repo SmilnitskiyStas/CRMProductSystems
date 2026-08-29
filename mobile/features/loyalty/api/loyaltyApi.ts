@@ -3,6 +3,8 @@ import type {
   LoyaltyCode,
   LoyaltyLedgerEntry,
   LoyaltyMembershipSummary,
+  LoyaltyTierProgress,
+  LoyaltyTierDefinition,
   LoyaltyNetworkSummary,
   ManualLoyaltyAdjustRequest,
   PagedResult,
@@ -16,6 +18,15 @@ import type {
 export async function getMemberships(): Promise<LoyaltyMembershipSummary[]> {
   const { data } = await personalApiClient.get<LoyaltyMembershipSummary[]>('/consumer/loyalty/memberships');
   return data;
+}
+
+export async function getLoyaltyTierProgress(tenantId: string): Promise<LoyaltyTierProgress> {
+  return (await personalApiClient.get<LoyaltyTierProgress>(`/consumer/loyalty/${tenantId}/tiers`)).data;
+}
+
+/** Consumer-safe public ladder. Requires the backend contract documented in API_GAP.md. */
+export async function getLoyaltyTierLadder(tenantId: string): Promise<LoyaltyTierDefinition[]> {
+  return (await personalApiClient.get<LoyaltyTierDefinition[]>(`/consumer/loyalty/${tenantId}/tiers/ladder`)).data;
 }
 
 export async function getAvailableNetworks(): Promise<LoyaltyNetworkSummary[]> {

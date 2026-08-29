@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, Text, View, type ImageStyle, type StyleProp } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSelectedConsumerContext } from '@/features/consumer-content/hooks';
 import { useSetPreferredStore } from '@/features/loyalty/hooks/useLoyalty';
 import { useAuthStore } from '@/features/auth/store';
@@ -244,12 +245,26 @@ export function StoreListBlock({ block }: BlockComponentProps<StoreListProps>) {
   const theme = useRetailTheme();
   const [expanded, setExpanded] = useState(false);
   const hasPersonalAccess = useAuthStore((state) => state.personalAccessToken !== null);
-  const { membership } = useSelectedConsumerContext(hasPersonalAccess);
+  const { membership, membershipsQuery } = useSelectedConsumerContext(hasPersonalAccess);
+  const queryClient = useQueryClient();
   const preferredStore = useSetPreferredStore();
+
+  function toggleStoreList() {
+    const opening = !expanded;
+    setExpanded(opening);
+    if (opening && hasPersonalAccess) {
+      void Promise.all([
+        membershipsQuery.refetch(),
+        queryClient.refetchQueries({ queryKey: ['loyalty', 'networks'], type: 'active' }),
+      ]);
+    }
+  }
 
   function selectStore(storeId: string) {
     if (!membership || preferredStore.isPending) return;
-    void preferredStore.mutateAsync({ tenantId: membership.tenantId, storeId });
+    void preferredStore.mutateAsync({ tenantId: membership.tenantId, storeId })
+      .then(() => setExpanded(false))
+      .catch(() => undefined);
   }
   return (
     <View
@@ -264,7 +279,7 @@ export function StoreListBlock({ block }: BlockComponentProps<StoreListProps>) {
         accessibilityRole="button"
         accessibilityLabel={expanded ? 'Закрити список магазинів' : 'Відкрити список магазинів'}
         accessibilityState={{ expanded }}
-        onPress={() => setExpanded((current) => !current)}
+        onPress={toggleStoreList}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -279,7 +294,8 @@ export function StoreListBlock({ block }: BlockComponentProps<StoreListProps>) {
         <View style={{ flex: 1, marginLeft: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: 17, fontWeight: '800' }}>{block.props.title || 'Магазини'}</Text>
           <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-            {block.props.items.length ? `${block.props.items.length} доступних` : 'Немає доступних магазинів'}
+            {membership?.preferredStoreName
+              ?? (block.props.items.length ? `${block.props.items.length} доступних` : 'Немає доступних магазинів')}
           </Text>
         </View>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={21} color={theme.colors.textSecondary} />
@@ -317,11 +333,9 @@ export function StoreListBlock({ block }: BlockComponentProps<StoreListProps>) {
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="location-outline" size={18} color={theme.colors.primary} />
                 <Text style={{ flex: 1, marginLeft: theme.spacing.sm, color: theme.colors.textPrimary, fontWeight: '700' }}>{item.name}</Text>
-                {item.openNow !== undefined ? <Text style={{ color: item.openNow ? theme.colors.primary : theme.colors.textSecondary, fontSize: 12 }}>{item.openNow ? 'Відчинено' : 'Зачинено'}</Text> : null}
                 {membership?.preferredStoreId === item.id ? <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} /> : null}
               </View>
               {item.address ? <Text style={{ color: theme.colors.textSecondary, marginLeft: 18 + theme.spacing.sm, marginTop: 5 }}>{item.address}</Text> : null}
-              {block.props.showDistance !== false && item.distanceKm !== undefined ? <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginLeft: 18 + theme.spacing.sm, marginTop: 4 }}>{item.distanceKm.toFixed(1)} км</Text> : null}
             </Pressable>
           ))}
           {!block.props.items.length ? <Text style={{ paddingVertical: theme.spacing.md, textAlign: 'center', color: theme.colors.textSecondary }}>Магазини цієї мережі поки недоступні.</Text> : null}

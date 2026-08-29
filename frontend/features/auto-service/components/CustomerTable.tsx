@@ -7,6 +7,7 @@ import { useCustomers, useDeleteCustomer, useVehicles } from "../hooks/useAutoSe
 import { CustomerForm } from "./CustomerForm";
 import { VehicleForm } from "./VehicleForm";
 import type { CustomerDto } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 // ─── Vehicle sub-row ──────────────────────────────────────────────────────────
 
@@ -113,6 +114,78 @@ export function CustomerTable() {
     return <div style={{ padding: "32px", color: "#F87171", fontSize: 13 }}>{t("loadError")}</div>;
   }
 
+  // Column 0 is the expand toggle (a leading utility column, structurally like the checkbox
+  // column in shelf/StockTable.tsx), so the real "label" column (customer name) sits at index 1
+  // and needs an explicit `align: "left"` override — the default would otherwise center it.
+  const columns: TableColumn<CustomerDto>[] = [
+    {
+      key: "expand",
+      width: 32,
+      align: "center",
+      header: "",
+      render: (customer) =>
+        expandedId === customer.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />,
+      cellStyle: { color: "#4B5563" },
+    },
+    {
+      key: "name",
+      align: "left",
+      header: t("headerCustomer"),
+      render: (customer) => (
+        <div>
+          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>{customer.name}</div>
+          {customer.notes && (
+            <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{customer.notes}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      render: (customer) => customer.phone ?? "—",
+    },
+    {
+      key: "email",
+      header: t("headerEmail"),
+      render: (customer) => customer.email ?? "—",
+    },
+    {
+      key: "vehicles",
+      header: t("headerVehicles"),
+      render: (customer) => customer.vehicleCount,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (customer) => (
+        <div
+          style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setEditingCustomer(customer)}
+            style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
+            title={t("editTitle")}
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={() => {
+              if (confirm(t("deleteConfirm", { name: customer.name }))) {
+                deleteCustomer.mutate(customer.id);
+              }
+            }}
+            style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
+            title={t("deleteTitle")}
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       {/* Toolbar */}
@@ -144,100 +217,17 @@ export function CustomerTable() {
       </div>
 
       {/* Table */}
-      <div style={{ background: "#111827", border: "1px solid #1F2937", borderRadius: 10, overflow: "hidden" }}>
-        {/* Header */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "32px 1fr 160px 160px 80px 80px",
-            padding: "10px 16px",
-            borderBottom: "1px solid #1F2937",
-          }}
-        >
-          {["", t("headerCustomer"), t("headerPhone"), t("headerEmail"), t("headerVehicles"), ""].map((h, i) => (
-            <div key={i} style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-              {h}
-            </div>
-          ))}
-        </div>
-
-        {/* Rows */}
-        {!customers || customers.length === 0 ? (
-          <div style={{ padding: "40px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            {t("empty")}
-          </div>
-        ) : (
-          customers.map((customer) => {
-            const expanded = expandedId === customer.id;
-            return (
-              <div key={customer.id} style={{ borderBottom: "1px solid #1F2937" }}>
-                {/* Row */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "32px 1fr 160px 160px 80px 80px",
-                    padding: "12px 16px",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    transition: "background 0.1s",
-                  }}
-                  onClick={() => setExpandedId(expanded ? null : customer.id)}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#0D1117"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                >
-                  {/* Expand toggle */}
-                  <div style={{ color: "#4B5563" }}>
-                    {expanded
-                      ? <ChevronDown size={14} />
-                      : <ChevronRight size={14} />
-                    }
-                  </div>
-                  {/* Name */}
-                  <div>
-                    <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>{customer.name}</div>
-                    {customer.notes && (
-                      <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{customer.notes}</div>
-                    )}
-                  </div>
-                  {/* Phone */}
-                  <div style={{ color: "#9CA3AF", fontSize: 13 }}>{customer.phone ?? "—"}</div>
-                  {/* Email */}
-                  <div style={{ color: "#9CA3AF", fontSize: 13 }}>{customer.email ?? "—"}</div>
-                  {/* Vehicle count */}
-                  <div style={{ color: "#9CA3AF", fontSize: 13 }}>{customer.vehicleCount}</div>
-                  {/* Actions */}
-                  <div
-                    style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={() => setEditingCustomer(customer)}
-                      style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
-                      title={t("editTitle")}
-                    >
-                      <Pencil size={13} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(t("deleteConfirm", { name: customer.name }))) {
-                          deleteCustomer.mutate(customer.id);
-                        }
-                      }}
-                      style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
-                      title={t("deleteTitle")}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Expanded vehicle list */}
-                {expanded && <CustomerVehicleList customer={customer} />}
-              </div>
-            );
-          })
-        )}
-      </div>
+      <Table
+        columns={columns}
+        rows={customers ?? []}
+        rowKey={(customer) => customer.id}
+        onRowClick={(customer) =>
+          setExpandedId((prev) => (prev === customer.id ? null : customer.id))
+        }
+        expandedRowKey={expandedId}
+        renderExpanded={(customer) => <CustomerVehicleList customer={customer} />}
+        emptyMessage={t("empty")}
+      />
 
       {/* Modals */}
       {showCreate && <CustomerForm onClose={() => setShowCreate(false)} />}

@@ -74,6 +74,20 @@ describe('mobile navigation policy', () => {
     expect(navigationDecision('/(app)/production', { user: supplier, settings }).allowed).toBe(false);
   });
 
+  test('marketplace receiving is available to a manager with the marketplace tab and module', () => {
+    expect(navigationDecision('/(app)/marketplace-orders', {
+      user: user('store_manager', [], ['marketplace']),
+      settings: allModules,
+    })).toEqual({ allowed: true });
+  });
+
+  test('marketplace receiving fails closed when the assigned tabs exclude marketplace', () => {
+    expect(navigationDecision('/(app)/marketplace-orders', {
+      user: user('store_manager', [], ['inventory']),
+      settings: allModules,
+    })).toEqual({ allowed: false, reason: 'access_denied' });
+  });
+
   test('shortcut filtering uses the same route policy', () => {
     const items = [{ href: '/(app)/pos' }, { href: '/(app)/transfers' }];
     expect(visibleRoutes(items, { user: user('cashier'), settings: allModules }))

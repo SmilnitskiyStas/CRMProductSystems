@@ -36,8 +36,11 @@ export async function getProductionOrderById(id: string): Promise<ProductionOrde
 
 export async function createProductionOrder(
   dto: ProductionOrderCreate,
+  idempotencyKey?: string,
 ): Promise<ProductionOrderListItem> {
-  const { data } = await apiClient.post('/production/orders', dto);
+  const { data } = await apiClient.post('/production/orders', dto, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  });
   return data;
 }
 

@@ -27,7 +27,7 @@ export default function ConsumerAppNavigationPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 800, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
           {t("title")}

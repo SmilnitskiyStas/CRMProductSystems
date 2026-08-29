@@ -109,6 +109,15 @@ const draftMobileConfigSchema = {
           },
           label: { type: 'string', minLength: 1, maxLength: 30 },
           icon: { enum: ['home', 'tag', 'grid', 'qr', 'ticket', 'map', 'news', 'user'] },
+          isPrimary: { type: 'boolean' },
+          primaryColor: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$' },
+          primaryBarColor: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$' },
+          primarySize: { enum: ['large', 'xlarge'] },
+          primaryStyle: { enum: ['floating', 'raisedContour'] },
+          primaryRaised: { type: 'boolean' },
+          primaryGlow: { type: 'boolean' },
+          primaryGlowAnimated: { type: 'boolean' },
+          primaryGlowSpeed: { enum: ['slow', 'normal', 'fast'] },
         },
       },
     },
@@ -204,7 +213,8 @@ export function validateMobileConfig(value: unknown): MobileConfigValidationResu
   const navigationIsSafe =
     new Set(routeTypes).size === routeTypes.length &&
     routeTypes.includes('home') &&
-    routeTypes.includes('profile');
+    routeTypes.includes('profile') &&
+    normalized.navigation.filter((item) => item.isPrimary).length <= 1;
   return {
     valid: navigationIsSafe,
     config: navigationIsSafe ? normalized : null,

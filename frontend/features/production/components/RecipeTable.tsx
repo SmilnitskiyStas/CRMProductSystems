@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useRecipes, useDeactivateRecipe } from "../hooks/useProduction";
 import { RecipeForm } from "./RecipeForm";
 import type { RecipeListItemDto } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 interface Props {
   showInactive: boolean;
@@ -23,6 +24,72 @@ export function RecipeTable({ showInactive }: Props) {
     if (!confirm(t("deactivateConfirm"))) return;
     deactivate.mutate(id);
   }
+
+  const columns: TableColumn<RecipeListItemDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (recipe) => recipe.name,
+    },
+    {
+      key: "outputItem",
+      header: t("headerOutputItem"),
+      render: (recipe) => recipe.outputItemName,
+    },
+    {
+      key: "output",
+      header: t("headerOutput"),
+      render: (recipe) => `${recipe.outputQty} ${recipe.unit}`,
+    },
+    {
+      key: "ingredients",
+      header: t("headerIngredients"),
+      render: (recipe) => (
+        <span
+          style={{
+            display: "inline-block",
+            padding: "2px 8px",
+            borderRadius: 12,
+            background: "#1F2937",
+            color: "#9CA3AF",
+            fontSize: 12,
+          }}
+        >
+          {recipe.ingredientCount}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (recipe) => <StatusBadge active={recipe.isActive} />,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (recipe) => (
+        <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+          <ActionButton
+            onClick={() => setEditRecipe(recipe)}
+            title={t("editTitle")}
+            color="#9CA3AF"
+          >
+            <Pencil size={14} />
+          </ActionButton>
+          {recipe.isActive && (
+            <ActionButton
+              onClick={() => handleDeactivate(recipe.id)}
+              title={t("deactivateTitle")}
+              color="#F87171"
+            >
+              <PowerOff size={14} />
+            </ActionButton>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   if (isLoading) {
     return (
@@ -75,120 +142,12 @@ export function RecipeTable({ showInactive }: Props) {
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 10,
-          overflow: "hidden",
-        }}
-      >
-        {recipes.length === 0 ? (
-          <div
-            style={{
-              padding: "48px 32px",
-              textAlign: "center",
-              color: "#4B5563",
-              fontSize: 14,
-            }}
-          >
-            {t("empty")}
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {[
-                  t("headerName"),
-                  t("headerOutputItem"),
-                  t("headerOutput"),
-                  t("headerIngredients"),
-                  t("headerStatus"),
-                  "",
-                ].map((h, i) => (
-                  <th
-                    key={i}
-                    style={{
-                      padding: "10px 16px",
-                      textAlign: "left",
-                      color: "#4B5563",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      borderBottom: "1px solid #1F2937",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recipes.map((recipe) => (
-                <tr
-                  key={recipe.id}
-                  style={{ borderBottom: "1px solid #1F2937" }}
-                >
-                  <td style={tdStyle}>
-                    <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
-                      {recipe.name}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                      {recipe.outputItemName}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                      {recipe.outputQty} {recipe.unit}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "2px 8px",
-                        borderRadius: 12,
-                        background: "#1F2937",
-                        color: "#9CA3AF",
-                        fontSize: 12,
-                      }}
-                    >
-                      {recipe.ingredientCount}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <StatusBadge active={recipe.isActive} />
-                  </td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                      <ActionButton
-                        onClick={() => setEditRecipe(recipe)}
-                        title={t("editTitle")}
-                        color="#9CA3AF"
-                      >
-                        <Pencil size={14} />
-                      </ActionButton>
-                      {recipe.isActive && (
-                        <ActionButton
-                          onClick={() => handleDeactivate(recipe.id)}
-                          title={t("deactivateTitle")}
-                          color="#F87171"
-                        >
-                          <PowerOff size={14} />
-                        </ActionButton>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Table
+        columns={columns}
+        rows={recipes}
+        rowKey={(recipe) => recipe.id}
+        emptyMessage={t("empty")}
+      />
 
       {/* Create modal */}
       {createOpen && <RecipeForm onClose={() => setCreateOpen(false)} />}
@@ -255,8 +214,3 @@ function ActionButton({
     </button>
   );
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  verticalAlign: "middle",
-};

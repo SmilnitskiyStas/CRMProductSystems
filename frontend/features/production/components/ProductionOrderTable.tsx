@@ -6,7 +6,8 @@ import { Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useProductionOrders } from "../hooks/useProduction";
 import { ProductionOrderForm } from "./ProductionOrderForm";
-import type { ProductionOrderStatus } from "../types";
+import type { ProductionOrderListItemDto, ProductionOrderStatus } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 export function ProductionOrderTable() {
   const t = useTranslations("Dashboard.production.orderTable");
@@ -42,6 +43,42 @@ export function ProductionOrderTable() {
       </div>
     );
   }
+
+  const columns: TableColumn<ProductionOrderListItemDto>[] = [
+    {
+      key: "recipe",
+      header: t("headerRecipe"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (order) => order.recipeName,
+    },
+    {
+      key: "location",
+      header: t("headerLocation"),
+      render: (order) => order.locationName,
+    },
+    {
+      key: "plannedQty",
+      header: t("headerPlannedQty"),
+      render: (order) => order.plannedQty,
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (order) => <OrderStatusBadge status={order.status} />,
+    },
+    {
+      key: "createdAt",
+      header: t("headerCreatedAt"),
+      cellStyle: { color: "#6B7280", fontSize: 12 },
+      render: (order) => formatDate(order.createdAt, intlLocale),
+    },
+    {
+      key: "completedAt",
+      header: t("headerCompletedAt"),
+      cellStyle: { color: "#6B7280", fontSize: 12 },
+      render: (order) => (order.completedAt ? formatDate(order.completedAt, intlLocale) : "—"),
+    },
+  ];
 
   return (
     <div>
@@ -104,105 +141,13 @@ export function ProductionOrderTable() {
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 10,
-          overflow: "hidden",
-        }}
-      >
-        {orders.length === 0 ? (
-          <div
-            style={{
-              padding: "48px 32px",
-              textAlign: "center",
-              color: "#4B5563",
-              fontSize: 14,
-            }}
-          >
-            {t("empty")}
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {[t("headerRecipe"), t("headerLocation"), t("headerPlannedQty"), t("headerStatus"), t("headerCreatedAt"), t("headerCompletedAt")].map(
-                  (h, i) => (
-                    <th
-                      key={i}
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "left",
-                        color: "#4B5563",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em",
-                        borderBottom: "1px solid #1F2937",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr
-                  key={order.id}
-                  onClick={() =>
-                    router.push(`/production/orders/${order.id}`)
-                  }
-                  style={{
-                    borderBottom: "1px solid #1F2937",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      "#1a2030";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      "transparent";
-                  }}
-                >
-                  <td style={tdStyle}>
-                    <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
-                      {order.recipeName}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                      {order.locationName}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                      {order.plannedQty}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <OrderStatusBadge status={order.status} />
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#6B7280", fontSize: 12 }}>
-                      {formatDate(order.createdAt, intlLocale)}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#6B7280", fontSize: 12 }}>
-                      {order.completedAt ? formatDate(order.completedAt, intlLocale) : "—"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Table
+        columns={columns}
+        rows={orders}
+        rowKey={(order) => order.id}
+        onRowClick={(order) => router.push(`/production/orders/${order.id}`)}
+        emptyMessage={t("empty")}
+      />
 
       {createOpen && <ProductionOrderForm onClose={() => setCreateOpen(false)} />}
     </div>
@@ -244,8 +189,3 @@ function formatDate(iso: string, intlLocale: string) {
     year: "numeric",
   });
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  verticalAlign: "middle",
-};

@@ -41,6 +41,25 @@ const labelStyle: React.CSSProperties = {
 
 const hintStyle: React.CSSProperties = { color: "#4B5563", fontSize: 11, marginTop: 4 };
 
+const sectionStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  background: "#10151D",
+  border: "1px solid #202938",
+  borderRadius: 10,
+  padding: 16,
+  display: "flex",
+  flexDirection: "column",
+  gap: 14,
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  color: "#E8EDF5",
+  fontSize: 13,
+  fontWeight: 700,
+  margin: 0,
+};
+
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
   cursor: "pointer",
@@ -80,6 +99,7 @@ interface Props {
   /** null = create mode. A banner id = edit mode, prefilled from GET /api/banners/{id}. */
   bannerId: string | null;
   onClose: () => void;
+  presentation?: "modal" | "page";
 }
 
 /**
@@ -93,13 +113,17 @@ interface Props {
  * draft (`lifecycleStatus === "draft"`), a standalone "Опублікувати" button in place of that
  * toggle (publishing post-creation is a one-way action via POST /{id}/publish, not a form field).
  */
-export function BannerForm({ bannerId, onClose }: Props) {
+export function BannerForm({ bannerId, onClose, presentation = "modal" }: Props) {
   const t = useTranslations("Dashboard.consumerApp.banners.form");
   const isEdit = bannerId !== null;
 
   const { data: banner, isLoading: bannerLoading } = useBanner(bannerId);
   const { data: locations } = useLocations();
-  const { data: catalogProducts } = useCatalogProducts();
+  const [productsOpen, setProductsOpen] = useState(false);
+  const { data: catalogProducts, isLoading: productsLoading } = useCatalogProducts(
+    undefined,
+    { enabled: productsOpen },
+  );
   const activeLocations = useMemo(() => (locations ?? []).filter((l) => l.isActive), [locations]);
   const activeProducts = useMemo(() => (catalogProducts ?? []).filter((p) => p.isActive), [catalogProducts]);
   const isDraftEdit = isEdit && banner?.lifecycleStatus === "draft";
@@ -233,24 +257,26 @@ export function BannerForm({ bannerId, onClose }: Props) {
 
   return (
     <>
-      <div
-        onClick={onClose}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, backdropFilter: "blur(2px)" }}
-      />
+      {presentation === "modal" && (
+        <div
+          onClick={onClose}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, backdropFilter: "blur(2px)" }}
+        />
+      )}
       <div
         style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(640px, 95vw)",
+          position: presentation === "modal" ? "fixed" : "relative",
+          top: presentation === "modal" ? "50%" : undefined,
+          left: presentation === "modal" ? "50%" : undefined,
+          transform: presentation === "modal" ? "translate(-50%, -50%)" : undefined,
+          width: presentation === "modal" ? "min(640px, 95vw)" : "100%",
           background: "#0D1117",
           border: "1px solid #1F2937",
           borderRadius: 14,
-          zIndex: 301,
+          zIndex: presentation === "modal" ? 301 : undefined,
           display: "flex",
           flexDirection: "column",
-          maxHeight: "90vh",
+          maxHeight: presentation === "modal" ? "90vh" : undefined,
           overflow: "hidden",
         }}
       >
@@ -279,12 +305,30 @@ export function BannerForm({ bannerId, onClose }: Props) {
         ) : (
           <form
             onSubmit={handleSubmit}
-            style={{ padding: 22, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}
+            style={{
+              padding: presentation === "page" ? 18 : 22,
+              overflowY: presentation === "modal" ? "auto" : "visible",
+              display: presentation === "page" ? "grid" : "flex",
+              gridTemplateColumns: presentation === "page"
+                ? "repeat(auto-fit, minmax(min(100%, 440px), 1fr))"
+                : undefined,
+              flexDirection: presentation === "modal" ? "column" : undefined,
+              alignItems: "start",
+              gap: presentation === "page" ? 16 : 14,
+              maxWidth: presentation === "page" ? 1240 : undefined,
+              width: "100%",
+              boxSizing: "border-box",
+              margin: presentation === "page" ? "0 auto" : undefined,
+            }}
           >
+            <section style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>Основний контент</h3>
             {/* Title / Eyebrow */}
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>{t("titleLabel")}</label>
+                <label style={{ ...labelStyle, minHeight: 30, display: "flex", alignItems: "flex-end" }}>
+                  {t("titleLabel")}
+                </label>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -294,7 +338,9 @@ export function BannerForm({ bannerId, onClose }: Props) {
                 {errors.title && <p style={{ ...hintStyle, color: "#EF4444" }}>{errors.title}</p>}
               </div>
               <div>
-                <label style={labelStyle}>{t("eyebrowLabel")}</label>
+                <label style={{ ...labelStyle, minHeight: 30, display: "flex", alignItems: "flex-end" }}>
+                  {t("eyebrowLabel")}
+                </label>
                 <input
                   value={eyebrow}
                   onChange={(e) => setEyebrow(e.target.value)}
@@ -342,16 +388,28 @@ export function BannerForm({ bannerId, onClose }: Props) {
               />
               <p style={hintStyle}>{t("termsHint")}</p>
             </div>
+            </section>
 
+            <section style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>Оформлення</h3>
             {/* Image */}
             <div>
               <label style={labelStyle}>{t("imageLabel")}</label>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {imagePreview && (
-                  <img
-                    src={imagePreview}
-                    alt=""
-                    style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, border: "1px solid #1F2937" }}
+                  <div
+                    role="img"
+                    aria-label={t("imageLabel")}
+                    style={{
+                      width: 60,
+                      height: 60,
+                      flexShrink: 0,
+                      backgroundImage: `url("${imagePreview}")`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      borderRadius: 8,
+                      border: "1px solid #1F2937",
+                    }}
                   />
                 )}
                 <label style={{
@@ -415,7 +473,10 @@ export function BannerForm({ bannerId, onClose }: Props) {
                 />
               </div>
             </div>
+            </section>
 
+            <section style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>Перехід і аудиторія</h3>
             {/* Detail mode */}
             <div>
               <label style={labelStyle}>{t("detailModeLabel")}</label>
@@ -460,41 +521,43 @@ export function BannerForm({ bannerId, onClose }: Props) {
 
             {/* Products */}
             <div>
-              <label style={labelStyle}>{t("productsLabel")}</label>
-              <input
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                placeholder={t("productsSearchPlaceholder")}
-                style={{ ...inputStyle, marginBottom: 8 }}
-              />
-              <div
-                style={{
-                  maxHeight: 160, overflowY: "auto", border: "1px solid #1F2937",
-                  borderRadius: 8, padding: 8, display: "flex", flexDirection: "column", gap: 2,
-                }}
-              >
-                {filteredProducts.length === 0 ? (
-                  <p style={{ ...hintStyle, marginTop: 0 }}>{t("productsEmptyHint")}</p>
-                ) : (
-                  filteredProducts.map((p) => (
-                    <label
-                      key={p.id}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8, fontSize: 13,
-                        color: "#E8EDF5", cursor: "pointer", padding: "5px 6px", borderRadius: 6,
-                      }}
-                    >
-                      <input type="checkbox" checked={productIds.includes(p.id)} onChange={() => toggleProduct(p.id)} />
-                      {p.name}
-                    </label>
-                  ))
-                )}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <label style={{ ...labelStyle, marginBottom: 2 }}>{t("productsLabel")}</label>
+                  <span style={hintStyle}>{productIds.length > 0 ? t("productsSelectedCount", { count: productIds.length }) : "Банер може працювати без прив’язаних товарів."}</span>
+                </div>
+                <Btn type="button" size="sm" variant="ghost" onClick={() => setProductsOpen((value) => !value)}>
+                  {productsOpen ? "Згорнути" : productIds.length > 0 ? "Змінити" : "Додати товари"}
+                </Btn>
               </div>
-              {productIds.length > 0 && (
-                <p style={hintStyle}>{t("productsSelectedCount", { count: productIds.length })}</p>
+              {productsOpen && (
+                <div style={{ marginTop: 10 }}>
+                  <input
+                    autoFocus
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder={t("productsSearchPlaceholder")}
+                    style={{ ...inputStyle, marginBottom: 8 }}
+                  />
+                  <div style={{ maxHeight: 190, overflowY: "auto", border: "1px solid #293241", background: "#0D1117", borderRadius: 8, padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
+                    {productsLoading ? (
+                      <p style={{ ...hintStyle, margin: 4 }}>Завантаження товарів…</p>
+                    ) : filteredProducts.length === 0 ? (
+                      <p style={{ ...hintStyle, margin: 4 }}>{t("productsEmptyHint")}</p>
+                    ) : filteredProducts.map((p) => (
+                      <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E8EDF5", cursor: "pointer", padding: "6px", borderRadius: 6 }}>
+                        <input type="checkbox" checked={productIds.includes(p.id)} onChange={() => toggleProduct(p.id)} />
+                        {p.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
+            </section>
 
+            <section style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>Публікація</h3>
             {/* Dates */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
@@ -552,11 +615,12 @@ export function BannerForm({ bannerId, onClose }: Props) {
                 </Btn>
               </div>
             )}
+            </section>
 
             {formError && <p style={{ color: "#F87171", fontSize: 12 }}>{formError}</p>}
 
-            <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
-              <Btn type="submit" disabled={isPending} style={{ flex: 1, justifyContent: "center" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 12, borderTop: "1px solid #1F2937", gridColumn: presentation === "page" ? "1 / -1" : undefined }}>
+              <Btn type="submit" disabled={isPending}>
                 {isPending ? t("savingButton") : isEdit ? t("saveButton") : t("createButton")}
               </Btn>
               <Btn type="button" variant="ghost" onClick={onClose}>

@@ -4,6 +4,8 @@ import {
   getLoyaltyCode,
   getAvailableNetworks,
   getLoyaltyHistory,
+  getLoyaltyTierProgress,
+  getLoyaltyTierLadder,
   getMemberships,
   getMyMembership,
   getPublicRetailer,
@@ -89,6 +91,19 @@ export function useLoyaltyHistory(tenantId: string | null, page: number, pageSiz
     queryKey: ['loyalty', 'history', tenantId, page, pageSize],
     queryFn: () => getLoyaltyHistory(tenantId as string, page, pageSize),
     enabled: !!tenantId,
+  });
+}
+
+export function useLoyaltyTierProgress(tenantId: string | null) {
+  return useQuery({ queryKey: ['loyalty', 'tier-progress', tenantId], queryFn: () => getLoyaltyTierProgress(tenantId!), enabled: !!tenantId });
+}
+
+export function useLoyaltyTierLadder(tenantId: string | null) {
+  return useQuery({
+    queryKey: ['loyalty', 'tier-ladder', tenantId],
+    queryFn: () => getLoyaltyTierLadder(tenantId!),
+    enabled: !!tenantId,
+    retry: false,
   });
 }
 

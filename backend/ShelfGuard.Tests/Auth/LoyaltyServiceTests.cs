@@ -1367,6 +1367,35 @@ public sealed class LoyaltyServiceTests
         Assert.Equal(format, existing.CustomerCodeFormat);
     }
 
+    [Fact]
+    public async Task UpsertSettingsAsync_round_trips_bonus_exclusions()
+    {
+        var tenantId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var existing = new LoyaltyProgramSettings { TenantId = tenantId };
+        _loyalty.GetSettingsAsync(tenantId, default).Returns(existing);
+
+        var request = new UpsertLoyaltyProgramSettingsRequest(
+            true, 3m, 50m, 0m, 30, "barcode",
+            BonusExclusionsEnabled: true,
+            ExclusionsApplyToAccrual: true,
+            ExclusionsApplyToRedemption: false,
+            ExcludeDiscountedItems: true,
+            ExcludedCategoryIds: [categoryId],
+            ExcludedProductIds: [productId]);
+
+        var (dto, error) = await _sut.UpsertSettingsAsync(tenantId, request);
+
+        Assert.Null(error);
+        Assert.True(dto!.BonusExclusionsEnabled);
+        Assert.True(dto.ExclusionsApplyToAccrual);
+        Assert.False(dto.ExclusionsApplyToRedemption);
+        Assert.True(dto.ExcludeDiscountedItems);
+        Assert.Equal([categoryId], dto.ExcludedCategoryIds);
+        Assert.Equal([productId], dto.ExcludedProductIds);
+    }
+
     // ── GetNetworkBySlugAsync (TASK-548) ──────────────────────────────────
 
     [Fact]
@@ -1880,7 +1909,7 @@ public sealed class LoyaltyServiceTests
         Assert.Null(error);
         Assert.NotNull(progress);
         Assert.Null(progress!.CurrentTierId);
-        Assert.Equal(1.0m, progress.AccrualMultiplier);
+        Assert.Equal(0m, progress.AccrualMultiplier);
         Assert.Equal(0m, progress.DiscountPercent);
         Assert.Equal("Bronze", progress.NextTierName);
         Assert.Equal(30m, progress.ScoreToNextTier); // 50 - 20

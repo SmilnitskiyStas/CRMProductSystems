@@ -12,6 +12,7 @@ public sealed class BannerEvent
     public Guid Id { get; private set; }
     public Guid TenantId { get; private set; }
     public Guid BannerId { get; private set; }
+    public Guid? StoreId { get; private set; }
 
     /// <summary>view | click — see <see cref="BannerEventType"/>.</summary>
     public string EventType { get; private set; } = BannerEventType.View;
@@ -27,11 +28,12 @@ public sealed class BannerEvent
 
     private BannerEvent() { }
 
-    public static BannerEvent Create(Guid tenantId, Guid bannerId, string eventType, Guid? consumerAccountId) => new()
+    public static BannerEvent Create(Guid tenantId, Guid bannerId, Guid? storeId, string eventType, Guid? consumerAccountId) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenantId,
         BannerId = bannerId,
+        StoreId = storeId,
         EventType = eventType,
         ConsumerAccountId = consumerAccountId,
         OccurredAt = DateTime.UtcNow,

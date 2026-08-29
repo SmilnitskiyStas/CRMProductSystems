@@ -17,19 +17,18 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { cssInterop } from 'nativewind';
-import { useCreateTransfer, useLocations } from '@/features/transfers/hooks/useTransfers';
+import { useLocations } from '@/features/transfers/hooks/useTransfers';
 import type { DraftTransferItem } from '@/features/transfers/types';
 import { getProductByBarcode, getStock } from '@/features/stock/api/stockApi';
 import { useAuthStore } from '@/features/auth/store';
 import { useOperationalDraft } from '@/features/operational-drafts/useOperationalDraft';
-import { classifyOperationalError } from '@/features/operational-drafts/submission';
+import { enqueueOperationalMutation, syncOperationalMutations } from '@/features/offline-mutations/operationalQueue';
 
 cssInterop(CameraView, { className: 'style' });
 
 export default function CreateTransferScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const createTransfer = useCreateTransfer();
   const { data: locations } = useLocations();
   const netInfo = useNetInfo();
   const owner = user?.tenantId ? { tenantId: user.tenantId, userId: user.id } : null;
@@ -38,6 +37,7 @@ export default function CreateTransferScreen() {
   const [items, setItems] = useState<DraftTransferItem[]>([]);
   const [toLocationId, setToLocationId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Scanner state
   const [scanOpen, setScanOpen] = useState(false);
@@ -177,43 +177,39 @@ export default function CreateTransferScreen() {
       Alert.alert('Додайте хоча б один товар');
       return;
     }
-    const network = await NetInfo.fetch();
-    if (!network.isConnected || network.isInternetReachable === false) {
-      await draft.transition({ status: 'failed', message: 'Немає мережі. Чернетку збережено.' }, draftPayload);
-      Alert.alert('Немає мережі', 'Підключіться до мережі перед відправленням.');
-      return;
-    }
-    let mutationStarted = false;
+    if (!owner || isSubmitting) return;
+    setIsSubmitting(true);
     try {
-      const currentStock = await getStock({ locationId: user.locationId });
-      const stale = items.some((item) => {
-        const current = currentStock.find((stock) => stock.id === item.productStockId);
-        return !current || current.quantity < item.quantity;
-      });
-      if (stale) {
-        const state = { status: 'conflict' as const, message: 'Партія або залишок змінилися. Повторно відскануйте товари перед відправленням.' };
-        await draft.transition(state, draftPayload);
-        Alert.alert('Залишки змінилися', state.message);
-        return;
+      const network = await NetInfo.fetch();
+      if (network.isConnected && network.isInternetReachable !== false) {
+        const currentStock = await getStock({ locationId: user.locationId });
+        const stale = items.some((item) => {
+          const current = currentStock.find((stock) => stock.id === item.productStockId);
+          return !current || current.quantity < item.quantity;
+        });
+        if (stale) {
+          Alert.alert('Залишки змінилися', 'Повторно відскануйте товари перед відправленням.');
+          return;
+        }
       }
-      mutationStarted = true;
-      await createTransfer.mutateAsync({
+      await enqueueOperationalMutation(owner, { kind: 'transfer.create', payload: {
         fromLocationId: user.locationId,
         toLocationId,
         transferType: 'store_to_store',
         notes: notes.trim() || undefined,
         items: items.map((i) => ({ productStockId: i.productStockId, quantity: i.quantity })),
-      });
+      } });
       await draft.clear();
-      Alert.alert('Переміщення створено', 'Товар відправлено в дорогу.', [
+      const result = network.isConnected && network.isInternetReachable !== false
+        ? await syncOperationalMutations(owner) : { synced: 0, remaining: 1 };
+      Alert.alert(result.synced > 0 ? 'Переміщення створено' : 'Збережено офлайн', result.synced > 0
+        ? 'Товар відправлено в дорогу.' : 'Переміщення буде передано після появи інтернету.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
-    } catch (error) {
-      const state = mutationStarted
-        ? classifyOperationalError(error)
-        : { status: 'failed' as const, message: 'Не вдалося оновити залишки. Переміщення не відправлялося, чернетку збережено.' };
-      await draft.transition(state, draftPayload);
-      Alert.alert(state.status === 'uncertain' ? 'Результат не підтверджено' : 'Помилка', state.message);
+    } catch {
+      Alert.alert('Помилка', 'Не вдалося надійно зберегти переміщення. Дані форми залишено.');
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -350,12 +346,12 @@ export default function CreateTransferScreen() {
 
           <TouchableOpacity
             onPress={() => void handleSubmit()}
-            disabled={createTransfer.isPending || items.length === 0 || !toLocationId || netInfo.isConnected === false || draft.submission.status === 'uncertain'}
+            disabled={isSubmitting || items.length === 0 || !toLocationId}
             className={`rounded-xl py-3.5 items-center ${
               items.length === 0 || !toLocationId ? 'bg-gray-200' : 'bg-primary-600'
             }`}
           >
-            {createTransfer.isPending ? (
+            {isSubmitting ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Text

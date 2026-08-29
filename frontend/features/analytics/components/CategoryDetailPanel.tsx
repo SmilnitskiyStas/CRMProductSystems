@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { X } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { canViewAnalyticsMargin } from "@/lib/roles";
-import { SortableHeader, TablePaginationFooter } from "@/features/marketing-analytics/price-segments/components/TableControls";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { useCategoryProductBreakdown } from "../hooks/useAnalytics";
 import type { CategoryProductRowDto } from "../types";
 
@@ -51,13 +51,6 @@ function compareRows(a: CategoryProductRowDto, b: CategoryProductRowDto, key: So
   const bv = b[key] ?? -Infinity;
   return av - bv;
 }
-
-const numCell: React.CSSProperties = {
-  color: "#9CA3AF",
-  fontSize: 12,
-  textAlign: "center",
-  fontFamily: "monospace",
-};
 
 /** TASK-488: product-name click target when onProductClick is provided. Deliberately not the
  * whole grid row (this row's other cells are just status/margin figures, not separate nav
@@ -109,8 +102,10 @@ function daysOfStockColor(v: number | null): string {
  * TASK-483) — renders below CategoryStatusChart + the by-category table when a category (or the
  * uncategorized bucket) is selected, never in place of them. Owns its own fetch; sort/pagination
  * are entirely client-side (the by-category/products endpoint returns the full product list for
- * one category in a single response, unlike the server-paginated price-segments tables this
- * reuses SortableHeader/TablePaginationFooter from).
+ * one category in a single response, unlike the server-paginated tables elsewhere in the app).
+ * Migrated to the shared `Table` component (table-unification migration, Batch B) — same
+ * sortKey/sortDescending/page state as before, wired directly into Table's props instead of
+ * SortableHeader/TablePaginationFooter.
  */
 export function CategoryDetailPanel({ categoryId, from, to, storeIds, onClose, onProductClick }: Props) {
   const t = useTranslations("Dashboard.analytics.categoryDetailPanel");
@@ -148,20 +143,132 @@ export function CategoryDetailPanel({ categoryId, from, to, storeIds, onClose, o
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // Margin columns must be entirely absent from the DOM when canViewMargin is false (ADR-027 /
-  // security requirement), not just visually hidden — the grid template itself only reserves
-  // the two extra columns when they're actually going to render. daysOfStockRemaining (TASK-494)
-  // is NOT margin-gated — it's operational data, visible to the same audience as every other
-  // column here — so its 100px is appended unconditionally in both branches below, always the
-  // last column.
-  // Status columns are 100px, not a tighter fit-the-data width, because their headers are the
-  // longest words on this page ("ПОПЕРЕДЖЕННЯ" — 12 chars) — a narrower column let the header
-  // text bleed into its neighbors (unreadable overlap), even though the cell values themselves
-  // (small counts) would fit in far less space. Margin columns are 150px for the same reason —
-  // "Маржа % (оцінна)" is 16 characters, longer than any status header.
-  const GRID = canViewMargin
-    ? "minmax(160px,1.4fr) 100px 100px 100px 100px 90px 110px 90px 150px 150px 100px"
-    : "minmax(160px,1.4fr) 100px 100px 100px 100px 90px 110px 90px 100px";
-  const gridMinWidth = canViewMargin ? 1356 : 1036;
+  // security requirement), not just visually hidden — the array below only pushes the two extra
+  // columns when they're actually going to render. daysOfStockRemaining (TASK-494) is NOT
+  // margin-gated — it's operational data, visible to the same audience as every other column
+  // here — so it's appended unconditionally, always the last column.
+  // Status/margin column widths (100px / 150px) are carried over from this panel's pre-Table
+  // CSS-grid layout, where they were needed to stop long header labels ("ПОПЕРЕДЖЕННЯ" — 12
+  // chars, "Маржа % (оцінна)" — 16 chars) from bleeding into neighboring columns. A real
+  // `<table>` reflows instead of overlapping, so they're no longer strictly required for that
+  // reason, but they still keep these short numeric columns visually compact rather than
+  // stretching to share whatever extra width the table has — kept via `column.width`.
+  const columns: TableColumn<CategoryProductRowDto>[] = [
+    {
+      key: "name",
+      header: t("headers.product"),
+      sortKey: "name",
+      render: (p) =>
+        onProductClick ? (
+          <button
+            type="button"
+            onClick={() => onProductClick(p.productId, p.productName)}
+            title={p.productName}
+            style={productNameButton}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+          >
+            {p.productName}
+          </button>
+        ) : (
+          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {p.productName}
+          </div>
+        ),
+    },
+    {
+      key: "safe",
+      header: tStatus("safe"),
+      sortKey: "safe",
+      width: 100,
+      cellStyle: { fontFamily: "monospace", color: "#4ADE80" },
+      render: (p) => p.safe,
+    },
+    {
+      key: "warning",
+      header: tStatus("warning"),
+      sortKey: "warning",
+      width: 100,
+      cellStyle: { fontFamily: "monospace", color: "#FBBF24" },
+      render: (p) => p.warning,
+    },
+    {
+      key: "critical",
+      header: tStatus("critical"),
+      sortKey: "critical",
+      width: 100,
+      cellStyle: { fontFamily: "monospace", color: "#F87171" },
+      render: (p) => p.critical,
+    },
+    {
+      key: "expired",
+      header: tStatus("expired"),
+      sortKey: "expired",
+      width: 100,
+      cellStyle: { fontFamily: "monospace", color: "#DC2626" },
+      render: (p) => p.expired,
+    },
+    {
+      key: "totalQuantity",
+      header: t("headers.totalQuantity"),
+      sortKey: "totalQuantity",
+      cellStyle: { fontFamily: "monospace" },
+      render: (p) => p.totalQuantity.toLocaleString(intlLocale),
+    },
+    {
+      key: "salesRevenue",
+      header: t("headers.salesRevenue"),
+      sortKey: "salesRevenue",
+      cellStyle: { fontFamily: "monospace", color: "#E8EDF5" },
+      render: (p) => `${p.salesRevenue.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+    {
+      key: "unitsSold",
+      header: t("headers.unitsSold"),
+      sortKey: "unitsSold",
+      cellStyle: { fontFamily: "monospace" },
+      render: (p) => p.unitsSold.toLocaleString(intlLocale),
+    },
+    ...(canViewMargin
+      ? ([
+          {
+            key: "marginAmount",
+            header: t("headers.marginAmount"),
+            sortKey: "marginAmount",
+            width: 150,
+            render: (p) => (
+              <span style={{ fontFamily: "monospace", color: marginColor(p.marginAmount) }}>
+                {p.marginAmount == null ? "—" : `${p.marginAmount.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`}
+              </span>
+            ),
+          },
+          {
+            key: "marginPercent",
+            header: t("headers.marginPercent"),
+            sortKey: "marginPercent",
+            width: 150,
+            render: (p) => (
+              <span style={{ fontFamily: "monospace", color: marginColor(p.marginPercent) }}>
+                {p.marginPercent == null ? "—" : `${p.marginPercent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%`}
+              </span>
+            ),
+          },
+        ] as TableColumn<CategoryProductRowDto>[])
+      : []),
+    {
+      key: "daysOfStockRemaining",
+      header: t("headers.daysOfStockRemaining"),
+      sortKey: "daysOfStockRemaining",
+      width: 100,
+      render: (p) => (
+        <span style={{ fontFamily: "monospace", color: daysOfStockColor(p.daysOfStockRemaining) }}>
+          {p.daysOfStockRemaining == null
+            ? "—"
+            : t("daysOfStockValue", { days: p.daysOfStockRemaining.toLocaleString(intlLocale, { maximumFractionDigits: 1 }) })}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div
@@ -213,93 +320,18 @@ export function CategoryDetailPanel({ categoryId, from, to, storeIds, onClose, o
       ) : products.length === 0 ? (
         <div style={{ color: "#4B5563", fontSize: 13, padding: "12px 0", textAlign: "center" }}>{t("empty")}</div>
       ) : (
-        <>
-          <div style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 10, overflow: "auto" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: GRID,
-                padding: "10px 14px",
-                borderBottom: "1px solid #1F2937",
-                background: "#0A1020",
-                minWidth: gridMinWidth,
-                gap: 8,
-              }}
-            >
-              <SortableHeader label={t("headers.product")} sortKey="name" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} />
-              <SortableHeader label={tStatus("safe")} sortKey="safe" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-              <SortableHeader label={tStatus("warning")} sortKey="warning" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-              <SortableHeader label={tStatus("critical")} sortKey="critical" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-              <SortableHeader label={tStatus("expired")} sortKey="expired" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-              <SortableHeader label={t("headers.totalQuantity")} sortKey="totalQuantity" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-              <SortableHeader label={t("headers.salesRevenue")} sortKey="salesRevenue" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-              <SortableHeader label={t("headers.unitsSold")} sortKey="unitsSold" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-              {canViewMargin && (
-                <>
-                  <SortableHeader label={t("headers.marginAmount")} sortKey="marginAmount" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-                  <SortableHeader label={t("headers.marginPercent")} sortKey="marginPercent" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-                </>
-              )}
-              <SortableHeader label={t("headers.daysOfStockRemaining")} sortKey="daysOfStockRemaining" activeSort={sortKey} activeDescending={sortDescending} onSort={handleSort} align="center" />
-            </div>
-
-            {pageRows.map((p) => (
-              <div
-                key={p.productId}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: GRID,
-                  padding: "9px 14px",
-                  borderBottom: "1px solid #0F1924",
-                  alignItems: "center",
-                  minWidth: gridMinWidth,
-                  gap: 8,
-                }}
-              >
-                {onProductClick ? (
-                  <button
-                    type="button"
-                    onClick={() => onProductClick(p.productId, p.productName)}
-                    title={p.productName}
-                    style={productNameButton}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                  >
-                    {p.productName}
-                  </button>
-                ) : (
-                  <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.productName}
-                  </div>
-                )}
-                <div style={{ ...numCell, color: "#4ADE80" }}>{p.safe}</div>
-                <div style={{ ...numCell, color: "#FBBF24" }}>{p.warning}</div>
-                <div style={{ ...numCell, color: "#F87171" }}>{p.critical}</div>
-                <div style={{ ...numCell, color: "#DC2626" }}>{p.expired}</div>
-                <div style={numCell}>{p.totalQuantity.toLocaleString(intlLocale)}</div>
-                <div style={{ ...numCell, color: "#E8EDF5" }}>{p.salesRevenue.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴</div>
-                <div style={numCell}>{p.unitsSold.toLocaleString(intlLocale)}</div>
-                {canViewMargin && (
-                  <>
-                    <div style={{ ...numCell, color: marginColor(p.marginAmount) }}>
-                      {p.marginAmount == null ? "—" : `${p.marginAmount.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`}
-                    </div>
-                    <div style={{ ...numCell, color: marginColor(p.marginPercent) }}>
-                      {p.marginPercent == null ? "—" : `${p.marginPercent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%`}
-                    </div>
-                  </>
-                )}
-                <div style={{ ...numCell, color: daysOfStockColor(p.daysOfStockRemaining) }}>
-                  {p.daysOfStockRemaining == null
-                    ? "—"
-                    : t("daysOfStockValue", { days: p.daysOfStockRemaining.toLocaleString(intlLocale, { maximumFractionDigits: 1 }) })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <TablePaginationFooter page={page} totalPages={totalPages} totalLabel={t("totalCount", { count: sorted.length })} onPageChange={setPage} />
-        </>
+        <Table
+          columns={columns}
+          rows={pageRows}
+          rowKey={(p) => p.productId}
+          sortBy={sortKey}
+          sortDescending={sortDescending}
+          onSort={(key) => handleSort(key as SortKey)}
+          page={page}
+          totalPages={totalPages}
+          totalCount={sorted.length}
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

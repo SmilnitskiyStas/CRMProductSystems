@@ -28,6 +28,14 @@ import { LossesProductBreakdownPanel } from "@/features/analytics/components/Los
 import { ProductTrendPanel } from "@/features/analytics/components/ProductTrendPanel";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import type {
+  ExpirySummaryStoreDto,
+  WriteOffByReasonDto,
+  ZoneAnalyticsDto,
+  CategoryAnalyticsDto,
+  LossByStoreDto,
+} from "@/features/analytics/types";
 
 function defaultRange(): SimpleDateRange {
   const to = parseDateInputValue(toDateInputValue(new Date()));
@@ -92,54 +100,6 @@ function MetricCard({
   );
 }
 
-// ── Shared table style tokens ──────────────────────────────────────────────────
-const ROW_BORDER = "1px solid #1F2937";
-
-/** Base cell padding + border */
-const baseTd: React.CSSProperties = {
-  padding: "10px 16px",
-  fontSize: 13,
-  borderBottom: ROW_BORDER,
-  borderRight: "1px solid #1F2937",
-  textAlign: "center",
-};
-
-/** Text column */
-const tdText: React.CSSProperties = {
-  ...baseTd,
-  color: "#E8EDF5",
-  fontWeight: 500,
-};
-
-/** Secondary text (store name in zone table etc.) */
-const tdMuted: React.CSSProperties = {
-  ...baseTd,
-  color: "#6B7280",
-};
-
-/** Numeric column — monospace */
-const tdNum: React.CSSProperties = {
-  ...baseTd,
-  color: "#9CA3AF",
-  fontFamily: "monospace",
-};
-
-/** Header */
-function thStyle(_align: "left" | "right" = "left"): React.CSSProperties {
-  return {
-    padding: "10px 16px",
-    color: "#4B5563",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    borderBottom: "1px solid #374151",
-    borderRight: "1px solid #374151",
-    textAlign: "center",
-    background: "#0A0F1A",
-  };
-}
-
 const sectionTitle: React.CSSProperties = {
   color: "#E8EDF5",
   fontSize: 15,
@@ -147,21 +107,6 @@ const sectionTitle: React.CSSProperties = {
   margin: 0,
   marginBottom: 12,
 };
-
-const tableWrapper: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 10,
-  overflow: "hidden",
-};
-
-function rowHoverStyle(isHovered: boolean): React.CSSProperties {
-  return {
-    cursor: "pointer",
-    background: isHovered ? "#0F1825" : "transparent",
-    transition: "background 0.1s",
-  };
-}
 
 export default function AnalyticsPage() {
   const router = useRouter();
@@ -246,13 +191,6 @@ export default function AnalyticsPage() {
   const lossesLoadingEffective = compareEnabled ? lossesCompareLoading : lossesLoading;
   const lossesPrevious = compareEnabled ? lossesCompare?.comparison : undefined;
 
-  // Row hover states
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const [hoveredReasonRow, setHoveredReasonRow] = useState<string | null>(null);
-  const [hoveredZoneRow, setHoveredZoneRow] = useState<string | null>(null);
-  const [hoveredCategoryRow, setHoveredCategoryRow] = useState<string | null>(null);
-  const [hoveredLossRow, setHoveredLossRow] = useState<string | null>(null);
-
   // ── Drill-down panel selection (interactive analytics plan, TASK-483) ──────
   // `selectedCategoryId` is `string | null | undefined` rather than the plan's literal
   // `string | null` — a plain two-state type can't tell "nothing selected" apart from "the
@@ -301,6 +239,232 @@ export default function AnalyticsPage() {
     // own handleDayClick (TASK-485).
     setSelectedLossDay((prev) => (prev === date ? null : date));
   }
+
+  // ── Table column defs (table-unification migration, Batch B) ──────────────
+  // None of these 5 tables have their own sort/pagination — they never did — so no
+  // sortKey/onSort/page props are wired below. Per-cell onClick+stopPropagation spans
+  // (status counts that deep-link to a filtered /stock view independently of the row's
+  // own onRowClick) are preserved unchanged inside render().
+  const expiryByStoreColumns: TableColumn<ExpirySummaryStoreDto>[] = [
+    {
+      key: "store",
+      header: t("headers.store"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (s) => s.storeName,
+    },
+    {
+      key: "safe",
+      header: tStatus("safe"),
+      cellStyle: { color: "#4ADE80", fontFamily: "monospace" },
+      render: (s) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=safe`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {s.safe}
+        </span>
+      ),
+    },
+    {
+      key: "warning",
+      header: t("headers.warningShort"),
+      cellStyle: { color: "#FBBF24", fontFamily: "monospace" },
+      render: (s) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=warning`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {s.warning}
+        </span>
+      ),
+    },
+    {
+      key: "critical",
+      header: tStatus("critical"),
+      cellStyle: { color: "#F87171", fontFamily: "monospace" },
+      render: (s) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=critical`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {s.critical}
+        </span>
+      ),
+    },
+    {
+      key: "expired",
+      header: tStatus("expired"),
+      cellStyle: { color: "#DC2626", fontFamily: "monospace" },
+      render: (s) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=expired`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {s.expired}
+        </span>
+      ),
+    },
+  ];
+
+  const writeOffReasonColumns: TableColumn<WriteOffByReasonDto>[] = [
+    {
+      key: "reason",
+      header: t("headers.reason"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (r) => (tReason.has(r.reason) ? tReason(r.reason) : r.reason),
+    },
+    {
+      key: "count",
+      header: t("writeOffs.headers.documentsCount"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (r) => r.count,
+    },
+    {
+      key: "losses",
+      header: t("headers.losses"),
+      cellStyle: { color: "#F87171", fontFamily: "monospace" },
+      render: (r) => `${r.totalLoss.toLocaleString(intlLocale)} ₴`,
+    },
+  ];
+
+  const zoneColumns: TableColumn<ZoneAnalyticsDto>[] = [
+    {
+      key: "zone",
+      header: t("headers.zone"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (z) => z.zoneName,
+    },
+    {
+      key: "storeName",
+      header: t("headers.store"),
+      cellStyle: { color: "#6B7280" },
+      render: (z) => z.storeName,
+    },
+    {
+      key: "safe",
+      header: tStatus("safe"),
+      cellStyle: { color: "#4ADE80", fontFamily: "monospace" },
+      render: (z) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=safe`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {z.safe}
+        </span>
+      ),
+    },
+    {
+      key: "warning",
+      header: t("headers.warningShort"),
+      cellStyle: { color: "#FBBF24", fontFamily: "monospace" },
+      render: (z) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=warning`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {z.warning}
+        </span>
+      ),
+    },
+    {
+      key: "critical",
+      header: tStatus("critical"),
+      cellStyle: { color: "#F87171", fontFamily: "monospace" },
+      render: (z) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=critical`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {z.critical}
+        </span>
+      ),
+    },
+    {
+      key: "expired",
+      header: tStatus("expired"),
+      cellStyle: { color: "#DC2626", fontFamily: "monospace" },
+      render: (z) => (
+        <span
+          onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=expired`); }}
+          style={{ cursor: "pointer" }}
+        >
+          {z.expired}
+        </span>
+      ),
+    },
+    {
+      key: "total",
+      header: t("headers.total"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (z) => z.totalBatches,
+    },
+  ];
+
+  const categoryColumns: TableColumn<CategoryAnalyticsDto>[] = [
+    {
+      key: "category",
+      header: t("headers.category"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (c) => c.categoryName,
+    },
+    {
+      key: "safe",
+      header: tStatus("safe"),
+      cellStyle: { color: "#4ADE80", fontFamily: "monospace" },
+      render: (c) => c.safe,
+    },
+    {
+      key: "warning",
+      header: t("headers.warningShort"),
+      cellStyle: { color: "#FBBF24", fontFamily: "monospace" },
+      render: (c) => c.warning,
+    },
+    {
+      key: "critical",
+      header: tStatus("critical"),
+      cellStyle: { color: "#F87171", fontFamily: "monospace" },
+      render: (c) => c.critical,
+    },
+    {
+      key: "expired",
+      header: tStatus("expired"),
+      cellStyle: { color: "#DC2626", fontFamily: "monospace" },
+      render: (c) => c.expired,
+    },
+    {
+      key: "batches",
+      header: t("byCategory.headers.batches"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (c) => c.totalBatches,
+    },
+    {
+      key: "quantity",
+      header: t("byCategory.headers.quantity"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (c) => c.totalQuantity.toLocaleString(intlLocale),
+    },
+  ];
+
+  const lossesByStoreColumns: TableColumn<LossByStoreDto>[] = [
+    {
+      key: "store",
+      header: t("headers.store"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (s) => s.storeName,
+    },
+    {
+      key: "documents",
+      header: t("lossesByStore.headers.documents"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (s) => s.writeOffCount,
+    },
+    {
+      key: "losses",
+      header: t("headers.losses"),
+      cellStyle: { color: "#F87171", fontFamily: "monospace" },
+      render: (s) => `${s.totalLoss.toLocaleString(intlLocale)} ₴`,
+    },
+  ];
 
   if (access === null) return null;
   if (!access) return <AccessDenied title={t("title")} />;
@@ -366,63 +530,13 @@ export default function AnalyticsPage() {
             />
 
             {expiry.stores.length > 0 && (
-              <div style={{ ...tableWrapper, marginTop: 16 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle("left")}>{t("headers.store")}</th>
-                      <th style={thStyle("right")}>{tStatus("safe")}</th>
-                      <th style={thStyle("right")}>{t("headers.warningShort")}</th>
-                      <th style={thStyle("right")}>{tStatus("critical")}</th>
-                      <th style={thStyle("right")}>{tStatus("expired")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expiry.stores.map((s) => (
-                      <tr
-                        key={s.storeId}
-                        onClick={() => router.push(`/stock?store_id=${s.storeId}`)}
-                        onMouseEnter={() => setHoveredRow(s.storeId)}
-                        onMouseLeave={() => setHoveredRow(null)}
-                        style={rowHoverStyle(hoveredRow === s.storeId)}
-                      >
-                        <td style={tdText}>{s.storeName}</td>
-                        <td style={{ ...tdNum, color: "#4ADE80" }}>
-                          <span
-                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=safe`); }}
-                            style={{ cursor: "pointer" }}
-                          >
-                            {s.safe}
-                          </span>
-                        </td>
-                        <td style={{ ...tdNum, color: "#FBBF24" }}>
-                          <span
-                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=warning`); }}
-                            style={{ cursor: "pointer" }}
-                          >
-                            {s.warning}
-                          </span>
-                        </td>
-                        <td style={{ ...tdNum, color: "#F87171" }}>
-                          <span
-                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=critical`); }}
-                            style={{ cursor: "pointer" }}
-                          >
-                            {s.critical}
-                          </span>
-                        </td>
-                        <td style={{ ...tdNum, color: "#DC2626" }}>
-                          <span
-                            onClick={(e) => { e.stopPropagation(); router.push(`/stock?store_id=${s.storeId}&status=expired`); }}
-                            style={{ cursor: "pointer" }}
-                          >
-                            {s.expired}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ marginTop: 16 }}>
+                <Table
+                  columns={expiryByStoreColumns}
+                  rows={expiry.stores}
+                  rowKey={(s) => s.storeId}
+                  onRowClick={(s) => router.push(`/stock?store_id=${s.storeId}`)}
+                />
               </div>
             )}
           </>
@@ -514,40 +628,14 @@ export default function AnalyticsPage() {
           />
 
           {writeoffs.byReason.length > 0 && (
-            <div style={{ ...tableWrapper, marginTop: 16 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle("left")}>{t("headers.reason")}</th>
-                    <th style={thStyle("right")}>{t("writeOffs.headers.documentsCount")}</th>
-                    <th style={thStyle("right")}>{t("headers.losses")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {writeoffs.byReason.map((r) => (
-                    <tr
-                      key={r.reason}
-                      onClick={() => handleReasonClick(r.reason)}
-                      onMouseEnter={() => setHoveredReasonRow(r.reason)}
-                      onMouseLeave={() => setHoveredReasonRow(null)}
-                      style={{
-                        cursor: "pointer",
-                        background:
-                          hoveredReasonRow === r.reason || (selectedLossDimension?.type === "reason" && selectedLossDimension.value === r.reason)
-                            ? "#0F1825"
-                            : "transparent",
-                        transition: "background 0.1s",
-                      }}
-                    >
-                      <td style={tdText}>{tReason.has(r.reason) ? tReason(r.reason) : r.reason}</td>
-                      <td style={tdNum}>{r.count}</td>
-                      <td style={{ ...tdNum, color: "#F87171" }}>
-                        {r.totalLoss.toLocaleString(intlLocale)} ₴
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{ marginTop: 16 }}>
+              <Table
+                columns={writeOffReasonColumns}
+                rows={writeoffs.byReason}
+                rowKey={(r) => r.reason}
+                onRowClick={(r) => handleReasonClick(r.reason)}
+                isRowSelected={(r) => selectedLossDimension?.type === "reason" && selectedLossDimension.value === r.reason}
+              />
             </div>
           )}
 
@@ -572,68 +660,12 @@ export default function AnalyticsPage() {
       {zones && zones.length > 0 && (
         <section>
           <h2 style={sectionTitle}>{t("byZone.title")}</h2>
-          <div style={tableWrapper}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={thStyle("left")}>{t("headers.zone")}</th>
-                  <th style={thStyle("left")}>{t("headers.store")}</th>
-                  <th style={thStyle("right")}>{tStatus("safe")}</th>
-                  <th style={thStyle("right")}>{t("headers.warningShort")}</th>
-                  <th style={thStyle("right")}>{tStatus("critical")}</th>
-                  <th style={thStyle("right")}>{tStatus("expired")}</th>
-                  <th style={thStyle("right")}>{t("headers.total")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zones.map((z) => (
-                  <tr
-                    key={z.zoneId}
-                    onClick={() => router.push(`/stock?zone_id=${z.zoneId}`)}
-                    onMouseEnter={() => setHoveredZoneRow(z.zoneId)}
-                    onMouseLeave={() => setHoveredZoneRow(null)}
-                    style={rowHoverStyle(hoveredZoneRow === z.zoneId)}
-                  >
-                    <td style={tdText}>{z.zoneName}</td>
-                    <td style={tdMuted}>{z.storeName}</td>
-                    <td style={{ ...tdNum, color: "#4ADE80" }}>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=safe`); }}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {z.safe}
-                      </span>
-                    </td>
-                    <td style={{ ...tdNum, color: "#FBBF24" }}>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=warning`); }}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {z.warning}
-                      </span>
-                    </td>
-                    <td style={{ ...tdNum, color: "#F87171" }}>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=critical`); }}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {z.critical}
-                      </span>
-                    </td>
-                    <td style={{ ...tdNum, color: "#DC2626" }}>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); router.push(`/stock?zone_id=${z.zoneId}&status=expired`); }}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {z.expired}
-                      </span>
-                    </td>
-                    <td style={tdNum}>{z.totalBatches}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={zoneColumns}
+            rows={zones}
+            rowKey={(z) => z.zoneId}
+            onRowClick={(z) => router.push(`/stock?zone_id=${z.zoneId}`)}
+          />
         </section>
       )}
 
@@ -642,46 +674,14 @@ export default function AnalyticsPage() {
         <section>
           <h2 style={sectionTitle}>{t("byCategory.title")}</h2>
           <CategoryStatusChart data={categories} onCategoryClick={handleCategoryClick} selectedCategoryId={selectedCategoryId} />
-          <div style={{ ...tableWrapper, marginTop: 16 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={thStyle("left")}>{t("headers.category")}</th>
-                  <th style={thStyle("right")}>{tStatus("safe")}</th>
-                  <th style={thStyle("right")}>{t("headers.warningShort")}</th>
-                  <th style={thStyle("right")}>{tStatus("critical")}</th>
-                  <th style={thStyle("right")}>{tStatus("expired")}</th>
-                  <th style={thStyle("right")}>{t("byCategory.headers.batches")}</th>
-                  <th style={thStyle("right")}>{t("byCategory.headers.quantity")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map((c) => (
-                  <tr
-                    key={c.categoryId ?? "uncategorized"}
-                    onClick={() => handleCategoryClick(c.categoryId)}
-                    onMouseEnter={() => setHoveredCategoryRow(c.categoryId ?? "uncategorized")}
-                    onMouseLeave={() => setHoveredCategoryRow(null)}
-                    style={{
-                      cursor: "pointer",
-                      background:
-                        hoveredCategoryRow === (c.categoryId ?? "uncategorized") || selectedCategoryId === c.categoryId
-                          ? "#0F1825"
-                          : "transparent",
-                      transition: "background 0.1s",
-                    }}
-                  >
-                    <td style={tdText}>{c.categoryName}</td>
-                    <td style={{ ...tdNum, color: "#4ADE80" }}>{c.safe}</td>
-                    <td style={{ ...tdNum, color: "#FBBF24" }}>{c.warning}</td>
-                    <td style={{ ...tdNum, color: "#F87171" }}>{c.critical}</td>
-                    <td style={{ ...tdNum, color: "#DC2626" }}>{c.expired}</td>
-                    <td style={tdNum}>{c.totalBatches}</td>
-                    <td style={tdNum}>{c.totalQuantity.toLocaleString(intlLocale)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ marginTop: 16 }}>
+            <Table
+              columns={categoryColumns}
+              rows={categories}
+              rowKey={(c) => c.categoryId ?? "uncategorized"}
+              onRowClick={(c) => handleCategoryClick(c.categoryId)}
+              isRowSelected={(c) => selectedCategoryId === c.categoryId}
+            />
           </div>
 
           {selectedCategoryId !== undefined && (
@@ -745,40 +745,14 @@ export default function AnalyticsPage() {
             onStoreClick={handleStoreLossClick}
             selectedStoreId={selectedLossDimension?.type === "store" ? selectedLossDimension.value : undefined}
           />
-          <div style={{ ...tableWrapper, marginTop: 16 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={thStyle("left")}>{t("headers.store")}</th>
-                  <th style={thStyle("right")}>{t("lossesByStore.headers.documents")}</th>
-                  <th style={thStyle("right")}>{t("headers.losses")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {losses.byStore.map((s) => (
-                  <tr
-                    key={s.storeId}
-                    onClick={() => handleStoreLossClick(s.storeId)}
-                    onMouseEnter={() => setHoveredLossRow(s.storeId)}
-                    onMouseLeave={() => setHoveredLossRow(null)}
-                    style={{
-                      cursor: "pointer",
-                      background:
-                        hoveredLossRow === s.storeId || (selectedLossDimension?.type === "store" && selectedLossDimension.value === s.storeId)
-                          ? "#0F1825"
-                          : "transparent",
-                      transition: "background 0.1s",
-                    }}
-                  >
-                    <td style={tdText}>{s.storeName}</td>
-                    <td style={tdNum}>{s.writeOffCount}</td>
-                    <td style={{ ...tdNum, color: "#F87171" }}>
-                      {s.totalLoss.toLocaleString(intlLocale)} ₴
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ marginTop: 16 }}>
+            <Table
+              columns={lossesByStoreColumns}
+              rows={losses.byStore}
+              rowKey={(s) => s.storeId}
+              onRowClick={(s) => handleStoreLossClick(s.storeId)}
+              isRowSelected={(s) => selectedLossDimension?.type === "store" && selectedLossDimension.value === s.storeId}
+            />
           </div>
 
           {selectedLossDimension?.type === "store" && (

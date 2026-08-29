@@ -23,6 +23,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES, type AppRole } from "@/lib/roles";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import type {
   CooperationAgreementDto,
   MarketplaceOrderDto,
@@ -49,6 +50,9 @@ function formatDate(iso: string, locale: string): string {
   });
 }
 
+// Inline styles for the nested item tables rendered inside an expanded order row
+// (these stay plain markup per the migration brief — only the outer order list
+// becomes a shared `Table`).
 const headerCellStyle: React.CSSProperties = {
   padding: "10px 14px",
   color: "#4B5563",
@@ -78,48 +82,75 @@ function OrdersTab() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<MarketplaceOrderDto | null>(null);
 
-  if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>;
-  }
-
-  if (orders.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
-        {t("empty")}
-      </div>
-    );
-  }
+  const columns: TableColumn<MarketplaceOrderDto>[] = [
+    {
+      key: "expand",
+      header: "",
+      width: 30,
+      cellStyle: { color: "#6B7280" },
+      render: (order) =>
+        expandedId === order.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />,
+    },
+    {
+      key: "number",
+      header: t("headerNumber"),
+      align: "left",
+      cellStyle: { fontWeight: 600 },
+      render: (order) => order.orderNumber,
+    },
+    {
+      key: "supplier",
+      header: t("headerSupplier"),
+      render: (order) => order.supplierName,
+    },
+    {
+      key: "date",
+      header: t("headerDate"),
+      cellStyle: { color: "#9CA3AF", whiteSpace: "nowrap" },
+      render: (order) => formatDate(order.createdAt, intlLocale),
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (order) => (
+        <>
+          <OrderStatusBadge status={order.status} />
+          <ShippingEtaHint order={order} />
+        </>
+      ),
+    },
+    {
+      key: "total",
+      header: t("headerTotal"),
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (order) => money(order.totalAmount, intlLocale),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (order) =>
+        order.status === "new" ? (
+          <div onClick={(e) => e.stopPropagation()}>
+            <Btn size="sm" variant="danger" onClick={() => setCancelTarget(order)}>
+              {t("cancelButton")}
+            </Btn>
+          </div>
+        ) : null,
+    },
+  ];
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ ...headerCellStyle, width: 30 }}></th>
-            <th style={headerCellStyle}>{t("headerNumber")}</th>
-            <th style={headerCellStyle}>{t("headerSupplier")}</th>
-            <th style={headerCellStyle}>{t("headerDate")}</th>
-            <th style={headerCellStyle}>{t("headerStatus")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerTotal")}</th>
-            <th style={headerCellStyle}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((order) => {
-            const expanded = expandedId === order.id;
-            return (
-              <FragmentRow
-                key={order.id}
-                order={order}
-                expanded={expanded}
-                intlLocale={intlLocale}
-                onToggle={() => setExpandedId(expanded ? null : order.id)}
-                onCancel={() => setCancelTarget(order)}
-              />
-            );
-          })}
-        </tbody>
-      </table>
+    <div>
+      <Table
+        columns={columns}
+        rows={orders}
+        rowKey={(order) => order.id}
+        onRowClick={(order) => setExpandedId(expandedId === order.id ? null : order.id)}
+        expandedRowKey={expandedId}
+        renderExpanded={(order) => <OrderExpandedContent order={order} intlLocale={intlLocale} />}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? t("loading") : t("empty")}
+      />
 
       {cancelTarget && (
         <ReasonModal
@@ -147,109 +178,68 @@ function OrdersTab() {
   );
 }
 
-function FragmentRow({
+function OrderExpandedContent({
   order,
-  expanded,
   intlLocale,
-  onToggle,
-  onCancel,
 }: {
   order: MarketplaceOrderDto;
-  expanded: boolean;
   intlLocale: string;
-  onToggle: () => void;
-  onCancel: () => void;
 }) {
   const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
   return (
-    <>
-      <tr onClick={onToggle} style={{ cursor: "pointer" }}>
-        <td style={{ ...cellStyle, color: "#6B7280" }}>
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </td>
-        <td style={{ ...cellStyle, fontWeight: 600 }}>{order.orderNumber}</td>
-        <td style={cellStyle}>{order.supplierName}</td>
-        <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-          {formatDate(order.createdAt, intlLocale)}
-        </td>
-        <td style={cellStyle}>
-          <OrderStatusBadge status={order.status} />
-          <ShippingEtaHint order={order} />
-        </td>
-        <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-          {money(order.totalAmount, intlLocale)}
-        </td>
-        <td
-          style={{ ...cellStyle, textAlign: "right" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {order.status === "new" && (
-            <Btn size="sm" variant="danger" onClick={onCancel}>
-              {t("cancelButton")}
-            </Btn>
-          )}
-        </td>
-      </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={7} style={{ padding: 0, borderBottom: "1px solid #1A2235" }}>
-            <div style={{ background: "#0D1117", padding: "12px 24px 16px 44px" }}>
-              {order.comment && (
-                <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
-                  {t("commentLabel", { comment: order.comment })}
-                </div>
-              )}
-              {order.cancelReason && (
-                <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
-                  {t("cancelReasonLabel", { reason: order.cancelReason })}
-                </div>
-              )}
-              <ShippingDetail
-                shippedAt={order.shippedAt}
-                estimatedDeliveryDays={order.estimatedDeliveryDays}
-                deliveredAt={order.deliveredAt}
-                delayReason={order.delayReason}
-                intlLocale={intlLocale}
-              />
-              {order.status === "delivered" && (
-                <ReceiptDetail orderId={order.id} intlLocale={intlLocale} />
-              )}
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={headerCellStyle}>{t("headerProduct")}</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerQty")}</th>
-                    <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerLineTotal")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.items.map((item) => (
-                    <tr key={item.id}>
-                      <td style={cellStyle}>
-                        {item.itemName}
-                        {item.unit && (
-                          <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>
-                        )}
-                      </td>
-                      <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                        {money(item.price, intlLocale)}
-                      </td>
-                      <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
-                        {item.qty}
-                      </td>
-                      <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                        {money(item.lineTotal, intlLocale)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
+    <div style={{ background: "#0D1117", padding: "12px 24px 16px 44px" }}>
+      {order.comment && (
+        <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
+          {t("commentLabel", { comment: order.comment })}
+        </div>
       )}
-    </>
+      {order.cancelReason && (
+        <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
+          {t("cancelReasonLabel", { reason: order.cancelReason })}
+        </div>
+      )}
+      <ShippingDetail
+        shippedAt={order.shippedAt}
+        estimatedDeliveryDays={order.estimatedDeliveryDays}
+        deliveredAt={order.deliveredAt}
+        delayReason={order.delayReason}
+        intlLocale={intlLocale}
+      />
+      {order.status === "delivered" && (
+        <ReceiptDetail orderId={order.id} intlLocale={intlLocale} />
+      )}
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={headerCellStyle}>{t("headerProduct")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerQty")}</th>
+            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerLineTotal")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {order.items.map((item) => (
+            <tr key={item.id}>
+              <td style={cellStyle}>
+                {item.itemName}
+                {item.unit && (
+                  <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>
+                )}
+              </td>
+              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
+                {money(item.price, intlLocale)}
+              </td>
+              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
+                {item.qty}
+              </td>
+              <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+                {money(item.lineTotal, intlLocale)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -425,68 +415,69 @@ function CooperationTab() {
       .catch((err) => toast.error(err.message));
   }
 
-  if (isLoading) {
-    return <div style={{ color: "#4B5563", fontSize: 13, padding: "16px 0" }}>{t("loading")}</div>;
-  }
-
-  if (agreements.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: "40px 0", color: "#4B5563", fontSize: 14 }}>
-        {t("empty")}
-      </div>
-    );
-  }
+  const columns: TableColumn<CooperationAgreementDto>[] = [
+    {
+      key: "supplier",
+      header: t("headerSupplier"),
+      cellStyle: { fontWeight: 600 },
+      render: (a) => a.supplierName,
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (a) => (
+        <>
+          <AgreementStatusBadge status={a.status} />
+          {a.rejectionReason && (
+            <div style={{ color: "#F87171", fontSize: 11, marginTop: 4 }}>
+              {a.rejectionReason}
+            </div>
+          )}
+          {a.status === "awaiting_signature" && (
+            <div style={{ marginTop: 8 }}>
+              <SigningMethodChoice agreement={a} />
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "contractNumber",
+      header: t("headerContractNumber"),
+      cellStyle: { color: "#9CA3AF" },
+      render: (a) => a.contractNumber ?? "—",
+    },
+    {
+      key: "requestDate",
+      header: t("headerRequestDate"),
+      cellStyle: { color: "#9CA3AF", whiteSpace: "nowrap" },
+      render: (a) => formatDate(a.requestedAt, intlLocale),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (a) =>
+        a.hasContractFile ? (
+          <Btn
+            size="sm"
+            variant="ghost"
+            icon={<Eye size={13} />}
+            onClick={() => handleViewContract(a)}
+          >
+            {t("viewContractButton")}
+          </Btn>
+        ) : null,
+    },
+  ];
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={headerCellStyle}>{t("headerSupplier")}</th>
-            <th style={headerCellStyle}>{t("headerStatus")}</th>
-            <th style={headerCellStyle}>{t("headerContractNumber")}</th>
-            <th style={headerCellStyle}>{t("headerRequestDate")}</th>
-            <th style={headerCellStyle}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {agreements.map((a) => (
-            <tr key={a.id}>
-              <td style={{ ...cellStyle, fontWeight: 600 }}>{a.supplierName}</td>
-              <td style={cellStyle}>
-                <AgreementStatusBadge status={a.status} />
-                {a.rejectionReason && (
-                  <div style={{ color: "#F87171", fontSize: 11, marginTop: 4 }}>
-                    {a.rejectionReason}
-                  </div>
-                )}
-                {a.status === "awaiting_signature" && (
-                  <div style={{ marginTop: 8 }}>
-                    <SigningMethodChoice agreement={a} />
-                  </div>
-                )}
-              </td>
-              <td style={{ ...cellStyle, color: "#9CA3AF" }}>{a.contractNumber ?? "—"}</td>
-              <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                {formatDate(a.requestedAt, intlLocale)}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                {a.hasContractFile && (
-                  <Btn
-                    size="sm"
-                    variant="ghost"
-                    icon={<Eye size={13} />}
-                    onClick={() => handleViewContract(a)}
-                  >
-                    {t("viewContractButton")}
-                  </Btn>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      columns={columns}
+      rows={agreements}
+      rowKey={(a) => a.id}
+      isLoading={isLoading}
+      emptyMessage={isLoading ? t("loading") : t("empty")}
+    />
   );
 }
 
@@ -538,17 +529,8 @@ export default function MarketplaceOrdersPage() {
         </button>
       </div>
 
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: 24,
-        }}
-      >
-        {activeTab === "orders" && <OrdersTab />}
-        {activeTab === "cooperation" && <CooperationTab />}
-      </div>
+      {activeTab === "orders" && <OrdersTab />}
+      {activeTab === "cooperation" && <CooperationTab />}
     </div>
   );
 }

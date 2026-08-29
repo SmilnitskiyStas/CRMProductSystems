@@ -2,6 +2,7 @@ import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 
 export interface NewsPromotionProduct {
+  catalogId?: string | null;
   id: string;
   barcode: string | null;
   name: string;
@@ -25,6 +26,7 @@ export interface NewsPromotionProduct {
 
 export interface ConsumerNewsItem {
   id: string;
+  contentType?: 'banner' | 'promotion_campaign';
   icon: ComponentProps<typeof Ionicons>['name'];
   eyebrow: string | null;
   title: string;

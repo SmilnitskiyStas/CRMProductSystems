@@ -21,6 +21,7 @@ export const MOBILE_ROUTES = {
   more: '/(app)/more',
   profile: '/(app)/profile',
   notifications: '/(app)/notifications',
+  movements: '/(app)/movements',
 } as const;
 
 type RouteRule = {
@@ -42,6 +43,7 @@ const SHELL_ROLES = [...TENANT_STAFF, AppRoles.Provider, AppRoles.ProviderAdmin,
 export const ROUTE_RULES: readonly RouteRule[] = [
   { prefix: MOBILE_ROUTES.profile, roles: SHELL_ROLES },
   { prefix: MOBILE_ROUTES.notifications, roles: SHELL_ROLES },
+  { prefix: MOBILE_ROUTES.movements, roles: [AppRoles.Storekeeper, AppRoles.Merchandiser, ...MANAGERS], module: 'inventory', tab: 'inventory' },
   { prefix: MOBILE_ROUTES.more, roles: SHELL_ROLES },
   { prefix: MOBILE_ROUTES.pos, roles: [AppRoles.Cashier, AppRoles.Storekeeper, ...MANAGERS], module: 'pos', tab: 'pos' },
   { prefix: MOBILE_ROUTES.receipt, roles: [AppRoles.Storekeeper, ...MANAGERS], module: 'procurement', tab: 'procurement' },

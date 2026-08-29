@@ -29,6 +29,11 @@ export interface RecentMovement {
   toLocationId: string | null;
   toLocationName: string | null;
   quantity: number;
+  quantityBefore: number | null;
+  quantityAfter: number | null;
+  unitPrice: number | null;
+  totalAmount: number | null;
+  referenceId: string | null;
   referenceType: string | null;
   notes: string | null;
   createdAt: string;
@@ -48,3 +53,18 @@ export const MOVEMENT_LABELS: Record<string, string> = {
   adjustment:  'Коригування',
   pos_sale:    'Продаж',
 };
+
+export const MOVEMENT_REFERENCE_LABELS: Record<string, string> = {
+  receipt: 'Прийомка',
+  marketplace_receipt: 'Приймання замовлення',
+  transfer: 'Переміщення',
+  write_off: 'Списання',
+  adjustment: 'Коригування залишку',
+  pos_sale: 'Продаж через касу',
+  production: 'Виробництво',
+  inventory: 'Інвентаризація',
+};
+
+export function movementNumber(movement: Pick<RecentMovement, 'id'>): string {
+  return movement.id.slice(0, 8).toUpperCase();
+}

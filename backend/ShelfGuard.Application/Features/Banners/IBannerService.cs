@@ -28,5 +28,7 @@ public interface IBannerService
         Guid tenantId, Guid id, Stream imageStream, string fileName, CancellationToken ct = default);
 
     Task<(BannerAnalyticsDto? Analytics, string? Error)> GetAnalyticsAsync(
-        Guid tenantId, Guid id, CancellationToken ct = default);
+        Guid tenantId, Guid id, DateTime? from = null, DateTime? toExclusive = null,
+        IReadOnlyCollection<Guid>? storeIds = null,
+        CancellationToken ct = default);
 }

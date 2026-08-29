@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations, useLocale } from "next-intl";
-import type { WorstProductsDto } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import type { WorstProductsDto, WorstProductRowDto } from "../types";
 
 interface Props {
   data: WorstProductsDto;
@@ -15,45 +16,18 @@ interface Props {
   selectedProductId?: string | null;
 }
 
-const ROW_BORDER = "1px solid #1F2937";
-
-const baseTd: React.CSSProperties = {
-  padding: "10px 16px",
-  fontSize: 13,
-  borderBottom: ROW_BORDER,
-  borderRight: "1px solid #1F2937",
-};
-
-const tdText: React.CSSProperties = { ...baseTd, color: "#E8EDF5", fontWeight: 500 };
-const tdMuted: React.CSSProperties = { ...baseTd, color: "#6B7280", fontFamily: "monospace" };
-const tdNum: React.CSSProperties = { ...baseTd, color: "#9CA3AF", fontFamily: "monospace", textAlign: "right" };
-const tdRevenue: React.CSSProperties = { ...tdNum, color: "#4ADE80" };
-// Distinct from tdRevenue's green — this is the "evidence" column (units sitting unsold), styled
-// with the same amber the rest of this feature already uses for "warning"-class status counts
-// (see CategoryDetailPanel.tsx's p.warning cell) rather than a brand-new color.
-const tdStock: React.CSSProperties = { ...tdNum, color: "#FBBF24", fontWeight: 600 };
-
-function thStyle(): React.CSSProperties {
-  return {
-    padding: "10px 16px",
-    color: "#4B5563",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    borderBottom: "1px solid #374151",
-    borderRight: "1px solid #374151",
-    background: "#0A0F1A",
-    textAlign: "left",
-  };
-}
-
 /**
  * Dead-stock counterpart to PosTopProductsTable (TASK-490's `pos/worst-products` endpoint):
  * active, on-hand-stock items sorted ascending by sales revenue, so true zero-sale products
  * surface first. currentStock is the extra column that makes a zero-revenue row actionable —
  * "N units sitting unsold" — which PosTopProductsTable has no equivalent of. No barcode column
  * (WorstProductRowDto carries no barcode field, unlike PosTopProductItem).
+ * Migrated to the shared `Table` component (table-unification migration, Batch B). The leading
+ * `#` row-number column occupies index 0 (same override pattern as StockTable's checkbox
+ * column), pushing the name column to index 1 with an explicit `align: "left"` override.
+ * isRowSelected now drives Table's canonical #0F1825 highlight instead of this file's own
+ * #111827 — a deliberate consolidation onto one shared selection color across every migrated
+ * table, not a functional change (hover always tracked the row already via Table's own state).
  */
 export function WorstProductsTable({ data, onRowClick, selectedProductId }: Props) {
   const t = useTranslations("Dashboard.analytics.pos.worstProducts");
@@ -78,50 +52,62 @@ export function WorstProductsTable({ data, onRowClick, selectedProductId }: Prop
     );
   }
 
+  const columns: TableColumn<WorstProductRowDto>[] = [
+    {
+      key: "index",
+      align: "center",
+      width: 32,
+      cellStyle: { color: "#374151", fontFamily: "monospace" },
+      header: "#",
+      render: (_item, index) => index + 1,
+    },
+    {
+      key: "name",
+      align: "left",
+      header: t("headers.name"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (item) => item.productName,
+    },
+    {
+      key: "revenue",
+      header: t("headers.revenue"),
+      cellStyle: { color: "#4ADE80", fontFamily: "monospace" },
+      render: (item) => `${item.salesRevenue.toLocaleString(intlLocale)} ₴`,
+    },
+    {
+      key: "quantity",
+      header: t("headers.quantity"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (item) => item.unitsSold.toLocaleString(intlLocale),
+    },
+    {
+      key: "receipts",
+      header: t("headers.receipts"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (item) => item.transactionCount.toLocaleString(intlLocale),
+    },
+    {
+      key: "currentStock",
+      header: t("headers.currentStock"),
+      // Same amber the rest of this feature already uses for "warning"-class status counts
+      // (see CategoryDetailPanel.tsx's p.warning cell) rather than a brand-new color.
+      cellStyle: { color: "#FBBF24", fontWeight: 600, fontFamily: "monospace" },
+      render: (item) => item.currentStock.toLocaleString(intlLocale),
+    },
+  ];
+
   return (
     <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "hidden" }}>
       <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #1F2937" }}>
         <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>{t("title")}</div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ ...thStyle(), width: 32, textAlign: "center" }}>#</th>
-              <th style={thStyle()}>{t("headers.name")}</th>
-              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.revenue")}</th>
-              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.quantity")}</th>
-              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.receipts")}</th>
-              <th style={{ ...thStyle(), textAlign: "right" }}>{t("headers.currentStock")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.products.map((item, idx) => {
-              const isSelected = !!onRowClick && selectedProductId === item.productId;
-              return (
-                <tr
-                  key={item.productId}
-                  onClick={onRowClick ? () => onRowClick(item.productId, item.productName) : undefined}
-                  style={{
-                    transition: "background 0.1s",
-                    cursor: onRowClick ? "pointer" : undefined,
-                    background: isSelected ? "#111827" : "transparent",
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#111827")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = isSelected ? "#111827" : "transparent")}
-                >
-                  <td style={{ ...tdMuted, textAlign: "center", color: "#374151" }}>{idx + 1}</td>
-                  <td style={tdText}>{item.productName}</td>
-                  <td style={tdRevenue}>{item.salesRevenue.toLocaleString(intlLocale)} ₴</td>
-                  <td style={tdNum}>{item.unitsSold.toLocaleString(intlLocale)}</td>
-                  <td style={tdNum}>{item.transactionCount.toLocaleString(intlLocale)}</td>
-                  <td style={tdStock}>{item.currentStock.toLocaleString(intlLocale)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={columns}
+        rows={data.products}
+        rowKey={(item) => item.productId}
+        onRowClick={onRowClick ? (item) => onRowClick(item.productId, item.productName) : undefined}
+        isRowSelected={(item) => !!onRowClick && selectedProductId === item.productId}
+      />
     </div>
   );
 }

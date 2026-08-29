@@ -141,12 +141,22 @@ public sealed class BannersController : ControllerBase
     [HttpGet("{id:guid}/analytics")]
     [ProducesResponseType(typeof(BannerAnalyticsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAnalytics(Guid id, CancellationToken ct)
+    public async Task<IActionResult> GetAnalytics(
+        Guid id,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] Guid[]? storeIds = null,
+        CancellationToken ct = default)
     {
         var tenantId = _tenantContext.TenantId;
         if (tenantId is null) return Forbid();
 
-        var (analytics, error) = await _service.GetAnalyticsAsync(tenantId.Value, id, ct);
+        if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+            return BadRequest(new { error = "The start date must not be later than the end date." });
+
+        var fromUtc = from?.Date;
+        var toExclusive = to?.Date.AddDays(1);
+        var (analytics, error) = await _service.GetAnalyticsAsync(tenantId.Value, id, fromUtc, toExclusive, storeIds, ct);
         return analytics is null ? NotFound(new { error }) : Ok(analytics);
     }
 

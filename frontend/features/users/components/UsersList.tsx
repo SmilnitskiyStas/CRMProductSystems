@@ -7,6 +7,7 @@ import { UserDetailPanel } from "./UserDetailPanel";
 import { getRoleLabel, ROLE_KEYS } from "@/features/profile/types";
 import type { UserDto } from "../types";
 import { TenantRoleBadge } from "@/features/tenant-roles/components/TenantRoleBadge";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ function AccessBadge({ user }: { user: UserDto }) {
   const grants = Object.values(perms).filter(Boolean).length;
   const denies = Object.values(perms).filter((v) => !v).length;
   return (
-    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+    <div style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
       {grants > 0 && (
         <span
           style={{
@@ -131,26 +132,12 @@ function formatDatetime(iso: string | null | undefined, locale: string) {
   });
 }
 
-// ── Grid template ─────────────────────────────────────────────────────────────
-// Columns: User | Role | Phone | Access | Last active | Added | Invited by | Status
-const GRID = "minmax(200px,1fr) 150px 130px 100px 140px 120px 140px 110px";
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function UsersList() {
   const t = useTranslations("Dashboard.users.list");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
-  const HEADERS = [
-    t("headerUser"),
-    t("headerRole"),
-    t("headerPhone"),
-    t("headerAccess"),
-    t("headerLastActive"),
-    t("headerAdded"),
-    t("headerInvitedBy"),
-    t("headerStatus"),
-  ];
   const tRoles = useTranslations("Dashboard.roles");
   const { data: users, isLoading, isError } = useUsers();
   // Holds only the id — the panel's `user` is derived live from `users` below, so an
@@ -195,6 +182,112 @@ export function UsersList() {
       </div>
     );
   }
+
+  // Columns: User | Role | Phone | Access | Last active | Added | Invited by | Status
+  const columns: TableColumn<UserDto>[] = [
+    {
+      key: "user",
+      header: t("headerUser"),
+      render: (user) => {
+        const initials = user.fullName
+          .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <div
+              style={{
+                width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                background: user.isActive
+                  ? "linear-gradient(135deg, #3B82F6, #6366F1)"
+                  : "#1F2937",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#fff", fontSize: 12, fontWeight: 700,
+              }}
+            >
+              {initials}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{
+                color: "#E8EDF5", fontSize: 13, fontWeight: 500,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>
+                {user.fullName}
+              </div>
+              <div style={{
+                color: "#4B5563", fontSize: 11,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>
+                {user.email}
+              </div>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "role",
+      header: t("headerRole"),
+      render: (user) => (
+        <div style={{ display: "inline-flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+          <RoleBadge role={user.role} />
+          <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
+          {user.needsLocationAssignment && <NeedsLocationBadge />}
+        </div>
+      ),
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      render: (user) => (
+        <span style={{ color: user.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>
+          {user.phone ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "access",
+      header: t("headerAccess"),
+      render: (user) => <AccessBadge user={user} />,
+    },
+    {
+      key: "lastActive",
+      header: t("headerLastActive"),
+      render: (user) => (
+        <span style={{ color: "#4B5563", fontSize: 12 }}>
+          {user.lastActiveAt ? formatDatetime(user.lastActiveAt, intlLocale) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "added",
+      header: t("headerAdded"),
+      render: (user) => (
+        <span style={{ color: "#4B5563", fontSize: 12 }}>
+          {formatDate(user.createdAt, intlLocale)}
+        </span>
+      ),
+    },
+    {
+      key: "invitedBy",
+      header: t("headerInvitedBy"),
+      render: (user) => (
+        <span style={{ color: user.invitedByName ? "#9CA3AF" : "#374151", fontSize: 12, whiteSpace: "nowrap" }}>
+          {user.invitedByName ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (user) => (
+        <div style={{ display: "inline-flex", alignItems: "center" }}>
+          <StatusDot isActive={user.isActive} />
+          <span style={{ color: user.isActive ? "#4ADE80" : "#6B7280", fontSize: 12 }}>
+            {user.isActive ? t("statusActive") : t("statusInactive")}
+          </span>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -278,142 +371,18 @@ export function UsersList() {
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "auto",          // horizontal scroll on narrow screens
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: GRID,
-            padding: "10px 16px",
-            borderBottom: "1px solid #1F2937",
-            background: "#0A1020",
-            minWidth: 900,
-          }}
-        >
-          {HEADERS.map((h) => (
-            <div
-              key={h}
-              style={{
-                color: "#4B5563",
-                fontSize: 11,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              {h}
-            </div>
-          ))}
-        </div>
-
-        {/* Rows */}
-        {filtered.length === 0 ? (
-          <div style={{ padding: "32px 16px", textAlign: "center", color: "#374151", fontSize: 13 }}>
-            {search || roleFilter !== "all" || statusFilter !== "all" || onlyMissingLocation
-              ? t("notFound")
-              : t("noUsersYet")}
-          </div>
-        ) : (
-          filtered.map((user) => {
-            const initials = user.fullName
-              .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
-
-            return (
-              <div
-                key={user.id}
-                onClick={() => setSelectedId(user.id)}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: GRID,
-                  padding: "12px 16px",
-                  borderBottom: "1px solid #0F1924",
-                  cursor: "pointer",
-                  alignItems: "center",
-                  minWidth: 900,
-                  transition: "background 0.1s",
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#0A1628"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-              >
-                {/* 1. Name + email */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <div
-                    style={{
-                      width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
-                      background: user.isActive
-                        ? "linear-gradient(135deg, #3B82F6, #6366F1)"
-                        : "#1F2937",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "#fff", fontSize: 12, fontWeight: 700,
-                    }}
-                  >
-                    {initials}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{
-                      color: "#E8EDF5", fontSize: 13, fontWeight: 500,
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    }}>
-                      {user.fullName}
-                    </div>
-                    <div style={{
-                      color: "#4B5563", fontSize: 11,
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    }}>
-                      {user.email}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Role */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
-                  <RoleBadge role={user.role} />
-                  <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
-                  {user.needsLocationAssignment && <NeedsLocationBadge />}
-                </div>
-
-                {/* 3. Phone */}
-                <div style={{ color: user.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>
-                  {user.phone ?? "—"}
-                </div>
-
-                {/* 4. Access overrides */}
-                <div><AccessBadge user={user} /></div>
-
-                {/* 5. Last active */}
-                <div style={{ color: "#4B5563", fontSize: 12 }}>
-                  {user.lastActiveAt ? formatDatetime(user.lastActiveAt, intlLocale) : "—"}
-                </div>
-
-                {/* 6. Added (createdAt) */}
-                <div style={{ color: "#4B5563", fontSize: 12 }}>
-                  {formatDate(user.createdAt, intlLocale)}
-                </div>
-
-                {/* 7. Invited by */}
-                <div style={{ color: user.invitedByName ? "#9CA3AF" : "#374151", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {user.invitedByName ?? "—"}
-                </div>
-
-                {/* 8. Status */}
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <StatusDot isActive={user.isActive} />
-                  <span style={{ color: user.isActive ? "#4ADE80" : "#6B7280", fontSize: 12 }}>
-                    {user.isActive ? t("statusActive") : t("statusInactive")}
-                  </span>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+      <Table
+        columns={columns}
+        rows={filtered}
+        rowKey={(user) => user.id}
+        onRowClick={(user) => setSelectedId(user.id)}
+        minWidth={900}
+        emptyMessage={
+          search || roleFilter !== "all" || statusFilter !== "all" || onlyMissingLocation
+            ? t("notFound")
+            : t("noUsersYet")
+        }
+      />
 
       {/* Footer count */}
       {filtered.length > 0 && (

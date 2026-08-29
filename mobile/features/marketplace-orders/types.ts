@@ -29,6 +29,8 @@ export interface MarketplaceOrderReceiptItem {
   batchNumber: string | null;
   discrepancyNotes: string | null;
   isResolved: boolean;
+  price: number;
+  referenceImageUrl: string | null;
 }
 
 export interface MarketplaceOrderReceipt {

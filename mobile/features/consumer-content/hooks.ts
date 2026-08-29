@@ -2,13 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemberships } from '@/features/loyalty/hooks/useLoyalty';
 import { useLoyaltyUiStore } from '@/features/loyalty/store';
 import { selectMembershipForTenant } from '@/features/loyalty/selection';
-import { getConsumerBanners, getConsumerCatalog, getConsumerCatalogByIds, getConsumerPromotions } from './api';
+import { getConsumerBanners, getConsumerCatalog, getConsumerCatalogByIds, getConsumerPromotionCampaigns, getConsumerPromotions } from './api';
 import type { ConsumerContentContext } from './types';
 
 export function useSelectedConsumerContext(enabled = true) {
   const selectedTenantId = useLoyaltyUiStore((state) => state.selectedTenantId);
   const membershipsQuery = useMemberships(enabled);
-  const membership = selectMembershipForTenant(membershipsQuery.data, selectedTenantId);
+  const membership = selectMembershipForTenant(membershipsQuery.data, selectedTenantId)
+    ?? membershipsQuery.data?.find((item) => item.status === 'active')
+    ?? null;
   const context = membership?.preferredStoreId
     ? { tenantId: membership.tenantId, storeId: membership.preferredStoreId }
     : null;
@@ -31,6 +33,9 @@ export function useConsumerPromotions(context: ConsumerContentContext | null) {
     enabled: Boolean(context),
     staleTime: 60_000,
   });
+}
+export function useConsumerPromotionCampaigns(context: ConsumerContentContext | null) {
+  return useQuery({ queryKey:['consumer-content','promotion-campaigns',context?.tenantId,context?.storeId], queryFn:()=>getConsumerPromotionCampaigns(context as ConsumerContentContext), enabled:Boolean(context), staleTime:60_000 });
 }
 
 export function useConsumerCatalog(

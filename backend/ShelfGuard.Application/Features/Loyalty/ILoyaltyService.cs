@@ -206,6 +206,7 @@ public interface ILoyaltyService
 
     Task<(LoyaltyProgramSettingsDto? Settings, string? Error)> UpsertSettingsAsync(
         Guid tenantId, UpsertLoyaltyProgramSettingsRequest request, CancellationToken ct = default);
+    Task<int> ResetAllBonusBalancesAsync(Guid tenantId, CancellationToken ct = default);
 
     // ── Tier ladder (enterprise_admin, TASK-615) ──────────────────────────────
 

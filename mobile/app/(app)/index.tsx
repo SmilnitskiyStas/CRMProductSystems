@@ -21,6 +21,7 @@ import {
   MOVEMENT_LABELS,
   type RecentMovement,
 } from '@/features/dashboard/types';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
 
 const MODULE_SHORTCUTS: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -48,13 +49,13 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function MovementRow({ item }: { item: RecentMovement }) {
+function MovementRow({ item, onPress }: { item: RecentMovement; onPress: () => void }) {
   const iconName = MOVEMENT_ICONS[item.movementType] ?? 'ellipse-outline';
   const label = MOVEMENT_LABELS[item.movementType] ?? item.movementType;
   const store = item.toLocationName ?? item.fromLocationName ?? '';
 
   return (
-    <View className="flex-row items-center gap-3 py-3">
+    <TouchableOpacity onPress={onPress} className="flex-row items-center gap-3 py-3" accessibilityRole="button">
       <View className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center">
         <Ionicons name={iconName} size={16} color="#6b7280" />
       </View>
@@ -68,13 +69,16 @@ function MovementRow({ item }: { item: RecentMovement }) {
         </Text>
         <Text className="text-xs text-gray-400">{formatDate(item.createdAt)}</Text>
       </View>
-    </View>
+      <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+    </TouchableOpacity>
   );
 }
 
 export default function DashboardScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const selectedLocationId = useWorkspaceLocationStore((state) => state.selectedLocationId);
+  const locationId = selectedLocationId === undefined ? user?.locationId ?? undefined : selectedLocationId ?? undefined;
 
   const isManager = hasRole(user?.role, AT_LEAST_STORE_MANAGER_OR_PROVIDER);
 
@@ -83,7 +87,7 @@ export default function DashboardScreen() {
     isLoading: statsLoading,
     refetch: refetchStats,
     isRefetching: statsRefetching,
-  } = useDashboardStats();
+  } = useDashboardStats(locationId);
 
   const {
     data: aiOrders,
@@ -95,7 +99,7 @@ export default function DashboardScreen() {
     data: movementsPage,
     refetch: refetchMovements,
     isRefetching: movementsRefetching,
-  } = useRecentMovements();
+  } = useRecentMovements(locationId);
 
   const isRefreshing = statsRefetching || aiRefetching || movementsRefetching;
 
@@ -110,6 +114,13 @@ export default function DashboardScreen() {
     : 0;
 
   const recentMovements = movementsPage?.items ?? [];
+
+  function openMovement(item: RecentMovement) {
+    router.push({
+      pathname: '/(app)/movements/[id]',
+      params: { id: item.id, movement: JSON.stringify(item) },
+    });
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50" edges={['bottom', 'left', 'right']}>
@@ -283,10 +294,17 @@ export default function DashboardScreen() {
         {/* Recent Events */}
         {recentMovements.length > 0 && (
           <View className="bg-white rounded-xl border border-gray-100 px-4">
-            <Text className="text-sm font-semibold text-gray-500 pt-4 pb-2">Останні події</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/movements')}
+              className="pt-4 pb-2 flex-row items-center justify-between"
+              accessibilityRole="button"
+            >
+              <Text className="text-sm font-semibold text-gray-500">Останні події</Text>
+              <Text className="text-xs font-semibold text-primary-600">Показати всі</Text>
+            </TouchableOpacity>
             {recentMovements.map((item, idx) => (
               <View key={item.id}>
-                <MovementRow item={item} />
+                <MovementRow item={item} onPress={() => openMovement(item)} />
                 {idx < recentMovements.length - 1 && (
                   <View className="h-px bg-gray-100" />
                 )}

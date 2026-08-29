@@ -6,7 +6,14 @@ import type {
   ConsumerCatalogPage,
   ConsumerContentContext,
   ConsumerPromotionDto,
+  ConsumerPromotionCampaignDto,
 } from './types';
+
+const catalogAnalyticsSessionId = `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+export async function recordConsumerCatalogEvent(context: ConsumerContentContext, event: { catalogId: string; eventType: 'catalog_view' | 'product_view' | 'product_scan'; productId?: string | null }): Promise<void> {
+  await personalApiClient.post(`/consumer/${context.tenantId}/catalog-events`, { catalogId: event.catalogId, storeId: context.storeId, productId: event.productId ?? null, eventType: event.eventType, sessionId: catalogAnalyticsSessionId });
+}
 
 function formatValidUntil(value: string | null): string {
   if (!value) return 'Постійна пропозиція';
@@ -39,6 +46,7 @@ function mapBannerProduct(
 function mapBanner(dto: ConsumerBannerDto): ConsumerNewsItem {
   return {
     id: dto.id,
+    contentType: 'banner',
     icon: (dto.icon || 'newspaper-outline') as ConsumerNewsItem['icon'],
     eyebrow: dto.eyebrow,
     title: dto.title,
@@ -72,6 +80,13 @@ function mapPromotion(dto: ConsumerPromotionDto): NewsPromotionProduct {
   };
 }
 
+function mapPromotionCampaign(dto: ConsumerPromotionCampaignDto): ConsumerNewsItem {
+  return { id:dto.id, contentType:'promotion_campaign', icon:'pricetag-outline', eyebrow:dto.eyebrow, title:dto.title, description:dto.description,
+    body:dto.body, terms:dto.terms, validUntil:formatValidUntil(dto.endsAt), imageUrl:resolveApiAssetUrl(dto.imageUrl),
+    background:dto.backgroundColor, accent:dto.accentColor, detailMode:'internal', externalUrl:null,
+    promotionProducts:dto.products.map(mapPromotion) };
+}
+
 export async function getConsumerBanners({
   tenantId,
   storeId,
@@ -83,12 +98,16 @@ export async function getConsumerBanners({
   return data.map(mapBanner);
 }
 
-export async function recordBannerView(tenantId: string, id: string): Promise<void> {
-  await personalApiClient.post(`/consumer/${tenantId}/banners/${id}/view`);
+export async function recordBannerView(context: ConsumerContentContext, id: string): Promise<void> {
+  await personalApiClient.post(`/consumer/${context.tenantId}/banners/${id}/view`, null, { params: { storeId: context.storeId } });
 }
 
-export async function recordBannerClick(tenantId: string, id: string): Promise<void> {
-  await personalApiClient.post(`/consumer/${tenantId}/banners/${id}/click`);
+export async function recordBannerClick(context: ConsumerContentContext, id: string): Promise<void> {
+  await personalApiClient.post(`/consumer/${context.tenantId}/banners/${id}/click`, null, { params: { storeId: context.storeId } });
+}
+
+export async function recordPromotionCampaignEvent(context: ConsumerContentContext, id: string, eventType: 'impression' | 'open'): Promise<void> {
+  await personalApiClient.post(`/consumer/${context.tenantId}/promotion-campaigns/${id}/${eventType}`, null, { params: { storeId: context.storeId } });
 }
 
 export async function getConsumerPromotions({
@@ -100,6 +119,11 @@ export async function getConsumerPromotions({
     { params: { storeId } }
   );
   return data.map(mapPromotion);
+}
+
+export async function getConsumerPromotionCampaigns({ tenantId, storeId }: ConsumerContentContext): Promise<ConsumerNewsItem[]> {
+  const { data } = await personalApiClient.get<ConsumerPromotionCampaignDto[]>(`/consumer/${tenantId}/promotion-campaigns`, { params: { storeId } });
+  return data.map(mapPromotionCampaign);
 }
 
 export async function getConsumerCatalog(

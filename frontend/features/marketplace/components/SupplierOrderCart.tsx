@@ -10,6 +10,7 @@ import { ShoppingCart, Trash2, X, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useCreateMarketplaceOrder, useCheckOrderConflicts } from "../hooks/useCooperation";
 import type { SupplierItemDto, BarcodeConflict, CreateMarketplaceOrderItem } from "../types";
@@ -70,6 +71,72 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
 
   const total = cart.reduce((sum, line) => sum + (line.item.price ?? 0) * line.qty, 0);
   const allConflictsResolved = conflicts.every((c) => resolutions[c.supplierItemId] != null);
+
+  const cartColumns: TableColumn<CartLine>[] = [
+    {
+      key: "product",
+      header: t("headerProduct"),
+      render: (line) => (
+        <>
+          {line.item.customName ?? line.item.itemName ?? "—"}
+          {line.item.unit && (
+            <span style={{ color: "#4B5563", fontSize: 11 }}> · {line.item.unit}</span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "price",
+      header: t("headerPrice"),
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (line) => (line.item.price != null ? money(line.item.price, intlLocale) : "—"),
+    },
+    {
+      key: "qty",
+      header: t("headerQty"),
+      render: (line) => (
+        <input
+          type="number"
+          value={line.qty}
+          min={line.item.minQty ?? 1}
+          max={line.item.maxQty ?? undefined}
+          onChange={(e) =>
+            onUpdateQty(line.item.id, clampQty(line.item, Number(e.target.value) || 1))
+          }
+          style={{
+            width: 70,
+            background: "#1F2937",
+            border: "1px solid #374151",
+            borderRadius: 6,
+            color: "#E8EDF5",
+            fontSize: 13,
+            padding: "5px 8px",
+            outline: "none",
+            textAlign: "right",
+          }}
+        />
+      ),
+    },
+    {
+      key: "total",
+      header: t("headerTotal"),
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (line) => (line.item.price != null ? money(line.item.price * line.qty, intlLocale) : "—"),
+    },
+    {
+      key: "remove",
+      header: "",
+      render: (line) => (
+        <button
+          onClick={() => onRemove(line.item.id)}
+          title={t("removeFromCartTitle")}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#F87171", padding: 2, display: "inline-flex" }}
+        >
+          <Trash2 size={15} />
+        </button>
+      ),
+    },
+  ];
 
   function closeModal() {
     setModalOpen(false);
@@ -344,81 +411,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               </div>
               ) : (
               <>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {[t("headerProduct"), t("headerPrice"), t("headerQty"), t("headerTotal"), ""].map((h, i) => (
-                      <th
-                        key={i}
-                        style={{
-                          padding: "8px 10px",
-                          color: "#4B5563",
-                          fontSize: 11,
-                          fontWeight: 600,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                          textAlign: i === 0 ? "left" : "right",
-                          borderBottom: "1px solid #1F2937",
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map((line) => (
-                    <tr key={line.item.id}>
-                      <td style={{ padding: "10px", color: "#E8EDF5", fontSize: 13, borderBottom: "1px solid #1A2235" }}>
-                        {line.item.customName ?? line.item.itemName ?? "—"}
-                        {line.item.unit && (
-                          <span style={{ color: "#4B5563", fontSize: 11 }}> · {line.item.unit}</span>
-                        )}
-                      </td>
-                      <td style={{ padding: "10px", color: "#9CA3AF", fontSize: 13, textAlign: "right", borderBottom: "1px solid #1A2235", whiteSpace: "nowrap" }}>
-                        {line.item.price != null ? money(line.item.price, intlLocale) : "—"}
-                      </td>
-                      <td style={{ padding: "10px", textAlign: "right", borderBottom: "1px solid #1A2235" }}>
-                        <input
-                          type="number"
-                          value={line.qty}
-                          min={line.item.minQty ?? 1}
-                          max={line.item.maxQty ?? undefined}
-                          onChange={(e) =>
-                            onUpdateQty(
-                              line.item.id,
-                              clampQty(line.item, Number(e.target.value) || 1)
-                            )
-                          }
-                          style={{
-                            width: 70,
-                            background: "#1F2937",
-                            border: "1px solid #374151",
-                            borderRadius: 6,
-                            color: "#E8EDF5",
-                            fontSize: 13,
-                            padding: "5px 8px",
-                            outline: "none",
-                            textAlign: "right",
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "10px", color: "#E8EDF5", fontSize: 13, textAlign: "right", borderBottom: "1px solid #1A2235", whiteSpace: "nowrap" }}>
-                        {line.item.price != null ? money(line.item.price * line.qty, intlLocale) : "—"}
-                      </td>
-                      <td style={{ padding: "10px", textAlign: "right", borderBottom: "1px solid #1A2235" }}>
-                        <button
-                          onClick={() => onRemove(line.item.id)}
-                          title={t("removeFromCartTitle")}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#F87171", padding: 2, display: "inline-flex" }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table columns={cartColumns} rows={cart} rowKey={(line) => line.item.id} />
 
               <div style={{ marginTop: 16 }}>
                 <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>

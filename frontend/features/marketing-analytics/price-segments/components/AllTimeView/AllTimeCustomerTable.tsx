@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Users } from "lucide-react";
-import { SortableHeader, TablePaginationFooter } from "../TableControls";
 import { ExportAllTimeButton, PiiUnmaskToggle } from "../ExportButtons";
-import type { AllTimeCustomerTableDto, AllTimeSortBy, PriceSegmentKey } from "../../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import type { AllTimeCustomerTableDto, AllTimeCustomerRowDto, AllTimeSortBy, PriceSegmentKey } from "../../types";
 
 interface Props {
   data: AllTimeCustomerTableDto | undefined;
@@ -20,8 +20,6 @@ interface Props {
   canExportPii: boolean;
 }
 
-const GRID = "minmax(150px,1fr) 120px 150px 110px 110px 90px 110px";
-
 /**
  * Server-paginated/sorted "Весь час" customer table — shows the whole base when no segment is
  * selected, or one tier when SegmentDistributionChart's bar/button filter is active. No
@@ -29,6 +27,12 @@ const GRID = "minmax(150px,1fr) 120px 150px 110px 110px 90px 110px";
  * sourced from the overview response (segment-scoped, not row-scoped), not this table's DTO —
  * `AllTimeCustomerTableDto` genuinely carries no `recommendation` field (unlike the comparison
  * and frequency tables, which do).
+ *
+ * Migrated to the shared `Table` component (Batch C of the table-unification migration) — same
+ * state/hooks as before, only the grid markup + TableControls' SortableHeader/
+ * TablePaginationFooter were replaced. Per Table's non-negotiable alignment rule, only column 0
+ * (name) is left-aligned; every other column (including the previously right-aligned numeric
+ * ones) is now center-aligned, matching ProductsTable's Batch A precedent.
  */
 export function AllTimeCustomerTable({
   data,
@@ -46,6 +50,56 @@ export function AllTimeCustomerTable({
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [unmaskPii, setUnmaskPii] = useState(false);
+
+  const columns: TableColumn<AllTimeCustomerRowDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      sortKey: "name",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500, whiteSpace: "nowrap" },
+      render: (r) => r.name,
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      render: (r) => <span style={{ color: r.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>{r.phone ?? "—"}</span>,
+    },
+    {
+      key: "segment",
+      header: t("headerSegment"),
+      sortKey: "segment",
+      cellStyle: { color: "#E8EDF5", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" },
+      render: (r) => r.segmentLabelUa,
+    },
+    {
+      key: "items",
+      header: t("headerItems"),
+      sortKey: "items",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.itemsPerReceipt.toLocaleString(intlLocale, { maximumFractionDigits: 1 }),
+    },
+    {
+      key: "check",
+      header: t("headerCheck"),
+      sortKey: "check",
+      cellStyle: { color: "#E8EDF5", fontSize: 13, fontFamily: "monospace" },
+      render: (r) => `${r.typicalCheck.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+    {
+      key: "purchases",
+      header: t("headerPurchases"),
+      sortKey: "purchases",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.purchaseCount.toLocaleString(intlLocale),
+    },
+    {
+      key: "ltv",
+      header: t("headerLtv"),
+      sortKey: "ltv",
+      cellStyle: { color: "#4ADE80", fontSize: 13, fontFamily: "monospace" },
+      render: (r) => `${r.ltv.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+  ];
 
   return (
     <div style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -81,40 +135,19 @@ export function AllTimeCustomerTable({
           <div style={{ color: "#9CA3AF", fontSize: 14, fontWeight: 600 }}>{t("empty")}</div>
         </div>
       ) : (
-        <>
-          <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #1F2937", background: "#0A1020", minWidth: 820, gap: 8 }}>
-              <SortableHeader label={t("headerName")} sortKey="name" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>{t("headerPhone")}</div>
-              <SortableHeader label={t("headerSegment")} sortKey="segment" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              <SortableHeader label={t("headerItems")} sortKey="items" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerCheck")} sortKey="check" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerPurchases")} sortKey="purchases" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerLtv")} sortKey="ltv" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-            </div>
-
-            {data.rows.map((r) => (
-              <div
-                key={r.customerId}
-                style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #0F1924", alignItems: "center", minWidth: 820, gap: 8 }}
-              >
-                <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
-                <div style={{ color: r.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>{r.phone ?? "—"}</div>
-                <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{r.segmentLabelUa}</div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.itemsPerReceipt.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}
-                </div>
-                <div style={{ color: "#E8EDF5", fontSize: 13, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.typicalCheck.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴
-                </div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>{r.purchaseCount.toLocaleString(intlLocale)}</div>
-                <div style={{ color: "#4ADE80", fontSize: 13, textAlign: "right", fontFamily: "monospace" }}>{r.ltv.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴</div>
-              </div>
-            ))}
-          </div>
-
-          <TablePaginationFooter page={page} totalPages={data.totalPages} totalLabel={t("totalCount", { count: data.totalCount })} onPageChange={onPageChange} />
-        </>
+        <Table
+          columns={columns}
+          rows={data.rows}
+          rowKey={(r) => r.customerId}
+          sortBy={sortBy}
+          sortDescending={sortDescending}
+          onSort={onSort}
+          page={page}
+          totalPages={data.totalPages}
+          totalCount={data.totalCount}
+          onPageChange={onPageChange}
+          minWidth={820}
+        />
       )}
     </div>
   );

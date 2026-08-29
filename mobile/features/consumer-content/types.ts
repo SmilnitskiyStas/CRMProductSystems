@@ -38,6 +38,12 @@ export interface ConsumerPromotionDto {
   validUntil: string | null;
 }
 
+export interface ConsumerPromotionCampaignDto {
+  id: string; title: string; eyebrow: string | null; description: string; body: string[]; terms: string[];
+  imageUrl: string | null; backgroundColor: string; accentColor: string; startsAt: string; endsAt: string | null;
+  sortOrder: number; products: ConsumerPromotionDto[];
+}
+
 export interface ConsumerCatalogItem {
   id: string;
   name: string;
@@ -47,6 +53,12 @@ export interface ConsumerCatalogItem {
   categoryId: string | null;
   categoryName: string | null;
   isAvailableAtStore: boolean;
+  sortOrder?: number;
+  isFeatured?: boolean;
+  mobileDiscountPercent?: number | null;
+  mobilePrice?: number | null;
+  catalogId?: string | null;
+  barcode?: string | null;
 }
 
 export interface ConsumerCatalogPage {

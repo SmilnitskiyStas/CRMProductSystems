@@ -4,6 +4,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { Gift } from "lucide-react";
 import { FiscalBadge } from "./FiscalBadge";
 import { saleHasLoyaltyActivity, type SaleDto } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 interface Props {
   sales: SaleDto[] | undefined;
@@ -11,26 +12,6 @@ interface Props {
   isLoading: boolean;
   onSelectSale: (sale: SaleDto) => void;
 }
-
-const th: React.CSSProperties = {
-  textAlign: "left",
-  color: "#6B7280",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
-  padding: "10px 14px",
-  borderBottom: "1px solid #1F2937",
-  whiteSpace: "nowrap",
-};
-
-const td: React.CSSProperties = {
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "12px 14px",
-  borderBottom: "1px solid #161B26",
-  verticalAlign: "middle",
-};
 
 function formatTime(iso: string, intlLocale: string): string {
   return new Date(iso).toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit" });
@@ -43,108 +24,88 @@ export function SalesTable({ sales, totalAmount, isLoading, onSelectSale }: Prop
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
 
-  if (isLoading) {
-    return (
-      <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 32 }}>
-        {tCommon("loading")}
-      </div>
-    );
-  }
-
-  if (!sales?.length) {
-    return (
-      <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: 40 }}>
-        {t("empty")}
-      </div>
-    );
-  }
+  const columns: TableColumn<SaleDto>[] = [
+    {
+      key: "receiptNo",
+      header: t("headers.receiptNo"),
+      render: (sale) => (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontFamily: "monospace", fontSize: 12, color: "#93C5FD" }}>
+            #{sale.receiptNumber}
+          </span>
+          {/*
+            TASK-408: proxy indicator for "has loyalty activity", not "has a linked
+            customer" — SaleDto has no CustomerId field at all (see types.ts doc on
+            saleHasLoyaltyActivity / SaleDetailDrawer.tsx for the full backend-gap
+            writeup). Always hidden today: GetSalesForShiftAsync (the query behind
+            this table's data) never populates loyaltyAccrued/Redeemed/Balance —
+            only the mobile checkout's immediate creation response does.
+          */}
+          {saleHasLoyaltyActivity(sale) && (
+            <span title={t("loyaltyIndicator")} style={{ display: "inline-flex" }}>
+              <Gift size={12} color="#34d399" aria-label={t("loyaltyIndicator")} />
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "time",
+      header: t("headers.time"),
+      render: (sale) => formatTime(sale.createdAt, intlLocale),
+    },
+    {
+      key: "items",
+      header: t("headers.items"),
+      cellStyle: { color: "#E8EDF5" },
+      render: (sale) => sale.items.length,
+    },
+    {
+      key: "payment",
+      header: t("headers.payment"),
+      render: (sale) => (tPayment.has(sale.paymentType) ? tPayment(sale.paymentType) : sale.paymentType),
+    },
+    {
+      key: "sum",
+      header: t("headers.sum"),
+      cellStyle: { fontWeight: 700, color: "#34d399" },
+      render: (sale) => `${sale.subtotal.toFixed(2)} ₴`,
+    },
+    {
+      key: "fiscalization",
+      header: t("headers.fiscalization"),
+      render: (sale) => <FiscalBadge status={sale.fiscalStatus} />,
+    },
+  ];
 
   return (
     <div>
-      <div
-        style={{
-          background: "#161B26",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          overflow: "auto",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={th}>{t("headers.receiptNo")}</th>
-              <th style={th}>{t("headers.time")}</th>
-              <th style={th}>{t("headers.items")}</th>
-              <th style={th}>{t("headers.payment")}</th>
-              <th style={{ ...th, textAlign: "right" }}>{t("headers.sum")}</th>
-              <th style={th}>{t("headers.fiscalization")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sales.map((sale) => (
-              <tr
-                key={sale.transactionId}
-                onClick={() => onSelectSale(sale)}
-                style={{ cursor: "pointer" }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = "#1a2035";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = "transparent";
-                }}
-              >
-                <td style={td}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "#93C5FD" }}>
-                      #{sale.receiptNumber}
-                    </span>
-                    {/*
-                      TASK-408: proxy indicator for "has loyalty activity", not "has a linked
-                      customer" — SaleDto has no CustomerId field at all (see types.ts doc on
-                      saleHasLoyaltyActivity / SaleDetailDrawer.tsx for the full backend-gap
-                      writeup). Always hidden today: GetSalesForShiftAsync (the query behind
-                      this table's data) never populates loyaltyAccrued/Redeemed/Balance —
-                      only the mobile checkout's immediate creation response does.
-                    */}
-                    {saleHasLoyaltyActivity(sale) && (
-                      <span title={t("loyaltyIndicator")} style={{ display: "inline-flex" }}>
-                        <Gift size={12} color="#34d399" aria-label={t("loyaltyIndicator")} />
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td style={{ ...td, color: "#9CA3AF" }}>{formatTime(sale.createdAt, intlLocale)}</td>
-                <td style={td}>{sale.items.length}</td>
-                <td style={{ ...td, color: "#9CA3AF" }}>
-                  {tPayment.has(sale.paymentType) ? tPayment(sale.paymentType) : sale.paymentType}
-                </td>
-                <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#34d399" }}>
-                  {sale.subtotal.toFixed(2)} ₴
-                </td>
-                <td style={td}>
-                  <FiscalBadge status={sale.fiscalStatus} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={columns}
+        rows={sales ?? []}
+        rowKey={(sale) => sale.transactionId}
+        onRowClick={(sale) => onSelectSale(sale)}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? tCommon("loading") : t("empty")}
+      />
 
       {/* Footer total */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          marginTop: 12,
-          color: "#9CA3AF",
-          fontSize: 13,
-        }}
-      >
-        {t("totalLabel")}{" "}
-        <span style={{ color: "#34d399", fontWeight: 700, marginLeft: 6 }}>
-          {totalAmount.toFixed(2)} ₴
-        </span>
-      </div>
+      {!isLoading && !!sales?.length && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: 12,
+            color: "#9CA3AF",
+            fontSize: 13,
+          }}
+        >
+          {t("totalLabel")}{" "}
+          <span style={{ color: "#34d399", fontWeight: 700, marginLeft: 6 }}>
+            {totalAmount.toFixed(2)} ₴
+          </span>
+        </div>
+      )}
     </div>
   );
 }

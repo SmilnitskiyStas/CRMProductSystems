@@ -1,9 +1,11 @@
 import { apiClient } from '@/lib/api-client';
 import type { Receipt } from '../types';
 
-export async function getReceipts(): Promise<Receipt[]> {
-  const { data } = await apiClient.get<Receipt[]>('/receipts');
-  return data;
+export async function getReceipts(locationId?: string): Promise<Receipt[]> {
+  const { data } = await apiClient.get<{ items: Receipt[] }>('/receipts', {
+    params: { store_id: locationId },
+  });
+  return Array.isArray(data.items) ? data.items : [];
 }
 
 export async function getReceipt(id: string): Promise<Receipt> {
@@ -11,8 +13,10 @@ export async function getReceipt(id: string): Promise<Receipt> {
   return data;
 }
 
-export async function confirmReceipt(id: string): Promise<Receipt> {
-  const { data } = await apiClient.put<Receipt>(`/receipts/${id}/receive`);
+export async function confirmReceipt(id: string, idempotencyKey?: string): Promise<Receipt> {
+  const { data } = await apiClient.put<Receipt>(`/receipts/${id}/receive`, undefined, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  });
   return data;
 }
 
@@ -21,9 +25,10 @@ export async function processItem(
   receiptId: string,
   itemId: string,
   quantityReceived: number,
+  idempotencyKey?: string,
 ): Promise<Receipt> {
   const { data } = await apiClient.put<Receipt>(`/receipts/${receiptId}/items`, {
     items: [{ itemId, quantityReceived }],
-  });
+  }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined });
   return data;
 }

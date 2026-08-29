@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useConsumerCatalog, useSelectedConsumerContext } from '@/features/consumer-content/hooks';
+import { recordConsumerCatalogEvent } from '@/features/consumer-content/api';
 import { registerConsumerProduct } from '@/features/shopping/products';
 import type { ConsumerCatalogItem } from '@/features/consumer-content/types';
 import type { NewsPromotionProduct } from '@/features/loyalty/news';
@@ -29,13 +30,14 @@ function formatPrice(value: number | null) {
 
 function mapCatalogProduct(item: ConsumerCatalogItem): NewsPromotionProduct {
   return {
+    catalogId: item.catalogId ?? null,
     id: item.id,
-    barcode: null,
+    barcode: item.barcode ?? null,
     name: item.name,
     unit: item.unit,
     regularPrice: item.priceRetail,
-    appPrice: null,
-    discountPercent: null,
+    appPrice: item.mobilePrice ?? null,
+    discountPercent: item.mobileDiscountPercent ?? null,
     imageUrl: item.imageUrl,
     icon: 'cube-outline',
     background: '#f3f4f6',
@@ -58,6 +60,8 @@ function StaticConsumerCatalogScreen() {
     page,
     pageSize: 20,
   });
+  const activeCatalogId = catalogQuery.data?.items[0]?.catalogId;
+  useEffect(() => { if (context && activeCatalogId) void recordConsumerCatalogEvent(context, { catalogId: activeCatalogId, eventType: 'catalog_view' }); }, [context, activeCatalogId]);
   const categories = Array.from(
     new Map(
       (categoriesQuery.data?.items ?? [])
@@ -67,6 +71,7 @@ function StaticConsumerCatalogScreen() {
   );
 
   function openProduct(item: ConsumerCatalogItem) {
+    if (context && item.catalogId) void recordConsumerCatalogEvent(context, { catalogId: item.catalogId, eventType: 'product_view', productId: item.id });
     const product = mapCatalogProduct(item);
     registerConsumerProduct(product, context?.tenantId);
     router.push({ pathname: '/(personal)/product/[id]', params: { id: item.id, source: 'catalog' } });
@@ -194,7 +199,7 @@ function StaticConsumerCatalogScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Відкрити товар: ${item.name}`}
               onPress={() => openProduct(item)}
-              className="flex-1 overflow-hidden rounded-2xl border border-gray-100 bg-white p-3"
+              className={`flex-1 overflow-hidden rounded-2xl border bg-white p-3 ${item.isFeatured ? 'border-amber-400' : 'border-gray-100'}`}
             >
               <View className="h-32 items-center justify-center overflow-hidden rounded-2xl bg-gray-100">
                 {item.imageUrl ? (
@@ -207,7 +212,8 @@ function StaticConsumerCatalogScreen() {
                 {item.name}
               </Text>
               <Text className="mt-1 text-xs text-gray-400">{item.unit}</Text>
-              <Text className="mt-3 text-base font-bold text-green-700">{formatPrice(item.priceRetail)}</Text>
+              {item.isFeatured ? <View className="mt-2 self-start rounded-full bg-amber-100 px-2 py-1"><Text className="text-[10px] font-bold text-amber-800">Рекомендуємо</Text></View> : null}
+              {item.mobilePrice != null ? <View className="mt-3 flex-row items-end gap-2"><Text className="text-base font-bold text-red-600">{formatPrice(item.mobilePrice)}</Text><Text className="text-xs text-gray-400 line-through">{formatPrice(item.priceRetail)}</Text></View> : <Text className="mt-3 text-base font-bold text-green-700">{formatPrice(item.priceRetail)}</Text>}
               <View className={`mt-2 self-start rounded-full px-2 py-1 ${
                 item.isAvailableAtStore ? 'bg-green-50' : 'bg-gray-100'
               }`}>
@@ -227,7 +233,13 @@ function StaticConsumerCatalogScreen() {
 
 export default function ConsumerCatalogScreen() {
   const { config, source } = useMobileConfig();
-  if ((source === 'published' || source === 'last-valid') && config.pages.catalog) {
+  const configuredCatalog = config.pages.catalog;
+  const hasConfiguredProductCollection = configuredCatalog?.blocks.some(
+    (block) => block.type === 'productGrid' || block.type === 'productCarousel'
+  );
+  // Adding the Catalog tab in the builder creates a page entry even when no catalogue block
+  // was placed on it. Such an empty/decorative page must not hide the functional catalogue.
+  if ((source === 'published' || source === 'last-valid') && hasConfiguredProductCollection) {
     return <ConfiguredRetailPage pageKey="catalog" title="Каталог" />;
   }
   return <StaticConsumerCatalogScreen />;

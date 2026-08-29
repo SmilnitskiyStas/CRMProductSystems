@@ -6,28 +6,7 @@ import { useTranslations } from "next-intl";
 import { BufferFunnel } from "./BufferFunnel";
 import type { OrderLine } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
-
-const th: React.CSSProperties = {
-  textAlign: "left",
-  color: "#6B7280",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
-  padding: "10px 12px",
-  borderBottom: "1px solid #1F2937",
-  whiteSpace: "nowrap",
-};
-
-const td: React.CSSProperties = {
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "10px 12px",
-  borderBottom: "1px solid #161B22",
-  verticalAlign: "middle",
-};
-
-const num: React.CSSProperties = { ...td, textAlign: "right", fontFamily: "monospace" };
+import { Table, type TableColumn } from "@/components/ui/Table";
 
 const roundingLabels: Record<OrderLine["rounding"], string> = {
   none: "",
@@ -39,78 +18,100 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
   const router = useRouter();
   const t = useTranslations("Dashboard.orders.table");
 
-  if (lines.length === 0) {
-    return (
-      <div style={{ color: "#4B5563", fontSize: 14, padding: "48px 0", textAlign: "center" }}>
-        {t("empty")}
-      </div>
-    );
-  }
+  const columns: TableColumn<OrderLine>[] = [
+    {
+      key: "product",
+      header: t("headers.product"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (l) => (
+        <div style={{ minWidth: 0 }}>
+          <div>{l.productName}</div>
+          {l.barcode && (
+            <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{l.barcode}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "buffer",
+      header: t("headers.buffer"),
+      render: (l) => <BufferFunnel line={l} />,
+    },
+    {
+      key: "stock",
+      header: t("headers.stock"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (l) => l.stockOnHand,
+    },
+    {
+      key: "inTransit",
+      header: t("headers.inTransit"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (l) => (l.inTransit > 0 ? l.inTransit : "—"),
+    },
+    {
+      key: "safetyBuffer",
+      header: t("headers.safetyBuffer"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (l) => l.safetyBuffer,
+    },
+    {
+      key: "calculation",
+      header: t("headers.calculation"),
+      cellStyle: { fontFamily: "monospace" },
+      render: (l) => l.quantityRaw,
+    },
+    {
+      key: "order",
+      header: t("headers.order"),
+      render: (l) =>
+        l.quantityToOrder > 0 ? (
+          <span
+            style={{
+              background: "#1D3461",
+              border: "1px solid #3B82F6",
+              color: "#93C5FD",
+              borderRadius: 8,
+              padding: "4px 12px",
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {l.quantityToOrder}
+            {l.rounding !== "none" && (
+              <span style={{ color: "#3B82F6", fontSize: 10, marginLeft: 6 }}>
+                {roundingLabels[l.rounding]}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span style={{ color: "#34D399", fontSize: 12 }}>{t("covered")}</span>
+        ),
+    },
+    {
+      key: "actions",
+      header: t("headers.actions"),
+      render: (l) => (
+        <ActionMenu
+          items={[
+            {
+              label: t("actionMenu.productAnalytics"),
+              icon: <BarChart2 size={13} />,
+              onClick: () => router.push(`/inventory/${l.productId}?tab=analytics`),
+            },
+          ]}
+        />
+      ),
+    },
+  ];
 
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>
-        <tr>
-          <th style={th}>{t("headers.product")}</th>
-          <th style={th}>{t("headers.buffer")}</th>
-          <th style={{ ...th, textAlign: "right" }}>{t("headers.stock")}</th>
-          <th style={{ ...th, textAlign: "right" }}>{t("headers.inTransit")}</th>
-          <th style={{ ...th, textAlign: "right" }}>{t("headers.safetyBuffer")}</th>
-          <th style={{ ...th, textAlign: "right" }}>{t("headers.calculation")}</th>
-          <th style={{ ...th, textAlign: "right" }}>{t("headers.order")}</th>
-          <th style={th}>{t("headers.actions")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map((l) => {
-          const ordering = l.quantityToOrder > 0;
-          return (
-            <tr key={l.productId} style={ordering ? undefined : { opacity: 0.45 }}>
-              <td style={td}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div>{l.productName}</div>
-                  {l.barcode && (
-                    <div style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{l.barcode}</div>
-                  )}
-                </div>
-              </td>
-              <td style={td}><BufferFunnel line={l} /></td>
-              <td style={num}>{l.stockOnHand}</td>
-              <td style={num}>{l.inTransit > 0 ? l.inTransit : "—"}</td>
-              <td style={{ ...num, color: "#9CA3AF" }}>{l.safetyBuffer}</td>
-              <td style={{ ...num, color: "#9CA3AF" }}>{l.quantityRaw}</td>
-              <td style={{ ...num }}>
-                {ordering ? (
-                  <span style={{
-                    background: "#1D3461", border: "1px solid #3B82F6", color: "#93C5FD",
-                    borderRadius: 8, padding: "4px 12px", fontWeight: 700, whiteSpace: "nowrap",
-                  }}>
-                    {l.quantityToOrder}
-                    {l.rounding !== "none" && (
-                      <span style={{ color: "#3B82F6", fontSize: 10, marginLeft: 6 }}>
-                        {roundingLabels[l.rounding]}
-                      </span>
-                    )}
-                  </span>
-                ) : (
-                  <span style={{ color: "#34D399", fontSize: 12 }}>{t("covered")}</span>
-                )}
-              </td>
-              <td style={td}>
-                <ActionMenu
-                  items={[
-                    {
-                      label: t("actionMenu.productAnalytics"),
-                      icon: <BarChart2 size={13} />,
-                      onClick: () => router.push(`/inventory/${l.productId}?tab=analytics`),
-                    },
-                  ]}
-                />
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <Table
+      columns={columns}
+      rows={lines}
+      rowKey={(l) => l.productId}
+      rowStyle={(l) => (l.quantityToOrder > 0 ? {} : { opacity: 0.45 })}
+      emptyMessage={t("empty")}
+    />
   );
 }

@@ -198,11 +198,34 @@ public sealed record LoyaltyMembershipLookupResult(
 public sealed record LoyaltyProgramSettingsDto(
     bool IsEnabled,
     decimal AccrualRatePercent,
+    int BonusUnitsPerCurrencyUnit,
     decimal RedemptionCapPercent,
     decimal MinRedemptionBalance,
     int CodeTtlSeconds,
     /// <summary>TASK-499: "qr" or "barcode" — how this tenant's consumers render their code.</summary>
     string CustomerCodeFormat,
+    bool AnnualBonusResetEnabled,
+    int AnnualBonusResetMonth,
+    int AnnualBonusResetDay,
+    int AnnualBonusResetHour,
+    string BonusResetTimeZone,
+    bool BonusExclusionsEnabled,
+    bool ExclusionsApplyToAccrual,
+    bool ExclusionsApplyToRedemption,
+    bool ExcludeDiscountedItems,
+    Guid[] ExcludedCategoryIds,
+    Guid[] ExcludedProductIds,
+    bool WelcomeRewardEnabled,
+    decimal WelcomeRewardAmount,
+    bool FirstPurchaseRewardEnabled,
+    decimal FirstPurchaseRewardAmount,
+    bool ProfileCompletionRewardEnabled,
+    decimal ProfileCompletionRewardAmount,
+    bool ReviewRewardEnabled,
+    decimal ReviewRewardAmount,
+    bool BonusLifetimeEnabled,
+    int BonusLifetimeDays,
+    int? LastAnnualBonusResetYear,
     DateTimeOffset? UpdatedAt);
 
 public sealed record UpsertLoyaltyProgramSettingsRequest(
@@ -216,4 +239,26 @@ public sealed record UpsertLoyaltyProgramSettingsRequest(
     /// semantics (every field is always fully overwritten), so null/empty is rejected the same
     /// as any other unrecognized value, not treated as "leave unchanged".
     /// </summary>
-    string CustomerCodeFormat);
+    string CustomerCodeFormat,
+    bool AnnualBonusResetEnabled = false,
+    int AnnualBonusResetMonth = 1,
+    int AnnualBonusResetDay = 1,
+    int AnnualBonusResetHour = 0,
+    string BonusResetTimeZone = "Europe/Kyiv",
+    bool BonusExclusionsEnabled = false,
+    bool ExclusionsApplyToAccrual = true,
+    bool ExclusionsApplyToRedemption = true,
+    bool ExcludeDiscountedItems = false,
+    Guid[]? ExcludedCategoryIds = null,
+    Guid[]? ExcludedProductIds = null,
+    bool WelcomeRewardEnabled = false,
+    decimal WelcomeRewardAmount = 0m,
+    bool FirstPurchaseRewardEnabled = false,
+    decimal FirstPurchaseRewardAmount = 0m,
+    bool ProfileCompletionRewardEnabled = false,
+    decimal ProfileCompletionRewardAmount = 0m,
+    bool ReviewRewardEnabled = false,
+    decimal ReviewRewardAmount = 0m,
+    bool BonusLifetimeEnabled = false,
+    int BonusLifetimeDays = 365,
+    int BonusUnitsPerCurrencyUnit = 1);

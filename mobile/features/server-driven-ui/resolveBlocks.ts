@@ -5,6 +5,7 @@ import type { MobileBlockConfig, MobilePageConfig } from '@/features/mobile-conf
 
 export interface BlockDataSources {
   banners: readonly ConsumerNewsItem[];
+  promotionCampaigns?: readonly ConsumerNewsItem[];
   promotions: readonly NewsPromotionProduct[];
   catalog: readonly ConsumerCatalogItem[];
   catalogById: ReadonlyMap<string, ConsumerCatalogItem>;
@@ -92,14 +93,14 @@ export function resolveBlock(block: MobileBlockConfig, data: BlockDataSources): 
     }
     case 'newsList': {
       const limit = positiveInt(props.limit, 5, 20);
-      return { ...block, props: { items: data.banners.slice(0, limit).map((item) => ({
+      return { ...block, props: { items: (data.promotionCampaigns ?? []).slice(0, limit).map((item) => ({
         id: item.id, title: item.title, summary: item.description,
         publishedAt: item.validUntil ?? undefined, imageUrl: item.imageUrl ?? undefined,
       })) } };
     }
     case 'storeList': {
       const limit = positiveInt(props.limit, 10, 30);
-      return { ...block, props: { title: props.title, showDistance: props.showDistance,
+      return { ...block, props: { title: props.title, showDistance: props.showDistance, limit,
         items: (data.network?.stores ?? []).slice(0, limit).map((store) => ({
         id: store.storeId, name: store.storeName, address: store.address ?? undefined,
       })) } };
@@ -110,5 +111,11 @@ export function resolveBlock(block: MobileBlockConfig, data: BlockDataSources): 
 }
 
 export function resolvePage(page: MobilePageConfig, data: BlockDataSources): MobilePageConfig {
-  return { blocks: page.blocks.map((block) => resolveBlock(block, data)) };
+  return { blocks: page.blocks.map((block) => {
+    const resolved = resolveBlock(block, data);
+    const authored = block.props && typeof block.props === 'object' ? block.props as Record<string, unknown> : {};
+    return authored._visualEffect && typeof authored._visualEffect === 'object'
+      ? { ...resolved, props: { ...(resolved.props as Record<string, unknown>), _visualEffect: authored._visualEffect } }
+      : resolved;
+  }) };
 }

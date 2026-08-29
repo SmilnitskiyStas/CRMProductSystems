@@ -14,6 +14,7 @@ import {
 } from '@/features/write-offs/types';
 import { useAuthStore } from '@/features/auth/store';
 import { AT_LEAST_STORE_MANAGER, hasRole } from '@/lib/roles';
+import { money } from '@/features/write-offs/calculations';
 
 export default function WriteOffDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -133,6 +134,11 @@ export default function WriteOffDetailScreen() {
               valueClass="text-red-600 font-semibold"
             />
           )}
+          <Row label="Збиток за закупівлею" value={money(data.totalLossAmountPurchase)} valueClass="text-red-600 font-semibold" />
+          <Row label="Відшкодування" value={money(data.totalReimbursementAmount)} valueClass="text-green-700 font-semibold" />
+          <View className="border-t border-gray-100 pt-3">
+            <Row label="Чистий збиток" value={money(data.netLossAmount)} valueClass="text-red-700 font-bold" />
+          </View>
         </View>
 
         {/* Items */}
@@ -171,6 +177,24 @@ export default function WriteOffDetailScreen() {
                     −{item.lossAmount.toFixed(2)} ₴
                   </Text>
                 )}
+                <View className="mt-2 gap-1">
+                  <Text className="text-xs text-gray-500">
+                    Ціна продажу: <Text className="font-medium text-gray-700">{money(item.unitPrice)}</Text>
+                  </Text>
+                  <Text className="text-xs text-gray-500">
+                    Закупівельна ціна: <Text className="font-medium text-gray-700">{money(item.unitPricePurchase)}</Text>
+                  </Text>
+                  <Text className="text-xs text-red-600">Збиток за закупівлею: {money(item.lossAmountPurchase)}</Text>
+                  {item.isReturnedToSupplier && (
+                    <View className="bg-green-50 rounded-lg p-2 mt-1">
+                      <Text className="text-xs font-semibold text-green-800">Повернуто постачальнику</Text>
+                      <Text className="text-xs text-green-700 mt-0.5">
+                        Умова: {item.reimbursementType === 'percent' ? `${item.reimbursementValue ?? 0}%` : `${money(item.reimbursementValue)} за одиницю`}
+                      </Text>
+                      <Text className="text-xs font-semibold text-green-800">Відшкодовано: {money(item.reimbursementAmount)}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             ))}
           </View>

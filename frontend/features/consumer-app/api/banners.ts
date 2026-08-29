@@ -33,5 +33,11 @@ export const bannersApi = {
     return api.postForm<{ imageUrl: string }>(`/api/banners/${id}/image`, form);
   },
 
-  getAnalytics: (id: string) => api.get<BannerAnalyticsDto>(`/api/banners/${id}/analytics`),
+  getAnalytics: (id: string, params?: { from?: string; to?: string; storeIds?: string[] }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    params?.storeIds?.forEach((storeId) => qs.append("storeIds", storeId));
+    return api.get<BannerAnalyticsDto>(`/api/banners/${id}/analytics${qs.size ? `?${qs}` : ""}`);
+  },
 };

@@ -4,6 +4,8 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAwaitingReceiptOrders } from '@/features/marketplace-orders/hooks/useMarketplaceOrders';
 import type { MarketplaceOrder } from '@/features/marketplace-orders/types';
+import { useAuthStore } from '@/features/auth/store';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
 
 function OrderCard({ order, onPress }: { order: MarketplaceOrder; onPress: () => void }) {
   return (
@@ -33,6 +35,12 @@ function OrderCard({ order, onPress }: { order: MarketplaceOrder; onPress: () =>
 export default function MarketplaceOrdersScreen() {
   const router = useRouter();
   const query = useAwaitingReceiptOrders();
+  const assignedLocationId = useAuthStore((state) => state.user?.locationId);
+  const selectedLocationId = useWorkspaceLocationStore((state) => state.selectedLocationId);
+  const effectiveLocationId = selectedLocationId === undefined ? assignedLocationId : selectedLocationId;
+  const orders = effectiveLocationId
+    ? query.data?.filter((order) => order.destinationStoreId === effectiveLocationId)
+    : query.data;
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <Stack.Screen options={{ headerShown: true, title: 'Приймання замовлень', headerBackTitle: '' }} />
@@ -45,7 +53,7 @@ export default function MarketplaceOrdersScreen() {
         </View>
       ) : (
         <FlatList
-          data={query.data}
+          data={orders}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <OrderCard order={item} onPress={() => router.push(`/(app)/marketplace-orders/${item.id}`)} />}
           ItemSeparatorComponent={() => <View className="h-3" />}

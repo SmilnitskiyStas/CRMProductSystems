@@ -12,6 +12,7 @@ import {
 import { autoServiceApi } from "../api/auto-service-api";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUTO_SERVICE_KEYS } from "../hooks/useAutoService";
+import type { TableColumn } from "@/components/ui/Table";
 import type {
   ServiceCatalogItemDto,
   CreateServiceCatalogItemRequest,
@@ -225,6 +226,78 @@ export function ServiceCatalogTable() {
   if (isError) {
     return <div style={{ padding: "32px", color: "#F87171", fontSize: 13 }}>{t("loadError")}</div>;
   }
+
+  const columns: TableColumn<ServiceCatalogItemDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 600 },
+      render: (item) => item.name,
+    },
+    {
+      key: "description",
+      header: t("headerDescription"),
+      cellStyle: { color: "#6B7280" },
+      render: (item) => item.description ?? "—",
+    },
+    {
+      key: "price",
+      header: t("headerPrice"),
+      cellStyle: { color: "#E8EDF5" },
+      render: (item) => item.defaultPrice.toFixed(2),
+    },
+    {
+      key: "duration",
+      header: t("headerDuration"),
+      render: (item) => (item.durationMinutes ? `${item.durationMinutes} ${t("durationUnit")}` : "—"),
+    },
+    {
+      key: "status",
+      header: t("headerStatus"),
+      render: (item) => (
+        <span
+          style={{
+            display: "inline-block",
+            padding: "2px 8px",
+            borderRadius: 12,
+            fontSize: 11,
+            fontWeight: 600,
+            background: item.isActive ? "#064E3B" : "#1F2937",
+            color: item.isActive ? "#34D399" : "#6B7280",
+          }}
+        >
+          {item.isActive ? t("statusActive") : t("statusInactive")}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (item) => (
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+          <DeactivateButton item={item} />
+          <button
+            onClick={() => setEditingItem(item)}
+            style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
+            title={t("editTitle")}
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={() => {
+              if (confirm(t("deleteConfirm", { name: item.name }))) {
+                deleteItem.mutate(item.id);
+              }
+            }}
+            style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 6px" }}
+            title={t("deleteTitle")}
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <>

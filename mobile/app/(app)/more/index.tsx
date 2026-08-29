@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/features/auth/store';
 import { useModulesSettings } from '@/features/navigation/hooks';
 import { visibleRoutes } from '@/features/navigation/policy';
+import { WorkspaceLocationSelector } from '@/features/locations/WorkspaceLocationSelector';
 
 const ROLE_LABELS: Record<string, string> = {
   enterprise_admin: 'Адміністратор підприємства',
@@ -25,13 +26,6 @@ type ModuleItem = {
 };
 
 const MODULES: ModuleItem[] = [
-  {
-    icon: 'scan-circle-outline',
-    label: 'Приймання замовлень',
-    description: 'Сканування поставок із маркетплейсу',
-    href: '/(app)/marketplace-orders',
-    color: '#0284c7',
-  },
   {
     icon: 'storefront-outline',
     label: 'Маркетплейс',
@@ -93,6 +87,7 @@ const MODULES: ModuleItem[] = [
 export default function MoreScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const personalAccessToken = useAuthStore((s) => s.personalAccessToken);
   const { data: settings } = useModulesSettings(Boolean(user?.tenantId));
   const visibleModules = visibleRoutes(MODULES, { user, settings: settings ?? null });
 
@@ -125,6 +120,35 @@ export default function MoreScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
         </TouchableOpacity>
+
+        {personalAccessToken ? (
+          <TouchableOpacity
+            className="mx-4 mt-3 bg-green-50 border border-green-100 rounded-2xl p-4 flex-row items-center"
+            onPress={() => router.replace('/(personal)')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Перейти до особистого кабінету"
+          >
+            <View className="w-10 h-10 bg-green-100 rounded-xl items-center justify-center mr-3">
+              <Ionicons name="person-outline" size={20} color="#16a34a" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-gray-800">Особистий кабінет</Text>
+              <Text className="text-xs text-gray-500 mt-0.5">Покупки, бонуси та пропозиції</Text>
+            </View>
+            <Ionicons name="swap-horizontal-outline" size={19} color="#16a34a" />
+          </TouchableOpacity>
+        ) : null}
+
+        <View className="mx-4 mt-5">
+          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            Активний магазин
+          </Text>
+          <WorkspaceLocationSelector />
+          <Text className="text-xs text-gray-400 mt-2">
+            Дані робочих розділів показуються лише для цього магазину.
+          </Text>
+        </View>
 
         {/* Modules section */}
         <View className="px-4 mt-6 mb-2">

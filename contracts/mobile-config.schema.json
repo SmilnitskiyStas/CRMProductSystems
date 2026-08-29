@@ -101,7 +101,16 @@
           "icon": {
             "description": "Must match MobileConfigWhitelists.NavigationIcons exactly (TASK-542, verified by MobileConfigSchemaContractTests).",
             "enum": ["home", "tag", "grid", "qr", "ticket", "map", "news", "user"]
-          }
+          },
+          "isPrimary": { "type": "boolean" },
+          "primaryColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+          "primaryBarColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+          "primarySize": { "enum": ["large", "xlarge"] },
+          "primaryStyle": { "enum": ["floating", "raisedContour"] },
+          "primaryRaised": { "type": "boolean" },
+          "primaryGlow": { "type": "boolean" }
+          ,"primaryGlowAnimated": { "type": "boolean" }
+          ,"primaryGlowSpeed": { "enum": ["slow", "normal", "fast"] }
         }
       }
     },

@@ -48,15 +48,15 @@ public sealed class ConsumerContentController : ControllerBase
     [HttpPost("{tenantId:guid}/banners/{id:guid}/view")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public Task<IActionResult> RecordView(Guid tenantId, Guid id, CancellationToken ct) =>
-        RecordEvent(tenantId, id, BannerEventType.View, ct);
+    public Task<IActionResult> RecordView(Guid tenantId, Guid id, [FromQuery] Guid storeId, CancellationToken ct) =>
+        RecordEvent(tenantId, id, storeId, BannerEventType.View, ct);
 
     /// <summary>Records a banner tap-through. consumerAccountId is attached when a consumer JWT is present.</summary>
     [HttpPost("{tenantId:guid}/banners/{id:guid}/click")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public Task<IActionResult> RecordClick(Guid tenantId, Guid id, CancellationToken ct) =>
-        RecordEvent(tenantId, id, BannerEventType.Click, ct);
+    public Task<IActionResult> RecordClick(Guid tenantId, Guid id, [FromQuery] Guid storeId, CancellationToken ct) =>
+        RecordEvent(tenantId, id, storeId, BannerEventType.Click, ct);
 
     /// <summary>Active discounted products for a store — read projection over Discount, no Discount API changes.</summary>
     [HttpGet("{tenantId:guid}/promotions")]
@@ -65,6 +65,24 @@ public sealed class ConsumerContentController : ControllerBase
     {
         var (promotions, error) = await _service.GetActivePromotionsAsync(tenantId, storeId, ct);
         return promotions is null ? NotFound(new { error }) : Ok(promotions);
+    }
+
+    [HttpGet("{tenantId:guid}/promotion-campaigns")]
+    [RequireConsumerFeature("promotions")]
+    public async Task<IActionResult> GetPromotionCampaigns(Guid tenantId, [FromQuery] Guid storeId, CancellationToken ct)
+    {
+        var (campaigns, error) = await _service.GetActivePromotionCampaignsAsync(tenantId, storeId, ResolveConsumerAccountId(), ct);
+        return campaigns is null ? NotFound(new { error }) : Ok(campaigns);
+    }
+
+    [HttpPost("{tenantId:guid}/promotion-campaigns/{id:guid}/{eventType}")]
+    [RequireConsumerFeature("promotions")]
+    public async Task<IActionResult> RecordPromotionCampaignEvent(
+        Guid tenantId, Guid id, string eventType, [FromQuery] Guid storeId, CancellationToken ct)
+    {
+        var (success, error) = await _service.RecordPromotionCampaignEventAsync(
+            tenantId, id, storeId, eventType, ResolveConsumerAccountId(), ct);
+        return success ? NoContent() : NotFound(new { error });
     }
 
     /// <summary>Paginated active catalog for the tenant, annotated with availability at storeId.</summary>
@@ -101,10 +119,10 @@ public sealed class ConsumerContentController : ControllerBase
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private async Task<IActionResult> RecordEvent(Guid tenantId, Guid bannerId, string eventType, CancellationToken ct)
+    private async Task<IActionResult> RecordEvent(Guid tenantId, Guid bannerId, Guid storeId, string eventType, CancellationToken ct)
     {
         var consumerId = ResolveConsumerAccountId();
-        var (success, error) = await _service.RecordBannerEventAsync(tenantId, bannerId, eventType, consumerId, ct);
+        var (success, error) = await _service.RecordBannerEventAsync(tenantId, bannerId, storeId, eventType, consumerId, ct);
         return success ? NoContent() : NotFound(new { error });
     }
 

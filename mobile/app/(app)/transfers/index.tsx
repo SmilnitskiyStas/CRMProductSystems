@@ -5,11 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTransfers } from '@/features/transfers/hooks/useTransfers';
 import { TransferCard } from '@/features/transfers/components/TransferCard';
 import { useAuthStore } from '@/features/auth/store';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
 
 export default function TransfersScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { data, isLoading, isError, refetch } = useTransfers(user?.locationId ?? undefined);
+  const selectedLocationId = useWorkspaceLocationStore((state) => state.selectedLocationId);
+  const locationId = selectedLocationId === undefined ? user?.locationId : selectedLocationId;
+  const { data, isLoading, isError, refetch } = useTransfers(locationId ?? undefined);
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">

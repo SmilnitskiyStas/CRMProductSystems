@@ -57,9 +57,9 @@ public sealed class ConsumerContentRepository : IConsumerContentRepository
         _db.Banners.AnyAsync(b => b.Id == bannerId && b.TenantId == tenantId, ct);
 
     public async Task RecordEventAsync(
-        Guid tenantId, Guid bannerId, string eventType, Guid? consumerAccountId, CancellationToken ct = default)
+        Guid tenantId, Guid bannerId, Guid storeId, string eventType, Guid? consumerAccountId, CancellationToken ct = default)
     {
-        var evt = BannerEvent.Create(tenantId, bannerId, eventType, consumerAccountId);
+        var evt = BannerEvent.Create(tenantId, bannerId, storeId, eventType, consumerAccountId);
         await _db.BannerEvents.AddAsync(evt, ct);
         await _db.SaveChangesAsync(ct);
     }
@@ -70,6 +70,7 @@ public sealed class ConsumerContentRepository : IConsumerContentRepository
         return await _db.Discounts
             .Where(d => d.TenantId == tenantId
                 && d.StoreId == storeId
+                && d.PromotionCampaignId == null
                 && d.Status == DiscountStatus.Active
                 && d.ValidFrom <= utcNow
                 && (d.ValidUntil == null || d.ValidUntil >= utcNow))
@@ -81,11 +82,60 @@ public sealed class ConsumerContentRepository : IConsumerContentRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<ConsumerPromotionCampaignDto>> GetActivePromotionCampaignsAsync(Guid tenantId, Guid storeId, Guid? consumerAccountId, DateTime utcNow, CancellationToken ct = default)
+    {
+        Guid? currentTierId = null;
+        var isMember = false;
+        if (consumerAccountId.HasValue)
+        {
+            var membership = await _db.LoyaltyMemberships.AsNoTracking().FirstOrDefaultAsync(x => x.TenantId == tenantId && x.ConsumerAccountId == consumerAccountId, ct);
+            isMember = membership is not null; currentTierId = membership?.CurrentTierId;
+        }
+        var rows = await _db.PromotionCampaigns.AsNoTracking()
+            .Where(x => x.TenantId == tenantId && x.Status == PromotionCampaignStatus.Published && x.StartsAt <= utcNow && (x.EndsAt == null || x.EndsAt >= utcNow)
+                && _db.PromotionCampaignLocations.Any(l => l.CampaignId == x.Id && l.LocationId == storeId))
+            .Include(x => x.Products).ThenInclude(x => x.Product).OrderBy(x => x.SortOrder).ToListAsync(ct);
+        return rows.Where(x => x.AudienceType == PromotionAudienceType.All
+                || (x.AudienceType == PromotionAudienceType.LoyaltyMembers && isMember)
+                || (x.AudienceType == PromotionAudienceType.LoyaltyTiers && currentTierId.HasValue && System.Text.Json.JsonSerializer.Deserialize<Guid[]>(x.AudienceTierIdsJson)!.Contains(currentTierId.Value)))
+            .Select(x => new ConsumerPromotionCampaignDto(x.Id,x.Title,x.Eyebrow,x.Description,SplitLines(x.Body),SplitLines(x.Terms),x.ImageUrl,x.BackgroundColor,x.AccentColor,x.StartsAt,x.EndsAt,x.SortOrder,
+                x.Products.Select(p => new ConsumerPromotionDto(p.Id,p.ProductId,p.Product?.Name??string.Empty,p.Product?.ImageUrl,p.Product?.Unit??"шт",p.DiscountPercent,p.Product?.PriceRetail,p.Product?.PriceRetail is decimal price?Math.Round(price*(1-p.DiscountPercent/100m),2):null,x.EndsAt)).ToList())).ToList();
+    }
+
+    public Task<bool> PromotionCampaignExistsAtStoreAsync(Guid tenantId, Guid campaignId, Guid storeId, CancellationToken ct = default) =>
+        _db.PromotionCampaigns.AnyAsync(x => x.TenantId == tenantId && x.Id == campaignId
+            && _db.PromotionCampaignLocations.Any(l => l.CampaignId == campaignId && l.LocationId == storeId), ct);
+
+    public async Task RecordPromotionCampaignEventAsync(Guid tenantId, Guid campaignId, Guid storeId, string eventType,
+        Guid? consumerAccountId, CancellationToken ct = default)
+    {
+        await _db.PromotionCampaignEvents.AddAsync(new PromotionCampaignEvent
+        {
+            TenantId = tenantId, CampaignId = campaignId, StoreId = storeId,
+            EventType = eventType, ConsumerAccountId = consumerAccountId,
+        }, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task<(IReadOnlyList<ConsumerCatalogItemDto> Items, int Total)> GetCatalogPagedAsync(
         Guid tenantId, Guid storeId, string? search, Guid? categoryId, int page, int pageSize,
         CancellationToken ct = default)
     {
         var query = _db.Items.Where(i => i.TenantId == tenantId && i.IsActive);
+        var now = DateTime.UtcNow;
+        var catalogSettings = await _db.MobileCatalogSettings.AsNoTracking().Include(x => x.Items)
+            .Where(x => x.TenantId == tenantId && x.IsEnabled
+                && x.Status != MobileCatalogPublicationStatus.Draft && x.Status != MobileCatalogPublicationStatus.Archived
+                && x.PublishAt <= now && (!x.UnpublishAt.HasValue || x.UnpublishAt >= now)
+                && _db.MobileCatalogLocations.Any(l => l.SettingsId == x.Id && l.LocationId == storeId))
+            .OrderByDescending(x => x.PublishAt).FirstOrDefaultAsync(ct);
+        if (catalogSettings is null && await _db.MobileCatalogSettings.AnyAsync(x => x.TenantId == tenantId, ct))
+            return (Array.Empty<ConsumerCatalogItemDto>(), 0);
+        if (catalogSettings is not null)
+        {
+            var curatedIds = catalogSettings.Items.Select(x => x.ProductId).ToList();
+            query = query.Where(i => curatedIds.Contains(i.Id));
+        }
 
         if (categoryId.HasValue)
             query = query.Where(i => i.CategoryId == categoryId.Value);
@@ -95,12 +145,14 @@ public sealed class ConsumerContentRepository : IConsumerContentRepository
 
         var total = await query.CountAsync(ct);
 
-        var pageItems = await query
+        var matchedItems = await query
             .Include(i => i.Category)
-            .OrderBy(i => i.Name)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
             .ToListAsync(ct);
+        var settingsByProduct = catalogSettings?.Items.ToDictionary(x => x.ProductId) ?? new Dictionary<Guid, MobileCatalogItem>();
+        var pageItems = (catalogSettings is null
+                ? matchedItems.OrderBy(i => i.Name)
+                : matchedItems.OrderBy(i => settingsByProduct[i.Id].SortOrder))
+            .Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
         // Availability lookup restricted to just this page's item ids — cheaper than summing
         // stock for the whole tenant catalog up front (this is a browse endpoint, not a
@@ -117,7 +169,13 @@ public sealed class ConsumerContentRepository : IConsumerContentRepository
         var items = pageItems.Select(i => new ConsumerCatalogItemDto(
             i.Id, i.Name, i.ImageUrl, i.Unit, i.PriceRetail,
             i.CategoryId, i.Category?.Name,
-            stockByProduct.TryGetValue(i.Id, out var qty) && qty > 0))
+            stockByProduct.TryGetValue(i.Id, out var qty) && qty > 0,
+            settingsByProduct.TryGetValue(i.Id, out var configured) ? configured.SortOrder : 0,
+            configured?.IsFeatured ?? false,
+            configured?.MobileDiscountPercent,
+            configured?.MobileDiscountPercent is decimal discount && i.PriceRetail is decimal price ? Math.Round(price * (1 - discount / 100m), 2) : null,
+            catalogSettings?.Id,
+            i.Barcodes.FirstOrDefault()))
             .ToList();
 
         return (items, total);

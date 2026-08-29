@@ -15,8 +15,10 @@ export async function getTransfer(id: string): Promise<Transfer> {
   return data;
 }
 
-export async function createTransfer(payload: CreateTransferPayload): Promise<Transfer> {
-  const { data } = await apiClient.post<Transfer>('/transfers', payload);
+export async function createTransfer(payload: CreateTransferPayload, idempotencyKey?: string): Promise<Transfer> {
+  const { data } = await apiClient.post<Transfer>('/transfers', payload, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  });
   return data;
 }
 

@@ -1,12 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Users } from "lucide-react";
 import { useExplainPriceAudience } from "../hooks/usePriceSegments";
 import { RecommendationBlock } from "./RecommendationBlock";
-import { SortableHeader, TablePaginationFooter } from "./TableControls";
 import { ExportPriceAudienceButton, PiiUnmaskToggle } from "./ExportButtons";
-import type { PriceAudienceTableDto, PriceAudienceKey, PriceAudienceSortBy, PriceSegmentsPeriodFilters } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import type { PriceAudienceTableDto, PriceAudienceRowDto, PriceAudienceKey, PriceAudienceSortBy, PriceSegmentsPeriodFilters } from "../types";
 
 interface Props {
   data: PriceAudienceTableDto | undefined;
@@ -28,12 +29,16 @@ interface Props {
   canExportPii: boolean;
 }
 
-const GRID = "minmax(150px,1fr) 120px 190px 130px 110px 110px";
-
 /**
  * Server-paginated/sorted table for one comparison-mode audience (RealGrowth/PriceGrowth/
  * Declining/Stable). Segment columns show CURRENCY RANGE labels ("was → now"), not audience
  * names — `previousSegmentLabelUa`/`currentSegmentLabelUa` come straight from the DTO.
+ *
+ * Migrated to the shared `Table` component (Batch C of the table-unification migration) — same
+ * state/hooks as before, only the grid markup + TableControls' SortableHeader/
+ * TablePaginationFooter were replaced. Per Table's non-negotiable alignment rule, only column 0
+ * (name) is left-aligned; every other column (including the previously right-aligned numeric
+ * ones) is now center-aligned, matching ProductsTable's Batch A precedent.
  */
 export function PriceAudienceTable({
   data,
@@ -54,6 +59,56 @@ export function PriceAudienceTable({
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const [unmaskPii, setUnmaskPii] = useState(false);
   const { mutate, isPending, data: explainData, error } = useExplainPriceAudience();
+
+  const columns: TableColumn<PriceAudienceRowDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      sortKey: "name",
+      cellStyle: { color: "#E8EDF5", fontWeight: 500, whiteSpace: "nowrap" },
+      render: (r) => r.name,
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      render: (r) => <span style={{ color: r.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>{r.phone ?? "—"}</span>,
+    },
+    {
+      key: "segment",
+      header: t("headerSegment"),
+      sortKey: "segment",
+      cellStyle: { color: "#D1D5DB", fontSize: 12 },
+      render: (r) => (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+          <span>{r.previousSegmentLabelUa}</span>
+          <span style={{ color: "#4B5563" }}>→</span>
+          <span style={{ color: "#E8EDF5", fontWeight: 600 }}>{r.currentSegmentLabelUa}</span>
+        </span>
+      ),
+    },
+    {
+      key: "items",
+      header: t("headerItems"),
+      sortKey: "items",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace", whiteSpace: "nowrap" },
+      render: (r) =>
+        `${r.itemsPerReceiptPrevious.toLocaleString(intlLocale, { maximumFractionDigits: 1 })} → ${r.itemsPerReceiptCurrent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}`,
+    },
+    {
+      key: "check",
+      header: t("headerCheck"),
+      sortKey: "check",
+      cellStyle: { color: "#E8EDF5", fontSize: 13, fontFamily: "monospace" },
+      render: (r) => `${r.typicalCheckCurrent.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+    {
+      key: "ltv",
+      header: t("headerLtv"),
+      sortKey: "ltv",
+      cellStyle: { color: "#4ADE80", fontSize: 13, fontFamily: "monospace" },
+      render: (r) => `${r.ltv.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+  ];
 
   return (
     <div style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -94,48 +149,18 @@ export function PriceAudienceTable({
         </div>
       ) : (
         <>
-          <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #1F2937", background: "#0A1020", minWidth: 780, gap: 8 }}>
-              <SortableHeader label={t("headerName")} sortKey="name" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>{t("headerPhone")}</div>
-              <SortableHeader label={t("headerSegment")} sortKey="segment" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-              <SortableHeader label={t("headerItems")} sortKey="items" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerCheck")} sortKey="check" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerLtv")} sortKey="ltv" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-            </div>
-
-            {data.rows.map((r) => (
-              <div
-                key={r.customerId}
-                style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #0F1924", alignItems: "center", minWidth: 780, gap: 8 }}
-              >
-                <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
-                <div style={{ color: r.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>{r.phone ?? "—"}</div>
-                <div style={{ color: "#D1D5DB", fontSize: 12, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
-                  <span>{r.previousSegmentLabelUa}</span>
-                  <span style={{ color: "#4B5563" }}>→</span>
-                  <span style={{ color: "#E8EDF5", fontWeight: 600 }}>{r.currentSegmentLabelUa}</span>
-                </div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                  {r.itemsPerReceiptPrevious.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}
-                  {" → "}
-                  {r.itemsPerReceiptCurrent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}
-                </div>
-                <div style={{ color: "#E8EDF5", fontSize: 13, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.typicalCheckCurrent.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴
-                </div>
-                <div style={{ color: "#4ADE80", fontSize: 13, textAlign: "right", fontFamily: "monospace" }}>
-                  {r.ltv.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <TablePaginationFooter
+          <Table
+            columns={columns}
+            rows={data.rows}
+            rowKey={(r) => r.customerId}
+            sortBy={sortBy}
+            sortDescending={sortDescending}
+            onSort={onSort}
             page={page}
             totalPages={data.totalPages}
-            totalLabel={t("totalCount", { count: data.totalCount })}
+            totalCount={data.totalCount}
             onPageChange={onPageChange}
+            minWidth={780}
           />
 
           <div key={`${audience}:${filters.period}:${filters.from ?? ""}:${filters.to ?? ""}:${filters.storeIds.join(",")}`}>
@@ -154,5 +179,3 @@ export function PriceAudienceTable({
     </div>
   );
 }
-
-import { useState } from "react";

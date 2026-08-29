@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations, useLocale } from "next-intl";
-import type { PosTopProductsDto } from "../types";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import type { PosTopProductsDto, PosTopProductItem } from "../types";
 
 interface Props {
   data: PosTopProductsDto;

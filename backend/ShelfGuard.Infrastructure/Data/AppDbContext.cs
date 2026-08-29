@@ -164,6 +164,14 @@ public sealed class AppDbContext : DbContext
     public DbSet<ConsumerAccount> ConsumerAccounts => Set<ConsumerAccount>();
     public DbSet<LoyaltyMembership> LoyaltyMemberships => Set<LoyaltyMembership>();
     public DbSet<LoyaltyLedgerEntry> LoyaltyLedgerEntries => Set<LoyaltyLedgerEntry>();
+    public DbSet<LoyaltyBonusLot> LoyaltyBonusLots => Set<LoyaltyBonusLot>();
+    public DbSet<PromotionCampaign> PromotionCampaigns => Set<PromotionCampaign>();
+    public DbSet<PromotionCampaignLocation> PromotionCampaignLocations => Set<PromotionCampaignLocation>();
+    public DbSet<PromotionCampaignProduct> PromotionCampaignProducts => Set<PromotionCampaignProduct>();
+    public DbSet<MobileCatalogSettings> MobileCatalogSettings => Set<MobileCatalogSettings>();
+    public DbSet<MobileCatalogItem> MobileCatalogItems => Set<MobileCatalogItem>();
+    public DbSet<MobileCatalogLocation> MobileCatalogLocations => Set<MobileCatalogLocation>();
+    public DbSet<MobileCatalogEvent> MobileCatalogEvents => Set<MobileCatalogEvent>();
     public DbSet<LoyaltyProgramSettings> LoyaltyProgramSettings => Set<LoyaltyProgramSettings>();
     public DbSet<PriceSegmentSettings> PriceSegmentSettings => Set<PriceSegmentSettings>();
 
@@ -178,6 +186,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<BannerLocation> BannerLocations => Set<BannerLocation>();
     public DbSet<BannerProduct> BannerProducts => Set<BannerProduct>();
     public DbSet<BannerEvent> BannerEvents => Set<BannerEvent>();
+    public DbSet<PromotionCampaignEvent> PromotionCampaignEvents => Set<PromotionCampaignEvent>();
 
     // Mobile Configuration domain — multi-tenant consumer app-builder (CLAUDE CODE SPEC ЕТАП 3,
     // TASK-531). Schema only; validation/CRUD/publish/API land in TASK-532/534.
@@ -1629,6 +1638,11 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(t => t.CustomerId)
              .HasDatabaseName("idx_pos_tx_customer")
              .HasFilter("\"CustomerId\" IS NOT NULL");
+            e.HasIndex(t => t.LoyaltyMembershipId)
+             .HasDatabaseName("idx_pos_tx_loyalty_membership")
+             .HasFilter("\"LoyaltyMembershipId\" IS NOT NULL");
+            e.HasOne(t => t.LoyaltyMembership).WithMany()
+             .HasForeignKey(t => t.LoyaltyMembershipId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             // Store-migration analytics (RFM dashboard, TASK-501): per-customer first/last
             // transaction lookup within a tenant+date window via
             // DISTINCT ON ("CustomerId") ... WHERE "TenantId" = ? AND "CreatedAt" BETWEEN ? AND ?
@@ -2352,6 +2366,18 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(l => l.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
+        builder.Entity<LoyaltyBonusLot>(e =>
+        {
+            e.ToTable("loyalty_bonus_lots");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.OriginalAmount).HasColumnType("decimal(18,2)");
+            e.Property(x => x.RemainingAmount).HasColumnType("decimal(18,2)");
+            e.HasIndex(x => new { x.TenantId, x.MembershipId, x.ExpiresAt });
+            e.HasOne(x => x.Membership).WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.SourceLedgerEntry).WithMany().HasForeignKey(x => x.SourceLedgerEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         // ── LoyaltyProgramSettings (Loyalty Фаза 0, TASK-404) ─────────────────
         builder.Entity<LoyaltyProgramSettings>(e =>
         {
@@ -2360,7 +2386,21 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(s => s.TenantId).IsRequired();
             e.Property(s => s.IsEnabled).HasDefaultValue(true);
-            e.Property(s => s.AccrualRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(3.0m);
+              e.Property(s => s.AccrualRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(3.0m);
+              e.Property(s => s.BonusUnitsPerCurrencyUnit).HasDefaultValue(1);
+            e.Property(s => s.AnnualBonusResetMonth).HasDefaultValue(1);
+            e.Property(s => s.AnnualBonusResetDay).HasDefaultValue(1);
+            e.Property(s => s.AnnualBonusResetHour).HasDefaultValue(0);
+            e.Property(s => s.BonusResetTimeZone).HasMaxLength(100).HasDefaultValue("Europe/Kyiv");
+            e.Property(s => s.ExclusionsApplyToAccrual).HasDefaultValue(true);
+            e.Property(s => s.ExclusionsApplyToRedemption).HasDefaultValue(true);
+            e.Property(s => s.ExcludedCategoryIdsJson).HasColumnType("jsonb").HasDefaultValue("[]");
+            e.Property(s => s.ExcludedProductIdsJson).HasColumnType("jsonb").HasDefaultValue("[]");
+            e.Property(s => s.WelcomeRewardAmount).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+            e.Property(s => s.FirstPurchaseRewardAmount).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+            e.Property(s => s.ProfileCompletionRewardAmount).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+            e.Property(s => s.ReviewRewardAmount).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+            e.Property(s => s.BonusLifetimeDays).HasDefaultValue(365);
             e.Property(s => s.RedemptionCapPercent).HasColumnType("decimal(5,2)").HasDefaultValue(50.0m);
             e.Property(s => s.MinRedemptionBalance).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
             e.Property(s => s.CodeTtlSeconds).HasDefaultValue(30);
@@ -2372,6 +2412,117 @@ public sealed class AppDbContext : DbContext
             e.HasOne(s => s.Tenant).WithMany()
              .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
+
+        builder.Entity<MobileCatalogSettings>(e =>
+        {
+            e.ToTable("mobile_catalog_settings"); e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(1200).IsRequired();
+            e.Property(x => x.BannerUrl).HasMaxLength(1000);
+            e.Property(x => x.LayoutMode).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.Status, x.PublishAt }).HasDatabaseName("idx_mobile_catalog_settings_tenant_status_publish");
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<MobileCatalogItem>(e =>
+        {
+            e.ToTable("mobile_catalog_items"); e.HasKey(x => x.Id);
+            e.Property(x => x.MobileDiscountPercent).HasPrecision(5, 2);
+            e.Property(x => x.ProductNameSnapshot).HasMaxLength(300).IsRequired();
+            e.Property(x => x.UnitSnapshot).HasMaxLength(30).IsRequired();
+            e.Property(x => x.ImageUrlSnapshot).HasMaxLength(1000);
+            e.Property(x => x.RegularPriceSnapshot).HasPrecision(18, 2);
+            e.Property(x => x.MobilePriceSnapshot).HasPrecision(18, 2);
+            e.HasIndex(x => new { x.SettingsId, x.ProductId }).IsUnique().HasDatabaseName("uq_mobile_catalog_items_settings_product");
+            e.HasIndex(x => new { x.TenantId, x.SortOrder }).HasDatabaseName("idx_mobile_catalog_items_tenant_order");
+            e.HasOne(x => x.Settings).WithMany(x => x.Items).HasForeignKey(x => x.SettingsId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<MobileCatalogLocation>(e =>
+        {
+            e.ToTable("mobile_catalog_locations"); e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.SettingsId, x.LocationId }).IsUnique().HasDatabaseName("uq_mobile_catalog_locations_settings_location");
+            e.HasIndex(x => new { x.TenantId, x.LocationId }).HasDatabaseName("idx_mobile_catalog_locations_tenant_location");
+            e.HasOne(x => x.Settings).WithMany(x => x.Locations).HasForeignKey(x => x.SettingsId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<MobileCatalogEvent>(e =>
+        {
+            e.ToTable("mobile_catalog_events"); e.HasKey(x => x.Id);
+            e.Property(x => x.EventType).HasMaxLength(30).IsRequired();
+            e.Property(x => x.SessionId).HasMaxLength(100).IsRequired();
+            e.Property(x => x.OccurredAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.CatalogId, x.EventType, x.OccurredAt }).HasDatabaseName("idx_mobile_catalog_events_analytics");
+            e.HasIndex(x => new { x.TenantId, x.ConsumerAccountId, x.ProductId, x.OccurredAt }).HasDatabaseName("idx_mobile_catalog_events_attribution");
+            e.HasOne<MobileCatalogSettings>().WithMany().HasForeignKey(x => x.CatalogId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Location>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ConsumerAccount>().WithMany().HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<PromotionCampaign>(e =>
+        {
+            e.ToTable("promotion_campaigns");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Eyebrow).HasMaxLength(100);
+            e.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Body).HasColumnType("text");
+            e.Property(x => x.Terms).HasColumnType("text");
+            e.Property(x => x.ImageUrl).HasMaxLength(500);
+            e.Property(x => x.BackgroundColor).HasMaxLength(20);
+            e.Property(x => x.AccentColor).HasMaxLength(20);
+            e.Property(x => x.AudienceType).HasMaxLength(30);
+            e.Property(x => x.AudienceTierIdsJson).HasColumnType("jsonb").HasDefaultValue("[]");
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.HasIndex(x => new { x.TenantId, x.Status, x.StartsAt });
+        });
+
+        builder.Entity<PromotionCampaignLocation>(e =>
+        {
+            e.ToTable("promotion_campaign_locations");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.HasIndex(x => new { x.CampaignId, x.LocationId }).IsUnique();
+            e.HasOne(x => x.Campaign).WithMany(x => x.Locations).HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PromotionCampaignProduct>(e =>
+        {
+            e.ToTable("promotion_campaign_products");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.DiscountPercent).HasColumnType("decimal(5,2)");
+            e.HasIndex(x => new { x.CampaignId, x.ProductId }).IsUnique();
+            e.HasOne(x => x.Campaign).WithMany(x => x.Products).HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PromotionCampaignEvent>(e =>
+        {
+            e.ToTable("promotion_campaign_events");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.EventType).HasMaxLength(20).IsRequired();
+            e.Property(x => x.OccurredAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.CampaignId, x.EventType, x.OccurredAt })
+                .HasDatabaseName("idx_promotion_campaign_events_analytics");
+            e.HasIndex(x => new { x.TenantId, x.StoreId, x.OccurredAt })
+                .HasDatabaseName("idx_promotion_campaign_events_store");
+            e.HasOne<PromotionCampaign>().WithMany().HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Location>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ConsumerAccount>().WithMany().HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<Discount>()
+            .HasOne<PromotionCampaign>()
+            .WithMany()
+            .HasForeignKey(x => x.PromotionCampaignId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // ── ConsumerAccountProfileChange (TASK-613) ───────────────────────────
         // NO RLS at all, same precedent as ConsumerAccount itself — see class remarks.
@@ -2703,16 +2854,22 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(x => x.TenantId).IsRequired();
             e.Property(x => x.BannerId).IsRequired();
+            e.Property(x => x.StoreId).IsRequired(false);
             e.Property(x => x.EventType).HasMaxLength(20).IsRequired();
             e.Property(x => x.OccurredAt).HasDefaultValueSql("NOW()");
             // Analytics read: COUNT(...) GROUP BY EventType for one banner within a tenant.
             e.HasIndex(x => new { x.TenantId, x.BannerId, x.EventType })
              .HasDatabaseName("idx_banner_events_tenant_banner_type");
+            e.HasIndex(x => new { x.TenantId, x.BannerId, x.StoreId, x.OccurredAt })
+             .HasDatabaseName("idx_banner_events_analytics_store_date");
             e.HasOne<Banner>().WithMany()
              .HasForeignKey(x => x.BannerId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<ConsumerAccount>().WithMany()
              .HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
+
 
         // ── MobileConfiguration domain (multi-tenant consumer app-builder, TASK-531) ──────
         // Root + versions with a pointer: MobileConfiguration.PublishedVersionId/DraftVersionId

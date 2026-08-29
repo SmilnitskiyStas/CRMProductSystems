@@ -38,9 +38,7 @@ export function StockBatchCard({ item, onPress }: Props) {
       <View className="flex-row mt-3 gap-4">
         <View>
           <Text className="text-xs text-gray-400">К-сть</Text>
-          <Text className="text-sm font-medium text-gray-700">
-            {item.quantity} {item.unit}
-          </Text>
+          <Text className="text-sm font-medium text-gray-700">{item.quantity}</Text>
         </View>
         <View>
           <Text className="text-xs text-gray-400">Термін</Text>

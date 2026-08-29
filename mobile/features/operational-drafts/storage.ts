@@ -20,6 +20,11 @@ export interface DraftItem {
   expiryDate?: string | null;
   quantity: number;
   availableQty?: number;
+  unitPrice?: number | null;
+  unitPricePurchase?: number | null;
+  isReturnedToSupplier?: boolean;
+  reimbursementType?: 'fixed' | 'percent' | null;
+  reimbursementValue?: number | null;
 }
 
 export type OperationalDraftPayload =
@@ -75,7 +80,16 @@ function validItem(value: unknown): value is DraftItem {
     && Number.isFinite(value.quantity)
     && value.quantity > 0
     && (value.availableQty === undefined
-      || (typeof value.availableQty === 'number' && Number.isFinite(value.availableQty) && value.availableQty >= 0));
+      || (typeof value.availableQty === 'number' && Number.isFinite(value.availableQty) && value.availableQty >= 0))
+    && (value.unitPrice === undefined || value.unitPrice === null
+      || (typeof value.unitPrice === 'number' && Number.isFinite(value.unitPrice) && value.unitPrice >= 0))
+    && (value.unitPricePurchase === undefined || value.unitPricePurchase === null
+      || (typeof value.unitPricePurchase === 'number' && Number.isFinite(value.unitPricePurchase) && value.unitPricePurchase >= 0))
+    && (value.isReturnedToSupplier === undefined || typeof value.isReturnedToSupplier === 'boolean')
+    && (value.reimbursementType === undefined || value.reimbursementType === null
+      || value.reimbursementType === 'fixed' || value.reimbursementType === 'percent')
+    && (value.reimbursementValue === undefined || value.reimbursementValue === null
+      || (typeof value.reimbursementValue === 'number' && Number.isFinite(value.reimbursementValue) && value.reimbursementValue >= 0));
 }
 
 function validPayload(value: unknown, kind: OperationalDraftKind): value is OperationalDraftPayload {
@@ -117,6 +131,11 @@ function cleanItem(item: DraftItem): DraftItem {
     ...(item.batchNumber !== undefined ? { batchNumber: item.batchNumber } : {}),
     ...(item.expiryDate !== undefined ? { expiryDate: item.expiryDate } : {}),
     ...(item.availableQty !== undefined ? { availableQty: item.availableQty } : {}),
+    ...(item.unitPrice !== undefined ? { unitPrice: item.unitPrice } : {}),
+    ...(item.unitPricePurchase !== undefined ? { unitPricePurchase: item.unitPricePurchase } : {}),
+    ...(item.isReturnedToSupplier !== undefined ? { isReturnedToSupplier: item.isReturnedToSupplier } : {}),
+    ...(item.reimbursementType !== undefined ? { reimbursementType: item.reimbursementType } : {}),
+    ...(item.reimbursementValue !== undefined ? { reimbursementValue: item.reimbursementValue } : {}),
   };
 }
 

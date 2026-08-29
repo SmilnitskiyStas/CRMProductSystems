@@ -9,8 +9,7 @@ import { ThemeEditorSection } from "@/features/consumer-app/components/ThemeEdit
 /**
  * TASK-537: replaces TASK-535's placeholder with the real Theme Editor — whitelisted
  * color/radius/spacing controls (TASK-536) with a live, unsaved-state preview. Same role gate
- * and page-shell shape as every sibling route here (mirrors `/consumer-app/page.tsx`), just
- * wider than the single-column settings pages to fit the form + preview side by side.
+ * and page-shell shape as every sibling route here (mirrors `/consumer-app/page.tsx`).
  */
 export default function ConsumerAppDesignPage() {
   const t = useTranslations("Dashboard.consumerApp.designPage");
@@ -26,7 +25,7 @@ export default function ConsumerAppDesignPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1100, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
           {t("title")}

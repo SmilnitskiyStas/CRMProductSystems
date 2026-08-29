@@ -5,10 +5,10 @@ import { useTranslations, useLocale } from "next-intl";
 import { Users, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
-import { SortableHeader, TablePaginationFooter } from "@/features/marketing-analytics/price-segments/components/TableControls";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { PiiUnmaskToggle } from "@/features/marketing-analytics/components/ExportButtons";
 import { useExportPostCampaignCustomers } from "../hooks/usePostCampaign";
-import type { PostCampaignCustomerSortBy, PostCampaignCustomerTableDto } from "../types";
+import type { PostCampaignCustomerRowDto, PostCampaignCustomerSortBy, PostCampaignCustomerTableDto } from "../types";
 
 interface Props {
   segmentId: string;
@@ -23,8 +23,6 @@ interface Props {
   canExportPii: boolean;
 }
 
-const GRID = "minmax(140px,1fr) 120px 90px 90px 100px 100px 200px";
-
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
@@ -32,8 +30,8 @@ function errorMessage(e: unknown): string {
 /**
  * "Споживачі сегмента" (source doc §23) — full SERVER pagination, explicitly NOT a Top-200 cap
  * (source doc §23.3/§35.3's required fix over the competitor: `PostCampaignCustomerTableDto` has
- * no row cap at all, same `SortableHeader`/`TablePaginationFooter` every sibling phase's tables
- * already reuse from `price-segments/components/TableControls.tsx`). ID itself is never sortable
+ * no row cap at all), rendered via the shared `components/ui/Table` (sort/pagination state owned
+ * here, same as every sibling phase's table). ID itself is never sortable
  * (source doc §23.2) — only checks/turnover before/after and the RFM transition. `row.phone` is
  * rendered exactly as the server sent it: already masked/unmasked per the CALLER's own role
  * (`PostCampaignService.GetCustomersAsync`'s `canViewUnmaskedPii` gate) — never re-masked here,
@@ -57,6 +55,59 @@ export function CustomerTable({ segmentId, storeIds, data, isLoading, sortBy, so
       },
     );
   }
+
+  const columns: TableColumn<PostCampaignCustomerRowDto>[] = [
+    {
+      key: "name",
+      header: t("headerName"),
+      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      render: (r) => r.name,
+    },
+    {
+      key: "phone",
+      header: t("headerPhone"),
+      render: (r) => <span style={{ color: r.phone ? "#9CA3AF" : "#374151" }}>{r.phone ?? "—"}</span>,
+    },
+    {
+      key: "checksBefore",
+      header: t("headerChecksBefore"),
+      sortKey: "checksbefore",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => r.checksBefore.toLocaleString(intlLocale),
+    },
+    {
+      key: "checksAfter",
+      header: t("headerChecksAfter"),
+      sortKey: "checksafter",
+      cellStyle: { color: "#E8EDF5", fontSize: 13, fontFamily: "monospace", fontWeight: 600 },
+      render: (r) => r.checksAfter.toLocaleString(intlLocale),
+    },
+    {
+      key: "turnoverBefore",
+      header: t("headerTurnoverBefore"),
+      sortKey: "turnoverbefore",
+      cellStyle: { color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" },
+      render: (r) => `${r.turnoverBefore.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+    {
+      key: "turnoverAfter",
+      header: t("headerTurnoverAfter"),
+      sortKey: "turnoverafter",
+      cellStyle: { color: "#4ADE80", fontSize: 13, fontFamily: "monospace" },
+      render: (r) => `${r.turnoverAfter.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴`,
+    },
+    {
+      key: "transition",
+      header: t("headerTransition"),
+      sortKey: "transition",
+      cellStyle: { color: "#9CA3AF", fontSize: 11.5, whiteSpace: "nowrap" },
+      render: (r) => (
+        <>
+          {r.segmentBeforeLabelUa} <span style={{ color: "#4B5563" }}>→</span> <span style={{ color: "#E8EDF5" }}>{r.segmentAfterLabelUa}</span>
+        </>
+      ),
+    },
+  ];
 
   return (
     <div style={{ background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -90,35 +141,19 @@ export function CustomerTable({ segmentId, storeIds, data, isLoading, sortBy, so
           <div style={{ color: "#9CA3AF", fontSize: 14, fontWeight: 600 }}>{t("empty")}</div>
         </div>
       ) : (
-        <>
-          <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, overflow: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #1F2937", background: "#0A1020", minWidth: 780, gap: 8 }}>
-              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>{t("headerName")}</div>
-              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>{t("headerPhone")}</div>
-              <SortableHeader label={t("headerChecksBefore")} sortKey="checksbefore" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerChecksAfter")} sortKey="checksafter" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerTurnoverBefore")} sortKey="turnoverbefore" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerTurnoverAfter")} sortKey="turnoverafter" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} align="right" />
-              <SortableHeader label={t("headerTransition")} sortKey="transition" activeSort={sortBy} activeDescending={sortDescending} onSort={onSort} />
-            </div>
-
-            {data.rows.map((r) => (
-              <div key={r.customerId} style={{ display: "grid", gridTemplateColumns: GRID, padding: "10px 16px", borderBottom: "1px solid #0F1924", alignItems: "center", minWidth: 780, gap: 8 }}>
-                <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
-                <div style={{ color: r.phone ? "#9CA3AF" : "#374151", fontSize: 12 }}>{r.phone ?? "—"}</div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>{r.checksBefore.toLocaleString(intlLocale)}</div>
-                <div style={{ color: "#E8EDF5", fontSize: 13, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{r.checksAfter.toLocaleString(intlLocale)}</div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right", fontFamily: "monospace" }}>{r.turnoverBefore.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴</div>
-                <div style={{ color: "#4ADE80", fontSize: 13, textAlign: "right", fontFamily: "monospace" }}>{r.turnoverAfter.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴</div>
-                <div style={{ color: "#9CA3AF", fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {r.segmentBeforeLabelUa} <span style={{ color: "#4B5563" }}>→</span> <span style={{ color: "#E8EDF5" }}>{r.segmentAfterLabelUa}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <TablePaginationFooter page={page} totalPages={data.totalPages} totalLabel={t("totalCount", { count: data.totalCount })} onPageChange={onPageChange} />
-        </>
+        <Table
+          columns={columns}
+          rows={data.rows}
+          rowKey={(r) => r.customerId}
+          sortBy={sortBy}
+          sortDescending={sortDescending}
+          onSort={onSort}
+          page={page}
+          totalPages={data.totalPages}
+          totalCount={data.totalCount}
+          onPageChange={onPageChange}
+          minWidth={780}
+        />
       )}
     </div>
   );

@@ -25,9 +25,14 @@ public interface IBannerRepository
     Task<Dictionary<Guid, List<Guid>>> GetProductIdsForBannersAsync(
         Guid tenantId, IReadOnlyCollection<Guid> bannerIds, CancellationToken ct = default);
 
-    /// <summary>Batched: banner id → (view count, click count) from banner_events.</summary>
+    Task<BannerEventAnalyticsSnapshot> GetEventAnalyticsAsync(
+        Guid tenantId, Guid bannerId, DateTime? from = null, DateTime? toExclusive = null,
+        IReadOnlyCollection<Guid>? storeIds = null,
+        CancellationToken ct = default);
+
     Task<Dictionary<Guid, (int Views, int Clicks)>> GetEventCountsForBannersAsync(
-        Guid tenantId, IReadOnlyCollection<Guid> bannerIds, CancellationToken ct = default);
+        Guid tenantId, IReadOnlyCollection<Guid> bannerIds, DateTime? from = null, DateTime? toExclusive = null,
+        CancellationToken ct = default);
 
     Task AddAsync(Banner banner, CancellationToken ct = default);
 
@@ -52,3 +57,8 @@ public interface IBannerRepository
 
     Task SaveChangesAsync(CancellationToken ct = default);
 }
+
+public sealed record BannerEventDailyCount(DateOnly Date, int Views, int Clicks);
+public sealed record BannerEventStoreCount(Guid StoreId, string StoreName, int Views, int Clicks);
+public sealed record BannerEventAnalyticsSnapshot(int Views, int Clicks,
+    IReadOnlyList<BannerEventDailyCount> Daily, IReadOnlyList<BannerEventStoreCount> Stores);

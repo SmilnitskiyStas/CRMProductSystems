@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useStock } from '@/features/stock/hooks/useStock';
 import { StockBatchCard } from '@/features/stock/components/StockBatchCard';
 import type { StockStatus } from '@/features/stock/types';
+import { useAuthStore } from '@/features/auth/store';
+import { useWorkspaceLocationStore } from '@/features/locations/store';
 
 const STATUS_FILTERS: { label: string; value: StockStatus | 'all' }[] = [
   { label: 'Всі', value: 'all' },
@@ -17,9 +19,15 @@ export default function StockScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ status?: StockStatus }>();
   const activeStatus = params.status ?? 'all';
+  const locationId = useAuthStore((state) => state.user?.locationId);
+  const selectedLocationId = useWorkspaceLocationStore((state) => state.selectedLocationId);
+  const effectiveLocationId = selectedLocationId === undefined ? locationId : selectedLocationId;
 
   const { data, isLoading, isError, refetch } = useStock(
-    activeStatus !== 'all' ? { status: activeStatus } : undefined
+    {
+      status: activeStatus !== 'all' ? activeStatus : undefined,
+      locationId: effectiveLocationId ?? undefined,
+    }
   );
 
   return (
