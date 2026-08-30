@@ -132,23 +132,23 @@ public sealed class ItemServiceTests
     [Fact]
     public async Task GetPagedAsync_NoSearchOrIds_PassesNullsThrough()
     {
-        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item>(), 0));
 
         await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, null, null, 1, 50);
 
-        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, null, null, 1, 50, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task GetPagedAsync_WithSearch_PassesSearchThrough()
     {
-        _repo.GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item>(), 0));
 
         await _sut.GetPagedAsync(_tenantId, null, null, null, "молок", null, null, null, 1, 50);
 
-        await _repo.Received(1).GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -157,24 +157,24 @@ public sealed class ItemServiceTests
         var a = new Item { TenantId = _tenantId, Name = "A", ManagementType = "MTS" };
         var b = new Item { TenantId = _tenantId, Name = "Z", ManagementType = "MTS" };
         var ids = new List<Guid> { a.Id, b.Id };
-        _repo.GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item> { a, b }, 2));
 
         var result = await _sut.GetPagedAsync(_tenantId, null, null, null, null, ids, null, null, 1, 30);
 
         Assert.Equal(2, result.Items.Count);
-        await _repo.Received(1).GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, null, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task GetPagedAsync_WithSortByAndSortDescending_PassesBothThrough()
     {
-        _repo.GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item>(), 0));
 
         await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, "retailprice", true, 1, 50);
 
-        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, null, null, Arg.Any<CancellationToken>());
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────

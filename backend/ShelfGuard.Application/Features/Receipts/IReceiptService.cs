@@ -6,9 +6,12 @@ namespace ShelfGuard.Application.Features.Receipts;
 public interface IReceiptService
 {
     Task<List<ReceiptDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default);
+    // TASK-640: categoryId/minItems/maxItems — see IReceiptRepository.GetPagedAsync.
     Task<PagedResult<ReceiptDto>> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
-        int page, int pageSize, CancellationToken ct = default);
+        int page, int pageSize,
+        Guid? categoryId = null, int? minItems = null, int? maxItems = null,
+        CancellationToken ct = default);
     Task<ReceiptDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<(ReceiptDto? Receipt, string? Error)> CreateAsync(

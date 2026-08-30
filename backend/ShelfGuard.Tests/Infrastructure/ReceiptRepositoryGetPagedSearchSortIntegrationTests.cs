@@ -31,6 +31,7 @@ public sealed class ReceiptRepositoryGetPagedSearchSortIntegrationTests : IAsync
     private Guid _matchesBySupplierOnly;
     private Guid _matchesByDestinationOnly;
     private Guid _matchesNeither;
+    private Guid _categoryId;
 
     private string SupplierNeedle => $"SupplierNeedle-{_run}";
     private string DestinationNeedle => $"DestNeedle-{_run}";
@@ -95,6 +96,22 @@ public sealed class ReceiptRepositoryGetPagedSearchSortIntegrationTests : IAsync
         _matchesNeither = neither.Id;
 
         db.StockReceipts.AddRange(bySupplier, byDestination, neither);
+
+        // TASK-640: category_id/min_items/max_items fixtures. bySupplier has 1 line item (of the
+        // categorized item), byDestination has 2, neither has 0 — distinct counts for each bound.
+        var category = new Category { TenantId = _tenantId, Name = $"Category {_run}" };
+        _categoryId = category.Id;
+        db.Categories.Add(category);
+
+        var categorizedItem = new Item { TenantId = _tenantId, Name = $"Categorized Item {_run}", ManagementType = "MTS", CategoryId = category.Id };
+        var plainItem = new Item { TenantId = _tenantId, Name = $"Plain Item {_run}", ManagementType = "MTS" };
+        db.Items.AddRange(categorizedItem, plainItem);
+
+        db.StockReceiptItems.AddRange(
+            new StockReceiptItem { ReceiptId = bySupplier.Id, ProductId = categorizedItem.Id, QuantityOrdered = 1 },
+            new StockReceiptItem { ReceiptId = byDestination.Id, ProductId = plainItem.Id, QuantityOrdered = 1 },
+            new StockReceiptItem { ReceiptId = byDestination.Id, ProductId = plainItem.Id, QuantityOrdered = 1 });
+
         await db.SaveChangesAsync();
     }
 
@@ -103,7 +120,11 @@ public sealed class ReceiptRepositoryGetPagedSearchSortIntegrationTests : IAsync
         if (!_dbAvailable) return;
 
         await using var db = NewContext();
+        // stock_receipt_items cascade-deletes with their parent stock_receipts row (FK
+        // OnDelete(Cascade) — see AppDbContext's StockReceiptItem config).
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM stock_receipts WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM suppliers WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
@@ -207,6 +228,56 @@ public sealed class ReceiptRepositoryGetPagedSearchSortIntegrationTests : IAsync
 
         Assert.Equal(1, total);
         Assert.Equal(_matchesByDestinationOnly, items.Single().Id);
+    }
+
+    // TASK-640: category_id/min_items/max_items filters. bySupplier has 1 line item (the
+    // categorized item), byDestination has 2, neither has 0.
+    [Fact]
+    public async Task GetPagedAsync_CategoryIdFilter_ReturnsOnlyReceiptsWithMatchingLineItem()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new ReceiptRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, categoryId: _categoryId);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesBySupplierOnly, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MinItemsFilter_ExcludesReceiptsWithFewerLineItems()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new ReceiptRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, minItems: 2);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesByDestinationOnly, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MaxItemsFilter_ExcludesReceiptsWithMoreLineItems()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new ReceiptRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, maxItems: 0);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesNeither, items.Single().Id);
     }
 
     // KI-035: one shared, process-wide pooled data source instead of a per-test-instance

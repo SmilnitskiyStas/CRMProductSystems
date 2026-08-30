@@ -15,6 +15,7 @@ import {
   useUpdateProduct,
 } from "@/features/inventory/hooks/useProducts";
 import { useCategories } from "@/features/inventory/hooks/useCategories";
+import { RangeFilter } from "@/components/ui/RangeFilter";
 import type { CreateProductPayload, Product, ProductSortBy, UpdateProductPayload } from "@/features/inventory/types";
 
 const PAGE_SIZE = 50;
@@ -37,6 +38,8 @@ export default function InventoryPage() {
 
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [minPrice, setMinPrice] = useState<number | undefined>(undefined);
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<ProductSortBy>("name");
   const [sortDescending, setSortDescending] = useState(false);
@@ -57,7 +60,7 @@ export default function InventoryPage() {
   // Reset to page 1 whenever a filter/sort changes underneath the current page.
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, categoryId, sortBy, sortDescending]);
+  }, [debouncedSearch, categoryId, minPrice, maxPrice, sortBy, sortDescending]);
 
   function handleSort(key: ProductSortBy) {
     if (key === sortBy) setSortDescending((d) => !d);
@@ -73,6 +76,8 @@ export default function InventoryPage() {
   const { data, isLoading, isError } = useProductsPaged({
     search: debouncedSearch || undefined,
     category_id: categoryId || undefined,
+    min_price: minPrice,
+    max_price: maxPrice,
     page,
     pageSize: PAGE_SIZE,
     sortBy,
@@ -187,6 +192,16 @@ export default function InventoryPage() {
             </option>
           ))}
         </select>
+
+        <RangeFilter
+          min={minPrice}
+          max={maxPrice}
+          onChange={(next) => {
+            setMinPrice(next.min);
+            setMaxPrice(next.max);
+          }}
+          placeholder={t("priceRangeLabel")}
+        />
       </div>
 
       {isLoading ? (

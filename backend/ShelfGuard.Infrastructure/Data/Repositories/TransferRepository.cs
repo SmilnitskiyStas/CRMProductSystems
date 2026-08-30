@@ -30,7 +30,9 @@ public sealed class TransferRepository : ITransferRepository
 
     public async Task<(List<StockTransfer> Items, int Total)> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize,
+        Guid? categoryId = null, int? minItems = null, int? maxItems = null,
+        CancellationToken ct = default)
     {
         var query = _db.StockTransfers
             .Include(t => t.Items).ThenInclude(i => i.Product)
@@ -42,6 +44,14 @@ public sealed class TransferRepository : ITransferRepository
             query = query.Where(t => t.FromStoreId == storeId || t.ToStoreId == storeId);
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(t => t.Status == status);
+        // TASK-640: category_id/min_items/max_items filters for the frontend table filter UI.
+        // `.HasValue` checks (never a truthy/non-zero check) — 0 is a valid items-count bound.
+        if (categoryId.HasValue)
+            query = query.Where(t => t.Items.Any(i => i.Product != null && i.Product.CategoryId == categoryId));
+        if (minItems.HasValue)
+            query = query.Where(t => t.Items.Count >= minItems);
+        if (maxItems.HasValue)
+            query = query.Where(t => t.Items.Count <= maxItems);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();

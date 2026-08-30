@@ -7,6 +7,9 @@ export function useReceipts(
   params?: {
     store_id?: string;
     status?: string;
+    category_id?: string;
+    min_items?: number;
+    max_items?: number;
     page?: number;
     pageSize?: number;
     search?: string;

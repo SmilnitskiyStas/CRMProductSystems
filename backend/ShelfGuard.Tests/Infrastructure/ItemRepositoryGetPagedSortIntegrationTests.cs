@@ -291,6 +291,40 @@ public sealed class ItemRepositoryGetPagedSortIntegrationTests : IAsyncLifetime
         Assert.Equal(_itemAlpha, items.Single().Id);
     }
 
+    // TASK-640: min_price/max_price range filter on Item.PriceRetail.
+    [Fact]
+    public async Task GetPagedAsync_MinPriceFilter_ExcludesItemsBelowBound()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new ItemRepository(db);
+
+        // Retail prices: itemAlpha=10, itemZebra=50, itemNoCat=200.
+        var (items, total) = await repo.GetPagedAsync(
+            categoryId: null, segmentId: null, managementType: null, search: _run, ids: null,
+            sortBy: null, sortDescending: null, page: 1, pageSize: 30, minPrice: 60m);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_itemNoCat, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MaxPriceFilter_ExcludesItemsAboveBound()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new ItemRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            categoryId: null, segmentId: null, managementType: null, search: _run, ids: null,
+            sortBy: null, sortDescending: null, page: 1, pageSize: 30, maxPrice: 60m);
+
+        Assert.Equal(2, total);
+        Assert.DoesNotContain(items, i => i.Id == _itemNoCat);
+    }
+
     // KI-035: one shared, process-wide pooled data source instead of a per-test-instance
     // NpgsqlDataSource that was never disposed. See TestPostgres.
     private AppDbContext NewContext() => TestPostgres.NewContext(_connectionString);

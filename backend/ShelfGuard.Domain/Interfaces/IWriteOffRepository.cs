@@ -5,9 +5,15 @@ namespace ShelfGuard.Domain.Interfaces;
 public interface IWriteOffRepository
 {
     Task<List<WriteOff>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default);
+    // TASK-640: categoryId/minLossAmount/maxLossAmount — additive category/loss-amount range
+    // filters for the frontend table filter UI. Appended at the very end (still before ct) so
+    // no pre-existing parameter's positional index shifts for existing callers. Range-filters on
+    // the already-stored WriteOff.TotalLossAmount column (not recomputed here).
     Task<(List<WriteOff> Items, int Total)> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
-        int page, int pageSize, CancellationToken ct = default);
+        int page, int pageSize,
+        Guid? categoryId = null, decimal? minLossAmount = null, decimal? maxLossAmount = null,
+        CancellationToken ct = default);
     Task<WriteOff?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<ProductStock?> GetStockByIdAsync(Guid stockId, CancellationToken ct = default);
 

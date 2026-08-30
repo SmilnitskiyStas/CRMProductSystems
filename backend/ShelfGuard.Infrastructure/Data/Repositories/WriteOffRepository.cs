@@ -30,7 +30,9 @@ public sealed class WriteOffRepository : IWriteOffRepository
 
     public async Task<(List<WriteOff> Items, int Total)> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize,
+        Guid? categoryId = null, decimal? minLossAmount = null, decimal? maxLossAmount = null,
+        CancellationToken ct = default)
     {
         var query = _db.WriteOffs
             .Include(w => w.Items).ThenInclude(i => i.Product)
@@ -42,6 +44,16 @@ public sealed class WriteOffRepository : IWriteOffRepository
             query = query.Where(w => w.StoreId == storeId);
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(w => w.Status == status);
+        // TASK-640: category_id filters by line-item category; min/max_loss_amount range-filter
+        // the pre-computed WriteOff.TotalLossAmount column (nullable — a write-off with no total
+        // set simply won't match once either bound is applied, via EF's normal null-comparison
+        // SQL semantics). `.HasValue` checks (never truthy/non-zero) — 0 is a valid bound.
+        if (categoryId.HasValue)
+            query = query.Where(w => w.Items.Any(i => i.Product != null && i.Product.CategoryId == categoryId));
+        if (minLossAmount.HasValue)
+            query = query.Where(w => w.TotalLossAmount >= minLossAmount);
+        if (maxLossAmount.HasValue)
+            query = query.Where(w => w.TotalLossAmount <= maxLossAmount);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();

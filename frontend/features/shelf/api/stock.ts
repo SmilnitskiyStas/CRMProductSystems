@@ -14,6 +14,9 @@ export const stockApi = {
     status?: string;
     zone_id?: string;
     product_id?: string;
+    category_id?: string;
+    min_quantity?: number;
+    max_quantity?: number;
     page?: number;
     pageSize?: number;
     search?: string;
@@ -27,6 +30,10 @@ export const stockApi = {
     if (params?.status) qs.set("status", params.status);
     if (params?.zone_id) qs.set("zone_id", params.zone_id);
     if (params?.product_id) qs.set("product_id", params.product_id);
+    if (params?.category_id) qs.set("category_id", params.category_id);
+    // `!= null` (never a truthy check) — 0 is a valid bound and must not be treated as unset.
+    if (params?.min_quantity != null) qs.set("min_quantity", String(params.min_quantity));
+    if (params?.max_quantity != null) qs.set("max_quantity", String(params.max_quantity));
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     if (params?.search) qs.set("search", params.search);

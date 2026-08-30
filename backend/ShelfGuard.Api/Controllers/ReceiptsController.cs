@@ -31,10 +31,15 @@ public sealed class ReceiptsController : ControllerBase
         [FromQuery] bool? sortDescending,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
+        [FromQuery] Guid? category_id = null,
+        [FromQuery] int? min_items = null,
+        [FromQuery] int? max_items = null,
         CancellationToken ct = default)
     {
         var query = new PagedQuery { Page = page, PageSize = pageSize };
-        var result = await _receipts.GetPagedAsync(store_id, status, search, sortBy, sortDescending, query.ClampedPage, query.ClampedPageSize, ct);
+        var result = await _receipts.GetPagedAsync(
+            store_id, status, search, sortBy, sortDescending, query.ClampedPage, query.ClampedPageSize,
+            category_id, min_items, max_items, ct);
         return Ok(result);
     }
 

@@ -27,10 +27,15 @@ public sealed class WriteOffsController : ControllerBase
         [FromQuery] bool? sortDescending,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
+        [FromQuery] Guid? category_id = null,
+        [FromQuery] decimal? min_loss_amount = null,
+        [FromQuery] decimal? max_loss_amount = null,
         CancellationToken ct = default)
     {
         var query = new PagedQuery { Page = page, PageSize = pageSize };
-        var result = await _writeOffs.GetPagedAsync(store_id, status, search, sortBy, sortDescending, query.ClampedPage, query.ClampedPageSize, ct);
+        var result = await _writeOffs.GetPagedAsync(
+            store_id, status, search, sortBy, sortDescending, query.ClampedPage, query.ClampedPageSize,
+            category_id, min_loss_amount, max_loss_amount, ct);
         return Ok(result);
     }
 

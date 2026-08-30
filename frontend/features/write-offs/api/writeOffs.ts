@@ -6,6 +6,9 @@ export const writeOffsApi = {
   getAll: (params?: {
     store_id?: string;
     status?: string;
+    category_id?: string;
+    min_loss_amount?: number;
+    max_loss_amount?: number;
     page?: number;
     pageSize?: number;
     search?: string;
@@ -15,6 +18,10 @@ export const writeOffsApi = {
     const qs = new URLSearchParams();
     if (params?.store_id) qs.set("store_id", params.store_id);
     if (params?.status) qs.set("status", params.status);
+    if (params?.category_id) qs.set("category_id", params.category_id);
+    // `!= null` (never a truthy check) — 0 is a valid bound and must not be treated as unset.
+    if (params?.min_loss_amount != null) qs.set("min_loss_amount", String(params.min_loss_amount));
+    if (params?.max_loss_amount != null) qs.set("max_loss_amount", String(params.max_loss_amount));
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     if (params?.search) qs.set("search", params.search);

@@ -17,10 +17,12 @@ import { WRITE_OFF_STATUS_COLOR } from "@/features/write-offs/types";
 import { CreateWriteOffForm } from "@/features/write-offs/components/CreateWriteOffForm";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
+import { useCategories } from "@/features/inventory/hooks/useCategories";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { RangeFilter } from "@/components/ui/RangeFilter";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
@@ -30,6 +32,18 @@ import {
 } from "@/components/ui/DetailDrawer";
 
 const STATUS_TAB_VALUES = ["", "pending_approval", "approved", "draft", "rejected"] as const;
+
+// Matches the search input's existing inline style below — shared here for the new
+// category filter select added alongside it.
+const filterInputStyle: React.CSSProperties = {
+  background: "#111827",
+  border: "1px solid #1F2937",
+  borderRadius: 8,
+  color: "#E8EDF5",
+  fontSize: 13,
+  padding: "7px 12px",
+  outline: "none",
+};
 
 function StatusBadge({ status }: { status: WriteOffStatus }) {
   const t = useTranslations("Dashboard.writeOffs.status");
@@ -301,6 +315,10 @@ function WriteOffsPageContent() {
 
   const [statusFilter, setStatusFilter] = useState("");
   const [reasonFilter] = useState(searchParams.get("reason") ?? "");
+  const [categoryId, setCategoryId] = useState("");
+  const [minLossAmount, setMinLossAmount] = useState<number | undefined>(undefined);
+  const [maxLossAmount, setMaxLossAmount] = useState<number | undefined>(undefined);
+  const { data: categories = [] } = useCategories();
   const primaryStoreId = usePrimaryStoreId();
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
@@ -329,6 +347,9 @@ function WriteOffsPageContent() {
   const { data, isLoading } = useWriteOffs({
     store_id: primaryStoreId,
     status: statusFilter || undefined,
+    category_id: categoryId || undefined,
+    min_loss_amount: minLossAmount,
+    max_loss_amount: maxLossAmount,
     page,
     pageSize: PAGE_SIZE,
     search: search || undefined,
@@ -342,7 +363,17 @@ function WriteOffsPageContent() {
   // Reset to page 1 whenever a filter changes underneath the current page.
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, reasonFilter, primaryStoreId, search, sortBy, sortDescending]);
+  }, [
+    statusFilter,
+    reasonFilter,
+    categoryId,
+    minLossAmount,
+    maxLossAmount,
+    primaryStoreId,
+    search,
+    sortBy,
+    sortDescending,
+  ]);
 
   const approve = useApproveWriteOff();
   const reject = useRejectWriteOff();
@@ -533,6 +564,32 @@ function WriteOffsPageContent() {
             outline: "none",
             width: 260,
           }}
+        />
+      </div>
+
+      {/* Category + loss-amount filters */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          style={{ ...filterInputStyle, cursor: "pointer" }}
+        >
+          <option value="">{tPage("allCategories")}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
+        <RangeFilter
+          min={minLossAmount}
+          max={maxLossAmount}
+          onChange={(next) => {
+            setMinLossAmount(next.min);
+            setMaxLossAmount(next.max);
+          }}
+          placeholder={tPage("lossAmountRangeLabel")}
         />
       </div>
 

@@ -6,9 +6,12 @@ namespace ShelfGuard.Application.Features.WriteOffs;
 public interface IWriteOffService
 {
     Task<List<WriteOffDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default);
+    // TASK-640: categoryId/minLossAmount/maxLossAmount — see IWriteOffRepository.GetPagedAsync.
     Task<PagedResult<WriteOffDto>> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
-        int page, int pageSize, CancellationToken ct = default);
+        int page, int pageSize,
+        Guid? categoryId = null, decimal? minLossAmount = null, decimal? maxLossAmount = null,
+        CancellationToken ct = default);
     Task<WriteOffDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<(WriteOffDto? WriteOff, string? Error)> CreateAsync(

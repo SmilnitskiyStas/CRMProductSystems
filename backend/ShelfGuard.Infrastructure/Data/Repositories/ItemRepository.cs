@@ -41,7 +41,9 @@ public sealed class ItemRepository : IItemRepository
     public async Task<(List<Item> Items, int Total)> GetPagedAsync(
         Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids,
         string? sortBy, bool? sortDescending,
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize,
+        decimal? minPrice = null, decimal? maxPrice = null,
+        CancellationToken ct = default)
     {
         var query = _db.Items
             .Include(p => p.Category)
@@ -55,6 +57,12 @@ public sealed class ItemRepository : IItemRepository
             query = query.Where(p => p.SegmentId == segmentId);
         if (!string.IsNullOrWhiteSpace(managementType))
             query = query.Where(p => p.ManagementType == managementType.ToUpperInvariant());
+        // TASK-640: min_price/max_price range filter on Item.PriceRetail for the frontend table
+        // filter UI. `.HasValue` checks (never a truthy/non-zero check) — 0 is a valid bound.
+        if (minPrice.HasValue)
+            query = query.Where(p => p.PriceRetail >= minPrice);
+        if (maxPrice.HasValue)
+            query = query.Where(p => p.PriceRetail <= maxPrice);
         if (!string.IsNullOrWhiteSpace(search))
         {
             // Also match an exact barcode, not just a name substring — the mobile receiving

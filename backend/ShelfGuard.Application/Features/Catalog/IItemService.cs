@@ -12,6 +12,9 @@ public interface IItemService
         string? managementType,
         CancellationToken ct = default);
 
+    // TASK-640: minPrice/maxPrice — see IItemRepository.GetPagedAsync. Appended at the very end
+    // (still before ct) so no pre-existing parameter's positional index shifts for existing
+    // callers.
     Task<PagedResult<ItemDto>> GetPagedAsync(
         Guid tenantId,
         Guid? categoryId,
@@ -23,6 +26,8 @@ public interface IItemService
         bool? sortDescending,
         int page,
         int pageSize,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
         CancellationToken ct = default);
 
     Task<ItemDto?> GetByIdAsync(Guid id, CancellationToken ct = default);

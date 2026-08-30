@@ -13,6 +13,9 @@ public interface IStockService
         Guid? productId,
         CancellationToken ct = default);
 
+    // TASK-640: categoryId/minQuantity/maxQuantity — see IStockRepository.GetPagedAsync.
+    // Appended at the very end (still before ct) so no pre-existing parameter's positional
+    // index shifts for existing callers.
     Task<PagedResult<ProductStockDto>> GetPagedAsync(
         Guid[]? storeIds,
         string? status,
@@ -23,6 +26,9 @@ public interface IStockService
         bool? sortDescending,
         int page,
         int pageSize,
+        Guid? categoryId = null,
+        decimal? minQuantity = null,
+        decimal? maxQuantity = null,
         CancellationToken ct = default);
 
     Task<ProductStockDto?> GetByIdAsync(Guid id, CancellationToken ct = default);

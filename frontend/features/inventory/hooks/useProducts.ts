@@ -7,6 +7,8 @@ const PRODUCTS_KEY = ["products"] as const;
 interface ProductsListParams {
   search?: string;
   category_id?: string;
+  min_price?: number;
+  max_price?: number;
   page?: number;
   pageSize?: number;
   sortBy?: ProductSortBy | string;

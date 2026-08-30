@@ -23,9 +23,12 @@ public sealed class StockService : IStockService
         Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId,
         string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
+        Guid? categoryId = null, decimal? minQuantity = null, decimal? maxQuantity = null,
         CancellationToken ct = default)
     {
-        var (batches, total) = await _repo.GetPagedAsync(storeIds, status, zoneId, productId, search, sortBy, sortDescending, page, pageSize, ct);
+        var (batches, total) = await _repo.GetPagedAsync(
+            storeIds, status, zoneId, productId, search, sortBy, sortDescending, page, pageSize,
+            categoryId, minQuantity, maxQuantity, ct);
         return new PagedResult<ProductStockDto>
         {
             Items = batches.Select(ToDto).ToList(),

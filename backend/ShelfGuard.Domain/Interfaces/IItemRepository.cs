@@ -10,6 +10,10 @@ public interface IItemRepository
         string? managementType,
         CancellationToken ct = default);
 
+    // TASK-640: minPrice/maxPrice — additive range filter on Item.PriceRetail for the frontend
+    // table filter UI. Appended at the very end (still before ct) so no pre-existing
+    // parameter's positional index shifts for existing callers/fakes (WriteOffServiceTests
+    // reads `ids` off a fixed positional index).
     Task<(List<Item> Items, int Total)> GetPagedAsync(
         Guid? categoryId,
         Guid? segmentId,
@@ -20,6 +24,8 @@ public interface IItemRepository
         bool? sortDescending,
         int page,
         int pageSize,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
         CancellationToken ct = default);
 
     Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default);

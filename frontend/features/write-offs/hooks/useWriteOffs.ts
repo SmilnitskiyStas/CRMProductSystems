@@ -7,6 +7,9 @@ export function useWriteOffs(
   params?: {
     store_id?: string;
     status?: string;
+    category_id?: string;
+    min_loss_amount?: number;
+    max_loss_amount?: number;
     page?: number;
     pageSize?: number;
     search?: string;

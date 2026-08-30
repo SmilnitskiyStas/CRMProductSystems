@@ -28,6 +28,7 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
 
     private Guid _tenantId;
     private Guid _storeId;
+    private Guid _categoryId;
     private readonly string _run = Guid.NewGuid().ToString("N");
 
     private Guid _matchesByNameOnly;
@@ -77,7 +78,13 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
         // `search: _run` reliably scopes a query to just this test's 4 rows — the shared dev DB
         // already has hundreds of unrelated stock rows, so an unscoped total/order assertion
         // would be flaky against real data.
-        var productByName = new Item { TenantId = _tenantId, Name = $"Product {NameNeedle} Extra", Barcodes = [$"BC-{_run}-other-a"], ManagementType = "MTS" };
+        // TASK-640: a category assigned to just one item (productByName), so category_id can be
+        // asserted against a known single matching stock row.
+        var category = new Category { TenantId = _tenantId, Name = $"Category {_run}" };
+        _categoryId = category.Id;
+        db.Categories.Add(category);
+
+        var productByName = new Item { TenantId = _tenantId, Name = $"Product {NameNeedle} Extra", Barcodes = [$"BC-{_run}-other-a"], ManagementType = "MTS", CategoryId = category.Id };
         var productByBarcode = new Item { TenantId = _tenantId, Name = $"Unrelated Name A {_run}", Barcodes = [Barcode], ManagementType = "MTS" };
         var productNeutral = new Item { TenantId = _tenantId, Name = $"Totally Unrelated Product {_run}", Barcodes = [$"BC-{_run}-other-b"], ManagementType = "MTS" };
         db.Items.AddRange(productByName, productByBarcode, productNeutral);
@@ -124,6 +131,7 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
         await using var db = NewContext();
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM product_stock WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
@@ -273,6 +281,59 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
 
         Assert.Equal(1, total);
         Assert.Equal(_matchesByNameOnly, items.Single().Id);
+    }
+
+    // TASK-640: category_id/min_quantity/max_quantity range/category filters.
+    [Fact]
+    public async Task GetPagedAsync_CategoryIdFilter_ReturnsOnlyMatchingProductStock()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new StockRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeIds: null, status: null, zoneId: null, productId: null,
+            search: _run, sortBy: null, sortDescending: null, page: 1, pageSize: 30,
+            categoryId: _categoryId);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesByNameOnly, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MinQuantityFilter_ExcludesBatchesBelowBound()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new StockRepository(db);
+
+        // Quantities: byName=5, byBarcode=3, byBatch=8, neither=1.
+        var (items, total) = await repo.GetPagedAsync(
+            storeIds: null, status: null, zoneId: null, productId: null,
+            search: _run, sortBy: null, sortDescending: null, page: 1, pageSize: 30,
+            minQuantity: 4);
+
+        Assert.Equal(2, total);
+        Assert.All(items, i => Assert.Contains(i.Id, new[] { _matchesByNameOnly, _matchesByBatchOnly }));
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MaxQuantityFilter_ExcludesBatchesAboveBound()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new StockRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeIds: null, status: null, zoneId: null, productId: null,
+            search: _run, sortBy: null, sortDescending: null, page: 1, pageSize: 30,
+            maxQuantity: 3);
+
+        Assert.Equal(2, total);
+        Assert.All(items, i => Assert.Contains(i.Id, new[] { _matchesByBarcodeOnly, _matchesNeither }));
     }
 
     // KI-035: one shared, process-wide pooled data source instead of a per-test-instance

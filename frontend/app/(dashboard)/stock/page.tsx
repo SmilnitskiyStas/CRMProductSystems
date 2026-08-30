@@ -21,6 +21,9 @@ interface Filters {
   search: string;
   store_id: string;
   zone_id: string;
+  category_id: string;
+  min_quantity?: number;
+  max_quantity?: number;
 }
 
 function StockPageContent() {
@@ -32,6 +35,9 @@ function StockPageContent() {
     search: "",
     store_id: searchParams.get("store_id") ?? "",
     zone_id: searchParams.get("zone_id") ?? "",
+    category_id: "",
+    min_quantity: undefined,
+    max_quantity: undefined,
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
@@ -74,6 +80,9 @@ function StockPageContent() {
     status: filters.status || undefined,
     store_id: effectiveStoreId,
     zone_id: filters.zone_id || undefined,
+    category_id: filters.category_id || undefined,
+    min_quantity: filters.min_quantity,
+    max_quantity: filters.max_quantity,
     page,
     pageSize: PAGE_SIZE,
     search: debouncedSearch || undefined,
@@ -87,7 +96,17 @@ function StockPageContent() {
   // Reset to page 1 whenever a filter changes underneath the current page.
   useEffect(() => {
     setPage(1);
-  }, [filters.status, effectiveStoreId, filters.zone_id, debouncedSearch, sortBy, sortDescending]);
+  }, [
+    filters.status,
+    effectiveStoreId,
+    filters.zone_id,
+    filters.category_id,
+    filters.min_quantity,
+    filters.max_quantity,
+    debouncedSearch,
+    sortBy,
+    sortDescending,
+  ]);
 
   const { data: stores = [] } = useStores();
   const { data: products = [] } = useCatalogProducts();
@@ -163,7 +182,13 @@ function StockPageContent() {
 
       {/* Filters */}
       <StockFilters
-        filters={{ status: filters.status, search: filters.search }}
+        filters={{
+          status: filters.status,
+          search: filters.search,
+          category_id: filters.category_id,
+          min_quantity: filters.min_quantity,
+          max_quantity: filters.max_quantity,
+        }}
         onChange={(partial) => setFilters((prev) => ({ ...prev, ...partial, store_id: prev.store_id, zone_id: prev.zone_id }))}
       />
 

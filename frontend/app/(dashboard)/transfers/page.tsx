@@ -15,11 +15,13 @@ import { CreateTransferForm } from "@/features/transfers/components/CreateTransf
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
+import { useCategories } from "@/features/inventory/hooks/useCategories";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { RangeFilter } from "@/components/ui/RangeFilter";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
@@ -29,6 +31,18 @@ import {
 } from "@/components/ui/DetailDrawer";
 
 const STATUS_TAB_VALUES = ["", "draft", "in_transit", "received"] as const;
+
+// Matches the search input's existing inline style below — shared here for the new
+// category filter select added alongside it.
+const filterInputStyle: React.CSSProperties = {
+  background: "#111827",
+  border: "1px solid #1F2937",
+  borderRadius: 8,
+  color: "#E8EDF5",
+  fontSize: 13,
+  padding: "7px 12px",
+  outline: "none",
+};
 
 function StatusBadge({ status }: { status: TransferStatus }) {
   const t = useTranslations("Dashboard.transfers.status");
@@ -207,6 +221,10 @@ export default function TransfersPage() {
   const access = me ? hasRole(me.role, CAN_RECEIVE_STOCK) : null;
 
   const [statusFilter, setStatusFilter] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [minItems, setMinItems] = useState<number | undefined>(undefined);
+  const [maxItems, setMaxItems] = useState<number | undefined>(undefined);
+  const { data: categories = [] } = useCategories();
   const primaryStoreId = usePrimaryStoreId();
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
@@ -236,6 +254,9 @@ export default function TransfersPage() {
     {
       store_id: primaryStoreId,
       status: statusFilter || undefined,
+      category_id: categoryId || undefined,
+      min_items: minItems,
+      max_items: maxItems,
       page,
       pageSize: PAGE_SIZE,
       search: search || undefined,
@@ -251,7 +272,7 @@ export default function TransfersPage() {
   // Reset to page 1 whenever a filter changes underneath the current page.
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, primaryStoreId, search, sortBy, sortDescending]);
+  }, [statusFilter, categoryId, minItems, maxItems, primaryStoreId, search, sortBy, sortDescending]);
 
   const { data: locations = [] } = useLocations();
   const myLocationIds = useMemo(() => new Set(locations.map((l) => l.id)), [locations]);
@@ -403,6 +424,32 @@ export default function TransfersPage() {
             outline: "none",
             width: 260,
           }}
+        />
+      </div>
+
+      {/* Category + item-count filters */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          style={{ ...filterInputStyle, cursor: "pointer" }}
+        >
+          <option value="">{tPage("allCategories")}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
+        <RangeFilter
+          min={minItems}
+          max={maxItems}
+          onChange={(next) => {
+            setMinItems(next.min);
+            setMaxItems(next.max);
+          }}
+          placeholder={tPage("itemsRangeLabel")}
         />
       </div>
 

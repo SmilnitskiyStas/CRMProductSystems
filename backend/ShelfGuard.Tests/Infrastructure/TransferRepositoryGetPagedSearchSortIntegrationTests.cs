@@ -31,6 +31,7 @@ public sealed class TransferRepositoryGetPagedSearchSortIntegrationTests : IAsyn
     private Guid _matchesByToOnly;
     private Guid _matchesByTypeOnly;
     private Guid _matchesNeither;
+    private Guid _categoryId;
 
     private string FromNeedle => $"FromNeedle-{_run}";
     private string ToNeedle => $"ToNeedle-{_run}";
@@ -99,6 +100,22 @@ public sealed class TransferRepositoryGetPagedSearchSortIntegrationTests : IAsyn
         _matchesNeither = neither.Id;
 
         db.StockTransfers.AddRange(byFrom, byTo, byType, neither);
+
+        // TASK-640: category_id/min_items/max_items fixtures. byFrom has 1 line item (of the
+        // categorized item), byTo has 2, byType/neither have 0 — distinct counts for each bound.
+        var category = new Category { TenantId = _tenantId, Name = $"Category {_run}" };
+        _categoryId = category.Id;
+        db.Categories.Add(category);
+
+        var categorizedItem = new Item { TenantId = _tenantId, Name = $"Categorized Item {_run}", ManagementType = "MTS", CategoryId = category.Id };
+        var plainItem = new Item { TenantId = _tenantId, Name = $"Plain Item {_run}", ManagementType = "MTS" };
+        db.Items.AddRange(categorizedItem, plainItem);
+
+        db.StockTransferItems.AddRange(
+            new StockTransferItem { TransferId = byFrom.Id, ProductStockId = Guid.NewGuid(), ProductId = categorizedItem.Id, Quantity = 1, ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)) },
+            new StockTransferItem { TransferId = byTo.Id, ProductStockId = Guid.NewGuid(), ProductId = plainItem.Id, Quantity = 1, ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)) },
+            new StockTransferItem { TransferId = byTo.Id, ProductStockId = Guid.NewGuid(), ProductId = plainItem.Id, Quantity = 1, ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)) });
+
         await db.SaveChangesAsync();
     }
 
@@ -107,7 +124,11 @@ public sealed class TransferRepositoryGetPagedSearchSortIntegrationTests : IAsyn
         if (!_dbAvailable) return;
 
         await using var db = NewContext();
+        // stock_transfer_items cascade-deletes with their parent stock_transfers row (FK
+        // OnDelete(Cascade) — see AppDbContext's StockTransferItem config).
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM stock_transfers WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
@@ -207,6 +228,56 @@ public sealed class TransferRepositoryGetPagedSearchSortIntegrationTests : IAsyn
 
         Assert.Equal(1, total);
         Assert.Equal(_matchesByFromOnly, items.Single().Id);
+    }
+
+    // TASK-640: category_id/min_items/max_items filters. byFrom has 1 line item (the categorized
+    // item), byTo has 2, byType/neither have 0.
+    [Fact]
+    public async Task GetPagedAsync_CategoryIdFilter_ReturnsOnlyTransfersWithMatchingLineItem()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new TransferRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, categoryId: _categoryId);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesByFromOnly, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MinItemsFilter_ExcludesTransfersWithFewerLineItems()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new TransferRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, minItems: 2);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesByToOnly, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MaxItemsFilter_ExcludesTransfersWithMoreLineItems()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new TransferRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, maxItems: 0);
+
+        Assert.Equal(2, total);
+        Assert.All(items, i => Assert.Contains(i.Id, new[] { _matchesByTypeOnly, _matchesNeither }));
     }
 
     // KI-035: one shared, process-wide pooled data source instead of a per-test-instance

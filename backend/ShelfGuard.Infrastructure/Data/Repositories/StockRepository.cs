@@ -43,6 +43,7 @@ public sealed class StockRepository : IStockRepository
         Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId,
         string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
+        Guid? categoryId = null, decimal? minQuantity = null, decimal? maxQuantity = null,
         CancellationToken ct = default)
     {
         var query = _db.ProductStocks
@@ -58,6 +59,15 @@ public sealed class StockRepository : IStockRepository
             query = query.Where(s => s.ZoneId == zoneId);
         if (productId.HasValue)
             query = query.Where(s => s.ProductId == productId);
+        // TASK-640: category_id/min_quantity/max_quantity range/category filters for the
+        // frontend table filter UI. `.HasValue` checks (never a truthy/non-zero check) — 0 is a
+        // valid quantity bound.
+        if (categoryId.HasValue)
+            query = query.Where(s => s.Product != null && s.Product.CategoryId == categoryId);
+        if (minQuantity.HasValue)
+            query = query.Where(s => s.Quantity >= minQuantity);
+        if (maxQuantity.HasValue)
+            query = query.Where(s => s.Quantity <= maxQuantity);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();

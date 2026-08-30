@@ -11,6 +11,11 @@ public interface IStockRepository
         Guid? productId,
         CancellationToken ct = default);
 
+    // TASK-640: categoryId/minQuantity/maxQuantity are additive server-side range/category
+    // filters for the frontend's table filter UI — appended at the very end (after the
+    // pre-existing params, still before ct) and defaulted to null so every existing positional
+    // caller/fake keeps compiling and behaving unchanged when it omits them, and no pre-existing
+    // parameter's positional index shifts.
     Task<(List<ProductStock> Items, int Total)> GetPagedAsync(
         Guid[]? storeIds,
         string? status,
@@ -21,6 +26,9 @@ public interface IStockRepository
         bool? sortDescending,
         int page,
         int pageSize,
+        Guid? categoryId = null,
+        decimal? minQuantity = null,
+        decimal? maxQuantity = null,
         CancellationToken ct = default);
 
     Task<ProductStock?> GetByIdAsync(Guid id, CancellationToken ct = default);

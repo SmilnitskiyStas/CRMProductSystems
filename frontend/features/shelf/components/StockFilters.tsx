@@ -1,10 +1,15 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useCategories } from "@/features/inventory/hooks/useCategories";
+import { RangeFilter } from "@/components/ui/RangeFilter";
 
 interface StockFilters {
   status: string;
   search: string;
+  category_id: string;
+  min_quantity?: number;
+  max_quantity?: number;
 }
 
 interface Props {
@@ -27,6 +32,14 @@ const inputStyle: React.CSSProperties = {
 export function StockFilters({ filters, onChange }: Props) {
   const t = useTranslations("Dashboard.shelf.stockFilters");
   const tStatus = useTranslations("Dashboard.shelf.status");
+  const { data: categories = [] } = useCategories();
+
+  const hasActiveFilters =
+    filters.status ||
+    filters.search ||
+    filters.category_id ||
+    filters.min_quantity != null ||
+    filters.max_quantity != null;
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -51,9 +64,31 @@ export function StockFilters({ filters, onChange }: Props) {
         ))}
       </select>
 
-      {(filters.status || filters.search) && (
+      <select
+        value={filters.category_id}
+        onChange={(e) => onChange({ ...filters, category_id: e.target.value })}
+        style={{ ...inputStyle, cursor: "pointer" }}
+      >
+        <option value="">{t("allCategories")}</option>
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+
+      <RangeFilter
+        min={filters.min_quantity}
+        max={filters.max_quantity}
+        onChange={(next) => onChange({ ...filters, min_quantity: next.min, max_quantity: next.max })}
+        placeholder={t("quantityRangeLabel")}
+      />
+
+      {hasActiveFilters && (
         <button
-          onClick={() => onChange({ status: "", search: "" })}
+          onClick={() =>
+            onChange({ status: "", search: "", category_id: "", min_quantity: undefined, max_quantity: undefined })
+          }
           style={{
             background: "transparent",
             border: "1px solid #374151",

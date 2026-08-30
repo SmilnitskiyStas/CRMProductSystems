@@ -28,6 +28,8 @@ public sealed class ItemsController : ControllerBase
         [FromQuery] bool? sortDescending = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
+        [FromQuery] decimal? min_price = null,
+        [FromQuery] decimal? max_price = null,
         CancellationToken ct = default)
     {
         // tenantId is accepted by the service but not yet used for filtering (RLS handles isolation at DB level).
@@ -48,7 +50,7 @@ public sealed class ItemsController : ControllerBase
         var query = new PagedQuery { Page = page, PageSize = pageSize };
         var result = await _catalog.GetPagedAsync(
             tenantId, category_id, segment_id, management_type, search, clampedIds, sortBy, sortDescending,
-            query.ClampedPage, query.ClampedPageSize, ct);
+            query.ClampedPage, query.ClampedPageSize, min_price, max_price, ct);
         return Ok(result);
     }
 

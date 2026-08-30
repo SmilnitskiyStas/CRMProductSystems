@@ -9,6 +9,9 @@ export function useStock(
     status?: string;
     zone_id?: string;
     product_id?: string;
+    category_id?: string;
+    min_quantity?: number;
+    max_quantity?: number;
     page?: number;
     pageSize?: number;
     search?: string;

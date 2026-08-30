@@ -28,7 +28,7 @@ public sealed class WriteOffServiceTests
         _items.GetPagedAsync(
                 Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(),
                 Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<string?>(), Arg.Any<bool?>(),
-                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 var ids = ci.ArgAt<IReadOnlyList<Guid>?>(4) ?? [];
@@ -41,7 +41,7 @@ public sealed class WriteOffServiceTests
         _items.GetPagedAsync(
                 Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(),
                 Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<string?>(), Arg.Any<bool?>(),
-                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 var ids = ci.ArgAt<IReadOnlyList<Guid>?>(4) ?? [];

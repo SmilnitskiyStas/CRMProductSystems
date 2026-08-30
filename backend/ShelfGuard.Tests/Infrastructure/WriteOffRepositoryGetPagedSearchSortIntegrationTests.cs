@@ -32,6 +32,7 @@ public sealed class WriteOffRepositoryGetPagedSearchSortIntegrationTests : IAsyn
     private Guid _matchesNeither;
     private Guid _highestNetLoss;
     private Guid _lowestNetLoss;
+    private Guid _categoryId;
 
     private string StoreNeedle => $"StoreNeedle-{_run}";
     // Reason is varchar(50) — keep well under that (with the "other: " prefix) using a short slice of _run.
@@ -75,16 +76,21 @@ public sealed class WriteOffRepositoryGetPagedSearchSortIntegrationTests : IAsyn
         var byStore = new WriteOff
         {
             TenantId = _tenantId, StoreId = matchStore.Id, Status = "pending_approval", Reason = "expired",
+            // TASK-640: TotalLossAmount (distinct column from TotalLossAmountPurchase above) is
+            // the one min_loss_amount/max_loss_amount range-filter — lowest of the three.
+            TotalLossAmount = 10m,
             TotalLossAmountPurchase = 10m, TotalReimbursementAmount = 0m, CreatedAt = DateTime.UtcNow.AddMinutes(-40),
         };
         var byReason = new WriteOff
         {
             TenantId = _tenantId, StoreId = otherStore.Id, Status = "approved", Reason = $"other: {ReasonNeedle}",
+            TotalLossAmount = 100m, // highest of the three
             TotalLossAmountPurchase = 100m, TotalReimbursementAmount = 0m, CreatedAt = DateTime.UtcNow.AddMinutes(-30),
         };
         var neither = new WriteOff
         {
             TenantId = _tenantId, StoreId = otherStore.Id, Status = "rejected", Reason = "damaged",
+            TotalLossAmount = null, // deliberately unset — must not match once either bound is set
             TotalLossAmountPurchase = 50m, TotalReimbursementAmount = 20m, CreatedAt = DateTime.UtcNow.AddMinutes(-20),
         };
         _matchesByStoreOnly = byStore.Id;
@@ -94,6 +100,18 @@ public sealed class WriteOffRepositoryGetPagedSearchSortIntegrationTests : IAsyn
         _lowestNetLoss = byStore.Id;   // 10 - 0 = 10
 
         db.WriteOffs.AddRange(byStore, byReason, neither);
+
+        // TASK-640: category_id fixture — byStore has 1 line item of the categorized item, the
+        // other two have none.
+        var category = new Category { TenantId = _tenantId, Name = $"Category {_run}" };
+        _categoryId = category.Id;
+        db.Categories.Add(category);
+
+        var categorizedItem = new Item { TenantId = _tenantId, Name = $"Categorized Item {_run}", ManagementType = "MTS", CategoryId = category.Id };
+        db.Items.Add(categorizedItem);
+
+        db.WriteOffItems.Add(new WriteOffItem { WriteOffId = byStore.Id, ProductId = categorizedItem.Id, Quantity = 1 });
+
         await db.SaveChangesAsync();
     }
 
@@ -102,7 +120,11 @@ public sealed class WriteOffRepositoryGetPagedSearchSortIntegrationTests : IAsyn
         if (!_dbAvailable) return;
 
         await using var db = NewContext();
+        // write_off_items cascade-deletes with their parent write_offs row (FK
+        // OnDelete(Cascade) — see AppDbContext's WriteOffItem config).
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM write_offs WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
@@ -198,6 +220,56 @@ public sealed class WriteOffRepositoryGetPagedSearchSortIntegrationTests : IAsyn
         var (items, total) = await repo.GetPagedAsync(
             storeId: _storeId, status: "pending_approval", search: null, sortBy: null, sortDescending: null,
             page: 1, pageSize: 30);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesByStoreOnly, items.Single().Id);
+    }
+
+    // TASK-640: category_id/min_loss_amount/max_loss_amount filters.
+    [Fact]
+    public async Task GetPagedAsync_CategoryIdFilter_ReturnsOnlyWriteOffsWithMatchingLineItem()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new WriteOffRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, categoryId: _categoryId);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesByStoreOnly, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MinLossAmountFilter_ExcludesBelowBoundAndNullTotals()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new WriteOffRepository(db);
+
+        // TotalLossAmount: byStore=10, byReason=100, neither=null.
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, minLossAmount: 50m);
+
+        Assert.Equal(1, total);
+        Assert.Equal(_matchesByReasonOnly, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_MaxLossAmountFilter_ExcludesAboveBoundAndNullTotals()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        await using var db = NewContext();
+        var repo = new WriteOffRepository(db);
+
+        var (items, total) = await repo.GetPagedAsync(
+            storeId: null, status: null, search: _run, sortBy: null, sortDescending: null,
+            page: 1, pageSize: 30, maxLossAmount: 50m);
 
         Assert.Equal(1, total);
         Assert.Equal(_matchesByStoreOnly, items.Single().Id);

@@ -7,6 +7,8 @@ export const productsApi = {
     search?: string;
     ids?: string[];
     category_id?: string;
+    min_price?: number;
+    max_price?: number;
     page?: number;
     pageSize?: number;
     sortBy?: string;
@@ -16,6 +18,9 @@ export const productsApi = {
     if (params?.search) qs.set("search", params.search);
     if (params?.ids?.length) for (const id of params.ids) qs.append("ids", id);
     if (params?.category_id) qs.set("category_id", params.category_id);
+    // `!= null` (never a truthy check) — 0 is a valid bound and must not be treated as unset.
+    if (params?.min_price != null) qs.set("min_price", String(params.min_price));
+    if (params?.max_price != null) qs.set("max_price", String(params.max_price));
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     if (params?.sortBy) qs.set("sortBy", params.sortBy);

@@ -29,10 +29,15 @@ Query params: `?page=1&pageSize=50`
 
 Paginated endpoints:
 - `GET /api/stock` — `PagedResult<ProductStockDto>`
+  Query: `?storeIds=&status=&zone_id=&product_id=&search=&sortBy=&sortDescending=&page=&pageSize=&category_id=&min_quantity=&max_quantity=` (TASK-640: `category_id`/`min_quantity`/`max_quantity` — additive range/category filters, all optional)
 - `GET /api/receipts` — `PagedResult<ReceiptDto>`
+  Query: `?store_id=&status=&search=&sortBy=&sortDescending=&page=&pageSize=&category_id=&min_items=&max_items=` (TASK-640: `category_id` matches receipts with at least one line item in that category; `min_items`/`max_items` range-filter the line-item count)
 - `GET /api/write-offs` — `PagedResult<WriteOffDto>`
+  Query: `?store_id=&status=&search=&sortBy=&sortDescending=&page=&pageSize=&category_id=&min_loss_amount=&max_loss_amount=` (TASK-640: `category_id` as above; `min_loss_amount`/`max_loss_amount` range-filter the stored `WriteOff.TotalLossAmount` — a write-off with no total set won't match once either bound is given)
 - `GET /api/transfers` — `PagedResult<TransferDto>`
+  Query: `?store_id=&status=&search=&sortBy=&sortDescending=&page=&pageSize=&category_id=&min_items=&max_items=` (TASK-640: same shape as receipts above)
 - `GET /api/items` — `PagedResult<ItemDto>`
+  Query: `?category_id=&segment_id=&management_type=&search=&ids=&sortBy=&sortDescending=&page=&pageSize=&min_price=&max_price=` (TASK-640: `min_price`/`max_price` range-filter `Item.PriceRetail`)
 - `GET /api/suppliers` — `PagedResult<SupplierDto>`
 
 ---

@@ -27,9 +27,12 @@ public sealed class ReceiptService : IReceiptService
     public async Task<PagedResult<ReceiptDto>> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
+        Guid? categoryId = null, int? minItems = null, int? maxItems = null,
         CancellationToken ct = default)
     {
-        var (receipts, total) = await _repo.GetPagedAsync(storeId, status, search, sortBy, sortDescending, page, pageSize, ct);
+        var (receipts, total) = await _repo.GetPagedAsync(
+            storeId, status, search, sortBy, sortDescending, page, pageSize,
+            categoryId, minItems, maxItems, ct);
         return new PagedResult<ReceiptDto>
         {
             Items = receipts.Select(ToDto).ToList(),

@@ -364,7 +364,9 @@
     "prev": "Prev",
     "next": "Next",
     "pageOf": "{page} / {totalPages}",
-    "totalLabel": "Total: {count}"
+    "totalLabel": "Total: {count}",
+    "rangeFrom": "from",
+    "rangeTo": "to"
   },
   "Dashboard": {
     "layout": {
@@ -705,7 +707,8 @@
         "toastUpdated": "Product updated",
         "toastDeleted": "Product deleted",
         "searchPlaceholder": "Search by name or barcode…",
-        "allCategories": "All categories"
+        "allCategories": "All categories",
+        "priceRangeLabel": "Price, ₴"
       },
       "itemTypes": {
         "product": "Product",
@@ -884,6 +887,8 @@
       "stockFilters": {
         "searchPlaceholder": "Search by name or barcode…",
         "allStatuses": "All statuses",
+        "allCategories": "All categories",
+        "quantityRangeLabel": "Quantity",
         "reset": "Reset"
       },
       "stockTable": {
@@ -978,6 +983,8 @@
         "empty": "No receipts",
         "newButton": "New receipt",
         "searchPlaceholder": "Search by supplier or store…",
+        "allCategories": "All categories",
+        "itemsRangeLabel": "Item count",
         "headers": {
           "id": "#",
           "store": "Store",
@@ -1084,6 +1091,8 @@
         },
         "empty": "No transfers",
         "searchPlaceholder": "Search by store…",
+        "allCategories": "All categories",
+        "itemsRangeLabel": "Item count",
         "headers": {
           "from": "From",
           "to": "To",
@@ -1167,6 +1176,8 @@
         },
         "empty": "No write-offs",
         "searchPlaceholder": "Search by store or reason…",
+        "allCategories": "All categories",
+        "lossAmountRangeLabel": "Loss amount, ₴",
         "headers": {
           "store": "Store",
           "reason": "Reason",

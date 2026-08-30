@@ -121,7 +121,7 @@ file sealed class RetryFakeStockRepo : IStockRepository
     public Task<List<ProductStock>> GetDeficitStocksAsync(Guid productId, Guid excludeStoreId, CancellationToken ct = default) => Task.FromResult(new List<ProductStock>());
     public Task<Dictionary<Guid, List<ProductStock>>> GetDeficitStocksBulkAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default) =>
         Task.FromResult(productIds.ToDictionary(id => id, _ => new List<ProductStock>()));
-    public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId, string? search, string? sortBy, bool? sortDescending, int page, int pageSize, CancellationToken ct = default) =>
+    public Task<(List<ProductStock> Items, int Total)> GetPagedAsync(Guid[]? storeIds, string? status, Guid? zoneId, Guid? productId, string? search, string? sortBy, bool? sortDescending, int page, int pageSize, Guid? categoryId = null, decimal? minQuantity = null, decimal? maxQuantity = null, CancellationToken ct = default) =>
         Task.FromResult((new List<ProductStock>(), 0));
     public Task<List<Location>> GetProductionStoresAsync(CancellationToken ct = default) => Task.FromResult(new List<Location>());
     public Task<Dictionary<string, int>> GetStatusCountsAsync(Guid[]? storeIds, CancellationToken ct = default) => Task.FromResult(new Dictionary<string, int>());
@@ -137,7 +137,7 @@ file sealed class RetryFakeCatalogRepo : IItemRepository
     public Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<Item>>(new List<Item>());
     public Task<List<Item>> GetAllAsync(Guid? c, Guid? s, string? m, CancellationToken ct = default) => Task.FromResult(new List<Item>());
-    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids, string? sortBy, bool? sortDescending, int page, int pageSize, CancellationToken ct = default) =>
+    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids, string? sortBy, bool? sortDescending, int page, int pageSize, decimal? minPrice = null, decimal? maxPrice = null, CancellationToken ct = default) =>
         Task.FromResult((new List<Item>(), 0));
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) => Task.FromResult(new List<ProductSupplierSetting>());

@@ -364,7 +364,9 @@
     "prev": "Назад",
     "next": "Вперед",
     "pageOf": "{page} / {totalPages}",
-    "totalLabel": "Усього: {count}"
+    "totalLabel": "Усього: {count}",
+    "rangeFrom": "від",
+    "rangeTo": "до"
   },
   "Dashboard": {
     "layout": {
@@ -705,7 +707,8 @@
         "toastUpdated": "Товар оновлено",
         "toastDeleted": "Товар видалено",
         "searchPlaceholder": "Пошук по назві або штрихкоду…",
-        "allCategories": "Всі категорії"
+        "allCategories": "Всі категорії",
+        "priceRangeLabel": "Ціна, ₴"
       },
       "itemTypes": {
         "product": "Товар",
@@ -884,6 +887,8 @@
       "stockFilters": {
         "searchPlaceholder": "Пошук по назві або штрихкоду…",
         "allStatuses": "Всі статуси",
+        "allCategories": "Всі категорії",
+        "quantityRangeLabel": "Кількість",
         "reset": "Скинути"
       },
       "stockTable": {
@@ -978,6 +983,8 @@
         "empty": "Немає прийомок",
         "newButton": "Нова прийомка",
         "searchPlaceholder": "Пошук за постачальником або магазином…",
+        "allCategories": "Всі категорії",
+        "itemsRangeLabel": "Кількість позицій",
         "headers": {
           "id": "#",
           "store": "Магазин",
@@ -1084,6 +1091,8 @@
         },
         "empty": "Немає переміщень",
         "searchPlaceholder": "Пошук за магазином…",
+        "allCategories": "Всі категорії",
+        "itemsRangeLabel": "Кількість позицій",
         "headers": {
           "from": "Звідки",
           "to": "Куди",
@@ -1167,6 +1176,8 @@
         },
         "empty": "Немає списань",
         "searchPlaceholder": "Пошук за магазином або причиною…",
+        "allCategories": "Всі категорії",
+        "lossAmountRangeLabel": "Сума збитку, ₴",
         "headers": {
           "store": "Магазин",
           "reason": "Причина",

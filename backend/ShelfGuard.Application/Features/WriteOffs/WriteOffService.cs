@@ -31,9 +31,12 @@ public sealed class WriteOffService : IWriteOffService
     public async Task<PagedResult<WriteOffDto>> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
+        Guid? categoryId = null, decimal? minLossAmount = null, decimal? maxLossAmount = null,
         CancellationToken ct = default)
     {
-        var (writeOffs, total) = await _repo.GetPagedAsync(storeId, status, search, sortBy, sortDescending, page, pageSize, ct);
+        var (writeOffs, total) = await _repo.GetPagedAsync(
+            storeId, status, search, sortBy, sortDescending, page, pageSize,
+            categoryId, minLossAmount, maxLossAmount, ct);
         return new PagedResult<WriteOffDto>
         {
             Items = writeOffs.Select(ToDto).ToList(),

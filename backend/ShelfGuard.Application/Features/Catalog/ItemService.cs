@@ -34,9 +34,13 @@ public sealed class ItemService : IItemService
         bool? sortDescending,
         int page,
         int pageSize,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
         CancellationToken ct = default)
     {
-        var (products, total) = await _repo.GetPagedAsync(categoryId, segmentId, managementType, search, ids, sortBy, sortDescending, page, pageSize, ct);
+        var (products, total) = await _repo.GetPagedAsync(
+            categoryId, segmentId, managementType, search, ids, sortBy, sortDescending, page, pageSize,
+            minPrice, maxPrice, ct);
         return new PagedResult<ItemDto>
         {
             Items = products.Select(ToDto).ToList(),
