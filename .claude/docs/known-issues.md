@@ -5,7 +5,7 @@
 
 ## Active Issues
 
-### KI-036: Session-level `SET app.role='provider'` in `MarketplaceRepository` leaked for the whole HTTP request — cross-tenant catalog disclosure + cross-tenant write vector in the B2B marketplace ✅ resolved (2026-08-30, TASK-641..645) — NOT yet deployed
+### KI-036: Session-level `SET app.role='provider'` in `MarketplaceRepository` leaked for the whole HTTP request — cross-tenant catalog disclosure + cross-tenant write vector in the B2B marketplace ✅ resolved + deployed (2026-08-30, TASK-641..645, commit `f14ea7f6`)
 Severity: **critical** — confirmed cross-tenant data disclosure AND a confirmed cross-tenant write
 vector, on real production data (TASK-642 verified live on prod that `items.provider_bypass` is
 `FOR ALL` PERMISSIVE with `WITH CHECK = NULL`, so the leaked role grants cross-tenant read *and*
@@ -13,7 +13,8 @@ write; a fail-closed `tenant_isolation` cannot contain it because PERMISSIVE pol
 Status: resolved by TASK-641..645 (2026-08-30) — implemented (TASK-643 + 643b remediation),
 independently reviewed pre-impl (TASK-641) and post-impl (TASK-645: SHIP-WITH-CHANGES → C1/C2
 remediation confirmed → final verdict **SHIP**), real-Postgres RLS regression coverage added
-(TASK-644, leak proven to fail pre-fix). **NOT yet committed or deployed as of 2026-08-30.** Found
+(TASK-644, leak proven to fail pre-fix). **Committed `f14ea7f6` and auto-deployed to production
+2026-08-30** (CI green incl. "Deploy → production"; prod API verified serving post-deploy). Found
 by the user at marketplace checkout; root-caused by the main session + 3 Explore agents + a Plan
 agent, then TASK-641's threat model.
 Exact repro: a client tenant whose own `Item` catalog is **empty** places a marketplace order from a

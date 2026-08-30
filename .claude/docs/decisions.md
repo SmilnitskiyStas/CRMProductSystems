@@ -8,8 +8,9 @@ Date: 2026-08-30
 Status: accepted — implemented (TASK-643 + 643b remediation), independently reviewed pre-impl
 (TASK-641: SHIP-WITH-CHANGES, R1–R7 additive) and post-impl (TASK-645: SHIP-WITH-CHANGES → C1/C2
 remediation confirmed → final verdict **SHIP**), real-Postgres RLS regression coverage added
-(TASK-644, leak proven to fail pre-fix). **NOT yet committed or deployed as of 2026-08-30.** See
-KI-036 in `known-issues.md` for the closed-out bug and the full verification chain.
+(TASK-644, leak proven to fail pre-fix). **Committed `f14ea7f6`, auto-deployed to production
+2026-08-30** (CI green incl. "Deploy → production"). See KI-036 in `known-issues.md` for the
+closed-out bug and the full verification chain.
 
 Context: a user hit a functional bug at marketplace checkout — the "Знайдено збіги штрихкодів"
 (barcode-collision) dialog claimed the client's order lines already existed in their catalog "under

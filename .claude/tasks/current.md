@@ -6118,7 +6118,7 @@ Live `pg_policies` verification confirmed `items.tenant_isolation` on **dev** is
 
 # TASK-643 — Marketplace provider-RLS leak: implementation Parts A+B (+643b C1/C2 remediation) (backend-developer)
 
-**Status:** done — implemented + reviewed, NOT committed or deployed · **Agent:** backend-developer (opus) · **Updated:** 2026-08-30
+**Status:** done — committed `f14ea7f6`, auto-deployed to prod 2026-08-30 (CI green) · **Agent:** backend-developer (opus) · **Updated:** 2026-08-30
 Part of TASK-641..646 (plan `snappy-dreaming-hanrahan.md`). After TASK-641/642, before TASK-644.
 Log: `.claude/logs/tasks/643_2026-08-30_marketplace-provider-rls-impl_backend-developer.md`
 Handoff: `.claude/logs/handoffs/643-to-qa-tester.md`
@@ -6245,11 +6245,12 @@ Log: `.claude/logs/tasks/646_2026-08-30_marketplace-provider-rls-docs_documentat
 - **KI-036** (`.claude/docs/known-issues.md`, new top of Active Issues) — severity critical; exact
   repro; root cause `MarketplaceRepository.cs:410-419`; full blast radius (read disclosure / F2
   write vector / F5 cross-tenant Claude-key consumption / C1 order numbers); verification chain with
-  TASK-644's verbatim pre-fix failure; status resolved-not-deployed.
+  TASK-644's verbatim pre-fix failure; status resolved + deployed `f14ea7f6` 2026-08-30.
 - **KI-028** — forward reference added: KI-036 is its first confirmed live instance.
 - **`backend-structure.md`** — `IProviderRlsOverride` added as the third `SET LOCAL` override
   primitive alongside `ITenantSessionOverride`/`IAnalyticsRlsOverride`; the `MarketplaceOrderService`
   app-level `TenantId` second-layer note; the F7 `DISCARD ALL` / `No Reset On Close` one-liner.
 
-Docs-only, no code/tests touched. The whole TASK-641..646 effort is implemented + reviewed (final
-verdict SHIP) but **NOT yet committed or deployed**.
+Docs-only, no code/tests touched. The whole TASK-641..646 effort was committed as `f14ea7f6` and
+auto-deployed to production 2026-08-30 (CI green incl. "Deploy → production"; prod API verified
+serving post-deploy). Full suite 2037/2037.
