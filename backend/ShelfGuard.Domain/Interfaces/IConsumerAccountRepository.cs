@@ -18,6 +18,7 @@ namespace ShelfGuard.Domain.Interfaces;
 public interface IConsumerAccountRepository
 {
     Task<ConsumerAccount?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<ConsumerAccount?> GetByAccountNumberAsync(long accountNumber, CancellationToken ct = default);
 
     /// <summary>Phone must already be normalized (+380XXXXXXXXX) — globally unique lookup.</summary>
     Task<ConsumerAccount?> GetByPhoneAsync(string phone, CancellationToken ct = default);

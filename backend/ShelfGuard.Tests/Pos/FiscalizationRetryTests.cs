@@ -171,6 +171,7 @@ file sealed class RetryFakeFiscalFactory : IFiscalServiceFactory
 file sealed class RetryFakeLoyaltyRepo : ILoyaltyRepository
 {
     public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
+    public Task<LoyaltyMembership?> GetMembershipByCardNumberAsync(long cardNumber, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<LoyaltyMembership?> GetMembershipByCustomerIdAsync(Guid customerId, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<LoyaltyMembership?> GetMembershipByLinkedUserAsync(Guid tenantId, Guid linkedUserId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);

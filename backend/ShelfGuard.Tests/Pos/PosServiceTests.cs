@@ -173,6 +173,9 @@ file sealed class FakeLoyaltyRepo : ILoyaltyRepository
     public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
         Task.FromResult(Memberships.FirstOrDefault(m => m.Id == id && m.TenantId == tenantId));
 
+    public Task<LoyaltyMembership?> GetMembershipByCardNumberAsync(long cardNumber, Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult(Memberships.FirstOrDefault(m => m.CardNumber == cardNumber && m.TenantId == tenantId));
+
     public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) =>
         Task.FromResult(Memberships.FirstOrDefault(m => m.TenantId == tenantId && m.ConsumerAccountId == consumerAccountId));
 

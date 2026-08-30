@@ -290,6 +290,8 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
             return result;
         }
 
+        public Task<LoyaltyMembership?> GetMembershipByCardNumberAsync(long cardNumber, Guid tenantId, CancellationToken ct = default) =>
+            Inner.GetMembershipByCardNumberAsync(cardNumber, tenantId, ct);
         public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) =>
             Inner.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
         public Task<LoyaltyMembership?> GetMembershipByCustomerIdAsync(Guid customerId, Guid tenantId, CancellationToken ct = default) =>

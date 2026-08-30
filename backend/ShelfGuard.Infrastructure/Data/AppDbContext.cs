@@ -2257,11 +2257,15 @@ public sealed class AppDbContext : DbContext
         // Global identity, no TenantId column at all — deliberately excluded from RLS
         // (see AddLoyaltyProgram migration for the full rationale). Protected only by
         // application code, same precedent as Tenant.
+        builder.HasSequence<long>("consumer_account_number_seq").StartsAt(1_000_000_000L).HasMax(9_999_999_999L);
+        builder.HasSequence<long>("loyalty_card_number_seq").StartsAt(1_000_000_000L).HasMax(9_999_999_999L);
+
         builder.Entity<ConsumerAccount>(e =>
         {
             e.ToTable("consumer_accounts");
             e.HasKey(a => a.Id);
             e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.AccountNumber).HasDefaultValueSql("nextval('consumer_account_number_seq')").ValueGeneratedOnAdd();
             e.Property(a => a.Phone).HasColumnType("text").IsRequired();
             e.Property(a => a.PasswordHash).HasColumnType("text").IsRequired();
             e.Property(a => a.LoyaltyTotpSecret).HasColumnType("text").IsRequired();
@@ -2274,6 +2278,7 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(a => a.Phone)
              .IsUnique()
              .HasDatabaseName("uq_consumer_accounts_phone");
+            e.HasIndex(a => a.AccountNumber).IsUnique().HasDatabaseName("uq_consumer_accounts_account_number");
             e.HasMany(a => a.Memberships).WithOne(m => m.ConsumerAccount)
              .HasForeignKey(m => m.ConsumerAccountId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -2284,6 +2289,7 @@ public sealed class AppDbContext : DbContext
             e.ToTable("loyalty_memberships");
             e.HasKey(m => m.Id);
             e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.CardNumber).HasDefaultValueSql("nextval('loyalty_card_number_seq')").ValueGeneratedOnAdd();
             e.Property(m => m.TenantId).IsRequired();
             e.Property(m => m.ConsumerAccountId).IsRequired();
             e.Property(m => m.TotpSecret).HasColumnType("text").IsRequired();
@@ -2313,6 +2319,8 @@ public sealed class AppDbContext : DbContext
              .HasDatabaseName("uq_loyalty_memberships_tenant_consumer");
             e.HasIndex(m => m.TenantId)
              .HasDatabaseName("idx_loyalty_memberships_tenant");
+            e.HasIndex(m => new { m.TenantId, m.CardNumber }).IsUnique()
+             .HasDatabaseName("uq_loyalty_memberships_tenant_card_number");
             e.HasOne(m => m.Tenant).WithMany()
              .HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(m => m.Customer).WithMany()

@@ -24,6 +24,7 @@ public interface ILoyaltyRepository
     /// sale flow above all) always have tier data on hand without a second round-trip.
     /// </summary>
     Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default);
+    Task<LoyaltyMembership?> GetMembershipByCardNumberAsync(long cardNumber, Guid tenantId, CancellationToken ct = default);
 
     /// <summary>The "does this consumer already have a card at this tenant" / join lookup.</summary>
     Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default);

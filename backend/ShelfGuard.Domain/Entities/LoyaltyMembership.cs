@@ -17,6 +17,8 @@ namespace ShelfGuard.Domain.Entities;
 public sealed class LoyaltyMembership
 {
     public Guid Id { get; init; } = Guid.NewGuid();
+    /// <summary>Short, database-generated numeric loyalty-card number.</summary>
+    public long CardNumber { get; private set; }
     public Guid TenantId { get; init; }
 
     public Guid ConsumerAccountId { get; init; }

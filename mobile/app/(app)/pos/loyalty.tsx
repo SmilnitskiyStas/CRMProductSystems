@@ -298,7 +298,7 @@ export default function PosLoyaltyScreen() {
                     placeholder={identifierType === 'phone' ? '380XXXXXXXXX' : identifierType === 'card' ? 'Номер картки' : 'Цифровий ID акаунта'}
                     keyboardType="number-pad"
                     inputMode="numeric"
-                    maxLength={39}
+                    maxLength={10}
                     value={identifierText}
                     onChangeText={(value) => setIdentifierText(value.replace(/\D/g, ''))}
                   />

@@ -17,6 +17,10 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
         _db.LoyaltyMemberships.Include(m => m.CurrentTier)
             .FirstOrDefaultAsync(m => m.Id == id && m.TenantId == tenantId, ct);
 
+    public Task<LoyaltyMembership?> GetMembershipByCardNumberAsync(long cardNumber, Guid tenantId, CancellationToken ct = default) =>
+        _db.LoyaltyMemberships.Include(m => m.CurrentTier)
+            .FirstOrDefaultAsync(m => m.CardNumber == cardNumber && m.TenantId == tenantId, ct);
+
     public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(
         Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) =>
         _db.LoyaltyMemberships.FirstOrDefaultAsync(

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using System.Numerics;
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
 using ShelfGuard.Application.Features.MobileConfig;
@@ -432,7 +431,7 @@ public sealed class LoyaltyService : ILoyaltyService
         var code = _totp.GenerateCode(consumer.LoyaltyTotpSecret);
         var payload = $"{ConsumerCodePrefix}.{consumer.Id}.{code}";
         return (new LoyaltyCodeDto(payload, displayFormat, selectedMembership?.Balance ?? 0m, 30,
-            GuidAsDigits(consumer.Id), selectedMembership is null ? null : GuidAsDigits(selectedMembership.Id)), null, null);
+            consumer.AccountNumber.ToString(), selectedMembership?.CardNumber.ToString()), null, null);
     }
 
     /// <summary>
@@ -696,16 +695,16 @@ public sealed class LoyaltyService : ILoyaltyService
             }
             case "account":
             {
-                if (!TryDigitsAsGuid(digits, out var consumerId)) return (null, "Invalid account ID.", 400);
-                consumer = await _consumerAccounts.GetByIdAsync(consumerId, ct);
+                if (!long.TryParse(digits, out var accountNumber)) return (null, "Invalid account ID.", 400);
+                consumer = await _consumerAccounts.GetByAccountNumberAsync(accountNumber, ct);
                 if (consumer is null || !consumer.IsActive) return (null, "Customer not found.", 404);
                 membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumer.Id, ct);
                 break;
             }
             case "card":
             {
-                if (!TryDigitsAsGuid(digits, out var membershipId)) return (null, "Invalid card number.", 400);
-                membership = await _loyalty.GetMembershipByIdAsync(membershipId, tenantId, ct);
+                if (!long.TryParse(digits, out var cardNumber)) return (null, "Invalid card number.", 400);
+                membership = await _loyalty.GetMembershipByCardNumberAsync(cardNumber, tenantId, ct);
                 consumer = membership is null ? null : await _consumerAccounts.GetByIdAsync(membership.ConsumerAccountId, ct);
                 break;
             }
@@ -722,18 +721,6 @@ public sealed class LoyaltyService : ILoyaltyService
             MaskPhone(consumer.Phone), membership.Balance), null, null);
     }
 
-    private static string GuidAsDigits(Guid id) => new BigInteger(id.ToByteArray(), isUnsigned: true).ToString();
-
-    private static bool TryDigitsAsGuid(string digits, out Guid id)
-    {
-        id = Guid.Empty;
-        if (!BigInteger.TryParse(digits, out var number) || number < 0) return false;
-        var bytes = number.ToByteArray(isUnsigned: true);
-        if (bytes.Length > 16) return false;
-        Array.Resize(ref bytes, 16);
-        id = new Guid(bytes);
-        return id != Guid.Empty;
-    }
 
     private async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)>
         ResolveLegacyMembershipCodeAsync(Guid tenantId, Guid staffUserId, string scannedValue, CancellationToken ct)

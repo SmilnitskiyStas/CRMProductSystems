@@ -75,7 +75,14 @@ public sealed class RlsAuditRoleFixture : IAsyncLifetime
                         CREATE ROLE rls_audit_test_role NOSUPERUSER NOBYPASSRLS;
                     END IF;
                 END $$;
-                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO rls_audit_test_role;",
+                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO rls_audit_test_role;
+                -- Postgres treats tables and sequences as separate grantable object types even
+                -- within the same schema — ""ON ALL TABLES"" above never covered sequences.
+                -- Needed once AddShortLoyaltyNumbers added the first two sequences this schema
+                -- has ever had (consumer_account_number_seq/loyalty_card_number_seq); every
+                -- LoyaltyJoinRlsIntegrationTests/LoyaltyFeatureGateRlsIntegrationTests insert now
+                -- calls nextval() on them, which failed with 42501 for this role without this.
+                GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO rls_audit_test_role;",
                 connection);
             await cmd.ExecuteNonQueryAsync();
 

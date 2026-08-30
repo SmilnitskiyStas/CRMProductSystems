@@ -13,6 +13,9 @@ public sealed class ConsumerAccountRepository : IConsumerAccountRepository
     public Task<ConsumerAccount?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.ConsumerAccounts.FirstOrDefaultAsync(a => a.Id == id, ct);
 
+    public Task<ConsumerAccount?> GetByAccountNumberAsync(long accountNumber, CancellationToken ct = default) =>
+        _db.ConsumerAccounts.FirstOrDefaultAsync(a => a.AccountNumber == accountNumber, ct);
+
     public Task<ConsumerAccount?> GetByPhoneAsync(string phone, CancellationToken ct = default) =>
         _db.ConsumerAccounts.FirstOrDefaultAsync(a => a.Phone == phone, ct);
 

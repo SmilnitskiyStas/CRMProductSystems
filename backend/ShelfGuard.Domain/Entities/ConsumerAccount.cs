@@ -13,6 +13,8 @@ namespace ShelfGuard.Domain.Entities;
 public sealed class ConsumerAccount
 {
     public Guid Id { get; init; } = Guid.NewGuid();
+    /// <summary>Short, database-generated numeric identifier for assisted POS lookup.</summary>
+    public long AccountNumber { get; private set; }
 
     /// <summary>
     /// Normalized to +380XXXXXXXXX. Globally unique — unlike <see cref="Customer.Phone"/>,
