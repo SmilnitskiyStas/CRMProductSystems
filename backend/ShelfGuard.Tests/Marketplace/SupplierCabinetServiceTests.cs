@@ -469,8 +469,18 @@ public sealed class SupplierCabinetServiceTests
             Id = reviewId, SupplierId = supplier.Id, Rating = 5, Comment = "Great",
             Tenant = Tenant.Create("Reviewer Co", "reviewer-co"),
         };
-        _repo.GetReviewByIdAsync(supplier.Id, reviewId, Arg.Any<CancellationToken>())
-             .Returns(review);
+        // TASK-643/KI-036 (W2): the lookup + reply write + flush moved into
+        // IMarketplaceRepository.SetReviewReplyAsync so they share one provider-role transaction
+        // (the review row belongs to the REVIEWER tenant, not this supplier's). The stub mirrors
+        // what the real repository does with the reply text/timestamp it is handed.
+        _repo.SetReviewReplyAsync(supplier.Id, reviewId, Arg.Any<string>(),
+                Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+             .Returns(ci =>
+             {
+                 review.ReplyText = ci.ArgAt<string>(2);
+                 review.RepliedAt = ci.ArgAt<DateTimeOffset>(3);
+                 return review;
+             });
 
         var (dto, error) = await _sut.ReplyToReviewAsync(_tenantId, reviewId, "Thank you!");
 
@@ -480,7 +490,14 @@ public sealed class SupplierCabinetServiceTests
         Assert.NotNull(dto.RepliedAt);
         Assert.Equal("Thank you!", review.ReplyText);
         Assert.NotNull(review.RepliedAt);
-        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // Trimmed reply text, and the supplier id resolved from the caller's own cabinet — never
+        // a supplier id taken from the request.
+        await _repo.Received(1).SetReviewReplyAsync(
+            supplier.Id, reviewId, "Thank you!", Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>());
+        // The service must NOT flush on its own any more — that would run outside the override.
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -488,8 +505,10 @@ public sealed class SupplierCabinetServiceTests
     {
         var (_, supplier) = ArrangeOwnSupplier();
         var reviewId = Guid.NewGuid();
-        // Repo is tenant/supplier-scoped: a review of a different supplier resolves to null.
-        _repo.GetReviewByIdAsync(supplier.Id, reviewId, Arg.Any<CancellationToken>())
+        // Repo filters on SupplierId inside its own override block: a review of a different
+        // supplier resolves to null and is never written to (TASK-643 W2).
+        _repo.SetReviewReplyAsync(supplier.Id, reviewId, Arg.Any<string>(),
+                Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
              .Returns((SupplierReview?)null);
 
         var (dto, error) = await _sut.ReplyToReviewAsync(_tenantId, reviewId, "Thanks!");
@@ -508,8 +527,9 @@ public sealed class SupplierCabinetServiceTests
 
         Assert.Null(dto);
         Assert.NotNull(error);
-        await _repo.DidNotReceive().GetReviewByIdAsync(
-            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().SetReviewReplyAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

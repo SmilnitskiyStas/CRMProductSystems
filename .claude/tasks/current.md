@@ -6029,3 +6029,227 @@ No `api-contracts.md`/`domain-model.md` update: `LoyaltyMembershipSummaryDto` ne
 
 `dotnet build`: 0 errors. `dotnet test`: **1953/1953 passing** (4 new, up from TASK-626's
 1949/1949 baseline, zero regressions). `mobile/`/`frontend/` untouched.
+
+# TASK-642 — Verify prod `tenant_isolation` on `items` (Part C of marketplace RLS-leak fix)
+
+**Status:** done · **Agent:** database-engineer · **Updated:** 2026-08-30
+Part C of TASK-641..646 (plan `snappy-dreaming-hanrahan.md`). Runs in parallel with the
+security-reviewer threat model; unblocks nothing — TASK-643 (Parts A+B) proceeds regardless.
+Log: `.claude/logs/tasks/642_2026-08-30_prod-items-rls-failopen-verify_database-engineer.md`
+
+**Result: no migration needed — `database-schema.md:108` was stale documentation.** It claimed
+prod still ran the fail-open `tenant_isolation` shape "as of 2026-07-14"; that line was written
+two days before the pre-launch audit deployed (2026-07-16, commit `84c48061`) and was never
+rewritten. Same pattern as memory `shelfguard-store-scope-checklist-doc-stale`.
+
+Live read-only verification against the prod DB (`docker exec shelfguard_postgres psql`, `SELECT`
+only — no writes, no DDL): `20260714180000_FixFailOpenTenantIsolationOnReset` **is** in prod's
+`__EFMigrationsHistory` (along with all 8 migrations `prelaunch-readiness.md` blocker 2 lists as
+dev-only, plus the "decision required" `20260714150000_ExpandProviderBypassToProviderAdmin`, which
+rode in and is applied). Prod has 107 `tenant_isolation` policies; exactly **two** — `users` and
+`refresh_tokens` — still carry the session-level fail-open branch, i.e. precisely the two
+documented pre-auth exceptions. `items` and all 10 Group-A siblings checked read the canonical
+fail-closed form `("TenantId" = (NULLIF(current_setting('app.tenant_id', true), ''))::uuid)` with
+no `WITH CHECK`; Group-C EXISTS-through-parent tables likewise.
+
+Also closed pre-launch blocker 3 / KI-027 while connected: the API connects as `shelfguard_app`
+(`rolsuper=f, rolbypassrls=f`), `items` is owned by it, and FORCE RLS is on — prod RLS is live,
+not inert.
+
+**Bonus for TASK-643:** prod `items.provider_bypass` is `FOR ALL` PERMISSIVE with `WITH CHECK =
+NULL` (Postgres defaults it to `USING`) over `ARRAY['provider','provider_admin']` — plan finding
+F1 confirmed on the live DB. The leaked session `app.role='provider'` therefore grants cross-tenant
+read **and write** on real prod data, and no `tenant_isolation` change could ever have contained
+it (permissive policies OR together). Part A remains the only fix.
+
+Files: `.claude/docs/database-schema.md` (stale paragraph replaced with verified status + queries),
+`.claude/docs/prelaunch-readiness.md` (dated correction banner + ✅ CLOSED notes on blockers 2/3).
+No migration file, no code, no schema change. Uncommitted.
+
+# TASK-641 — Pre-implementation threat model: marketplace provider-RLS leak (security-reviewer)
+
+**Status:** done · **Agent:** security-reviewer · **Updated:** 2026-08-30
+Part of TASK-641..646 (cross-tenant RLS-leak fix in the B2B marketplace). Analysis only — no
+production code written.
+Log: `.claude/logs/tasks/641_2026-08-30_marketplace-provider-rls-pre-review_security-reviewer.md`
+
+**Verdict: SHIP-WITH-CHANGES** on plan `snappy-dreaming-hanrahan.md` (7 additive required changes,
+R1–R7 in the log). Nothing blocks starting implementation (TASK-643, backend-developer).
+
+Confirmed from source: session-level `SET app.role='provider'` in
+`MarketplaceRepository.SetProviderRoleAsync` (`:410-419`) leaks for the rest of the HTTP request
+(manual `conn.OpenAsync` makes the connection externally-owned, so `TenantConnectionInterceptor`
+never re-fires). `items.provider_bypass` is `FOR ALL` with `USING` only ⇒ `WITH CHECK` defaults to it
+⇒ **write** bypass too (F1). Read leak: `CheckCatalogConflictsAsync:217` → `GetByAnyBarcodeAsync`
+discloses a foreign `Item`'s id/name/imageUrl/barcodes. **F2 write vector confirmed and
+self-contained** — the conflicts dialog hands the attacker the foreign `Item.Id` it then replays as
+`linkedItemId`, reaching `_items.Update` on a foreign row (`ExecuteCatalogPlanAsync:476-478`).
+`DbSet.Update` marks the loaded graph Modified, so `categories`/`product_segments`/`suppliers` rows
+are rewritten too. Severity: critical.
+
+Endpoint sweep (27 endpoints across the 13 bypass call sites) + classification of every downstream
+`SaveChangesAsync` in 9 services: plan's **W1** (`MarketplaceService:158`, `supplier_metrics`) and
+**W2** (`SupplierCabinetService:212`, `supplier_reviews`) are the **only** cross-tenant writes that
+need the bypass — no third one exists. Everything else is own-tenant or sits on an OR-based
+`tenant_isolation` policy. W2 is certain: `supplier_admin` is not in
+`TenantConnectionInterceptor.ValidRoles`, so a cabinet session has no `app.role` at all.
+
+Ratified keeping the `'provider'` role value (no ADR-028-style sentinel) — it narrows duration, never
+widens a policy, and `app.role` is never an authorization input outside RLS. Conditioned on
+documenting the measured blast radius: **107 tables carry a `provider_bypass` policy**, not ~8.
+
+Ambient-transaction check: no nesting risk. Correction to the plan — there are **4**
+`BeginTransactionAsync` sites, not 3 (`MobileCatalogSettingsController:76` was missed; verified it
+never reaches the marketplace repo). Re-read all 5 `ITenantSessionOverride` lambdas (incl.
+`SupplierAgreementService:394`, `SupplierChatService:152`): none reaches `IMarketplaceRepository`.
+
+New findings for the implementer: **F5** — `POST /api/marketplace/ai-recommend` consumes **another
+tenant's Claude API key** (`SupplierAdvisor.ResolveAsync` reads `integration_configs` unfiltered
+*after* the leak starts); fixed for free by Part A, must be listed in KI-036. **F6** — a second copy
+of the disproved "ambient RLS scopes GetByIdAsync" comment at
+`MarketplaceOrderReceiptService:153-154`. **F7** — Npgsql's `DISCARD ALL` pool reset is the only
+thing bounding the leak to one request. **F8** — `GetReviewByIdAsync` becomes dead code after W2
+moves; delete it rather than leave a repurposable bypass method.
+
+`dotnet build` baseline: 0 errors, **1 pre-existing warning** (CS8602,
+`MarketplaceServiceTests.cs:534`) — the plan's "0 new warnings" gate measures against 1, not 0.
+Live `pg_policies` verification confirmed `items.tenant_isolation` on **dev** is already fail-closed
+(Part C's dev half is a no-op; prod check still owned by TASK-642).
+
+# TASK-643 — Marketplace provider-RLS leak: implementation Parts A+B (+643b C1/C2 remediation) (backend-developer)
+
+**Status:** done — implemented + reviewed, NOT committed or deployed · **Agent:** backend-developer (opus) · **Updated:** 2026-08-30
+Part of TASK-641..646 (plan `snappy-dreaming-hanrahan.md`). After TASK-641/642, before TASK-644.
+Log: `.claude/logs/tasks/643_2026-08-30_marketplace-provider-rls-impl_backend-developer.md`
+Handoff: `.claude/logs/handoffs/643-to-qa-tester.md`
+
+Root cause removed: `MarketplaceRepository.SetProviderRoleAsync` (session-level `SET app.role='provider'`
+on a manually-opened `DbConnection`, never reset) deleted along with its `GetDbConnection()`/`OpenAsync()`.
+New `IProviderRlsOverride` primitive — `SET LOCAL app.role='provider'` in a short explicit transaction,
+auto-revert; mirrors `IAnalyticsRlsOverride`/ADR-028; DI `AddScoped`. 12 provider-bypass reads each
+wrapped in one `ExecuteAsync` block; the 13th (`GetReviewByIdAsync`) deleted as dead code. W1/W2
+cross-tenant writes became composite read+write repo methods
+`UpsertMetricsRatingAsync`/`SetReviewReplyAsync` (write runs inside the bypass tx); `IProviderRlsOverride`
+not exposed to the service layer. Part B: application-level JWT-derived `clientTenantId` filters at 3
+`MarketplaceOrderService` sites + write-time re-validation before `_items.Update`. R1–R7 (from TASK-641)
+all addressed; `ProviderRlsOverrideContainmentTests` added (R4).
+
+643b remediation (TASK-645 C1/C2): C1 — `NextOrderNumberAsync` also silently depended on the leak
+(`MP-{yyyy}-{NNN}` sequential-per-supplier only because the leaked role satisfied
+`marketplace_orders.provider_bypass`); now counts inside `_tenantSessionOverride.ExecuteAsync(supplierTenantId, …)`,
+with a 2-client RLS regression test. C2 — containment test now also scans `ShelfGuard.Api`. Cleanups:
+`AddMetricsAsync` deleted (unused after W1 moved), both composites detach the foreign-tenant entity.
+
+Release build 0 errors / 1 pre-existing warning (CS8602, `MarketplaceServiceTests.cs`), no EF1002.
+`dotnet test` **2037/2037 passed, 0 skipped**. Uncommitted; Debug build blocked by a concurrent
+session's `bin/Debug` file lock (not a code issue). `.claude/docs/` left for TASK-646.
+
+# TASK-644 — Marketplace provider-RLS leak: real-Postgres RLS integration tests (qa-tester)
+
+**Status:** done (uncommitted) · **Agent:** qa-tester · **Updated:** 2026-08-30
+Part of TASK-641..646 (plan `snappy-dreaming-hanrahan.md`). Sequenced after TASK-643 (impl),
+before TASK-645 (post-impl review).
+Log: `.claude/logs/tasks/644_2026-08-30_marketplace-provider-rls-qa_qa-tester.md`
+Handoff: `.claude/logs/handoffs/644-to-security-reviewer.md`
+
+Two new live-Postgres RLS integration files (`backend/ShelfGuard.Tests/Infrastructure/`), no
+production source touched:
+- `MarketplaceOrderCatalogConflictsRlsIntegrationTests.cs` (4 facts) — drives the real
+  `MarketplaceOrderService` under a real `rls_audit_test_role` client session. Headline:
+  `CheckCatalogConflictsAsync` returns an **empty** list for a client with an empty catalog even
+  when a third tenant owns the barcode, and `current_setting('app.role')` on the same open
+  connection is back to `store_manager`. Plus: `CreateOrderAsync` provisions exactly one
+  own-tenant `Item`; own-tenant collision still reported; **F2/R6** — `link` to a foreign item →
+  `LinkedItemNotFoundError` and the third tenant's `items`/`categories`/`suppliers` rows unchanged.
+- `MarketplaceProviderBypassScopeRlsIntegrationTests.cs` (6 facts) — `GetSupplierItemsAsync`
+  bypass works then role reverts (`db.Items.CountAsync()` sees own-tenant only); raw
+  `SET LOCAL app.role='provider'` reverts on commit; **W1** `CreateReviewAsync` end-to-end on
+  **both** the `supplier_metrics` INSERT and UPDATE branches; **W2** `ReplyToReviewAsync`
+  end-to-end; public marketplace reads still cross-tenant.
+
+**Proved the leak fails pre-fix** (targeted-pathspec `git stash` of the TASK-643 diff — not
+worktree, not blanket `-u`; scratch repro test): pre-fix `CheckCatalogConflictsAsync` returned one
+conflict disclosing the third tenant's `Item` id/name/imageUrl/barcodes to a client with an empty
+catalog, and left `app.role='provider'` on the connection. Verbatim output in the log. Restored
+clean (`stash pop`, `SetProviderRoleAsync` grep == 1 doc mention).
+
+`dotnet test --filter "…MarketplaceOrderCatalogConflictsRls|…MarketplaceProviderBypassScope"` →
+**10/10 passed, 0 skipped** (real Postgres :5435, no soft-skip). Full suite (Release — Debug blocked
+by concurrent `bin/Debug` lock): see task log. No bug found in the TASK-643 fix.
+
+# TASK-645 — Marketplace provider-RLS leak: independent post-impl review (security-reviewer)
+
+**Status:** done · **Agent:** security-reviewer · **Updated:** 2026-08-30
+Analysis only, no code changed. Last review gate of TASK-641..646 (plan `snappy-dreaming-hanrahan.md`).
+Log: `.claude/logs/tasks/645_2026-08-30_marketplace-provider-rls-post-review_security-reviewer.md`
+
+**Verdict: SHIP-WITH-CHANGES.** The security fix itself is correct and complete — root cause gone
+(zero `GetDbConnection()` / `SetProviderRoleAsync` in production code, no new per-request raw `SET`),
+all 12 provider-bypass reads wrapped (13th deleted per R1, absorbed by `SetReviewReplyAsync`), no
+block wraps an outward call, both composites narrow and their F10 flush-first contract verified from
+source at both call sites (`AppDbContext` has no `SaveChanges` override and no save interceptor, so
+nothing can stage a dirty entity behind them), Part B filters traced to the JWT `tenant_id` claim
+with write-time re-validation present, R5 comment rewritten, no ambient-transaction nesting path.
+Independently re-verified: Release build 0 errors / 1 pre-existing warning; the two RLS files +
+containment tests **12/12 passed, 0 skipped** against real Postgres.
+
+**Two required changes:**
+- **C1 (new finding, functional regression)** — `MarketplaceOrderService.NextOrderNumberAsync:615`
+  → `MarketplaceOrderRepository.CountForSupplierAsync:62` runs on the **client** session after the
+  bypass reads. Pre-fix the leaked provider role made it count **all** of the supplier's orders;
+  post-fix `marketplace_orders`' OR-based `tenant_isolation` limits it to orders this client is a
+  party to. `MP-{yyyy}-{NNN}` stops being "sequential per supplier" (its own doc comment at :614) —
+  two clients of one supplier both get `MP-2026-001`. No unique index on `OrderNumber`, so it fails
+  silently. Not a security regression; invisible to the new tests (single client each) and to the
+  unit tests (repo mocked). Suggested fix: wrap the count in
+  `_tenantSessionOverride.ExecuteAsync(supplierTenantId, …)` — already injected, trusted value,
+  OR-based policy, no ambient tx at that point — plus a two-client regression test.
+- **C2 (R4 gap)** — `ProviderRlsOverrideContainmentTests` scans only Application + Infrastructure.
+  `ShelfGuard.Tests` already references `ShelfGuard.Api`, and `MarketplaceChatController` is
+  precedent for a controller injecting a repository directly, so a controller taking
+  `IProviderRlsOverride` would pass the test R4 exists to prevent. Add the Api assembly to both scans.
+
+**Non-blocking:** detach the foreign-tenant entity the two composites leave tracked (fails closed
+today); state the blast radius as "107 measured 2026-08-30 and growing" in ADR-035/KI-036 — the
+concurrent migration `20260830143000` (unrelated to this fix, verified no interaction) takes it to
+109; delete the now-unused `AddMetricsAsync` + its vacuous `DidNotReceive` assertion
+(`MarketplaceServiceTests.cs:209`).
+
+**C1/C2 remediation confirmed (same day) → final verdict: SHIP.** backend-developer applied C1, C2
+and all three non-blocking cleanups; targeted re-check of just those changes confirmed all five
+points. C1: `NextOrderNumberAsync` now counts inside `_tenantSessionOverride.ExecuteAsync(
+supplierTenantId, …)` — no ambient tx at `CreateOrderAsync:158`, `app.tenant_id` reverts on commit
+so the subsequent `marketplace_orders`/`marketplace_order_items` INSERT still satisfies the OR-based
+policy via `ClientTenantId = session`, `supplierTenantId` trusted, only an `int` leaves the block;
+the count-then-insert race is pre-existing, not introduced. New 2-client RLS regression test pins
+the exact `MP-{year}-001`/`-002` pair (fails `Expected: Not "MP-2026-001"` pre-C1). Real
+`TenantSessionOverride` in the suite's `BuildOrderService` is correct wiring and masks nothing.
+C2: shared `ScannedAssemblies` now includes `ShelfGuard.Api`, so a controller injecting
+`IProviderRlsOverride` breaks the assertion; Domain correctly excluded. Cleanups: `AddMetricsAsync`
+gone (comments only), both composites detach the foreign-tenant entity (incl. the `.Include`d
+`Tenant`) and `SupplierCabinetService.cs:215` still resolves `Tenant.Name` off the detached
+instance. Independently re-verified: Release build 0 errors, **89/89 tests passed, 0 skipped**
+across the affected filters.
+
+# TASK-646 — Marketplace provider-RLS leak: documentation (documentation-writer)
+
+**Status:** done · **Agent:** documentation-writer · **Updated:** 2026-08-30
+Final task of TASK-641..646 (plan `snappy-dreaming-hanrahan.md`). Assembled from the TASK-641..645
+task logs — no new design.
+Log: `.claude/logs/tasks/646_2026-08-30_marketplace-provider-rls-docs_documentation-writer.md`
+
+- **ADR-035** (`.claude/docs/decisions.md`, prepended above ADR-034) — `IProviderRlsOverride`; the
+  "keep `'provider'`, sentinel deferred" reasoned departure from ADR-028; repository-layer
+  containment + the 2 composite methods; the 3 Part-B `clientTenantId` filters; Consequences incl.
+  C1 and the F7 `DISCARD ALL` pool-reset caveat. Supersedes nothing.
+- **KI-036** (`.claude/docs/known-issues.md`, new top of Active Issues) — severity critical; exact
+  repro; root cause `MarketplaceRepository.cs:410-419`; full blast radius (read disclosure / F2
+  write vector / F5 cross-tenant Claude-key consumption / C1 order numbers); verification chain with
+  TASK-644's verbatim pre-fix failure; status resolved-not-deployed.
+- **KI-028** — forward reference added: KI-036 is its first confirmed live instance.
+- **`backend-structure.md`** — `IProviderRlsOverride` added as the third `SET LOCAL` override
+  primitive alongside `ITenantSessionOverride`/`IAnalyticsRlsOverride`; the `MarketplaceOrderService`
+  app-level `TenantId` second-layer note; the F7 `DISCARD ALL` / `No Reset On Close` one-liner.
+
+Docs-only, no code/tests touched. The whole TASK-641..646 effort is implemented + reviewed (final
+verdict SHIP) but **NOT yet committed or deployed**.

@@ -23,7 +23,7 @@ public sealed class MarketplaceRepositoryPlatformTenantTests
     public async Task GetOrCreatePlatformTenantIdAsync_FirstCall_CreatesSystemTenant()
     {
         await using var db = MakeDb();
-        var repo = new MarketplaceRepository(db);
+        var repo = new MarketplaceRepository(db, new PassThroughProviderRlsOverride());
 
         var id = await repo.GetOrCreatePlatformTenantIdAsync();
 
@@ -40,7 +40,7 @@ public sealed class MarketplaceRepositoryPlatformTenantTests
     public async Task GetOrCreatePlatformTenantIdAsync_SecondCall_ReusesExistingTenant()
     {
         await using var db = MakeDb();
-        var repo = new MarketplaceRepository(db);
+        var repo = new MarketplaceRepository(db, new PassThroughProviderRlsOverride());
 
         var first  = await repo.GetOrCreatePlatformTenantIdAsync();
         var second = await repo.GetOrCreatePlatformTenantIdAsync();
@@ -59,10 +59,12 @@ public sealed class MarketplaceRepositoryPlatformTenantTests
 
         Guid first, second;
         await using (var db1 = new AppDbContext(Options()))
-            first = await new MarketplaceRepository(db1).GetOrCreatePlatformTenantIdAsync();
+            first = await new MarketplaceRepository(db1, new PassThroughProviderRlsOverride())
+                .GetOrCreatePlatformTenantIdAsync();
         await using (var db2 = new AppDbContext(Options()))
         {
-            second = await new MarketplaceRepository(db2).GetOrCreatePlatformTenantIdAsync();
+            second = await new MarketplaceRepository(db2, new PassThroughProviderRlsOverride())
+                .GetOrCreatePlatformTenantIdAsync();
             Assert.Equal(first, second);
             Assert.Equal(1, await db2.Tenants.CountAsync());
         }
@@ -74,7 +76,7 @@ public sealed class MarketplaceRepositoryPlatformTenantTests
         // A provider-created supplier lives under the platform tenant with
         // IsOwnerManaged = false — the supplier cabinet must not pick it up.
         await using var db = MakeDb();
-        var repo = new MarketplaceRepository(db);
+        var repo = new MarketplaceRepository(db, new PassThroughProviderRlsOverride());
 
         var platformTenantId = await repo.GetOrCreatePlatformTenantIdAsync();
 

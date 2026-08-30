@@ -1,7 +1,7 @@
 # Backend Structure
 
 **Owner:** backend-developer
-**Updated:** 2026-08-26
+**Updated:** 2026-08-30
 **Last reviewed:** 2026-07-16 (pre-launch audit) — startup sequence, migration history and feature-status tables below refreshed to reality. Migration Commands section expanded 2026-08-26 after a hand-written-migration incident (see section for detail).
 
 ## Layer Responsibilities
@@ -55,6 +55,36 @@ JWT). `ITenantSessionOverride` instead lets an already-trusted operation tempora
 `tenant_id` claim at all. Do not use one in place of the other, and do not route
 `ConsumerContentController`/`ConsumerLoyaltyController`-style cross-tenant reads through
 `ITenantContext` — they correctly stay on `ITenantSessionOverride`.
+
+**RLS override primitives — the `SET LOCAL` family.** Three primitives temporarily change one
+Postgres RLS session variable for the duration of a single short explicit transaction (auto-revert
+on commit / rollback / unhandled exception — never longer, never into a later pooled-connection
+request). None may be nested inside another.
+- **`ITenantSessionOverride`** (`ShelfGuard.Application/Services/`, TASK-417) — sets `app.tenant_id`
+  to an explicitly-chosen, already-validated tenant, for sessions that structurally carry no
+  `tenant_id` claim (consumer / cross-tenant). Wrapped at the **service** layer.
+- **`IAnalyticsRlsOverride`** (ADR-028, KI-033) — sets `app.role = 'marketing_analytics_bypass'`
+  (a dedicated sentinel that is never a real assignable role, never in
+  `TenantConnectionInterceptor.ValidRoles`) so `MarketingAnalyticsRepository`'s tenant-wide queries
+  clear `pos_transactions.store_scope`. Wrapped inside the **repository**.
+- **`IProviderRlsOverride`** (ADR-035, KI-036) — sets `app.role = 'provider'` so
+  `MarketplaceRepository`'s public-marketplace reads clear `provider_bypass`. Wrapped inside the
+  repository, one block per bypass method; `ProviderRlsOverrideContainmentTests` (scans Application +
+  Infrastructure + Api) asserts no other type ever acquires it. Unlike the analytics primitive it
+  uses the **real** `'provider'` role value: `provider_bypass` was on **107 tables (measured
+  2026-08-30, grows with every new RLS table)**, so this is a whole-schema cross-tenant read+write
+  bypass, narrow only in *duration*; a dedicated sentinel is recorded in ADR-035 as deferred
+  hardening. It replaced the session-level `SET app.role='provider'` leak in
+  `MarketplaceRepository.SetProviderRoleAsync` (KI-036), which was bounded to one HTTP request **only
+  by Npgsql's default `DISCARD ALL` pool reset** (`No Reset On Close=false`) — if that connection-
+  string flag is ever set `true` for perf, that class of stale-`app.role` bug returns cross-request,
+  and `supplier_admin` is not in `TenantConnectionInterceptor.ValidRoles` so a cabinet session would
+  inherit the stale value.
+
+`MarketplaceOrderService`'s catalog-conflict / catalog-link path additionally carries an
+application-level `TenantId == clientTenantId` check (JWT-derived) as a second layer — the one
+**documented exception** to "trust RLS completely" for single-object reads (ADR-035 Decision 4;
+a scoped adoption of KI-028 option (c), not a codebase-wide change).
 
 > **Critical (KI-027/KI-028):** RLS is the *sole* tenant-isolation layer for single-object reads
 > (`GetByIdAsync` methods carry no `&& TenantId==` clause by design). It only works if the app's

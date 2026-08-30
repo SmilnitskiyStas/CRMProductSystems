@@ -150,8 +150,17 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
 
         if (request.ProductId.HasValue)
         {
-            // Defence in depth: GetByIdAsync is RLS-scoped to the ambient (client) session, so a
-            // ProductId belonging to another tenant can never resolve here even if guessed.
+            // Existence check only. TASK-643/KI-036 correction: the comment that used to sit here
+            // claimed "GetByIdAsync is RLS-scoped to the ambient (client) session, so a foreign
+            // tenant's ProductId can never resolve" — that invariant is FALSE as a general rule.
+            // IItemRepository carries no app-level TenantId filter by convention, so it holds only
+            // while no provider/worker bypass role is active on the connection, which is a
+            // property of call ordering, not of this method. It happens to hold on this request
+            // today (no marketplace bypass method runs before this point — verified TASK-641 §6
+            // F6), but the ownership guarantee below is the receipt's own ClientTenantId check,
+            // not RLS. If a supplier-side lookup is ever hoisted above this line, add an explicit
+            // `product.TenantId != receipt.ClientTenantId` check here — the same fix
+            // MarketplaceOrderService.PlanCatalogOutcomeAsync needed.
             var product = await _items.GetByIdAsync(request.ProductId.Value, ct);
             if (product is null)
                 return (null, ProductNotFoundError);

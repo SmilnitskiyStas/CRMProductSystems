@@ -105,10 +105,38 @@ presence/naming) and `TenantIsolationPolicies_HaveNoFailOpenBranch_ExceptDocumen
 `ProductStock_FullyResetSession_ReturnsZeroRows_NotEveryRow` (direct live reproduction of the
 exact RESET-state scenario that was vulnerable).
 
-**Production status (as of 2026-07-14): this fix is applied to the dev database only.**
-Production still runs the fail-open policy shape described above — deploying this fix to
-production is a separate decision (urgency/rollout method) for the user to make, not something
-done as part of this audit.
+**Production status — VERIFIED FAIL-CLOSED on 2026-08-30 (TASK-642).** The line that used to
+stand here ("as of 2026-07-14 this fix is applied to the dev database only; production still runs
+the fail-open policy shape") was written *before* the pre-launch audit shipped and went stale the
+moment it did — it was still being read as current a month and a half later and nearly caused a
+redundant production migration. Live read-only check against the prod DB
+(`docker exec shelfguard_postgres psql -U shelfguard -d shelfguard`, `pg_policy` /
+`pg_get_expr(polqual, polrelid)`):
+
+- `20260714180000_FixFailOpenTenantIsolationOnReset` **is** present in prod's
+  `__EFMigrationsHistory`, as are `20260714100000_FixMissingRlsGuardsAndProviderBypass`,
+  `20260714150000_ExpandProviderBypassToProviderAdmin` and
+  `20260715120000_FixNotificationSettingsRlsFailOpen`. Migrations auto-apply on deploy
+  (`Program.cs` → `MigrateAsync`); the audit deployed 2026-07-16 (commit `84c48061`).
+- Prod has **107** `tenant_isolation` policies. Exactly **two** — `users` and `refresh_tokens` —
+  still carry the session-level fail-open branch (`NULLIF(current_setting('app.tenant_id', true), '') IS NULL OR …`),
+  i.e. precisely the two documented pre-auth exceptions in the table above and nothing else.
+  (`activity_logs`, `notification_queue` and `notification_settings` match a naive `%IS NULL%`
+  search but only via the *row-level* `"TenantId" IS NULL` / `u."TenantId" IS NULL` Group-B
+  provider-row clause, which is intentional and not a session-level fail-open branch.)
+- Spot-checked fail-closed on prod: `items`, `suppliers`, `supplier_items`,
+  `supplier_item_barcodes`, `supplier_item_images`, `supplier_metrics`, `supplier_reviews`,
+  `product_stock`, `categories`, `product_segments`, `product_supplier_settings` (Group A) and
+  `location_zones`, `pos_transaction_items`, `stock_receipt_items`, `write_off_items` (Group C
+  EXISTS-through-parent). All read
+  `("TenantId" = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)` with no
+  `WITH CHECK` override.
+- RLS is **not** inert on prod (pre-launch blocker 3 / KI-027 is closed): the API connects as
+  `shelfguard_app` (`rolsuper=f`, `rolbypassrls=f`), `items` is owned by `shelfguard_app`, and
+  `items`/`suppliers`/`supplier_items` all have `relrowsecurity=t` **and** `relforcerowsecurity=t`.
+
+No production migration is outstanding for this issue. Re-verify with the queries above rather
+than trusting this paragraph if the date drifts far from today.
 
 ## Migration History
 | Migration | Date | Description |

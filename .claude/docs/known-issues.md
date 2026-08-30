@@ -1,9 +1,116 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-08-29
+**Updated:** 2026-08-30
 
 ## Active Issues
+
+### KI-036: Session-level `SET app.role='provider'` in `MarketplaceRepository` leaked for the whole HTTP request — cross-tenant catalog disclosure + cross-tenant write vector in the B2B marketplace ✅ resolved (2026-08-30, TASK-641..645) — NOT yet deployed
+Severity: **critical** — confirmed cross-tenant data disclosure AND a confirmed cross-tenant write
+vector, on real production data (TASK-642 verified live on prod that `items.provider_bypass` is
+`FOR ALL` PERMISSIVE with `WITH CHECK = NULL`, so the leaked role grants cross-tenant read *and*
+write; a fail-closed `tenant_isolation` cannot contain it because PERMISSIVE policies OR together).
+Status: resolved by TASK-641..645 (2026-08-30) — implemented (TASK-643 + 643b remediation),
+independently reviewed pre-impl (TASK-641) and post-impl (TASK-645: SHIP-WITH-CHANGES → C1/C2
+remediation confirmed → final verdict **SHIP**), real-Postgres RLS regression coverage added
+(TASK-644, leak proven to fail pre-fix). **NOT yet committed or deployed as of 2026-08-30.** Found
+by the user at marketplace checkout; root-caused by the main session + 3 Explore agents + a Plan
+agent, then TASK-641's threat model.
+Exact repro: a client tenant whose own `Item` catalog is **empty** places a marketplace order from a
+supplier whose `SupplierItem` has an EAN barcode that also exists in a **third** tenant's catalog.
+At checkout the "Знайдено збіги штрихкодів" dialog appears and shows that third tenant's `Item` —
+`id`, `name`, `imageUrl`, full barcode list — claiming the client's order lines already exist in
+their catalog "under another name", even though the catalog is empty. Chain:
+`POST /api/marketplace/suppliers/{id}/orders/conflicts` →
+`MarketplaceOrderService.CheckCatalogConflictsAsync` → `GetSupplierTenantIdAsync` +
+`GetSupplierItemsAsync` (both call `SetProviderRoleAsync` — leak starts) →
+`_items.GetByAnyBarcodeAsync(barcodes)` runs under the leaked `provider` role → matches across every
+tenant's catalog → `new MarketplaceOrderConflictingItemDto(match.Id, match.Name, match.ImageUrl, match.Barcodes)`.
+Root cause: `MarketplaceRepository.SetProviderRoleAsync` (`MarketplaceRepository.cs:410-419`,
+pre-fix) — `conn = _db.Database.GetDbConnection(); if (conn.State != Open) await conn.OpenAsync(ct);`
+then `cmd.CommandText = "SET app.role = 'provider';"`, executed and **never reset**. Three
+compounding defects: (1) `SET` not `SET LOCAL`, no enclosing transaction → the GUC persists for the
+whole session; (2) the manual `conn.OpenAsync` makes EF treat the connection as externally-owned and
+stop closing it after each query, so `TenantConnectionInterceptor.ConnectionOpenedAsync` never
+re-fires to restore the caller's real role; (3) nothing resets it. Every subsequent statement in the
+same HTTP request runs as `app.role='provider'`, and `items.provider_bypass` (PERMISSIVE `FOR ALL`,
+`WITH CHECK` defaults to `USING`) OR-ed with `tenant_isolation` makes every row of every tenant
+readable and writable. First confirmed live realization of the KI-028 risk class ("a code path that
+runs SET ROLE / SET app.role").
+Full blast radius (TASK-641 §1/§6, threat-model change R6):
+- **(i) read disclosure** — foreign `Item` `id`/`name`/`imageUrl`/`barcodes` via
+  `CheckCatalogConflictsAsync`. The disclosed `id` is also the primary key that arms (ii).
+- **(ii) write vector (F2)** — `catalogAction:"link"` + the just-disclosed foreign `Item.Id` as
+  `linkedItemId` → `PlanCatalogOutcomeAsync` resolves the foreign row (`_items.GetByIdAsync`, no
+  app-level filter, `provider_bypass` `USING` = true), the barcode-intersection guard passes
+  trivially (the id came from a barcode match), `ExecuteCatalogPlanAsync` sets `SourceSupplierItemId`
+  and calls `_items.Update` → the UPDATE on the foreign tenant's row succeeds under
+  `provider_bypass`'s defaulted `WITH CHECK`. Because `DbSet.Update` marks the whole loaded graph
+  `Modified`, the flush also emits full-row UPDATEs against the foreign tenant's `categories` /
+  `product_segments` / `suppliers` rows (`.Include`d by `GetByIdAsync`). Values are round-tripped so
+  no field changes, but it is a genuine cross-tenant full-row-rewrite / lost-update primitive on
+  4 tables. Preconditions are ordinary: one ACTIVE `SupplierAgreement` + a supplier item whose EAN
+  also exists in a victim catalog. No id guessing — the attacker's own earlier API response supplies
+  the target id.
+- **(iii) F5 — cross-tenant Claude API-key consumption** on `POST /api/marketplace/ai-recommend`:
+  `SupplierAdvisor.ResolveAsync` reads `integration_configs` with no `TenantId` filter and no
+  `ORDER BY` *after* the leak has started (`SearchSuppliersAsync` at `:178`), so its
+  `FirstOrDefaultAsync` can return **another tenant's** Claude `api_key`, which is then spent on a
+  live outbound Anthropic call — billing/quota abuse, and secret material crosses a tenant boundary
+  in-process. **Resolved by this fix** (Part A removes the leak that enables it) — recorded here so
+  it is not later re-derived as a separate open issue.
+- **(iv) C1 — `MP-{yyyy}-{NNN}` order numbers** were only sequential-per-supplier because the leaked
+  `provider` role satisfied `marketplace_orders.provider_bypass` in `NextOrderNumberAsync`'s count;
+  a customer-visible identifier scheme was unknowingly resting on the leak. Found and fixed during
+  post-impl review (TASK-645) — the count now runs inside
+  `ITenantSessionOverride.ExecuteAsync(supplierTenantId, …)`. No unique index on `OrderNumber`, so
+  removing the leak without C1 would have silently produced duplicate order numbers across two
+  clients of one supplier.
+Affected surface: ~13 `MarketplaceRepository` provider-bypass methods reachable from ~27 endpoints —
+see the endpoint table in
+`.claude/logs/tasks/641_2026-08-30_marketplace-provider-rls-pre-review_security-reviewer.md` §2
+rather than reproduced here. Only two downstream writes legitimately needed the bypass (W1 —
+`supplier_metrics` rating recalc; W2 — `supplier_reviews` reply); every other downstream
+`SaveChangesAsync` is own-tenant or sits on an OR-based `tenant_isolation` policy and keeps working.
+Why the test suite missed it: the unit tests mock `IItemRepository`, so real RLS is never exercised.
+The existing `CreateOrder_LinkAction_LinkedItemNotOwnedByTenant_ReturnsError` test even encoded the
+disproved assumption in its own comment ("ambient RLS on GetByIdAsync resolves a foreign-tenant id
+to null") and stubbed `GetByIdAsync → null` — it was rewritten, not extended. Same
+"mocked-repository-hides-a-real-RLS-interaction-bug" shape as KI-030.
+Fix (ADR-035): new `IProviderRlsOverride` primitive — `SET LOCAL app.role='provider'` inside a short
+explicit transaction, auto-revert on commit/rollback/exception; `MarketplaceRepository`-only,
+enforced by `ProviderRlsOverrideContainmentTests` (scans Application + Infrastructure + Api).
+`SetProviderRoleAsync` and its `GetDbConnection()`/`OpenAsync()` deleted; 12 bypass reads wrapped in
+one `ExecuteAsync` block each, the 13th (`GetReviewByIdAsync`) deleted as dead code; W1/W2 became
+composite read+write repo methods `UpsertMetricsRatingAsync`/`SetReviewReplyAsync` so the write runs
+inside the bypass transaction; Part B application-level JWT-derived `clientTenantId` filters at 3
+`MarketplaceOrderService` sites + write-time re-validation before `_items.Update`; C1 order-number
+fix. `'provider'` kept (not replaced with a dedicated sentinel) — a reasoned departure from ADR-028,
+recorded there as deferred hardening; `provider_bypass` was on **107 tables measured 2026-08-30 and
+growing with every new RLS table** (109 a day later), so `'provider'` is a whole-schema read+write
+bypass, narrowed here only in *duration*.
+Verification chain: TASK-641 (pre-impl threat model, opus — F1/F2 confirmed from source, 27-endpoint
+sweep, "keep `'provider'`" ratified, R1–R7). TASK-642 (database-engineer — prod `items.tenant_isolation`
+already fail-closed since the 2026-07-16 audit deploy, `database-schema.md:108` was stale, no
+migration; F1 confirmed live on prod). TASK-643 + 643b (backend-developer, opus — implementation +
+C1/C2 remediation; Release build 0 errors / 1 pre-existing warning, no EF1002). TASK-644 (qa-tester —
+2 new real-Postgres RLS integration files, 10 facts; **proved the leak pre-fix** via a
+targeted-pathspec `git stash` of the TASK-643 diff, verbatim recorded failure:
+```
+Assert.Empty() Failure: Collection was not empty
+Collection: [MarketplaceOrderConflictDto { SupplierItemId = 70691801-…, ExistingItem =
+  MarketplaceOrderConflictingItemDto { Id = dc436a5b-dbfb-4451-95c7-763f4feb2486,
+  Name = Чужий товар (третій тенант), ImageUrl = https://example.test/foreign.jpg,
+  Barcodes = System.Collections.Generic.List`1[System.String] } }]
+ …
+ app.role AFTER the call (never reset pre-fix) = 'provider'
+```
+). TASK-645 (independent post-impl review, opus — 12/12 security criteria pass; found C1 + C2; after
+remediation, final verdict **SHIP**). Full suite **2037/2037 passed, 0 skipped**. Full detail:
+`.claude/logs/tasks/641..645_2026-08-30_marketplace-provider-rls-*.md`, ADR-035
+(`.claude/docs/decisions.md`).
+Cross-references: **KI-028** (the risk class this realizes — see its forward note), **KI-030** (same
+mocked-repository test blind spot at the DB/RLS boundary).
 
 ### KI-035: Postgres connection-pool exhaustion (`53300: too many clients already`) in `ShelfGuard.Tests` integration suite — scattered failures across unrelated feature test classes ✅ resolved (2026-08-29, TASK-639)
 Severity: medium (blocked CI's Test step / delayed deploy when it hit, but deploy was correctly
@@ -735,6 +842,15 @@ environment, automatically; (c) add explicit `&& x.TenantId == tenantId` defense
 to the highest-risk single-object endpoints (items/stock/locations/customers/receipts/write-offs) —
 real code change across many files, most thorough but not a quick fix. No code changed for this
 finding.
+**Update (2026-08-30) — KI-036 is the first confirmed live instance of the trigger this issue
+hypothesizes.** "A code path that runs SET ROLE / SET app.role" was realized in production code:
+`MarketplaceRepository.SetProviderRoleAsync` leaked a session-level `SET app.role='provider'` for
+the rest of the HTTP request, and because `ItemRepository.GetByAnyBarcodeAsync`/`GetByIdAsync` carry
+no app-level `TenantId` filter (exactly the gap described above), the result was silent cross-tenant
+`Item` disclosure plus a cross-tenant write vector — not merely a theoretical exposure. This
+strengthens the case for the still-unadopted defense-in-depth option (c). ADR-035 adopts a **scoped**
+version of (c) — `&& TenantId == clientTenantId` filters on the one marketplace consumer that sits
+next to that bypass — but explicitly not codebase-wide; the broader decision remains open.
 
 ### KI-029: A validating `ADD CONSTRAINT` FK migration on an already-populated column can crash the app on startup under RLS + a non-superuser connection
 Severity: high (would have caused a production deploy outage, not just a local inconvenience)

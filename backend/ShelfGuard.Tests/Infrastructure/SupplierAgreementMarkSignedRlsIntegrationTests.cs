@@ -219,7 +219,10 @@ public sealed class SupplierAgreementMarkSignedRlsIntegrationTests : IAsyncLifet
     private static SupplierAgreementService BuildAgreementService(AppDbContext db) => new(
         new SupplierAgreementRepository(db),
         new SupplierContractSettingsRepository(db),
-        new MarketplaceRepository(db),
+        // TASK-643: real ProviderRlsOverride, not a pass-through — this suite runs against live
+        // Postgres and the repository's cross-tenant reads must exercise the genuine
+        // SET LOCAL app.role transaction here.
+        new MarketplaceRepository(db, new ProviderRlsOverride(db)),
         new SupplierChatRepository(db),
         Substitute.For<IContractPdfGenerator>(),
         Substitute.For<IVchasnoClientFactory>(),

@@ -52,6 +52,14 @@ public sealed class MarketplaceOrderServiceTests
             .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<bool>>>()());
 
+        // TASK-645 C1: NextOrderNumberAsync now counts the supplier's orders under the SUPPLIER
+        // tenant's RLS context (marketplace_orders' tenant_isolation is OR-based, so a client
+        // session would only see its own orders and MP-{yyyy}-{NNN} would restart per client).
+        // Same pass-through convention, different generic argument.
+        _tenantSessionOverride
+            .ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<string>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<string>>>()());
+
         // TASK-598: no barcodes set up on CatalogItem() by default → PlanCatalogOutcomeAsync's
         // collision check short-circuits (empty list), so every pre-existing CreateOrderAsync test
         // below hits the auto-create path. Stub it to always succeed so those tests don't need to
@@ -140,6 +148,12 @@ public sealed class MarketplaceOrderServiceTests
         Assert.Equal(76.50m, line.LineTotal);
         Assert.Equal(76.50m, created.TotalAmount);
         await _orders.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // TASK-645 C1: the per-supplier sequence must be counted under the SUPPLIER tenant's RLS
+        // context, not the calling client's. (The real cross-client collision this prevents is
+        // only observable against a live DB — see MarketplaceProviderBypassScopeRlsIntegrationTests.)
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            _supplierTenantId, Arg.Any<Func<Task<string>>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -393,19 +407,195 @@ public sealed class MarketplaceOrderServiceTests
         _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(new List<SupplierItem> { item });
 
-        var foreignItemId = Guid.NewGuid();
-        // Ambient RLS would scope GetByIdAsync to the caller's own tenant — a foreign-tenant id
-        // simply resolves to null, same as "not found".
-        _items.GetByIdAsync(foreignItemId, Arg.Any<CancellationToken>()).Returns((Item?)null);
+        // TASK-643/KI-036: this test used to stub GetByIdAsync → null on the (disproved)
+        // assumption that ambient RLS scopes it to the caller's tenant. IItemRepository carries
+        // no app-level TenantId filter, and under the leaked provider role a foreign-tenant row
+        // DID resolve here — which is what armed the cross-tenant write vector. Stub what the
+        // real repository actually returns in that situation, and assert the application-level
+        // ownership check rejects it. Barcode matches on purpose: the barcode guard alone would
+        // have let this through.
+        var foreignItem = new Item
+        {
+            TenantId = Guid.NewGuid(),          // NOT _clientTenantId
+            Name     = "Чужий товар",
+            Barcodes = ["555"],
+        };
+        _items.GetByIdAsync(foreignItem.Id, Arg.Any<CancellationToken>()).Returns(foreignItem);
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
             new CreateMarketplaceOrderDto(
-                [new CreateMarketplaceOrderItemDto(item.Id, 1, "link", foreignItemId)], null, Guid.NewGuid()),
+                [new CreateMarketplaceOrderItemDto(item.Id, 1, "link", foreignItem.Id)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(dto);
+        // Reported exactly like "not found" — never confirms another tenant owns that id.
+        Assert.Equal(MarketplaceOrderService.LinkedItemNotFoundError, error);
+        Assert.Null(foreignItem.SourceSupplierItemId);
+        _items.DidNotReceive().Update(Arg.Any<Item>());
+        await _items.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_LinkAction_MissingLinkedItem_StillReturnsSameNotFoundError()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "5551", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var missingId = Guid.NewGuid();
+        _items.GetByIdAsync(missingId, Arg.Any<CancellationToken>()).Returns((Item?)null);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto(
+                [new CreateMarketplaceOrderItemDto(item.Id, 1, "link", missingId)], null, Guid.NewGuid()),
             _userId);
 
         Assert.Null(dto);
         Assert.Equal(MarketplaceOrderService.LinkedItemNotFoundError, error);
+    }
+
+    // ── TASK-643/KI-036: cross-tenant catalog leak — application-level defence in depth ────────
+
+    [Fact]
+    public async Task CheckCatalogConflicts_IgnoresBarcodeMatchOwnedByAnotherTenant()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "888", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        // What the real repository returned under the leaked provider role: another tenant's Item
+        // sharing this EAN. The reported symptom was a "barcode already in your catalog" dialog
+        // shown to a client whose own catalog was completely empty — leaking the foreign Item's
+        // id, name, image and full barcode list.
+        _items.GetByAnyBarcodeAsync(
+                Arg.Is<IReadOnlyList<string>>(l => l.Contains("888")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item>
+            {
+                new() { TenantId = Guid.NewGuid(), Name = "Чуже молоко", Barcodes = ["888"] },
+            });
+
+        var (conflicts, error, _) = await _sut.CheckCatalogConflictsAsync(
+            _clientTenantId, _supplierId, [new CreateMarketplaceOrderItemDto(item.Id, 1)]);
+
+        Assert.Null(error);
+        Assert.NotNull(conflicts);
+        Assert.Empty(conflicts);
+    }
+
+    [Fact]
+    public async Task CheckCatalogConflicts_ForeignAndOwnMatch_ReportsOnlyTheOwnTenantItem()
+    {
+        // Over-correction guard: filtering by tenant must not swallow a genuine own-tenant
+        // collision just because a foreign row happens to sort first in the result set.
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "889", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var foreign = new Item { TenantId = Guid.NewGuid(), Name = "Чуже", Barcodes = ["889"] };
+        var own = new Item
+        {
+            TenantId = _clientTenantId,
+            Name     = "Моє існуюче",
+            Barcodes = ["889"],
+            ImageUrl = "https://x/own.jpg",
+        };
+        _items.GetByAnyBarcodeAsync(
+                Arg.Is<IReadOnlyList<string>>(l => l.Contains("889")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { foreign, own });
+
+        var (conflicts, error, _) = await _sut.CheckCatalogConflictsAsync(
+            _clientTenantId, _supplierId, [new CreateMarketplaceOrderItemDto(item.Id, 1)]);
+
+        Assert.Null(error);
+        Assert.NotNull(conflicts);
+        var conflict = Assert.Single(conflicts);
+        Assert.Equal(own.Id, conflict.ExistingItem.Id);
+        Assert.Equal("Моє існуюче", conflict.ExistingItem.Name);
+    }
+
+    [Fact]
+    public async Task CreateOrder_ForeignTenantBarcodeCollision_ProceedsAndAutoCreatesItem()
+    {
+        // The functional half of the bug: a foreign tenant's row sharing the supplier item's EAN
+        // raised a bogus BarcodeCollisionError and blocked a legitimate order outright.
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "999", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+        _items.GetByAnyBarcodeAsync(
+                Arg.Is<IReadOnlyList<string>>(l => l.Contains("999")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item>
+            {
+                new() { TenantId = Guid.NewGuid(), Name = "Чужий дублікат", Barcodes = ["999"] },
+            });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        await _itemService.Received(1).CreateAsync(
+            _clientTenantId,
+            Arg.Is<CreateProductRequest>(r => r.SourceSupplierItemId == item.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_ForeignLinkOnSecondLine_NeverUpdatesAnyItem()
+    {
+        // Pass 1 (plan every line) and pass 2 (execute) are separated by a whole loop, so a
+        // failure on a later line must not leave an earlier line's write already applied — and a
+        // foreign-tenant link must never reach _items.Update at all.
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var lineA = CatalogItem(price: 10m);
+        lineA.Barcodes.Add(new SupplierItemBarcode { Barcode = "1001", Kind = "primary" });
+        var lineB = CatalogItem(price: 20m);
+        lineB.Barcodes.Add(new SupplierItemBarcode { Barcode = "1002", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { lineA, lineB });
+
+        var ownItem = new Item { TenantId = _clientTenantId, Name = "Моє", Barcodes = ["1001"] };
+        var foreignItem = new Item { TenantId = Guid.NewGuid(), Name = "Чуже", Barcodes = ["1002"] };
+        _items.GetByIdAsync(ownItem.Id, Arg.Any<CancellationToken>()).Returns(ownItem);
+        _items.GetByIdAsync(foreignItem.Id, Arg.Any<CancellationToken>()).Returns(foreignItem);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto(
+            [
+                new CreateMarketplaceOrderItemDto(lineA.Id, 1, "link", ownItem.Id),
+                new CreateMarketplaceOrderItemDto(lineB.Id, 1, "link", foreignItem.Id),
+            ], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.LinkedItemNotFoundError, error);
+        _items.DidNotReceive().Update(Arg.Any<Item>());
+        await _items.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        Assert.Null(ownItem.SourceSupplierItemId);
+        Assert.Null(foreignItem.SourceSupplierItemId);
+        await _orders.DidNotReceive().AddAsync(Arg.Any<MarketplaceOrder>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

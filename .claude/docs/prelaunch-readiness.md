@@ -108,6 +108,12 @@ defects found and closed. All fixes are applied on dev/staging (see the deploy b
 
 ## ⚠️ LAUNCH BLOCKERS — mandatory before production
 
+> ⚠️ **STALE AS WRITTEN — read the 2026-08-30 correction below before acting on this list.**
+> The paragraph that follows describes the state on 2026-07-15, *before* the audit was deployed.
+> The audit shipped to production on **2026-07-16** (commit `84c48061`). Blockers 2 and 3 below
+> were re-verified against the live prod DB on **2026-08-30 (TASK-642)** and are **CLOSED** —
+> see the per-blocker notes. The remaining blockers were not re-checked in that pass.
+>
 > **All audit fixes are applied to dev/staging only. Production is untouched and still runs the
 > full pre-audit codebase — RLS fail-open, dead worker crons, POS race, privilege escalation,
 > broken write-offs, non-functional mobile.** Production deploy was deliberately deferred by the
@@ -134,6 +140,14 @@ defects found and closed. All fixes are applied on dev/staging (see the deploy b
      committed, `MigrateAsync` will apply it automatically on deploy. Decide keep-and-apply vs
      remove-from-tree **before** the deploy, don't let it ride in silently.
 
+   > ✅ **CLOSED — verified on prod 2026-08-30 (TASK-642).** All 8 migrations listed above are in
+   > prod's `__EFMigrationsHistory`. The "decision required" one,
+   > `20260714150000_ExpandProviderBypassToProviderAdmin`, **rode in and is applied** — prod's
+   > `items.provider_bypass` reads
+   > `current_setting('app.role', true) = ANY (ARRAY['provider','provider_admin'])`. Prod
+   > `tenant_isolation` is fail-closed on every table except the two documented pre-auth
+   > exceptions; full evidence in `.claude/docs/database-schema.md` ("Production status").
+
 3. **Re-verify production's Postgres role — do NOT assume (KI-027/KI-028).** Production was not
    touched this session. Memory says prod already switched from a superuser to a non-superuser
    `shelfguard_app` role once — but that is an *assumption*, not a checked fact, and staging shipped
@@ -145,6 +159,12 @@ defects found and closed. All fixes are applied on dev/staging (see the deploy b
    first. The new startup canary (blocker 1) will also fail-fast on boot if the prod role is wrong,
    which is a second safety net — but verify explicitly rather than relying on the canary catching it
    post-deploy.
+
+   > ✅ **CLOSED — verified on prod 2026-08-30 (TASK-642).** `SELECT rolname, rolsuper, rolbypassrls
+   > FROM pg_roles WHERE rolcanlogin` on the prod DB returns `shelfguard_app | f | f` (the role the
+   > API actually connects with, per `pg_stat_activity`), and `items` is owned by `shelfguard_app`
+   > with `relrowsecurity=t, relforcerowsecurity=t`. Production RLS is live, not inert.
+   > The bootstrap superuser `shelfguard` (`t | t`) still exists but is not the app's login role.
 
 4. **Test the mobile app end-to-end on a real device.** The three critical mobile fixes (KI-024/025/026)
    were verified at the code/contract level only — **there was no emulator or device in the audit

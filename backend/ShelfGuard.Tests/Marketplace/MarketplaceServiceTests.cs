@@ -182,45 +182,61 @@ public sealed class MarketplaceServiceTests
 
     // ── CreateReviewAsync — rating recalc (TASK-285) ──────────────────────────
 
+    // TASK-643/KI-036 (W1): the load-or-create + save of supplier_metrics moved out of this
+    // service and into IMarketplaceRepository.UpsertMetricsRatingAsync, because the row belongs
+    // to the SUPPLIER tenant while the session is the reviewer's — read and write must share one
+    // provider-role transaction. The service's remaining job is the average, and passing the
+    // supplier's own TenantId through so the INSERT branch can stamp the right owner.
     [Fact]
-    public async Task CreateReviewAsync_RecalculatesRating_CreatesMetricsRowWhenAbsent()
+    public async Task CreateReviewAsync_RecalculatesRating_DelegatesUpsertWithSupplierTenantId()
     {
         var supplier = ArrangeReviewableSupplier();
         _repo.GetReviewRatingsAsync(_supplierIdA, Arg.Any<CancellationToken>())
              .Returns(new List<short> { 4, 5, 3 });
-        _repo.GetMetricsBySupplierIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
-             .Returns((SupplierMetrics?)null);
 
         var (review, error, _) = await _sut.CreateReviewAsync(
             _supplierIdA, _tenantId, new SupplierReviewCreateDto(3, null));
 
         Assert.Null(error);
         Assert.NotNull(review);
-        await _repo.Received(1).AddMetricsAsync(
-            Arg.Is<SupplierMetrics>(m =>
-                m.SupplierId == _supplierIdA &&
-                m.TenantId == supplier.TenantId &&
-                m.Rating == 4.00m),
-            Arg.Any<CancellationToken>());
+        await _repo.Received(1).UpsertMetricsRatingAsync(
+            _supplierIdA, supplier.TenantId, 4.00m, Arg.Any<CancellationToken>());
+
+        // The service must no longer load or stage the metrics row itself — doing so would put a
+        // foreign-tenant entity in the shared change tracker outside the override block.
+        // (The AddMetricsAsync half of this assertion was dropped in TASK-645: the method is gone
+        // from the interface entirely, so asserting it wasn't called is vacuous.)
+        await _repo.DidNotReceive().GetMetricsBySupplierIdAsync(
+            Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task CreateReviewAsync_RecalculatesRating_UpdatesExistingMetricsRow()
+    public async Task CreateReviewAsync_RecalculatesRating_AveragesAllRatings()
     {
-        ArrangeReviewableSupplier();
+        var supplier = ArrangeReviewableSupplier();
         _repo.GetReviewRatingsAsync(_supplierIdA, Arg.Any<CancellationToken>())
              .Returns(new List<short> { 5, 4 });
-
-        var metrics = new SupplierMetrics { SupplierId = _supplierIdA, Rating = 1.00m };
-        _repo.GetMetricsBySupplierIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
-             .Returns(metrics);
 
         var (_, error, _) = await _sut.CreateReviewAsync(
             _supplierIdA, _tenantId, new SupplierReviewCreateDto(4, null));
 
         Assert.Null(error);
-        Assert.Equal(4.50m, metrics.Rating);
-        await _repo.DidNotReceive().AddMetricsAsync(Arg.Any<SupplierMetrics>(), Arg.Any<CancellationToken>());
+        await _repo.Received(1).UpsertMetricsRatingAsync(
+            _supplierIdA, supplier.TenantId, 4.50m, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateReviewAsync_NoRatings_SkipsMetricsUpsertEntirely()
+    {
+        // ArrangeReviewableSupplier stubs GetReviewRatingsAsync to an empty list.
+        ArrangeReviewableSupplier();
+
+        var (_, error, _) = await _sut.CreateReviewAsync(
+            _supplierIdA, _tenantId, new SupplierReviewCreateDto(4, null));
+
+        Assert.Null(error);
+        await _repo.DidNotReceive().UpsertMetricsRatingAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<CancellationToken>());
     }
 
     // ── GetSupplierReviewsAsync — public reviews (TASK-285) ───────────────────

@@ -167,15 +167,47 @@ public interface IMarketplaceRepository
     Task<int> CountReviewsBySupplierAsync(Guid supplierId, CancellationToken ct = default);
 
     /// <summary>
-    /// Returns a review only if it belongs to the given supplier (cross-tenant guard,
-    /// mirrors <see cref="GetSupplierItemByIdAsync"/>). Tracked (no AsNoTracking) so the
-    /// caller can mutate ReplyText/RepliedAt and save. Provider-bypass read.
+    /// Untracked metrics row for a supplier (provider-bypass read), or null when absent.
+    /// Read-only: mutating the rating goes through <see cref="UpsertMetricsRatingAsync"/>.
     /// </summary>
-    Task<SupplierReview?> GetReviewByIdAsync(
-        Guid supplierId, Guid reviewId, CancellationToken ct = default);
-
-    /// <summary>Tracked metrics row for a supplier (provider-bypass read), or null when absent.</summary>
     Task<SupplierMetrics?> GetMetricsBySupplierIdAsync(Guid supplierId, CancellationToken ct = default);
 
-    Task AddMetricsAsync(SupplierMetrics metrics, CancellationToken ct = default);
+    // TASK-645: AddMetricsAsync deleted — UpsertMetricsRatingAsync below owns the INSERT branch
+    // now, and leaving unused public surface on the interface this task exists to harden is the
+    // wrong default even when the method itself is harmless (staging-only, no bypass).
+
+    // ── Composite cross-tenant read+write (TASK-643/KI-036, ADR-035) ─────────
+
+    /// <summary>
+    /// Sets <c>SupplierMetrics.Rating</c> for <paramref name="supplierId"/>, inserting the row
+    /// (owned by <paramref name="supplierTenantId"/>) when it does not exist yet. Both branches
+    /// are cross-tenant: the caller is the REVIEWER tenant, the row belongs to the SUPPLIER
+    /// tenant, and supplier_metrics has a plain single-tenant RLS policy — so the read, the
+    /// UPDATE/INSERT and the flush must all happen inside one provider-role transaction. That is
+    /// why this is a composite repository method and not a read + a caller-side SaveChangesAsync.
+    ///
+    /// CALLER CONTRACT (not enforced by the type system — TASK-641 F10, a review criterion):
+    /// this calls SaveChangesAsync on the shared request-scoped AppDbContext under the provider
+    /// role, so it flushes ANY pending tracked changes, not just its own. Every caller must have
+    /// flushed its own writes BEFORE calling in. True today: MarketplaceService.CreateReviewAsync
+    /// saves the review itself before recalculating the rating.
+    /// </summary>
+    Task UpsertMetricsRatingAsync(
+        Guid supplierId, Guid supplierTenantId, decimal rating, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a supplier's reply on one of its own reviews and returns the updated (tracked)
+    /// entity with <c>Tenant</c> included, or <c>null</c> when the review does not exist or
+    /// belongs to a different supplier — the caller must map both cases to the same "not found"
+    /// error and never reveal which. Cross-tenant: the review row belongs to the REVIEWER tenant
+    /// while the caller is the supplier tenant, so read + UPDATE + flush must share one
+    /// provider-role transaction.
+    ///
+    /// CALLER CONTRACT: identical to <see cref="UpsertMetricsRatingAsync"/> above — the
+    /// SaveChangesAsync inside runs under the provider role and flushes any pending tracked
+    /// change. True today: SupplierCabinetService.ReplyToReviewAsync stages nothing else.
+    /// </summary>
+    Task<SupplierReview?> SetReviewReplyAsync(
+        Guid supplierId, Guid reviewId, string replyText, DateTimeOffset repliedAt,
+        CancellationToken ct = default);
 }

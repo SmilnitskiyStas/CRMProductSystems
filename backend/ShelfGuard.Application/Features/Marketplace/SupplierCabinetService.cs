@@ -203,13 +203,14 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
         // Cross-tenant guard: the review must belong to THIS supplier. Never reveal
         // whether it exists for a different supplier — same "not found" wording
         // used elsewhere in this controller (e.g. DeactivateStaffAsync, item lookups).
-        var review = await _repo.GetReviewByIdAsync(supplierId, reviewId, ct);
+        //
+        // TASK-643/KI-036: the review row belongs to the REVIEWER tenant, not this supplier's,
+        // so the lookup and the reply write must share one provider-role transaction inside the
+        // repository — see IMarketplaceRepository.SetReviewReplyAsync. Nothing else is staged on
+        // this request, which satisfies that method's flush-first caller contract.
+        var review = await _repo.SetReviewReplyAsync(
+            supplierId, reviewId, trimmed, DateTimeOffset.UtcNow, ct);
         if (review is null) return (null, ReviewNotFoundError);
-
-        review.ReplyText = trimmed;
-        review.RepliedAt = DateTimeOffset.UtcNow;
-
-        await _repo.SaveChangesAsync(ct);
 
         var reviewerName = review.Tenant?.Name ?? string.Empty;
         return (new PublicSupplierReviewDto(

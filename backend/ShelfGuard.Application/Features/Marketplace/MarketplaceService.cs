@@ -138,24 +138,12 @@ public sealed class MarketplaceService : IMarketplaceService
 
         var avg = Math.Round((decimal)ratings.Average(r => (int)r), 2);
 
-        var metrics = await _repo.GetMetricsBySupplierIdAsync(supplier.Id, ct);
-        if (metrics is null)
-        {
-            metrics = new SupplierMetrics
-            {
-                SupplierId = supplier.Id,
-                TenantId   = supplier.TenantId,
-                Rating     = avg,
-            };
-            await _repo.AddMetricsAsync(metrics, ct);
-        }
-        else
-        {
-            metrics.Rating    = avg;
-            metrics.UpdatedAt = DateTimeOffset.UtcNow;
-        }
-
-        await _repo.SaveChangesAsync(ct);
+        // TASK-643/KI-036: the metrics row belongs to the SUPPLIER tenant while this session is
+        // the reviewer's, so the load-or-create + save is a genuinely cross-tenant write and must
+        // happen inside the repository's own provider-role transaction — see
+        // IMarketplaceRepository.UpsertMetricsRatingAsync. Its caller contract requires the
+        // review itself to be flushed first; CreateReviewAsync above does exactly that.
+        await _repo.UpsertMetricsRatingAsync(supplier.Id, supplier.TenantId, avg, ct);
     }
 
     // ── Supplier self-management ──────────────────────────────────────────────

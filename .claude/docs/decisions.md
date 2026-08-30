@@ -1,7 +1,180 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-24
+**Updated:** 2026-08-30
+
+## ADR-035: `IProviderRlsOverride` — scoping the marketplace provider bypass to one repository method, replacing session-level `SET app.role`
+Date: 2026-08-30
+Status: accepted — implemented (TASK-643 + 643b remediation), independently reviewed pre-impl
+(TASK-641: SHIP-WITH-CHANGES, R1–R7 additive) and post-impl (TASK-645: SHIP-WITH-CHANGES → C1/C2
+remediation confirmed → final verdict **SHIP**), real-Postgres RLS regression coverage added
+(TASK-644, leak proven to fail pre-fix). **NOT yet committed or deployed as of 2026-08-30.** See
+KI-036 in `known-issues.md` for the closed-out bug and the full verification chain.
+
+Context: a user hit a functional bug at marketplace checkout — the "Знайдено збіги штрихкодів"
+(barcode-collision) dialog claimed the client's order lines already existed in their catalog "under
+another name" even though that client's `Item` catalog was completely empty; the shown "matches"
+were other tenants' `Item` rows. Root-cause investigation (main session + 3 Explore agents + a Plan
+agent, then TASK-641's threat model) found a cross-tenant RLS leak:
+
+`MarketplaceRepository.SetProviderRoleAsync` (`MarketplaceRepository.cs:410-419`, pre-fix) issued a
+**session-level** `SET app.role = 'provider';` (not `SET LOCAL`, no enclosing transaction) directly
+on the request-scoped `AppDbContext`'s `DbConnection`, and never reset it. It also called
+`conn.OpenAsync()` manually, which makes EF treat the connection as externally-owned and stop
+closing it after each query, so `TenantConnectionInterceptor.ConnectionOpenedAsync` never re-fired
+to restore the caller's real role. Every subsequent statement in that HTTP request ran as
+`app.role='provider'`. `items.provider_bypass` is a PERMISSIVE `FOR ALL` policy whose `WITH CHECK`
+is `NULL` (Postgres defaults it to the `USING` expression) ⇒ cross-tenant **read AND write**; being
+PERMISSIVE it ORs with `tenant_isolation`, so a fail-closed `tenant_isolation` could never contain
+it (confirmed on live prod — TASK-642). `ItemRepository.GetByAnyBarcodeAsync`/`GetByIdAsync` carry
+no app-level `TenantId` filter (documented project convention — `CLAUDE.md` "Tenant isolation via
+RLS"), so under the leaked role they returned every tenant's rows.
+
+**This is KI-028's hypothesised risk class — "a code path that runs SET ROLE / SET app.role" —
+realized in production code, and the first confirmed live instance.** Blast radius: read disclosure
+of foreign `Item` id/name/imageUrl/barcodes; a self-contained cross-tenant **write** vector (F2 —
+`catalogAction:"link"` replays the disclosed foreign `Item.Id` into `_items.Update`, and
+`DbSet.Update` rewrites the whole `.Include`d graph, so `categories`/`product_segments`/`suppliers`
+foreign rows too); and cross-tenant Claude-API-key consumption on `POST /api/marketplace/ai-recommend`
+(F5). Full detail in KI-036.
+
+Precedent (mirrored): `IAnalyticsRlsOverride`/`AnalyticsRlsOverride` + ADR-028 (KI-033) — `SET LOCAL`
+in a short explicit transaction, auto-revert, wrapped inside the repository, security contract as an
+interface XML doc. `ITenantSessionOverride` (TASK-417) is the same shape for `app.tenant_id`.
+
+Decision:
+
+### Decision 1 — new `IProviderRlsOverride` primitive, not an inline helper
+`ShelfGuard.Application/Services/IProviderRlsOverride.cs` (impl
+`ShelfGuard.Infrastructure/Services/ProviderRlsOverride.cs`, DI `AddScoped` immediately after
+`IAnalyticsRlsOverride`), signature identical to `IAnalyticsRlsOverride`
+(`Task<T> ExecuteAsync<T>(Func<Task<T>> action, CancellationToken ct = default)`). Implementation
+one-for-one with `AnalyticsRlsOverride`: `BeginTransactionAsync` → `ExecuteSqlRawAsync("SET LOCAL
+app.role = 'provider'")` (fixed literal ⇒ no `#pragma warning disable EF1002`) → `action()` →
+`CommitAsync`; reverts on commit, rollback or unhandled exception. It deliberately does **not** join
+an ambient transaction — if anyone ever nests it, EF throws `InvalidOperationException` loudly
+rather than silently widening an outer transaction's RLS context.
+
+Chosen over an inline `SET LOCAL` helper because: the ADR-028 precedent is binding here; the
+security contract needs a documented home (the interface XML doc); a substitutable primitive lets
+`ProviderRlsOverrideContainmentTests` assert both that every bypass method goes through it and that
+no other type acquires it; and repositories in this codebase do not otherwise manage transactions.
+
+`SetProviderRoleAsync` — including its `GetDbConnection()` and `conn.OpenAsync()` — was **deleted
+entirely** (root-cause removal; "no `GetDbConnection()` left in `MarketplaceRepository`" is a
+standing review criterion). 12 provider-bypass reads each wrap their existing body in one
+`ExecuteAsync` block (`SearchSuppliersAsync`'s two dependent queries share one block;
+`GetSupplierItemImagesByIdsAsync`'s `Count == 0` early return stays outside). The 13th,
+`GetReviewByIdAsync`, was deleted as dead code once W2 moved (Decision 3) rather than left as a
+repurposable bypass method.
+
+### Decision 2 — keep the `'provider'` role value; no dedicated sentinel (deferred hardening)
+ADR-028 minted `marketing_analytics_bypass` because it was **widening** a policy — adding a new
+value to `pos_transactions.store_scope`'s IN-list, which needed a migration. This change is
+different in kind: `provider_bypass` already exists and `MarketplaceRepository` already set
+`app.role='provider'`; wrapping it in `SET LOCAL` inside a short transaction only **narrows the
+duration** of an already-existing bypass (from "rest of the HTTP request" to "one transaction"). No
+policy changes, no new row becomes reachable, and `app.role` is never read as an authorization input
+outside RLS `USING` clauses (checked — `[Authorize(Policy = ProviderOnly)]` reads the JWT claim, not
+the DB GUC). A migration would buy nothing for correctness.
+
+**Blast radius, stated as a number:** `provider_bypass` was on **107 tables measured 2026-08-30**
+(`SELECT count(*) FROM pg_policies WHERE policyname='provider_bypass'`), and **109 a day later**
+after an unrelated concurrent migration (`20260830143000_AddCustomerMessageCampaignSnapshots`) — it
+grows with every new RLS table. So `'provider'` is a whole-schema cross-tenant read+write bypass; it
+is narrow **only in duration**, never by table. Phrase it that way, never as a fixed number.
+
+A dedicated sentinel (e.g. `marketplace_provider_bypass`, mirroring ADR-028) is recorded here as
+**deferred hardening**. Concrete revisit trigger: any new `IProviderRlsOverride` call site outside
+`MarketplaceRepository`, **or** any `ExecuteAsync` block body that touches a non-marketplace table
+or calls outward to another service/repository/override. The moment Decision 1's or Decision 3's
+containment invariant is relaxed, the sentinel stops being bikeshedding and becomes the right fix.
+
+### Decision 3 — repository-layer containment; `IProviderRlsOverride` never reaches the service layer
+Follows ADR-028 point 3. Two downstream cross-tenant writes legitimately needed the bypass (TASK-641
+§3 confirmed these are the only two — no third exists):
+- **W1** — `MarketplaceService.RecalculateRatingAsync` writes `supplier_metrics` under the
+  **supplier's** tenant while the session is the reviewer's. Became
+  `IMarketplaceRepository.UpsertMetricsRatingAsync(supplierId, supplierTenantId, rating, ct)` —
+  load-or-create + `SaveChangesAsync` in one `ExecuteAsync` block (covers both the UPDATE and the
+  cross-tenant INSERT branch).
+- **W2** — `SupplierCabinetService.ReplyToReviewAsync` writes `supplier_reviews` under the
+  **reviewer's** tenant while the session is the supplier's. Became
+  `SetReviewReplyAsync(supplierId, reviewId, replyText, repliedAt, ct)` — filtered load +
+  mutate + save in one block; returns `null` when absent (preserves "never reveal existence").
+
+Both composites have narrow, purpose-shaped signatures, touch exactly one table, and cannot express
+a general "run this under provider role" request. `IProviderRlsOverride` is deliberately **not**
+injected into `MarketplaceService`/`SupplierCabinetService` — there is no per-call trust value for a
+service to vouch for, and it keeps the contract surface minimal.
+
+**F10 caller contract** (XML doc + review criterion, not type-enforced): these composites call
+`SaveChangesAsync` on the shared `AppDbContext` under the provider role, so they flush **any**
+pending tracked change — every caller must flush its own writes first. Verified to hold at both call
+sites today (`CreateReviewAsync` flushes the review before `RecalculateRatingAsync`;
+`ReplyToReviewAsync` stages nothing before the composite). Both composites also detach the
+foreign-tenant entity after the block so no foreign row lingers in the shared change tracker.
+
+`ProviderRlsOverrideContainmentTests` (reflection over **Application + Infrastructure + Api**
+assemblies — Api added per TASK-645 C2 because `MarketplaceChatController` is live precedent for a
+controller injecting a repository directly) asserts `MarketplaceRepository` is the only type taking
+`IProviderRlsOverride` as a constructor parameter or holding it in a field.
+
+### Decision 4 — targeted application-level `TenantId` filtering at 3 `MarketplaceOrderService` sites
+A **scoped** adoption of KI-028's rejected option (c) — explicitly **not** a codebase-wide "add
+`WHERE TenantId=` everywhere" change. All three filters use `clientTenantId`, which is JWT-derived
+(`MarketplaceCooperationController.ResolveTenantId()`), never from the request body:
+1. `CheckCatalogConflictsAsync` — `matches.FirstOrDefault(m => m.TenantId == clientTenantId)`, so a
+   foreign row never reaches `MarketplaceOrderConflictingItemDto`.
+2. `PlanCatalogOutcomeAsync` — `linkedItem is null || linkedItem.TenantId != clientTenantId` →
+   the same `LinkedItemNotFoundError` as a genuine miss; collision set filtered to
+   `TenantId == clientTenantId`; the disproved doc comment (which asserted "ambient RLS resolves a
+   foreign-tenant id to null") rewritten. The matching second copy at
+   `MarketplaceOrderReceiptService.cs:153-154` was rewritten in the same change (R5).
+3. `ExecuteCatalogPlanAsync` — re-validates `plan.LinkedItem!.TenantId != clientTenantId` before
+   `_items.Update` (a genuinely independent second check — pass 1 and pass 2 are loop-separated).
+
+`ItemRepository.GetByAnyBarcodeAsync`/`GetByIdAsync`/`GetByBarcodeAsync` signatures are left
+untouched — adding a `tenantId` parameter contradicts `backend-structure.md`'s "trust RLS"
+convention. Filtering at the one consumer that sits next to the bypass is the proportionate change.
+
+Consequences:
++ The two composite writes and — after TASK-645 C1 — `NextOrderNumberAsync`'s order-number count no
+  longer rest on the leak. C1: `MP-{yyyy}-{NNN}` was only sequential-per-supplier because the leaked
+  `provider` role satisfied `marketplace_orders.provider_bypass`; a customer-visible identifier
+  scheme was unknowingly resting on the leak. `NextOrderNumberAsync` now counts inside
+  `_tenantSessionOverride.ExecuteAsync(supplierTenantId, …)`. There is no unique index on
+  `OrderNumber`, so removing the leak without C1 would have silently produced duplicate order
+  numbers for two clients of one supplier.
++ F2 (write vector) and F5 (cross-tenant Claude-API-key consumption on `/ai-recommend`) are both
+  closed by Part A — F5 for free, since the leak is what enabled it.
+- `GET /api/marketplace/suppliers/{id}`, `/items`, `/reviews` each now open 2–3 short explicit
+  transactions where they previously opened none — a few extra round-trips on these anonymous
+  endpoints. Consistency is unchanged (the statements were already separate).
+- Nested-transaction misuse of any override primitive now throws `InvalidOperationException` loudly
+  instead of silently joining the ambient transaction.
+- One new interface + implementation + DI line + 2 composite repo methods; `MarketplaceOrderServiceTests`
+  / `MarketplaceServiceTests` / `SupplierCabinetServiceTests` reworked; 2 new real-Postgres RLS
+  integration files. `AddMetricsAsync` (unused after W1 moved) and `GetReviewByIdAsync` (unused
+  after W2 moved) deleted from `IMarketplaceRepository`.
+- **F7 — the leak was previously bounded to one HTTP request only by Npgsql's default `DISCARD ALL`
+  pool reset on connection return (`No Reset On Close=false`, not overridden in any connection
+  string).** If that flag is ever set `true` for perf, this class of stale-`app.role` bug returns
+  **cross-request** — and `TenantConnectionInterceptor.BuildSetSql` would not save it: when the JWT
+  role is absent or not whitelisted it emits no `SET app.role` at all, and `supplier_admin` is not
+  in `TenantConnectionInterceptor.ValidRoles`, so supplier-cabinet requests would inherit whatever
+  stale value the pooled connection carried. Recorded here and in `backend-structure.md`.
+
+Supersedes: nothing. Introduces a second, independent `SET LOCAL` override primitive alongside
+ADR-028's `IAnalyticsRlsOverride`; changes no RLS policy and does not reopen ADR-028.
+
+Task breakdown: TASK-641 (pre-impl threat model, security-reviewer/opus — R1–R7) ∥ TASK-642 (prod
+`items` fail-open verification, database-engineer/opus — `database-schema.md:108` was stale, prod
+already fail-closed since the 2026-07-16 audit deploy, no migration) → TASK-643 + 643b
+(implementation + C1/C2 remediation, backend-developer/opus) → TASK-644 (real-Postgres RLS
+regression, qa-tester — leak proven to fail pre-fix) → TASK-645 (independent post-impl review,
+security-reviewer/opus — final verdict SHIP) → TASK-646 (this documentation pass). Uncommitted as of
+2026-08-30.
 
 ## ADR-034: CRM loyalty tier ladder, consumer self-service, support tickets, reviews — phone-change verification, composite-score formula/timing, per-item tier discount, worker-job write boundary, ticket/review pattern reuse, review-ownership resolution path
 Date: 2026-08-24

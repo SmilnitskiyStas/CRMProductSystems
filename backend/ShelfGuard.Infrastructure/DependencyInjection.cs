@@ -269,6 +269,14 @@ public static class DependencyInjection
         services.AddScoped<Application.Services.IAnalyticsRlsOverride,
             Services.AnalyticsRlsOverride>();
 
+        // TASK-643/KI-036 (ADR-035): scopes MarketplaceRepository's cross-tenant provider_bypass
+        // reads to one transaction each (SET LOCAL app.role = 'provider'), replacing the
+        // session-level SET that leaked the provider role into the rest of the HTTP request —
+        // see IProviderRlsOverride's doc for the security contract. Scoped, same as the two
+        // overrides above — wraps the request-scoped AppDbContext.
+        services.AddScoped<Application.Services.IProviderRlsOverride,
+            Services.ProviderRlsOverride>();
+
         // TASK-406 - Marketing analytics Фаза 1 (RFM engine + dashboard)
         services.AddScoped<Application.Features.MarketingAnalytics.IMarketingAnalyticsRepository,
             Data.Repositories.MarketingAnalyticsRepository>();

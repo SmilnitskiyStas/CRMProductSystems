@@ -122,7 +122,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             if (validationError is not null)
                 return (null, validationError, false);
 
-            var (plan, planError) = await PlanCatalogOutcomeAsync(item!, line, ct);
+            var (plan, planError) = await PlanCatalogOutcomeAsync(clientTenantId, item!, line, ct);
             if (planError is not null)
                 return (null, planError, false);
             plans.Add(plan!);
@@ -214,8 +214,14 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             if (barcodes.Count == 0)
                 continue;
 
+            // TASK-643/KI-036 defence in depth: IItemRepository.GetByAnyBarcodeAsync carries no
+            // app-level TenantId filter by convention (backend-structure.md) and relies on
+            // ambient RLS — which the marketplace provider bypass used to defeat, so a foreign
+            // tenant's Item could surface here and be echoed back (id, name, image, barcodes) as
+            // a "conflict" to a client whose own catalog is empty. clientTenantId is JWT-derived
+            // (MarketplaceCooperationController), never taken from the request body.
             var matches = await _items.GetByAnyBarcodeAsync(barcodes, ct);
-            var match = matches.FirstOrDefault();
+            var match = matches.FirstOrDefault(m => m.TenantId == clientTenantId);
             if (match is null)
                 continue;
 
@@ -413,16 +419,25 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
 
     /// <summary>
     /// Read-only planning step (TASK-598): resolves what CatalogAction means for this line
-    /// without writing anything. "link" validates LinkedItemId belongs to this client tenant
-    /// (ambient RLS on GetByIdAsync already enforces this — a foreign-tenant id resolves to null)
-    /// and genuinely shares a barcode with the SupplierItem (defence against a forged/stale
-    /// request). null/"auto"/"create_new" re-checks the barcode collision authoritatively — never
-    /// trusts a stale earlier call to CheckCatalogConflictsAsync — and rejects null/"auto" when a
+    /// without writing anything. "link" validates LinkedItemId belongs to this client tenant and
+    /// genuinely shares a barcode with the SupplierItem (defence against a forged/stale request).
+    /// null/"auto"/"create_new" re-checks the barcode collision authoritatively — never trusts a
+    /// stale earlier call to CheckCatalogConflictsAsync — and rejects null/"auto" when a
     /// collision exists, since silently guessing (auto-link or silent duplicate) is exactly what
     /// this feature must not do.
+    ///
+    /// TASK-643/KI-036: ownership of LinkedItemId, and the collision set, are checked HERE in the
+    /// application layer against the JWT-derived <paramref name="clientTenantId"/>. This used to
+    /// be delegated to ambient RLS ("a foreign-tenant id resolves to null on GetByIdAsync") —
+    /// that assumption was disproved: IItemRepository carries no app-level TenantId filter by
+    /// convention, and the marketplace provider bypass leaking into the request made
+    /// provider_bypass (PERMISSIVE, WITH CHECK defaulting to USING) resolve — and allow writes to
+    /// — every tenant's rows. RLS is still the outer layer; this is the second one, and it does
+    /// not depend on any session GUC being correct.
     /// </summary>
     private async Task<(CatalogPlan? Plan, string? Error)> PlanCatalogOutcomeAsync(
-        SupplierItem supplierItem, CreateMarketplaceOrderItemDto line, CancellationToken ct)
+        Guid clientTenantId, SupplierItem supplierItem, CreateMarketplaceOrderItemDto line,
+        CancellationToken ct)
     {
         var barcodes = supplierItem.Barcodes.Select(b => b.Barcode).ToList();
         var action = string.IsNullOrWhiteSpace(line.CatalogAction) ? "auto" : line.CatalogAction;
@@ -433,7 +448,9 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
                 return (null, LinkedItemRequiredError);
 
             var linkedItem = await _items.GetByIdAsync(line.LinkedItemId.Value, ct);
-            if (linkedItem is null)
+            // A foreign-tenant row is reported exactly like a missing one — never confirm that
+            // some other tenant owns this id.
+            if (linkedItem is null || linkedItem.TenantId != clientTenantId)
                 return (null, LinkedItemNotFoundError);
 
             if (barcodes.Count == 0 || !linkedItem.Barcodes.Intersect(barcodes).Any())
@@ -444,7 +461,11 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
 
         if (barcodes.Count > 0)
         {
-            var collisions = await _items.GetByAnyBarcodeAsync(barcodes, ct);
+            // Only THIS tenant's catalog can collide with this tenant's catalog — a foreign
+            // tenant's row sharing an EAN must never block a legitimate order.
+            var collisions = (await _items.GetByAnyBarcodeAsync(barcodes, ct))
+                .Where(i => i.TenantId == clientTenantId)
+                .ToList();
             if (collisions.Count > 0 && action != "create_new")
                 return (null, BarcodeCollisionError);
         }
@@ -473,7 +494,14 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     {
         if (plan.IsLink)
         {
-            plan.LinkedItem!.SourceSupplierItemId = plan.SupplierItem.Id;
+            // TASK-643/KI-036: re-validate ownership at the WRITE, not just at planning time.
+            // Pass 1 (planning) and pass 2 (execute) are separated by a whole loop, so the check
+            // that guarded the plan is not the check that guards the UPDATE. Cheap, and it closes
+            // the cross-tenant write vector even if a future refactor loosens planning.
+            if (plan.LinkedItem!.TenantId != clientTenantId)
+                return LinkedItemNotFoundError;
+
+            plan.LinkedItem.SourceSupplierItemId = plan.SupplierItem.Id;
             _items.Update(plan.LinkedItem);
             await _items.SaveChangesAsync(ct);
             return null;
@@ -583,12 +611,33 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         }, ct);
     }
 
-    /// <summary>«MP-{yyyy}-{NNN}» — NNN sequential per supplier via CountForSupplierAsync.</summary>
-    private async Task<string> NextOrderNumberAsync(Guid supplierTenantId, CancellationToken ct)
-    {
-        var seq = await _orders.CountForSupplierAsync(supplierTenantId, ct) + 1;
-        return $"MP-{DateTime.UtcNow.Year}-{seq:D3}";
-    }
+    /// <summary>
+    /// «MP-{yyyy}-{NNN}» — NNN sequential per supplier via CountForSupplierAsync.
+    ///
+    /// TASK-645 C1: the count MUST run under the SUPPLIER tenant's RLS context. This method is
+    /// called from CreateOrderAsync on the CLIENT session, and marketplace_orders'
+    /// tenant_isolation policy is OR-based (<c>"SupplierTenantId" = session OR "ClientTenantId" =
+    /// session</c>), so an ambient client session counts only the orders that client is a party to
+    /// — making NNN sequential per (supplier, client) pair instead of per supplier, and handing
+    /// two different clients of the same supplier the same MP-2026-001. There is no unique index
+    /// on OrderNumber, so that would corrupt silently.
+    ///
+    /// Until TASK-643 this happened to work only because MarketplaceRepository's leaked
+    /// session-level <c>app.role='provider'</c> satisfied marketplace_orders' provider_bypass for
+    /// the rest of the request (KI-036) — i.e. a customer-visible identifier scheme was
+    /// unknowingly resting on the RLS leak. Same ITenantSessionOverride pattern already used for
+    /// the cross-tenant notification outbox above; supplierTenantId is a trusted value here (it
+    /// came from GetSupplierTenantIdAsync and passed the ACTIVE-agreement gate), the target
+    /// policy is OR-based on SupplierTenantId so the supplier identity exposes exactly the
+    /// intended rows and nothing more, and no ambient transaction is open at this point (pass 2's
+    /// catalog saves have already completed).
+    /// </summary>
+    private Task<string> NextOrderNumberAsync(Guid supplierTenantId, CancellationToken ct) =>
+        _tenantSessionOverride.ExecuteAsync(supplierTenantId, async () =>
+        {
+            var seq = await _orders.CountForSupplierAsync(supplierTenantId, ct) + 1;
+            return $"MP-{DateTime.UtcNow.Year}-{seq:D3}";
+        }, ct);
 
     private static string? NormalizeComment(string? comment)
     {
