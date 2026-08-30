@@ -42,6 +42,8 @@ export interface LoyaltyCode {
   displayFormat: 'qr' | 'barcode';
   balance: number;
   expiresInSeconds: number;
+  accountNumber: string;
+  cardNumber: string | null;
 }
 
 export interface LoyaltyLedgerEntry {
@@ -109,6 +111,8 @@ export interface ResolveLoyaltyCodeResult {
   maskedPhone: string | null;
   balance: number;
 }
+
+export type LoyaltyIdentifierType = 'phone' | 'card' | 'account';
 
 export interface ManualLoyaltyAdjustRequest {
   membershipId: string;

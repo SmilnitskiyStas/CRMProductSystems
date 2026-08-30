@@ -6,6 +6,7 @@ import type {
   LoyaltyTierProgress,
   LoyaltyTierDefinition,
   LoyaltyNetworkSummary,
+  LoyaltyIdentifierType,
   ManualLoyaltyAdjustRequest,
   PagedResult,
   ResolveLoyaltyCodeResult,
@@ -93,6 +94,11 @@ export async function setPreferredStore(
 
 export async function resolveLoyaltyCode(code: string): Promise<ResolveLoyaltyCodeResult> {
   const { data } = await apiClient.post<ResolveLoyaltyCodeResult>('/loyalty/resolve-code', { code });
+  return data;
+}
+
+export async function resolveLoyaltyIdentifier(identifierType: LoyaltyIdentifierType, value: string): Promise<ResolveLoyaltyCodeResult> {
+  const { data } = await apiClient.post<ResolveLoyaltyCodeResult>('/loyalty/resolve-identifier', { identifierType, value });
   return data;
 }
 

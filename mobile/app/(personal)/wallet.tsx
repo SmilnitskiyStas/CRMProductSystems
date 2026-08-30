@@ -133,6 +133,10 @@ export default function WalletScreen() {
               )}
               <Text className="text-[10px] text-gray-400 mt-3 font-mono text-center">{codeData.code}</Text>
               <Text className="text-[11px] text-gray-400 mt-1">Код оновлюється автоматично</Text>
+              <View className="mt-3 w-full rounded-xl bg-gray-50 px-3 py-2">
+                {codeData.cardNumber ? <Text selectable className="text-center text-xs text-gray-600">Номер картки: <Text className="font-mono font-semibold">{codeData.cardNumber}</Text></Text> : null}
+                <Text selectable className="mt-1 text-center text-xs text-gray-600">ID акаунта: <Text className="font-mono font-semibold">{codeData.accountNumber}</Text></Text>
+              </View>
             </>
           ) : null}
 

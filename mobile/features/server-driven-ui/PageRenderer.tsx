@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
 import type { MobilePageConfig, RetailFeatureConfig } from '@/features/mobile-config/types';
 import { featureRequirementMet } from '@/features/feature-flags/policy';
@@ -76,6 +77,45 @@ export function PageRenderer({ pageKey }: { pageKey: string }) {
   const catalogByIds = useConsumerCatalogByIds(context, curatedIds);
   const networks = useAvailableNetworks(hasPersonalAccess);
   if (!page) return null;
+
+  // A configured promotions page used to render its block headings immediately while the
+  // consumer context/data was still unavailable. With two promotion blocks this produced
+  // exactly "Акції / Акції / Акції" and an otherwise blank screen. Keep the authored page,
+  // but give this data-driven surface the same loading/error/empty states as the static page.
+  if (pageKey === 'promotions') {
+    if (membershipsQuery.isLoading || promotions.isLoading || promotionCampaigns.isLoading) {
+      return <View className="items-center py-20"><ActivityIndicator size="large" color="#16a34a" /></View>;
+    }
+    if (!context) {
+      return (
+        <View className="items-center px-7 py-20">
+          <Ionicons name="storefront-outline" size={48} color="#9ca3af" />
+          <Text className="mt-4 text-center text-lg font-bold text-gray-900">Магазин не вибрано</Text>
+          <Text className="mt-2 text-center text-sm text-gray-500">Оберіть мережу та магазин, щоб побачити актуальні пропозиції.</Text>
+        </View>
+      );
+    }
+    if (promotions.isError || promotionCampaigns.isError) {
+      return (
+        <View className="items-center px-7 py-20">
+          <Text className="text-center text-gray-500">Не вдалося завантажити акції</Text>
+          <Pressable
+            onPress={() => void Promise.all([promotions.refetch(), promotionCampaigns.refetch()])}
+            className="mt-4 rounded-xl bg-green-700 px-5 py-3"
+          >
+            <Text className="font-bold text-white">Спробувати ще раз</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    const promotionItems = [
+      ...(promotions.data ?? []),
+      ...(promotionCampaigns.data ?? []).flatMap((item) => item.promotionProducts ?? []),
+    ];
+    if (promotionItems.length === 0) {
+      return <Text className="py-20 text-center text-gray-500">Активних акцій поки немає</Text>;
+    }
+  }
   // Builder blocks need the same reconciled store source as the static Home. Memberships carry
   // the persisted preferred store while the networks endpoint carries the complete store list.
   const storeNetworks = mergeStoreNetworks(networks.data, membershipsQuery.data);

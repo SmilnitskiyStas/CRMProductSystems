@@ -27,6 +27,14 @@ public interface ILoyaltyService
     Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetAvailableNetworksAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Returns discoverable networks plus the full store list for networks the consumer has
+    /// already joined. A discovery feature flag may prevent new joins, but must not collapse an
+    /// existing member's store picker to only the preferred store carried by the membership DTO.
+    /// </summary>
+    Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetNetworksForConsumerAsync(
+        Guid consumerAccountId, CancellationToken ct = default);
+
+    /// <summary>
     /// TASK-548: single-network lookup backing <c>GET /api/v1/retailers/{slug}</c>. Applies the
     /// exact same eligibility rule <see cref="GetAvailableNetworksAsync"/> filters its list by
     /// (decision 1's accepted consequence) — an unknown slug, an inactive tenant, a tenant
@@ -171,6 +179,9 @@ public interface ILoyaltyService
     /// </summary>
     Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveCodeAsync(
         Guid tenantId, Guid staffUserId, string scannedValue, CancellationToken ct = default);
+
+    Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveNumericIdentifierAsync(
+        Guid tenantId, string identifierType, string value, CancellationToken ct = default);
 
     /// <summary>store_manager+. Status codes: 404 membership not found, 400 would go negative.</summary>
     Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> ManualAdjustAsync(

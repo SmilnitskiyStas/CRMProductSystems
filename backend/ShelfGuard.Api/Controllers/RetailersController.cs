@@ -48,8 +48,9 @@ public sealed class RetailersController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<LoyaltyNetworkSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRetailers(CancellationToken ct)
     {
-        if (ResolveConsumerAccountId() is null) return Forbid();
-        return Ok(await _loyalty.GetAvailableNetworksAsync(ct));
+        var consumerId = ResolveConsumerAccountId();
+        if (consumerId is null) return Forbid();
+        return Ok(await _loyalty.GetNetworksForConsumerAsync(consumerId.Value, ct));
     }
 
     /// <summary>Single retailer lookup by slug. 404 for an unknown, inactive, or

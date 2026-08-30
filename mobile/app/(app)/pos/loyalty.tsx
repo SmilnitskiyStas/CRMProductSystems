@@ -14,8 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BarcodeCameraView } from '@/features/pos/components/BarcodeCameraView';
-import { useResolveLoyaltyCode } from '@/features/loyalty/hooks/useLoyalty';
-import type { ResolveLoyaltyCodeResult } from '@/features/loyalty/types';
+import { useResolveLoyaltyCode, useResolveLoyaltyIdentifier } from '@/features/loyalty/hooks/useLoyalty';
+import type { LoyaltyIdentifierType, ResolveLoyaltyCodeResult } from '@/features/loyalty/types';
 import { useCustomers } from '@/features/customers/hooks/useCustomers';
 import { CustomerCard } from '@/features/customers/components/CustomerCard';
 import type { SaleItem } from '@/features/pos/types';
@@ -64,10 +64,12 @@ export default function PosLoyaltyScreen() {
   const [resolved, setResolved] = useState<ResolveLoyaltyCodeResult | null>(null);
   const [manualCustomer, setManualCustomer] = useState<{ id: string; name: string } | null>(null);
   const [redeemText, setRedeemText] = useState('');
-  const [codeText, setCodeText] = useState('');
+  const [identifierText, setIdentifierText] = useState('');
+  const [identifierType, setIdentifierType] = useState<LoyaltyIdentifierType>('phone');
   const [customerSearch, setCustomerSearch] = useState('');
 
   const resolveMutation = useResolveLoyaltyCode();
+  const identifierMutation = useResolveLoyaltyIdentifier();
   const { data: customersPage, isLoading: customersLoading } = useCustomers(customerSearch);
 
   const resumeScanning = () => {
@@ -100,6 +102,17 @@ export default function PosLoyaltyScreen() {
     lastScanRef.current = data;
     setScanning(false);
     handleResolve(data);
+  };
+
+  const handleIdentifierResolve = () => {
+    if (!identifierText) return;
+    identifierMutation.mutate({ identifierType, value: identifierText }, {
+      onSuccess: (result) => { setResolved(result); setManualCustomer(null); },
+      onError: (err: unknown) => {
+        const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        Alert.alert('Клієнта не знайдено', message ?? 'Перевірте введені цифри та мережу каси.');
+      },
+    });
   };
 
   const redeemAmount = parseFloat(redeemText.replace(',', '.')) || 0;
@@ -253,7 +266,7 @@ export default function PosLoyaltyScreen() {
                     className={`flex-1 py-2 rounded-lg items-center ${mode === m ? 'bg-white' : ''}`}
                   >
                     <Text className={`text-xs font-semibold ${mode === m ? 'text-gray-900' : 'text-gray-400'}`}>
-                      {m === 'scan' ? 'QR-скан' : m === 'code-entry' ? 'Код вручну' : 'Пошук клієнта'}
+                      {m === 'scan' ? 'QR-скан' : m === 'code-entry' ? 'За номером' : 'Пошук клієнта'}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -272,27 +285,36 @@ export default function PosLoyaltyScreen() {
 
               {mode === 'code-entry' && (
                 <View className="mx-4 mt-4">
-                  <Text className="text-sm font-semibold text-gray-600 mb-2">Повний код з екрану клієнта</Text>
+                  <Text className="text-sm font-semibold text-gray-600 mb-2">Як знайти покупця</Text>
+                  <View className="mb-3 flex-row rounded-xl bg-gray-100 p-1">
+                    {([['phone', 'Телефон'], ['card', 'Картка'], ['account', 'ID акаунта']] as const).map(([type, label]) => (
+                      <TouchableOpacity key={type} onPress={() => { setIdentifierType(type); setIdentifierText(''); }} className={`flex-1 items-center rounded-lg py-2 ${identifierType === type ? 'bg-white' : ''}`}>
+                        <Text className={`text-xs font-semibold ${identifierType === type ? 'text-gray-900' : 'text-gray-400'}`}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                   <TextInput
                     className="border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-900 bg-gray-50"
-                    placeholder="SGCUS1.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.123456"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={codeText}
-                    onChangeText={setCodeText}
+                    placeholder={identifierType === 'phone' ? '380XXXXXXXXX' : identifierType === 'card' ? 'Номер картки' : 'Цифровий ID акаунта'}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    maxLength={39}
+                    value={identifierText}
+                    onChangeText={(value) => setIdentifierText(value.replace(/\D/g, ''))}
                   />
+                  <Text className="mt-1 text-xs text-gray-400">Дозволені лише цифри. Пошук виконується тільки в мережі цієї каси.</Text>
                   <TouchableOpacity
-                    onPress={() => codeText.trim() && handleResolve(codeText.trim())}
-                    disabled={resolveMutation.isPending || !codeText.trim()}
+                    onPress={handleIdentifierResolve}
+                    disabled={identifierMutation.isPending || !identifierText}
                     className={`mt-3 rounded-xl py-3 items-center ${
-                      resolveMutation.isPending || !codeText.trim() ? 'bg-gray-200' : 'bg-primary-600'
+                      identifierMutation.isPending || !identifierText ? 'bg-gray-200' : 'bg-primary-600'
                     }`}
                   >
-                    {resolveMutation.isPending ? (
+                    {identifierMutation.isPending ? (
                       <ActivityIndicator color="white" />
                     ) : (
-                      <Text className={`font-semibold ${!codeText.trim() ? 'text-gray-400' : 'text-white'}`}>
-                        Перевірити
+                      <Text className={`font-semibold ${!identifierText ? 'text-gray-400' : 'text-white'}`}>
+                        Знайти покупця
                       </Text>
                     )}
                   </TouchableOpacity>

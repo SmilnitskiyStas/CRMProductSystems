@@ -49,4 +49,13 @@ describe('retail navigation policy', () => {
     expect(personalRouteAllowed('wallet', config.features, true)).toBe(true);
     expect(personalRouteAllowed('account', config.features, false)).toBe(true);
   });
+
+  test('allows the transactions screen through its configured loyalty parent route', () => {
+    const config = createMockMobileConfig('tenant-a');
+    const features = { ...config.features, loyalty: false };
+
+    expect(personalRouteAllowed('history', features, true)).toBe(false);
+    expect(personalRouteAllowed('history', features, true, config.navigation)).toBe(true);
+    expect(personalRouteAllowed('history', features, false, config.navigation)).toBe(false);
+  });
 });

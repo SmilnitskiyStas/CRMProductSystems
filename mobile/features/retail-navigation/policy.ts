@@ -67,12 +67,15 @@ export function resolveRetailNavigation(
 }
 
 const protectedPersonalScreens: Readonly<
-  Record<string, { feature?: RetailFeatureKey; requiresPersonalAccess?: boolean }>
+  Record<string, { feature?: RetailFeatureKey; requiresPersonalAccess?: boolean; parentRoute?: RetailNavigationRoute }>
 > = {
   promotions: { feature: 'promotions' },
   catalog: { feature: 'catalog' },
   wallet: { feature: 'loyalty', requiresPersonalAccess: true },
-  history: { feature: 'loyalty', requiresPersonalAccess: true },
+  // History is opened from the Transactions button inside the loyalty wallet; it cannot be
+  // authored as a standalone navigation item. Treat the configured loyalty route as its parent
+  // so an explicit Wallet tab remains authoritative even when the legacy feature seed is false.
+  history: { feature: 'loyalty', requiresPersonalAccess: true, parentRoute: 'loyalty' },
   coupons: { feature: 'coupons' },
   news: { feature: 'news' },
 };
@@ -86,7 +89,9 @@ export function personalRouteAllowed(
   if (!screen) return true;
   const requirement = protectedPersonalScreens[screen];
   if (!requirement) return true;
-  const configuredScreen = navigation.some((item) => retailRoutePolicies[item.type]?.screen === screen);
+  const configuredScreen = navigation.some((item) =>
+    retailRoutePolicies[item.type]?.screen === screen || item.type === requirement.parentRoute
+  );
   if (!configuredScreen && requirement.feature && !features[requirement.feature]) return false;
   return !requirement.requiresPersonalAccess || hasPersonalAccess;
 }

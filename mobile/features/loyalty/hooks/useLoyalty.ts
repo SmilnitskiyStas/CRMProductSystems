@@ -14,10 +14,11 @@ import {
   joinRetailerBySlug,
   manualAdjustLoyalty,
   resolveLoyaltyCode,
+  resolveLoyaltyIdentifier,
   setPreferredStore,
 } from '../api/loyaltyApi';
 import { useLoyaltyUiStore } from '../store';
-import type { LoyaltyMembershipSummary } from '../types';
+import type { LoyaltyIdentifierType, LoyaltyMembershipSummary } from '../types';
 
 // ─── Consumer wallet ──────────────────────────────────────────────────────────
 
@@ -167,6 +168,13 @@ export function useSetPreferredStore() {
 export function useResolveLoyaltyCode() {
   return useMutation({
     mutationFn: (code: string) => resolveLoyaltyCode(code),
+  });
+}
+
+export function useResolveLoyaltyIdentifier() {
+  return useMutation({
+    mutationFn: ({ identifierType, value }: { identifierType: LoyaltyIdentifierType; value: string }) =>
+      resolveLoyaltyIdentifier(identifierType, value),
   });
 }
 

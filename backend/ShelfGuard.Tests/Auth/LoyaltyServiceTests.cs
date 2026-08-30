@@ -1271,6 +1271,43 @@ public sealed class LoyaltyServiceTests
     }
 
     [Fact]
+    public async Task GetNetworksForConsumerAsync_returns_all_stores_for_existing_member_when_discovery_flag_is_disabled()
+    {
+        var consumerId = Guid.NewGuid();
+        var tenant = MakeTenant("loyalty");
+        _tenants.GetAllAsync(default).Returns([tenant]);
+        _featureFlags.IsEnabledAsync(tenant.Id, "loyalty", default).Returns(false);
+        _loyalty.GetMembershipsForConsumerAsync(consumerId, default).Returns([
+            new LoyaltyMembership
+            {
+                TenantId = tenant.Id,
+                ConsumerAccountId = consumerId,
+                Status = LoyaltyMembershipStatus.Active,
+            },
+        ]);
+        _loyalty.GetSettingsAsync(tenant.Id, default).Returns(new LoyaltyProgramSettings
+        {
+            TenantId = tenant.Id,
+            IsEnabled = false,
+        });
+        var stores = new[]
+        {
+            MakeLocation(tenant.Id, "Магазин 1"),
+            MakeLocation(tenant.Id, "Магазин 2"),
+            MakeLocation(tenant.Id, "Магазин 3"),
+        };
+        _locations.GetAllAsync(default).Returns(stores.ToList());
+
+        var result = await _sut.GetNetworksForConsumerAsync(consumerId);
+
+        var network = Assert.Single(result);
+        Assert.Equal(3, network.Stores.Count);
+        Assert.Equal(stores.Select(store => store.Id), network.Stores.Select(store => store.StoreId));
+        await _featureFlags.DidNotReceiveWithAnyArgs()
+            .IsEnabledAsync(default, default!, default);
+    }
+
+    [Fact]
     public async Task GetSettingsAsync_no_saved_row_returns_defaults_with_null_updatedAt()
     {
         var tenantId = Guid.NewGuid();

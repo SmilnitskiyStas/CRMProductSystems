@@ -49,6 +49,21 @@ public sealed class LoyaltyController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("resolve-identifier")]
+    [Authorize(Policy = AppPolicies.CanAccessPos)]
+    [ProducesResponseType(typeof(ResolveLoyaltyCodeResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResolveIdentifier(
+        [FromBody] ResolveLoyaltyIdentifierRequest request, CancellationToken ct)
+    {
+        var tenantId = _tenantContext.TenantId;
+        if (tenantId is null) return Forbid();
+        var (result, error, statusCode) = await _loyalty.ResolveNumericIdentifierAsync(
+            tenantId.Value, request.IdentifierType, request.Value, ct);
+        return error is null ? Ok(result) : StatusCode(statusCode ?? 400, new { error });
+    }
+
     /// <summary>
     /// TASK-498: staff types a phone at the register (POS "no QR" fallback) instead of the
     /// consumer manually selecting/typing a store's GUID. Resolves the ConsumerAccount for that

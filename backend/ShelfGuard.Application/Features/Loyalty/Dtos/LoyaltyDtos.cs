@@ -71,7 +71,9 @@ public sealed record LoyaltyCodeDto(
     string Code,
     string DisplayFormat,
     decimal Balance,
-    int ExpiresInSeconds);
+    int ExpiresInSeconds,
+    string AccountNumber,
+    string? CardNumber);
 
 public sealed record LoyaltyLedgerEntryDto(
     Guid Id,
@@ -168,6 +170,9 @@ public sealed record LoyaltyTierChangeHistoryDto(
 
 /// <summary>Full scanned/typed payload, e.g. "SGLOY1.{membershipId}.{6-digit-code}".</summary>
 public sealed record ResolveLoyaltyCodeRequest(string Code);
+
+/// <summary>Numeric-only POS fallback when a rotating QR/barcode cannot be scanned.</summary>
+public sealed record ResolveLoyaltyIdentifierRequest(string IdentifierType, string Value);
 
 public sealed record ResolveLoyaltyCodeResult(
     Guid MembershipId,

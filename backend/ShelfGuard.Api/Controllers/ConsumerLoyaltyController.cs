@@ -62,8 +62,9 @@ public sealed class ConsumerLoyaltyController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<LoyaltyNetworkSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNetworks(CancellationToken ct)
     {
-        if (ResolveConsumerAccountId() is null) return Forbid();
-        return Ok(await _loyalty.GetAvailableNetworksAsync(ct));
+        var consumerId = ResolveConsumerAccountId();
+        if (consumerId is null) return Forbid();
+        return Ok(await _loyalty.GetNetworksForConsumerAsync(consumerId.Value, ct));
     }
 
     /// <summary>

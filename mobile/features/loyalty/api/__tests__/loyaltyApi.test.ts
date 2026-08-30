@@ -1,5 +1,5 @@
 import MockAdapter from 'axios-mock-adapter';
-import { personalApiClient } from '@/lib/api-client';
+import { apiClient, personalApiClient } from '@/lib/api-client';
 import {
   getAvailableNetworks,
   getLoyaltyHistory,
@@ -7,9 +7,24 @@ import {
   getPublicRetailer,
   joinRetailerBySlug,
   setPreferredStore,
+  resolveLoyaltyIdentifier,
 } from '../loyaltyApi';
 
 const mock = new MockAdapter(personalApiClient);
+const staffMock = new MockAdapter(apiClient);
+
+describe('resolveLoyaltyIdentifier', () => {
+  afterEach(() => staffMock.reset());
+
+  it.each(['phone', 'card', 'account'] as const)('sends a numeric %s lookup to the tenant-scoped POS endpoint', async (identifierType) => {
+    staffMock.onPost('/loyalty/resolve-identifier').reply((config) => {
+      expect(JSON.parse(config.data)).toEqual({ identifierType, value: '1234567890' });
+      return [200, { membershipId: 'membership-a', customerId: null, customerName: 'Покупець', maskedPhone: null, balance: 0 }];
+    });
+
+    await expect(resolveLoyaltyIdentifier(identifierType, '1234567890')).resolves.toMatchObject({ membershipId: 'membership-a' });
+  });
+});
 
 describe('getLoyaltyCode', () => {
   afterEach(() => mock.reset());

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Numerics;
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
 using ShelfGuard.Application.Features.MobileConfig;
@@ -217,17 +218,33 @@ public sealed class LoyaltyService : ILoyaltyService
     /// </summary>
     public async Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetAvailableNetworksAsync(
         CancellationToken ct = default)
+        => await GetNetworksCoreAsync(new HashSet<Guid>(), ct);
+
+    public async Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetNetworksForConsumerAsync(
+        Guid consumerAccountId, CancellationToken ct = default)
+    {
+        var memberships = await _loyalty.GetMembershipsForConsumerAsync(consumerAccountId, ct);
+        var joinedTenantIds = memberships
+            .Where(m => m.Status == LoyaltyMembershipStatus.Active)
+            .Select(m => m.TenantId)
+            .ToHashSet();
+        return await GetNetworksCoreAsync(joinedTenantIds, ct);
+    }
+
+    private async Task<IReadOnlyList<LoyaltyNetworkSummaryDto>> GetNetworksCoreAsync(
+        IReadOnlySet<Guid> joinedTenantIds, CancellationToken ct)
     {
         var tenants = await _tenants.GetAllAsync(ct);
         var result = new List<LoyaltyNetworkSummaryDto>();
         foreach (var tenant in tenants.Where(t => t.IsActive && t.HasModule("loyalty")))
         {
-            if (!await _featureFlags.IsEnabledAsync(tenant.Id, "loyalty", ct))
+            var isExistingMember = joinedTenantIds.Contains(tenant.Id);
+            if (!isExistingMember && !await _featureFlags.IsEnabledAsync(tenant.Id, "loyalty", ct))
                 continue;
 
             var (settings, stores) = await _tenantScope.ExecuteAsync(
                 tenant.Id, () => LoadNetworkDetailsAsync(tenant.Id, ct), ct);
-            if (settings?.IsEnabled == false) continue;
+            if (!isExistingMember && settings?.IsEnabled == false) continue;
             result.Add(new LoyaltyNetworkSummaryDto(tenant.Id, tenant.Name, tenant.Slug, stores));
         }
         return result;
@@ -384,10 +401,11 @@ public sealed class LoyaltyService : ILoyaltyService
             return (null, "Consumer account not found.", 404);
 
         string displayFormat;
+        LoyaltyMembership? selectedMembership = null;
         if (tenantId is not null)
         {
-            var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId.Value, consumerAccountId, ct);
-            if (membership is null)
+            selectedMembership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId.Value, consumerAccountId, ct);
+            if (selectedMembership is null)
                 return (null, "You are not a member of this network.", 403);
 
             displayFormat = await ResolveCustomerCodeFormatAsync(tenantId.Value, ct);
@@ -398,8 +416,9 @@ public sealed class LoyaltyService : ILoyaltyService
             if (memberships.Count >= 2)
                 return (null, "network_selection_required", 409);
 
-            displayFormat = memberships.Count == 1
-                ? await ResolveCustomerCodeFormatAsync(memberships[0].TenantId, ct)
+            selectedMembership = memberships.Count == 1 ? memberships[0] : null;
+            displayFormat = selectedMembership is not null
+                ? await ResolveCustomerCodeFormatAsync(selectedMembership.TenantId, ct)
                 : "barcode"; // 0 memberships — system default, no network context exists yet
         }
 
@@ -412,7 +431,8 @@ public sealed class LoyaltyService : ILoyaltyService
 
         var code = _totp.GenerateCode(consumer.LoyaltyTotpSecret);
         var payload = $"{ConsumerCodePrefix}.{consumer.Id}.{code}";
-        return (new LoyaltyCodeDto(payload, displayFormat, 0m, 30), null, null);
+        return (new LoyaltyCodeDto(payload, displayFormat, selectedMembership?.Balance ?? 0m, 30,
+            GuidAsDigits(consumer.Id), selectedMembership is null ? null : GuidAsDigits(selectedMembership.Id)), null, null);
     }
 
     /// <summary>
@@ -652,6 +672,67 @@ public sealed class LoyaltyService : ILoyaltyService
 
         return (new ResolveLoyaltyCodeResult(
             membership.Id, membership.CustomerId, customerName, maskedPhone, membership.Balance), null, null);
+    }
+
+    public async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveNumericIdentifierAsync(
+        Guid tenantId, string identifierType, string value, CancellationToken ct = default)
+    {
+        var digits = value?.Trim() ?? string.Empty;
+        if (digits.Length == 0 || digits.Any(ch => ch < '0' || ch > '9'))
+            return (null, "Identifier must contain digits only.", 400);
+
+        LoyaltyMembership? membership;
+        ConsumerAccount? consumer;
+        switch (identifierType?.Trim().ToLowerInvariant())
+        {
+            case "phone":
+            {
+                var normalized = PhoneNormalizer.Normalize(digits);
+                if (normalized is null) return (null, "Invalid phone number.", 400);
+                consumer = await _consumerAccounts.GetByPhoneAsync(normalized, ct);
+                if (consumer is null || !consumer.IsActive) return (null, "Customer not found.", 404);
+                membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumer.Id, ct);
+                break;
+            }
+            case "account":
+            {
+                if (!TryDigitsAsGuid(digits, out var consumerId)) return (null, "Invalid account ID.", 400);
+                consumer = await _consumerAccounts.GetByIdAsync(consumerId, ct);
+                if (consumer is null || !consumer.IsActive) return (null, "Customer not found.", 404);
+                membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumer.Id, ct);
+                break;
+            }
+            case "card":
+            {
+                if (!TryDigitsAsGuid(digits, out var membershipId)) return (null, "Invalid card number.", 400);
+                membership = await _loyalty.GetMembershipByIdAsync(membershipId, tenantId, ct);
+                consumer = membership is null ? null : await _consumerAccounts.GetByIdAsync(membership.ConsumerAccountId, ct);
+                break;
+            }
+            default:
+                return (null, "Unsupported identifier type.", 400);
+        }
+
+        if (membership is null || consumer is null) return (null, "Customer is not a member of this network.", 404);
+        if (membership.Status != LoyaltyMembershipStatus.Active) return (null, "This loyalty membership is blocked.", 400);
+        var customer = membership.CustomerId.HasValue
+            ? await _customers.GetByIdAsync(membership.CustomerId.Value, tenantId, ct)
+            : null;
+        return (new ResolveLoyaltyCodeResult(membership.Id, membership.CustomerId, customer?.Name,
+            MaskPhone(consumer.Phone), membership.Balance), null, null);
+    }
+
+    private static string GuidAsDigits(Guid id) => new BigInteger(id.ToByteArray(), isUnsigned: true).ToString();
+
+    private static bool TryDigitsAsGuid(string digits, out Guid id)
+    {
+        id = Guid.Empty;
+        if (!BigInteger.TryParse(digits, out var number) || number < 0) return false;
+        var bytes = number.ToByteArray(isUnsigned: true);
+        if (bytes.Length > 16) return false;
+        Array.Resize(ref bytes, 16);
+        id = new Guid(bytes);
+        return id != Guid.Empty;
     }
 
     private async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)>
