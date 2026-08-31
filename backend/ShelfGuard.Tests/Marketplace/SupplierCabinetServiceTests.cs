@@ -185,6 +185,49 @@ public sealed class SupplierCabinetServiceTests
     }
 
     [Fact]
+    public async Task UpdateProfileAsync_DeliveryCoverage_ValidatesSerializes_StopsWritingDeliveryRegions()
+    {
+        var (profile, _) = ArrangeOwnSupplier();
+
+        var coverage = new DeliveryCoverageDto(
+            new[] { new DeliveryCoverageEntryDto("UA-46", "Львів і область") },
+            new[] { "UA-40" },
+            null);
+
+        var (dto, error) = await _sut.UpdateProfileAsync(_tenantId, new CabinetProfileUpdateDto(
+            Region: null, Categories: null, Website: null, DeliveryRegions: null,
+            WorkingHours: null, PaymentTerms: null, DeliveryCoverage: coverage));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+#pragma warning disable CS0618
+        Assert.Null(profile.DeliveryRegions);
+#pragma warning restore CS0618
+        var stored = DeliveryCoverageJson.Parse(profile.DeliveryCoverage);
+        Assert.Equal("UA-46", stored!.Served[0].RegionCode);
+        Assert.Equal("Львів і область", stored.Served[0].Terms);
+        Assert.Equal(new[] { "UA-40" }, stored.NotServed);
+        Assert.Equal("UA-46", dto!.DeliveryCoverage!.Served[0].RegionCode);
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_InvalidDeliveryCoverage_ReturnsError_DoesNotSave()
+    {
+        ArrangeOwnSupplier();
+
+        var bad = new DeliveryCoverageDto(
+            new[] { new DeliveryCoverageEntryDto("UA-9999", null) }, Array.Empty<string>(), null);
+
+        var (dto, error) = await _sut.UpdateProfileAsync(_tenantId, new CabinetProfileUpdateDto(
+            null, null, null, null, null, null, DeliveryCoverage: bad));
+
+        Assert.Null(dto);
+        Assert.NotNull(error);
+        _repo.DidNotReceive().UpdateProfile(Arg.Any<SupplierProfile>());
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task TogglePublishAsync_FlipsIsPublic()
     {
         var (profile, _) = ArrangeOwnSupplier(isPublic: false);

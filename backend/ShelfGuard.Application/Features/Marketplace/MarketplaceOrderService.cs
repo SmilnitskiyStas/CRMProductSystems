@@ -61,6 +61,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     private readonly ITenantSessionOverride _tenantSessionOverride;
     private readonly IItemRepository _items;
     private readonly IItemService _itemService;
+    private readonly ILocationRepository _locations;
 
     public MarketplaceOrderService(
         IMarketplaceOrderRepository orders,
@@ -70,7 +71,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         INotificationRepository notifications,
         ITenantSessionOverride tenantSessionOverride,
         IItemRepository items,
-        IItemService itemService)
+        IItemService itemService,
+        ILocationRepository locations)
     {
         _orders      = orders;
         _agreements  = agreements;
@@ -80,6 +82,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         _tenantSessionOverride = tenantSessionOverride;
         _items       = items;
         _itemService = itemService;
+        _locations   = locations;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -95,6 +98,13 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         // the DB column stays nullable so historical pre-migration orders remain valid rows).
         if (request.DestinationStoreId is null)
             return (null, DestinationStoreRequiredError, false);
+
+        // TASK-650: snapshot the destination location's region at creation time (like ADR-033 for
+        // receipts) — a location's RegionCode may be corrected later, but the delivery-time-by-
+        // region metric must reflect where the order actually went. Loaded under the caller's
+        // (client) RLS context; a foreign/unknown id resolves to null → DestinationRegionCode
+        // stays null, which is acceptable.
+        var destination = await _locations.GetByIdAsync(request.DestinationStoreId.Value, ct);
 
         var supplierTenantId = await _marketplace.GetSupplierTenantIdAsync(supplierId, ct);
         if (supplierTenantId is null)
@@ -164,6 +174,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             TotalAmount      = orderItems.Sum(i => i.LineTotal),
             CreatedByUserId  = userId,
             DestinationStoreId = request.DestinationStoreId,
+            DestinationRegionCode = destination?.RegionCode,
         };
 
         foreach (var item in orderItems)

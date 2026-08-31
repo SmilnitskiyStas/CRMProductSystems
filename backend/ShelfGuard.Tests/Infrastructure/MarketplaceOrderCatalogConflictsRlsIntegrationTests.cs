@@ -291,7 +291,8 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             // would return a null OrderNumber and the insert would violate the NOT NULL column.
             new TenantSessionOverride(db),
             new ItemRepository(db),
-            new ItemService(new ItemRepository(db)));
+            new ItemService(new ItemRepository(db)),
+            new LocationRepository(db));
     }
 
     private static async Task<string?> CurrentRoleAsync(AppDbContext db)

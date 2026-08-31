@@ -60,6 +60,14 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
 
         var (profile, supplier) = resolved.Value;
 
+        // TASK-650: DeliveryRegions is no longer written — validate structured coverage first.
+        if (request.DeliveryCoverage is not null)
+        {
+            var coverageErrors = DeliveryCoverageJson.Validate(request.DeliveryCoverage);
+            if (coverageErrors.Count > 0)
+                return (null, string.Join(" ", coverageErrors));
+        }
+
         // Patch semantics — only provided fields are applied.
         // IsPublic (publish toggle) and Plan are intentionally not editable here.
         if (request.Region is not null)
@@ -68,8 +76,8 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
             profile.Categories = JsonSerializer.Serialize(request.Categories);
         if (request.Website is not null)
             profile.Website = request.Website.Trim();
-        if (request.DeliveryRegions is not null)
-            profile.DeliveryRegions = JsonSerializer.Serialize(request.DeliveryRegions);
+        if (request.DeliveryCoverage is not null)
+            profile.DeliveryCoverage = DeliveryCoverageJson.Serialize(request.DeliveryCoverage);
         if (request.WorkingHours is not null)
             profile.WorkingHours = request.WorkingHours.Trim();
         if (request.PaymentTerms is not null)
@@ -177,9 +185,7 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
         if (m is null)
             return (new SupplierMetricsDto(null, null, null, null, null, null, DateTimeOffset.UtcNow), null);
 
-        return (new SupplierMetricsDto(
-            m.Rating, m.AvgDeliveryDays, m.OrderAccuracy, m.QualityScore,
-            m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt), null);
+        return (MarketplaceService.ToMetricsDto(m), null);
     }
 
     public const int MaxReplyTextLength = 2000;
@@ -398,16 +404,16 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
             p.Region,
             DeserializeStringArray(p.Categories),
             p.Website,
+#pragma warning disable CS0618 // deprecated legacy free-text list — still surfaced until the T14 backfill runs
             DeserializeStringArray(p.DeliveryRegions),
+#pragma warning restore CS0618
             p.WorkingHours,
             p.PaymentTerms,
             p.IsPublic,
             p.Plan,
-            m is not null
-                ? new SupplierMetricsDto(
-                    m.Rating, m.AvgDeliveryDays, m.OrderAccuracy, m.QualityScore,
-                    m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt)
-                : null);
+            m is not null ? MarketplaceService.ToMetricsDto(m) : null,
+            ReviewStats: null,
+            DeliveryCoverage: DeliveryCoverageJson.Parse(p.DeliveryCoverage));
 
     private static SupplierItemDto ToItemDto(SupplierItem i) =>
         new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable,

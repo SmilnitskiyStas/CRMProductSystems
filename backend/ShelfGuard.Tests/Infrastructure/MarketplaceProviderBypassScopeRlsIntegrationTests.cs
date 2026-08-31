@@ -397,7 +397,8 @@ public sealed class MarketplaceProviderBypassScopeRlsIntegrationTests : IAsyncLi
             // Real override — the supplier-scoped order-number count is exactly what's under test.
             new TenantSessionOverride(db),
             new ItemRepository(db),
-            new ItemService(new ItemRepository(db)));
+            new ItemService(new ItemRepository(db)),
+            new LocationRepository(db));
     }
 
     private sealed record TwoClientOrderFixture(

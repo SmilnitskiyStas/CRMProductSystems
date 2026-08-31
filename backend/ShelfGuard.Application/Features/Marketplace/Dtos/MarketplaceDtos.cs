@@ -12,6 +12,11 @@ public record SupplierListItemDto(
     bool IsPublic);
 
 /// <summary>Full supplier profile. Premium fields are null for unauthenticated / free-plan callers.</summary>
+/// <remarks>
+/// <see cref="DeliveryCoverage"/> (TASK-650) is NOT premium-gated — it is populated for every
+/// caller. <see cref="DeliveryRegions"/> is the deprecated legacy free-text list, fed from the
+/// obsolete <c>supplier_profiles.DeliveryRegions</c> column until the T14 backfill runs.
+/// </remarks>
 public record SupplierProfileDto(
     Guid SupplierId,
     string SupplierName,
@@ -24,7 +29,8 @@ public record SupplierProfileDto(
     bool IsPublic,
     string Plan,
     SupplierMetricsDto? Metrics,
-    SupplierReviewStatsDto? ReviewStats = null);
+    SupplierReviewStatsDto? ReviewStats = null,
+    DeliveryCoverageDto? DeliveryCoverage = null);
 
 public record SupplierMetricsDto(
     decimal? Rating,
@@ -33,7 +39,45 @@ public record SupplierMetricsDto(
     decimal? QualityScore,
     decimal? CancellationRate,
     decimal? ResponseTimeHours,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    // TASK-650: worker-computed delivery/response aggregates (nullable — the nightly job may not
+    // have run yet, or there may be no data behind a given metric).
+    IReadOnlyList<RegionDeliveryStatDto>? DeliveryByRegion = null,
+    int? DeliverySampleSize = null,
+    int? ResponseSampleSize = null,
+    DateTimeOffset? AggregatesComputedAt = null);
+
+// ── Delivery coverage (TASK-650 / plan «eventual-whistling-rabbit») ───────────
+
+/// <summary>One served region plus optional free-text delivery terms for that region.</summary>
+public record DeliveryCoverageEntryDto(string RegionCode, string? Terms);
+
+/// <summary>
+/// A supplier's declared delivery coverage. <see cref="Served"/> and <see cref="NotServed"/> are
+/// mutually-exclusive region-code sets; <see cref="Note"/> is a free-text catch-all. Persisted as
+/// a JSONB string on <c>supplier_profiles.DeliveryCoverage</c>; (de)serialized and validated via
+/// <see cref="ShelfGuard.Application.Features.Marketplace.DeliveryCoverageJson"/>.
+/// </summary>
+public record DeliveryCoverageDto(
+    IReadOnlyList<DeliveryCoverageEntryDto> Served,
+    IReadOnlyList<string> NotServed,
+    string? Note);
+
+/// <summary>Measured average delivery time to one destination region (nightly worker job).</summary>
+public record RegionDeliveryStatDto(string RegionCode, decimal AvgDeliveryDays, int SampleSize);
+
+/// <summary>
+/// A supplier's delivery coverage resolved against one buyer's region (served by
+/// <c>GET /api/marketplace/suppliers/{id}/coverage</c>, TASK-651).
+/// </summary>
+/// <param name="BuyerRegionStatus"><c>"served"</c> | <c>"not_served"</c> | <c>"unknown"</c>.</param>
+public record SupplierCoverageForBuyerDto(
+    DeliveryCoverageDto Coverage,
+    string? BuyerRegionCode,
+    string BuyerRegionStatus,
+    string? BuyerRegionTerms,
+    decimal? MeasuredAvgDeliveryDaysToBuyerRegion,
+    int? MeasuredSampleSize);
 
 public record SupplierItemDto(
     Guid Id,
@@ -70,6 +114,11 @@ public record SupplierReviewDto(
 
 public record SupplierSearchDto(string ItemName, string? Region);
 
+/// <remarks>
+/// Patch semantics — a non-null field replaces, null leaves the stored value untouched.
+/// <see cref="DeliveryRegions"/> is retained for wire compatibility only and is IGNORED
+/// (TASK-650); send <see cref="DeliveryCoverage"/> instead.
+/// </remarks>
 public record SupplierProfileUpdateDto(
     string? Region,
     string[]? Categories,
@@ -78,7 +127,8 @@ public record SupplierProfileUpdateDto(
     string? WorkingHours,
     string? PaymentTerms,
     bool? IsPublic,
-    string? Plan);
+    string? Plan,
+    DeliveryCoverageDto? DeliveryCoverage = null);
 
 /// <summary>Paginated list response.</summary>
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
@@ -140,7 +190,10 @@ public record CabinetProfileUpdateDto(
     string? Website,
     string[]? DeliveryRegions,
     string? WorkingHours,
-    string? PaymentTerms);
+    string? PaymentTerms,
+    // TASK-650: patch semantics — non-null replaces, null leaves untouched. DeliveryRegions above
+    // is kept for wire-compat only and is ignored.
+    DeliveryCoverageDto? DeliveryCoverage = null);
 
 // ── Supplier cabinet staff management (self-service) ─────────────────────────
 

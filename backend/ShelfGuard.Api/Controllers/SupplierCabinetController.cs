@@ -53,9 +53,10 @@ public sealed class SupplierCabinetController : ControllerBase
         return error is not null ? NotFound(new { error }) : Ok(profile);
     }
 
-    /// <summary>Patch-updates the own profile (region, categories, website, delivery regions, working hours, payment terms).</summary>
+    /// <summary>Patch-updates the own profile (region, categories, website, delivery coverage, working hours, payment terms).</summary>
     [HttpPut("profile")]
     [ProducesResponseType(typeof(SupplierProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateProfile(
         [FromBody] CabinetProfileUpdateDto request, CancellationToken ct)
@@ -65,7 +66,13 @@ public sealed class SupplierCabinetController : ControllerBase
         if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ProfileManagement)) return Forbid();
 
         var (profile, error) = await _cabinet.UpdateProfileAsync(tenantId.Value, request, ct);
-        return error is not null ? NotFound(new { error }) : Ok(profile);
+        if (error is null) return Ok(profile);
+
+        // "cabinet not available" is the only resource-missing error here (TASK-650); a
+        // delivery-coverage validation failure is a 400, mirroring SupplierProfileSettingsController.
+        return error.Contains("not available", StringComparison.OrdinalIgnoreCase)
+            ? NotFound(new { error })
+            : BadRequest(new { error });
     }
 
     /// <summary>Toggles marketplace visibility (IsPublic) of the own profile.</summary>

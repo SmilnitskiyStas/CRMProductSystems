@@ -3,6 +3,25 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-650 (T3) — coverage DTOs + `DeliveryCoverageJson` + profile services + order region snapshot (backend)
+
+**Status:** done (committed to main) · **Agent:** backend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T3 of T1–T16. Depends on T1/T2 (both on main).
+Log: `.claude/logs/tasks/650_2026-08-31_coverage-dtos-profile-services_backend-developer.md`
+
+New `DeliveryCoverageDto` / `DeliveryCoverageEntryDto` / `RegionDeliveryStatDto` /
+`SupplierCoverageForBuyerDto` in `MarketplaceDtos.cs`; `SupplierProfileDto` += `DeliveryCoverage`
+(**not** premium-gated), `SupplierMetricsDto` += 4 worker-aggregate fields (all appended-optional),
+`SupplierProfileUpdateDto`/`CabinetProfileUpdateDto` += `DeliveryCoverage` (patch), `DeliveryRegions`
+now ignored on input. New `DeliveryCoverageJson` helper (Parse/Serialize/Validate, camelCase, reuses
+`UkraineRegions.Validate`). `MarketplaceService` + `SupplierCabinetService`: coverage read
+unconditionally, validate+serialize on write, **stopped writing `DeliveryRegions`** (4 `CS0618`
+warnings gone; 2 legacy reads pragma-suppressed until T14 backfill). `MarketplaceOrderService.CreateOrderAsync`
+snapshots `order.DestinationRegionCode` from the destination `Location` (injected `ILocationRepository`).
+`SupplierCabinetController.UpdateProfile` now returns 400 (not 404) for validation errors. Build 0
+errors; marketplace/cabinet/order/coverage suites 268/268 (+19 new). Follow-ups: T4 (coverage endpoint +
+repo filter), T5 (contract PDF), T6 (worker), T14 (backfill), openapi.json regen → T15.
+
 ## TASK-649 (T2) — `AddSupplierPerformanceData` migration + entity/DbContext (database)
 
 **Status:** done (merged to main) ·

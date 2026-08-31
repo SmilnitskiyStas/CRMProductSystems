@@ -175,6 +175,15 @@ public sealed class MarketplaceService : IMarketplaceService
         if (profile is null || supplier is null)
             return (null, "Supplier profile not found for this tenant.");
 
+        // TASK-650: DeliveryRegions is no longer written — validate the structured coverage
+        // (region codes known, no code in both served/notServed) before persisting it.
+        if (request.DeliveryCoverage is not null)
+        {
+            var coverageErrors = DeliveryCoverageJson.Validate(request.DeliveryCoverage);
+            if (coverageErrors.Count > 0)
+                return (null, string.Join(" ", coverageErrors));
+        }
+
         // Patch semantics — only update provided fields
         if (request.Region is not null)
             profile.Region = request.Region;
@@ -182,8 +191,8 @@ public sealed class MarketplaceService : IMarketplaceService
             profile.Categories = JsonSerializer.Serialize(request.Categories);
         if (request.Website is not null)
             profile.Website = request.Website;
-        if (request.DeliveryRegions is not null)
-            profile.DeliveryRegions = JsonSerializer.Serialize(request.DeliveryRegions);
+        if (request.DeliveryCoverage is not null)
+            profile.DeliveryCoverage = DeliveryCoverageJson.Serialize(request.DeliveryCoverage);
         if (request.WorkingHours is not null)
             profile.WorkingHours = request.WorkingHours;
         if (request.PaymentTerms is not null)
@@ -419,17 +428,62 @@ public sealed class MarketplaceService : IMarketplaceService
             p.Region,
             DeserializeStringArray(p.Categories),
             showPremium ? p.Website : null,
+#pragma warning disable CS0618 // deprecated legacy free-text list — still surfaced until the T14 backfill runs
             showPremium ? DeserializeStringArray(p.DeliveryRegions) : null,
+#pragma warning restore CS0618
             showPremium ? p.WorkingHours : null,
             showPremium ? p.PaymentTerms : null,
             p.IsPublic,
             p.Plan,
             m is not null ? ToMetricsDto(m) : null,
-            reviewStats);
+            reviewStats,
+            // TASK-650: structured coverage is NOT premium-gated — every caller sees it.
+            DeliveryCoverageJson.Parse(p.DeliveryCoverage));
 
-    private static SupplierMetricsDto ToMetricsDto(SupplierMetrics m) =>
+    /// <summary>
+    /// Maps a <see cref="SupplierMetrics"/> row to its DTO, including the TASK-650 worker-computed
+    /// aggregate columns. Shared with <see cref="SupplierCabinetService"/> so cabinet and public
+    /// metrics stay in sync.
+    /// </summary>
+    internal static SupplierMetricsDto ToMetricsDto(SupplierMetrics m) =>
         new(m.Rating, m.AvgDeliveryDays, m.OrderAccuracy, m.QualityScore,
-            m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt);
+            m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt,
+            ParseDeliveryByRegion(m.DeliveryByRegion),
+            m.DeliverySampleSize, m.ResponseSampleSize, m.AggregatesComputedAt);
+
+    private static readonly JsonSerializerOptions JsonbReadOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>
+    /// Parses <c>supplier_metrics.DeliveryByRegion</c> (written by the nightly worker job as
+    /// <c>[{ "regionCode": "UA-32", "avgDeliveryDays": 2.4, "sampleSize": 17 }]</c>). Null-safe.
+    /// </summary>
+    private static IReadOnlyList<RegionDeliveryStatDto>? ParseDeliveryByRegion(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            var rows = JsonSerializer.Deserialize<List<RegionDeliveryStatRow>>(json, JsonbReadOptions);
+            if (rows is null) return null;
+            return rows
+                .Where(r => r is not null && !string.IsNullOrWhiteSpace(r.RegionCode))
+                .Select(r => new RegionDeliveryStatDto(r!.RegionCode!.Trim(), r.AvgDeliveryDays, r.SampleSize))
+                .ToList();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private sealed class RegionDeliveryStatRow
+    {
+        public string? RegionCode { get; set; }
+        public decimal AvgDeliveryDays { get; set; }
+        public int SampleSize { get; set; }
+    }
 
     private static SupplierItemDto ToItemDto(SupplierItem i) =>
         new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable,

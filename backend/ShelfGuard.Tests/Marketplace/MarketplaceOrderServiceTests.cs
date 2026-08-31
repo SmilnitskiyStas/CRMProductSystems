@@ -25,6 +25,7 @@ public sealed class MarketplaceOrderServiceTests
     private readonly ITenantSessionOverride _tenantSessionOverride = Substitute.For<ITenantSessionOverride>();
     private readonly IItemRepository _items = Substitute.For<IItemRepository>();
     private readonly IItemService _itemService = Substitute.For<IItemService>();
+    private readonly ILocationRepository _locations = Substitute.For<ILocationRepository>();
     private readonly MarketplaceOrderService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -36,7 +37,7 @@ public sealed class MarketplaceOrderServiceTests
     {
         _sut = new MarketplaceOrderService(
             _orders, _agreements, _marketplace, _tenantNames, _notifications, _tenantSessionOverride,
-            _items, _itemService);
+            _items, _itemService, _locations);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);
@@ -254,6 +255,61 @@ public sealed class MarketplaceOrderServiceTests
         Assert.False(isGateViolation);
         Assert.Equal(MarketplaceOrderService.DestinationStoreRequiredError, error);
         await _orders.DidNotReceive().AddAsync(Arg.Any<MarketplaceOrder>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── TASK-650: destination region snapshot ─────────────────────────────────
+
+    [Fact]
+    public async Task CreateOrder_SnapshotsDestinationRegionCodeFromLocation()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var destinationStoreId = Guid.NewGuid();
+        _locations.GetByIdAsync(destinationStoreId, Arg.Any<CancellationToken>())
+            .Returns(new Location { Id = destinationStoreId, TenantId = _clientTenantId, RegionCode = "UA-30" });
+
+        MarketplaceOrder? created = null;
+        _orders.AddAsync(Arg.Do<MarketplaceOrder>(o => created = o), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, destinationStoreId),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(created);
+        Assert.Equal("UA-30", created!.DestinationRegionCode);
+    }
+
+    [Fact]
+    public async Task CreateOrder_UnknownDestinationLocation_LeavesRegionCodeNull()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        // _locations.GetByIdAsync returns null by default (foreign/unknown id under client RLS).
+        MarketplaceOrder? created = null;
+        _orders.AddAsync(Arg.Do<MarketplaceOrder>(o => created = o), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var (_, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(created);
+        Assert.Null(created!.DestinationRegionCode);
     }
 
     // ── TASK-598: marketplace catalog auto-provisioning ─────────────────────────

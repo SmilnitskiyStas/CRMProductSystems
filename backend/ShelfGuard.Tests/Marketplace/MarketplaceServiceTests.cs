@@ -383,6 +383,122 @@ public sealed class MarketplaceServiceTests
         Assert.Contains("not found", error, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ── UpdateOwnProfileAsync — delivery coverage (TASK-650) ──────────────────
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_DeliveryCoverage_ValidatesSerializesAndRoundTrips()
+    {
+        var profile  = MakeProfile(_supplierIdA, _tenantId);
+        var supplier = MakeSupplier(_supplierIdA, "My Supplier");
+        _repo.GetOwnProfileAsync(_tenantId, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier));
+
+        var coverage = new DeliveryCoverageDto(
+            new[] { new DeliveryCoverageEntryDto("UA-32", "2-3 дні") },
+            new[] { "UA-43" },
+            "note");
+        var request = new SupplierProfileUpdateDto(
+            null, null, null, DeliveryRegions: null, null, null, null, null, DeliveryCoverage: coverage);
+
+        var (result, error) = await _sut.UpdateOwnProfileAsync(_tenantId, request);
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        // Legacy column is never written any more.
+#pragma warning disable CS0618
+        Assert.Null(profile.DeliveryRegions);
+#pragma warning restore CS0618
+        Assert.NotNull(profile.DeliveryCoverage);
+        var stored = DeliveryCoverageJson.Parse(profile.DeliveryCoverage);
+        Assert.Equal("UA-32", stored!.Served[0].RegionCode);
+        Assert.Equal("2-3 дні", stored.Served[0].Terms);
+        Assert.Equal(new[] { "UA-43" }, stored.NotServed);
+        Assert.Equal("note", stored.Note);
+        // ...and it flows back through the profile DTO unconditionally.
+        Assert.NotNull(result!.DeliveryCoverage);
+        Assert.Equal("UA-32", result.DeliveryCoverage!.Served[0].RegionCode);
+        Assert.Equal(new[] { "UA-43" }, result.DeliveryCoverage.NotServed);
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_InvalidDeliveryCoverage_ReturnsError_DoesNotSave()
+    {
+        var profile  = MakeProfile(_supplierIdA, _tenantId);
+        var supplier = MakeSupplier(_supplierIdA, "My Supplier");
+        _repo.GetOwnProfileAsync(_tenantId, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier));
+
+        var bad = new DeliveryCoverageDto(
+            new[] { new DeliveryCoverageEntryDto("UA-32", null) },
+            new[] { "UA-32" },                       // same code in both lists
+            null);
+        var request = new SupplierProfileUpdateDto(
+            null, null, null, null, null, null, null, null, DeliveryCoverage: bad);
+
+        var (result, error) = await _sut.UpdateOwnProfileAsync(_tenantId, request);
+
+        Assert.Null(result);
+        Assert.NotNull(error);
+        Assert.Contains("UA-32", error);
+        _repo.DidNotReceive().UpdateProfile(Arg.Any<SupplierProfile>());
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSupplierProfileAsync_PopulatesDeliveryCoverage_ForAnonymousCaller()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, plan: "free");
+        profile.DeliveryCoverage =
+            """{"served":[{"regionCode":"UA-30","terms":"наступного дня"}],"notServed":["UA-43"],"note":null}""";
+        var supplier = MakeSupplier(_supplierIdA, "Free Supplier");
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, (SupplierMetrics?)null));
+
+        var result = await _sut.GetSupplierProfileAsync(_supplierIdA, callerIsAuthenticated: false);
+
+        Assert.NotNull(result);
+        Assert.Null(result!.Website);                 // premium field still hidden
+        Assert.NotNull(result.DeliveryCoverage);      // coverage is NOT premium-gated
+        Assert.Equal("UA-30", result.DeliveryCoverage!.Served[0].RegionCode);
+        Assert.Equal(new[] { "UA-43" }, result.DeliveryCoverage.NotServed);
+    }
+
+    [Fact]
+    public async Task GetSupplierProfileAsync_MapsWorkerMetricAggregates()
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, plan: "premium");
+        var supplier = MakeSupplier(_supplierIdA, "Metrics Supplier");
+        var computedAt = DateTimeOffset.UtcNow.AddHours(-3);
+        var metrics = new SupplierMetrics
+        {
+            SupplierId           = _supplierIdA,
+            TenantId             = _tenantId,
+            AvgDeliveryDays      = 2.4m,
+            DeliverySampleSize   = 17,
+            ResponseSampleSize   = 9,
+            AggregatesComputedAt = computedAt,
+            DeliveryByRegion     =
+                """[{"regionCode":"UA-32","avgDeliveryDays":2.4,"sampleSize":12},{"regionCode":"UA-30","avgDeliveryDays":1.1,"sampleSize":5}]""",
+        };
+
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((profile, supplier, metrics));
+
+        var result = await _sut.GetSupplierProfileAsync(_supplierIdA, callerIsAuthenticated: true);
+
+        Assert.NotNull(result?.Metrics);
+        var m = result!.Metrics!;
+        Assert.Equal(17, m.DeliverySampleSize);
+        Assert.Equal(9, m.ResponseSampleSize);
+        Assert.Equal(computedAt, m.AggregatesComputedAt);
+        Assert.NotNull(m.DeliveryByRegion);
+        Assert.Equal(2, m.DeliveryByRegion!.Count);
+        var kyivOblast = m.DeliveryByRegion.Single(r => r.RegionCode == "UA-32");
+        Assert.Equal(2.4m, kyivOblast.AvgDeliveryDays);
+        Assert.Equal(12, kyivOblast.SampleSize);
+    }
+
 
     // ── AdminUpdateSupplierItemAsync (TASK-284) ───────────────────────────────
 
