@@ -18,6 +18,22 @@ checklist, `disabledCodes`), `DeliveryCoverageEditor` (served + per-region terms
 note, emits fully-formed `DeliveryCoverage`). No region list hard-coded — all from `useRegions()`.
 `tsc --noEmit` + `npm run lint` clean. Not wired into any page yet (T8–T12); no i18n yet.
 
+## TASK-648 — Geo: UkraineRegions registry + `GET /api/geo/regions` (backend)
+
+**Status:** done (2026-08-31) · **Agent:** backend-developer · **Depends:** — · T1 of plan
+`eventual-whistling-rabbit.md` (supplier delivery-coverage feature).
+Log: `.claude/logs/tasks/648_2026-08-31_geo-regions-registry_backend-developer.md`
+
+New `ShelfGuard.Domain/Constants/UkraineRegions.cs` (mirrors `SupplierItemCategories.cs`):
+`RegionDefinition(Code, NameUa, Kind, ParentCode)`; `All` = 27 ISO 3166-2:UA oblast-level
+units + 24 major cities (`Kind="city"`, `Code="{oblast}-{TRANSLIT}"`); helpers `Find`,
+`IsValid`, `Validate`, `TryMatchFreeText` (for the T14 backfill). New `Features/Geo/`
+(`RegionDto`, `IGeoService`/`GeoService`, no DB) + thin `GeoController`
+(`GET /api/geo/regions`, `[AllowAnonymous]` per item-categories precedent) + DI. Tests:
+`UkraineRegionsTests`, `GeoServiceTests`, `GeoControllerTests` — 41/41 green; `dotnet build`
+0 errors. No migration / RLS / marketplace files touched.
+Downstream contract: `RegionDto { code, nameUa, kind: "oblast"|"city", parentCode: string|null }`.
+
 ## TASK-647 — CustomerMessage migration chain: restore missing `.Designer.cs` (database)
 
 **Status:** done · **Agent:** database-engineer · Repair of another session's uncommitted work.

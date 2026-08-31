@@ -24,6 +24,7 @@ using ShelfGuard.Application.Features.Schedules;
 using ShelfGuard.Application.Features.ServiceDesk;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Leads;
+using ShelfGuard.Application.Features.Geo;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ShelfGuard.Application;
@@ -194,6 +195,9 @@ services.AddScoped<IAuthService, AuthService>();
 
         // TASK-617 - Consumer purchase reviews (rating + comment on a PosTransaction, one staff reply)
         services.AddScoped<Features.Reviews.IReviewService, Features.Reviews.ReviewService>();
+
+        // TASK-648 - Geo taxonomy (UkraineRegions registry -> GET /api/geo/regions)
+        services.AddScoped<IGeoService, GeoService>();
 
         return services;
     }
