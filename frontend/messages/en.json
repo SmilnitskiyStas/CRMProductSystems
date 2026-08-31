@@ -3406,7 +3406,8 @@
           "termsLabel": "Terms: {terms}",
           "measuredDeliveryLabel": "Average delivery time to your region: {days} d. (based on {count})",
           "termsByAgreement": "by agreement",
-          "notServed": "Does not deliver to: {regions}"
+          "notServed": "Does not deliver to: {regions}",
+          "regionNotDeclared": "The supplier hasn't specified delivery info for your region ({region})"
         }
       },
       "agreementStatus": {

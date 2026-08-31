@@ -3,6 +3,21 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-664 (BUG-1) — fix: cooperation coverage panel "region not declared" vs "region unknown"
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Fixes BUG-1 from TASK-663 QA.
+Frontend only, small fix.
+Log: `.claude/logs/tasks/664_2026-08-31_fix-cooperation-coverage-region-unknown_frontend-developer.md`
+
+`CooperationCoveragePanel.tsx`: the `buyerRegionStatus === "unknown"` branch now splits on
+`buyerRegionCode?.trim()`. Resolved-but-undeclared region (case b) → one neutral advisory line
+`t("regionNotDeclared", {region})`, no `<RegionSelect>`, full coverage summary still shown, submit
+never blocked. Genuinely-unresolved region (case a) → unchanged `regionUnknown` copy +
+`<RegionSelect>` override. New i18n key
+`Dashboard.marketplace.cooperationRequestModal.coverage.regionNotDeclared` ({region} param) in
+uk + en. No backend/DTO change. tsc + lint clean, vitest 50/50, uk/en parity 4612=4612.
+Browser-verified case (a)/(b)/served on dev :3007 in uk + en.
+
 ## TASK-663 (T16) — e2e + regression QA: supplier delivery-coverage / performance-metrics
 
 **Status:** done · **Agent:** qa-tester · Marketplace supplier-performance plan

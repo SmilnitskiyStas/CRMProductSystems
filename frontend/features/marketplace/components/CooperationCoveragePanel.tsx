@@ -90,28 +90,38 @@ export function CooperationCoveragePanel({ supplierId }: Props) {
         </div>
       )}
 
-      {buyerRegionStatus === "unknown" && (
-        <div>
-          <div style={{ color: "#9CA3AF" }}>{t("regionUnknown")}</div>
-          <div style={{ marginTop: 8 }}>
-            <label
-              style={{
-                display: "block",
-                color: "#6B7280",
-                fontSize: 11.5,
-                marginBottom: 4,
-              }}
-            >
-              {t("yourRegionLabel")}
-            </label>
-            <RegionSelect
-              value={regionOverride}
-              onChange={setRegionOverride}
-              placeholder={t("regionSelectPlaceholder")}
-            />
+      {buyerRegionStatus === "unknown" &&
+        (buyerRegionCode?.trim() ? (
+          // Region IS resolved — the supplier simply didn't declare it in either
+          // `served` or `notServed`. Show a neutral advisory line, not the
+          // "couldn't determine your region" prompt (BUG-1 / TASK-664).
+          <div style={{ color: "#9CA3AF" }}>
+            {t("regionNotDeclared", { region: regionName })}
           </div>
-        </div>
-      )}
+        ) : (
+          // Region genuinely unresolved — offer the manual override that re-fires
+          // the coverage query with `?buyerRegionCode=`.
+          <div>
+            <div style={{ color: "#9CA3AF" }}>{t("regionUnknown")}</div>
+            <div style={{ marginTop: 8 }}>
+              <label
+                style={{
+                  display: "block",
+                  color: "#6B7280",
+                  fontSize: 11.5,
+                  marginBottom: 4,
+                }}
+              >
+                {t("yourRegionLabel")}
+              </label>
+              <RegionSelect
+                value={regionOverride}
+                onChange={setRegionOverride}
+                placeholder={t("regionSelectPlaceholder")}
+              />
+            </div>
+          </div>
+        ))}
 
       {hasSummary && (
         <div

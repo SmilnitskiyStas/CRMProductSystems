@@ -3406,7 +3406,8 @@
           "termsLabel": "Умови: {terms}",
           "measuredDeliveryLabel": "Середній термін доставки у ваш регіон: {days} дн. (на основі {count})",
           "termsByAgreement": "за домовленістю",
-          "notServed": "Не доставляє: {regions}"
+          "notServed": "Не доставляє: {regions}",
+          "regionNotDeclared": "Постачальник не вказав інформацію про доставку у ваш регіон ({region})"
         }
       },
       "agreementStatus": {
