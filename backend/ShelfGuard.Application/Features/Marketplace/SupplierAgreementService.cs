@@ -573,6 +573,16 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
             clientLegalEntity = entity;
         }
 
+        // TASK-652: structured delivery coverage → contract section «5. РЕГІОНИ ТА
+        // УМОВИ ДОСТАВКИ». This method runs under the supplier's own RLS context
+        // (the supplier is the party approving/regenerating), so a plain
+        // tenant-scoped read of their own profile is fine — GetOwnProfileAsync
+        // applies standard tenant RLS, no provider bypass. Region codes are
+        // resolved to Ukrainian names HERE so the PDF generator stays IO-free and
+        // has no dependency on UkraineRegions.
+        var (coverageServed, coverageNotServed, coverageNote) =
+            await BuildDeliveryCoverageAsync(agreement.SupplierTenantId, ct);
+
         var data = new ContractPdfData(
             agreement.ContractNumber ?? string.Empty,
             DateTimeOffset.UtcNow,
@@ -597,7 +607,10 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
             clientLegalEntity?.BankName,
             clientLegalEntity?.LegalAddress,
             clientLegalEntity?.DirectorName,
-            clientLegalEntity?.IsVatPayer ?? false);
+            clientLegalEntity?.IsVatPayer ?? false,
+            coverageServed,
+            coverageNotServed,
+            coverageNote);
 
         var pdfBytes = _pdf.Generate(data);
 
@@ -608,6 +621,37 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         agreement.ContractFilePath =
             $"/uploads/contracts/{agreement.SupplierTenantId}/{agreement.Id}.pdf";
     }
+
+    /// <summary>
+    /// TASK-652: reads the supplier's own <c>SupplierProfile.DeliveryCoverage</c> JSONB
+    /// (plain tenant RLS — the supplier is the caller here) and resolves every region code
+    /// to its Ukrainian name via <see cref="UkraineRegions"/>. Returns all-null when the
+    /// profile has no coverage or no served regions, in which case the contract's delivery
+    /// section is not rendered.
+    /// </summary>
+    private async Task<(IReadOnlyList<ContractDeliveryRegion>? Served,
+                        IReadOnlyList<string>? NotServed,
+                        string? Note)> BuildDeliveryCoverageAsync(
+        Guid supplierTenantId, CancellationToken ct)
+    {
+        var ownProfile = await _marketplace.GetOwnProfileAsync(supplierTenantId, ct);
+        var coverage = DeliveryCoverageJson.Parse(ownProfile?.Profile?.DeliveryCoverage);
+        if (coverage is null || coverage.Served.Count == 0)
+            return (null, null, null);
+
+        var served = coverage.Served
+            .Select(e => new ContractDeliveryRegion(ResolveRegionName(e.RegionCode), e.Terms))
+            .ToList();
+
+        var notServed = coverage.NotServed.Count > 0
+            ? coverage.NotServed.Select(ResolveRegionName).ToList()
+            : null;
+
+        return (served, notServed, coverage.Note);
+    }
+
+    private static string ResolveRegionName(string regionCode) =>
+        UkraineRegions.Find(regionCode)?.NameUa ?? regionCode;
 
     /// <summary>Loads a signature/stamp image from its wwwroot URL; null when unset or missing on disk.</summary>
     private static byte[]? ReadImageSafe(string? url)

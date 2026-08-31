@@ -166,8 +166,47 @@ public sealed class ContractPdfGenerator : IContractPdfGenerator
                         });
                     }
 
-                    // ── 5. Підписи ──────────────────────────────────────────
-                    Section(col, "5. ПІДПИСИ СТОРІН");
+                    // ── 5. Регіони та умови доставки (TASK-652) ─────────────
+                    // Only rendered when the supplier declared served regions in
+                    // their delivery coverage — same optional-block style as the
+                    // client requisites section above. Region names arrive
+                    // already resolved to Ukrainian (SupplierAgreementService).
+                    if (data.DeliveryCoverageServed is { Count: > 0 })
+                    {
+                        Section(col, "5. РЕГІОНИ ТА УМОВИ ДОСТАВКИ");
+                        col.Item().Text("5.1. Постачальник здійснює доставку в такі регіони:");
+                        col.Item().Table(table =>
+                        {
+                            table.ColumnsDefinition(cd =>
+                            {
+                                cd.ConstantColumn(150);
+                                cd.RelativeColumn();
+                            });
+
+                            table.Cell().PaddingVertical(2).Text("Регіон").SemiBold();
+                            table.Cell().PaddingVertical(2).Text("Умови").SemiBold();
+
+                            foreach (var region in data.DeliveryCoverageServed)
+                            {
+                                table.Cell().PaddingVertical(2).Text(region.RegionName);
+                                table.Cell().PaddingVertical(2).Text(
+                                    string.IsNullOrWhiteSpace(region.Terms)
+                                        ? "за домовленістю"
+                                        : region.Terms!);
+                            }
+                        });
+
+                        if (data.DeliveryCoverageNotServed is { Count: > 0 })
+                            col.Item().Text(
+                                "5.2. Доставка не здійснюється в такі регіони: " +
+                                $"{string.Join(", ", data.DeliveryCoverageNotServed)}.");
+
+                        if (data.DeliveryCoverageNote is { Length: > 0 })
+                            col.Item().Text($"5.3. {data.DeliveryCoverageNote}");
+                    }
+
+                    // ── 6. Підписи ──────────────────────────────────────────
+                    Section(col, "6. ПІДПИСИ СТОРІН");
                     col.Item().PaddingTop(10).Row(row =>
                     {
                         row.RelativeItem().Column(side =>

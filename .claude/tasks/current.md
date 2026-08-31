@@ -3,6 +3,27 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-652 (T5) — delivery-coverage section in the cooperation-contract PDF (backend)
+
+**Status:** review (worktree branch `worktree-agent-ae1eafb63d6be4bf5`, not merged) · **Agent:** backend-developer ·
+Marketplace supplier-performance plan (`eventual-whistling-rabbit.md`), T5 of T1–T16. Depends on T1 (`UkraineRegions`)
++ T3 (`DeliveryCoverageJson`, `SupplierProfile.DeliveryCoverage`) — both merged to main.
+Log: `.claude/logs/tasks/652_2026-08-31_contract-pdf-delivery-coverage_backend-developer.md`
+
+`ContractPdfData` += 3 trailing optional params (`DeliveryCoverageServed: IReadOnlyList<ContractDeliveryRegion>?`,
+`DeliveryCoverageNotServed: IReadOnlyList<string>?` — resolved region NAMES, `DeliveryCoverageNote: string?`) + new
+`ContractDeliveryRegion(string RegionName, string? Terms)` record. `ContractPdfGenerator` renders new section
+**«5. РЕГІОНИ ТА УМОВИ ДОСТАВКИ»** (5.1 lead + 2-col served table [region | умови, "за домовленістю" when no terms] +
+5.2 not-served line + 5.3 note) immediately before signatures, which are **renumbered to «6. ПІДПИСИ СТОРІН»**; section
+renders only when `DeliveryCoverageServed` is non-empty (same optional-block style as client requisites). Generator stays
+IO-free / no `UkraineRegions` dependency. `SupplierAgreementService.GenerateAndStoreContractAsync` loads the supplier's
+own `SupplierProfile.DeliveryCoverage` via existing `IMarketplaceRepository.GetOwnProfileAsync` (plain tenant RLS — the
+supplier is the approving party), `DeliveryCoverageJson.Parse` + resolves each code → `UkraineRegions.Find(code)?.NameUa ?? code`,
+passes ready strings in. Null/empty coverage → nulls (section absent). No existing PDF-test assertion changes needed
+(existing tests use a mocked generator / don't grep section numbers). +3 `ContractPdfGeneratorTests` (coverage renders &
+grows PDF; served-only vs +extras; null coverage keeps a valid PDF) +2 `SupplierAgreementServiceTests` (code→name resolve
+into `ContractPdfData`; no-profile → null coverage). Build 0 errors; full suite 2109/2109.
+
 ## TASK-650 (T3) — coverage DTOs + `DeliveryCoverageJson` + profile services + order region snapshot (backend)
 
 **Status:** done (committed to main) · **Agent:** backend-developer · Marketplace supplier-performance
