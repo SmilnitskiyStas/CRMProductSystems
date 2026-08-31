@@ -1,9 +1,72 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-08-30
+**Updated:** 2026-08-31
 
 ## Active Issues
+
+### KI-038: Supplier delivery/response metrics carry structural measurement limitations — per-region sparsity, receipt-finalization bias, answered-sessions-only response median
+Severity: low (every number shown is honest as far as it goes; each limitation biases *toward* the
+diligent supplier/client, never fabricates data — provided the UI shows "на основі N")
+Status: open — accepted by design (plan `eventual-whistling-rabbit.md` risks 2/3/4, TASK-653,
+ADR-036). Documented so a future reader does not treat a legitimately-sparse drill-down as a bug.
+Description:
+- **`SupplierMetricsDto.deliveryByRegion` stays sparse for months.** `MarketplaceOrder.DestinationRegionCode`
+  is a point-in-time snapshot (ADR-036 Decision 2), written only at order creation from
+  `Location.RegionCode`. Every order predating migration `20260831090731` has it NULL, and
+  `Location.RegionCode` itself starts NULL and is set by hand. Those orders still feed the *overall*
+  `avgDeliveryDays` (they have `ShippedAt`/`DeliveredAt`) but no per-region row — `deliveryByRegion`
+  starts at n=0 and fills only as new orders accrue. Not backfilled (region-from-`Address` is
+  unreliable and would feed the real statistics wrong data). Web/mobile must render "на основі N" /
+  "ще недостатньо даних по регіонах"; without it the drill-down looks broken.
+- **`avgDeliveryDays` = `DeliveredAt − ShippedAt`, and `DeliveredAt` only exists once the client
+  finalizes a `MarketplaceOrderReceipt` (ADR-033).** Shipped-but-not-received orders are invisible
+  to the metric → the average is biased toward diligent receiving clients. `MarketplaceOrder` has no
+  `ConfirmedAt`, so "how fast did the supplier acknowledge the order" is unmeasurable — only chat
+  first-reply latency exists.
+- **`responseTimeHours` median counts only chat sessions where the supplier eventually replied.**
+  A supplier who ignores half their threads looks identical to one who answers every one.
+  `responseSampleSize` is the count of *answered* sessions; there is no "response rate" metric.
+- `qualityScore` has no data source at all — always null, its tile renders "—".
+Related: **KI-037** (the mobile fraction-tile fix, TASK-660) — the per-region breakdown and
+`Час відповіді` tile added in the same task use correct scaling from the start.
+Resolution: each is its own future initiative (a `Location.RegionCode` data-entry campaign; an
+`order.ConfirmedAt` + supplier-ack flow; a response-rate denominator from all
+`supplier_chat_sessions`). None blocks the feature.
+
+### KI-039: `DeliveryRegions` → `DeliveryCoverage` backfill match rate is low; unmapped free text lands in `note`
+Severity: low
+Status: open — expected outcome of the TASK-661 one-shot tool
+(`ShelfGuard.Tools.DeliveryCoverageBackfill`), not a defect.
+Description: legacy `supplier_profiles.DeliveryRegions` is a free-text jsonb array.
+`UkraineRegions.TryMatchFreeText` maps oblast/city names and a few aliases (`Київська`→UA-32,
+`Дніпро`→UA-12, `АР Крим`→UA-43, …) to codes, but common entries like «Вся Україна» /
+«по домовленості» / «Нова Пошта» don't resolve — they are preserved verbatim in
+`DeliveryCoverage.note` as `"Також: …"` so nothing is lost, but they do not participate in the
+structured `served`/`notServed` region filter. Affected suppliers may need to re-declare coverage
+through the profile editor to appear under a region filter with a real match. A
+`DeliveryCoverage IS NULL` profile still matches `GET /api/marketplace/suppliers?regionCode=` via a
+`Region ILIKE` fallback, so a supplier does not vanish from search during the transition — but a
+profile the backfill flips to note-only coverage loses that fallback (rare: needs an
+entirely-unmappable `DeliveryRegions` *and* a `Region` string that would have ILIKE-matched).
+Resolution: none required; the tool logs every unmatched value. `SupplierProfile.DeliveryRegions`
+stays `[Obsolete]` (kept for audit) and is dropped by a later migration; the two
+`#pragma warning disable CS0618` reads in `MarketplaceService`/`SupplierCabinetService` can be
+removed once the tool has run in prod.
+
+### KI-040: `backend/openapi.json` not regenerated for the delivery-coverage endpoints (pending chore)
+Severity: low (the committed snapshot is a doc artifact, not runtime — nothing breaks; but
+`docs/integration/MOBILE_API.md` regeneration reads from it, so it drifts)
+Status: open — TASK-648..661 shipped without regenerating it (needs a live API + local dev Postgres
+run, per `backend-structure.md` §"OpenAPI Contract").
+Description: `GET /api/geo/regions`, `GET /api/marketplace/suppliers/{id}/coverage`, the
+`region`→`regionCode` query-param rename on `GET /api/marketplace/suppliers` +
+`POST /api/marketplace/search`, and the `deliveryCoverage` / `deliveryByRegion` /
+`deliverySampleSize` / `responseSampleSize` / `aggregatesComputedAt` DTO fields are all absent from
+the committed `backend/openapi.json`.
+Resolution: run the regeneration command in `backend-structure.md` §"OpenAPI Contract"
+(`dotnet build` + `dotnet tool run swagger tofile`, dev Postgres up) and commit the result.
+Mechanical; no code change.
 
 ### KI-036: Session-level `SET app.role='provider'` in `MarketplaceRepository` leaked for the whole HTTP request — cross-tenant catalog disclosure + cross-tenant write vector in the B2B marketplace ✅ resolved + deployed (2026-08-30, TASK-641..645, commit `f14ea7f6`)
 Severity: **critical** — confirmed cross-tenant data disclosure AND a confirmed cross-tenant write

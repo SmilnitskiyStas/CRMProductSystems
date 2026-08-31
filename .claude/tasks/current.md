@@ -3,6 +3,25 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-662 (T15) — docs for the supplier delivery-coverage / performance-metrics feature
+
+**Status:** done (committed to main) · **Agent:** documentation-writer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T15 of T1–T16. Depends on TASK-648..661, all on main. Docs only.
+Log: `.claude/logs/tasks/662_2026-08-31_coverage-feature-docs_documentation-writer.md`
+
+New **ADR-036** in `decisions.md` (region taxonomy = app-side `UkraineRegions` constant not a DB
+table; `MarketplaceOrder.DestinationRegionCode` point-in-time snapshot per ADR-033; delivery
+coverage deliberately NOT premium-gated; `supplier-metrics-recompute` worker write-boundary — never
+`Rating`/`QualityScore`, no `xmin`, mirrors ADR-034 D4). `domain-model.md`: Ukraine Region Registry
++ `SupplierProfile.DeliveryCoverage` (supersedes `[Obsolete]` `DeliveryRegions`) + `SupplierMetrics`
+now populated (4 new cols) + `Location.RegionCode`/`MarketplaceOrder.DestinationRegionCode`.
+`database-schema.md`: new `## TASK-649 — Supplier performance data` (4 col groups, 2 indexes,
+"no new tables / no RLS change" note). `api-contracts.md`: new marketplace section — `GET /api/geo/regions`,
+`GET /api/marketplace/suppliers/{id}/coverage`, `region`→`regionCode` rename + coverage-match
+semantics, `SupplierProfileDto`/`SupplierMetricsDto`/`*ProfileUpdateDto` field additions, contract
+PDF §5/§6. `known-issues.md`: KI-038 (metrics measurement limitations), KI-039 (backfill match rate),
+KI-040 (openapi.json not regenerated — pending chore). All 5 doc headers date-bumped to 2026-08-31.
+
 ## TASK-657 (T10) — delivery-coverage panel in `CooperationRequestModal` (frontend)
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance

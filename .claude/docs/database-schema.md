@@ -1,7 +1,7 @@
 # Database Schema
 
 **Owner:** database-engineer
-**Updated:** 2026-08-24
+**Updated:** 2026-08-31
 **Source:** v1-spec.md section 4
 
 ## Multi-Tenancy
@@ -997,6 +997,57 @@ sees everything — and, worth remembering if this class of result ever looks li
 alarm again, an unscoped query with **no** session vars set returns 0 rows on every policy
 (fail-closed default), which briefly looked like wiped dev data during TASK-622's own verification
 pass before the RLS explanation was confirmed.
+
+## TASK-649 — Supplier performance data (`AddSupplierPerformanceData`, 2026-08-31)
+
+Pure additive DDL for the marketplace supplier delivery-coverage + performance-metrics feature
+(plan `eventual-whistling-rabbit.md`, TASK-648..661 — see `decisions.md` ADR-036 for the design
+calls, `domain-model.md` for the entity relationships). Previous migration:
+`20260831060145_AddCustomerMessageDeliveryLifecycle`.
+
+**No new tables. No RLS policy changes.** The four target tables already carry
+`tenant_isolation` + `provider_bypass` + `worker_bypass` under `FORCE ROW LEVEL SECURITY`, and the
+new columns inherit them — the migration's class-level XML doc states this explicitly. Live-verified
+(dev, non-superuser `shelfguard_app_dev` role): `pg_policies` on the four tables identical
+before/after (3 policies each), `relrowsecurity`/`relforcerowsecurity` = `t/t`, table ownership
+unchanged. The `AllForceRlsTables_HaveTenantIsolationNullifGuard_ProviderBypass_AndWorkerBypass`
+audit ran and passed unchanged (no new FORCE-RLS table).
+
+### Columns added (all nullable, no FK, no default)
+
+| Table | Column | Type | Purpose |
+|---|---|---|---|
+| `locations` | `RegionCode` | `varchar(20)` | Location's Ukraine region code (`UkraineRegions`); set via the location form, NULL for all existing rows (not backfilled) |
+| `marketplace_orders` | `DestinationRegionCode` | `varchar(20)` | **Point-in-time snapshot** of the destination `Location.RegionCode` at order creation (ADR-036 Decision 2) — not a live join; NULL for all pre-migration orders |
+| `supplier_profiles` | `DeliveryCoverage` | `jsonb` | Structured supplier-declared coverage (`served`/`notServed`/`note`); supersedes `DeliveryRegions` (now `[Obsolete]`, column kept, drop later) |
+| `supplier_metrics` | `DeliveryByRegion` | `jsonb` | Worker-computed `[{regionCode, avgDeliveryDays, sampleSize}]` |
+| `supplier_metrics` | `DeliverySampleSize` | `integer` | Worker-computed overall delivered-order count (365d window) |
+| `supplier_metrics` | `ResponseSampleSize` | `integer` | Worker-computed answered-chat-session count (180d window) |
+| `supplier_metrics` | `AggregatesComputedAt` | `timestamptz` | Last `supplier-metrics-recompute` run |
+
+> `varchar(20)`, not the plan's `varchar(12)` — a city code (`UA-XX-LONGTRANSLIT`, e.g.
+> `UA-12-KRYVYI-RIH`) is ~15 chars. `AppDbContext` uses `HasMaxLength(20)` on both region-code
+> columns; `DeliveryCoverage`/`DeliveryByRegion` use `HasColumnType("jsonb")` like `Item.Categories`.
+> `SupplierProfile.DeliveryRegions` mapping wrapped in `#pragma warning disable CS0618`.
+
+### Indexes added
+
+| Index | Table | Shape | Why |
+|---|---|---|---|
+| `IX_supplier_chat_messages_SessionId_SenderTenantId_CreatedAt` | `supplier_chat_messages` | plain composite, EF-tracked | The `supplier-metrics-recompute` job's first-reply-latency query filters `(SessionId, SenderTenantId)` and orders by `CreatedAt`; the existing single-column `SessionId`/`CreatedAt` indexes didn't cover it |
+| `ix_marketplace_orders_metrics` | `marketplace_orders` | **partial**: `("SupplierTenantId","DeliveredAt") WHERE "Status" = 'delivered'` | The same job scans one supplier's delivered orders in a rolling window. Hand-written via `migrationBuilder.Sql(...)` (EF does not emit the `WHERE` filter) — not tracked in the model snapshot, same treatment as the project's other raw-SQL indexes/policies |
+
+`Down()` reverses everything symmetrically (partial index via `DROP INDEX IF EXISTS`, then EF
+`DropIndex` + 7 `DropColumn`); round-trip verified on the dev DB.
+
+**Worker write-boundary on `supplier_metrics` (load-bearing — see ADR-036 Decision 4):** the nightly
+`supplier-metrics-recompute.job.ts` writes only `AvgDeliveryDays`/`DeliverySampleSize`/
+`DeliveryByRegion`/`ResponseTimeHours`/`ResponseSampleSize`/`CancellationRate`/`OrderAccuracy`/
+`AggregatesComputedAt` (+ `SupplierId`/`TenantId` on INSERT). It must **never** write `Rating`
+(owned by the synchronous `MarketplaceRepository.UpsertMetricsRatingAsync`, ADR-035) or
+`QualityScore`. `supplier_metrics` has **no `xmin`** — the two writers are safe only because they
+touch disjoint columns via separate `UPDATE` statements; any future "upsert all metrics" path needs
+an explicit concurrency token first.
 
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`

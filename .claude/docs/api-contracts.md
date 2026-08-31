@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-08-25
+**Updated:** 2026-08-31
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -504,6 +504,124 @@ Key DTOs (`Features/Marketplace/Dtos/CooperationDtos.cs`): full shapes in
 order numbers «MP-{yyyy}-{NNN}» — sequential per supplier. Termination reason is stored in
 `rejectionReason`. Вчасно integration: `PUT /api/integrations/vchasno` with config `{ "api_key" }`
 (masked on GET like ПРРО secrets).
+
+---
+
+### Geo taxonomy + marketplace delivery coverage & performance metrics (v4.4 — TASK-648..661, ADR-036)
+
+#### `GET /api/geo/regions`  `[AllowAnonymous]`
+```
+200: RegionDto[]   — 27 ISO 3166-2:UA oblast-level units, then 24 major cities. Static, cacheable.
+```
+```ts
+RegionDto { code: string; nameUa: string; kind: "oblast" | "city"; parentCode: string | null }
+```
+Oblast `code` = ISO 3166-2:UA — **`UA-30` = the city of Kyiv, `UA-32` = Kyiv oblast** (distinct).
+City `code` = `{oblastCode}-{TRANSLIT}` (e.g. `UA-18-ZHYTOMYR`), `parentCode` = its oblast.
+`UA-40`/`UA-43` (Sevastopol / AR Crimea) are present with neutral labels so a supplier can mark
+them not-served — no political status encoded. Frontend/mobile render every region picker from this
+endpoint; the list is never hardcoded client-side. Backed by the `UkraineRegions` domain constant,
+same Domain-constant→endpoint pattern as `GET /api/marketplace/item-categories`.
+
+#### `GET /api/marketplace/suppliers` — `region` query param renamed to `regionCode`
+```
+GET /api/marketplace/suppliers?regionCode=&category=&plan=&page=&pageSize=   [AllowAnonymous]
+  -> 200 PagedResult<SupplierListItemDto>
+```
+`regionCode` is a structured region code and filters on **declared delivery coverage**, not the
+free-text HQ region: a supplier matches when `DeliveryCoverage.served` contains the code **and** the
+code is not in `DeliveryCoverage.notServed`. A profile with `DeliveryCoverage = null` (legacy,
+pre-backfill) falls back to a `Region ILIKE` match against the raw code or the region's Ukrainian
+name, so suppliers don't disappear during the TASK-661 backfill. The value is normalized best-effort
+server-side (`UkraineRegions.TryMatchFreeText`) — a bare code passes through, a legacy name
+(`"Київська область"` → `UA-32`) resolves, anything unrecognized drops the filter. Matching uses a
+server-side jsonb `@>` predicate inside the existing `IProviderRlsOverride` block — no
+`GetDbConnection()`, KI-036 / ADR-035 rule intact.
+
+#### `POST /api/marketplace/search` — `SupplierSearchDto.region` → `regionCode`
+```json
+{ "itemName": "string", "regionCode": "string|null" }
+```
+Same coverage-match semantics as the listing above.
+
+#### `GET /api/marketplace/suppliers/{id}/coverage`  `[Authorize]` + `[RequireModule("marketplace")]`
+Not anonymous (it resolves the buyer's own region). Not premium-gated.
+```
+?buyerRegionCode=   (optional override; ignored unless a known code)
+  -> 200 SupplierCoverageForBuyerDto
+  -> 404   supplier missing or unpublished
+```
+```ts
+SupplierCoverageForBuyerDto {
+  coverage: {
+    served: { regionCode: string; terms: string | null }[];
+    notServed: string[];
+    note: string | null;
+  };
+  buyerRegionCode: string | null;
+  buyerRegionStatus: "served" | "not_served" | "unknown";
+  buyerRegionTerms: string | null;
+  measuredAvgDeliveryDaysToBuyerRegion: number | null;
+  measuredSampleSize: number | null;
+}
+```
+Buyer-region resolution: a valid `?buyerRegionCode=` wins; else the caller tenant's **oldest active
+`Location` that has a `RegionCode`** (no first-class primary-location flag exists in the schema);
+else `null` → `buyerRegionStatus: "unknown"`, terms/measured all null. The measured fields come from
+`SupplierMetrics.DeliveryByRegion` (nightly worker job) — null until orders to that region accrue.
+
+#### `SupplierProfileDto` — new field `deliveryCoverage` (NOT premium-gated)
+`GET /api/marketplace/suppliers/{id}` and every other profile-returning path:
+```json
+{
+  "deliveryCoverage": {
+    "served": [ { "regionCode": "UA-32", "terms": "2-3 дні, від 5000 грн" } ],
+    "notServed": ["UA-43"],
+    "note": "Доставка Новою Поштою за домовленістю"
+  }
+}
+```
+Populated for every caller — anonymous, free-plan, premium (deliberate deviation from the
+premium-gated `website`/`workingHours`/`paymentTerms`, ADR-036 Decision 3). The legacy
+`deliveryRegions: string[]` field stays on the wire (deprecated, fed from the obsolete
+`supplier_profiles.DeliveryRegions` column) until the TASK-661 backfill runs.
+
+#### `SupplierMetricsDto` — 4 new worker-computed fields
+```json
+{
+  "deliveryByRegion": [ { "regionCode": "UA-30", "avgDeliveryDays": 3.5, "sampleSize": 2 } ],
+  "deliverySampleSize": 4,
+  "responseSampleSize": 2,
+  "aggregatesComputedAt": "2026-08-31T02:00:00Z"
+}
+```
+All nullable — the nightly `supplier-metrics-recompute` job may not have run, or there may be no
+data behind a given metric (`known-issues.md` KI-038). `deliverySampleSize` ≥ Σ
+`deliveryByRegion[].sampleSize` (orders with a null `DestinationRegionCode` feed the overall average
+only). `rating` is the only metric still written synchronously (at review time); `qualityScore` has
+no data source and is always null; `orderAccuracy`/`cancellationRate` are 0–1 fractions.
+
+#### `SupplierProfileUpdateDto` / `CabinetProfileUpdateDto` — `deliveryCoverage` patch field
+```
+PUT /api/settings/supplier-profile        (SupplierProfileUpdateDto)
+PUT /api/supplier-cabinet/profile          (CabinetProfileUpdateDto)
+```
+Both gained an optional
+`deliveryCoverage: { served: [{regionCode, terms?}], notServed: string[], note? } | null` — patch
+semantics (non-null replaces the stored value, null leaves it untouched). Validation: every
+`regionCode` must pass `UkraineRegions.IsValid`, and no code may appear in both `served` and
+`notServed` — either violation is `400 { error }` (joined messages). Serialized to
+`supplier_profiles.DeliveryCoverage` (camelCase JSONB) via the shared `DeliveryCoverageJson` helper.
+The legacy `deliveryRegions` field is still accepted on the wire but **silently ignored** by both
+services.
+
+#### Cooperation contract PDF
+`GET /api/marketplace/cooperation/{id}/contract` (and the supplier-cabinet equivalent) now render a
+section **«5. РЕГІОНИ ТА УМОВИ ДОСТАВКИ»** (served regions + terms table, a not-served line, the
+note) immediately before the signatures block, which is renumbered **«6. ПІДПИСИ СТОРІН»**.
+Rendered only when the supplier has ≥ 1 served region — an all-legacy supplier with no
+`DeliveryCoverage` keeps the old layout (§5 signatures). Codes are resolved to Ukrainian names in
+the Application layer; the QuestPDF generator stays IO-free.
 
 ---
 

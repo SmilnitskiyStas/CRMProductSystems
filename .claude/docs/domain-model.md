@@ -1,7 +1,7 @@
 # Domain Model
 
 **Owner:** project-architect
-**Updated:** 2026-08-24
+**Updated:** 2026-08-31
 **Source:** v1-spec.md
 
 ## Core Entities
@@ -541,6 +541,81 @@ purchase), rating (1-5), comment?, created_at, reply_text?, replied_at?, replied
   `GET /api/customers/{id}/profile-history` reads `ConsumerAccountProfileChange` through the same
   membership link. A customer who never joined the tenant's loyalty program shows nulls/empty
   arrays across all of these — never an error.
+
+### Ukraine Region Registry (TASK-648)
+App-side source-of-truth list of Ukraine regions — **not** a DB table, same rationale as the
+`Block Registry` above: region *types* are static compile-time metadata, read alongside a profile
+rather than joined. Lives as the `UkraineRegions` domain constant
+(`ShelfGuard.Domain/Constants/UkraineRegions.cs`), mirroring `SupplierItemCategories`. 27
+ISO 3166-2:UA oblast-level units (`Kind="oblast"`, `ParentCode=null`) + 24 major cities
+(`Kind="city"`, `Code="{oblastCode}-{TRANSLIT}"` e.g. `UA-18-ZHYTOMYR`, `ParentCode` = the oblast).
+Served to frontend/mobile via `GET /api/geo/regions`; all region pickers render from that endpoint,
+never a hardcoded list.
+- **`UA-30` (м. Київ, the city) is a different code from `UA-32` (Київська область).** `UA-30` has
+  no `city` child row.
+- `UA-40` (Севастополь) / `UA-43` (АР Крим) are present with neutral administrative labels so a
+  supplier can mark them `notServed` — no political status is encoded.
+- Helpers on the constant: `Find(code)`, `IsValid(code)`, `Validate(codes)`, and
+  `TryMatchFreeText(raw)` (legacy free-text → code, used by the TASK-661 backfill; oblast/city
+  name match + a small alias map — «Київська»→UA-32, «Дніпро»→UA-12, «АР Крим»→UA-43).
+
+### SupplierProfile — delivery coverage (marketplace, TASK-648..661)
+EF entity `SupplierProfile` → table `supplier_profiles` (one row per supplier tenant, the
+marketplace-facing profile).
+
+- **`DeliveryCoverage` (jsonb, nullable)** — structured, supplier-declared delivery coverage.
+  **Supersedes `DeliveryRegions`** (now `[Obsolete]`, column and mapping kept for legacy reads,
+  dropped by a later migration). Shape (camelCase, (de)serialized + validated by the
+  `DeliveryCoverageJson` helper — `ShelfGuard.Application/Features/Marketplace/`):
+  ```json
+  { "served":    [ { "regionCode": "UA-32", "terms": "2-3 дні, від 5000 грн" } ],
+    "notServed": ["UA-43"],
+    "note":      "Доставка Новою Поштою за домовленістю" }
+  ```
+  `served` and `notServed` are mutually-exclusive region-code sets (a code in both is a `400`);
+  every code must pass `UkraineRegions.IsValid`; `note` is a free-text catch-all. **Not
+  premium-gated** — `SupplierProfileDto.DeliveryCoverage` is populated for every caller
+  (ADR-036 Decision 3), unlike `Website`/`WorkingHours`/`PaymentTerms`. Written via
+  `MarketplaceService.UpdateOwnProfileAsync` / `SupplierCabinetService.UpdateProfileAsync`
+  (patch — non-null replaces, null leaves untouched); neither writes `DeliveryRegions` any more.
+- **`Region` (free string)** — unchanged; still the supplier's HQ region. Used only as the
+  `Region ILIKE` fallback for the marketplace region filter on profiles whose `DeliveryCoverage`
+  is still null (pre-backfill), so a supplier does not vanish from search during the transition.
+
+### SupplierMetrics — now actually populated (TASK-653)
+EF entity `SupplierMetrics` → table `supplier_metrics` (one row per supplier tenant). Existed
+end-to-end since v4 but until now **only `Rating` was ever written** (synchronously, at review
+time, by `MarketplaceRepository.UpsertMetricsRatingAsync` — ADR-035 W1, also the owner of
+`UpdatedAt`). The nightly `supplier-metrics-recompute.job.ts` worker job (cron `0 2 * * *`, TASK-653)
+now populates the rest.
+
+- New columns: **`DeliveryByRegion` (jsonb)** — `[{ "regionCode": "UA-32", "avgDeliveryDays": 2.4,
+  "sampleSize": 17 }]`, measured `DeliveredAt − ShippedAt` grouped by the order's
+  `DestinationRegionCode` snapshot, 365-day window; **`DeliverySampleSize` (int)** — overall
+  delivered-order count in that window (≥ Σ per-region `sampleSize`, since null-region orders feed
+  the overall average only); **`ResponseSampleSize` (int)** — chat sessions counted for the
+  response-time median (180-day window; **only sessions where the supplier eventually replied** —
+  no "response rate" metric); **`AggregatesComputedAt` (timestamptz)** — last job run, always set
+  even when there is no data.
+- The job also (re)writes `AvgDeliveryDays`, `ResponseTimeHours`, `CancellationRate`,
+  `OrderAccuracy`. **It never writes `Rating` (owned by the synchronous writer) or `QualityScore`
+  (no data source — always NULL).** `supplier_metrics` has no `xmin`; the two writers are safe only
+  because they touch disjoint columns via separate statements — see ADR-036 Decision 4 and
+  `database-schema.md` TASK-649.
+- `orderAccuracy`/`cancellationRate` are 0–1 fractions on the wire (KI-037 — the mobile tiles that
+  rendered them as `Math.round(x)%` were fixed in TASK-660).
+
+### Location.RegionCode / MarketplaceOrder.DestinationRegionCode (TASK-649)
+- **`Location.RegionCode` (varchar(20), nullable)** — the location's Ukraine region code, set
+  through the location form (`LocationService` validates it via `UkraineRegions.IsValid`). NULL for
+  every pre-existing location — not backfilled from `Address` (unreliable, and would feed the real
+  statistics wrong data).
+- **`MarketplaceOrder.DestinationRegionCode` (varchar(20), nullable)** — a **point-in-time
+  snapshot** of the destination `Location.RegionCode`, copied by
+  `MarketplaceOrderService.CreateOrderAsync` at order creation. Not a live join through
+  `DestinationStoreId` (ADR-036 Decision 2 — a location's region may be corrected later; delivery
+  history must reflect where goods actually went). NULL for every order predating migration
+  `20260831090731`; those feed the overall `AvgDeliveryDays` but not `DeliveryByRegion`.
 
 ---
 

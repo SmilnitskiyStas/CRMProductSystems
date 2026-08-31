@@ -1,7 +1,143 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-30
+**Updated:** 2026-08-31
+
+## ADR-036: Supplier delivery coverage + performance metrics — app-side Ukraine region registry, point-in-time `MarketplaceOrder.DestinationRegionCode` snapshot, coverage deliberately not premium-gated, and the `supplier-metrics-recompute` worker write-boundary
+Date: 2026-08-31
+Status: accepted — implemented (TASK-648..661, plan `eventual-whistling-rabbit.md`, all merged to
+`main`). Consolidated by documentation-writer (TASK-662) from the individual task logs rather than
+authored up front — an already-approved, already-executed plan, not a from-scratch design session.
+
+Context: a marketplace buyer sees almost no data about how a supplier actually performs.
+`supplier_metrics` (`AvgDeliveryDays`/`ResponseTimeHours`/`OrderAccuracy`/`QualityScore`/
+`CancellationRate`/`Rating`) has existed end-to-end since v4 — entity → DTO → web/mobile UI — **but
+only `Rating` was ever written** (synchronously, at review time); the code comment "Updated by
+background job" described a job that never existed. Geography was unmodeled: `SupplierProfile.Region`
+is a free string, `SupplierProfile.DeliveryRegions` is an unused free-text jsonb array shown only as
+premium chips, `Location` had only `Address` + coordinates. The feature adds: supplier-declared
+per-region delivery coverage (with terms), a nightly worker job that measures actual
+`DeliveredAt − ShippedAt` per destination region and chat first-reply latency, a buyer-facing "does
+this supplier deliver to my region" endpoint, and a delivery-coverage section in the
+cooperation-contract PDF.
+
+Decision:
+
+### Decision 1 — the region taxonomy is an app-side static registry, not a DB reference table
+`UkraineRegions` (`ShelfGuard.Domain/Constants/UkraineRegions.cs`), mirroring `SupplierItemCategories`
+— 27 ISO 3166-2:UA oblast-level units + 24 major cities, served via `GET /api/geo/regions`
+(`[AllowAnonymous]`, precedent = the marketplace item-categories endpoint). Frontend and mobile
+render every region picker from the endpoint and never hardcode the list; `DeliveryCoverageJson`
+and `LocationService`/profile validation all check codes against `UkraineRegions.IsValid`.
+
+Not a DB table because region *types* are static compile-time metadata (no tenant ever mints one),
+the codes are read alongside the profile rather than joined, and a new table would be an RLS-triad +
+audit-test surface for zero benefit — the same reasoning `domain-model.md`'s Block Registry
+(TASK-538) already applied to block types.
+
+- **`UA-30` (м. Київ — the city) ≠ `UA-32` (Київська область).** Classic confusion point; kept as
+  two distinct rows, called out in the class doc and the endpoint doc; `UA-30` has no separate
+  `city` child row (the code already *is* the city).
+- Occupied territories — `UA-40` (Севастополь), `UA-43` (Автономна Республіка Крим) — are included
+  with neutral administrative labels **specifically so a supplier can explicitly mark them "not
+  served"** in `DeliveryCoverage.notServed`. The registry encodes no political status.
+
+### Decision 2 — `MarketplaceOrder.DestinationRegionCode` is a point-in-time snapshot, not a live join through `DestinationStoreId`
+`MarketplaceOrderService.CreateOrderAsync` copies the destination `Location.RegionCode` onto the
+order row at creation time. Same rationale as ADR-033 (the `MarketplaceOrderReceipt`
+denormalized-tenant columns) and the FEFO `expiry_date`/`batch_number` copy-on-transfer rule: a
+location's `RegionCode` can be corrected later (it starts NULL on every existing location and is set
+by hand through the location form), and delivery-time *history* must reflect where the goods actually
+went, not where that store is filed today. The worker job then never joins `locations` at all — it
+reads the frozen code off `marketplace_orders`.
+
+**Consequence:** every order placed before migration `20260831090731` has
+`DestinationRegionCode = NULL`, and those are not backfilled (region-from-`Address` is unreliable and
+would feed the real statistics wrong data). Such orders still feed the *overall* `AvgDeliveryDays`
+(they have `ShippedAt`/`DeliveredAt`), but no per-region row — `DeliveryByRegion` starts at n=0 and
+fills only as new orders accrue. `known-issues.md` KI-038.
+
+### Decision 3 — delivery coverage is NOT premium-gated (deliberate deviation from the `SupplierProfileDto` premium pattern)
+`SupplierProfileDto.DeliveryCoverage` is populated for every caller — anonymous, free-plan and
+premium alike — and `GET /api/marketplace/suppliers/{id}/coverage` carries no plan check. This is a
+conscious departure from the established pattern where delivery-adjacent profile fields (`Website`,
+`WorkingHours`, `PaymentTerms`, and the legacy `DeliveryRegions` chips) are premium-only.
+
+"Does this supplier deliver to my region, and on what terms" is decision-critical for the buyer —
+hiding it behind premium forces a cooperation request just to find out, which defeats the point of a
+browsable marketplace. `Website`/`WorkingHours`/`PaymentTerms` stay premium. Recorded here so a
+future reader does not "fix" the inconsistency by gating coverage.
+
+### Decision 4 — the `supplier-metrics-recompute` worker job writes a fixed, disjoint column set and must never touch `Rating`/`QualityScore`
+Mirrors ADR-034 Decision 4's framing for `loyalty-tier-recompute`.
+`worker/src/jobs/supplier-metrics-recompute.job.ts` (cron `0 2 * * *`) writes exactly
+`AvgDeliveryDays`, `DeliverySampleSize`, `DeliveryByRegion`, `ResponseTimeHours`,
+`ResponseSampleSize`, `CancellationRate`, `OrderAccuracy`, `AggregatesComputedAt` — plus
+`SupplierId`/`TenantId` on the INSERT branch only.
+
+- **Never `Rating`** — owned by the synchronous `MarketplaceRepository.UpsertMetricsRatingAsync`
+  (ADR-035 W1), which also owns `UpdatedAt`.
+- **Never `QualityScore`** — there is no data source for it; it stays NULL end-to-end and its UI tile
+  renders "—".
+- **`supplier_metrics` has no `xmin` token.** Safety today rests entirely on the two writers touching
+  **disjoint columns via separate UPDATE statements** — Postgres row-locking serializes them, and no
+  lost update is possible because no column is written by both. This is load-bearing and fragile: any
+  future "upsert all supplier metrics in one statement" path reintroduces a clobber risk against the
+  synchronous `Rating` writer and **must add an explicit concurrency token first**. The rule is
+  restated in the job-file header.
+- The job populates **all** suppliers with a profile (no `IsPublic` filter) so the numbers are ready
+  the moment a supplier publishes.
+
+Consequences:
++ The region taxonomy has exactly one home; web, mobile and the contract-PDF generator all resolve
+  codes → Ukrainian names from `UkraineRegions` (the PDF generator receives already-resolved names
+  and stays IO-free).
++ `supplier_metrics`' long-dead columns finally have a writer — the stale "Updated by background job"
+  comment is now true.
++ The `regionCode` filter on `GET /api/marketplace/suppliers` / `POST /api/marketplace/search` uses a
+  server-side jsonb `@>` predicate (`EF.Functions.JsonContains`) inside the existing
+  `IProviderRlsOverride.ExecuteAsync` block — verified via `ToQueryString()`, no `GetDbConnection()`,
+  KI-036 / ADR-035 standing rule intact.
++ No new tables, no RLS policy change — the 7 new columns inherit `tenant_isolation` /
+  `provider_bypass` / `worker_bypass` from their existing tables; the
+  `AllForceRlsTables_HaveTenantIsolationNullifGuard_ProviderBypass_AndWorkerBypass` audit is
+  unaffected.
+- Per-region delivery stats stay sparse for months (Decision 2) — the UI **must** show "на основі N"
+  / "недостатньо даних" or a legitimately-empty drill-down reads as broken. `known-issues.md` KI-038.
+- `AvgDeliveryDays` depends on the client finalizing a `MarketplaceOrderReceipt` (ADR-033) for
+  `DeliveredAt` to exist → the average is biased toward diligent receiving clients; there is no
+  `ConfirmedAt`, so supplier *order*-acknowledgement speed is unmeasurable — only chat first-reply
+  latency. The response median counts only sessions where the supplier eventually replied (no
+  "response rate" metric). All in KI-038.
+- `DeliveryRegions` → `DeliveryCoverage` backfill match rate is low — free text like «Вся Україна» /
+  «по домовленості» lands in `DeliveryCoverage.note`, not in structured `served` codes; affected
+  suppliers may need to re-declare coverage to appear under a region filter. A
+  `DeliveryCoverage IS NULL` profile still matches the region filter via a `Region ILIKE` fallback,
+  so nobody vanishes from search mid-transition. `known-issues.md` KI-039.
+- The cooperation-contract PDF gained «5. РЕГІОНИ ТА УМОВИ ДОСТАВКИ» (rendered only when the supplier
+  has served regions); the signatures block renumbered `5.` → `6. ПІДПИСИ СТОРІН`.
+  `ContractPdfGeneratorTests` assert byte-length deltas, not section text (no PDF text-extractor in
+  the test project).
+- `SupplierProfile.DeliveryRegions` is now `[Obsolete]` — column and mapping kept (fed to the
+  deprecated `SupplierProfileDto.DeliveryRegions` for legacy rows), to be dropped by a later
+  migration once the TASK-661 backfill tool has run in prod and the two
+  `#pragma warning disable CS0618` reads in `MarketplaceService`/`SupplierCabinetService` are removed.
+- `backend/openapi.json` was not regenerated for the new endpoints/DTOs — pending chore,
+  `known-issues.md` KI-040.
+
+Supersedes: nothing. Does not reopen ADR-033 (the `DestinationStoreId` / receiving-flow decisions
+stand) or ADR-035 (the provider-bypass containment is unchanged — the new jsonb predicate lives
+inside it).
+
+Task breakdown: TASK-648 (region registry + `GeoService` + `GET /api/geo/regions`, backend/sonnet) ∥
+TASK-649 (migration `AddSupplierPerformanceData` + entities, database-engineer/sonnet) → TASK-650
+(coverage DTOs + `DeliveryCoverageJson` + profile read/write + order region snapshot,
+backend/sonnet) → TASK-651 (coverage region filter + `GET suppliers/{id}/coverage`, backend/sonnet)
+→ TASK-652 (contract-PDF §5, backend/sonnet) ∥ TASK-653 (worker
+`supplier-metrics-recompute.job.ts`, backend/opus) → TASK-654..658 (frontend `features/geo` +
+editors + panels + location form, frontend-developer) → TASK-660 (mobile read-only parity, also
+fixes KI-037, mobile-developer) → TASK-661 (`DeliveryRegions` → codes one-shot tool, backend/sonnet)
+→ TASK-662 (this documentation pass, documentation-writer).
 
 ## ADR-035: `IProviderRlsOverride` — scoping the marketplace provider bypass to one repository method, replacing session-level `SET app.role`
 Date: 2026-08-30
