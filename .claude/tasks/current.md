@@ -3,6 +3,27 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-663 (T16) — e2e + regression QA: supplier delivery-coverage / performance-metrics
+
+**Status:** done · **Agent:** qa-tester · Marketplace supplier-performance plan
+(`eventual-whistling-rabbit.md`), T16 of T1–T16. Covers TASK-648..662 (merged to `main`, HEAD `f11425cd`).
+Log: `.claude/logs/tasks/663_2026-08-31_coverage-feature-qa_qa-tester.md`
+
+**Verdict: SHIP WITH NOTES.** Automated: build 0 err / 1 known warn; `dotnet test` **2134/2134**
+(RLS audit + 185 coverage-feature tests green); frontend tsc/lint/vitest clean, i18n parity 4611=4611;
+mobile tsc + worker build clean; EF snapshot consistent. E2E: all 8 steps PASS — coverage editor
+save+reload, region filter (UI+API), always-visible coverage panel + per-region drill-down, cooperation
+modal panel (advisory), contract PDF §5 «РЕГІОНИ ТА УМОВИ ДОСТАВКИ» / §6 signatures in correct Ukrainian,
+order `DestinationRegionCode=UA-30` snapshot, real BullMQ worker run (**`Rating` + `UpdatedAt` UNCHANGED**,
+`AvgDeliveryDays=3.00`, `DeliveryByRegion` UA-30 n=1), mobile static review + KI-037 fix confirmed.
+Regression: legacy `Region ILIKE` fallback + `DeliveryCoverageBackfill --apply` → structured `served` match,
+null-coverage profile/PDF don't crash, unfiltered supplier set unchanged (3). Dev data seeded then cleaned.
+
+**BUG-1 (LOW, non-blocking):** `CooperationCoveragePanel.tsx` shows "Не вдалося визначити ваш регіон"
+even when the buyer's region IS resolved but the supplier just didn't declare it (`BuyerRegionStatus`
+enum can't distinguish "region unknown" from "coverage for known region undeclared"). Advisory panel,
+never blocks submit. Fix sketch in the log.
+
 ## TASK-659 (T12) — i18n sweep for the supplier-coverage feature
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
