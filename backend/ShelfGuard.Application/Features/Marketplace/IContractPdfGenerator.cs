@@ -8,6 +8,11 @@ namespace ShelfGuard.Application.Features.Marketplace;
 /// client selected one of their own registered legal entities
 /// (SupplierAgreement.ClientLegalEntityId) when requesting cooperation; when
 /// null, the contract keeps rendering only ClientDisplayName as before.
+/// DeliveryCoverage* fields (TASK-652) are optional: the supplier's declared
+/// delivery coverage, with region codes ALREADY resolved to Ukrainian names by
+/// the caller (SupplierAgreementService) so the generator stays IO-/lookup-free.
+/// The "5. РЕГІОНИ ТА УМОВИ ДОСТАВКИ" section renders only when
+/// DeliveryCoverageServed is non-empty.
 /// </summary>
 public record ContractPdfData(
     string ContractNumber,
@@ -33,7 +38,18 @@ public record ContractPdfData(
     string? ClientBankName = null,
     string? ClientLegalAddress = null,
     string? ClientDirectorName = null,
-    bool ClientIsVatPayer = false);
+    bool ClientIsVatPayer = false,
+    IReadOnlyList<ContractDeliveryRegion>? DeliveryCoverageServed = null,
+    IReadOnlyList<string>? DeliveryCoverageNotServed = null,   // resolved region NAMES, not codes
+    string? DeliveryCoverageNote = null);
+
+/// <summary>
+/// One served delivery region for the cooperation contract's coverage section
+/// (TASK-652). <paramref name="RegionName"/> is the resolved Ukrainian display
+/// name (never a raw code); <paramref name="Terms"/> is the supplier's optional
+/// free-text delivery terms for that region.
+/// </summary>
+public record ContractDeliveryRegion(string RegionName, string? Terms);
 
 /// <summary>
 /// Renders the cooperation contract PDF («ДОГОВІР ПРО СПІВПРАЦЮ») from supplier
