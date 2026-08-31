@@ -3,6 +3,23 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-647 — CustomerMessage migration chain: restore missing `.Designer.cs` (database)
+
+**Status:** done · **Agent:** database-engineer · Repair of another session's uncommitted work.
+Log: `.claude/logs/tasks/647_2026-08-31_customer-message-migration-designer-fix_database-engineer.md`
+
+The hand-written `20260830143000_AddCustomerMessageCampaignSnapshots` migration shipped without
+a `.Designer.cs`, so its `BuildTargetModel()` was empty and the chain wasn't walkable. Created
+the one missing file, derived from `20260830175708_...Designer.cs` by reverse-applying that
+migration's `Up()`: dropped the 4 `Content*` properties from the `CustomerMessageCampaign`
+block and restored `b.HasIndex("TenantId")`; everything else byte-identical. `[DbContext]` /
+`[Migration]` attributes deliberately **not** repeated in the Designer — the hand-written `.cs`
+already declares them on the same partial class and both are `AllowMultiple = false` (`CS0579`).
+Release build 0 errors; `migrations add __Verify` → empty `Up()`/`Down()` (snapshot consistent,
+`+170/-0` unchanged); `migrations script 20260830083005 → 20260831060145` generates cleanly;
+filtered tests 77/77. Dev DB untouched and confirmed to match the replayed chain (3 history
+rows, `IX_customer_message_campaigns_TenantId` correctly absent, all 6 RLS policies present).
+
 ## TASK-636 — Shared `Table` component: Batch A foundation + pilot (frontend)
 
 **Status:** done · **Agent:** frontend-developer · Batch A of 9 (46-file table-unification

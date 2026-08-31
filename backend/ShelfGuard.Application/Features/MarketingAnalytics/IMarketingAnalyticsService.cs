@@ -26,6 +26,12 @@ public interface IMarketingAnalyticsService
         Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, RfmSegmentKey key,
         CancellationToken ct = default);
 
+    /// <summary>Internal reusable audience resolution for features such as customer-message
+    /// campaigns. Returns tenant-scoped ids only; no PII leaves the application layer.</summary>
+    Task<IReadOnlyList<Guid>> ResolveSegmentCustomerIdsAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, RfmSegmentKey key,
+        CancellationToken ct = default);
+
     Task<RfmAffinityResultDto> GetAffinityAsync(
         Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, RfmSegmentKey key,
         string productName, int topN = 10, CancellationToken ct = default);

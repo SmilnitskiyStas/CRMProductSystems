@@ -433,6 +433,7 @@
         "consumerApp": {
           "label": "App",
           "bonusProgram": "Bonus Program",
+          "customerMessages": "Customer Messages",
           "loyaltyTiers": "Loyalty Tiers",
           "banners": "Banners",
           "promotions": "Promotions",
@@ -4624,6 +4625,30 @@
         "title": "Banners",
         "subtitle": "Promotional banners on the consumer app's home feed — running, past, and drafts"
       },
+      "customerMessagesPage": {
+        "title": "Customer Messages",
+        "subtitle": "Create useful messages for users of the customer app",
+        "cardTitle": "New message",
+        "cardDescription": "Select an audience and one or more channels: Push, messenger, or SMS.",
+        "createButton": "Create message",
+        "newTitle": "New message",
+        "newSubtitle": "Configure message content, audience, and delivery channels",
+        "integrationHint": "Delivery will become available after the respective services are connected. Messages are currently saved to the queue.",
+        "history": {
+          "title": "Sending history",
+          "subtitle": "Messages created for customer app users",
+          "message": "Message",
+          "audience": "Audience",
+          "channel": "Channel",
+          "status": "Status",
+          "createdAt": "Created",
+          "allCustomers": "All customers",
+          "loyaltyMembers": "Loyalty members",
+          "integrationPending": "Waiting for service",
+          "empty": "No messages yet",
+          "loadError": "Failed to load message history"
+        }
+      },
       "promotionsPage": {
         "title": "Promo Products",
         "subtitle": "Discounted products for the consumer app — running, past, and drafts"
@@ -5589,19 +5614,23 @@
         "iotOffline": "Device offline",
         "accessTemporaryExpiringSoon": "Temporary access expiring soon",
         "accessTemporaryExpired": "Temporary access expired",
-        "authPasswordResetRequested": "Password reset requested"
+        "authPasswordResetRequested": "Password reset requested",
+        "customerMessageCreated": "Customer message"
       },
       "channels": {
         "telegram": "Telegram",
         "push": "Push",
         "email": "Email",
-        "webhook": "Webhook"
+        "webhook": "Webhook",
+        "messenger": "Messenger",
+        "sms": "SMS"
       },
       "status": {
         "sent": "Sent",
         "failed": "Failed",
         "skipped": "Skipped",
-        "pending": "Pending"
+        "pending": "Pending",
+        "integration_pending": "Waiting for service integration"
       },
       "eventSource": {
         "stockExpiryWarning": { "service": "Inventory module", "actor": "Expiry date monitoring" },
@@ -5617,7 +5646,8 @@
         "iotOffline": { "service": "IoT monitoring", "actor": "Device status" },
         "accessTemporaryExpiringSoon": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
         "accessTemporaryExpired": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
-        "authPasswordResetRequested": { "service": "Authentication", "actor": "Password reset" }
+        "authPasswordResetRequested": { "service": "Authentication", "actor": "Password reset" },
+        "customerMessageCreated": { "service": "Marketing messages", "actor": "Network administrator" }
       }
     },
     "serviceDesk": {

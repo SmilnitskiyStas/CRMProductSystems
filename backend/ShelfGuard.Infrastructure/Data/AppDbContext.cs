@@ -49,6 +49,8 @@ public sealed class AppDbContext : DbContext
     // Notifications
     public DbSet<NotificationSetting> NotificationSettings => Set<NotificationSetting>();
     public DbSet<NotificationQueue> NotificationQueues => Set<NotificationQueue>();
+    public DbSet<CustomerMessageCampaign> CustomerMessageCampaigns => Set<CustomerMessageCampaign>();
+    public DbSet<CustomerMessageRecipient> CustomerMessageRecipients => Set<CustomerMessageRecipient>();
 
     // Integrations
     public DbSet<IntegrationConfig> IntegrationConfigs => Set<IntegrationConfig>();
@@ -786,6 +788,42 @@ public sealed class AppDbContext : DbContext
              .HasDatabaseName("idx_notification_queue_title_trgm")
              .HasMethod("gin")
              .HasOperators("gin_trgm_ops");
+        });
+
+        builder.Entity<CustomerMessageCampaign>(e =>
+        {
+            e.ToTable("customer_message_campaigns");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.Title).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Message).HasMaxLength(2000).IsRequired();
+            e.Property(x => x.AudienceSource).HasMaxLength(50).IsRequired();
+            e.Property(x => x.AudienceDefinition).HasColumnType("jsonb").IsRequired();
+            e.Property(x => x.Channels).HasColumnType("jsonb").IsRequired();
+            e.Property(x => x.MessengerProvider).HasMaxLength(30);
+            e.Property(x => x.ContentType).HasMaxLength(30);
+            e.Property(x => x.ContentTitle).HasMaxLength(200);
+            e.Property(x => x.ContentImageUrl).HasMaxLength(2000);
+            e.Property(x => x.DeliveryMode).HasMaxLength(30).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(30).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt }).IsDescending(false, true)
+             .HasDatabaseName("idx_customer_message_campaigns_tenant_created");
+            e.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.CreatedByUser).WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Recipients).WithOne(x => x.Campaign).HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CustomerMessageRecipient>(e =>
+        {
+            e.ToTable("customer_message_recipients");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.CampaignId, x.CustomerId }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.CustomerId })
+             .HasDatabaseName("idx_customer_message_recipients_tenant_customer");
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── IntegrationConfig ───────────────────────────────────────────────

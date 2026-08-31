@@ -68,6 +68,7 @@ const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
   failed:  { bg: "#450a0a", text: "#F87171" },
   skipped: { bg: "#1f2937", text: "#9CA3AF" },
   pending: { bg: "#1c1917", text: "#FACC15" },
+  integration_pending: { bg: "#172554", text: "#93C5FD" },
 };
 
 interface Props {

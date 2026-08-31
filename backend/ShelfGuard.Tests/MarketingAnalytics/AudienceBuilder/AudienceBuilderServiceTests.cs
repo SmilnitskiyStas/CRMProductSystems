@@ -217,6 +217,27 @@ public sealed class AudienceBuilderServiceTests
     // ── Exports: ActivityLog + repository call shape ────────────────────────────────────────
 
     [Fact]
+    public async Task ResolveCustomerIdsAsync_reads_every_page_without_the_ui_page_size_cap()
+    {
+        var ids = Enumerable.Range(0, 201).Select(_ => Guid.NewGuid()).ToArray();
+        _repo.GetBuyersAsync(Arg.Any<ResolvedAudienceQuery>(), Arg.Any<int>(), 200, "name", false, Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var page = call.ArgAt<int>(1);
+                return ids.Skip((page - 1) * 200).Take(200)
+                    .Select(id => new AudienceBuyerRowRaw(id, "Покупець", null, 1, 1, 10, 201, 0))
+                    .ToArray();
+            });
+
+        var result = await _sut.ResolveCustomerIdsAsync(TenantId, BuildRequest(
+            [new AudienceTermRequest(AudienceTermKind.Text, "кава", null)]));
+
+        Assert.Equal(201, result.Count);
+        await _repo.Received(1).GetBuyersAsync(Arg.Any<ResolvedAudienceQuery>(), 1, 200, "name", false, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetBuyersAsync(Arg.Any<ResolvedAudienceQuery>(), 2, 200, "name", false, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ExportBuyersAsync_calls_receipt_level_repository_method_and_logs_activity()
     {
         _repo.GetBuyerReceiptsAsync(Arg.Any<ResolvedAudienceQuery>(), Arg.Any<int>(), Arg.Any<CancellationToken>())

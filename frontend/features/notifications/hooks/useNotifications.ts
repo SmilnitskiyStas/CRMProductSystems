@@ -10,6 +10,10 @@ import {
   markNotificationAsUnread,
   markAllNotificationsAsRead,
   fetchUnreadCount,
+  createCustomerMessage,
+  fetchCustomerMessageCampaigns,
+  submitCustomerMessage,
+  fetchCustomerMessageCampaign,
 } from "../api/notifications";
 import type { PagedResult } from "@/lib/api-types";
 import type {
@@ -18,6 +22,8 @@ import type {
   NotificationEventType,
   NotificationHistoryItem,
   NotificationHistoryFilters,
+  CustomerMessageCampaignItem,
+  CustomerMessageCampaignDetail,
 } from "../types";
 
 // ── Mock data (backend TASK-017 not yet implemented) ──────────────────────────
@@ -125,6 +131,42 @@ export function useSendTestNotification() {
   return useMutation({
     mutationFn: ({ channel, eventType }: { channel: string; eventType: string }) =>
       sendTestNotification(channel, eventType),
+  });
+}
+
+export function useCreateCustomerMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createCustomerMessage,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: HISTORY_KEY_PREFIX });
+      qc.invalidateQueries({ queryKey: ["customer-message-campaigns"] });
+    },
+  });
+}
+
+export function useCustomerMessageCampaigns(page: number, pageSize = 20) {
+  return useQuery<PagedResult<CustomerMessageCampaignItem>>({
+    queryKey: ["customer-message-campaigns", page, pageSize],
+    queryFn: () => fetchCustomerMessageCampaigns(page, pageSize),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useCustomerMessageCampaign(id: string | null) {
+  return useQuery<CustomerMessageCampaignDetail>({
+    queryKey: ["customer-message-campaigns", id],
+    queryFn: () => fetchCustomerMessageCampaign(id!),
+    enabled: !!id,
+  });
+}
+
+export function useSubmitCustomerMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, deliveryMode, scheduledAt }: { id: string; deliveryMode: "send_now" | "scheduled"; scheduledAt?: string }) =>
+      submitCustomerMessage(id, deliveryMode, scheduledAt),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["customer-message-campaigns"] }),
   });
 }
 

@@ -433,6 +433,7 @@
         "consumerApp": {
           "label": "Застосунок",
           "bonusProgram": "Бонусна програма",
+          "customerMessages": "Повідомлення клієнтам",
           "loyaltyTiers": "Рівні лояльності",
           "banners": "Банери",
           "promotions": "Акції",
@@ -4624,6 +4625,30 @@
         "title": "Банери",
         "subtitle": "Промо-банери на головному екрані клієнтського застосунку — активні, минулі та чернетки"
       },
+      "customerMessagesPage": {
+        "title": "Повідомлення клієнтам",
+        "subtitle": "Створення корисних повідомлень для користувачів клієнтського застосунку",
+        "cardTitle": "Нове повідомлення",
+        "cardDescription": "Оберіть аудиторію та один або кілька каналів: Push, месенджер або SMS.",
+        "createButton": "Створити повідомлення",
+        "newTitle": "Нове повідомлення",
+        "newSubtitle": "Налаштуйте вміст, аудиторію та канали відправлення",
+        "integrationHint": "Відправлення запрацює після підключення відповідних сервісів. Зараз повідомлення зберігаються в черзі.",
+        "history": {
+          "title": "Історія відправлень",
+          "subtitle": "Повідомлення, створені для користувачів застосунку",
+          "message": "Повідомлення",
+          "audience": "Аудиторія",
+          "channel": "Канал",
+          "status": "Статус",
+          "createdAt": "Створено",
+          "allCustomers": "Усі покупці",
+          "loyaltyMembers": "Учасники лояльності",
+          "integrationPending": "Очікує сервіс",
+          "empty": "Повідомлень ще немає",
+          "loadError": "Не вдалося завантажити історію повідомлень"
+        }
+      },
       "promotionsPage": {
         "title": "Акційні товари",
         "subtitle": "Товари зі знижками для клієнтського застосунку — активні, минулі та чернетки"
@@ -5589,19 +5614,23 @@
         "iotOffline": "Пристрій офлайн",
         "accessTemporaryExpiringSoon": "Тимчасовий доступ незабаром закінчується",
         "accessTemporaryExpired": "Тимчасовий доступ закінчився",
-        "authPasswordResetRequested": "Запит на відновлення пароля"
+        "authPasswordResetRequested": "Запит на відновлення пароля",
+        "customerMessageCreated": "Повідомлення покупцям"
       },
       "channels": {
         "telegram": "Telegram",
         "push": "Push",
         "email": "Email",
-        "webhook": "Webhook"
+        "webhook": "Webhook",
+        "messenger": "Месенджер",
+        "sms": "SMS"
       },
       "status": {
         "sent": "Надіслано",
         "failed": "Помилка",
         "skipped": "Пропущено",
-        "pending": "Очікує"
+        "pending": "Очікує",
+        "integration_pending": "Очікує підключення сервісу"
       },
       "eventSource": {
         "stockExpiryWarning": { "service": "Модуль інвентаризації", "actor": "Моніторинг терміну придатності" },
@@ -5617,7 +5646,8 @@
         "iotOffline": { "service": "IoT моніторинг", "actor": "Стан пристрою" },
         "accessTemporaryExpiringSoon": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
         "accessTemporaryExpired": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
-        "authPasswordResetRequested": { "service": "Автентифікація", "actor": "Відновлення пароля" }
+        "authPasswordResetRequested": { "service": "Автентифікація", "actor": "Відновлення пароля" },
+        "customerMessageCreated": { "service": "Маркетингові повідомлення", "actor": "Адміністратор мережі" }
       }
     },
     "serviceDesk": {

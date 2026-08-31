@@ -80,6 +80,24 @@ public sealed class AudienceBuilderService : IAudienceBuilderService
             sortBy, request.SortDescending, hash, DateTimeOffset.UtcNow);
     }
 
+    public async Task<IReadOnlyList<Guid>> ResolveCustomerIdsAsync(
+        Guid tenantId, AudienceBuildRequest request, CancellationToken ct = default)
+    {
+        var query = ResolveAudience(tenantId, request.From, request.To, request.StoreIds, request.Terms, request.Mode,
+            request.MinQuantity, request.MinAmount, request.ExcludedItemIds);
+        if (query is null) return [];
+
+        var result = new List<Guid>();
+        for (var page = 1; ; page++)
+        {
+            var rows = await _repo.GetBuyersAsync(query, page, MaxPageSize, "name", false, ct);
+            result.AddRange(rows.Select(x => x.CustomerId));
+            var total = rows.FirstOrDefault()?.TotalCount ?? 0;
+            if (rows.Count == 0 || result.Count >= total) break;
+        }
+        return result.Distinct().ToArray();
+    }
+
     public async Task<MatchedItemsTableDto> GetMatchedItemsAsync(Guid tenantId, AudienceBuildRequest request, CancellationToken ct = default)
     {
         var hash = ComputeHash(tenantId, request);

@@ -1,4 +1,88 @@
 export type NotificationChannel = "telegram" | "push" | "email" | "webhook";
+export type NotificationHistoryChannel = NotificationChannel | "messenger" | "sms";
+
+export type CustomerMessageChannel = "push" | "messenger" | "sms";
+import type { MarketingAnalyticsPeriodPreset, RfmSegmentKey } from "@/features/marketing-analytics/types";
+
+export type CustomerMessageAudience = "all_customers" | "loyalty_members" | "rfm_segment" | "purchase_history";
+export type MessengerProvider = "telegram" | "viber" | "whatsapp";
+export type CustomerMessageContentType = "promotion" | "banner" | "catalog";
+export type CustomerMessageDeliveryMode = "draft" | "send_now" | "scheduled";
+
+export interface CreateCustomerMessageRequest {
+  title: string;
+  message: string;
+  audience: CustomerMessageAudience;
+  channels: CustomerMessageChannel[];
+  messengerProvider?: MessengerProvider;
+  content?: { type: CustomerMessageContentType; id: string };
+  rfmAudience?: {
+    segment: RfmSegmentKey;
+    period: MarketingAnalyticsPeriodPreset;
+    from?: string;
+    to?: string;
+    storeIds: string[];
+    estimatedRecipients: number;
+  };
+  purchaseAudience?: {
+    from: string;
+    to: string;
+    storeIds: string[];
+    terms: Array<{ kind: "Text" | "Category"; text: string | null; categoryId: string | null }>;
+    mode: "Any" | "All";
+    minQuantity: number | null;
+    minAmount: number | null;
+    estimatedRecipients: number;
+  };
+  deliveryMode: CustomerMessageDeliveryMode;
+  scheduledAt?: string;
+}
+
+export interface CreateCustomerMessageResult {
+  campaignId: string;
+  queuedChannels: number;
+  status: "draft" | "scheduled" | "integration_pending";
+}
+
+export interface CustomerMessageCampaignItem {
+  id: string;
+  title: string;
+  message: string;
+  audienceSource: CustomerMessageAudience;
+  audienceDefinition: string;
+  channels: CustomerMessageChannel[];
+  messengerProvider: MessengerProvider | null;
+  contentType: CustomerMessageContentType | null;
+  contentId: string | null;
+  contentTitle: string | null;
+  contentImageUrl: string | null;
+  deliveryMode: CustomerMessageDeliveryMode;
+  scheduledAt: string | null;
+  submittedAt: string | null;
+  estimatedRecipients: number;
+  resolvedRecipients: number;
+  status: "integration_pending" | "draft" | "scheduled" | "sending" | "completed" | "failed";
+  createdAt: string;
+}
+
+export interface CustomerMessageChannelSummary {
+  channel: CustomerMessageChannel;
+  status: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  pendingCount: number;
+}
+
+export interface CustomerMessageCampaignDetail {
+  campaign: CustomerMessageCampaignItem;
+  channels: CustomerMessageChannelSummary[];
+  totalDeliveries: number;
+  sentCount: number;
+  failedCount: number;
+  pendingCount: number;
+  providersConnected: boolean;
+}
 
 export type NotificationEventType =
   | "stock.expiry_warning"
@@ -14,7 +98,8 @@ export type NotificationEventType =
   | "iot.offline"
   | "access.temporary_expiring_soon"
   | "access.temporary_expired"
-  | "auth.password_reset_requested";
+  | "auth.password_reset_requested"
+  | "customer_message.created";
 
 export interface NotificationSetting {
   id: string;
@@ -32,8 +117,8 @@ export interface NotificationSettingsMap {
 export interface NotificationHistoryItem {
   id: string;
   eventType: NotificationEventType;
-  channel: NotificationChannel;
-  status: "sent" | "failed" | "skipped" | "pending";
+  channel: NotificationHistoryChannel;
+  status: "sent" | "failed" | "skipped" | "pending" | "integration_pending";
   payload: string | null;
   createdAt: string;
   isRead: boolean;
@@ -85,6 +170,7 @@ export const EVENT_TYPE_I18N_KEY: Record<NotificationEventType, string> = {
   "access.temporary_expiring_soon": "accessTemporaryExpiringSoon",
   "access.temporary_expired": "accessTemporaryExpired",
   "auth.password_reset_requested": "authPasswordResetRequested",
+  "customer_message.created": "customerMessageCreated",
 };
 
 /** Translated event-type label. `t` must be scoped to `Dashboard.notifications.eventTypes`. */
@@ -94,7 +180,7 @@ export function getEventTypeLabel(t: (key: string) => string, eventType: Notific
 }
 
 /** Translated channel label. `t` must be scoped to `Dashboard.notifications.channels`. */
-export function getChannelLabel(t: (key: string) => string, channel: NotificationChannel): string {
+export function getChannelLabel(t: (key: string) => string, channel: NotificationHistoryChannel): string {
   return t(channel);
 }
 
@@ -114,9 +200,11 @@ export function getEventTypeSource(
   return { service: t(`${key}.service`), actor: t(`${key}.actor`) };
 }
 
-export const CHANNEL_ICONS: Record<NotificationChannel, string> = {
+export const CHANNEL_ICONS: Record<NotificationHistoryChannel, string> = {
   telegram: "✈️",
   push: "📱",
   email: "📧",
   webhook: "🔗",
+  messenger: "💬",
+  sms: "✉️",
 };

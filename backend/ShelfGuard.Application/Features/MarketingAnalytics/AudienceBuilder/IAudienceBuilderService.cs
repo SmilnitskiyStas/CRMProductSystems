@@ -24,6 +24,8 @@ public interface IAudienceBuilderService
     /// DTO with an empty row list and zeroed KPIs (same "empty result must not break the page"
     /// rule Фаза 1/2's own QA checklists already set).</summary>
     Task<AudienceBuyerTableDto> GetBuyersAsync(Guid tenantId, AudienceBuildRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> ResolveCustomerIdsAsync(
+        Guid tenantId, AudienceBuildRequest request, CancellationToken ct = default);
 
     Task<MatchedItemsTableDto> GetMatchedItemsAsync(Guid tenantId, AudienceBuildRequest request, CancellationToken ct = default);
 

@@ -38,6 +38,7 @@ const STATUS_ICON: Record<string, { icon: React.ReactNode; color: string }> = {
   failed:  { icon: <AlertTriangle size={14} />, color: "#F87171" },
   skipped: { icon: <Clock size={14} />, color: "#9CA3AF" },
   pending: { icon: <Clock size={14} />, color: "#FACC15" },
+  integration_pending: { icon: <Clock size={14} />, color: "#93C5FD" },
 };
 
 export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props) {

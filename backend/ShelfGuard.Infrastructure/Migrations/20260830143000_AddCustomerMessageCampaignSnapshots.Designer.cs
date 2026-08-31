@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ShelfGuard.Infrastructure.Data;
@@ -11,10 +12,13 @@ using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.Migrations
 {
-    [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    // NOTE: [DbContext] / [Migration] attributes are declared on the
+    // hand-written 20260830143000_AddCustomerMessageCampaignSnapshots.cs
+    // partial (they are AllowMultiple=false, so they must not be repeated here).
+    partial class AddCustomerMessageCampaignSnapshots
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1045,21 +1049,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<Guid?>("ContentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentImageUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("ContentTitle")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("ContentType")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1067,11 +1056,6 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("DeliveryMode")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
 
                     b.Property<int>("EstimatedRecipients")
                         .HasColumnType("integer");
@@ -1088,16 +1072,10 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<int>("ResolvedRecipients")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("ScheduledAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
-
-                    b.Property<DateTime?>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
@@ -1110,6 +1088,8 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("TenantId", "CreatedAt")
                         .IsDescending(false, true)

@@ -33,6 +33,22 @@ public interface INotificationRepository
     /// resolves into real per-user rows and marks <c>Status = "dispatched"</c>.
     /// </summary>
     Task EnqueueAsync(NotificationQueue item, CancellationToken ct = default);
+    Task EnqueueManyAsync(IReadOnlyCollection<NotificationQueue> items, CancellationToken ct = default);
+    Task CreateCustomerCampaignAsync(CustomerMessageCampaign campaign,
+        IReadOnlyCollection<CustomerMessageRecipient> recipients,
+        IReadOnlyCollection<NotificationQueue> queueItems,
+        CancellationToken ct = default);
+    Task<(IReadOnlyList<CustomerMessageCampaign> Items, int Total)> GetCustomerCampaignsAsync(
+        Guid tenantId, int page, int pageSize, CancellationToken ct = default);
+    Task<(string Title, string? ImageUrl)?> ResolveCustomerMessageContentAsync(
+        Guid tenantId, string contentType, Guid contentId, CancellationToken ct = default);
+    Task<CustomerMessageCampaign?> SubmitCustomerCampaignAsync(
+        Guid tenantId, Guid campaignId, string deliveryMode, DateTime? scheduledAt,
+        CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> ResolveBasicCustomerAudienceAsync(
+        Guid tenantId, bool loyaltyMembersOnly, CancellationToken ct = default);
+    Task<(CustomerMessageCampaign? Campaign, IReadOnlyList<NotificationQueue> QueueItems)> GetCustomerCampaignDetailAsync(
+        Guid tenantId, Guid campaignId, CancellationToken ct = default);
 
     Task<NotificationQueue?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default);
     Task MarkAsReadAsync(Guid id, Guid tenantId, CancellationToken ct = default);

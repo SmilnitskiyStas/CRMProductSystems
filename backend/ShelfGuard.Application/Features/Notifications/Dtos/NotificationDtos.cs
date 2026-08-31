@@ -1,4 +1,5 @@
 using ShelfGuard.Application.Common;
+using ShelfGuard.Application.Features.MarketingAnalytics.AudienceBuilder.Dtos;
 
 namespace ShelfGuard.Application.Features.Notifications.Dtos;
 
@@ -55,3 +56,76 @@ public sealed record TestNotificationRequest(
     string Channel,
     string EventType
 );
+
+public sealed record CreateCustomerMessageRequest(
+    string Title,
+    string Message,
+    string Audience,
+    string[] Channels,
+    string? MessengerProvider = null,
+    RfmAudienceDefinition? RfmAudience = null,
+    CustomerMessageContentReference? Content = null,
+    PurchaseAudienceDefinition? PurchaseAudience = null,
+    string DeliveryMode = "draft",
+    DateTime? ScheduledAt = null);
+
+public sealed record SubmitCustomerMessageRequest(string DeliveryMode, DateTime? ScheduledAt = null);
+
+public sealed record CustomerMessageContentReference(string Type, Guid Id);
+
+public sealed record PurchaseAudienceDefinition(
+    DateOnly From,
+    DateOnly To,
+    Guid[] StoreIds,
+    IReadOnlyList<AudienceTermRequest> Terms,
+    AudienceCombineMode Mode,
+    decimal? MinQuantity,
+    decimal? MinAmount,
+    int EstimatedRecipients);
+
+public sealed record RfmAudienceDefinition(
+    string Segment,
+    string Period,
+    DateOnly? From,
+    DateOnly? To,
+    Guid[] StoreIds,
+    int EstimatedRecipients);
+
+public sealed record CreateCustomerMessageResult(Guid CampaignId, int QueuedChannels, string Status);
+
+public sealed record CustomerMessageCampaignDto(
+    Guid Id,
+    string Title,
+    string Message,
+    string AudienceSource,
+    string AudienceDefinition,
+    IReadOnlyList<string> Channels,
+    string? MessengerProvider,
+    string? ContentType,
+    Guid? ContentId,
+    string? ContentTitle,
+    string? ContentImageUrl,
+    string DeliveryMode,
+    DateTime? ScheduledAt,
+    DateTime? SubmittedAt,
+    int EstimatedRecipients,
+    int ResolvedRecipients,
+    string Status,
+    DateTime CreatedAt);
+
+public sealed record CustomerMessageChannelSummaryDto(
+    string Channel,
+    string Status,
+    int RecipientCount,
+    int SentCount,
+    int FailedCount,
+    int PendingCount);
+
+public sealed record CustomerMessageCampaignDetailDto(
+    CustomerMessageCampaignDto Campaign,
+    IReadOnlyList<CustomerMessageChannelSummaryDto> Channels,
+    int TotalDeliveries,
+    int SentCount,
+    int FailedCount,
+    int PendingCount,
+    bool ProvidersConnected);

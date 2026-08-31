@@ -324,12 +324,16 @@ public sealed class MarketingAnalyticsService : IMarketingAnalyticsService
         return new ClassifiedPopulation(bySegment, scored.Count, scored.Sum(r => r.PeriodRevenue));
     }
 
-    private async Task<List<Guid>> GetSegmentCustomerIdsAsync(
+    public async Task<IReadOnlyList<Guid>> ResolveSegmentCustomerIdsAsync(
         Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, RfmSegmentKey key, CancellationToken ct)
     {
         var population = await ClassifyAllAsync(tenantId, storeIds, from, to, ct);
         return population.BySegment[key].Select(r => r.CustomerId).ToList();
     }
+
+    private async Task<IReadOnlyList<Guid>> GetSegmentCustomerIdsAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, RfmSegmentKey key, CancellationToken ct)
+        => await ResolveSegmentCustomerIdsAsync(tenantId, storeIds, from, to, key, ct);
 
     /// <summary>Builds both the wire-facing detail DTO and the raw KPI input record the AI
     /// advisor needs — shared by GetSegmentDetailAsync and ExplainSegmentAsync so the two never

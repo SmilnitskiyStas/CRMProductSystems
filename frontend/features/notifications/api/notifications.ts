@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
-import type { NotificationSetting, NotificationHistoryItem, NotificationHistoryFilters } from "../types";
+import type { CreateCustomerMessageRequest, CreateCustomerMessageResult, CustomerMessageCampaignDetail, CustomerMessageCampaignItem, CustomerMessageDeliveryMode, NotificationSetting, NotificationHistoryItem, NotificationHistoryFilters } from "../types";
 
 export async function fetchNotificationSettings(): Promise<NotificationSetting[]> {
   return api.get<NotificationSetting[]>("/api/notifications/settings");
@@ -54,4 +54,20 @@ export async function markAllNotificationsAsRead(): Promise<void> {
 export async function fetchUnreadCount(): Promise<number> {
   const data = await api.get<{ count: number }>("/api/notifications/unread-count");
   return data.count;
+}
+
+export async function createCustomerMessage(body: CreateCustomerMessageRequest): Promise<CreateCustomerMessageResult> {
+  return api.post<CreateCustomerMessageResult>("/api/notifications/customer-messages", body);
+}
+
+export async function fetchCustomerMessageCampaigns(page = 1, pageSize = 20): Promise<PagedResult<CustomerMessageCampaignItem>> {
+  return api.get<PagedResult<CustomerMessageCampaignItem>>(`/api/notifications/customer-messages?page=${page}&pageSize=${pageSize}`);
+}
+
+export async function fetchCustomerMessageCampaign(id: string): Promise<CustomerMessageCampaignDetail> {
+  return api.get<CustomerMessageCampaignDetail>(`/api/notifications/customer-messages/${id}`);
+}
+
+export async function submitCustomerMessage(id: string, deliveryMode: Exclude<CustomerMessageDeliveryMode, "draft">, scheduledAt?: string): Promise<CustomerMessageCampaignItem> {
+  return api.post<CustomerMessageCampaignItem>(`/api/notifications/customer-messages/${id}/submit`, { deliveryMode, scheduledAt });
 }

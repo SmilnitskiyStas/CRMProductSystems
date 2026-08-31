@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
+using System.Text.Json;
 
 namespace ShelfGuard.Infrastructure.Data.Repositories;
 
@@ -70,6 +71,10 @@ public sealed class NotificationRepository : INotificationRepository
 
         if (!string.IsNullOrWhiteSpace(eventType))
             query = query.Where(q => q.EventType == eventType);
+        else
+            // Outbound customer campaigns have their own history screen and are not
+            // incoming system notifications for the administrator.
+            query = query.Where(q => q.EventType != "customer_message.created");
 
         if (userId.HasValue)
             query = query.Where(q => q.UserId == userId);
@@ -99,6 +104,121 @@ public sealed class NotificationRepository : INotificationRepository
     {
         _db.NotificationQueues.Add(item);
         await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task EnqueueManyAsync(IReadOnlyCollection<NotificationQueue> items, CancellationToken ct = default)
+    {
+        _db.NotificationQueues.AddRange(items);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task CreateCustomerCampaignAsync(
+        CustomerMessageCampaign campaign,
+        IReadOnlyCollection<CustomerMessageRecipient> recipients,
+        IReadOnlyCollection<NotificationQueue> queueItems,
+        CancellationToken ct = default)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        _db.CustomerMessageCampaigns.Add(campaign);
+        _db.CustomerMessageRecipients.AddRange(recipients);
+        _db.NotificationQueues.AddRange(queueItems);
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+    }
+
+    public async Task<(IReadOnlyList<CustomerMessageCampaign> Items, int Total)> GetCustomerCampaignsAsync(
+        Guid tenantId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.CustomerMessageCampaigns
+            .Where(x => x.TenantId == tenantId)
+            .AsNoTracking();
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+        return (items, total);
+    }
+
+    public async Task<(string Title, string? ImageUrl)?> ResolveCustomerMessageContentAsync(
+        Guid tenantId, string contentType, Guid contentId, CancellationToken ct = default)
+    {
+        if (contentType == "promotion")
+        {
+            var item = await _db.PromotionCampaigns.AsNoTracking()
+                .Where(x => x.TenantId == tenantId && x.Id == contentId)
+                .Select(x => new { x.Title, x.ImageUrl })
+                .FirstOrDefaultAsync(ct);
+            return item is null ? null : (item.Title, item.ImageUrl);
+        }
+        if (contentType == "banner")
+        {
+            var item = await _db.Banners.AsNoTracking()
+                .Where(x => x.TenantId == tenantId && x.Id == contentId)
+                .Select(x => new { x.Title, x.ImageUrl })
+                .FirstOrDefaultAsync(ct);
+            return item is null ? null : (item.Title, item.ImageUrl);
+        }
+        if (contentType == "catalog")
+        {
+            var item = await _db.MobileCatalogSettings.AsNoTracking()
+                .Where(x => x.TenantId == tenantId && x.Id == contentId)
+                .Select(x => new { x.Title, ImageUrl = x.BannerUrl })
+                .FirstOrDefaultAsync(ct);
+            return item is null ? null : (item.Title, item.ImageUrl);
+        }
+        return null;
+    }
+
+    public async Task<CustomerMessageCampaign?> SubmitCustomerCampaignAsync(
+        Guid tenantId, Guid campaignId, string deliveryMode, DateTime? scheduledAt,
+        CancellationToken ct = default)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        var campaign = await _db.CustomerMessageCampaigns
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == campaignId, ct);
+        if (campaign is null) return null;
+        if (campaign.Status != "draft") throw new InvalidOperationException("Only a draft campaign can be submitted.");
+
+        campaign.DeliveryMode = deliveryMode;
+        campaign.ScheduledAt = scheduledAt;
+        campaign.SubmittedAt = DateTime.UtcNow;
+        campaign.Status = deliveryMode == "scheduled" ? "scheduled" : "integration_pending";
+        var campaignToken = JsonSerializer.Serialize(new { campaignId });
+        var queueItems = await _db.NotificationQueues
+            .Where(x => x.TenantId == tenantId && x.EventType == "customer_message.created" &&
+                x.Payload != null && EF.Functions.JsonContains(x.Payload, campaignToken))
+            .ToListAsync(ct);
+        foreach (var item in queueItems) item.Status = campaign.Status;
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return campaign;
+    }
+
+    public async Task<IReadOnlyList<Guid>> ResolveBasicCustomerAudienceAsync(
+        Guid tenantId, bool loyaltyMembersOnly, CancellationToken ct = default)
+    {
+        if (!loyaltyMembersOnly)
+            return await _db.Customers.AsNoTracking().Where(x => x.TenantId == tenantId)
+                .Select(x => x.Id).ToListAsync(ct);
+
+        return await _db.LoyaltyMemberships.AsNoTracking()
+            .Where(x => x.TenantId == tenantId && x.Status == LoyaltyMembershipStatus.Active && x.CustomerId != null)
+            .Select(x => x.CustomerId!.Value).Distinct().ToListAsync(ct);
+    }
+
+    public async Task<(CustomerMessageCampaign? Campaign, IReadOnlyList<NotificationQueue> QueueItems)> GetCustomerCampaignDetailAsync(
+        Guid tenantId, Guid campaignId, CancellationToken ct = default)
+    {
+        var campaign = await _db.CustomerMessageCampaigns.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == campaignId, ct);
+        if (campaign is null) return (null, []);
+        var token = JsonSerializer.Serialize(new { campaignId });
+        var queueItems = await _db.NotificationQueues.AsNoTracking()
+            .Where(x => x.TenantId == tenantId && x.EventType == "customer_message.created" &&
+                x.Payload != null && EF.Functions.JsonContains(x.Payload, token))
+            .ToListAsync(ct);
+        return (campaign, queueItems);
     }
 
     public async Task<NotificationQueue?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default)
@@ -137,6 +257,6 @@ public sealed class NotificationRepository : INotificationRepository
     public async Task<int> GetUnreadCountAsync(Guid tenantId, CancellationToken ct = default)
     {
         return await _db.NotificationQueues
-            .CountAsync(q => q.TenantId == tenantId && !q.IsRead, ct);
+            .CountAsync(q => q.TenantId == tenantId && !q.IsRead && q.EventType != "customer_message.created", ct);
     }
 }

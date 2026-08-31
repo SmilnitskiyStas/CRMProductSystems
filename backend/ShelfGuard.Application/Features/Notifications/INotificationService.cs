@@ -13,6 +13,14 @@ public interface INotificationService
     Task SendTestAsync(Guid tenantId, Guid userId, TestNotificationRequest request, CancellationToken ct = default);
 
     Task<NotificationHistoryDto?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default);
+    Task<CreateCustomerMessageResult> CreateCustomerMessageAsync(
+        Guid tenantId, Guid userId, CreateCustomerMessageRequest request, CancellationToken ct = default);
+    Task<PagedResult<CustomerMessageCampaignDto>> GetCustomerCampaignsAsync(
+        Guid tenantId, PagedQuery query, CancellationToken ct = default);
+    Task<CustomerMessageCampaignDto?> SubmitCustomerMessageAsync(
+        Guid tenantId, Guid campaignId, SubmitCustomerMessageRequest request, CancellationToken ct = default);
+    Task<CustomerMessageCampaignDetailDto?> GetCustomerCampaignDetailAsync(
+        Guid tenantId, Guid campaignId, CancellationToken ct = default);
     Task MarkAsReadAsync(Guid id, Guid tenantId, CancellationToken ct = default);
     Task MarkAsUnreadAsync(Guid id, Guid tenantId, CancellationToken ct = default);
     Task MarkAllAsReadAsync(Guid tenantId, CancellationToken ct = default);
