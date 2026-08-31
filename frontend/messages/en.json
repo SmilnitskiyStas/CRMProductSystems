@@ -3186,7 +3186,23 @@
         "qualityScore": "Product quality",
         "responseTime": "Response time",
         "hourSuffix": " h.",
-        "cancellationRate": "Cancellations"
+        "cancellationRate": "Cancellations",
+        "basedOnOrders": "based on {n} orders",
+        "basedOnInquiries": "based on {n} inquiries",
+        "responseTimeInsufficient": "not enough data",
+        "regionsToggleShow": "details by region",
+        "regionsToggleHide": "hide regions"
+      },
+      "coverage": {
+        "title": "Delivery regions",
+        "empty": "The supplier has not specified delivery regions",
+        "termsByAgreement": "by agreement",
+        "notServed": "Does not deliver to: {regions}"
+      },
+      "deliveryByRegion": {
+        "empty": "Not enough regional data yet",
+        "days": "{days} d.",
+        "sample": "n={n}"
       },
       "reviewsTab": {
         "errorLoad": "Failed to load reviews.",

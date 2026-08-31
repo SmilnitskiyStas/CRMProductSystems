@@ -3186,7 +3186,23 @@
         "qualityScore": "Якість товарів",
         "responseTime": "Час відповіді",
         "hourSuffix": " год.",
-        "cancellationRate": "Відмови"
+        "cancellationRate": "Відмови",
+        "basedOnOrders": "на основі {n} замовлень",
+        "basedOnInquiries": "на основі {n} звернень",
+        "responseTimeInsufficient": "недостатньо даних",
+        "regionsToggleShow": "детальніше по регіонах",
+        "regionsToggleHide": "приховати регіони"
+      },
+      "coverage": {
+        "title": "Регіони доставки",
+        "empty": "Постачальник не вказав регіони доставки",
+        "termsByAgreement": "за домовленістю",
+        "notServed": "Не доставляє: {regions}"
+      },
+      "deliveryByRegion": {
+        "empty": "Ще недостатньо даних по регіонах",
+        "days": "{days} дн.",
+        "sample": "n={n}"
       },
       "reviewsTab": {
         "errorLoad": "Не вдалося завантажити відгуки.",

@@ -3,6 +3,12 @@
 // SupplierProfileDto, SupplierMetricsDto, SupplierItemDto,
 // PublicSupplierReviewDto (v4.1, TASK-285/287).
 
+import type { DeliveryCoverage, DeliveryCoverageEntry } from "@/features/geo/types";
+
+// Delivery-coverage shapes live in the shared geo feature (they match the backend
+// DeliveryCoverageDto exactly). Re-exported so marketplace consumers have one import.
+export type { DeliveryCoverage, DeliveryCoverageEntry };
+
 export type SupplierPlan = "free" | "premium";
 
 /** Compact card in the public listing / search results. */
@@ -17,6 +23,14 @@ export interface SupplierListItemDto {
   isPublic: boolean;
 }
 
+/** Measured average delivery time to one destination region, produced by the nightly
+ *  supplier-metrics worker job. Matches backend RegionDeliveryStatDto. */
+export interface RegionDeliveryStat {
+  regionCode: string;
+  avgDeliveryDays: number;
+  sampleSize: number;
+}
+
 export interface SupplierMetricsDto {
   rating: number | null;
   avgDeliveryDays: number | null;
@@ -25,6 +39,12 @@ export interface SupplierMetricsDto {
   cancellationRate: number | null;
   responseTimeHours: number | null;
   updatedAt: string;
+  // TASK-656 (T9): worker-computed delivery / response aggregates. All nullable — the
+  // nightly job may not have run yet, or a metric may have no data behind it.
+  deliveryByRegion?: RegionDeliveryStat[] | null;
+  deliverySampleSize?: number | null;
+  responseSampleSize?: number | null;
+  aggregatesComputedAt?: string | null;
 }
 
 /** Aggregated public review stats (GET reviewStats on supplier profile). */
@@ -50,6 +70,8 @@ export interface SupplierProfileDto {
   plan: SupplierPlan;
   metrics: SupplierMetricsDto | null;
   reviewStats?: SupplierReviewStats | null;
+  // TASK-656 (T9): declared delivery coverage — NOT premium-gated, present for every caller.
+  deliveryCoverage?: DeliveryCoverage | null;
 }
 
 /** Image of a supplier item. Ordered by sortOrder; kind "main" is the cover image. */

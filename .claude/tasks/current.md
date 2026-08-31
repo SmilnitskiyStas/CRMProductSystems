@@ -3,6 +3,24 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-656 (T9) — supplier profile coverage panel + per-region delivery drill-down (frontend)
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T9 of T1–T16. Depends on T3 (TASK-650) + T7 (TASK-654), both on main.
+Log: `.claude/logs/tasks/656_2026-08-31_profile-coverage-panel_frontend-developer.md`
+
+New `SupplierCoveragePanel.tsx` (always-visible delivery-coverage panel — served regions + terms,
+notServed, note; NOT premium-gated) and `DeliveryByRegionPanel.tsx` (per-region avg-delivery drill-down,
+sorted asc, `n=` sample size). `marketplace/[id]/page.tsx`: premium `deliveryRegions` chips → coverage
+panel above the metrics section, outside the premium gate. `SupplierMetrics.tsx`: "на основі N замовлень" /
+"на основі N звернень" sublabels, "детальніше по регіонах" toggle expanding the drill-down inline,
+"недостатньо даних" for null `responseTimeHours`. `types.ts`: reuse geo `DeliveryCoverage`, new
+`RegionDeliveryStat`, `SupplierMetricsDto`/`SupplierProfileDto` += read-side fields (appended, minimal
+diff vs concurrent TASK-655). New i18n keys in `metrics` + new `coverage` / `deliveryByRegion` namespaces,
+both `uk.json` + `en.json` (full parity). `tsc`/`lint`/`vitest` clean; browser-verified both locales
+(coverage panel, drill-down toggle, empty states, no missing-key throws). Follow-ups: T10 (coverage in
+CooperationRequestModal), T13 (mobile), T15 (docs).
+
 ## TASK-660 (T13) — mobile marketplace: delivery coverage + per-region metrics + response-time tile (mobile)
 
 **Status:** done (committed to main) · **Agent:** mobile-developer · Marketplace supplier-performance

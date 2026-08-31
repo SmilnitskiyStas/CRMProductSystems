@@ -14,6 +14,7 @@ import {
 import { useMyCooperation } from "@/features/marketplace/hooks/useCooperation";
 import { marketplaceApi } from "@/features/marketplace/api/marketplace-api";
 import { SupplierMetrics } from "@/features/marketplace/components/SupplierMetrics";
+import { SupplierCoveragePanel } from "@/features/marketplace/components/SupplierCoveragePanel";
 import { SupplierItemsTab } from "@/features/marketplace/components/SupplierItemsTab";
 import { SupplierReviewsTab } from "@/features/marketplace/components/SupplierReviewsTab";
 import { AddSupplierItemModal } from "@/features/marketplace/components/AddSupplierItemModal";
@@ -325,25 +326,6 @@ export default function SupplierProfilePage() {
                   <span style={{ color: "#9CA3AF", fontSize: 13 }}>{supplier.paymentTerms}</span>
                 </div>
               )}
-              {(supplier.deliveryRegions ?? []).length > 0 && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ color: "#4B5563", fontSize: 12 }}>{t("deliveryLabel")}</span>
-                  {(supplier.deliveryRegions ?? []).map((r) => (
-                    <span
-                      key={r}
-                      style={{
-                        padding: "2px 8px",
-                        background: "#1F2937",
-                        borderRadius: 4,
-                        color: "#9CA3AF",
-                        fontSize: 11,
-                      }}
-                    >
-                      {r}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -368,6 +350,9 @@ export default function SupplierProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Delivery coverage — always visible, not premium-gated (TASK-656) */}
+      <SupplierCoveragePanel coverage={supplier.deliveryCoverage} />
 
       {/* Metrics */}
       <div style={{ marginBottom: 28 }}>
