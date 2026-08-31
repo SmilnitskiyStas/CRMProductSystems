@@ -1,3 +1,5 @@
+import type { DeliveryCoverage } from '@/features/geo/types';
+
 export interface SupplierListItem {
   id: string;
   name: string;
@@ -9,14 +11,29 @@ export interface SupplierListItem {
   isPublic: boolean;
 }
 
+/** Measured average delivery time to one destination region (nightly worker job). */
+export interface RegionDeliveryStat {
+  regionCode: string;
+  avgDeliveryDays: number;
+  sampleSize: number;
+}
+
 export interface SupplierMetrics {
   rating: number | null;
   avgDeliveryDays: number | null;
+  // NOTE: orderAccuracy / qualityScore arrive as 0–1 fractions from the backend
+  // (`decimal?`), not percentages — multiply by 100 before rendering with "%".
   orderAccuracy: number | null;
   qualityScore: number | null;
   cancellationRate: number | null;
   responseTimeHours: number | null;
   updatedAt: string;
+  // TASK-660: worker-computed delivery/response aggregates. All optional/nullable —
+  // the nightly job may not have run yet, or a given metric may have no data.
+  deliveryByRegion?: RegionDeliveryStat[] | null;
+  deliverySampleSize?: number | null;
+  responseSampleSize?: number | null;
+  aggregatesComputedAt?: string | null;
 }
 
 export interface SupplierProfile {
@@ -31,6 +48,9 @@ export interface SupplierProfile {
   isPublic: boolean;
   plan: 'free' | 'premium';
   metrics: SupplierMetrics | null;
+  // TASK-660: supplier-declared delivery coverage. NOT premium-gated — populated for
+  // every caller. Read-only on mobile.
+  deliveryCoverage?: DeliveryCoverage | null;
 }
 
 export interface SupplierItem {

@@ -18,7 +18,9 @@ import {
   useSupplierItems,
   useCreateReview,
 } from '@/features/marketplace/hooks/useMarketplace';
-import type { SupplierItem } from '@/features/marketplace/types';
+import type { SupplierItem, SupplierMetrics } from '@/features/marketplace/types';
+import { useRegionLabel } from '@/features/geo/hooks';
+import type { DeliveryCoverage } from '@/features/geo/types';
 import { useAuthStore } from '@/features/auth/store';
 
 // ── Star picker ────────────────────────────────────────────────────────────────
@@ -58,13 +60,97 @@ function StarDisplay({ value }: { value: number | null }) {
 
 // ── Metric tile ────────────────────────────────────────────────────────────────
 
-function MetricTile({ label, value, unit }: { label: string; value: number | null; unit?: string }) {
+function MetricTile({
+  label,
+  value,
+  unit,
+  fallback = '—',
+  sublabel,
+}: {
+  label: string;
+  value: number | null;
+  unit?: string;
+  /** Shown in place of the value when `value` is null (default "—"). */
+  fallback?: string;
+  /** Faint one-liner under the value, e.g. sample-size context. */
+  sublabel?: string;
+}) {
   return (
     <View className="flex-1 bg-gray-50 rounded-xl p-3 items-center">
       <Text className="text-xs text-gray-500 text-center mb-1">{label}</Text>
-      <Text className="text-base font-bold text-gray-800">
-        {value !== null ? `${value}${unit ?? ''}` : '—'}
+      <Text className="text-base font-bold text-gray-800 text-center">
+        {value !== null ? `${value}${unit ?? ''}` : fallback}
       </Text>
+      {sublabel ? (
+        <Text className="text-[10px] text-gray-400 text-center mt-0.5">{sublabel}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Delivery coverage (read-only; supplier editing is web-only) ─────────────────
+
+function DeliveryCoverageBlock({ coverage }: { coverage: DeliveryCoverage }) {
+  const regionLabel = useRegionLabel();
+  const served = coverage.served ?? [];
+  const notServed = coverage.notServed ?? [];
+  const note = coverage.note?.trim() ? coverage.note : null;
+
+  if (served.length === 0 && notServed.length === 0 && !note) return null;
+
+  return (
+    <View className="mt-3 pt-3 border-t border-gray-100">
+      <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+        Регіони доставки
+      </Text>
+
+      {served.length > 0 ? (
+        <View className="gap-1 mb-1">
+          {served.map((entry) => (
+            <View key={entry.regionCode} className="flex-row flex-wrap items-baseline">
+              <Text className="text-sm text-gray-700 font-medium">
+                {regionLabel(entry.regionCode)}
+              </Text>
+              <Text className="text-xs text-gray-400 ml-1.5">
+                {entry.terms?.trim() ? entry.terms : 'за домовленістю'}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {notServed.length > 0 ? (
+        <Text className="text-xs text-gray-400 mb-1">
+          Не доставляє: {notServed.map((code) => regionLabel(code)).join(', ')}
+        </Text>
+      ) : null}
+
+      {note ? <Text className="text-xs text-gray-500 italic">{note}</Text> : null}
+    </View>
+  );
+}
+
+// ── Delivery per-region breakdown (collapsible) ────────────────────────────────
+
+function DeliveryByRegionList({ stats }: { stats: SupplierMetrics['deliveryByRegion'] }) {
+  const regionLabel = useRegionLabel();
+  const rows = [...(stats ?? [])].sort((a, b) => a.avgDeliveryDays - b.avgDeliveryDays);
+  if (rows.length === 0) {
+    return (
+      <Text className="text-xs text-gray-400 mt-2">Ще недостатньо даних по регіонах</Text>
+    );
+  }
+  return (
+    <View className="gap-1 mt-2">
+      {rows.map((r) => (
+        <View key={r.regionCode} className="flex-row items-baseline">
+          <Text className="text-xs text-gray-600 flex-1" numberOfLines={1}>
+            {regionLabel(r.regionCode)}
+          </Text>
+          <Text className="text-xs font-medium text-gray-700 ml-2">{r.avgDeliveryDays} дн.</Text>
+          <Text className="text-[10px] text-gray-300 ml-2">n={r.sampleSize}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -183,6 +269,7 @@ export default function SupplierDetailScreen() {
   const user = useAuthStore((s) => s.user);
   const [activeTab, setActiveTab] = useState<Tab>('catalog');
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [regionBreakdownOpen, setRegionBreakdownOpen] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = useSupplierById(id);
   const { data: items, isLoading: itemsLoading } = useSupplierItems(id);
@@ -255,6 +342,10 @@ export default function SupplierDetailScreen() {
               <Text className="text-xs text-gray-500">{profile.paymentTerms}</Text>
             </View>
           ) : null}
+
+          {profile.deliveryCoverage ? (
+            <DeliveryCoverageBlock coverage={profile.deliveryCoverage} />
+          ) : null}
         </View>
 
         {/* Metrics */}
@@ -268,11 +359,65 @@ export default function SupplierDetailScreen() {
                 <Text className="text-sm text-gray-600 mr-2">Рейтинг:</Text>
                 <StarDisplay value={m.rating} />
               </View>
+
               <View className="flex-row gap-2">
-                <MetricTile label="Доставка" value={m.avgDeliveryDays} unit=" дн." />
-                <MetricTile label="Точність" value={m.orderAccuracy !== null ? Math.round(m.orderAccuracy) : null} unit="%" />
-                <MetricTile label="Якість" value={m.qualityScore !== null ? Math.round(m.qualityScore) : null} unit="%" />
+                <MetricTile
+                  label="Доставка"
+                  value={m.avgDeliveryDays}
+                  unit=" дн."
+                  sublabel={
+                    m.deliverySampleSize != null
+                      ? `на основі ${m.deliverySampleSize} замовлень`
+                      : undefined
+                  }
+                />
+                <MetricTile
+                  label="Час відповіді"
+                  value={m.responseTimeHours}
+                  unit=" год."
+                  fallback="недостатньо даних"
+                  sublabel={
+                    m.responseTimeHours !== null && m.responseSampleSize != null
+                      ? `на основі ${m.responseSampleSize} звернень`
+                      : undefined
+                  }
+                />
               </View>
+
+              <View className="flex-row gap-2 mt-2">
+                <MetricTile
+                  label="Точність"
+                  value={m.orderAccuracy !== null ? Math.round(m.orderAccuracy * 100) : null}
+                  unit="%"
+                />
+                <MetricTile
+                  label="Якість"
+                  value={m.qualityScore !== null ? Math.round(m.qualityScore * 100) : null}
+                  unit="%"
+                />
+              </View>
+
+              {(m.deliveryByRegion && m.deliveryByRegion.length > 0) ||
+              m.deliverySampleSize != null ? (
+                <View className="mt-2">
+                  <TouchableOpacity
+                    onPress={() => setRegionBreakdownOpen((v) => !v)}
+                    className="flex-row items-center gap-1 py-1 self-start"
+                  >
+                    <Text className="text-xs font-medium text-primary-600">
+                      {regionBreakdownOpen ? 'Приховати регіони' : 'Детальніше по регіонах'}
+                    </Text>
+                    <Ionicons
+                      name={regionBreakdownOpen ? 'chevron-up' : 'chevron-down'}
+                      size={12}
+                      color="#16a34a"
+                    />
+                  </TouchableOpacity>
+                  {regionBreakdownOpen ? (
+                    <DeliveryByRegionList stats={m.deliveryByRegion} />
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           </View>
         ) : null}

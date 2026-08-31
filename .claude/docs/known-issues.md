@@ -737,6 +737,15 @@ token is present but `user` is still null, populating the store via a new `setUs
 falls back to `clearAuth()` (clean redirect to login) if the token turns out to be
 expired/invalid. `npx tsc --noEmit` clean.
 
+### KI-037: Mobile supplier-metrics tiles rendered 0–1 fraction fields as `Math.round(x)%` → always showed 0% ✅ resolved (2026-08-31, TASK-660)
+Severity: low (cosmetic; B2B marketplace supplier profile screen only)
+Description: `mobile/app/(app)/marketplace/[id].tsx` rendered `orderAccuracy` and `qualityScore`
+(both 0–1 fractions from `SupplierMetricsDto`, `decimal?`) as `Math.round(x)` with a `%` suffix,
+so e.g. `0.87` displayed as `0%`. The web `SupplierMetrics.tsx` already scaled by ×100.
+Resolution: TASK-660 changed both to `Math.round(x * 100)` with `%`. `qualityScore` has no
+backend data source and is always null, so its tile renders `—`. The per-region breakdown and
+`Час відповіді` tile added in the same task use correct scaling from the start.
+
 ### KI-027: Staging (and dev) Postgres connection role is a superuser — RLS is completely bypassed
 Severity: critical for the validity of any live security/RLS test run against staging/dev; NOT
 confirmed to be a live production issue (see KI-028 note below)

@@ -3,6 +3,24 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-660 (T13) — mobile marketplace: delivery coverage + per-region metrics + response-time tile (mobile)
+
+**Status:** done (committed to main) · **Agent:** mobile-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T13 of T1–T16. Depends on T3 (TASK-650, DTO final form — on main).
+Log: `.claude/logs/tasks/660_2026-08-31_mobile-marketplace-coverage_mobile-developer.md`
+
+New read-only `mobile/features/geo/` (`types.ts`, `api.ts` → `GET /geo/regions`, `hooks.ts` with
+`useRegions` / `useRegionLabel`, `staleTime: Infinity`). `mobile/features/marketplace/types.ts`:
+`SupplierMetrics` += `deliveryByRegion?` / `deliverySampleSize?` / `responseSampleSize?` /
+`aggregatesComputedAt?`, new `RegionDeliveryStat`; `SupplierProfile` += `deliveryCoverage?`.
+`marketplace/[id].tsx`: info card gets a "Регіони доставки" block (served regions + terms /
+"за домовленістю", muted "Не доставляє: …", note) shown only when `deliveryCoverage` present;
+metrics card gains a **"Час відповіді"** tile (`responseTimeHours` + " год.", "недостатньо даних"
+when null) and a collapsible per-region delivery list ("Детальніше по регіонах"). **Bug fix
+(KI-037):** `orderAccuracy` / `qualityScore` tiles rendered 0–1 fractions as `Math.round(x)%`
+(0.87 → "0%") → now `Math.round(x*100)%`; `qualityScore` always null → renders "—". Каталог /
+Відгуки tabs unchanged. tsc clean; lint clean (1 pre-existing unused-import warning); jest green.
+
 ## TASK-650 (T3) — coverage DTOs + `DeliveryCoverageJson` + profile services + order region snapshot (backend)
 
 **Status:** done (committed to main) · **Agent:** backend-developer · Marketplace supplier-performance
