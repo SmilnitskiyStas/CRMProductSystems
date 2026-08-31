@@ -3,6 +3,29 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-661 (T14) — one-shot backfill `DeliveryRegions` → `DeliveryCoverage` codes (backend)
+
+**Status:** done (committed to main) · **Agent:** backend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T14 of T1–T16. Depends on T1 (`UkraineRegions`) + T2
+(`DeliveryCoverage` column), both on main.
+Log: `.claude/logs/tasks/661_2026-08-31_delivery-regions-backfill_backend-developer.md`
+
+New standalone console tool `backend/ShelfGuard.Tools.DeliveryCoverageBackfill` (Tools pattern, per
+plan) — migrates legacy free-text `supplier_profiles.DeliveryRegions` → structured
+`DeliveryCoverage`. Pure transform `DeliveryRegionsBackfill.Build` (Application layer, 9 unit tests):
+`UkraineRegions.TryMatchFreeText` match → `served` code (terms null, deduped); no match → `note`
+`"Також: …"` so nothing is lost; note-only coverage is still written; `[]`/blank → row untouched.
+`DeliveryRegions` kept as audit trail. Idempotent (`DeliveryCoverage IS NULL` guard), one
+transaction, **dry-run by default** (`--apply` to persist). RLS: tool asserts
+`SET LOCAL app.role = 'provider'` itself (not the contract-locked `IProviderRlsOverride`).
+Run in prod: `ConnectionStrings__DefaultConnection=… dotnet run --project
+ShelfGuard.Tools.DeliveryCoverageBackfill [-- --apply]` as the non-superuser app role.
+Dev-DB run: scanned 2, updated 1 (`ef3a82bb` → note-only `"Також: Odesa"`), skipped 1; 3rd
+eligible row already had coverage from a concurrent session (guard skipped it). Latin QA data →
+0 code matches, real no-op until prod. Build 0 errors; `dotnet test` 2134/2134. Follow-up: after
+prod run, drop the 2 `#pragma CS0618` `DeliveryRegions` reads in `MarketplaceService`/
+`SupplierCabinetService` + a later migration dropping the column.
+
 ## TASK-658 (T11) — region picker on the Location form (frontend + small backend)
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
