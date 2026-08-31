@@ -346,6 +346,9 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.Name).HasMaxLength(255).IsRequired();
             e.Property(s => s.Type).HasMaxLength(50).IsRequired();
             e.Property(s => s.LocationType).HasMaxLength(50).HasDefaultValue("retail_store");
+            // TASK-649: structured Ukraine region code; varchar(20) fits the longest
+            // city code shape "UA-XX-LONGTRANSLIT" (e.g. UA-12-KRYVYI-RIH).
+            e.Property(s => s.RegionCode).HasMaxLength(20);
             e.Property(s => s.FloorPlan).HasColumnType("jsonb");
             e.Property(s => s.Latitude).HasColumnType("decimal(10,7)");
             e.Property(s => s.Longitude).HasColumnType("decimal(10,7)");
@@ -1314,7 +1317,11 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.Region).HasColumnType("text");
             e.Property(p => p.Categories).HasColumnType("jsonb");
             e.Property(p => p.Website).HasColumnType("text");
+#pragma warning disable CS0618 // DeliveryRegions is [Obsolete] (TASK-649) but the column is kept for backfill
             e.Property(p => p.DeliveryRegions).HasColumnType("jsonb");
+#pragma warning restore CS0618
+            // TASK-649: structured coverage jsonb (served/notServed/note); supersedes DeliveryRegions.
+            e.Property(p => p.DeliveryCoverage).HasColumnType("jsonb");
             e.Property(p => p.WorkingHours).HasColumnType("text");
             e.Property(p => p.PaymentTerms).HasColumnType("text");
             e.Property(p => p.IsPublic).HasDefaultValue(false);
@@ -1426,6 +1433,9 @@ public sealed class AppDbContext : DbContext
             e.Property(m => m.Rating).HasColumnType("numeric(3,2)");
             e.Property(m => m.CancellationRate).HasColumnType("numeric(5,4)");
             e.Property(m => m.ResponseTimeHours).HasColumnType("numeric(6,2)");
+            // TASK-649: worker-computed aggregates. DeliveryByRegion is a jsonb array
+            // [{ regionCode, avgDeliveryDays, sampleSize }]; the other three use default mapping.
+            e.Property(m => m.DeliveryByRegion).HasColumnType("jsonb");
             e.Property(m => m.UpdatedAt).HasDefaultValueSql("NOW()");
             // 1-to-1: one metrics record per supplier
             e.HasIndex(m => m.SupplierId).IsUnique();
@@ -1923,6 +1933,9 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(x => x.SessionId);
             e.HasIndex(x => x.CreatedAt);
+            // TASK-649: supports the supplier-metrics worker job's per-session "first client
+            // message → first supplier reply" scan (response-time median).
+            e.HasIndex(x => new { x.SessionId, x.SenderTenantId, x.CreatedAt });
         });
 
         // ── SupplierContractSettings (TASK-316) ───────────────────────────────
@@ -2036,6 +2049,9 @@ public sealed class AppDbContext : DbContext
             // TASK-586, ADR-033 Decision 2: nullable at the DB — historical orders have no
             // backfill value. Application-layer validation enforces it for new orders.
             e.Property(x => x.DestinationStoreId).IsRequired(false);
+            // TASK-649: destination region code, snapshotted at order creation (not a live
+            // join through DestinationStoreId). varchar(20) — same sizing as Location.RegionCode.
+            e.Property(x => x.DestinationRegionCode).HasMaxLength(20);
             e.HasIndex(x => x.SupplierTenantId);
             e.HasIndex(x => x.ClientTenantId);
             e.HasIndex(x => x.AgreementId);
