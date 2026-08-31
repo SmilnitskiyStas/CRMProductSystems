@@ -40,7 +40,7 @@ export function useSuppliers(
       marketplaceApi.getSuppliers({
         page,
         pageSize,
-        region: filters.region || undefined,
+        regionCode: filters.regionCode || undefined,
         category: filters.category || undefined,
         plan: filters.plan,
       }),

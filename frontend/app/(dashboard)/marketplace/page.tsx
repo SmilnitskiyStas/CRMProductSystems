@@ -10,7 +10,7 @@ import { useModules } from "@/features/modules/hooks/useModules";
 import type { MarketplaceFilters, SupplierListItemDto } from "@/features/marketplace/types";
 
 const DEFAULT_FILTERS: MarketplaceFilters = {
-  region: "",
+  regionCode: "",
   category: "",
   plan: "all",
 };
@@ -41,7 +41,7 @@ export default function MarketplacePage() {
       return;
     }
     searchMutation.mutate(
-      { itemName: searchQuery.trim(), region: filters.region || undefined },
+      { itemName: searchQuery.trim(), regionCode: filters.regionCode || undefined },
       {
         onSuccess: (results) => setSearchResults(results),
       }

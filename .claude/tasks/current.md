@@ -3,6 +3,26 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-655 (T8) — profile editors + marketplace region filter use the structured region taxonomy (frontend)
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T8 of T1–T16. Depends on T3 (TASK-650), T4 (TASK-651),
+T7 (TASK-654) — all on main. Frontend only.
+Log: `.claude/logs/tasks/655_2026-08-31_profile-editors-region-filter_frontend-developer.md`
+
+`marketplace/types.ts`: `MarketplaceSearchRequest.region`→`regionCode`, `MarketplaceFilters.region`
+→`regionCode`, `SupplierProfileUpdateRequest` drops `deliveryRegions` / adds `deliveryCoverage?`.
+`supplier-cabinet/types.ts`: `CabinetProfile` + `CabinetProfileUpdateRequest` gain `deliveryCoverage?`.
+`marketplace-api.ts` / `useMarketplace.ts` / `marketplace/page.tsx`: region query param → `regionCode`.
+`SupplierFilters.tsx`: free-text region input → `<RegionSelect>` on `filters.regionCode`.
+`SupplierProfileForm.tsx` + `CabinetProfileForm.tsx`: region `<input>` → `<RegionSelect>`,
+`deliveryRegions` TagInput/comma-input → `<DeliveryCoverageEditor>`.
+i18n: 4 new keys (`{marketplace,supplierCabinet}.profileForm.{deliveryCoverageLabel,regionSelectPlaceholder}`)
+in uk+en, 3 dead keys removed, `filters.regionPlaceholder` + `profileForm.regionLabel` reworded.
+`DeliveryCoverageEditor` needed no label props (internal UA strings — TASK-659's i18n scope).
+tsc + lint clean, parity 4590=4590, vitest 50/50. Browser-verified: region filter dropdown +
+coverage filtering (served/notServed), both editors render + save (PUT 200, reload persists).
+
 ## TASK-661 (T14) — one-shot backfill `DeliveryRegions` → `DeliveryCoverage` codes (backend)
 
 **Status:** done (committed to main) · **Agent:** backend-developer · Marketplace supplier-performance

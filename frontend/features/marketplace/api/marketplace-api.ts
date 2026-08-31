@@ -32,14 +32,15 @@ export const marketplaceApi = {
   getSuppliers: (params: {
     page?: number;
     pageSize?: number;
-    region?: string;
+    /** Structured Ukraine region code (TASK-655) — filters on the supplier's DeliveryCoverage. */
+    regionCode?: string;
     category?: string;
     plan?: "all" | SupplierPlan;
   }) => {
     const qs = new URLSearchParams();
     qs.set("page", String(params.page ?? 1));
     qs.set("pageSize", String(params.pageSize ?? 20));
-    if (params.region) qs.set("region", params.region);
+    if (params.regionCode) qs.set("regionCode", params.regionCode);
     if (params.category) qs.set("category", params.category);
     if (params.plan && params.plan !== "all") qs.set("plan", params.plan);
     return api.get<PaginatedResponse<SupplierListItemDto>>(

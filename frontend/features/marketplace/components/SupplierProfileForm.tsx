@@ -2,6 +2,8 @@
 
 import { useState, useEffect, KeyboardEvent } from "react";
 import { useTranslations } from "next-intl";
+import { RegionSelect } from "@/features/geo/components/RegionSelect";
+import { DeliveryCoverageEditor } from "@/features/geo/components/DeliveryCoverageEditor";
 import { useMySupplierProfile, useUpdateMySupplierProfile } from "../hooks/useMarketplace";
 import type { SupplierProfileUpdateRequest, SupplierPlan } from "../types";
 
@@ -107,7 +109,7 @@ const EMPTY_FORM: SupplierProfileUpdateRequest = {
   region: "",
   categories: [],
   website: "",
-  deliveryRegions: [],
+  deliveryCoverage: null,
   workingHours: "",
   paymentTerms: "",
   isPublic: false,
@@ -193,15 +195,14 @@ export function SupplierProfileForm() {
         </p>
       </div>
 
-      {/* Region */}
+      {/* Region — structured taxonomy (TASK-655); supplier HQ region, single code */}
       <div style={fieldStyle}>
         <label style={labelStyle}>{t("regionLabel")}</label>
-        <input
-          type="text"
-          value={form.region}
-          onChange={(e) => setForm({ ...form, region: e.target.value })}
-          placeholder={t("regionPlaceholder")}
-          style={inputStyle}
+        <RegionSelect
+          value={form.region || null}
+          onChange={(code) => setForm({ ...form, region: code ?? "" })}
+          allowEmpty
+          placeholder={t("regionSelectPlaceholder")}
         />
       </div>
 
@@ -228,13 +229,12 @@ export function SupplierProfileForm() {
         />
       </div>
 
-      {/* Delivery regions */}
+      {/* Delivery coverage — structured taxonomy (TASK-655), NOT premium-gated */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>{t("deliveryRegionsLabel")}</label>
-        <TagInput
-          value={form.deliveryRegions}
-          onChange={(deliveryRegions) => setForm({ ...form, deliveryRegions })}
-          placeholder={t("deliveryRegionsPlaceholder")}
+        <label style={labelStyle}>{t("deliveryCoverageLabel")}</label>
+        <DeliveryCoverageEditor
+          value={form.deliveryCoverage ?? null}
+          onChange={(deliveryCoverage) => setForm({ ...form, deliveryCoverage })}
         />
       </div>
 

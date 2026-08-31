@@ -5,6 +5,9 @@ import { useTranslations } from "next-intl";
 import { Eye, EyeOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
+import { RegionSelect } from "@/features/geo/components/RegionSelect";
+import { DeliveryCoverageEditor } from "@/features/geo/components/DeliveryCoverageEditor";
+import type { DeliveryCoverage } from "@/features/geo/types";
 import {
   useCabinetProfile,
   useUpdateCabinetProfile,
@@ -41,14 +44,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/** Comma-separated list → trimmed string array (empty entries dropped). */
-function parseList(raw: string): string[] {
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 export function CabinetProfileForm() {
   const t = useTranslations("Dashboard.supplierCabinet.profileForm");
   const { data: profile, isLoading, isError, error } = useCabinetProfile();
@@ -59,7 +54,7 @@ export function CabinetProfileForm() {
   const [region, setRegion] = useState("");
   const [categories, setCategories] = useState<Set<string>>(new Set());
   const [website, setWebsite] = useState("");
-  const [deliveryRegionsRaw, setDeliveryRegionsRaw] = useState("");
+  const [deliveryCoverage, setDeliveryCoverage] = useState<DeliveryCoverage | null>(null);
   const [workingHours, setWorkingHours] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -70,7 +65,7 @@ export function CabinetProfileForm() {
     setRegion(profile.region ?? "");
     setCategories(new Set(profile.categories ?? []));
     setWebsite(profile.website ?? "");
-    setDeliveryRegionsRaw((profile.deliveryRegions ?? []).join(", "));
+    setDeliveryCoverage(profile.deliveryCoverage ?? null);
     setWorkingHours(profile.workingHours ?? "");
     setPaymentTerms(profile.paymentTerms ?? "");
   }, [profile]);
@@ -96,7 +91,7 @@ export function CabinetProfileForm() {
         region: region.trim() || undefined,
         categories: Array.from(categories),
         website: website.trim() || undefined,
-        deliveryRegions: parseList(deliveryRegionsRaw),
+        deliveryCoverage: deliveryCoverage ?? undefined,
         workingHours: workingHours.trim() || undefined,
         paymentTerms: paymentTerms.trim() || undefined,
       },
@@ -184,11 +179,11 @@ export function CabinetProfileForm() {
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label={t("regionLabel")}>
-            <input
-              style={INPUT_STYLE}
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              placeholder={t("regionPlaceholder")}
+            <RegionSelect
+              value={region || null}
+              onChange={(code) => setRegion(code ?? "")}
+              allowEmpty
+              placeholder={t("regionSelectPlaceholder")}
             />
           </Field>
           <Field label={t("websiteLabel")}>
@@ -236,12 +231,10 @@ export function CabinetProfileForm() {
           </div>
         </Field>
 
-        <Field label={t("deliveryRegionsLabel")}>
-          <input
-            style={INPUT_STYLE}
-            value={deliveryRegionsRaw}
-            onChange={(e) => setDeliveryRegionsRaw(e.target.value)}
-            placeholder={t("deliveryRegionsPlaceholder")}
+        <Field label={t("deliveryCoverageLabel")}>
+          <DeliveryCoverageEditor
+            value={deliveryCoverage}
+            onChange={setDeliveryCoverage}
           />
         </Field>
 

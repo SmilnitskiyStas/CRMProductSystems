@@ -2,6 +2,8 @@
 // Matches backend DTOs: ShelfGuard.Application/Features/Marketplace/Dtos/MarketplaceDtos.cs
 // (SupplierProfileDto, SupplierItemDto, PublicSupplierReviewDto, SupplierMetricsDto).
 
+import type { DeliveryCoverage } from "@/features/geo/types";
+
 export type SupplierPlan = "free" | "premium";
 
 export interface CabinetMetrics {
@@ -21,12 +23,15 @@ export interface CabinetProfile {
   region: string | null;
   categories: string[] | null;
   website: string | null;
+  /** Legacy free-text list — deprecated, still surfaced until the T14 backfill (TASK-655). */
   deliveryRegions: string[] | null;
   workingHours: string | null;
   paymentTerms: string | null;
   isPublic: boolean;
   plan: SupplierPlan;
   metrics: CabinetMetrics | null;
+  /** Structured delivery coverage (TASK-655) — NOT premium-gated. */
+  deliveryCoverage?: DeliveryCoverage | null;
 }
 
 /** PUT /api/supplier-cabinet/profile — patch semantics, only non-null fields applied. */
@@ -34,9 +39,10 @@ export interface CabinetProfileUpdateRequest {
   region?: string;
   categories?: string[];
   website?: string;
-  deliveryRegions?: string[];
   workingHours?: string;
   paymentTerms?: string;
+  /** Structured delivery coverage (TASK-655). Omit / null leaves the stored value untouched. */
+  deliveryCoverage?: DeliveryCoverage | null;
 }
 
 /** Image of a supplier item. Ordered by sortOrder; kind "main" is the cover image. */

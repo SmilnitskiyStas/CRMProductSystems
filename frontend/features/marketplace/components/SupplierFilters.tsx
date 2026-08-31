@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import type { MarketplaceFilters } from "../types";
 
 interface Props {
@@ -24,14 +25,15 @@ export function SupplierFilters({ filters, onChange, categories }: Props) {
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-      {/* Region filter */}
-      <input
-        type="text"
-        placeholder={t("regionPlaceholder")}
-        value={filters.region}
-        onChange={(e) => onChange({ ...filters, region: e.target.value })}
-        style={{ ...inputStyle, width: 200 }}
-      />
+      {/* Region filter — structured taxonomy (TASK-655) */}
+      <div style={{ width: 200 }}>
+        <RegionSelect
+          value={filters.regionCode || null}
+          onChange={(code) => onChange({ ...filters, regionCode: code ?? "" })}
+          allowEmpty
+          placeholder={t("regionPlaceholder")}
+        />
+      </div>
 
       {/* Category filter */}
       <select

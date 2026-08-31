@@ -156,7 +156,8 @@ export interface PaginatedResponse<T> {
 
 export interface MarketplaceSearchRequest {
   itemName: string;
-  region?: string;
+  /** Structured Ukraine region code (TASK-655). Matches backend SupplierSearchDto.RegionCode. */
+  regionCode?: string;
 }
 
 export interface CreateReviewRequest {
@@ -168,7 +169,12 @@ export interface SupplierProfileUpdateRequest {
   region: string;
   categories: string[];
   website?: string;
-  deliveryRegions: string[];
+  /**
+   * Structured delivery coverage (TASK-655) — replaces the legacy free-text
+   * `deliveryRegions`. Patch semantics on the wire: omit / null leaves the stored
+   * value untouched. Present on the GET response too (backend returns SupplierProfileDto).
+   */
+  deliveryCoverage?: DeliveryCoverage | null;
   workingHours?: string;
   paymentTerms?: string;
   isPublic: boolean;
@@ -178,7 +184,8 @@ export interface SupplierProfileUpdateRequest {
 // ─── Filter state ─────────────────────────────────────────────────────────────
 
 export interface MarketplaceFilters {
-  region: string;
+  /** Structured Ukraine region code (TASK-655); "" = no region filter. */
+  regionCode: string;
   category: string;
   plan: "all" | SupplierPlan;
 }
