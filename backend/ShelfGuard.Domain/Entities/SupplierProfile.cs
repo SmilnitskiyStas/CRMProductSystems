@@ -15,7 +15,15 @@ public sealed class SupplierProfile
     public string? Categories { get; set; }
     public string? Website { get; set; }
     /// <summary>JSONB array of delivery region codes/names.</summary>
+    [Obsolete("Superseded by DeliveryCoverage (TASK-649). Read-only for backfill; drop in a later migration.")]
     public string? DeliveryRegions { get; set; }
+    /// <summary>
+    /// Raw JSONB string (like <see cref="Categories"/>) describing structured delivery coverage
+    /// (TASK-649): served regions with terms, explicitly not-served regions, and a free note.
+    /// Shape: { "served": [{ "regionCode": "UA-32", "terms": "..." }], "notServed": ["UA-43"], "note": "..." }.
+    /// Replaces <see cref="DeliveryRegions"/>. Nullable — legacy profiles have none until backfilled.
+    /// </summary>
+    public string? DeliveryCoverage { get; set; }
     public string? WorkingHours { get; set; }
     public string? PaymentTerms { get; set; }
     public bool IsPublic { get; set; } = false;

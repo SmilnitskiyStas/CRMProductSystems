@@ -3,6 +3,28 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-649 (T2) — `AddSupplierPerformanceData` migration + entity/DbContext (database)
+
+**Status:** done (merged to main) ·
+**Agent:** database-engineer · Part of the marketplace supplier-performance plan
+(`eventual-whistling-rabbit.md`), T2 of T1–T16.
+Log: `.claude/logs/tasks/649_2026-08-31_supplier-performance-data-migration_database-engineer.md`
+
+Pure additive DDL — **no new tables, no RLS policy changes** (the 4 target tables already carry
+`tenant_isolation`/`provider_bypass`/`worker_bypass`; new columns inherit them).
+`20260831090731_AddSupplierPerformanceData`:
+`locations.RegionCode varchar(20)`, `marketplace_orders.DestinationRegionCode varchar(20)`
+(snapshot), `supplier_profiles.DeliveryCoverage jsonb` (supersedes `DeliveryRegions`, which is
+now `[Obsolete]` but kept), `supplier_metrics` += `DeliveryByRegion jsonb` /
+`DeliverySampleSize int` / `ResponseSampleSize int` / `AggregatesComputedAt timestamptz`.
+Indexes: EF composite `(SessionId, SenderTenantId, CreatedAt)` on `supplier_chat_messages`;
+hand-written partial `ix_marketplace_orders_metrics ("SupplierTenantId","DeliveredAt") WHERE
+"Status" = 'delivered'`. Region-code length is `varchar(20)`, a deliberate deviation from the
+plan's `varchar(12)` (too short for `UA-XX-LONGTRANSLIT` city codes). Build 0 errors (4 expected
+`CS0618` warnings in T3-owned files); RLS audit 61/61; marketplace/supplier suites 250/250.
+Applied + `Down()` round-tripped on dev DB via `shelfguard_app_dev`; `pg_policies` identical
+before/after. Follow-ups: T3/T4 (service/DTO/repo), T6 (worker), T15 (docs).
+
 ## TASK-654 — Shared `frontend/features/geo/` components (T7, frontend)
 
 **Status:** done · **Agent:** frontend-developer · Part of the "supplier delivery-coverage / metrics"

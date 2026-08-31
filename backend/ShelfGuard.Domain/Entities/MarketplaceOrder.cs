@@ -30,6 +30,16 @@ public sealed class MarketplaceOrder
     /// </summary>
     public Guid? DestinationStoreId { get; set; }
 
+    /// <summary>
+    /// Ukraine region code of the destination location, snapshotted at order creation (TASK-649).
+    /// Deliberately a snapshot rather than a live join through <see cref="DestinationStoreId"/> —
+    /// a location's <see cref="Location.RegionCode"/> may be corrected later, but delivery-time
+    /// history must reflect where the goods actually went at the time (same rationale as ADR-033
+    /// for receipts). Set by the order service; this migration only adds the column/property.
+    /// Nullable — historical orders have no backfill value and are excluded from per-region stats.
+    /// </summary>
+    public string? DestinationRegionCode { get; set; }
+
     /// <summary>Set by the service layer when Status transitions to shipped.</summary>
     public DateTimeOffset? ShippedAt { get; set; }
     /// <summary>Supplier-entered delivery estimate (in days), captured at ship time.</summary>

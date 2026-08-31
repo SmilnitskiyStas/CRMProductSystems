@@ -21,6 +21,20 @@ public sealed class SupplierMetrics
     public decimal? CancellationRate { get; set; }
     /// <summary>Average response time in hours.</summary>
     public decimal? ResponseTimeHours { get; set; }
+
+    /// <summary>
+    /// TASK-649: JSONB array of measured delivery time per destination region, computed by the
+    /// nightly supplier-metrics worker job. Shape:
+    /// [{ "regionCode": "UA-32", "avgDeliveryDays": 2.4, "sampleSize": 17 }].
+    /// </summary>
+    public string? DeliveryByRegion { get; set; }
+    /// <summary>TASK-649: number of delivered orders behind <see cref="AvgDeliveryDays"/>.</summary>
+    public int? DeliverySampleSize { get; set; }
+    /// <summary>TASK-649: number of chat sessions behind <see cref="ResponseTimeHours"/>.</summary>
+    public int? ResponseSampleSize { get; set; }
+    /// <summary>TASK-649: when the worker job last recomputed the aggregate columns.</summary>
+    public DateTimeOffset? AggregatesComputedAt { get; set; }
+
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Supplier? Supplier { get; init; }
