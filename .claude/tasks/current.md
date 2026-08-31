@@ -3,6 +3,21 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-654 — Shared `frontend/features/geo/` components (T7, frontend)
+
+**Status:** done · **Agent:** frontend-developer · Part of the "supplier delivery-coverage / metrics"
+plan (`eventual-whistling-rabbit`). Depends on T1 (`GET /api/geo/regions`, backend, concurrent).
+Log: `.claude/logs/tasks/654_2026-08-31_geo-shared-components_frontend-developer.md`
+
+New `frontend/features/geo/`: `types.ts` (`Region`, `DeliveryCoverageEntry`, `DeliveryCoverage`),
+`api/geo-api.ts` (`geoApi.getRegions` via `@/lib/api`), `hooks/useRegions.ts` (React Query,
+`["geo","regions"]`, `staleTime: Infinity` + `useRegionLabel()`), `lib/regionLabel.ts`
+(`regionLabel` + `groupRegions`), and 3 controlled dark-theme components: `RegionSelect`
+(single `<select>` with `<optgroup>` per oblast), `RegionMultiSelect` (grouped checkbox
+checklist, `disabledCodes`), `DeliveryCoverageEditor` (served + per-region terms / notServed /
+note, emits fully-formed `DeliveryCoverage`). No region list hard-coded — all from `useRegions()`.
+`tsc --noEmit` + `npm run lint` clean. Not wired into any page yet (T8–T12); no i18n yet.
+
 ## TASK-647 — CustomerMessage migration chain: restore missing `.Designer.cs` (database)
 
 **Status:** done · **Agent:** database-engineer · Repair of another session's uncommitted work.
