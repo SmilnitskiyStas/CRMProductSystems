@@ -22,6 +22,11 @@ export const MARKETPLACE_KEYS = {
   supplierReviewsPrefix: (id: string) =>
     ["marketplace", "supplier-reviews", id] as const,
   myProfile: ["marketplace", "my-profile"] as const,
+  supplierCoverage: (
+    supplierId: string | null,
+    buyerRegionCode: string | null
+  ) =>
+    ["marketplace", "supplier-coverage", supplierId, buyerRegionCode] as const,
   itemCategories: ["marketplace", "item-categories"] as const,
   supplierChatMessages: (supplierId: string) =>
     ["marketplace", "supplier-chat-messages", supplierId] as const,
@@ -53,6 +58,28 @@ export function useSupplier(id: string) {
     queryKey: MARKETPLACE_KEYS.supplier(id),
     queryFn: () => marketplaceApi.getSupplier(id),
     enabled: !!id,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * GET /api/marketplace/suppliers/{id}/coverage — the supplier's delivery coverage
+ * resolved against the buyer's region (TASK-657). Pass `buyerRegionCode` to override
+ * the server-resolved region; a new value re-resolves the panel. Disabled until a
+ * supplier id is known.
+ */
+export function useSupplierCoverageForBuyer(
+  supplierId: string | null,
+  buyerRegionCode?: string | null
+) {
+  return useQuery({
+    queryKey: MARKETPLACE_KEYS.supplierCoverage(supplierId, buyerRegionCode ?? null),
+    queryFn: () =>
+      marketplaceApi.getSupplierCoverageForBuyer(
+        supplierId!,
+        buyerRegionCode ?? undefined
+      ),
+    enabled: !!supplierId,
     staleTime: 30_000,
   });
 }

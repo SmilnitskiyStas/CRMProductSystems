@@ -3376,7 +3376,19 @@
         "cancel": "Cancel",
         "submit": "Submit request",
         "submitting": "Sending...",
-        "toastSubmitted": "Cooperation request submitted"
+        "toastSubmitted": "Cooperation request submitted",
+        "coverage": {
+          "loading": "Checking delivery coverage…",
+          "servesYourRegion": "The supplier delivers to your region ({region})",
+          "doesNotServeYourRegion": "The supplier does NOT deliver to your region ({region})",
+          "regionUnknown": "Could not determine your region",
+          "yourRegionLabel": "Specify your delivery region",
+          "regionSelectPlaceholder": "Select a region",
+          "termsLabel": "Terms: {terms}",
+          "measuredDeliveryLabel": "Average delivery time to your region: {days} d. (based on {count})",
+          "termsByAgreement": "by agreement",
+          "notServed": "Does not deliver to: {regions}"
+        }
       },
       "agreementStatus": {
         "pending": "Request submitted",

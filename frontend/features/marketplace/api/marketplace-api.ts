@@ -25,6 +25,7 @@ import type {
   SupportTicketMessageDto,
   CreateSupportTicketRequest,
   BarcodeConflict,
+  SupplierCoverageForBuyer,
 } from "../types";
 
 export const marketplaceApi = {
@@ -51,6 +52,19 @@ export const marketplaceApi = {
   /** GET /api/marketplace/suppliers/{id} — supplier profile */
   getSupplier: (id: string) =>
     api.get<SupplierProfileDto>(`/api/marketplace/suppliers/${id}`),
+
+  /** GET /api/marketplace/suppliers/{id}/coverage — this supplier's delivery coverage
+   *  resolved against the calling buyer's region (TASK-651/657). `[Authorize]` +
+   *  `[RequireModule("marketplace")]`. Pass `buyerRegionCode` to override the
+   *  server-resolved region (used when the backend couldn't determine it). */
+  getSupplierCoverageForBuyer: (supplierId: string, buyerRegionCode?: string) => {
+    const qs = buyerRegionCode
+      ? `?buyerRegionCode=${encodeURIComponent(buyerRegionCode)}`
+      : "";
+    return api.get<SupplierCoverageForBuyer>(
+      `/api/marketplace/suppliers/${supplierId}/coverage${qs}`
+    );
+  },
 
   /** GET /api/marketplace/suppliers/{id}/items — supplier catalog */
   getSupplierItems: (supplierId: string) =>

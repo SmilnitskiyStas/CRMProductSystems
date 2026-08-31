@@ -3,6 +3,26 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-657 (T10) — delivery-coverage panel in `CooperationRequestModal` (frontend)
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T10 of T1–T16. Depends on T4 (TASK-651), T7 (TASK-654) — both
+on main. Frontend only.
+Log: `.claude/logs/tasks/657_2026-08-31_cooperation-modal-coverage_frontend-developer.md`
+
+New `CooperationCoveragePanel.tsx` rendered at the top of the cooperation-request modal (above the
+message textarea). `marketplace/types.ts`: `BuyerRegionStatus` + `SupplierCoverageForBuyer` (matches
+backend `SupplierCoverageForBuyerDto`). `marketplace-api.ts`: `getSupplierCoverageForBuyer(id,
+buyerRegionCode?)` → `GET /api/marketplace/suppliers/{id}/coverage`. `useMarketplace.ts`:
+`useSupplierCoverageForBuyer(supplierId|null, buyerRegionCode?|null)`, key
+`["marketplace","supplier-coverage",id,code]`, `enabled: !!supplierId`.
+Panel: served → green line + terms + measured-days (when non-null); not_served → amber line;
+unknown → neutral line + `<RegionSelect>` (local `useState` → fed back as `?buyerRegionCode=`
+override, re-resolves the panel). Compact full-coverage summary below. Advisory only — never blocks
+submit. i18n: new `cooperationRequestModal.coverage.*` sub-object (10 keys) in uk+en, parity
+4600=4600. tsc + lint clean, vitest 50/50. Browser-verified all 3 states (served/not_served/unknown
++ override) on dev :3007, uk + en.
+
 ## TASK-655 (T8) — profile editors + marketplace region filter use the structured region taxonomy (frontend)
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance

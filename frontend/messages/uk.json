@@ -3376,7 +3376,19 @@
         "cancel": "Скасувати",
         "submit": "Подати заявку",
         "submitting": "Надсилання...",
-        "toastSubmitted": "Заявку на співпрацю подано"
+        "toastSubmitted": "Заявку на співпрацю подано",
+        "coverage": {
+          "loading": "Перевірка покриття доставки…",
+          "servesYourRegion": "Постачальник доставляє у ваш регіон ({region})",
+          "doesNotServeYourRegion": "Постачальник НЕ доставляє у ваш регіон ({region})",
+          "regionUnknown": "Не вдалося визначити ваш регіон",
+          "yourRegionLabel": "Вкажіть ваш регіон доставки",
+          "regionSelectPlaceholder": "Оберіть регіон",
+          "termsLabel": "Умови: {terms}",
+          "measuredDeliveryLabel": "Середній термін доставки у ваш регіон: {days} дн. (на основі {count})",
+          "termsByAgreement": "за домовленістю",
+          "notServed": "Не доставляє: {regions}"
+        }
       },
       "agreementStatus": {
         "pending": "Заявку подано",

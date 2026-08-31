@@ -47,6 +47,26 @@ export interface SupplierMetricsDto {
   aggregatesComputedAt?: string | null;
 }
 
+/** Supplier delivery coverage resolved against the calling buyer's region.
+ *  Response of `GET /api/marketplace/suppliers/{id}/coverage` (TASK-651/657).
+ *  Matches backend `SupplierCoverageForBuyerDto`. */
+export type BuyerRegionStatus = "served" | "not_served" | "unknown";
+
+export interface SupplierCoverageForBuyer {
+  /** The supplier's full declared coverage (same shape as `SupplierProfileDto.deliveryCoverage`). */
+  coverage: DeliveryCoverage;
+  /** Region resolved for the buyer — from `?buyerRegionCode=` when passed, else the
+   *  buyer's oldest active location's region. `null` when neither could be resolved. */
+  buyerRegionCode: string | null;
+  buyerRegionStatus: BuyerRegionStatus;
+  /** Per-region delivery terms for the buyer's region when `buyerRegionStatus === "served"`. */
+  buyerRegionTerms: string | null;
+  /** Worker-measured average delivery time to the buyer's region; `null` until the
+   *  nightly job has a sample for that region. */
+  measuredAvgDeliveryDaysToBuyerRegion: number | null;
+  measuredSampleSize: number | null;
+}
+
 /** Aggregated public review stats (GET reviewStats on supplier profile). */
 export interface SupplierReviewStats {
   positive: number;

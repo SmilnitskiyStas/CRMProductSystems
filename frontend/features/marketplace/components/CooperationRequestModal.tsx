@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useCreateCooperationRequest } from "../hooks/useCooperation";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
+import { CooperationCoveragePanel } from "./CooperationCoveragePanel";
 
 interface Props {
   supplierId: string;
@@ -101,7 +102,17 @@ export function CooperationRequestModal({ supplierId, supplierName, onClose }: P
           {t("supplierLabel")} <span style={{ color: "#9CA3AF" }}>{supplierName}</span>
         </p>
 
-        <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
+        {/* Advisory delivery-coverage panel (TASK-657) — never blocks submit. */}
+        <CooperationCoveragePanel supplierId={supplierId} />
+
+        <label
+          style={{
+            display: "block",
+            color: "#9CA3AF",
+            fontSize: 12,
+            margin: "14px 0 6px",
+          }}
+        >
           {t("messageLabel")}
         </label>
         <textarea
