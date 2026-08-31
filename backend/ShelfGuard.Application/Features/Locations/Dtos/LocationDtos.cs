@@ -12,7 +12,9 @@ public sealed record LocationDto(
     DateTime CreatedAt,
     List<LocationZoneDto> Zones,
     /// <summary>Optional legal entity this location is registered under (TASK-321).</summary>
-    Guid? LegalEntityId = null
+    Guid? LegalEntityId = null,
+    /// <summary>Structured Ukraine region code (ISO 3166-2:UA oblast or city code), nullable (TASK-658).</summary>
+    string? RegionCode = null
 );
 
 public sealed record LocationZoneDto(
@@ -33,7 +35,8 @@ public sealed record CreateLocationRequest(
     decimal? Latitude,
     decimal? Longitude,
     string LocationType,
-    Guid? LegalEntityId = null
+    Guid? LegalEntityId = null,
+    string? RegionCode = null
 );
 
 public sealed record UpdateLocationRequest(
@@ -43,7 +46,8 @@ public sealed record UpdateLocationRequest(
     decimal? Longitude,
     string LocationType,
     bool IsActive,
-    Guid? LegalEntityId = null
+    Guid? LegalEntityId = null,
+    string? RegionCode = null
 );
 
 public sealed record UpdateFloorPlanRequest(

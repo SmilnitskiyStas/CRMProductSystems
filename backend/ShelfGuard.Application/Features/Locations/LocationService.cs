@@ -76,11 +76,16 @@ public sealed class LocationService : ILocationService
         if (!IsValidLocationType(request.LocationType))
             return (null, $"Invalid location type '{request.LocationType}'.");
 
+        var (regionCode, regionError) = NormalizeRegionCode(request.RegionCode);
+        if (regionError is not null)
+            return (null, regionError);
+
         var location = new Location
         {
             TenantId = tenantId,
             Name = request.Name.Trim(),
             Address = request.Address?.Trim(),
+            RegionCode = regionCode,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
             Type = request.LocationType,
@@ -105,8 +110,13 @@ public sealed class LocationService : ILocationService
         if (!IsValidLocationType(request.LocationType))
             return (null, $"Invalid location type '{request.LocationType}'.");
 
+        var (regionCode, regionError) = NormalizeRegionCode(request.RegionCode);
+        if (regionError is not null)
+            return (null, regionError);
+
         location.Name = request.Name.Trim();
         location.Address = request.Address?.Trim();
+        location.RegionCode = regionCode;
         location.Latitude = request.Latitude;
         location.Longitude = request.Longitude;
         location.Type = request.LocationType;
@@ -234,8 +244,25 @@ public sealed class LocationService : ILocationService
         s.FloorPlan,
         s.IsActive,
         s.CreatedAt,
-        s.Zones.Where(z => z.IsActive).Select(ToZoneDto).ToList()
+        s.Zones.Where(z => z.IsActive).Select(ToZoneDto).ToList(),
+        RegionCode: s.RegionCode
     );
+
+    /// <summary>
+    /// Trims a submitted region code and checks it against <see cref="UkraineRegions"/>.
+    /// Blank/whitespace/null → <c>(null, null)</c> (region is optional). Unknown code →
+    /// <c>(null, error)</c> for the standard 400 pattern.
+    /// </summary>
+    private static (string? Value, string? Error) NormalizeRegionCode(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return (null, null);
+
+        var code = raw.Trim();
+        return UkraineRegions.IsValid(code)
+            ? (code, null)
+            : (null, $"Invalid region code '{code}'.");
+    }
 
     private static LocationZoneDto ToZoneDto(LocationZone z) => new(
         z.Id,

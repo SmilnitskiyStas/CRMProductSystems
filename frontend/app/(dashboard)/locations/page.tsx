@@ -88,6 +88,7 @@ export default function LocationsPage() {
     locationType: LocationType;
     isActive: boolean;
     legalEntityId: string | null;
+    regionCode: string | null;
   }) {
     if (dialog === "create") {
       create.mutate(
@@ -96,6 +97,7 @@ export default function LocationsPage() {
           address: values.address,
           locationType: values.locationType,
           legalEntityId: values.legalEntityId,
+          regionCode: values.regionCode,
         },
         {
           onSuccess: () => {

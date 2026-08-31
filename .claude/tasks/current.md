@@ -3,6 +3,23 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-658 (T11) — region picker on the Location form (frontend + small backend)
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T11 of T1–T16. Depends on T7 (TASK-654) + TASK-649
+(`Location.RegionCode`), both on main.
+Log: `.claude/logs/tasks/658_2026-08-31_location-region-picker_frontend-developer.md`
+
+Backend: `RegionCode` (`string?`) added to `LocationDto` / `CreateLocationRequest` /
+`UpdateLocationRequest`; `LocationService` create+update validate it via
+`UkraineRegions.IsValid` (blank → null, unknown → 400 tuple) and map it through `ToDto`.
+Frontend: `features/locations/types.ts` + `api/locations.ts` gain `regionCode`;
+`LocationFormDialog.tsx` renders a `<RegionSelect>` ("Область / місто", label hardcoded —
+i18n is TASK-659, `messages/*` untouched) bound via `watch`/`setValue`, wired into zod schema,
+defaults, both `reset()` branches, `onSubmit` payload; `locations/page.tsx` threads `regionCode`
+into create. Build 0/0, tests 90/90, tsc + lint clean. Browser check skipped (needs geo endpoint +
+auth running). Follow-up: TASK-659 i18n; pre-existing `ToDto` never maps `LegalEntityId` (separate fix).
+
 ## TASK-651 (T4) — coverage-aware region filter + `GET /api/marketplace/suppliers/{id}/coverage` (backend)
 
 **Status:** done (committed to main) · **Agent:** backend-developer · Marketplace supplier-performance

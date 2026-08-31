@@ -91,4 +91,6 @@ export interface LocationDto {
   zones: LocationZoneDto[];
   /** Юридична особа мережі, до якої прив'язана локація (nullable). */
   legalEntityId: string | null;
+  /** Структурований код регіону України (ISO 3166-2:UA область або місто), nullable (TASK-658). */
+  regionCode: string | null;
 }

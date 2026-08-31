@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
+import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import { LOCATION_TYPE_VALUES, type LocationDto, type LocationType } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
@@ -29,6 +30,8 @@ function buildSchema(t: ReturnType<typeof useTranslations>) {
     ] as const),
     isActive: z.boolean(),
     legalEntityId: z.string().optional(),
+    // Region label is hardcoded for now; TASK-659 does the i18n sweep.
+    regionCode: z.string().nullable().optional(),
   });
 }
 
@@ -47,6 +50,7 @@ interface Props {
     locationType: LocationType;
     isActive: boolean;
     legalEntityId: string | null;
+    regionCode: string | null;
   }) => void;
 }
 
@@ -84,6 +88,8 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -93,6 +99,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       locationType: "retail_store",
       isActive: true,
       legalEntityId: "",
+      regionCode: null,
     },
   });
 
@@ -105,6 +112,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
         locationType: location.locationType,
         isActive: location.isActive,
         legalEntityId: location.legalEntityId ?? "",
+        regionCode: location.regionCode ?? null,
       });
     } else {
       reset({
@@ -113,6 +121,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
         locationType: "retail_store",
         isActive: true,
         legalEntityId: "",
+        regionCode: null,
       });
     }
   }, [location, reset]);
@@ -124,6 +133,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       locationType: values.locationType,
       isActive: values.isActive,
       legalEntityId: values.legalEntityId || null,
+      regionCode: values.regionCode ?? null,
     });
   }
 
@@ -189,6 +199,17 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
               {...register("address")}
               placeholder={t("addressPlaceholder")}
               style={inputStyle}
+            />
+          </Field>
+
+          {/* Region — label hardcoded until TASK-659 i18n sweep */}
+          <Field label="Область / місто" error={errors.regionCode?.message}>
+            <RegionSelect
+              value={watch("regionCode") ?? null}
+              onChange={(code) =>
+                setValue("regionCode", code, { shouldDirty: true })
+              }
+              placeholder="Не вказано"
             />
           </Field>
 
