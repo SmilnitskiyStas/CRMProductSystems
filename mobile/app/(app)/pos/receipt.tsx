@@ -1,16 +1,19 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   FlatList,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FiscalBadge } from '@/features/pos/components/FiscalBadge';
 import type { SaleResponse } from '@/features/pos/types';
+import { printSaleReceipt } from '@/features/pos/receiptPrinting';
 
 function formatPrice(amount: number): string {
   return amount.toFixed(2);
@@ -18,7 +21,9 @@ function formatPrice(amount: number): string {
 
 export default function PosReceiptScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ resultJson?: string; shiftId?: string }>();
+  const params = useLocalSearchParams<{ resultJson?: string; shiftId?: string; autoPrint?: string }>();
+  const autoPrintStarted = useRef(false);
+  const [printing, setPrinting] = useState(false);
 
   const shiftId = params.shiftId ?? '';
 
@@ -29,6 +34,20 @@ export default function PosReceiptScreen() {
       return null;
     }
   }, [params.resultJson]);
+
+  const printReceipt = async () => {
+    if (!result || printing) return;
+    setPrinting(true);
+    try { await printSaleReceipt(result); }
+    catch { Alert.alert('Не вдалося надрукувати чек', 'Перевірте підключення принтера та спробуйте ще раз.'); }
+    finally { setPrinting(false); }
+  };
+
+  useEffect(() => {
+    if (!result || params.autoPrint !== '1' || autoPrintStarted.current) return;
+    autoPrintStarted.current = true;
+    void printReceipt();
+  }, [params.autoPrint, result]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!result) {
     return (
@@ -48,7 +67,7 @@ export default function PosReceiptScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 190 }}>
         {/* Success header */}
         <View className="bg-white px-5 pt-6 pb-5 border-b border-gray-100 items-center">
           <View className="bg-green-100 w-16 h-16 rounded-full items-center justify-center mb-3">
@@ -177,6 +196,9 @@ export default function PosReceiptScreen() {
 
       {/* Bottom buttons */}
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-4 gap-3">
+        <TouchableOpacity disabled={printing} onPress={() => void printReceipt()} className="flex-row items-center justify-center rounded-2xl border border-green-600 py-3">
+          {printing ? <ActivityIndicator color="#16a34a" /> : <><Ionicons name="print-outline" size={19} color="#15803d" /><Text className="ml-2 font-semibold text-green-700">Надрукувати чек</Text></>}
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() =>
             router.replace({

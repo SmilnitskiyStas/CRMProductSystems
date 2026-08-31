@@ -37,6 +37,7 @@ export interface PosDraftSnapshot {
   customer: PosDraftCustomer | null;
   paymentType: PaymentType;
   cashReceived: string;
+  printReceipt: boolean;
   submission: {
     status: SaleSubmissionStatus;
     message?: string;
@@ -79,6 +80,7 @@ export function isValidPosDraft(
   if (value.customer !== null && !isRecord(value.customer)) return false;
   if (value.paymentType !== 'Cash' && value.paymentType !== 'Card') return false;
   if (typeof value.cashReceived !== 'string') return false;
+  if (value.printReceipt !== undefined && typeof value.printReceipt !== 'boolean') return false;
   if (!isRecord(value.submission)) return false;
   if (
     !['idle', 'pending', 'failed', 'uncertain', 'conflict', 'completed'].includes(
@@ -121,6 +123,7 @@ export function sanitizePosDraft(snapshot: PosDraftSnapshot): PosDraftSnapshot {
     customer,
     paymentType: snapshot.paymentType,
     cashReceived: snapshot.cashReceived,
+    printReceipt: snapshot.printReceipt !== false,
     submission: {
       status: snapshot.submission.status,
       ...(snapshot.submission.message ? { message: snapshot.submission.message } : {}),

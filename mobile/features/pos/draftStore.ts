@@ -21,12 +21,14 @@ interface PosDraftState {
   customer: PosDraftCustomer | null;
   paymentType: PaymentType;
   cashReceived: string;
+  printReceipt: boolean;
   submission: PosDraftSnapshot['submission'];
   bindOwner: (owner: PosDraftOwner) => Promise<void>;
   setShift: (shiftId: string) => void;
   setCart: (cart: DraftCart) => void;
   setCustomer: (customer: PosDraftCustomer | null) => void;
   setPayment: (paymentType: PaymentType, cashReceived: string) => void;
+  setPrintReceipt: (printReceipt: boolean) => void;
   setSubmission: (
     status: SaleSubmissionStatus,
     message?: string,
@@ -42,6 +44,7 @@ const empty = {
   customer: null,
   paymentType: 'Cash' as PaymentType,
   cashReceived: '',
+  printReceipt: true,
   submission: { status: 'idle' as SaleSubmissionStatus },
 };
 
@@ -55,6 +58,7 @@ function snapshot(state: PosDraftState): PosDraftSnapshot | null {
     customer: state.customer,
     paymentType: state.paymentType,
     cashReceived: state.cashReceived,
+    printReceipt: state.printReceipt,
     submission: state.submission,
     updatedAt: new Date().toISOString(),
   };
@@ -101,6 +105,7 @@ export const usePosDraftStore = create<PosDraftState>((set, get) => ({
         customer: restored.customer,
         paymentType: restored.paymentType,
         cashReceived: restored.cashReceived,
+        printReceipt: restored.printReceipt !== false,
         submission:
           restored.submission.status === 'pending'
             ? {
@@ -153,6 +158,10 @@ export const usePosDraftStore = create<PosDraftState>((set, get) => ({
   },
   setPayment: (paymentType, cashReceived) => {
     set({ paymentType, cashReceived });
+    persist();
+  },
+  setPrintReceipt: (printReceipt) => {
+    set({ printReceipt });
     persist();
   },
   setSubmission: async (status, message, transactionId) => {

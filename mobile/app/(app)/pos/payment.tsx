@@ -9,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -119,7 +120,7 @@ export default function PosPaymentScreen() {
       await draft.clearAfterConfirmedSale();
       router.replace({
         pathname: '/(app)/pos/receipt',
-        params: { resultJson: JSON.stringify(result), shiftId },
+        params: { resultJson: JSON.stringify(result), shiftId, autoPrint: draft.printReceipt ? '1' : '0' },
       });
       return;
     }
@@ -274,6 +275,23 @@ export default function PosPaymentScreen() {
             </Text>
           </View>
         )}
+
+        <View className="mx-4 mt-4 flex-row items-center rounded-2xl border border-gray-100 bg-white px-4 py-3">
+          <View className="mr-3 h-10 w-10 items-center justify-center rounded-xl bg-green-50">
+            <Ionicons name="print-outline" size={21} color="#15803d" />
+          </View>
+          <View className="flex-1">
+            <Text className="font-semibold text-gray-900">Друкувати чек</Text>
+            <Text className="mt-0.5 text-xs text-gray-500">Відкрити друк після успішної оплати</Text>
+          </View>
+          <Switch
+            accessibilityLabel="Друкувати чек після продажу"
+            value={draft.printReceipt}
+            onValueChange={draft.setPrintReceipt}
+            trackColor={{ false: '#d1d5db', true: '#86efac' }}
+            thumbColor={draft.printReceipt ? '#16a34a' : '#f3f4f6'}
+          />
+        </View>
 
         {draft.submission.status !== 'idle' && (
           <View

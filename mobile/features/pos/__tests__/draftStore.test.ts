@@ -24,6 +24,7 @@ const restored: PosDraftSnapshot = {
   customer: { customerId: 'customer', membershipId: 'membership' },
   paymentType: 'Card',
   cashReceived: '',
+  printReceipt: true,
   submission: { status: 'pending' },
   updatedAt: new Date().toISOString(),
 };

@@ -34,6 +34,7 @@ const draft: PosDraftSnapshot = {
   },
   paymentType: 'Cash',
   cashReceived: '100',
+  printReceipt: true,
   submission: { status: 'idle' },
   updatedAt: '2026-07-29T00:00:00.000Z',
 };
