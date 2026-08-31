@@ -7,7 +7,7 @@ public interface IMarketplaceService
     // ── Public listing ────────────────────────────────────────────────────────
 
     Task<PagedResult<SupplierListItemDto>> GetPublicSuppliersAsync(
-        string? region, string? category, string? plan,
+        string? regionCode, string? category, string? plan,
         int page, int pageSize,
         CancellationToken ct = default);
 
@@ -26,6 +26,20 @@ public interface IMarketplaceService
 
     Task<IReadOnlyList<SupplierListItemDto>> SearchSuppliersAsync(
         SupplierSearchDto request, CancellationToken ct = default);
+
+    /// <summary>
+    /// TASK-651: resolves a supplier's declared delivery coverage against ONE buyer's region for
+    /// <c>GET /api/marketplace/suppliers/{id}/coverage</c>. The buyer's region is
+    /// <paramref name="buyerRegionCodeOverride"/> when it is a known code, otherwise the caller
+    /// tenant's primary location (first active <see cref="ShelfGuard.Domain.Entities.Location"/> by
+    /// <c>CreatedAt</c> that has a <c>RegionCode</c>), otherwise unresolved
+    /// (<c>BuyerRegionStatus = "unknown"</c>, <c>BuyerRegionCode = null</c>).
+    /// Returns <c>null</c> when the supplier does not exist or is not published (404-equivalent).
+    /// Coverage is never premium-gated.
+    /// </summary>
+    Task<SupplierCoverageForBuyerDto?> GetSupplierCoverageForBuyerAsync(
+        Guid supplierId, string? buyerRegionCodeOverride, Guid callerTenantId,
+        CancellationToken ct = default);
 
     // ── Authenticated ─────────────────────────────────────────────────────────
 

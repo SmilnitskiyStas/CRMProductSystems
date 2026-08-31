@@ -10,13 +10,18 @@ namespace ShelfGuard.Tests.Marketplace;
 public sealed class MarketplaceServiceTests
 {
     private readonly IMarketplaceRepository _repo = Substitute.For<IMarketplaceRepository>();
+    private readonly ILocationRepository _locations = Substitute.For<ILocationRepository>();
     private readonly MarketplaceService _sut;
 
     private readonly Guid _supplierIdA = Guid.NewGuid();
     private readonly Guid _supplierIdB = Guid.NewGuid();
     private readonly Guid _tenantId    = Guid.NewGuid();
 
-    public MarketplaceServiceTests() => _sut = new MarketplaceService(_repo);
+    public MarketplaceServiceTests()
+    {
+        _locations.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Location>());
+        _sut = new MarketplaceService(_repo, _locations);
+    }
 
     // ── Helper builders ───────────────────────────────────────────────────────
 
@@ -289,22 +294,21 @@ public sealed class MarketplaceServiceTests
     // ── SearchSuppliersAsync ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task SearchSuppliersAsync_FiltersByItemNameAndRegion()
+    public async Task SearchSuppliersAsync_FiltersByItemNameAndRegionCode()
     {
-        var profileA = MakeProfile(_supplierIdA, _tenantId, region: "Kyiv");
+        var profileA = MakeProfile(_supplierIdA, _tenantId, region: "Київ");
         var supplierA = MakeSupplier(_supplierIdA, "Fresh Farm");
 
-        _repo.SearchSuppliersAsync("Milk", "Kyiv", Arg.Any<CancellationToken>())
+        _repo.SearchSuppliersAsync("Milk", "UA-30", Arg.Any<CancellationToken>())
              .Returns(new List<(SupplierProfile, Supplier, SupplierMetrics?)>
              {
                  (profileA, supplierA, null),
              });
 
-        var results = await _sut.SearchSuppliersAsync(new SupplierSearchDto("Milk", "Kyiv"));
+        var results = await _sut.SearchSuppliersAsync(new SupplierSearchDto("Milk", "UA-30"));
 
         Assert.Single(results);
         Assert.Equal("Fresh Farm", results[0].Name);
-        Assert.Equal("Kyiv", results[0].Region);
     }
 
     [Fact]
@@ -316,6 +320,44 @@ public sealed class MarketplaceServiceTests
         var results = await _sut.SearchSuppliersAsync(new SupplierSearchDto("XYZ_NonExistent", null));
 
         Assert.Empty(results);
+    }
+
+    // ── TASK-651: region-code normalization before it reaches the repo ────────
+
+    [Fact]
+    public async Task SearchSuppliersAsync_NormalizesLegacyFreeTextRegionName_ToCode()
+    {
+        _repo.SearchSuppliersAsync("Milk", Arg.Any<string?>(), Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierProfile, Supplier, SupplierMetrics?)>());
+
+        await _sut.SearchSuppliersAsync(new SupplierSearchDto("Milk", "Київська область"));
+
+        await _repo.Received(1).SearchSuppliersAsync("Milk", "UA-32", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SearchSuppliersAsync_DropsUnrecognizedRegionValue_PassesNullToRepo()
+    {
+        _repo.SearchSuppliersAsync("Milk", Arg.Any<string?>(), Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierProfile, Supplier, SupplierMetrics?)>());
+
+        await _sut.SearchSuppliersAsync(new SupplierSearchDto("Milk", "Вся Україна"));
+
+        await _repo.Received(1).SearchSuppliersAsync("Milk", null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetPublicSuppliersAsync_NormalizesRegionCodeForBothQueries()
+    {
+        _repo.GetPublicSuppliersAsync("UA-46", null, null, 1, 20, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierProfile, Supplier, SupplierMetrics?)>());
+        _repo.CountPublicSuppliersAsync("UA-46", null, null, Arg.Any<CancellationToken>())
+             .Returns(0);
+
+        await _sut.GetPublicSuppliersAsync("ua-46", null, null, 1, 20);
+
+        await _repo.Received(1).GetPublicSuppliersAsync("UA-46", null, null, 1, 20, Arg.Any<CancellationToken>());
+        await _repo.Received(1).CountPublicSuppliersAsync("UA-46", null, null, Arg.Any<CancellationToken>());
     }
 
     // ── UpdateOwnProfileAsync — patch semantics ───────────────────────────────
@@ -497,6 +539,173 @@ public sealed class MarketplaceServiceTests
         var kyivOblast = m.DeliveryByRegion.Single(r => r.RegionCode == "UA-32");
         Assert.Equal(2.4m, kyivOblast.AvgDeliveryDays);
         Assert.Equal(12, kyivOblast.SampleSize);
+    }
+
+    // ── GetSupplierCoverageForBuyerAsync (TASK-651) ──────────────────────────
+
+    private void ArrangeCoverageSupplier(string? coverageJson, string? deliveryByRegionJson = null)
+    {
+        var profile = MakeProfile(_supplierIdA, _tenantId, isPublic: true);
+        profile.DeliveryCoverage = coverageJson;
+        var metrics = deliveryByRegionJson is null
+            ? null
+            : new SupplierMetrics { SupplierId = _supplierIdA, TenantId = _tenantId, DeliveryByRegion = deliveryByRegionJson };
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((MakeSupplierProfileTuple(profile, metrics)));
+    }
+
+    private (SupplierProfile, Supplier, SupplierMetrics?) MakeSupplierProfileTuple(
+        SupplierProfile profile, SupplierMetrics? metrics) =>
+        (profile, MakeSupplier(_supplierIdA, "Coverage Supplier"), metrics);
+
+    private void ArrangePrimaryLocation(string? regionCode, bool isActive = true, DateTime? createdAt = null)
+    {
+        _locations.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Location>
+        {
+            new() { TenantId = _tenantId, Name = "Магазин", RegionCode = regionCode, IsActive = isActive,
+                    CreatedAt = createdAt ?? DateTime.UtcNow },
+        });
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_MissingOrUnpublished_ReturnsNull()
+    {
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((ValueTuple<SupplierProfile, Supplier, SupplierMetrics?>?)null);
+        Assert.Null(await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, null, _tenantId));
+
+        var unpublished = MakeProfile(_supplierIdA, _tenantId, isPublic: false);
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((unpublished, MakeSupplier(_supplierIdA, "Hidden"), (SupplierMetrics?)null));
+        Assert.Null(await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, null, _tenantId));
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_OverrideCode_Served_ReturnsTerms()
+    {
+        ArrangeCoverageSupplier(
+            """{"served":[{"regionCode":"UA-32","terms":"2-3 дні"}],"notServed":["UA-43"],"note":"н"}""");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-32", _tenantId);
+
+        Assert.NotNull(result);
+        Assert.Equal("UA-32", result!.BuyerRegionCode);
+        Assert.Equal("served", result.BuyerRegionStatus);
+        Assert.Equal("2-3 дні", result.BuyerRegionTerms);
+        // override wins — the primary-location lookup is never consulted
+        await _locations.DidNotReceive().GetAllAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_OverrideCode_NotServed()
+    {
+        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-32","terms":null}],"notServed":["UA-43"],"note":null}""");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-43", _tenantId);
+
+        Assert.Equal("not_served", result!.BuyerRegionStatus);
+        Assert.Null(result.BuyerRegionTerms);
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_InvalidOverride_FallsBackToPrimaryLocationRegion()
+    {
+        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-30","terms":"наступного дня"}],"notServed":[],"note":null}""");
+        ArrangePrimaryLocation("UA-30");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "not-a-code", _tenantId);
+
+        Assert.Equal("UA-30", result!.BuyerRegionCode);
+        Assert.Equal("served", result.BuyerRegionStatus);
+        Assert.Equal("наступного дня", result.BuyerRegionTerms);
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_PicksOldestActiveLocationWithRegion()
+    {
+        ArrangeCoverageSupplier("""{"served":[],"notServed":["UA-63"],"note":null}""");
+        _locations.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Location>
+        {
+            new() { TenantId = _tenantId, Name = "Неактивний", RegionCode = "UA-46", IsActive = false,
+                    CreatedAt = new DateTime(2024, 1, 1) },
+            new() { TenantId = _tenantId, Name = "Без регіону", RegionCode = null, IsActive = true,
+                    CreatedAt = new DateTime(2024, 2, 1) },
+            new() { TenantId = _tenantId, Name = "Найстаріший з регіоном", RegionCode = "UA-63", IsActive = true,
+                    CreatedAt = new DateTime(2024, 3, 1) },
+            new() { TenantId = _tenantId, Name = "Новіший", RegionCode = "UA-30", IsActive = true,
+                    CreatedAt = new DateTime(2024, 4, 1) },
+        });
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, null, _tenantId);
+
+        Assert.Equal("UA-63", result!.BuyerRegionCode);
+        Assert.Equal("not_served", result.BuyerRegionStatus);
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_NoResolvableRegion_StatusUnknown()
+    {
+        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-32","terms":"т"}],"notServed":[],"note":null}""");
+        // base ctor stubs GetAllAsync → empty list
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, null, _tenantId);
+
+        Assert.NotNull(result);
+        Assert.Null(result!.BuyerRegionCode);
+        Assert.Equal("unknown", result.BuyerRegionStatus);
+        Assert.Single(result.Coverage.Served);
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_ServedButRegionOutsideBothLists_StatusUnknown()
+    {
+        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-32","terms":"т"}],"notServed":["UA-43"],"note":null}""");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-46", _tenantId);
+
+        Assert.Equal("UA-46", result!.BuyerRegionCode);
+        Assert.Equal("unknown", result.BuyerRegionStatus);
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_NullCoverage_ReturnsEmptyCoverageDto()
+    {
+        ArrangeCoverageSupplier(coverageJson: null);
+        ArrangePrimaryLocation("UA-30");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, null, _tenantId);
+
+        Assert.NotNull(result);
+        Assert.Empty(result!.Coverage.Served);
+        Assert.Empty(result.Coverage.NotServed);
+        Assert.Equal("unknown", result.BuyerRegionStatus);
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_MeasuredDaysLookup_MatchesBuyerRegion()
+    {
+        ArrangeCoverageSupplier(
+            """{"served":[{"regionCode":"UA-32","terms":"2 дні"}],"notServed":[],"note":null}""",
+            deliveryByRegionJson:
+                """[{"regionCode":"UA-30","avgDeliveryDays":1.1,"sampleSize":4},{"regionCode":"UA-32","avgDeliveryDays":2.7,"sampleSize":11}]""");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-32", _tenantId);
+
+        Assert.Equal(2.7m, result!.MeasuredAvgDeliveryDaysToBuyerRegion);
+        Assert.Equal(11, result.MeasuredSampleSize);
+    }
+
+    [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_MeasuredDaysLookup_NoRowForRegion_ReturnsNulls()
+    {
+        ArrangeCoverageSupplier(
+            """{"served":[{"regionCode":"UA-32","terms":null}],"notServed":[],"note":null}""",
+            deliveryByRegionJson: """[{"regionCode":"UA-30","avgDeliveryDays":1.1,"sampleSize":4}]""");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-32", _tenantId);
+
+        Assert.Null(result!.MeasuredAvgDeliveryDaysToBuyerRegion);
+        Assert.Null(result.MeasuredSampleSize);
     }
 
 

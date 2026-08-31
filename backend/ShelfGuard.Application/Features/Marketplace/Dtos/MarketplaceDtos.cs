@@ -112,7 +112,13 @@ public record SupplierReviewDto(
     string? Comment,
     DateTimeOffset CreatedAt);
 
-public record SupplierSearchDto(string ItemName, string? Region);
+/// <remarks>
+/// TASK-651: <see cref="RegionCode"/> is a structured Ukraine region code (<see cref="ShelfGuard.Domain.Constants.UkraineRegions"/>).
+/// It is normalized best-effort (a legacy free-text region name still resolves) and filters on the
+/// supplier's <c>DeliveryCoverage</c> (served, and not in notServed), falling back to the legacy
+/// free-text <c>Region</c> column for profiles not yet backfilled.
+/// </remarks>
+public record SupplierSearchDto(string ItemName, string? RegionCode);
 
 /// <remarks>
 /// Patch semantics — a non-null field replaces, null leaves the stored value untouched.

@@ -11,11 +11,18 @@ public interface IMarketplaceRepository
     /// Executes with provider-level DB context (bypasses tenant RLS) so that
     /// unauthenticated marketplace listing can cross tenant boundaries.
     /// </summary>
+    /// <param name="regionCode">
+    /// TASK-651: a structured Ukraine region code (already validated/normalized by the caller).
+    /// A profile matches when its <c>DeliveryCoverage.served</c> contains the code and its
+    /// <c>notServed</c> does not; profiles with a NULL <c>DeliveryCoverage</c> fall back to a
+    /// free-text ILIKE against the legacy <c>Region</c> column so they don't vanish before the
+    /// coverage backfill runs.
+    /// </param>
     Task<IReadOnlyList<(SupplierProfile Profile, Supplier Supplier, SupplierMetrics? Metrics)>>
-        GetPublicSuppliersAsync(string? region, string? category, string? plan,
+        GetPublicSuppliersAsync(string? regionCode, string? category, string? plan,
             int page, int pageSize, CancellationToken ct = default);
 
-    Task<int> CountPublicSuppliersAsync(string? region, string? category, string? plan,
+    Task<int> CountPublicSuppliersAsync(string? regionCode, string? category, string? plan,
         CancellationToken ct = default);
 
     /// <summary>
@@ -41,11 +48,12 @@ public interface IMarketplaceRepository
 
     /// <summary>
     /// Searches public suppliers whose item catalog contains items matching
-    /// <paramref name="itemName"/> and optionally filtered by <paramref name="region"/>.
-    /// Uses provider context.
+    /// <paramref name="itemName"/> and optionally filtered by <paramref name="regionCode"/>
+    /// (TASK-651 — same delivery-coverage match semantics as
+    /// <see cref="GetPublicSuppliersAsync"/>). Uses provider context.
     /// </summary>
     Task<IReadOnlyList<(SupplierProfile Profile, Supplier Supplier, SupplierMetrics? Metrics)>>
-        SearchSuppliersAsync(string itemName, string? region, CancellationToken ct = default);
+        SearchSuppliersAsync(string itemName, string? regionCode, CancellationToken ct = default);
 
     // ── Authenticated operations (RLS enforced by TenantConnectionInterceptor) ──
 

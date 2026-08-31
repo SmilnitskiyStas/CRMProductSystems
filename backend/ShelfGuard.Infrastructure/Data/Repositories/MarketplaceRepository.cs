@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Application.Services;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -49,21 +50,21 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
 
     public Task<IReadOnlyList<(SupplierProfile Profile, Supplier Supplier, SupplierMetrics? Metrics)>>
         GetPublicSuppliersAsync(
-            string? region, string? category, string? plan,
+            string? regionCode, string? category, string? plan,
             int page, int pageSize,
             CancellationToken ct = default) =>
         _providerRlsOverride.ExecuteAsync<IReadOnlyList<(SupplierProfile, Supplier, SupplierMetrics?)>>(
-            async () => await BuildPublicQuery(region, category, plan)
+            async () => await BuildPublicQuery(regionCode, category, plan)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct),
             ct);
 
     public Task<int> CountPublicSuppliersAsync(
-        string? region, string? category, string? plan,
+        string? regionCode, string? category, string? plan,
         CancellationToken ct = default) =>
         _providerRlsOverride.ExecuteAsync(
-            async () => await BuildPublicQuery(region, category, plan).CountAsync(ct),
+            async () => await BuildPublicQuery(regionCode, category, plan).CountAsync(ct),
             ct);
 
     public Task<(SupplierProfile Profile, Supplier Supplier, SupplierMetrics? Metrics)?>
@@ -123,7 +124,7 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
     }
 
     public Task<IReadOnlyList<(SupplierProfile Profile, Supplier Supplier, SupplierMetrics? Metrics)>>
-        SearchSuppliersAsync(string itemName, string? region, CancellationToken ct = default) =>
+        SearchSuppliersAsync(string itemName, string? regionCode, CancellationToken ct = default) =>
         // Both queries are dependent (the second filters on the first's ids) and MUST share one
         // override block — splitting them would run the second under the caller's own role and
         // silently return nothing.
@@ -144,8 +145,8 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
                     .AsNoTracking()
                     .Where(p => p.IsPublic && matchingSupplierIds.Contains(p.SupplierId));
 
-                if (!string.IsNullOrWhiteSpace(region))
-                    query = query.Where(p => p.Region != null && EF.Functions.ILike(p.Region, $"%{region}%"));
+                if (!string.IsNullOrWhiteSpace(regionCode))
+                    query = ApplyRegionCoverageFilter(query, regionCode);
 
                 var rows = await query
                     .Join(_db.Suppliers, p => p.SupplierId, s => s.Id,
@@ -494,16 +495,50 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// TASK-651: region filter over a supplier's structured delivery coverage. A profile matches
+    /// when <c>DeliveryCoverage.served</c> contains an entry for <paramref name="regionCode"/> AND
+    /// the code is not present in <c>DeliveryCoverage.notServed</c>. Legacy profiles whose
+    /// <c>DeliveryCoverage</c> is still NULL (not yet backfilled — T14) fall back to a free-text
+    /// ILIKE against the deprecated <c>Region</c> column, matched against either the raw code or
+    /// the region's Ukrainian name, so they don't disappear from search during the transition.
+    ///
+    /// <para>
+    /// Both jsonb predicates are <see cref="EF.Functions"/> translations to Postgres' server-side
+    /// <c>@&gt;</c> containment operator (identical mechanism to the <c>Categories</c> filter in
+    /// <see cref="BuildPublicQuery"/>) — nothing here is client-evaluated, and no raw SQL /
+    /// <c>GetDbConnection()</c> is involved, so the KI-036 (ADR-035) standing rule at the top of
+    /// this file still holds. <paramref name="regionCode"/> is a registry-validated code by the
+    /// time it reaches here (MarketplaceService normalizes via <c>UkraineRegions.TryMatchFreeText</c>),
+    /// so the interpolated JSON fragments cannot be malformed.
+    /// </para>
+    /// </summary>
+    private static IQueryable<SupplierProfile> ApplyRegionCoverageFilter(
+        IQueryable<SupplierProfile> query, string regionCode)
+    {
+        var servedJson    = $"{{\"served\":[{{\"regionCode\":\"{regionCode}\"}}]}}";
+        var notServedJson = $"{{\"notServed\":[\"{regionCode}\"]}}";
+        var regionName    = UkraineRegions.Find(regionCode)?.NameUa;
+
+        return query.Where(p =>
+            (p.DeliveryCoverage != null
+                && EF.Functions.JsonContains(p.DeliveryCoverage, servedJson)
+                && !EF.Functions.JsonContains(p.DeliveryCoverage, notServedJson))
+            || (p.DeliveryCoverage == null
+                && p.Region != null
+                && (EF.Functions.ILike(p.Region, $"%{regionCode}%")
+                    || (regionName != null && EF.Functions.ILike(p.Region, $"%{regionName}%")))));
+    }
+
     private IQueryable<(SupplierProfile Profile, Supplier Supplier, SupplierMetrics? Metrics)>
-        BuildPublicQuery(string? region, string? category, string? plan)
+        BuildPublicQuery(string? regionCode, string? category, string? plan)
     {
         var profileQuery = _db.SupplierProfiles
             .AsNoTracking()
             .Where(p => p.IsPublic);
 
-        if (!string.IsNullOrWhiteSpace(region))
-            profileQuery = profileQuery.Where(p => p.Region != null &&
-                EF.Functions.ILike(p.Region, $"%{region}%"));
+        if (!string.IsNullOrWhiteSpace(regionCode))
+            profileQuery = ApplyRegionCoverageFilter(profileQuery, regionCode);
 
         if (!string.IsNullOrWhiteSpace(plan))
             profileQuery = profileQuery.Where(p => p.Plan == plan);

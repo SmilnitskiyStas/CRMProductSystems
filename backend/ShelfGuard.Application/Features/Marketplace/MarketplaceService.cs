@@ -9,18 +9,24 @@ namespace ShelfGuard.Application.Features.Marketplace;
 public sealed class MarketplaceService : IMarketplaceService
 {
     private readonly IMarketplaceRepository _repo;
+    private readonly ILocationRepository _locations;
 
-    public MarketplaceService(IMarketplaceRepository repo) => _repo = repo;
+    public MarketplaceService(IMarketplaceRepository repo, ILocationRepository locations)
+    {
+        _repo = repo;
+        _locations = locations;
+    }
 
     // ── Public listing ────────────────────────────────────────────────────────
 
     public async Task<PagedResult<SupplierListItemDto>> GetPublicSuppliersAsync(
-        string? region, string? category, string? plan,
+        string? regionCode, string? category, string? plan,
         int page, int pageSize,
         CancellationToken ct = default)
     {
-        var rows = await _repo.GetPublicSuppliersAsync(region, category, plan, page, pageSize, ct);
-        var total = await _repo.CountPublicSuppliersAsync(region, category, plan, ct);
+        var code = NormalizeRegionCode(regionCode);
+        var rows = await _repo.GetPublicSuppliersAsync(code, category, plan, page, pageSize, ct);
+        var total = await _repo.CountPublicSuppliersAsync(code, category, plan, ct);
 
         var items = rows.Select(r => ToListItemDto(r.Profile, r.Supplier, r.Metrics)).ToList();
         return new PagedResult<SupplierListItemDto>(items, total, page, pageSize);
@@ -60,8 +66,99 @@ public sealed class MarketplaceService : IMarketplaceService
     public async Task<IReadOnlyList<SupplierListItemDto>> SearchSuppliersAsync(
         SupplierSearchDto request, CancellationToken ct = default)
     {
-        var rows = await _repo.SearchSuppliersAsync(request.ItemName, request.Region, ct);
+        var rows = await _repo.SearchSuppliersAsync(
+            request.ItemName, NormalizeRegionCode(request.RegionCode), ct);
         return rows.Select(r => ToListItemDto(r.Profile, r.Supplier, r.Metrics)).ToList();
+    }
+
+    /// <summary>
+    /// TASK-651: maps an incoming region filter string to a registry code, or <c>null</c> when it
+    /// resolves to nothing. Accepts both a bare code (<c>UA-32</c>) and a legacy free-text region
+    /// name — <see cref="UkraineRegions.TryMatchFreeText"/> handles both, and returning <c>null</c>
+    /// for anything unrecognized keeps an unknown value from being interpolated into the
+    /// repository's jsonb predicate.
+    /// </summary>
+    private static string? NormalizeRegionCode(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) ? null : UkraineRegions.TryMatchFreeText(raw);
+
+    // ── Delivery coverage resolved for one buyer (TASK-651) ───────────────────
+
+    private const string BuyerRegionServed    = "served";
+    private const string BuyerRegionNotServed = "not_served";
+    private const string BuyerRegionUnknown   = "unknown";
+
+    public async Task<SupplierCoverageForBuyerDto?> GetSupplierCoverageForBuyerAsync(
+        Guid supplierId, string? buyerRegionCodeOverride, Guid callerTenantId,
+        CancellationToken ct = default)
+    {
+        // Cross-tenant read of the supplier profile — same provider-bypass path as
+        // GetSupplierProfileAsync (a client tenant reading a supplier tenant's row).
+        var result = await _repo.GetSupplierByIdAsync(supplierId, ct);
+        if (result is null) return null;
+
+        var (profile, _, metrics) = result.Value;
+        if (!profile.IsPublic) return null; // BUG-010 parity: unpublished behaves like "not found".
+
+        var coverage = DeliveryCoverageJson.Parse(profile.DeliveryCoverage)
+            ?? new DeliveryCoverageDto(
+                Array.Empty<DeliveryCoverageEntryDto>(), Array.Empty<string>(), null);
+
+        var buyerRegionCode = await ResolveBuyerRegionCodeAsync(buyerRegionCodeOverride, ct);
+
+        var status = BuyerRegionUnknown;
+        string? terms = null;
+        if (buyerRegionCode is not null)
+        {
+            var served = coverage.Served.FirstOrDefault(e =>
+                string.Equals(e.RegionCode, buyerRegionCode, StringComparison.OrdinalIgnoreCase));
+            if (served is not null)
+            {
+                status = BuyerRegionServed;
+                terms = served.Terms;
+            }
+            else if (coverage.NotServed.Any(c =>
+                string.Equals(c, buyerRegionCode, StringComparison.OrdinalIgnoreCase)))
+            {
+                status = BuyerRegionNotServed;
+            }
+        }
+
+        decimal? measuredAvgDays = null;
+        int? measuredSample = null;
+        if (buyerRegionCode is not null)
+        {
+            var stat = ParseDeliveryByRegion(metrics?.DeliveryByRegion)?.FirstOrDefault(r =>
+                string.Equals(r.RegionCode, buyerRegionCode, StringComparison.OrdinalIgnoreCase));
+            if (stat is not null)
+            {
+                measuredAvgDays = stat.AvgDeliveryDays;
+                measuredSample = stat.SampleSize;
+            }
+        }
+
+        return new SupplierCoverageForBuyerDto(
+            coverage, buyerRegionCode, status, terms, measuredAvgDays, measuredSample);
+    }
+
+    /// <summary>
+    /// Buyer's region: an explicit, registry-valid override wins; otherwise the caller tenant's
+    /// primary location — first active <see cref="Location"/> by <c>CreatedAt</c> that carries a
+    /// <c>RegionCode</c>. There is no first-class "primary location" flag in the schema, and
+    /// <c>ILocationRepository.GetAllAsync</c> already runs under the caller's tenant (and
+    /// store-scope) RLS, so "oldest active location with a region set" is the deterministic pick.
+    /// <c>null</c> when nothing resolves.
+    /// </summary>
+    private async Task<string?> ResolveBuyerRegionCodeAsync(string? overrideCode, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(overrideCode) && UkraineRegions.IsValid(overrideCode))
+            return overrideCode;
+
+        var locations = await _locations.GetAllAsync(ct);
+        return locations
+            .Where(l => l.IsActive && !string.IsNullOrWhiteSpace(l.RegionCode))
+            .OrderBy(l => l.CreatedAt)
+            .Select(l => l.RegionCode)
+            .FirstOrDefault();
     }
 
     // ── Authenticated ─────────────────────────────────────────────────────────

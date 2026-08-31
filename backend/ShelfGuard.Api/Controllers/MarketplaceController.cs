@@ -31,11 +31,16 @@ public sealed class MarketplaceController : ControllerBase
     // ── Public listing (no auth) ──────────────────────────────────────────────
 
     /// <summary>Paginated public supplier listing, filterable by region/category/plan.</summary>
+    /// <remarks>
+    /// TASK-651: <c>regionCode</c> is a structured Ukraine region code
+    /// (<see cref="ShelfGuard.Domain.Constants.UkraineRegions"/>) and filters on the supplier's
+    /// declared delivery coverage. It supersedes the old free-text <c>region</c> query param.
+    /// </remarks>
     [HttpGet("suppliers")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(PagedResult<SupplierListItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSuppliers(
-        [FromQuery] string? region,
+        [FromQuery] string? regionCode,
         [FromQuery] string? category,
         [FromQuery] string? plan,
         [FromQuery] int page = 1,
@@ -45,7 +50,7 @@ public sealed class MarketplaceController : ControllerBase
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
-        var result = await _marketplace.GetPublicSuppliersAsync(region, category, plan, page, pageSize, ct);
+        var result = await _marketplace.GetPublicSuppliersAsync(regionCode, category, plan, page, pageSize, ct);
         return Ok(result);
     }
 
@@ -119,6 +124,32 @@ public sealed class MarketplaceController : ControllerBase
     public IActionResult GetItemCategories()
     {
         return Ok(_marketplace.GetItemCategories());
+    }
+
+    // ── Authenticated — supplier delivery coverage for the calling buyer ──────
+
+    /// <summary>
+    /// TASK-651: this supplier's declared delivery coverage resolved against the calling buyer's
+    /// region. The region is <c>buyerRegionCode</c> when supplied (and a known code), otherwise
+    /// the caller tenant's primary location's region — hence <c>[Authorize]</c>, not anonymous.
+    /// Coverage is not premium-gated. 404 when the supplier is missing or unpublished.
+    /// </summary>
+    [HttpGet("suppliers/{id:guid}/coverage")]
+    [Authorize]
+    [RequireModule("marketplace")]
+    [ProducesResponseType(typeof(SupplierCoverageForBuyerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSupplierCoverage(
+        Guid id,
+        [FromQuery] string? buyerRegionCode,
+        CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var result = await _marketplace.GetSupplierCoverageForBuyerAsync(
+            id, buyerRegionCode, tenantId.Value, ct);
+        return result is null ? NotFound() : Ok(result);
     }
 
     // ── Authenticated — leave a review ────────────────────────────────────────

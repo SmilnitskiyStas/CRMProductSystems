@@ -3,6 +3,28 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-651 (T4) — coverage-aware region filter + `GET /api/marketplace/suppliers/{id}/coverage` (backend)
+
+**Status:** done (committed to main) · **Agent:** backend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T4 of T1–T16. Depends on T3 (TASK-650, on main — same files).
+Log: `.claude/logs/tasks/651_2026-08-31_coverage-filter-and-endpoint_backend-developer.md`
+
+`region` → `regionCode` on `GET /api/marketplace/suppliers`, `POST /api/marketplace/search`
+(`SupplierSearchDto`), and `IMarketplaceService`/`IMarketplaceRepository`. New
+`MarketplaceRepository.ApplyRegionCoverageFilter`: profile matches when `DeliveryCoverage.served`
+holds the code and `notServed` does not (`EF.Functions.JsonContains` → server-side jsonb `@>`,
+verified via `ToQueryString`, still inside the `IProviderRlsOverride` block — no `GetDbConnection`,
+KI-036 rule intact); legacy `DeliveryCoverage IS NULL` profiles fall back to `Region ILIKE` on the
+code or its Ukrainian name. `MarketplaceService.NormalizeRegionCode` (via `UkraineRegions.TryMatchFreeText`)
+turns a bare code / legacy name into a code, unrecognized → null.
+New `GET /api/marketplace/suppliers/{id}/coverage` `[Authorize]`+`[RequireModule("marketplace")]`
+→ `MarketplaceService.GetSupplierCoverageForBuyerAsync` → `SupplierCoverageForBuyerDto`
+(`buyerRegionStatus` served/not_served/unknown, terms, measured avg days from `DeliveryByRegion`).
+Buyer region: valid `?buyerRegionCode=` override, else caller tenant's **oldest active `Location`
+with a `RegionCode`** (no first-class primary-location flag exists), else unknown. `MarketplaceService`
+now also injects `ILocationRepository`. Build 0 errors; marketplace suite 283/283 (+15 unit, +3
+live-Postgres coverage-filter). Follow-ups: frontend `regionCode` wiring → T8/T10, openapi regen → T15.
+
 ## TASK-656 (T9) — supplier profile coverage panel + per-region delivery drill-down (frontend)
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
