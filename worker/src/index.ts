@@ -15,6 +15,7 @@ import { startPermissionGrantExpiryWorker } from "./jobs/permission-grant-expiry
 import { startLoyaltyTierRecomputeWorker } from "./jobs/loyalty-tier-recompute.job";
 import { startLoyaltyAnnualResetWorker } from "./jobs/loyalty-annual-reset.job";
 import { startLoyaltyBonusExpiryWorker } from "./jobs/loyalty-bonus-expiry.job";
+import { startSupplierMetricsRecomputeWorker } from "./jobs/supplier-metrics-recompute.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -33,6 +34,17 @@ async function scheduleRecurringJobs(): Promise<void> {
 
   const cleanupQueue = new Queue("cleanup", { connection: redisConnection });
   await cleanupQueue.upsertJobScheduler("cleanup-cron", { pattern: "0 3 * * *" }, { name: "cleanup" });
+
+  // TASK-653 / plan §"Worker-задача" (eventual-whistling-rabbit.md): daily 02:00 — recompute
+  // marketplace supplier performance aggregates (delivery time overall + by region, chat
+  // response median, cancellation rate, order accuracy). 02:00 is a deliberately clean slot
+  // between the hourly loyalty jobs and cleanup (03:00) / loyalty-tier (04:00) / ai-order (05:00).
+  const supplierMetricsQueue = new Queue("supplier-metrics-recompute", { connection: redisConnection });
+  await supplierMetricsQueue.upsertJobScheduler(
+    "supplier-metrics-recompute-cron",
+    { pattern: "0 2 * * *" },
+    { name: "supplier-metrics-recompute" }
+  );
 
   // TASK-619 / plan §3: daily 04:00 — recompute loyalty tier ladder RFM scores per tenant with
   // loyalty enabled, after cleanup (03:00), before weather-fetch/ai-order (05:00-06:00).
@@ -93,6 +105,7 @@ async function main(): Promise<void> {
   startNotificationWorker();
   startWeeklyReportWorker();
   startCleanupWorker();
+  startSupplierMetricsRecomputeWorker();
   startLoyaltyTierRecomputeWorker();
   startLoyaltyAnnualResetWorker();
   startLoyaltyBonusExpiryWorker();

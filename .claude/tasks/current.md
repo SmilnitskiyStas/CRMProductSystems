@@ -3,6 +3,28 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-653 — Worker: nightly `supplier-metrics-recompute` job (backend, T6)
+
+**Status:** done · **Agent:** backend-developer · Plan `eventual-whistling-rabbit.md`
+§«Worker-задача». Log:
+`.claude/logs/tasks/653_2026-08-31_supplier-metrics-recompute-job_backend-developer.md`
+
+Новий `worker/src/jobs/supplier-metrics-recompute.job.ts` + реєстрація в `index.ts`
+(черга `supplier-metrics-recompute`, cron `0 2 * * *` — чистий слот перед cleanup 03:00 /
+loyalty-tier 04:00). Нарешті наповнює колонки `supplier_metrics`, які з v4 існували наскрізно,
+але ніколи не писались. Пише РІВНО `AvgDeliveryDays`, `DeliverySampleSize`, `DeliveryByRegion`,
+`ResponseTimeHours`, `ResponseSampleSize`, `CancellationRate`, `OrderAccuracy`,
+`AggregatesComputedAt`; **ніколи `Rating`/`QualityScore`/`UpdatedAt`** — `supplier_metrics` без
+`xmin`, безпеку дає лише неперетинність колонок із синхронним писачем `Rating`
+(`UpsertMetricsRatingAsync`, ADR-035); правило зафіксовано рамкою в шапці job'а.
+Доставка — вікно 365 дн. з `DeliveredAt − ShippedAt` + розбивка по `DestinationRegionCode`;
+відповідь — медіана годин до першої відповіді в чаті, вікно 180 дн.; cancellation — all-time;
+accuracy — лише замовлення з фіналізованим receipt. `sampleSize` завжди реальний 0, не NULL.
+`tsc`/`build` чисто; SQL перевірено на dev-БД під `shelfguard_app_dev` + `SET app.role='worker'`
+(транзакційний seed із 8 замовлень і ROLLBACK — усі 4 агрегати дали очікувані значення), і
+скомпільований job прогнано e2e через BullMQ: 8 постачальників, `Rating` 5.00/5.00/4.00 і
+`UpdatedAt` збережені.
+
 ## TASK-647 — CustomerMessage migration chain: restore missing `.Designer.cs` (database)
 
 **Status:** done · **Agent:** database-engineer · Repair of another session's uncommitted work.
