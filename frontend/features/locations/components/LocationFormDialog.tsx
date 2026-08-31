@@ -30,7 +30,6 @@ function buildSchema(t: ReturnType<typeof useTranslations>) {
     ] as const),
     isActive: z.boolean(),
     legalEntityId: z.string().optional(),
-    // Region label is hardcoded for now; TASK-659 does the i18n sweep.
     regionCode: z.string().nullable().optional(),
   });
 }
@@ -202,14 +201,14 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
             />
           </Field>
 
-          {/* Region — label hardcoded until TASK-659 i18n sweep */}
-          <Field label="Область / місто" error={errors.regionCode?.message}>
+          {/* Region */}
+          <Field label={t("regionLabel")} error={errors.regionCode?.message}>
             <RegionSelect
               value={watch("regionCode") ?? null}
               onChange={(code) =>
                 setValue("regionCode", code, { shouldDirty: true })
               }
-              placeholder="Не вказано"
+              placeholder={t("regionPlaceholder")}
             />
           </Field>
 

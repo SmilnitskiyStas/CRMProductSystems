@@ -1265,6 +1265,23 @@
         "submit": "Створити списання"
       }
     },
+    "geo": {
+      "coverageEditor": {
+        "servedLabel": "Обслуговувані регіони",
+        "servedTermsPlaceholder": "напр. 2-3 дні, від 5000 грн",
+        "notServedLabel": "Не обслуговуються",
+        "noteLabel": "Загальна примітка",
+        "notePlaceholder": "напр. Доставка Новою Поштою за домовленістю"
+      },
+      "regionMultiSelect": {
+        "loading": "Завантаження регіонів…",
+        "emptyHint": "виберіть область/місто"
+      },
+      "regionSelect": {
+        "allPlaceholder": "Усі регіони",
+        "choosePlaceholder": "Оберіть регіон"
+      }
+    },
     "locations": {
       "page": {
         "title": "Локації",
@@ -1301,7 +1318,9 @@
         "saving": "Збереження…",
         "save": "Зберегти",
         "create": "Створити",
-        "validationRequired": "Назва обов'язкова"
+        "validationRequired": "Назва обов'язкова",
+        "regionLabel": "Область / місто",
+        "regionPlaceholder": "Не вказано"
       },
       "types": {
         "retail_store": "Роздрібний магазин",

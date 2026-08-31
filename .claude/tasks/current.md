@@ -3,6 +3,22 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-659 (T12) — i18n sweep for the supplier-coverage feature
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Marketplace supplier-performance
+plan (`eventual-whistling-rabbit.md`), T12 of T1–T16. Depends on TASK-654..658, all on main. Frontend only.
+Log: `.claude/logs/tasks/659_2026-08-31_i18n-sweep-coverage_frontend-developer.md`
+
+Прибрано хардкод українських рядків зі спільних `features/geo` компонентів
+(`DeliveryCoverageEditor`, `RegionMultiSelect`, `RegionSelect`) + мітку регіону в
+`LocationFormDialog`. 11 нових ключів у **обох** локалях: `Dashboard.geo.coverageEditor.*`
+(5), `Dashboard.geo.regionMultiSelect.{loading,emptyHint}`,
+`Dashboard.geo.regionSelect.{allPlaceholder,choosePlaceholder}`,
+`Dashboard.locations.form.{regionLabel,regionPlaceholder}`. Top-level `Geo` неможливий —
+`DashboardIntlProvider` віддає лише `Common`+`Dashboard`, тож `Dashboard.geo.*` (узгоджено
+з планом). `RegionSelect` `placeholder` prop-override збережено, змінено лише fallback.
+Sweep: понад список у брифі нічого не знайдено. tsc/lint/vitest clean; uk/en parity 4611==4611.
+
 ## TASK-662 (T15) — docs for the supplier delivery-coverage / performance-metrics feature
 
 **Status:** done (committed to main) · **Agent:** documentation-writer · Marketplace supplier-performance

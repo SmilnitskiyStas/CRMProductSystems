@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRegions } from "../hooks/useRegions";
 import { groupRegions } from "../lib/regionLabel";
 
@@ -29,6 +30,7 @@ const hintStyle: React.CSSProperties = {
 };
 
 export function RegionMultiSelect({ value, onChange, disabledCodes = [] }: Props) {
+  const t = useTranslations("Dashboard.geo.regionMultiSelect");
   const { data: regions, isLoading } = useRegions();
   const groups = groupRegions(regions ?? []);
   const selected = new Set(value);
@@ -42,17 +44,17 @@ export function RegionMultiSelect({ value, onChange, disabledCodes = [] }: Props
   }
 
   if (isLoading) {
-    return <div style={hintStyle}>Завантаження регіонів…</div>;
+    return <div style={hintStyle}>{t("loading")}</div>;
   }
   if (groups.length === 0) {
-    return <div style={hintStyle}>виберіть область/місто</div>;
+    return <div style={hintStyle}>{t("emptyHint")}</div>;
   }
 
   return (
     <div>
       {value.length === 0 && (
         <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 6 }}>
-          виберіть область/місто
+          {t("emptyHint")}
         </div>
       )}
       <div style={boxStyle}>

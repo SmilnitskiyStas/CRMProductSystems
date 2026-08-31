@@ -1265,6 +1265,23 @@
         "submit": "Create write-off"
       }
     },
+    "geo": {
+      "coverageEditor": {
+        "servedLabel": "Served regions",
+        "servedTermsPlaceholder": "e.g. 2-3 days, from UAH 5000",
+        "notServedLabel": "Not served",
+        "noteLabel": "General note",
+        "notePlaceholder": "e.g. Delivery via Nova Poshta by arrangement"
+      },
+      "regionMultiSelect": {
+        "loading": "Loading regions…",
+        "emptyHint": "select a region / city"
+      },
+      "regionSelect": {
+        "allPlaceholder": "All regions",
+        "choosePlaceholder": "Select a region"
+      }
+    },
     "locations": {
       "page": {
         "title": "Locations",
@@ -1301,7 +1318,9 @@
         "saving": "Saving…",
         "save": "Save",
         "create": "Create",
-        "validationRequired": "Name is required"
+        "validationRequired": "Name is required",
+        "regionLabel": "Region / city",
+        "regionPlaceholder": "Not specified"
       },
       "types": {
         "retail_store": "Retail Store",

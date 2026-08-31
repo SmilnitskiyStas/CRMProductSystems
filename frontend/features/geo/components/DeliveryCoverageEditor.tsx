@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { DeliveryCoverage, DeliveryCoverageEntry } from "../types";
 import { useRegionLabel } from "../hooks/useRegions";
 import { RegionMultiSelect } from "./RegionMultiSelect";
@@ -32,6 +33,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 export function DeliveryCoverageEditor({ value, onChange }: Props) {
+  const t = useTranslations("Dashboard.geo.coverageEditor");
   const coverage = value ?? EMPTY;
   const regionLabel = useRegionLabel();
   const servedCodes = coverage.served.map((s) => s.regionCode);
@@ -63,9 +65,9 @@ export function DeliveryCoverageEditor({ value, onChange }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {/* Обслуговувані регіони */}
+      {/* Served regions */}
       <div>
-        <label style={labelStyle}>Обслуговувані регіони</label>
+        <label style={labelStyle}>{t("servedLabel")}</label>
         <RegionMultiSelect
           value={servedCodes}
           onChange={setServedCodes}
@@ -99,7 +101,7 @@ export function DeliveryCoverageEditor({ value, onChange }: Props) {
                   type="text"
                   value={entry.terms ?? ""}
                   onChange={(e) => setTerms(entry.regionCode, e.target.value)}
-                  placeholder="напр. 2-3 дні, від 5000 грн"
+                  placeholder={t("servedTermsPlaceholder")}
                   style={inputStyle}
                 />
               </div>
@@ -108,9 +110,9 @@ export function DeliveryCoverageEditor({ value, onChange }: Props) {
         )}
       </div>
 
-      {/* Не обслуговуються */}
+      {/* Not served */}
       <div>
-        <label style={labelStyle}>Не обслуговуються</label>
+        <label style={labelStyle}>{t("notServedLabel")}</label>
         <RegionMultiSelect
           value={coverage.notServed}
           onChange={(codes) => emit({ notServed: codes })}
@@ -118,15 +120,15 @@ export function DeliveryCoverageEditor({ value, onChange }: Props) {
         />
       </div>
 
-      {/* Загальна примітка */}
+      {/* General note */}
       <div>
-        <label style={labelStyle}>Загальна примітка</label>
+        <label style={labelStyle}>{t("noteLabel")}</label>
         <textarea
           value={coverage.note ?? ""}
           onChange={(e) =>
             emit({ note: e.target.value.trim() === "" ? null : e.target.value })
           }
-          placeholder="напр. Доставка Новою Поштою за домовленістю"
+          placeholder={t("notePlaceholder")}
           rows={3}
           style={{ ...inputStyle, resize: "vertical" }}
         />

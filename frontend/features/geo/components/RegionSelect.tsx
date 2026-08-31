@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRegions } from "../hooks/useRegions";
 import { groupRegions } from "../lib/regionLabel";
 
@@ -35,6 +36,7 @@ export function RegionSelect({
   placeholder,
   allowEmpty = true,
 }: Props) {
+  const t = useTranslations("Dashboard.geo.regionSelect");
   const { data: regions, isLoading } = useRegions();
   const groups = groupRegions(regions ?? []);
 
@@ -46,10 +48,10 @@ export function RegionSelect({
       style={selectStyle}
     >
       {allowEmpty ? (
-        <option value="">{placeholder ?? "Усі регіони"}</option>
+        <option value="">{placeholder ?? t("allPlaceholder")}</option>
       ) : value == null ? (
         <option value="" disabled>
-          {placeholder ?? "Оберіть регіон"}
+          {placeholder ?? t("choosePlaceholder")}
         </option>
       ) : null}
 
