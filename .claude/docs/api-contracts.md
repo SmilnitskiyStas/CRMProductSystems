@@ -1,7 +1,7 @@
 # API Contracts
 
 **Owner:** backend-developer + frontend-developer
-**Updated:** 2026-08-31
+**Updated:** 2026-09-01
 **Base URL:** http://localhost:5000/api (dev)
 
 ## Auth Headers
@@ -554,13 +554,25 @@ Not anonymous (it resolves the buyer's own region). Not premium-gated.
 ```ts
 SupplierCoverageForBuyerDto {
   coverage: {
-    served: { regionCode: string; terms: string | null }[];
+    served: {
+      regionCode: string;
+      deliveryDaysMin: number | null;
+      deliveryDaysMax: number | null;
+      minOrderAmount: number | null;
+      note: string | null;
+    }[];
     notServed: string[];
     note: string | null;
   };
   buyerRegionCode: string | null;
   buyerRegionStatus: "served" | "not_served" | "unknown";
-  buyerRegionTerms: string | null;
+  buyerRegionEntry: {
+    regionCode: string;
+    deliveryDaysMin: number | null;
+    deliveryDaysMax: number | null;
+    minOrderAmount: number | null;
+    note: string | null;
+  } | null;
   measuredAvgDeliveryDaysToBuyerRegion: number | null;
   measuredSampleSize: number | null;
 }
@@ -575,15 +587,24 @@ else `null` → `buyerRegionStatus: "unknown"`, terms/measured all null. The mea
 ```json
 {
   "deliveryCoverage": {
-    "served": [ { "regionCode": "UA-32", "terms": "2-3 дні, від 5000 грн" } ],
+    "served": [
+      {
+        "regionCode": "UA-32",
+        "deliveryDaysMin": 1,
+        "deliveryDaysMax": 3,
+        "minOrderAmount": 5000,
+        "note": null
+      }
+    ],
     "notServed": ["UA-43"],
     "note": "Доставка Новою Поштою за домовленістю"
   }
 }
 ```
 Populated for every caller — anonymous, free-plan, premium (deliberate deviation from the
-premium-gated `website`/`workingHours`/`paymentTerms`, ADR-036 Decision 3). The legacy
-`deliveryRegions: string[]` field stays on the wire (deprecated, fed from the obsolete
+premium-gated `website`/`workingHours`/`paymentTerms`, ADR-036 Decision 3). Per-region entry
+fields (`deliveryDaysMin`, `deliveryDaysMax`, `minOrderAmount`, `note`) are all nullable. The
+legacy `deliveryRegions: string[]` field stays on the wire (deprecated, fed from the obsolete
 `supplier_profiles.DeliveryRegions` column) until the TASK-661 backfill runs.
 
 #### `SupplierMetricsDto` — 4 new worker-computed fields
@@ -607,13 +628,28 @@ PUT /api/settings/supplier-profile        (SupplierProfileUpdateDto)
 PUT /api/supplier-cabinet/profile          (CabinetProfileUpdateDto)
 ```
 Both gained an optional
-`deliveryCoverage: { served: [{regionCode, terms?}], notServed: string[], note? } | null` — patch
-semantics (non-null replaces the stored value, null leaves it untouched). Validation: every
-`regionCode` must pass `UkraineRegions.IsValid`, and no code may appear in both `served` and
-`notServed` — either violation is `400 { error }` (joined messages). Serialized to
-`supplier_profiles.DeliveryCoverage` (camelCase JSONB) via the shared `DeliveryCoverageJson` helper.
-The legacy `deliveryRegions` field is still accepted on the wire but **silently ignored** by both
-services.
+`deliveryCoverage: { served: [{regionCode, deliveryDaysMin?, deliveryDaysMax?, minOrderAmount?, note?}], notServed: string[], note? } | null` —
+patch semantics (non-null replaces the stored value, null leaves it untouched). Validation: every
+`regionCode` must pass `UkraineRegions.IsValid`; `deliveryDaysMin`/`Max` must be 0–365 when present;
+`minOrderAmount` must be ≥ 0 when present; no code may appear in both `served` and `notServed` —
+any violation is `400 { error }` (joined messages). Serialized to `supplier_profiles.DeliveryCoverage`
+(camelCase JSONB) via the shared `DeliveryCoverageJson` helper. The `categories` field (legacy, kept
+for back-compat) is now **ignored on update** — a supplier's primary category is read-only and set
+only at tenant creation. The legacy `deliveryRegions` field is still accepted on the wire but
+**silently ignored** by both services.
+
+#### `PUT /api/provider/tenants/{id}/supplier-category` — change a supplier's primary category (ProviderOnly)
+```
+PUT /api/provider/tenants/{id}/supplier-category
+  Body: { "category": "food" | "auto_parts" | "medical" | "construction" | null }
+  204: supplier category updated (or cleared if null)
+  400: { error }  — invalid category key, or tenant is not a supplier
+  404: { error }  — tenant not found
+```
+Allows a provider to set or correct a supplier tenant's primary category after creation. The value,
+when non-null, must be a valid key from `SupplierItemCategories`. Passing null clears the category
+(`Categories` array becomes empty). This is the only path that can modify a supplier's category
+after tenant creation.
 
 #### Cooperation contract PDF
 `GET /api/marketplace/cooperation/{id}/contract` (and the supplier-cabinet equivalent) now render a

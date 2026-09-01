@@ -1,7 +1,7 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-08-31
+**Updated:** 2026-09-01
 
 ## ADR-036: Supplier delivery coverage + performance metrics — app-side Ukraine region registry, point-in-time `MarketplaceOrder.DestinationRegionCode` snapshot, coverage deliberately not premium-gated, and the `supplier-metrics-recompute` worker write-boundary
 Date: 2026-08-31
@@ -138,6 +138,36 @@ backend/sonnet) → TASK-651 (coverage region filter + `GET suppliers/{id}/cover
 editors + panels + location form, frontend-developer) → TASK-660 (mobile read-only parity, also
 fixes KI-037, mobile-developer) → TASK-661 (`DeliveryRegions` → codes one-shot tool, backend/sonnet)
 → TASK-662 (this documentation pass, documentation-writer).
+
+### 2026-09-01 amendment: structured per-region delivery fields + primary supplier category (TASK-665..668)
+
+Further refinement of the delivery-coverage shape and supplier profile structure, *not yet shipped to production*. Two changes:
+
+**1. Structured per-region delivery entry fields, replacing the single `terms` string.**
+`DeliveryCoverageEntry` now carries `deliveryDaysMin`, `deliveryDaysMax`, `minOrderAmount` (all
+nullable int/decimal), and a per-region `note`, instead of a single `terms: string`. The global
+`DeliveryCoverage.note` field remains. Rationale: finer-grained filtering and display at the buyer
+side (the buyer can see "1–3 days, from 5000 hrn" as separate dimensions, not a free-text blob);
+easier mobile/web form building (dedicated number inputs per region). JSON shape in
+`supplier_profiles.DeliveryCoverage` is camelCase; no DB migration (app-level JSON reshape). Legacy
+rows in the old `terms` shape self-heal on read: `DeliveryCoverageJson.Parse` moves `terms` → `note`
+when `note` is empty, and `terms` is never written back (old `terms` key quietly disappears once
+updated). `SupplierAgreementService.FormatDeliveryTerms` flattens the structured fields back into the
+contract PDF's single `Terms` line so the PDF generator stays IO-free.
+
+**2. One primary supplier category, set at tenant creation, read-only afterward.**
+`SupplierProfile.Categories` (jsonb array) now holds 0 or 1 entry, chosen via
+`CreateTenantRequest.supplierCategory` (provider-create and admin-create paths); validated
+server-side only when `businessType == "supplier"`. Profile-update endpoints stop writing this field
+(it remains on the DTO wire for back-compat but is ignored). Rationale: a supplier's primary
+category is an immutable identity fact (a food distributor shouldn't flip to medical), so it belongs
+at onboarding, not in self-serve profile edit. Cleanup step added to `DeliveryCoverageBackfill` for
+dev: any multi-category rows reduced to their first. New provider endpoint
+`PUT /api/provider/tenants/{id}/supplier-category` allows correcting a supplier's category
+after the fact if needed.
+
+Implemented: TASK-665 (backend), TASK-666 (frontend), TASK-667 (frontend forms + tenant
+creation), TASK-668 (mobile display). No migration; no production deploy yet.
 
 ## ADR-035: `IProviderRlsOverride` — scoping the marketplace provider bypass to one repository method, replacing session-level `SET app.role`
 Date: 2026-08-30

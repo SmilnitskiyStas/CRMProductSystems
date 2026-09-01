@@ -1,7 +1,7 @@
 # Domain Model
 
 **Owner:** project-architect
-**Updated:** 2026-08-31
+**Updated:** 2026-09-01
 **Source:** v1-spec.md
 
 ## Core Entities
@@ -559,7 +559,7 @@ never a hardcoded list.
   `TryMatchFreeText(raw)` (legacy free-text → code, used by the TASK-661 backfill; oblast/city
   name match + a small alias map — «Київська»→UA-32, «Дніпро»→UA-12, «АР Крим»→UA-43).
 
-### SupplierProfile — delivery coverage (marketplace, TASK-648..661)
+### SupplierProfile — delivery coverage (marketplace, TASK-648..668)
 EF entity `SupplierProfile` → table `supplier_profiles` (one row per supplier tenant, the
 marketplace-facing profile).
 
@@ -568,16 +568,32 @@ marketplace-facing profile).
   dropped by a later migration). Shape (camelCase, (de)serialized + validated by the
   `DeliveryCoverageJson` helper — `ShelfGuard.Application/Features/Marketplace/`):
   ```json
-  { "served":    [ { "regionCode": "UA-32", "terms": "2-3 дні, від 5000 грн" } ],
+  { "served": [
+      { "regionCode": "UA-32",
+        "deliveryDaysMin": 1,
+        "deliveryDaysMax": 3,
+        "minOrderAmount": 5000,
+        "note": "доставляємо у всі оберізівні" }
+    ],
     "notServed": ["UA-43"],
-    "note":      "Доставка Новою Поштою за домовленістю" }
+    "note": "Доставка Новою Поштою за домовленістю" }
   ```
-  `served` and `notServed` are mutually-exclusive region-code sets (a code in both is a `400`);
-  every code must pass `UkraineRegions.IsValid`; `note` is a free-text catch-all. **Not
-  premium-gated** — `SupplierProfileDto.DeliveryCoverage` is populated for every caller
-  (ADR-036 Decision 3), unlike `Website`/`WorkingHours`/`PaymentTerms`. Written via
-  `MarketplaceService.UpdateOwnProfileAsync` / `SupplierCabinetService.UpdateProfileAsync`
-  (patch — non-null replaces, null leaves untouched); neither writes `DeliveryRegions` any more.
+  Per-region entry fields (all nullable): `deliveryDaysMin`/`deliveryDaysMax` (0–365 days, or
+  null), `minOrderAmount` (≥0 amount in product currency, or null), `note` (free-text per-region
+  catch-all). `served` and `notServed` are mutually-exclusive region-code sets; every code must
+  pass `UkraineRegions.IsValid`. Global `note` applies to the whole coverage. Legacy dev-DB rows
+  in the old `{"served":[{...,"terms":"..."}]}` shape self-heal on read: `terms` → per-region
+  `note` when the latter is empty; `terms` is never written back. **Not premium-gated** —
+  `SupplierProfileDto.DeliveryCoverage` is populated for every caller (ADR-036 Decision 3),
+  unlike `Website`/`WorkingHours`/`PaymentTerms`. Written via `MarketplaceService.UpdateOwnProfileAsync`
+  / `SupplierCabinetService.UpdateProfileAsync` (patch — non-null replaces, null leaves untouched).
+- **`Categories` (jsonb array, nullable)** — supplier's primary category (0 or 1 string entry).
+  Chosen at tenant creation via `CreateTenantRequest.supplierCategory` and validated only when
+  `businessType == "supplier"`. Read-only after creation — profile-update endpoints ignore any
+  `categories` value in the request (kept on the DTO wire for back-compat). The single entry, if
+  present, must be a valid key from `SupplierItemCategories` (the 4-category registry: food,
+  auto_parts, medical, construction). Provider `PUT /api/provider/tenants/{id}/supplier-category`
+  endpoint (ProviderOnly policy) can correct an existing supplier's category if needed.
 - **`Region` (free string)** — unchanged; still the supplier's HQ region. Used only as the
   `Region ILIKE` fallback for the marketplace region filter on profiles whose `DeliveryCoverage`
   is still null (pre-backfill), so a supplier does not vanish from search during the transition.

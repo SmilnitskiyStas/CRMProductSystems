@@ -1,7 +1,7 @@
 # Known Issues
 
 **Owner:** qa-tester
-**Updated:** 2026-08-31
+**Updated:** 2026-09-01
 
 ## Active Issues
 
@@ -67,6 +67,33 @@ the committed `backend/openapi.json`.
 Resolution: run the regeneration command in `backend-structure.md` §"OpenAPI Contract"
 (`dotnet build` + `dotnet tool run swagger tofile`, dev Postgres up) and commit the result.
 Mechanical; no code change.
+
+### KI-041: Existing dev/legacy supplier profiles may carry non-registry category strings; read-only display shows raw value
+Severity: low (dev/legacy data only — not a bug in the current code, which validates categories
+server-side against `SupplierItemCategories` at tenant creation; does not affect new suppliers)
+Status: open — expected outcome, no action required
+Description: before the 4-key `SupplierItemCategories` registry was defined (food, auto_parts,
+medical, construction), supplier profiles could be created with arbitrary category strings
+(e.g. `dairy`, `veterinary`, `sport`). The dev-DB seed still has some legacy entries. When
+displayed in the profile form (read-only single-category line), these arbitrary strings are shown
+as-is; the provider can correct them via `PUT /api/provider/tenants/{id}/supplier-category` to
+one of the 4 registry keys. No validation error or warning is shown client-side — the raw value is
+simply displayed. New suppliers (created after TASK-665) always have a valid registry key or null.
+Resolution: none required; the read-only display is correct as-is for audit purposes (showing what's
+actually stored).
+
+### KI-042: `admin/CreateTenantModal` has no render site in the current app; component exists but is dead code
+Severity: low (dead code only — the component is correctly implemented, just unreachable from the
+active UI)
+Status: open — no action needed; the component is maintained but not wired to a page
+Description: `frontend/features/admin/components/CreateTenantModal.tsx` includes the supplier-category
+selector (per TASK-667) and is functionally complete, but there is no admin page in `app/` that
+renders it. The modal was built to spec alongside the provider `CreateTenantWizard` (which *is* in
+use on `/provider`), but there is no admin tenant-creation page in the navigation or routing. The
+component is kept in the codebase for future use / completeness (should a `/admin/tenants/create`
+page be added later), but today it is inaccessible. Not a bug or gap — a placeholder kept in sync
+with the provider-side flow.
+Resolution: none required.
 
 ### KI-036: Session-level `SET app.role='provider'` in `MarketplaceRepository` leaked for the whole HTTP request — cross-tenant catalog disclosure + cross-tenant write vector in the B2B marketplace ✅ resolved + deployed (2026-08-30, TASK-641..645, commit `f14ea7f6`)
 Severity: **critical** — confirmed cross-tenant data disclosure AND a confirmed cross-tenant write

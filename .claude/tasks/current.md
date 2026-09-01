@@ -3,6 +3,22 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-669 (docs) — document structured delivery-coverage fields + primary supplier category
+
+**Status:** done · **Agent:** documentation-writer · Docs only.
+Log: `.claude/logs/tasks/669_2026-09-01_coverage-fields-docs_documentation-writer.md`
+
+Consolidated documentation (TASK-665..668). ADR-036 amendment: (1) structured per-region delivery
+entry fields (`deliveryDaysMin`, `deliveryDaysMax`, `minOrderAmount`, per-region `note`) replacing
+single `terms: string` — JSON camelCase, no migration, legacy self-heal on read, no write-back;
+`SupplierAgreementService.FormatDeliveryTerms` flattens back to contract PDF single line. (2) One
+primary supplier category (0–1), set at creation via `CreateTenantRequest.supplierCategory` (both
+provider/admin paths), validated for `businessType=="supplier"`, read-only after — rationale:
+immutable identity. New `PUT /api/provider/tenants/{id}/supplier-category` (ProviderOnly) to correct
+post-creation. Cleanup tool + dev DB run (1 profile `[auto_parts,medical,food]`→`[auto_parts]`).
+Files: `decisions.md` (ADR-036 amendment), `domain-model.md` (SupplierProfile shape),
+`api-contracts.md` (DTOs/endpoint), `known-issues.md` (KI-041/042). Dates bumped to 2026-09-01.
+
 ## TASK-667 — read-only single category + collapsible profile sections + supplier-category at tenant creation
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Frontend only.
