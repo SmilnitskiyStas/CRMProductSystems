@@ -27,6 +27,8 @@ export const MARKETPLACE_KEYS = {
     buyerRegionCode: string | null
   ) =>
     ["marketplace", "supplier-coverage", supplierId, buyerRegionCode] as const,
+  metricsHistory: (supplierId: string | null, days: number) =>
+    ["marketplace", "metrics-history", supplierId, days] as const,
   itemCategories: ["marketplace", "item-categories"] as const,
   supplierChatMessages: (supplierId: string) =>
     ["marketplace", "supplier-chat-messages", supplierId] as const,
@@ -81,6 +83,23 @@ export function useSupplierCoverageForBuyer(
       ),
     enabled: !!supplierId,
     staleTime: 30_000,
+  });
+}
+
+/**
+ * GET /api/marketplace/suppliers/{id}/metrics-history — daily metric snapshots for
+ * the buyer-facing supplier-metrics detail page (TASK-671/672), oldest → newest.
+ * `days` is clamped server-side to [7, 365]. Disabled until a supplier id is known.
+ */
+export function useSupplierMetricsHistory(
+  supplierId: string | null,
+  days = 90
+) {
+  return useQuery({
+    queryKey: MARKETPLACE_KEYS.metricsHistory(supplierId, days),
+    queryFn: () => marketplaceApi.getSupplierMetricsHistory(supplierId!, days),
+    enabled: !!supplierId,
+    staleTime: 60_000,
   });
 }
 

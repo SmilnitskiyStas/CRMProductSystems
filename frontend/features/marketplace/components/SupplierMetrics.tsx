@@ -1,56 +1,68 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { SupplierMetricsDto } from "../types";
 import { StarRating } from "./StarRating";
-import { DeliveryByRegionPanel } from "./DeliveryByRegionPanel";
 
 interface Props {
   metrics: SupplierMetricsDto | null;
+  supplierId: string;
 }
 
 interface MetricItemProps {
+  href: string;
   label: string;
   value: React.ReactNode;
   sublabel?: React.ReactNode;
-  footer?: React.ReactNode;
 }
 
-function MetricItem({ label, value, sublabel, footer }: MetricItemProps) {
+function MetricItem({ href, label, value, sublabel }: MetricItemProps) {
   return (
-    <div
-      style={{
-        background: "#0D1117",
-        border: "1px solid #1F2937",
-        borderRadius: 10,
-        padding: "16px 20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-      }}
-    >
-      <div style={{ color: "#4B5563", fontSize: 12 }}>{label}</div>
-      <div style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700 }}>{value}</div>
-      {sublabel != null && (
-        <div style={{ color: "#4B5563", fontSize: 11 }}>{sublabel}</div>
-      )}
-      {footer}
-    </div>
+    <Link href={href} style={{ textDecoration: "none" }}>
+      <div
+        style={{
+          background: "#0D1117",
+          border: "1px solid #1F2937",
+          borderRadius: 10,
+          padding: "16px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          cursor: "pointer",
+          transition: "border-color 0.15s",
+          height: "100%",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
+        }}
+      >
+        <div style={{ color: "#4B5563", fontSize: 12 }}>{label}</div>
+        <div style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700 }}>{value}</div>
+        {sublabel != null && (
+          <div style={{ color: "#4B5563", fontSize: 11 }}>{sublabel}</div>
+        )}
+      </div>
+    </Link>
   );
 }
 
-export function SupplierMetrics({ metrics }: Props) {
+/**
+ * Supplier performance tiles on the profile page. Each tile deep-links to the
+ * matching section of the metrics detail page (TASK-672); the per-region delivery
+ * drill-down and its trend charts now live there, not inline here.
+ */
+export function SupplierMetrics({ metrics, supplierId }: Props) {
   const t = useTranslations("Dashboard.marketplace.metrics");
-  const [regionsOpen, setRegionsOpen] = useState(false);
+  const tPage = useTranslations("Dashboard.marketplace.metricsPage");
 
   const fmt = (v: number | null | undefined, suffix = "") =>
     v != null ? `${v}${suffix}` : "—";
 
-  const deliveryByRegion = metrics?.deliveryByRegion ?? null;
-  const hasRegionBreakdown = (deliveryByRegion?.length ?? 0) > 0;
-  const showRegionToggle =
-    metrics != null && (hasRegionBreakdown || metrics.deliverySampleSize != null);
+  const base = `/marketplace/${supplierId}/metrics`;
 
   return (
     <div>
@@ -62,6 +74,7 @@ export function SupplierMetrics({ metrics }: Props) {
         }}
       >
         <MetricItem
+          href={`${base}#rating`}
           label={t("rating")}
           value={
             metrics?.rating != null ? (
@@ -75,6 +88,7 @@ export function SupplierMetrics({ metrics }: Props) {
           }
         />
         <MetricItem
+          href={`${base}#delivery`}
           label={t("avgDeliveryDays")}
           value={fmt(metrics?.avgDeliveryDays, t("daySuffix"))}
           sublabel={
@@ -82,27 +96,9 @@ export function SupplierMetrics({ metrics }: Props) {
               ? t("basedOnOrders", { n: metrics.deliverySampleSize })
               : undefined
           }
-          footer={
-            showRegionToggle ? (
-              <button
-                type="button"
-                onClick={() => setRegionsOpen((v) => !v)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  padding: 0,
-                  color: "#3B82F6",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                {regionsOpen ? t("regionsToggleHide") : t("regionsToggleShow")}
-              </button>
-            ) : undefined
-          }
         />
         <MetricItem
+          href={`${base}#accuracy`}
           label={t("orderAccuracy")}
           value={
             metrics?.orderAccuracy != null
@@ -110,8 +106,13 @@ export function SupplierMetrics({ metrics }: Props) {
               : "—"
           }
         />
-        <MetricItem label={t("qualityScore")} value={fmt(metrics?.qualityScore)} />
         <MetricItem
+          href={`${base}#quality`}
+          label={t("qualityScore")}
+          value={fmt(metrics?.qualityScore)}
+        />
+        <MetricItem
+          href={`${base}#response`}
           label={t("responseTime")}
           value={
             metrics?.responseTimeHours != null
@@ -125,6 +126,7 @@ export function SupplierMetrics({ metrics }: Props) {
           }
         />
         <MetricItem
+          href={`${base}#cancellation`}
           label={t("cancellationRate")}
           value={
             metrics?.cancellationRate != null
@@ -134,9 +136,18 @@ export function SupplierMetrics({ metrics }: Props) {
         />
       </div>
 
-      {regionsOpen && showRegionToggle && (
-        <DeliveryByRegionPanel stats={deliveryByRegion} />
-      )}
+      <Link
+        href={base}
+        style={{
+          display: "inline-block",
+          marginTop: 12,
+          color: "#3B82F6",
+          fontSize: 12,
+          textDecoration: "none",
+        }}
+      >
+        {tPage("detailsLink")}
+      </Link>
     </div>
   );
 }

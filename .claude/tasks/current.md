@@ -3,6 +3,22 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-672 (frontend) — buyer-facing supplier-metrics detail page + trend charts + deep-link tiles
+
+**Status:** done · **Agent:** frontend-developer · Builds on TASK-671. Not pushed.
+Log: `.claude/logs/tasks/672_2026-09-01_supplier-metrics-detail-page_frontend-developer.md`
+
+New route `marketplace/[id]/metrics` — 7 anchored sections (`rating`/`delivery`/`accuracy`/`quality`/
+`response`/`cancellation`/`coverage`), each: current value + keyed explanation + Recharts trend chart
+from new `GET .../metrics-history` (`useSupplierMetricsHistory`, key `["marketplace","metrics-history",id,days]`).
+New `SupplierMetricTrendChart` (LossesTrendChart clone, gaps on null, `<2` pts → empty state) +
+`DeliveryRegionComparison` (declared-vs-actual per measured region). `SupplierMetrics` profile tiles are
+now `<Link>`s deep-linking to `/metrics#<anchor>` (+ "Детальніше про показники →"); inline region toggle
+removed. New TS `SupplierMetricsHistoryPoint`. i18n: `Dashboard.marketplace.metricsPage.*` ×16 (uk+en),
+section titles reuse `metrics.*`. tsc/lint clean, vitest 59/59, uk==en parity 4652, `next build` OK
+(route 8.94 kB). Live-verified against dev stack (tiles→section scroll, back link, all sections,
+by-region declared/actual, quality empty-state); seed data reverted.
+
 ## TASK-671 (backend) — nightly metric snapshots + GET suppliers/{id}/metrics-history
 
 **Status:** done · **Agent:** backend-developer · Builds on TASK-670.

@@ -3238,6 +3238,24 @@
         "days": "{days} d.",
         "sample": "n={n}"
       },
+      "metricsPage": {
+        "title": "Supplier metrics",
+        "backToProfile": "to profile",
+        "updatedAt": "updated {date}",
+        "notComputed": "not calculated yet",
+        "byRegionTitle": "By region",
+        "declared": "Declared",
+        "actual": "Actual",
+        "chartEmpty": "The trend will appear after a few nightly recalculations",
+        "detailsLink": "More about these metrics →",
+        "explainRating": "Average score from marketplace buyers' reviews.",
+        "explainDelivery": "Average time from dispatch to order receipt over the last 365 days.",
+        "explainAccuracy": "Share of orders delivered with no discrepancy in quantity or line items over the last 365 days.",
+        "explainQuality": "Product-quality score based on order-intake results. Calculated once enough data has accumulated.",
+        "explainResponse": "Median time to the supplier's first reply in chat over the last 180 days.",
+        "explainCancellation": "Share of confirmed orders the supplier later cancelled over the last 365 days.",
+        "explainCoverage": "Regions the supplier declares delivery to, with stated lead times and minimum order amounts."
+      },
       "reviewsTab": {
         "errorLoad": "Failed to load reviews.",
         "positive": "Positive: {count}",

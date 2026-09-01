@@ -3,6 +3,7 @@ import { viewFile } from "@/lib/download";
 import type {
   SupplierListItemDto,
   SupplierProfileDto,
+  SupplierMetricsHistoryPoint,
   SupplierItemDto,
   SupplierReviewDto,
   PublicSupplierReviewDto,
@@ -65,6 +66,15 @@ export const marketplaceApi = {
       `/api/marketplace/suppliers/${supplierId}/coverage${qs}`
     );
   },
+
+  /** GET /api/marketplace/suppliers/{id}/metrics-history — daily point-in-time
+   *  snapshots of the supplier's performance metrics, oldest → newest (TASK-671).
+   *  `[Authorize]` + `[RequireModule("marketplace")]`. `days` is clamped
+   *  server-side to [7, 365] (default 90). 404 for a missing/unpublished supplier. */
+  getSupplierMetricsHistory: (supplierId: string, days = 90) =>
+    api.get<SupplierMetricsHistoryPoint[]>(
+      `/api/marketplace/suppliers/${supplierId}/metrics-history?days=${days}`
+    ),
 
   /** GET /api/marketplace/suppliers/{id}/items — supplier catalog */
   getSupplierItems: (supplierId: string) =>

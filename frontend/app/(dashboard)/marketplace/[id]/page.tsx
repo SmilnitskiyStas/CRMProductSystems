@@ -359,7 +359,7 @@ export default function SupplierProfilePage() {
         <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: "0 0 14px" }}>
           {t("metricsTitle")}
         </h2>
-        <SupplierMetrics metrics={supplier.metrics} />
+        <SupplierMetrics metrics={supplier.metrics} supplierId={id} />
       </div>
 
       {/* Tabs */}

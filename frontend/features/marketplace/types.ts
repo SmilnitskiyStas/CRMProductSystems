@@ -47,6 +47,26 @@ export interface SupplierMetricsDto {
   aggregatesComputedAt?: string | null;
 }
 
+/** One day's point-in-time copy of a supplier's performance metrics, from
+ *  `GET /api/marketplace/suppliers/{id}/metrics-history?days=90` (TASK-671).
+ *  The array is ordered oldest → newest. Every metric is nullable — the nightly
+ *  recompute job may have had no data behind it on that day. `orderAccuracy` and
+ *  `cancellationRate` are 0..1 fractions (multiply by 100 for a percentage);
+ *  `rating` / `qualityScore` are on a 0..5 scale. Matches backend
+ *  `SupplierMetricsHistoryPointDto`. */
+export interface SupplierMetricsHistoryPoint {
+  /** "2026-06-03" */
+  date: string;
+  rating: number | null;
+  avgDeliveryDays: number | null;
+  orderAccuracy: number | null;
+  qualityScore: number | null;
+  cancellationRate: number | null;
+  responseTimeHours: number | null;
+  deliverySampleSize: number | null;
+  responseSampleSize: number | null;
+}
+
 /** Supplier delivery coverage resolved against the calling buyer's region.
  *  Response of `GET /api/marketplace/suppliers/{id}/coverage` (TASK-651/657).
  *  Matches backend `SupplierCoverageForBuyerDto`. */
