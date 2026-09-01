@@ -1049,6 +1049,57 @@ audit ran and passed unchanged (no new FORCE-RLS table).
 touch disjoint columns via separate `UPDATE` statements; any future "upsert all metrics" path needs
 an explicit concurrency token first.
 
+## TASK-670 — Supplier metrics history (`AddSupplierMetricsHistory`, 2026-09-01)
+
+New table `supplier_metrics_snapshots` — append-only daily copy of a supplier's aggregate
+metrics, written by the nightly supplier-metrics worker job (idempotent upsert), feeding the
+buyer-facing metric trend-chart detail page. Previous migration:
+`20260831090731_AddSupplierPerformanceData`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | `uuid` PK | `gen_random_uuid()` default |
+| `SupplierId` | `uuid` | FK → `suppliers.Id` **CASCADE** (matches `supplier_metrics`) |
+| `TenantId` | `uuid` | FK → `tenants.Id` RESTRICT; the RLS tenant column |
+| `SnapshotDate` | `date` | the calendar day this row represents |
+| `AvgDeliveryDays` | `numeric(5,2)` NULL | column types mirror `supplier_metrics` exactly |
+| `OrderAccuracy` | `numeric(5,4)` NULL | |
+| `QualityScore` | `numeric(5,4)` NULL | |
+| `Rating` | `numeric(3,2)` NULL | |
+| `CancellationRate` | `numeric(5,4)` NULL | |
+| `ResponseTimeHours` | `numeric(6,2)` NULL | |
+| `DeliverySampleSize` | `integer` NULL | |
+| `ResponseSampleSize` | `integer` NULL | |
+| `CreatedAt` | `timestamptz` | `NOW()` default |
+
+**Indexes:**
+- `idx_supplier_metrics_snapshots_supplier_date` — **UNIQUE** `(SupplierId, SnapshotDate)`.
+  One row per supplier per day; the worker upserts `ON CONFLICT (SupplierId, SnapshotDate)`.
+  Also serves the buyer history query (`WHERE SupplierId = ? ORDER BY SnapshotDate DESC`) via a
+  backward b-tree index scan — **no dedicated `DESC` index added** (judged unnecessary).
+- `IX_supplier_metrics_snapshots_TenantId` — leading index on the RLS tenant column (Block 16 rule).
+
+**RLS — full triad added explicitly** (new tables don't auto-inherit — `feedback-rls-worker-bypass-missing`).
+Policy SQL copied verbatim from the live `supplier_metrics` policies (no `WITH CHECK`):
+```sql
+ALTER TABLE supplier_metrics_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE supplier_metrics_snapshots FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON supplier_metrics_snapshots
+  USING ("TenantId" = (NULLIF(current_setting('app.tenant_id', true), ''))::uuid);
+CREATE POLICY provider_bypass ON supplier_metrics_snapshots
+  USING (current_setting('app.role', true) IN ('provider', 'provider_admin'));
+CREATE POLICY worker_bypass ON supplier_metrics_snapshots
+  USING (current_setting('app.role', true) = 'worker');
+```
+`Down()` drops the 3 policies + `DISABLE ROW LEVEL SECURITY` + `DropTable`, symmetric.
+
+Applied to the dev DB via the non-superuser `shelfguard_app_dev` connection (brand-new empty FK
+columns don't trip the FK-validation-under-RLS false positive — no `crm` superuser escape hatch
+needed; table ends up owned by `shelfguard_app_dev`, correct grants). Live-verified: 3 policies
+present, `relrowsecurity`/`relforcerowsecurity` = `t/t`, `Down()` round-trip clean (table + policies
+gone, then fully restored). `AllForceRlsTables_HaveTenantIsolationNullifGuard_ProviderBypass_AndWorkerBypass`
+audit test passes with the new table present.
+
 ## Architecture Rules
 - `expiry_date` and `batch_number` are NEVER modified on transfer — copied as-is to `stock_transfer_items`
 - All soft deletes via `is_active`, never hard DELETE on business data

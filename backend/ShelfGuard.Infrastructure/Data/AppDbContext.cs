@@ -96,6 +96,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierProfile> SupplierProfiles => Set<SupplierProfile>();
     public DbSet<SupplierItem>    SupplierItems    => Set<SupplierItem>();
     public DbSet<SupplierMetrics> SupplierMetrics  => Set<SupplierMetrics>();
+    public DbSet<SupplierMetricsSnapshot> SupplierMetricsSnapshots => Set<SupplierMetricsSnapshot>();
     public DbSet<SupplierReview>  SupplierReviews  => Set<SupplierReview>();
     public DbSet<SupplierItemBarcode> SupplierItemBarcodes => Set<SupplierItemBarcode>();
     public DbSet<SupplierItemImage>   SupplierItemImages   => Set<SupplierItemImage>();
@@ -1444,6 +1445,41 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(m => m.SupplierId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(m => m.Tenant).WithMany()
              .HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── SupplierMetricsSnapshot (TASK-670) ─────────────────────────────
+        // Append-only daily copy of supplier_metrics aggregates, written by the
+        // nightly supplier-metrics worker job via an idempotent upsert on
+        // (SupplierId, SnapshotDate). Feeds the buyer-facing metric trend-chart
+        // detail page. Column types mirror SupplierMetrics above. RLS triad
+        // (tenant_isolation + provider_bypass + worker_bypass) is applied in the
+        // migration, not here (no EF fluent API for CREATE POLICY).
+        builder.Entity<SupplierMetricsSnapshot>(e =>
+        {
+            e.ToTable("supplier_metrics_snapshots");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.SnapshotDate).HasColumnType("date").IsRequired();
+            e.Property(s => s.AvgDeliveryDays).HasColumnType("numeric(5,2)");
+            e.Property(s => s.OrderAccuracy).HasColumnType("numeric(5,4)");
+            e.Property(s => s.QualityScore).HasColumnType("numeric(5,4)");
+            e.Property(s => s.Rating).HasColumnType("numeric(3,2)");
+            e.Property(s => s.CancellationRate).HasColumnType("numeric(5,4)");
+            e.Property(s => s.ResponseTimeHours).HasColumnType("numeric(6,2)");
+            e.Property(s => s.DeliverySampleSize).HasColumnType("integer");
+            e.Property(s => s.ResponseSampleSize).HasColumnType("integer");
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            // Idempotent upsert key — worker does ON CONFLICT (SupplierId, SnapshotDate).
+            // Also serves the buyer history query (WHERE SupplierId = ? ORDER BY SnapshotDate
+            // DESC) via a backward index scan — no dedicated DESC index needed.
+            e.HasIndex(s => new { s.SupplierId, s.SnapshotDate })
+             .IsUnique()
+             .HasDatabaseName("idx_supplier_metrics_snapshots_supplier_date");
+            e.HasIndex(s => s.TenantId);
+            e.HasOne(s => s.Supplier).WithMany()
+             .HasForeignKey(s => s.SupplierId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── SupplierReview (v4 Marketplace) ────────────────────────────────

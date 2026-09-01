@@ -3,6 +3,20 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-670 (DB) — `supplier_metrics_snapshots` table for supplier-metric history
+
+**Status:** done · **Agent:** database-engineer · Migration `20260901193439_AddSupplierMetricsHistory`.
+Log: `.claude/logs/tasks/670_2026-09-01_supplier-metrics-snapshots-table_database-engineer.md`
+
+New append-only table — nightly worker upserts one row per (supplier, day) from `supplier_metrics`
+aggregates; feeds a planned buyer-facing metric trend-chart page. UNIQUE `(SupplierId, SnapshotDate)`
+(also serves the `ORDER BY SnapshotDate DESC` history query via backward scan — no dedicated DESC
+index), leading `(TenantId)` index. Full RLS triad (`tenant_isolation` NULLIF-guard / `provider_bypass`
+provider+provider_admin / `worker_bypass`) added explicitly in the migration, verbatim from live
+`supplier_metrics`, no `WITH CHECK`. Build 0 err; `dotnet test` 2158/2158; RLS-audit filter 61/61
+(0 skipped) — `AllForceRlsTables_...` passes with the new table. Dev DB migrated (applied via
+`shelfguard_app_dev` role, `Down()` round-trip verified). Not pushed.
+
 ## TASK-669 (QA) — verification + regression: structured delivery fields + primary category
 
 **Status:** done · **Agent:** qa-tester · **Verdict: SHIP.** Covers TASK-665..668 (HEAD `c2e33f62`).
