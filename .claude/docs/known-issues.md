@@ -68,19 +68,19 @@ Resolution: run the regeneration command in `backend-structure.md` §"OpenAPI Co
 (`dotnet build` + `dotnet tool run swagger tofile`, dev Postgres up) and commit the result.
 Mechanical; no code change.
 
-### KI-041: Existing dev/legacy supplier profiles may carry non-registry category strings; read-only display shows raw value
+### KI-041: Existing dev/legacy supplier profiles may carry non-registry category strings; read-only display renders "—"
 Severity: low (dev/legacy data only — not a bug in the current code, which validates categories
 server-side against `SupplierItemCategories` at tenant creation; does not affect new suppliers)
 Status: open — expected outcome, no action required
 Description: before the 4-key `SupplierItemCategories` registry was defined (food, auto_parts,
 medical, construction), supplier profiles could be created with arbitrary category strings
-(e.g. `dairy`, `veterinary`, `sport`). The dev-DB seed still has some legacy entries. When
-displayed in the profile form (read-only single-category line), these arbitrary strings are shown
-as-is; the provider can correct them via `PUT /api/provider/tenants/{id}/supplier-category` to
-one of the 4 registry keys. No validation error or warning is shown client-side — the raw value is
-simply displayed. New suppliers (created after TASK-665) always have a valid registry key or null.
-Resolution: none required; the read-only display is correct as-is for audit purposes (showing what's
-actually stored).
+(e.g. `dairy`, `veterinary`, `sport`). The dev-DB seed still has some legacy entries. The
+read-only single-category line in the profile form resolves the stored key to `labelUa` via the
+`item-categories` registry; a non-registry key does not resolve, so the field falls back to
+`categoryNone` ("—" / "Not specified") rather than showing the raw string. The provider can set a
+valid key via `PUT /api/provider/tenants/{id}/supplier-category`. New suppliers (created after
+TASK-665) always have a valid registry key or null.
+Resolution: none required.
 
 ### KI-042: `admin/CreateTenantModal` has no render site in the current app; component exists but is dead code
 Severity: low (dead code only — the component is correctly implemented, just unreachable from the
