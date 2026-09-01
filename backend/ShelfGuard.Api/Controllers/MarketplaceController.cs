@@ -152,6 +152,25 @@ public sealed class MarketplaceController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    /// <summary>
+    /// TASK-671: buyer-facing time series of this supplier's nightly aggregate-metric snapshots,
+    /// oldest first (chart-ready). <c>days</c> is clamped server-side to <c>[7, 365]</c> (default
+    /// 90). Not premium-gated. 404 when the supplier is missing or unpublished.
+    /// </summary>
+    [HttpGet("suppliers/{id:guid}/metrics-history")]
+    [Authorize]
+    [RequireModule("marketplace")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierMetricsHistoryPointDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSupplierMetricsHistory(
+        Guid id,
+        [FromQuery] int days = 90,
+        CancellationToken ct = default)
+    {
+        var result = await _marketplace.GetSupplierMetricsHistoryAsync(id, days, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     // ── Authenticated — leave a review ────────────────────────────────────────
 
     /// <summary>Leave a review for a supplier. One review per tenant per supplier.</summary>

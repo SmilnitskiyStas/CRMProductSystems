@@ -180,6 +180,18 @@ public interface IMarketplaceRepository
     /// </summary>
     Task<SupplierMetrics?> GetMetricsBySupplierIdAsync(Guid supplierId, CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-671: append-only daily metric snapshots for a supplier within the trailing
+    /// <paramref name="days"/>-day window (<c>SnapshotDate &gt;= CURRENT_DATE - days</c>), ordered
+    /// by <c>SnapshotDate</c> ascending (oldest→newest, chart-ready). This is a cross-tenant read —
+    /// the caller is a buyer tenant, the rows belong to the supplier tenant — so it runs inside the
+    /// <see cref="IProviderRlsOverride"/> block, <c>AsNoTracking</c>, exactly like
+    /// <see cref="GetSupplierByIdAsync"/>. Caller is expected to have already clamped
+    /// <paramref name="days"/> to a sane range.
+    /// </summary>
+    Task<IReadOnlyList<SupplierMetricsSnapshot>> GetMetricsHistoryAsync(
+        Guid supplierId, int days, CancellationToken ct = default);
+
     // TASK-645: AddMetricsAsync deleted — UpsertMetricsRatingAsync below owns the INSERT branch
     // now, and leaving unused public surface on the interface this task exists to harden is the
     // wrong default even when the method itself is harmless (staging-only, no bypass).

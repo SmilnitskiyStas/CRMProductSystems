@@ -140,6 +140,37 @@ public sealed class MarketplaceService : IMarketplaceService
             coverage, buyerRegionCode, status, buyerRegionEntry, measuredAvgDays, measuredSample);
     }
 
+    // ── Metric history (TASK-671) ─────────────────────────────────────────────
+
+    private const int MetricsHistoryMinDays = 7;
+    private const int MetricsHistoryMaxDays = 365;
+
+    public async Task<IReadOnlyList<SupplierMetricsHistoryPointDto>?> GetSupplierMetricsHistoryAsync(
+        Guid supplierId, int days, CancellationToken ct = default)
+    {
+        // Resolve the supplier the same way the coverage endpoint does — cross-tenant provider
+        // -bypass read — and 404 on a missing / unpublished supplier before returning any history.
+        var result = await _repo.GetSupplierByIdAsync(supplierId, ct);
+        if (result is null) return null;
+        if (!result.Value.Profile.IsPublic) return null; // BUG-010 parity: unpublished == not found.
+
+        var clampedDays = Math.Clamp(days, MetricsHistoryMinDays, MetricsHistoryMaxDays);
+        var rows = await _repo.GetMetricsHistoryAsync(supplierId, clampedDays, ct);
+
+        return rows
+            .Select(s => new SupplierMetricsHistoryPointDto(
+                s.SnapshotDate,
+                s.Rating,
+                s.AvgDeliveryDays,
+                s.OrderAccuracy,
+                s.QualityScore,
+                s.CancellationRate,
+                s.ResponseTimeHours,
+                s.DeliverySampleSize,
+                s.ResponseSampleSize))
+            .ToList();
+    }
+
     /// <summary>
     /// Buyer's region: an explicit, registry-valid override wins; otherwise the caller tenant's
     /// primary location — first active <see cref="Location"/> by <c>CreatedAt</c> that carries a

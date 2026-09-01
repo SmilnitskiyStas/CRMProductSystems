@@ -40,6 +40,17 @@ import { db } from "../db";
 // ║ concurrency token first.                                                                   ║
 // ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 //
+// TASK-671 — nightly metric snapshot (`supplier_metrics_snapshots`):
+// After the `supplier_metrics` upsert above, this job ALSO writes one append-only row per supplier
+// per day into `supplier_metrics_snapshots` — a FULL point-in-time copy of the whole metric set,
+// `Rating` and `QualityScore` INCLUDED. The write-boundary box above governs only the live, shared
+// `supplier_metrics` row (no concurrency token, a separate synchronous `Rating` writer). The
+// snapshot table is a DISTINCT, append-only table that nothing else writes, keyed by a UNIQUE
+// (`SupplierId`, `SnapshotDate`) index — so the copy carries no clobber risk and a same-day re-run
+// is an idempotent overwrite (`ON CONFLICT DO UPDATE`). `Rating` / `QualityScore` for the snapshot
+// are read straight back from the `supplier_metrics` row this loop just upserted (this job computes
+// neither column). Feeds `GET /api/marketplace/suppliers/{id}/metrics-history`.
+//
 // Population: every `suppliers` row that has a `supplier_profiles` row — deliberately NO
 // `IsPublic` filter, so the numbers are already there the moment a supplier publishes.
 // `suppliers."TenantId"` IS the supplier tenant used by `marketplace_orders."SupplierTenantId"`
@@ -316,6 +327,43 @@ const UPSERT_METRICS_SQL = `
     "AggregatesComputedAt" = EXCLUDED."AggregatesComputedAt"
 `;
 
+/**
+ * TASK-671: `Rating` + `QualityScore` of the just-upserted `supplier_metrics` row. This job does
+ * not compute either column — `Rating` is owned by the synchronous review path
+ * (MarketplaceRepository.UpsertMetricsRatingAsync), `QualityScore` has no data source today — so
+ * the daily snapshot reads them back rather than re-deriving them. The row is guaranteed to exist:
+ * UPSERT_METRICS_SQL ran for this supplier immediately before.
+ */
+const SNAPSHOT_RATING_QUALITY_SQL = `
+  SELECT "Rating", "QualityScore" FROM supplier_metrics WHERE "SupplierId" = $1
+`;
+
+/**
+ * TASK-671: one append-only row per supplier per day in `supplier_metrics_snapshots` — a FULL
+ * point-in-time copy of the metric set, `Rating` and `QualityScore` INCLUDED (see the header note
+ * on why copying them here is safe: distinct append-only table, nothing else writes it). Idempotent
+ * on the UNIQUE (`SupplierId`, `SnapshotDate`) index — a same-day re-run overwrites rather than
+ * duplicates, so the job stays safe to retry. Runs on the same `SET app.role = 'worker'`
+ * connection, so the table's `worker_bypass` RLS policy applies. Feeds
+ * `GET /api/marketplace/suppliers/{id}/metrics-history`.
+ */
+const SNAPSHOT_UPSERT_SQL = `
+  INSERT INTO supplier_metrics_snapshots
+    ("Id", "SupplierId", "TenantId", "SnapshotDate", "AvgDeliveryDays", "OrderAccuracy",
+     "QualityScore", "Rating", "CancellationRate", "ResponseTimeHours", "DeliverySampleSize",
+     "ResponseSampleSize", "CreatedAt")
+  VALUES (gen_random_uuid(), $1, $2, CURRENT_DATE, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+  ON CONFLICT ("SupplierId", "SnapshotDate") DO UPDATE SET
+    "AvgDeliveryDays"    = EXCLUDED."AvgDeliveryDays",
+    "OrderAccuracy"      = EXCLUDED."OrderAccuracy",
+    "QualityScore"       = EXCLUDED."QualityScore",
+    "Rating"             = EXCLUDED."Rating",
+    "CancellationRate"   = EXCLUDED."CancellationRate",
+    "ResponseTimeHours"  = EXCLUDED."ResponseTimeHours",
+    "DeliverySampleSize" = EXCLUDED."DeliverySampleSize",
+    "ResponseSampleSize" = EXCLUDED."ResponseSampleSize"
+`;
+
 async function runSupplierMetricsRecompute(): Promise<void> {
   const client = await db.connect();
   try {
@@ -328,6 +376,7 @@ async function runSupplierMetricsRecompute(): Promise<void> {
     let withDeliveryData = 0;
     let withResponseData = 0;
     let regionRowsWritten = 0;
+    let snapshotsWritten = 0;
 
     for (const supplier of suppliersRes.rows) {
       const tenantId = supplier.tenant_id;
@@ -389,12 +438,35 @@ async function runSupplierMetricsRecompute(): Promise<void> {
         cancellationRate === null ? null : cancellationRate.toFixed(4),
         orderAccuracy === null ? null : orderAccuracy.toFixed(4),
       ]);
+
+      // TASK-671: append-only daily snapshot — a FULL copy of the metric set. Rating and
+      // QualityScore are read back from the row just upserted (this job computes neither); the
+      // recompute columns reuse the values computed above. Idempotent on (SupplierId, SnapshotDate).
+      const rqRes = await client.query<{ Rating: string | null; QualityScore: string | null }>(
+        SNAPSHOT_RATING_QUALITY_SQL,
+        [supplier.supplier_id]
+      );
+      const rq = rqRes.rows[0];
+
+      await client.query(SNAPSHOT_UPSERT_SQL, [
+        supplier.supplier_id,
+        tenantId,
+        avgDeliveryDays === null ? null : avgDeliveryDays.toFixed(2),
+        orderAccuracy === null ? null : orderAccuracy.toFixed(4),
+        rq?.QualityScore ?? null,
+        rq?.Rating ?? null,
+        cancellationRate === null ? null : cancellationRate.toFixed(4),
+        responseTimeHours === null ? null : responseTimeHours.toFixed(2),
+        deliverySampleSize,
+        responseSampleSize,
+      ]);
+      snapshotsWritten++;
     }
 
     console.log(
       `[supplier-metrics-recompute] suppliers: ${suppliersRes.rows.length}, ` +
         `with delivery data: ${withDeliveryData}, with response data: ${withResponseData}, ` +
-        `region rows: ${regionRowsWritten}`
+        `region rows: ${regionRowsWritten}, snapshots written: ${snapshotsWritten}`
     );
   } finally {
     client.release();

@@ -3,6 +3,24 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-671 (backend) — nightly metric snapshots + GET suppliers/{id}/metrics-history
+
+**Status:** done · **Agent:** backend-developer · Builds on TASK-670.
+Log: `.claude/logs/tasks/671_2026-09-01_metrics-history-worker-and-endpoint_backend-developer.md`
+
+Worker `supplier-metrics-recompute.job.ts`: after the `supplier_metrics` upsert, ALSO writes one
+append-only row/supplier/day into `supplier_metrics_snapshots` — FULL copy incl. Rating +
+QualityScore (read back from the just-upserted `supplier_metrics` row; write-boundary rule applies
+only to the live shared row, snapshot table is distinct + append-only + UNIQUE (SupplierId,
+SnapshotDate) → no clobber). Idempotent, same `SET app.role='worker'` scope. `index.ts` unchanged.
+New `GET /api/marketplace/suppliers/{id}/metrics-history?days=90` — `[Authorize]` +
+`[RequireModule("marketplace")]`, `days` clamped `[7,365]`, oldest→newest, 404 on
+missing/unpublished. Repo `GetMetricsHistoryAsync` inside `IProviderRlsOverride` / `AsNoTracking`
+(cross-tenant read), pure LINQ — KI-036 rule intact. DTO `SupplierMetricsHistoryPointDto`.
+Build 0 err; `dotnet test` **2174/2174** (0 skipped); Marketplace filter 325/325. Dev-DB dry-run:
+row lands for CURRENT_DATE, 2nd run updates not duplicates. Not pushed. openapi.json not regen'd
+(already months stale).
+
 ## TASK-670 (DB) — `supplier_metrics_snapshots` table for supplier-metric history
 
 **Status:** done · **Agent:** database-engineer · Migration `20260901193439_AddSupplierMetricsHistory`.

@@ -41,6 +41,16 @@ public interface IMarketplaceService
         Guid supplierId, string? buyerRegionCodeOverride, Guid callerTenantId,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-671: buyer-facing time series of a supplier's nightly aggregate-metric snapshots for
+    /// <c>GET /api/marketplace/suppliers/{id}/metrics-history</c>, oldest first (chart-ready).
+    /// <paramref name="days"/> is clamped to <c>[7, 365]</c>. Returns <c>null</c> when the supplier
+    /// does not exist or is not published (404-equivalent), an empty list when it exists but has no
+    /// snapshots in the window.
+    /// </summary>
+    Task<IReadOnlyList<SupplierMetricsHistoryPointDto>?> GetSupplierMetricsHistoryAsync(
+        Guid supplierId, int days, CancellationToken ct = default);
+
     // ── Authenticated ─────────────────────────────────────────────────────────
 
     /// <summary>

@@ -729,6 +729,117 @@ public sealed class MarketplaceServiceTests
     }
 
 
+    // ── GetSupplierMetricsHistoryAsync (TASK-671) ───────────────────────────
+
+    private void ArrangeMetricsHistorySupplier(bool isPublic = true)
+    {
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((MakeProfile(_supplierIdA, _tenantId, isPublic: isPublic),
+                       MakeSupplier(_supplierIdA, "History Supplier"),
+                       (SupplierMetrics?)null));
+        _repo.GetMetricsHistoryAsync(_supplierIdA, Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierMetricsSnapshot>());
+    }
+
+    [Fact]
+    public async Task GetSupplierMetricsHistoryAsync_UnknownSupplier_ReturnsNull_DoesNotQueryHistory()
+    {
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((ValueTuple<SupplierProfile, Supplier, SupplierMetrics?>?)null);
+
+        Assert.Null(await _sut.GetSupplierMetricsHistoryAsync(_supplierIdA, 90));
+        await _repo.DidNotReceive().GetMetricsHistoryAsync(
+            Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSupplierMetricsHistoryAsync_UnpublishedSupplier_ReturnsNull_DoesNotQueryHistory()
+    {
+        ArrangeMetricsHistorySupplier(isPublic: false);
+
+        Assert.Null(await _sut.GetSupplierMetricsHistoryAsync(_supplierIdA, 90));
+        await _repo.DidNotReceive().GetMetricsHistoryAsync(
+            Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(0, 7)]
+    [InlineData(-5, 7)]
+    [InlineData(3, 7)]
+    [InlineData(7, 7)]
+    [InlineData(30, 30)]
+    [InlineData(90, 90)]
+    [InlineData(365, 365)]
+    [InlineData(999, 365)]
+    [InlineData(100_000, 365)]
+    public async Task GetSupplierMetricsHistoryAsync_ClampsDaysTo7To365(int requested, int expected)
+    {
+        ArrangeMetricsHistorySupplier();
+
+        await _sut.GetSupplierMetricsHistoryAsync(_supplierIdA, requested);
+
+        await _repo.Received(1).GetMetricsHistoryAsync(
+            _supplierIdA, expected, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSupplierMetricsHistoryAsync_PublishedNoSnapshots_ReturnsEmptyList()
+    {
+        ArrangeMetricsHistorySupplier();
+
+        var result = await _sut.GetSupplierMetricsHistoryAsync(_supplierIdA, 90);
+
+        Assert.NotNull(result);
+        Assert.Empty(result!);
+    }
+
+    [Fact]
+    public async Task GetSupplierMetricsHistoryAsync_MapsSnapshotFields_PreservesRepoOrder()
+    {
+        _repo.GetSupplierByIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+             .Returns((MakeProfile(_supplierIdA, _tenantId, isPublic: true),
+                       MakeSupplier(_supplierIdA, "History Supplier"),
+                       (SupplierMetrics?)null));
+
+        var d1 = new DateOnly(2026, 8, 1);
+        var d2 = new DateOnly(2026, 8, 15);
+        _repo.GetMetricsHistoryAsync(_supplierIdA, Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierMetricsSnapshot>
+             {
+                 new()
+                 {
+                     SupplierId = _supplierIdA, TenantId = _tenantId, SnapshotDate = d1,
+                     Rating = 4.50m, AvgDeliveryDays = 2.40m, OrderAccuracy = 0.9800m,
+                     QualityScore = null, CancellationRate = 0.0100m, ResponseTimeHours = 5.50m,
+                     DeliverySampleSize = 12, ResponseSampleSize = 4,
+                 },
+                 new()
+                 {
+                     SupplierId = _supplierIdA, TenantId = _tenantId, SnapshotDate = d2,
+                     Rating = 4.60m, AvgDeliveryDays = 2.10m,
+                 },
+             });
+
+        var result = await _sut.GetSupplierMetricsHistoryAsync(_supplierIdA, 90);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.Count);
+
+        Assert.Equal(d1, result[0].Date);
+        Assert.Equal(4.50m, result[0].Rating);
+        Assert.Equal(2.40m, result[0].AvgDeliveryDays);
+        Assert.Equal(0.9800m, result[0].OrderAccuracy);
+        Assert.Null(result[0].QualityScore);
+        Assert.Equal(0.0100m, result[0].CancellationRate);
+        Assert.Equal(5.50m, result[0].ResponseTimeHours);
+        Assert.Equal(12, result[0].DeliverySampleSize);
+        Assert.Equal(4, result[0].ResponseSampleSize);
+
+        Assert.Equal(d2, result[1].Date);
+        Assert.Equal(4.60m, result[1].Rating);
+        Assert.Null(result[1].OrderAccuracy);
+    }
+
     // ── AdminUpdateSupplierItemAsync (TASK-284) ───────────────────────────────
 
     [Fact]

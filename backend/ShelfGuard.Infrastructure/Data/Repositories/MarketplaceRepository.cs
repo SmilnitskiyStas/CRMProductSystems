@@ -415,6 +415,27 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
                 .FirstOrDefaultAsync(m => m.SupplierId == supplierId, ct),
             ct);
 
+    /// <summary>
+    /// TASK-671: see <see cref="IMarketplaceRepository.GetMetricsHistoryAsync"/>. Cross-tenant read
+    /// (buyer tenant → supplier tenant's rows), so it runs inside one provider-override block,
+    /// <c>AsNoTracking</c> — same pattern as <see cref="GetSupplierByIdAsync"/>. Pure LINQ /
+    /// EF translation, no <c>GetDbConnection()</c> / raw SQL / session-level SET — KI-036 (ADR-035)
+    /// standing rule at the top of this file still holds. The <c>SnapshotDate &gt;= cutoff</c>
+    /// window uses <c>idx_supplier_metrics_snapshots_supplier_date</c>; ascending order is a
+    /// forward scan of that same index.
+    /// </summary>
+    public Task<IReadOnlyList<SupplierMetricsSnapshot>> GetMetricsHistoryAsync(
+        Guid supplierId, int days, CancellationToken ct = default) =>
+        _providerRlsOverride.ExecuteAsync<IReadOnlyList<SupplierMetricsSnapshot>>(async () =>
+        {
+            var cutoff = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(-days);
+            return await _db.SupplierMetricsSnapshots
+                .AsNoTracking()
+                .Where(s => s.SupplierId == supplierId && s.SnapshotDate >= cutoff)
+                .OrderBy(s => s.SnapshotDate)
+                .ToListAsync(ct);
+        }, ct);
+
     // ── Composite cross-tenant read+write (TASK-643, ADR-035) ────────────────
 
     /// <summary>

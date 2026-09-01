@@ -95,6 +95,24 @@ public record SupplierCoverageForBuyerDto(
     decimal? MeasuredAvgDeliveryDaysToBuyerRegion,
     int? MeasuredSampleSize);
 
+/// <summary>
+/// One day's point-in-time copy of a supplier's aggregate performance metrics (TASK-671), served
+/// by <c>GET /api/marketplace/suppliers/{id}/metrics-history</c> oldest-first (chart-ready). Rows
+/// are written by the nightly supplier-metrics worker job from <c>supplier_metrics_snapshots</c>.
+/// Every metric is nullable — the job may not have run on a given day, or there may be no data
+/// behind a metric.
+/// </summary>
+public record SupplierMetricsHistoryPointDto(
+    DateOnly Date,
+    decimal? Rating,
+    decimal? AvgDeliveryDays,
+    decimal? OrderAccuracy,
+    decimal? QualityScore,
+    decimal? CancellationRate,
+    decimal? ResponseTimeHours,
+    int? DeliverySampleSize,
+    int? ResponseSampleSize);
+
 public record SupplierItemDto(
     Guid Id,
     Guid? ItemId,
