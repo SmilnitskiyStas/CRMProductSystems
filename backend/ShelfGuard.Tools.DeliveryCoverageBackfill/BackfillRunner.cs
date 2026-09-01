@@ -27,6 +27,13 @@ namespace ShelfGuard.Tools.DeliveryCoverageBackfill;
 /// </para>
 ///
 /// <para>Idempotent via the <c>DeliveryCoverage IS NULL</c> filter. Dry run by default.</para>
+///
+/// <para>
+/// TASK-665: also runs a one-shot cleanup of <c>supplier_profiles.Categories</c> — a supplier
+/// now holds a single primary category, so any legacy row with more than one is reduced to its
+/// first element. Idempotent (rows with 0/1 category are skipped), same transaction / dry-run
+/// semantics.
+/// </para>
 /// </summary>
 public sealed class BackfillRunner
 {
@@ -93,6 +100,42 @@ public sealed class BackfillRunner
             Console.WriteLine($"           {coverageJson}");
         }
 
+        // ── TASK-665: collapse multi-element supplier_profiles.Categories to the first ──
+        // A supplier profile now holds at most one primary category (chosen at tenant creation,
+        // read-only afterward). Legacy rows that accumulated several via the old editable
+        // profile-update path are reduced to their first element. Idempotent — a row already
+        // carrying 0 or 1 category is left untouched.
+        var categoryProfiles = await _db.SupplierProfiles
+            .Where(p => p.Categories != null)
+            .OrderBy(p => p.Id)
+            .ToListAsync(ct);
+
+        var categoriesTrimmed = 0;
+        foreach (var profile in categoryProfiles)
+        {
+            string[]? cats;
+            try
+            {
+                cats = JsonSerializer.Deserialize<string[]>(profile.Categories!);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (cats is not { Length: > 1 })
+                continue;
+
+            var kept = cats[0];
+            profile.Categories = JsonSerializer.Serialize(new[] { kept });
+            categoriesTrimmed++;
+            Console.WriteLine($"  [categories] {profile.Id}  [{string.Join(", ", cats)}] -> [{kept}]");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Supplier profiles with >1 category reduced to the first: {categoriesTrimmed}");
+        Console.WriteLine();
+
         if (apply)
         {
             await _db.SaveChangesAsync(ct);
@@ -113,6 +156,7 @@ public sealed class BackfillRunner
         Console.WriteLine($"Rows scanned:                 {scanned}");
         Console.WriteLine($"Rows updated:                  {updated}  ({(apply ? "committed" : "rolled back — dry run")})");
         Console.WriteLine($"Rows skipped (nothing to map): {skippedNothingToMap}");
+        Console.WriteLine($"Categories reduced to 1 (TASK-665): {categoriesTrimmed}");
         Console.WriteLine($"Total unmatched values:        {allUnmatched.Count}  ({distinctUnmatched.Count} distinct)");
         if (distinctUnmatched.Count > 0)
         {

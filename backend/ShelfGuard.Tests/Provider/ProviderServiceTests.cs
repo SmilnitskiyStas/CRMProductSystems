@@ -80,6 +80,143 @@ public sealed class ProviderServiceTests
         await _tenants.DidNotReceive().AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
     }
 
+    // ── CreateTenantAsync — primary supplier category (TASK-665) ───────────────
+
+    [Fact]
+    public async Task CreateTenant_SupplierWithValidCategory_SeedsSingleCategoryOnProfile()
+    {
+        SupplierProfile? persistedProfile = null;
+        _tenants.When(r => r.AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>()))
+                .Do(ci => persistedProfile = ci.Arg<SupplierProfile>());
+
+        var req = new CreateTenantRequest(
+            "Fresh Foods Ltd", "fresh-foods-cat", "supplier", "basic", null,
+            SupplierCategory: "food");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        Assert.NotNull(persistedProfile);
+        Assert.Equal("[\"food\"]", persistedProfile!.Categories);
+    }
+
+    [Fact]
+    public async Task CreateTenant_SupplierWithUnknownCategory_ReturnsError_PersistsNothing()
+    {
+        var req = new CreateTenantRequest(
+            "Fresh Foods Ltd", "fresh-foods-badcat", "supplier", "basic", null,
+            SupplierCategory: "spaceship_fuel");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(tenant);
+        Assert.NotNull(error);
+        Assert.Contains("spaceship_fuel", error);
+        await _tenants.DidNotReceive().AddPendingAsync(Arg.Any<Tenant>(), Arg.Any<CancellationToken>());
+        await _tenants.DidNotReceive().AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateTenant_NonSupplierWithCategory_IgnoresIt_NoError()
+    {
+        var req = new CreateTenantRequest(
+            "Retail Shop", "retail-shop-cat", "retail", "basic", null,
+            SupplierCategory: "not_even_valid");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        await _tenants.DidNotReceive().AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── SetSupplierCategoryAsync (TASK-665) ───────────────────────────────────
+
+    [Fact]
+    public async Task SetSupplierCategory_ValidCategory_WritesSingleElementAndSaves()
+    {
+        var tenant = Tenant.Create("Fresh Foods", "fresh-foods-set");
+        tenant.UpdateBusinessType("supplier");
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+        var profile = new SupplierProfile { TenantId = tenant.Id, IsOwnerManaged = true };
+        _tenants.GetOwnerManagedSupplierProfileAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(profile);
+
+        var error = await _sut.SetSupplierCategoryAsync(tenant.Id, "auto_parts", default);
+
+        Assert.Null(error);
+        Assert.Equal("[\"auto_parts\"]", profile.Categories);
+        await _tenants.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetSupplierCategory_BlankCategory_ClearsIt()
+    {
+        var tenant = Tenant.Create("Fresh Foods", "fresh-foods-clear");
+        tenant.UpdateBusinessType("supplier");
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+        var profile = new SupplierProfile { TenantId = tenant.Id, IsOwnerManaged = true, Categories = "[\"food\"]" };
+        _tenants.GetOwnerManagedSupplierProfileAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(profile);
+
+        var error = await _sut.SetSupplierCategoryAsync(tenant.Id, "  ", default);
+
+        Assert.Null(error);
+        Assert.Null(profile.Categories);
+        await _tenants.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetSupplierCategory_UnknownCategory_ReturnsError_DoesNotSave()
+    {
+        var tenant = Tenant.Create("Fresh Foods", "fresh-foods-set-bad");
+        tenant.UpdateBusinessType("supplier");
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+
+        var error = await _sut.SetSupplierCategoryAsync(tenant.Id, "nope", default);
+
+        Assert.NotNull(error);
+        Assert.Contains("nope", error);
+        await _tenants.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetSupplierCategory_NonSupplierTenant_ReturnsError()
+    {
+        var tenant = Tenant.Create("Retail Shop", "retail-set");
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+
+        var error = await _sut.SetSupplierCategoryAsync(tenant.Id, "food", default);
+
+        Assert.Equal("Tenant is not a supplier.", error);
+        await _tenants.DidNotReceive().GetOwnerManagedSupplierProfileAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetSupplierCategory_TenantNotFound_ReturnsNotFound()
+    {
+        _tenants.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Tenant?)null);
+
+        var error = await _sut.SetSupplierCategoryAsync(Guid.NewGuid(), "food", default);
+
+        Assert.Equal("Tenant not found.", error);
+    }
+
+    [Fact]
+    public async Task SetSupplierCategory_NoProfile_ReturnsError()
+    {
+        var tenant = Tenant.Create("Fresh Foods", "fresh-foods-noprofile");
+        tenant.UpdateBusinessType("supplier");
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+        _tenants.GetOwnerManagedSupplierProfileAsync(tenant.Id, Arg.Any<CancellationToken>())
+                .Returns((SupplierProfile?)null);
+
+        var error = await _sut.SetSupplierCategoryAsync(tenant.Id, "food", default);
+
+        Assert.NotNull(error);
+        Assert.Contains("profile not found", error, StringComparison.OrdinalIgnoreCase);
+        await _tenants.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // ── CreateTenantUserAsync — role validation against business_type (TASK-289) ──
 
     [Fact]

@@ -168,7 +168,7 @@ public sealed class SupplierCabinetServiceTests
 
         var (dto, error) = await _sut.UpdateProfileAsync(_tenantId, new CabinetProfileUpdateDto(
             Region:          "Kyiv",
-            Categories:      ["dairy", "bakery"],
+            Categories:      ["dairy", "bakery"],   // TASK-665: sent by legacy clients, must be ignored
             Website:         null,
             DeliveryRegions: null,
             WorkingHours:    "9-18",
@@ -180,6 +180,9 @@ public sealed class SupplierCabinetServiceTests
         Assert.Equal("9-18", profile.WorkingHours);
         Assert.False(profile.IsPublic);   // publish is a separate toggle
         Assert.Equal("free", profile.Plan);
+        // TASK-665: the single primary category is read-only in the cabinet — the payload's
+        // Categories is ignored, the stored value is untouched.
+        Assert.Null(profile.Categories);
         _repo.Received(1).UpdateProfile(profile);
         await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
@@ -190,7 +193,7 @@ public sealed class SupplierCabinetServiceTests
         var (profile, _) = ArrangeOwnSupplier();
 
         var coverage = new DeliveryCoverageDto(
-            new[] { new DeliveryCoverageEntryDto("UA-46", "Львів і область") },
+            new[] { new DeliveryCoverageEntryDto("UA-46", 1, 2, 3000m, "Львів і область") },
             new[] { "UA-40" },
             null);
 
@@ -205,7 +208,10 @@ public sealed class SupplierCabinetServiceTests
 #pragma warning restore CS0618
         var stored = DeliveryCoverageJson.Parse(profile.DeliveryCoverage);
         Assert.Equal("UA-46", stored!.Served[0].RegionCode);
-        Assert.Equal("Львів і область", stored.Served[0].Terms);
+        Assert.Equal(1, stored.Served[0].DeliveryDaysMin);
+        Assert.Equal(2, stored.Served[0].DeliveryDaysMax);
+        Assert.Equal(3000m, stored.Served[0].MinOrderAmount);
+        Assert.Equal("Львів і область", stored.Served[0].Note);
         Assert.Equal(new[] { "UA-40" }, stored.NotServed);
         Assert.Equal("UA-46", dto!.DeliveryCoverage!.Served[0].RegionCode);
     }
@@ -216,7 +222,7 @@ public sealed class SupplierCabinetServiceTests
         ArrangeOwnSupplier();
 
         var bad = new DeliveryCoverageDto(
-            new[] { new DeliveryCoverageEntryDto("UA-9999", null) }, Array.Empty<string>(), null);
+            new[] { new DeliveryCoverageEntryDto("UA-9999", null, null, null, null) }, Array.Empty<string>(), null);
 
         var (dto, error) = await _sut.UpdateProfileAsync(_tenantId, new CabinetProfileUpdateDto(
             null, null, null, null, null, null, DeliveryCoverage: bad));

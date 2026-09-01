@@ -72,6 +72,14 @@ public sealed class TenantAdminService : ITenantAdminService
         if (businessTypeError is not null)
             return (null, businessTypeError);
 
+        // TASK-665: a supplier tenant's primary marketplace category is fixed at creation time.
+        // Validate only for supplier tenants; ignored for every other business type.
+        var isSupplierTenant = Marketplace.SupplierOnboarding.IsSupplierBusinessType(businessType);
+        var primaryCategory = isSupplierTenant ? req.SupplierCategory?.Trim() : null;
+        if (isSupplierTenant && !string.IsNullOrEmpty(primaryCategory) &&
+            SupplierItemCategories.Find(primaryCategory) is null)
+            return (null, $"Unknown supplier category: '{primaryCategory}'.");
+
         // Default module set follows business_type (ADR-015) unless overridden later via PATCH .../modules
         var modulesError = tenant.UpdateModules(Tenant.DefaultModulesForBusinessType(businessType));
         if (modulesError is not null)
@@ -80,7 +88,6 @@ public sealed class TenantAdminService : ITenantAdminService
         // 3. Create first admin user.
         // Supplier tenants (ADR-016) get a supplier_admin — cabinet-only access,
         // deliberately excluded from all tenant-staff policies.
-        var isSupplierTenant = tenant.BusinessType == "supplier";
         var passwordHash = _hasher.Hash(req.AdminPassword);
         var admin = User.Create(
             tenantId:     tenant.Id,
@@ -97,7 +104,8 @@ public sealed class TenantAdminService : ITenantAdminService
         // Supplier + owner-managed marketplace profile (hidden until published).
         if (isSupplierTenant)
         {
-            var (supplier, profile) = Marketplace.SupplierOnboarding.CreateOwnerManaged(tenant.Id, tenant.Name);
+            var (supplier, profile) = Marketplace.SupplierOnboarding.CreateOwnerManaged(
+                tenant.Id, tenant.Name, primaryCategory);
             await _repo.AddSupplierAsync(supplier, ct);
             await _repo.AddSupplierProfileAsync(profile, ct);
         }

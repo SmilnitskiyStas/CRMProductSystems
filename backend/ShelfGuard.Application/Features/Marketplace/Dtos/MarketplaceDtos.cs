@@ -47,10 +47,22 @@ public record SupplierMetricsDto(
     int? ResponseSampleSize = null,
     DateTimeOffset? AggregatesComputedAt = null);
 
-// ── Delivery coverage (TASK-650 / plan «eventual-whistling-rabbit») ───────────
+// ── Delivery coverage (TASK-650 / plan «eventual-whistling-rabbit», TASK-665) ─
 
-/// <summary>One served region plus optional free-text delivery terms for that region.</summary>
-public record DeliveryCoverageEntryDto(string RegionCode, string? Terms);
+/// <summary>
+/// One served region with structured per-region delivery terms (TASK-665): a delivery-time
+/// range in days, a minimum order amount, and a free-text per-region note. Every field is
+/// optional. The legacy single <c>terms</c> string was replaced by these — a legacy row that
+/// still carries <c>terms</c> is read back into <see cref="Note"/> by
+/// <see cref="ShelfGuard.Application.Features.Marketplace.DeliveryCoverageJson"/> and never
+/// re-serialized.
+/// </summary>
+public record DeliveryCoverageEntryDto(
+    string RegionCode,
+    int? DeliveryDaysMin,
+    int? DeliveryDaysMax,
+    decimal? MinOrderAmount,
+    string? Note);
 
 /// <summary>
 /// A supplier's declared delivery coverage. <see cref="Served"/> and <see cref="NotServed"/> are
@@ -71,11 +83,15 @@ public record RegionDeliveryStatDto(string RegionCode, decimal AvgDeliveryDays, 
 /// <c>GET /api/marketplace/suppliers/{id}/coverage</c>, TASK-651).
 /// </summary>
 /// <param name="BuyerRegionStatus"><c>"served"</c> | <c>"not_served"</c> | <c>"unknown"</c>.</param>
+/// <param name="BuyerRegionEntry">
+/// The served-list entry whose <c>regionCode</c> matches the buyer's region (with its structured
+/// delivery fields), or <c>null</c> when the buyer's region is unknown or not in <c>served</c>.
+/// </param>
 public record SupplierCoverageForBuyerDto(
     DeliveryCoverageDto Coverage,
     string? BuyerRegionCode,
     string BuyerRegionStatus,
-    string? BuyerRegionTerms,
+    DeliveryCoverageEntryDto? BuyerRegionEntry,
     decimal? MeasuredAvgDeliveryDaysToBuyerRegion,
     int? MeasuredSampleSize);
 
@@ -124,6 +140,9 @@ public record SupplierSearchDto(string ItemName, string? RegionCode);
 /// Patch semantics — a non-null field replaces, null leaves the stored value untouched.
 /// <see cref="DeliveryRegions"/> is retained for wire compatibility only and is IGNORED
 /// (TASK-650); send <see cref="DeliveryCoverage"/> instead.
+/// <see cref="Categories"/> is likewise retained for wire compatibility only and is IGNORED
+/// (TASK-665): a supplier's single primary category is chosen when the tenant is created and is
+/// not editable through profile update.
 /// </remarks>
 public record SupplierProfileUpdateDto(
     string? Region,
@@ -198,7 +217,9 @@ public record CabinetProfileUpdateDto(
     string? WorkingHours,
     string? PaymentTerms,
     // TASK-650: patch semantics — non-null replaces, null leaves untouched. DeliveryRegions above
-    // is kept for wire-compat only and is ignored.
+    // is kept for wire-compat only and is ignored. TASK-665: Categories is likewise kept for
+    // wire-compat only and ignored — the single primary category is set at tenant creation and
+    // is read-only in the cabinet.
     DeliveryCoverageDto? DeliveryCoverage = null);
 
 // ── Supplier cabinet staff management (self-service) ─────────────────────────

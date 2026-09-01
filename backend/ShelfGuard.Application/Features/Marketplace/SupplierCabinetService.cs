@@ -70,10 +70,10 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
 
         // Patch semantics — only provided fields are applied.
         // IsPublic (publish toggle) and Plan are intentionally not editable here.
+        // TASK-665: Categories is not editable here either — the single primary category is set at
+        // tenant creation and is read-only in the cabinet. request.Categories is ignored.
         if (request.Region is not null)
             profile.Region = request.Region.Trim();
-        if (request.Categories is not null)
-            profile.Categories = JsonSerializer.Serialize(request.Categories);
         if (request.Website is not null)
             profile.Website = request.Website.Trim();
         if (request.DeliveryCoverage is not null)

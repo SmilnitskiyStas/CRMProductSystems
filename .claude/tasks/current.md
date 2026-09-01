@@ -3,6 +3,29 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-665 — structured per-region delivery fields + single primary supplier category
+
+**Status:** done (committed to main) · **Agent:** backend-developer · Backend only. Modifies the
+shipped-but-not-deployed delivery-coverage feature (TASK-648..664, ADR-036). No DB migration.
+Log: `.claude/logs/tasks/665_2026-09-01_coverage-fields-and-primary-category_backend-developer.md`
+
+**Change A** — `DeliveryCoverageEntryDto` `(RegionCode, string? Terms)` → `(RegionCode, int? DeliveryDaysMin,
+int? DeliveryDaysMax, decimal? MinOrderAmount, string? Note)`. `SupplierCoverageForBuyerDto.BuyerRegionTerms`
+→ `DeliveryCoverageEntryDto? BuyerRegionEntry`. `DeliveryCoverageJson`: legacy `terms` self-heals into `note`
+on read, never written back; `Normalize` swaps reversed day pairs; `Validate` adds 0..365 days /
+non-negative min-order. `SupplierAgreementService.FormatDeliveryTerms` flattens the structured fields into
+the contract PDF's existing single `Terms` line — `ContractPdfGenerator` untouched. Repo region filter
+(`@>` subset match) unaffected — verified + test-seeded.
+
+**Change B** — a supplier profile now holds 0 or 1 category, chosen at tenant creation, read-only after.
+`CreateOwnerManaged(…, string? primaryCategory)`. `ProviderService`/`TenantAdminService` `CreateTenantRequest`
++= `string? SupplierCategory` (validated only for `businessType=="supplier"`). Profile-update endpoints stop
+writing `Categories` (kept on wire, ignored). New `PUT /api/provider/tenants/{id}/supplier-category`
+(+ `ProviderService.SetSupplierCategoryAsync`) to fix existing suppliers. One-shot cleanup added to
+`ShelfGuard.Tools.DeliveryCoverageBackfill` — **ran on dev DB**: 1 profile `[auto_parts,medical,food]`→`[auto_parts]`.
+
+Build 0 err; `dotnet test` **2158/2158** (baseline 2134 + 24). openapi.json regen still pending (KI-040).
+
 ## TASK-664 (BUG-1) — fix: cooperation coverage panel "region not declared" vs "region unknown"
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Fixes BUG-1 from TASK-663 QA.

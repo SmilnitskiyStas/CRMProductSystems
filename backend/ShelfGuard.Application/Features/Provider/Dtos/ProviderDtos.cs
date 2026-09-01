@@ -34,12 +34,21 @@ public record TenantDetailDto(
 // ── Mutations ───────────────────────────────────────────────────────────────
 
 /// <summary>POST /provider/tenants — create a new tenant</summary>
+/// <param name="SupplierCategory">
+/// TASK-665: for a <c>businessType == "supplier"</c> tenant, its single primary marketplace
+/// category (a <c>SupplierItemCategories</c> key). Validated only for supplier tenants; ignored
+/// otherwise. Optional — null leaves the supplier profile without a category.
+/// </param>
 public record CreateTenantRequest(
     string    Name,
     string    Slug,
     string    BusinessType,
     string    Plan,
-    string[]? Modules);
+    string[]? Modules,
+    string?   SupplierCategory = null);
+
+/// <summary>PUT /provider/tenants/:id/supplier-category — set/clear a supplier tenant's primary category</summary>
+public record SetSupplierCategoryRequest(string? Category);
 
 /// <summary>PUT /provider/tenants/:id/plan</summary>
 public record UpdatePlanRequest(string Plan);

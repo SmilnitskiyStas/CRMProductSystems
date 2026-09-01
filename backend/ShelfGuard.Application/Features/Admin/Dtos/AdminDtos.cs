@@ -28,6 +28,11 @@ public sealed record TenantUsageDto(
 /// BusinessType defaults to "retail" when omitted; it determines the tenant's
 /// initial module set (ADR-015 — see Tenant.DefaultModulesForBusinessType).
 /// </summary>
+/// <param name="SupplierCategory">
+/// TASK-665: for a <c>BusinessType == "supplier"</c> tenant, its single primary marketplace
+/// category (a <c>SupplierItemCategories</c> key). Validated only for supplier tenants; ignored
+/// otherwise. Optional.
+/// </param>
 public sealed record CreateTenantRequest(
     string Name,
     string Slug,
@@ -35,7 +40,8 @@ public sealed record CreateTenantRequest(
     string AdminEmail,
     string AdminFullName,
     string AdminPassword,
-    string? BusinessType = null);
+    string? BusinessType = null,
+    string? SupplierCategory = null);
 
 /// <summary>PATCH /api/admin/tenants/{id}/plan</summary>
 public sealed record UpdatePlanRequest(string Plan);

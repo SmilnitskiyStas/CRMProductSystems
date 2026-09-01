@@ -110,6 +110,14 @@ public sealed class ProviderService : IProviderService
         var btError = tenant.UpdateBusinessType(request.BusinessType);
         if (btError is not null) return (null, btError);
 
+        // TASK-665: a supplier tenant's primary marketplace category is fixed at creation time.
+        // Validate it here (only for supplier tenants; ignored for every other business type).
+        var isSupplierTenant = SupplierOnboarding.IsSupplierBusinessType(tenant.BusinessType);
+        var primaryCategory = isSupplierTenant ? request.SupplierCategory?.Trim() : null;
+        if (isSupplierTenant && !string.IsNullOrEmpty(primaryCategory) &&
+            SupplierItemCategories.Find(primaryCategory) is null)
+            return (null, $"Unknown supplier category: '{primaryCategory}'.");
+
         var modules = request.Modules ?? [.. Tenant.DefaultModulesForBusinessType(request.BusinessType)];
         var modError = tenant.UpdateModules(modules);
         if (modError is not null) return (null, modError);
@@ -119,9 +127,9 @@ public sealed class ProviderService : IProviderService
         // v4.1 onboarding hook (ADR-016, TASK-289): a supplier tenant created via the
         // provider wizard gets its own Supplier + owner-managed marketplace profile
         // (hidden until published), same as the TenantAdminService admin-onboarding path.
-        if (SupplierOnboarding.IsSupplierBusinessType(tenant.BusinessType))
+        if (isSupplierTenant)
         {
-            var (supplier, profile) = SupplierOnboarding.CreateOwnerManaged(tenant.Id, tenant.Name);
+            var (supplier, profile) = SupplierOnboarding.CreateOwnerManaged(tenant.Id, tenant.Name, primaryCategory);
             await _tenants.AddSupplierAsync(supplier, ct);
             await _tenants.AddSupplierProfileAsync(profile, ct);
         }
@@ -161,6 +169,39 @@ public sealed class ProviderService : IProviderService
 
         var error = tenant.UpdateModules(modules);
         if (error is not null) return error;
+
+        await _tenants.SaveChangesAsync(ct);
+        return null;
+    }
+
+    // ── Supplier primary category (TASK-665) ────────────────────────────────
+
+    /// <summary>
+    /// Sets (or clears, when <paramref name="category"/> is null/blank) a supplier tenant's single
+    /// primary marketplace category. This is the one supplier-profile field that is not editable
+    /// from the supplier cabinet or the profile-update endpoints — it exists so a provider can fix
+    /// a supplier that was onboarded without one, or misconfigured. Returns an error string on
+    /// failure, null on success.
+    /// </summary>
+    public async Task<string?> SetSupplierCategoryAsync(Guid tenantId, string? category, CancellationToken ct)
+    {
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        if (tenant is null) return "Tenant not found.";
+
+        if (!SupplierOnboarding.IsSupplierBusinessType(tenant.BusinessType))
+            return "Tenant is not a supplier.";
+
+        var trimmed = category?.Trim();
+        if (!string.IsNullOrEmpty(trimmed) && SupplierItemCategories.Find(trimmed) is null)
+            return $"Unknown supplier category: '{trimmed}'.";
+
+        var profile = await _tenants.GetOwnerManagedSupplierProfileAsync(tenantId, ct);
+        if (profile is null) return "Supplier profile not found for this tenant.";
+
+        profile.Categories = string.IsNullOrEmpty(trimmed)
+            ? null
+            : System.Text.Json.JsonSerializer.Serialize(new[] { trimmed });
+        profile.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _tenants.SaveChangesAsync(ct);
         return null;

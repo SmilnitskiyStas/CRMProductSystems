@@ -21,6 +21,10 @@ if (args.Contains("--help") || args.Contains("-h"))
         Idempotent: only rows with DeliveryCoverage IS NULL and a non-empty DeliveryRegions
         are considered, so re-running after a partial/aborted run is safe.
 
+        Also runs a one-shot TASK-665 cleanup: supplier_profiles.Categories rows holding more
+        than one category are reduced to the first (a supplier now has a single primary
+        category). Idempotent — rows with 0/1 category are untouched.
+
         Connection: ConnectionStrings:DefaultConnection in appsettings.json, override with the
         env var ConnectionStrings__DefaultConnection. Must be the non-superuser app role — the
         tool sets 'app.role = provider' itself (SET LOCAL, one transaction) for the

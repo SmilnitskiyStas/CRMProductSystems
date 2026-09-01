@@ -101,6 +101,28 @@ public sealed class ProviderController : ControllerBase
                 : BadRequest(new { error }));
     }
 
+    /// <summary>
+    /// Sets or clears a supplier tenant's single primary marketplace category (TASK-665).
+    /// Read-only from the supplier cabinet — this provider-only path exists to fix a supplier
+    /// onboarded without one, or misconfigured. Body: <c>{ "category": "food" | null }</c>.
+    /// </summary>
+    [HttpPut("tenants/{id:guid}/supplier-category")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetSupplierCategory(
+        Guid id,
+        [FromBody] SetSupplierCategoryRequest request,
+        CancellationToken ct)
+    {
+        var error = await _provider.SetSupplierCategoryAsync(id, request.Category, ct);
+        return error is null
+            ? NoContent()
+            : (error.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                ? NotFound(new { error })
+                : BadRequest(new { error }));
+    }
+
     /// <summary>Activates a previously deactivated tenant.</summary>
     [HttpPost("tenants/{id:guid}/activate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

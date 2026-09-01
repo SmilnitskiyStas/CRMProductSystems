@@ -106,7 +106,7 @@ public sealed class MarketplaceService : IMarketplaceService
         var buyerRegionCode = await ResolveBuyerRegionCodeAsync(buyerRegionCodeOverride, ct);
 
         var status = BuyerRegionUnknown;
-        string? terms = null;
+        DeliveryCoverageEntryDto? buyerRegionEntry = null;
         if (buyerRegionCode is not null)
         {
             var served = coverage.Served.FirstOrDefault(e =>
@@ -114,7 +114,7 @@ public sealed class MarketplaceService : IMarketplaceService
             if (served is not null)
             {
                 status = BuyerRegionServed;
-                terms = served.Terms;
+                buyerRegionEntry = served;
             }
             else if (coverage.NotServed.Any(c =>
                 string.Equals(c, buyerRegionCode, StringComparison.OrdinalIgnoreCase)))
@@ -137,7 +137,7 @@ public sealed class MarketplaceService : IMarketplaceService
         }
 
         return new SupplierCoverageForBuyerDto(
-            coverage, buyerRegionCode, status, terms, measuredAvgDays, measuredSample);
+            coverage, buyerRegionCode, status, buyerRegionEntry, measuredAvgDays, measuredSample);
     }
 
     /// <summary>
@@ -281,11 +281,11 @@ public sealed class MarketplaceService : IMarketplaceService
                 return (null, string.Join(" ", coverageErrors));
         }
 
-        // Patch semantics — only update provided fields
+        // Patch semantics — only update provided fields.
+        // TASK-665: Categories is no longer written here — a supplier's single primary category is
+        // set at tenant creation and is read-only afterward. request.Categories is ignored.
         if (request.Region is not null)
             profile.Region = request.Region;
-        if (request.Categories is not null)
-            profile.Categories = JsonSerializer.Serialize(request.Categories);
         if (request.Website is not null)
             profile.Website = request.Website;
         if (request.DeliveryCoverage is not null)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
@@ -640,7 +641,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
             return (null, null, null);
 
         var served = coverage.Served
-            .Select(e => new ContractDeliveryRegion(ResolveRegionName(e.RegionCode), e.Terms))
+            .Select(e => new ContractDeliveryRegion(ResolveRegionName(e.RegionCode), FormatDeliveryTerms(e)))
             .ToList();
 
         var notServed = coverage.NotServed.Count > 0
@@ -652,6 +653,34 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
 
     private static string ResolveRegionName(string regionCode) =>
         UkraineRegions.Find(regionCode)?.NameUa ?? regionCode;
+
+    /// <summary>
+    /// TASK-665: flattens a served region's structured delivery fields (day range, minimum order
+    /// amount, per-region note) into the single free-text line the contract PDF still renders —
+    /// e.g. «1–3 дні, від 5000 грн, Новою Поштою». Returns <c>null</c> when the entry carries no
+    /// structured data and no note (the PDF then shows an empty terms cell, as before).
+    /// </summary>
+    private static string? FormatDeliveryTerms(DeliveryCoverageEntryDto entry)
+    {
+        var parts = new List<string>(3);
+
+        var min = entry.DeliveryDaysMin;
+        var max = entry.DeliveryDaysMax;
+        if (min.HasValue && max.HasValue)
+            parts.Add(min.Value == max.Value ? $"{min.Value} дн." : $"{min.Value}–{max.Value} дні");
+        else if (max.HasValue)
+            parts.Add($"до {max.Value} днів");
+        else if (min.HasValue)
+            parts.Add($"від {min.Value} днів");
+
+        if (entry.MinOrderAmount is { } minOrder)
+            parts.Add($"від {minOrder.ToString("0.##", CultureInfo.InvariantCulture)} грн");
+
+        if (!string.IsNullOrWhiteSpace(entry.Note))
+            parts.Add(entry.Note!.Trim());
+
+        return parts.Count == 0 ? null : string.Join(", ", parts);
+    }
 
     /// <summary>Loads a signature/stamp image from its wwwroot URL; null when unset or missing on disk.</summary>
     private static byte[]? ReadImageSafe(string? url)

@@ -18,8 +18,8 @@ namespace ShelfGuard.Application.Features.Marketplace;
 /// <para>
 /// Mapping rule (per plan «eventual-whistling-rabbit», «Бекфіл / міграція даних»):
 /// each free-text string is run through <see cref="UkraineRegions.TryMatchFreeText"/>;
-/// a match becomes a <c>served</c> entry with <c>terms = null</c> (deduped by code, first
-/// occurrence wins), and anything that does not map is collected verbatim into the
+/// a match becomes a bare <c>served</c> entry (no structured delivery fields — deduped by code,
+/// first occurrence wins), and anything that does not map is collected verbatim into the
 /// <c>note</c> as "<c>Також: a, b</c>" so no information from the legacy column is lost.
 /// <c>notServed</c> is always empty — the legacy column only ever expressed positive coverage.
 /// Match rate is expected to be low ("Вся Україна" / "по домовленості" never map).
@@ -37,9 +37,9 @@ public static class DeliveryRegionsBackfill
     /// <returns>
     /// <see cref="DeliveryRegionsBackfillResult.Coverage"/> is <c>null</c> when there is nothing
     /// worth persisting (no mappable code and no leftover free text) — the tool then leaves the
-    /// row untouched. Otherwise it carries the matched region codes as <c>served</c> (terms
-    /// <c>null</c>), an empty <c>notServed</c>, and — when at least one string did not map — a
-    /// <c>note</c>. A note-only result (empty <c>served</c>) is still returned and written, so the
+    /// row untouched. Otherwise it carries the matched region codes as bare <c>served</c> entries
+    /// (no structured delivery fields), an empty <c>notServed</c>, and — when at least one string
+    /// did not map — a <c>note</c>. A note-only result (empty <c>served</c>) is still returned and written, so the
     /// legacy free text stays visible rather than being silently dropped.
     /// </returns>
     public static DeliveryRegionsBackfillResult Build(IEnumerable<string>? rawRegions)
@@ -76,7 +76,7 @@ public static class DeliveryRegionsBackfill
             : null;
 
         var coverage = new DeliveryCoverageDto(
-            matched.Select(c => new DeliveryCoverageEntryDto(c, null)).ToList(),
+            matched.Select(c => new DeliveryCoverageEntryDto(c, null, null, null, null)).ToList(),
             Array.Empty<string>(),
             note);
 

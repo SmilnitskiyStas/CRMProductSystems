@@ -213,6 +213,65 @@ public sealed class TenantAdminServiceTests
         await _repo.DidNotReceive().AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
     }
 
+    // ── CreateTenant — primary supplier category (TASK-665) ───────────────────
+
+    [Fact]
+    public async Task CreateTenant_SupplierWithValidCategory_SeedsSingleCategoryOnProfile()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        SupplierProfile? persistedProfile = null;
+        _repo.When(r => r.AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>()))
+             .Do(ci => persistedProfile = ci.Arg<SupplierProfile>());
+
+        var req = new CreateTenantRequest(
+            Name: "Fresh Foods Ltd", Slug: "fresh-foods-cat", Plan: "basic",
+            AdminEmail: "owner@ff.com", AdminFullName: "Owner", AdminPassword: "SecurePass123",
+            BusinessType: "supplier", SupplierCategory: "medical");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        Assert.NotNull(persistedProfile);
+        Assert.Equal("[\"medical\"]", persistedProfile!.Categories);
+    }
+
+    [Fact]
+    public async Task CreateTenant_SupplierWithUnknownCategory_ReturnsError_PersistsNothing()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        var req = new CreateTenantRequest(
+            Name: "Fresh Foods Ltd", Slug: "fresh-foods-badcat", Plan: "basic",
+            AdminEmail: "owner@ff.com", AdminFullName: "Owner", AdminPassword: "SecurePass123",
+            BusinessType: "supplier", SupplierCategory: "spaceship_fuel");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(tenant);
+        Assert.NotNull(error);
+        Assert.Contains("spaceship_fuel", error);
+        await _repo.DidNotReceive().AddTenantAsync(Arg.Any<Tenant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateTenant_NonSupplierWithCategory_IgnoresIt()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        var req = new CreateTenantRequest(
+            Name: "Retail Shop", Slug: "retail-shop-cat", Plan: "basic",
+            AdminEmail: "admin@rs.com", AdminFullName: "Admin", AdminPassword: "SecurePass123",
+            BusinessType: "retail", SupplierCategory: "not_even_valid");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        await _repo.DidNotReceive().AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
+
     // ── UpdatePlan_InvalidPlan_ReturnsError ────────────────────────────────
 
     [Fact]

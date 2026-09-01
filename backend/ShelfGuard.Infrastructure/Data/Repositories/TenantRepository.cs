@@ -91,4 +91,10 @@ public sealed class TenantRepository : ITenantRepository
 
     public async Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct) =>
         await _db.SupplierProfiles.AddAsync(profile, ct);
+
+    // TASK-665: tracked read of a supplier tenant's owner-managed profile so ProviderService
+    // can set its single primary category after creation. At most one owner-managed profile
+    // per tenant (partial unique index on TenantId).
+    public Task<SupplierProfile?> GetOwnerManagedSupplierProfileAsync(Guid tenantId, CancellationToken ct) =>
+        _db.SupplierProfiles.FirstOrDefaultAsync(p => p.TenantId == tenantId && p.IsOwnerManaged, ct);
 }

@@ -43,4 +43,11 @@ public interface ITenantRepository
     Task AddPendingAsync(Tenant tenant, CancellationToken ct);
     Task AddSupplierAsync(Supplier supplier, CancellationToken ct);
     Task AddSupplierProfileAsync(SupplierProfile profile, CancellationToken ct);
+
+    /// <summary>
+    /// TASK-665: the owner-managed <see cref="SupplierProfile"/> for a supplier tenant (tracked,
+    /// so the caller can mutate + <see cref="SaveChangesAsync"/>). Null when the tenant has none.
+    /// Provider-role caller — resolves across tenants via provider_bypass.
+    /// </summary>
+    Task<SupplierProfile?> GetOwnerManagedSupplierProfileAsync(Guid tenantId, CancellationToken ct);
 }

@@ -15,6 +15,10 @@ public interface IProviderService
     Task<string?> UpdatePlanAsync(Guid tenantId, string plan, CancellationToken ct);
     Task<string?> UpdateModulesAsync(Guid tenantId, string[] modules, CancellationToken ct);
 
+    // TASK-665: set/clear a supplier tenant's single primary marketplace category
+    // (the one field of the supplier profile that is not editable from the cabinet).
+    Task<string?> SetSupplierCategoryAsync(Guid tenantId, string? category, CancellationToken ct);
+
     // Tenant activation
     Task<(bool Success, string? Error)> ActivateTenantAsync(Guid tenantId, CancellationToken ct);
     Task<(bool Success, string? Error)> DeactivateTenantAsync(Guid tenantId, CancellationToken ct);

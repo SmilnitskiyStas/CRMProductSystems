@@ -20,7 +20,13 @@ public sealed class DeliveryRegionsBackfillTests
         Assert.NotNull(result.Coverage);
         Assert.Equal(new[] { "UA-32", "UA-18-ZHYTOMYR" },
             result.Coverage!.Served.Select(e => e.RegionCode));
-        Assert.All(result.Coverage.Served, e => Assert.Null(e.Terms));
+        Assert.All(result.Coverage.Served, e =>
+        {
+            Assert.Null(e.DeliveryDaysMin);
+            Assert.Null(e.DeliveryDaysMax);
+            Assert.Null(e.MinOrderAmount);
+            Assert.Null(e.Note);
+        });
         Assert.Empty(result.Coverage.NotServed);
         Assert.Equal("Також: по домовленості", result.Coverage.Note);
 

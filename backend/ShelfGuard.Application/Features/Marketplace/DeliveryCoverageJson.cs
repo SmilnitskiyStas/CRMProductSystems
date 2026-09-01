@@ -7,19 +7,27 @@ namespace ShelfGuard.Application.Features.Marketplace;
 
 /// <summary>
 /// (De)serialization + validation for the <c>supplier_profiles.DeliveryCoverage</c> JSONB string
-/// (TASK-650). Canonical stored shape is camelCase, matching both the frontend
-/// <c>features/geo</c> <c>DeliveryCoverage</c> type and the plan's documented shape:
+/// (TASK-650, restructured in TASK-665). Canonical stored shape is camelCase:
 /// <code>
-/// { "served": [{ "regionCode": "UA-32", "terms": "2-3 дні" }],
+/// { "served": [{ "regionCode": "UA-32", "deliveryDaysMin": 1, "deliveryDaysMax": 3,
+///                "minOrderAmount": 5000, "note": "Новою Поштою" }],
 ///   "notServed": ["UA-43"],
-///   "note": "Доставка Новою Поштою за домовленістю" }
+///   "note": "Загальна примітка" }
 /// </code>
-/// The same casing convention the rest of the codebase uses for JSONB string columns that are
-/// (de)serialized in the application layer (<c>Categories</c> is a bare string array where casing
-/// is moot; the worker writes <c>supplier_metrics.DeliveryByRegion</c> in camelCase).
+/// Same casing convention the rest of the codebase uses for JSONB string columns that are
+/// (de)serialized in the application layer.
+///
+/// <para>
+/// TASK-665 replaced the single per-region <c>terms</c> string with structured fields
+/// (<c>deliveryDaysMin</c>/<c>deliveryDaysMax</c>/<c>minOrderAmount</c>/<c>note</c>). Legacy
+/// dev-DB rows written in the old shape self-heal on read: a non-empty <c>terms</c> with no
+/// <c>note</c> is mapped into <c>note</c>. <c>terms</c> is never written back.
+/// </para>
 /// </summary>
 public static class DeliveryCoverageJson
 {
+    private const int MaxDeliveryDays = 365;
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -30,8 +38,8 @@ public static class DeliveryCoverageJson
     /// <summary>
     /// Deserializes the stored JSONB string into a DTO. Returns <c>null</c> for null/blank/invalid
     /// JSON. Tolerates missing keys (absent <c>served</c>/<c>notServed</c> become empty lists).
-    /// The result is normalized (trimmed, blanks dropped, deduped) but NOT validated — callers
-    /// that accept coverage from the wire must run <see cref="Validate"/> first.
+    /// The result is normalized (trimmed, blanks dropped, deduped, day ranges ordered) but NOT
+    /// validated — callers that accept coverage from the wire must run <see cref="Validate"/> first.
     /// </summary>
     public static DeliveryCoverageDto? Parse(string? json)
     {
@@ -46,7 +54,7 @@ public static class DeliveryCoverageJson
 
             var served = (raw.Served ?? new List<RawEntry>())
                 .Where(e => e is not null)
-                .Select(e => new DeliveryCoverageEntryDto(e.RegionCode ?? string.Empty, e.Terms))
+                .Select(ToEntry)
                 .ToList();
 
             return Normalize(new DeliveryCoverageDto(
@@ -67,7 +75,15 @@ public static class DeliveryCoverageJson
         return JsonSerializer.Serialize(new Raw
         {
             Served = n.Served
-                .Select(e => new RawEntry { RegionCode = e.RegionCode, Terms = e.Terms })
+                .Select(e => new RawEntry
+                {
+                    RegionCode      = e.RegionCode,
+                    DeliveryDaysMin = e.DeliveryDaysMin,
+                    DeliveryDaysMax = e.DeliveryDaysMax,
+                    MinOrderAmount  = e.MinOrderAmount,
+                    Note            = e.Note,
+                    // Terms is deliberately never written — read-only back-compat only.
+                })
                 .ToList(),
             NotServed = n.NotServed.ToList(),
             Note = n.Note,
@@ -77,7 +93,8 @@ public static class DeliveryCoverageJson
     /// <summary>
     /// Returns an error message per problem (empty = valid). After normalization: every
     /// <c>served[].regionCode</c> and every <c>notServed</c> entry must pass
-    /// <see cref="UkraineRegions.IsValid"/>, and no code may appear in both lists.
+    /// <see cref="UkraineRegions.IsValid"/>, no code may appear in both lists, and each served
+    /// entry's structured fields must be in range.
     /// </summary>
     public static List<string> Validate(DeliveryCoverageDto dto)
     {
@@ -95,12 +112,24 @@ public static class DeliveryCoverageJson
         foreach (var code in served.Intersect(notServed, StringComparer.OrdinalIgnoreCase).Distinct())
             errors.Add($"Регіон '{code}' вказано одночасно як «обслуговується» та «не обслуговується».");
 
+        foreach (var entry in n.Served)
+        {
+            if (IsDaysOutOfRange(entry.DeliveryDaysMin) || IsDaysOutOfRange(entry.DeliveryDaysMax))
+                errors.Add($"Термін доставки для регіону '{entry.RegionCode}' має бути в межах 0–{MaxDeliveryDays} днів.");
+
+            if (entry.MinOrderAmount is < 0)
+                errors.Add($"Мінімальна сума замовлення для регіону '{entry.RegionCode}' не може бути відʼємною.");
+        }
+
         return errors;
     }
 
+    private static bool IsDaysOutOfRange(int? days) => days is < 0 or > MaxDeliveryDays;
+
     /// <summary>
-    /// Trims every string, drops blank region codes, and dedupes both lists case-insensitively
-    /// (first occurrence wins for <c>served</c>, keeping its terms). Idempotent.
+    /// Trims strings, drops blank region codes, dedupes both lists case-insensitively (first
+    /// occurrence wins for <c>served</c>, keeping its fields), and orders each served entry's
+    /// day range so <c>min &lt;= max</c> (swapping a reversed pair). Idempotent.
     /// </summary>
     internal static DeliveryCoverageDto Normalize(DeliveryCoverageDto dto)
     {
@@ -113,8 +142,15 @@ public static class DeliveryCoverageJson
             var code = entry.RegionCode?.Trim();
             if (string.IsNullOrWhiteSpace(code) || !seenServed.Add(code))
                 continue;
-            var terms = string.IsNullOrWhiteSpace(entry.Terms) ? null : entry.Terms!.Trim();
-            served.Add(new DeliveryCoverageEntryDto(code!, terms));
+
+            var entryNote = string.IsNullOrWhiteSpace(entry.Note) ? null : entry.Note!.Trim();
+
+            var min = entry.DeliveryDaysMin;
+            var max = entry.DeliveryDaysMax;
+            if (min.HasValue && max.HasValue && min.Value > max.Value)
+                (min, max) = (max, min);
+
+            served.Add(new DeliveryCoverageEntryDto(code!, min, max, entry.MinOrderAmount, entryNote));
         }
 
         var notServed = new List<string>();
@@ -131,6 +167,24 @@ public static class DeliveryCoverageJson
         return new DeliveryCoverageDto(served, notServed, note);
     }
 
+    /// <summary>
+    /// Maps one raw JSON entry to a DTO, healing the legacy shape: a non-empty <c>terms</c> with
+    /// no <c>note</c> becomes the <c>note</c>.
+    /// </summary>
+    private static DeliveryCoverageEntryDto ToEntry(RawEntry e)
+    {
+        var note = string.IsNullOrWhiteSpace(e.Note) ? null : e.Note;
+        if (note is null && !string.IsNullOrWhiteSpace(e.Terms))
+            note = e.Terms;
+
+        return new DeliveryCoverageEntryDto(
+            e.RegionCode ?? string.Empty,
+            e.DeliveryDaysMin,
+            e.DeliveryDaysMax,
+            e.MinOrderAmount,
+            note);
+    }
+
     private sealed class Raw
     {
         public List<RawEntry>? Served { get; set; }
@@ -141,6 +195,12 @@ public static class DeliveryCoverageJson
     private sealed class RawEntry
     {
         public string? RegionCode { get; set; }
+        public int? DeliveryDaysMin { get; set; }
+        public int? DeliveryDaysMax { get; set; }
+        public decimal? MinOrderAmount { get; set; }
+        public string? Note { get; set; }
+
+        /// <summary>Legacy pre-TASK-665 single free-text field. Read-only back-compat — never written.</summary>
         public string? Terms { get; set; }
     }
 }

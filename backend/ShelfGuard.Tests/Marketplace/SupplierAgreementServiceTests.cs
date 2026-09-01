@@ -282,7 +282,7 @@ public sealed class SupplierAgreementServiceTests
     }
 
     [Fact]
-    public async Task Approve_WithDeliveryCoverage_ResolvesRegionCodesToNamesForPdf()
+    public async Task Approve_WithDeliveryCoverage_ResolvesRegionCodesToNames_AndFormatsStructuredTermsForPdf()
     {
         var agreement = PendingAgreement();
         _agreements.GetByIdAsync(agreement.Id, Arg.Any<CancellationToken>()).Returns(agreement);
@@ -296,7 +296,8 @@ public sealed class SupplierAgreementServiceTests
             TenantId = _supplierTenantId,
             DeliveryCoverage =
                 """
-                { "served": [ { "regionCode": "UA-32", "terms": "2-3 дні" },
+                { "served": [ { "regionCode": "UA-32", "deliveryDaysMin": 1, "deliveryDaysMax": 3,
+                                "minOrderAmount": 5000, "note": "спецумови" },
                               { "regionCode": "UA-18-ZHYTOMYR" } ],
                   "notServed": [ "UA-43" ],
                   "note": "Новою Поштою за домовленістю" }
@@ -309,17 +310,48 @@ public sealed class SupplierAgreementServiceTests
 
         Assert.Null(error);
         Assert.NotNull(dto);
+        // TASK-665: structured per-region fields are flattened into the single Terms line the
+        // PDF still renders; a region with no fields yields a null Terms.
         _pdf.Received(1).Generate(Arg.Is<ContractPdfData>(d =>
             d.DeliveryCoverageServed != null &&
             d.DeliveryCoverageServed.Count == 2 &&
             d.DeliveryCoverageServed[0].RegionName == "Київська" &&
-            d.DeliveryCoverageServed[0].Terms == "2-3 дні" &&
+            d.DeliveryCoverageServed[0].Terms == "1–3 дні, від 5000 грн, спецумови" &&
             d.DeliveryCoverageServed[1].RegionName == "Житомир" &&
             d.DeliveryCoverageServed[1].Terms == null &&
             d.DeliveryCoverageNotServed != null &&
             d.DeliveryCoverageNotServed.Count == 1 &&
             d.DeliveryCoverageNotServed[0] == "Автономна Республіка Крим" &&
             d.DeliveryCoverageNote == "Новою Поштою за домовленістю"));
+    }
+
+    [Fact]
+    public async Task Approve_WithLegacyTermsCoverage_StillRendersTheTermsLine()
+    {
+        var agreement = PendingAgreement();
+        _agreements.GetByIdAsync(agreement.Id, Arg.Any<CancellationToken>()).Returns(agreement);
+        _settings.GetByTenantAsync(_supplierTenantId, Arg.Any<CancellationToken>())
+            .Returns(CompleteSettings());
+        _agreements.ListForSupplierAsync(_supplierTenantId, null, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierAgreement> { agreement });
+
+        var profile = new SupplierProfile
+        {
+            TenantId = _supplierTenantId,
+            DeliveryCoverage =
+                """{ "served": [ { "regionCode": "UA-32", "terms": "2-3 дні" } ], "notServed": [], "note": null }""",
+        };
+        (SupplierProfile? Profile, Supplier? Supplier)? row = (profile, null);
+        _marketplace.GetOwnProfileAsync(_supplierTenantId, Arg.Any<CancellationToken>()).Returns(row);
+
+        var (dto, error) = await _sut.ApproveAsync(_supplierTenantId, agreement.Id);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        _pdf.Received(1).Generate(Arg.Is<ContractPdfData>(d =>
+            d.DeliveryCoverageServed != null &&
+            d.DeliveryCoverageServed.Count == 1 &&
+            d.DeliveryCoverageServed[0].Terms == "2-3 дні"));
     }
 
     [Fact]

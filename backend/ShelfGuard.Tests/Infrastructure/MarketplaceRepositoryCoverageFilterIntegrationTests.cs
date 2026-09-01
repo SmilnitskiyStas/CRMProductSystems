@@ -30,6 +30,7 @@ public sealed class MarketplaceRepositoryCoverageFilterIntegrationTests : IAsync
 
     // Buyer filters on "UA-32" (Київська область). Regions: UA-32 name = "Київська".
     private Guid _servedYes;                // DeliveryCoverage.served has UA-32
+    private Guid _servedYesNewShape;        // TASK-665 structured entry for UA-32 — extra keys must not break @>
     private Guid _notServed;                // DeliveryCoverage.notServed has UA-32
     private Guid _servedAndNotServed;       // UA-32 in BOTH lists — notServed guard must win (exclude)
     private Guid _legacyFallbackByName;     // DeliveryCoverage NULL, Region ILIKE "%Київська%"
@@ -65,6 +66,8 @@ public sealed class MarketplaceRepositoryCoverageFilterIntegrationTests : IAsync
 
         _servedYes           = Seed(db, "served-yes",
             coverage: """{"served":[{"regionCode":"UA-32","terms":"2 дні"}],"notServed":[],"note":null}""");
+        _servedYesNewShape   = Seed(db, "served-yes-newshape",
+            coverage: """{"served":[{"regionCode":"UA-32","deliveryDaysMin":1,"deliveryDaysMax":3,"minOrderAmount":5000,"note":"x"}],"notServed":[],"note":null}""");
         _notServed           = Seed(db, "not-served",
             coverage: """{"served":[{"regionCode":"UA-30","terms":null}],"notServed":["UA-32"],"note":null}""");
         _servedAndNotServed  = Seed(db, "served-and-notserved",
@@ -116,6 +119,7 @@ public sealed class MarketplaceRepositoryCoverageFilterIntegrationTests : IAsync
         var mine = rows.Where(r => r.Supplier.TenantId == _tenantId).Select(r => r.Supplier.Id).ToHashSet();
 
         Assert.Contains(_servedYes, mine);              // served: yes
+        Assert.Contains(_servedYesNewShape, mine);      // TASK-665 structured entry — extra keys don't break @>
         Assert.Contains(_legacyFallbackByName, mine);   // legacy fallback via region name
         Assert.Contains(_legacyFallbackByCode, mine);   // legacy fallback via raw code
 

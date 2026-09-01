@@ -436,7 +436,7 @@ public sealed class MarketplaceServiceTests
              .Returns((profile, supplier));
 
         var coverage = new DeliveryCoverageDto(
-            new[] { new DeliveryCoverageEntryDto("UA-32", "2-3 дні") },
+            new[] { new DeliveryCoverageEntryDto("UA-32", 2, 3, 5000m, "Новою Поштою") },
             new[] { "UA-43" },
             "note");
         var request = new SupplierProfileUpdateDto(
@@ -453,7 +453,10 @@ public sealed class MarketplaceServiceTests
         Assert.NotNull(profile.DeliveryCoverage);
         var stored = DeliveryCoverageJson.Parse(profile.DeliveryCoverage);
         Assert.Equal("UA-32", stored!.Served[0].RegionCode);
-        Assert.Equal("2-3 дні", stored.Served[0].Terms);
+        Assert.Equal(2, stored.Served[0].DeliveryDaysMin);
+        Assert.Equal(3, stored.Served[0].DeliveryDaysMax);
+        Assert.Equal(5000m, stored.Served[0].MinOrderAmount);
+        Assert.Equal("Новою Поштою", stored.Served[0].Note);
         Assert.Equal(new[] { "UA-43" }, stored.NotServed);
         Assert.Equal("note", stored.Note);
         // ...and it flows back through the profile DTO unconditionally.
@@ -471,7 +474,7 @@ public sealed class MarketplaceServiceTests
              .Returns((profile, supplier));
 
         var bad = new DeliveryCoverageDto(
-            new[] { new DeliveryCoverageEntryDto("UA-32", null) },
+            new[] { new DeliveryCoverageEntryDto("UA-32", null, null, null, null) },
             new[] { "UA-32" },                       // same code in both lists
             null);
         var request = new SupplierProfileUpdateDto(
@@ -581,43 +584,60 @@ public sealed class MarketplaceServiceTests
     }
 
     [Fact]
-    public async Task GetSupplierCoverageForBuyerAsync_OverrideCode_Served_ReturnsTerms()
+    public async Task GetSupplierCoverageForBuyerAsync_OverrideCode_Served_ReturnsBuyerRegionEntry()
     {
         ArrangeCoverageSupplier(
-            """{"served":[{"regionCode":"UA-32","terms":"2-3 дні"}],"notServed":["UA-43"],"note":"н"}""");
+            """{"served":[{"regionCode":"UA-32","deliveryDaysMin":2,"deliveryDaysMax":3,"minOrderAmount":5000,"note":"Новою Поштою"}],"notServed":["UA-43"],"note":"н"}""");
 
         var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-32", _tenantId);
 
         Assert.NotNull(result);
         Assert.Equal("UA-32", result!.BuyerRegionCode);
         Assert.Equal("served", result.BuyerRegionStatus);
-        Assert.Equal("2-3 дні", result.BuyerRegionTerms);
+        Assert.NotNull(result.BuyerRegionEntry);
+        Assert.Equal("UA-32", result.BuyerRegionEntry!.RegionCode);
+        Assert.Equal(2, result.BuyerRegionEntry.DeliveryDaysMin);
+        Assert.Equal(3, result.BuyerRegionEntry.DeliveryDaysMax);
+        Assert.Equal(5000m, result.BuyerRegionEntry.MinOrderAmount);
+        Assert.Equal("Новою Поштою", result.BuyerRegionEntry.Note);
         // override wins — the primary-location lookup is never consulted
         await _locations.DidNotReceive().GetAllAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
+    public async Task GetSupplierCoverageForBuyerAsync_LegacyTermsField_HealsIntoBuyerRegionEntryNote()
+    {
+        ArrangeCoverageSupplier(
+            """{"served":[{"regionCode":"UA-32","terms":"2-3 дні, від 5000 грн"}],"notServed":[],"note":null}""");
+
+        var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-32", _tenantId);
+
+        Assert.Equal("served", result!.BuyerRegionStatus);
+        Assert.Equal("2-3 дні, від 5000 грн", result.BuyerRegionEntry!.Note);
+    }
+
+    [Fact]
     public async Task GetSupplierCoverageForBuyerAsync_OverrideCode_NotServed()
     {
-        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-32","terms":null}],"notServed":["UA-43"],"note":null}""");
+        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-32"}],"notServed":["UA-43"],"note":null}""");
 
         var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "UA-43", _tenantId);
 
         Assert.Equal("not_served", result!.BuyerRegionStatus);
-        Assert.Null(result.BuyerRegionTerms);
+        Assert.Null(result.BuyerRegionEntry);
     }
 
     [Fact]
     public async Task GetSupplierCoverageForBuyerAsync_InvalidOverride_FallsBackToPrimaryLocationRegion()
     {
-        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-30","terms":"наступного дня"}],"notServed":[],"note":null}""");
+        ArrangeCoverageSupplier("""{"served":[{"regionCode":"UA-30","deliveryDaysMax":1}],"notServed":[],"note":null}""");
         ArrangePrimaryLocation("UA-30");
 
         var result = await _sut.GetSupplierCoverageForBuyerAsync(_supplierIdA, "not-a-code", _tenantId);
 
         Assert.Equal("UA-30", result!.BuyerRegionCode);
         Assert.Equal("served", result.BuyerRegionStatus);
-        Assert.Equal("наступного дня", result.BuyerRegionTerms);
+        Assert.Equal(1, result.BuyerRegionEntry!.DeliveryDaysMax);
     }
 
     [Fact]
