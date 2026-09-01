@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Eye, EyeOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import { DeliveryCoverageEditor } from "@/features/geo/components/DeliveryCoverageEditor";
@@ -35,10 +36,21 @@ const LABEL_STYLE: React.CSSProperties = {
   marginBottom: 6,
 };
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label style={LABEL_STYLE}>{label}</label>
+      {hint && (
+        <p style={{ color: "#6B7280", fontSize: 11, margin: "-2px 0 6px" }}>{hint}</p>
+      )}
       {children}
     </div>
   );
@@ -52,7 +64,6 @@ export function CabinetProfileForm() {
   const publish = useTogglePublish();
 
   const [region, setRegion] = useState("");
-  const [categories, setCategories] = useState<Set<string>>(new Set());
   const [website, setWebsite] = useState("");
   const [deliveryCoverage, setDeliveryCoverage] = useState<DeliveryCoverage | null>(null);
   const [workingHours, setWorkingHours] = useState("");
@@ -63,7 +74,6 @@ export function CabinetProfileForm() {
   useEffect(() => {
     if (!profile) return;
     setRegion(profile.region ?? "");
-    setCategories(new Set(profile.categories ?? []));
     setWebsite(profile.website ?? "");
     setDeliveryCoverage(profile.deliveryCoverage ?? null);
     setWorkingHours(profile.workingHours ?? "");
@@ -83,13 +93,18 @@ export function CabinetProfileForm() {
     );
   }
 
+  // Category is single + read-only after tenant creation (TASK-665/667) — a provider
+  // sets it via the tenant-creation flow or PUT .../supplier-category.
+  const categoryLabel = itemCategories.find(
+    (c) => c.key === (profile.categories ?? [])[0]
+  )?.labelUa;
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     update.mutate(
       {
         region: region.trim() || undefined,
-        categories: Array.from(categories),
         website: website.trim() || undefined,
         deliveryCoverage: deliveryCoverage ?? undefined,
         workingHours: workingHours.trim() || undefined,
@@ -176,86 +191,66 @@ export function CabinetProfileForm() {
         </Btn>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label={t("regionLabel")}>
-            <RegionSelect
-              value={region || null}
-              onChange={(code) => setRegion(code ?? "")}
-              allowEmpty
-              placeholder={t("regionSelectPlaceholder")}
-            />
-          </Field>
-          <Field label={t("websiteLabel")}>
-            <input
-              style={INPUT_STYLE}
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://example.com"
-            />
-          </Field>
-        </div>
-
-        <Field label={t("categoriesLabel")}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 20px" }}>
-            {itemCategories.map((cat) => (
-              <label
-                key={cat.key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  color: "#E8EDF5",
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={categories.has(cat.key)}
-                  onChange={(e) => {
-                    setCategories((prev) => {
-                      const next = new Set(prev);
-                      if (e.target.checked) {
-                        next.add(cat.key);
-                      } else {
-                        next.delete(cat.key);
-                      }
-                      return next;
-                    });
-                  }}
-                />
-                {cat.labelUa}
-              </label>
-            ))}
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <CollapsibleSection title={t("sectionGeneralLabel")} defaultOpen>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Field label={t("regionLabel")} hint={t("regionHint")}>
+              <RegionSelect
+                value={region || null}
+                onChange={(code) => setRegion(code ?? "")}
+                allowEmpty
+                placeholder={t("regionSelectPlaceholder")}
+              />
+            </Field>
+            <Field label={t("websiteLabel")}>
+              <input
+                style={INPUT_STYLE}
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://example.com"
+              />
+            </Field>
           </div>
-        </Field>
+        </CollapsibleSection>
 
-        <Field label={t("deliveryCoverageLabel")}>
+        <CollapsibleSection title={t("categoryReadonlyLabel")} defaultOpen>
+          <div
+            style={{
+              color: categoryLabel ? "#E8EDF5" : "#6B7280",
+              fontSize: 13,
+            }}
+          >
+            {categoryLabel ?? t("categoryNone")}
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title={t("deliveryCoverageLabel")} defaultOpen>
           <DeliveryCoverageEditor
             value={deliveryCoverage}
             onChange={setDeliveryCoverage}
           />
-        </Field>
+        </CollapsibleSection>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label={t("workingHoursLabel")}>
-            <input
-              style={INPUT_STYLE}
-              value={workingHours}
-              onChange={(e) => setWorkingHours(e.target.value)}
-              placeholder={t("workingHoursPlaceholder")}
-            />
-          </Field>
-          <Field label={t("paymentTermsLabel")}>
-            <input
-              style={INPUT_STYLE}
-              value={paymentTerms}
-              onChange={(e) => setPaymentTerms(e.target.value)}
-              placeholder={t("paymentTermsPlaceholder")}
-            />
-          </Field>
-        </div>
+        <CollapsibleSection title={t("sectionScheduleLabel")} defaultOpen>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Field label={t("workingHoursLabel")}>
+              <input
+                style={INPUT_STYLE}
+                value={workingHours}
+                onChange={(e) => setWorkingHours(e.target.value)}
+                placeholder={t("workingHoursPlaceholder")}
+              />
+            </Field>
+            <Field label={t("paymentTermsLabel")}>
+              <input
+                style={INPUT_STYLE}
+                value={paymentTerms}
+                onChange={(e) => setPaymentTerms(e.target.value)}
+                placeholder={t("paymentTermsPlaceholder")}
+              />
+            </Field>
+          </div>
+        </CollapsibleSection>
 
         {message && (
           <div

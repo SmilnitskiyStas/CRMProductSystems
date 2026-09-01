@@ -1,107 +1,16 @@
 "use client";
 
-import { useState, useEffect, KeyboardEvent } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import { DeliveryCoverageEditor } from "@/features/geo/components/DeliveryCoverageEditor";
-import { useMySupplierProfile, useUpdateMySupplierProfile } from "../hooks/useMarketplace";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import {
+  useMySupplierProfile,
+  useUpdateMySupplierProfile,
+  useItemCategories,
+} from "../hooks/useMarketplace";
 import type { SupplierProfileUpdateRequest, SupplierPlan } from "../types";
-
-// ─── Tag input helper ─────────────────────────────────────────────────────────
-
-interface TagInputProps {
-  value: string[];
-  onChange: (tags: string[]) => void;
-  placeholder?: string;
-}
-
-function TagInput({ value, onChange, placeholder }: TagInputProps) {
-  const [input, setInput] = useState("");
-
-  function addTag() {
-    const t = input.trim();
-    if (t && !value.includes(t)) {
-      onChange([...value, t]);
-    }
-    setInput("");
-  }
-
-  function onKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addTag();
-    }
-    if (e.key === "Backspace" && input === "" && value.length > 0) {
-      onChange(value.slice(0, -1));
-    }
-  }
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 6,
-        padding: "6px 10px",
-        background: "#0D1117",
-        border: "1px solid #1F2937",
-        borderRadius: 8,
-        minHeight: 42,
-        alignItems: "center",
-      }}
-    >
-      {value.map((tag) => (
-        <span
-          key={tag}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            padding: "2px 8px",
-            background: "#1F2937",
-            borderRadius: 4,
-            color: "#E8EDF5",
-            fontSize: 12,
-          }}
-        >
-          {tag}
-          <button
-            type="button"
-            onClick={() => onChange(value.filter((t) => t !== tag))}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#6B7280",
-              cursor: "pointer",
-              padding: 0,
-              lineHeight: 1,
-              fontSize: 14,
-            }}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={onKey}
-        onBlur={addTag}
-        placeholder={value.length === 0 ? placeholder : ""}
-        style={{
-          background: "transparent",
-          border: "none",
-          outline: "none",
-          color: "#E8EDF5",
-          fontSize: 13,
-          minWidth: 120,
-          flex: 1,
-        }}
-      />
-    </div>
-  );
-}
 
 // ─── Main form ────────────────────────────────────────────────────────────────
 
@@ -120,6 +29,7 @@ export function SupplierProfileForm() {
   const t = useTranslations("Dashboard.marketplace.profileForm");
   const tPlan = useTranslations("Dashboard.marketplace.planLabel");
   const { data, isLoading, isError } = useMySupplierProfile();
+  const { data: itemCategories = [] } = useItemCategories();
   const { mutate, isPending } = useUpdateMySupplierProfile();
 
   const [form, setForm] = useState<SupplierProfileUpdateRequest>(EMPTY_FORM);
@@ -135,6 +45,12 @@ export function SupplierProfileForm() {
     fontSize: 12,
     marginBottom: 6,
     display: "block",
+  };
+
+  const hintStyle: React.CSSProperties = {
+    color: "#6B7280",
+    fontSize: 11,
+    margin: "-2px 0 6px",
   };
 
   const inputStyle: React.CSSProperties = {
@@ -154,11 +70,25 @@ export function SupplierProfileForm() {
     flexDirection: "column",
   };
 
+  // Category is single + read-only after tenant creation (TASK-665/667).
+  const categoryLabel = itemCategories.find(
+    (c) => c.key === (form.categories ?? [])[0]
+  )?.labelUa;
+
   function handleSave() {
     setSaveError(null);
     setSaved(false);
+    // `categories` is intentionally omitted — the update endpoint ignores it (TASK-665).
     mutate(
-      { ...form, website: form.website || undefined, workingHours: form.workingHours || undefined, paymentTerms: form.paymentTerms || undefined },
+      {
+        region: form.region,
+        website: form.website || undefined,
+        deliveryCoverage: form.deliveryCoverage ?? null,
+        workingHours: form.workingHours || undefined,
+        paymentTerms: form.paymentTerms || undefined,
+        isPublic: form.isPublic,
+        plan: form.plan,
+      },
       {
         onSuccess: () => setSaved(true),
         onError: (err) => {
@@ -185,7 +115,7 @@ export function SupplierProfileForm() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 600 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 600 }}>
       <div>
         <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600, margin: 0 }}>
           {t("title")}
@@ -195,74 +125,84 @@ export function SupplierProfileForm() {
         </p>
       </div>
 
-      {/* Region — structured taxonomy (TASK-655); supplier HQ region, single code */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>{t("regionLabel")}</label>
-        <RegionSelect
-          value={form.region || null}
-          onChange={(code) => setForm({ ...form, region: code ?? "" })}
-          allowEmpty
-          placeholder={t("regionSelectPlaceholder")}
-        />
-      </div>
+      {/* General — origin region + website */}
+      <CollapsibleSection title={t("sectionGeneralLabel")} defaultOpen>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Region — supplier HQ / dispatch origin, single code (TASK-655/667) */}
+          <div style={fieldStyle}>
+            <label style={labelStyle}>{t("regionLabel")}</label>
+            <p style={hintStyle}>{t("regionHint")}</p>
+            <RegionSelect
+              value={form.region || null}
+              onChange={(code) => setForm({ ...form, region: code ?? "" })}
+              allowEmpty
+              placeholder={t("regionSelectPlaceholder")}
+            />
+          </div>
 
-      {/* Categories */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>{t("categoriesLabel")}</label>
-        <TagInput
-          value={form.categories}
-          onChange={(categories) => setForm({ ...form, categories })}
-          placeholder={t("categoriesPlaceholder")}
-        />
-      </div>
+          {/* Website */}
+          <div style={fieldStyle}>
+            <label style={labelStyle}>{t("websiteLabel")}</label>
+            <input
+              type="url"
+              value={form.website ?? ""}
+              onChange={(e) => setForm({ ...form, website: e.target.value })}
+              placeholder="https://example.com"
+              style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
+              disabled={form.plan === "free"}
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
 
-      {/* Website */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>{t("websiteLabel")}</label>
-        <input
-          type="url"
-          value={form.website ?? ""}
-          onChange={(e) => setForm({ ...form, website: e.target.value })}
-          placeholder="https://example.com"
-          style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
-          disabled={form.plan === "free"}
-        />
-      </div>
+      {/* Category — read-only, set at tenant creation (TASK-665/667) */}
+      <CollapsibleSection title={t("categoryReadonlyLabel")} defaultOpen>
+        <div
+          style={{
+            color: categoryLabel ? "#E8EDF5" : "#6B7280",
+            fontSize: 13,
+          }}
+        >
+          {categoryLabel ?? t("categoryNone")}
+        </div>
+      </CollapsibleSection>
 
       {/* Delivery coverage — structured taxonomy (TASK-655), NOT premium-gated */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>{t("deliveryCoverageLabel")}</label>
+      <CollapsibleSection title={t("deliveryCoverageLabel")} defaultOpen>
         <DeliveryCoverageEditor
           value={form.deliveryCoverage ?? null}
           onChange={(deliveryCoverage) => setForm({ ...form, deliveryCoverage })}
         />
-      </div>
+      </CollapsibleSection>
 
-      {/* Working hours */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>{t("workingHoursLabel")}</label>
-        <input
-          type="text"
-          value={form.workingHours ?? ""}
-          onChange={(e) => setForm({ ...form, workingHours: e.target.value })}
-          placeholder={t("workingHoursPlaceholder")}
-          style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
-          disabled={form.plan === "free"}
-        />
-      </div>
+      {/* Schedule & payment */}
+      <CollapsibleSection title={t("sectionScheduleLabel")} defaultOpen>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={fieldStyle}>
+            <label style={labelStyle}>{t("workingHoursLabel")}</label>
+            <input
+              type="text"
+              value={form.workingHours ?? ""}
+              onChange={(e) => setForm({ ...form, workingHours: e.target.value })}
+              placeholder={t("workingHoursPlaceholder")}
+              style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
+              disabled={form.plan === "free"}
+            />
+          </div>
 
-      {/* Payment terms */}
-      <div style={fieldStyle}>
-        <label style={labelStyle}>{t("paymentTermsLabel")}</label>
-        <input
-          type="text"
-          value={form.paymentTerms ?? ""}
-          onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })}
-          placeholder={t("paymentTermsPlaceholder")}
-          style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
-          disabled={form.plan === "free"}
-        />
-      </div>
+          <div style={fieldStyle}>
+            <label style={labelStyle}>{t("paymentTermsLabel")}</label>
+            <input
+              type="text"
+              value={form.paymentTerms ?? ""}
+              onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })}
+              placeholder={t("paymentTermsPlaceholder")}
+              style={{ ...inputStyle, opacity: form.plan === "free" ? 0.5 : 1 }}
+              disabled={form.plan === "free"}
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
 
       {/* Is public toggle */}
       <div

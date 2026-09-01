@@ -37,6 +37,12 @@ export interface CreateTenantRequest {
   businessType: BusinessType;
   plan: TenantPlan;
   modules?: TenantModule[];
+  /**
+   * Single `SupplierItemCategories` key (food / auto_parts / medical / construction).
+   * Sent only when `businessType === "supplier"` — the backend validates it server-side
+   * for supplier tenants (TASK-665/667) and ignores it otherwise.
+   */
+  supplierCategory?: string;
 }
 
 export interface ProviderHealthDto {

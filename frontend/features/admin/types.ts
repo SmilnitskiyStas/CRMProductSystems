@@ -31,6 +31,12 @@ export interface CreateTenantRequest {
    * gets the supplier_admin role. Backend defaults to "retail" when omitted.
    */
   businessType?: string;
+  /**
+   * Single `SupplierItemCategories` key (food / auto_parts / medical / construction).
+   * Sent only when `businessType === "supplier"` — validated server-side for supplier
+   * tenants (TASK-665/667), ignored otherwise.
+   */
+  supplierCategory?: string;
 }
 
 // ── Display helpers ──────────────────────────────────────────────────────────

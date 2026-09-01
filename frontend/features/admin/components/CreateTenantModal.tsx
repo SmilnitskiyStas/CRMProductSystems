@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { useCreateTenant } from "../hooks/useAdmin";
+import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { ALL_BUSINESS_TYPES, ALL_PLANS } from "../types";
 import type { CreateTenantRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
@@ -52,6 +53,7 @@ export function CreateTenantModal({ onClose }: Props) {
   const tPlans = useTranslations("Dashboard.admin.plans");
   const tBusinessTypes = useTranslations("Dashboard.admin.businessTypes");
   const createTenant = useCreateTenant();
+  const { data: itemCategories = [] } = useItemCategories();
 
   const [form, setForm] = useState<CreateTenantRequest>({
     name: "",
@@ -61,6 +63,7 @@ export function CreateTenantModal({ onClose }: Props) {
     adminEmail: "",
     adminFullName: "",
     adminPassword: "",
+    supplierCategory: "",
   });
   const [slugManual, setSlugManual] = useState(false);
   const [error, setError] = useState("");
@@ -91,8 +94,17 @@ export function CreateTenantModal({ onClose }: Props) {
       return;
     }
 
+    const isSupplier = form.businessType === "supplier";
+    if (isSupplier && !form.supplierCategory) {
+      setError(t("errorRequiredFields"));
+      return;
+    }
+
     try {
-      await createTenant.mutateAsync(form);
+      await createTenant.mutateAsync({
+        ...form,
+        supplierCategory: isSupplier ? form.supplierCategory : undefined,
+      });
       onClose();
     } catch (err) {
       setError((err as Error)?.message ?? t("errorCreateDefault"));
@@ -194,6 +206,24 @@ export function CreateTenantModal({ onClose }: Props) {
                 </div>
               )}
             </Field>
+
+            {form.businessType === "supplier" && (
+              <Field label={t("supplierCategoryLabel")}>
+                <select
+                  style={{ ...INPUT_STYLE, cursor: "pointer" }}
+                  value={form.supplierCategory ?? ""}
+                  onChange={(e) => setField("supplierCategory", e.target.value)}
+                >
+                  <option value="">{t("supplierCategoryPlaceholder")}</option>
+                  {itemCategories.map((cat) => (
+                    <option key={cat.key} value={cat.key}>{cat.labelUa}</option>
+                  ))}
+                </select>
+                <div style={{ color: "#6B7280", fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+                  {t("supplierCategoryHint")}
+                </div>
+              </Field>
+            )}
 
             <div style={{ borderTop: "1px solid #1F2937", paddingTop: 16 }}>
               <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 14 }}>

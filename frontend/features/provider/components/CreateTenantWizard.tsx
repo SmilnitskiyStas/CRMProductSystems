@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { X, ChevronRight, ChevronLeft, Check, Building2 } from "lucide-react";
 import { useCreateTenant } from "../hooks/useProvider";
+import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { slugify } from "@/lib/slug";
 import type { BusinessType, TenantModule, TenantPlan } from "../types";
 import {
@@ -27,6 +28,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
   const tModules = useTranslations("Dashboard.provider.modules");
   const tModuleDescriptions = useTranslations("Dashboard.provider.moduleDescriptions");
   const createTenant = useCreateTenant();
+  const { data: itemCategories = [] } = useItemCategories();
 
   const [step,         setStep]         = useState<1 | 2 | 3>(1);
   const [name,         setName]         = useState("");
@@ -34,6 +36,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
   const [slugTouched,  setSlugTouched]  = useState(false);
   const [plan,         setPlan]         = useState<TenantPlan>("trial");
   const [businessType, setBusinessType] = useState<BusinessType | null>(null);
+  const [supplierCategory, setSupplierCategory] = useState("");
   const [modules,      setModules]      = useState<TenantModule[]>([]);
   const [error,        setError]        = useState<string | null>(null);
 
@@ -45,6 +48,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
   function handleBusinessTypeSelect(bt: BusinessType) {
     setBusinessType(bt);
     setModules([...BUSINESS_TYPE_PRESETS[bt]]);
+    if (bt !== "supplier") setSupplierCategory("");
   }
 
   function toggleModule(m: TenantModule) {
@@ -63,6 +67,9 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
         businessType,
         plan,
         modules,
+        ...(businessType === "supplier" && supplierCategory
+          ? { supplierCategory }
+          : {}),
       });
       onCreated(result.id);
       onClose();
@@ -73,7 +80,9 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
   }
 
   const canGoStep2 = name.trim().length >= 2 && slug.trim().length >= 2;
-  const canGoStep3 = businessType !== null;
+  const isSupplier = businessType === "supplier";
+  const canGoStep3 =
+    businessType !== null && (!isSupplier || supplierCategory !== "");
 
   return (
     <>
@@ -242,6 +251,51 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
                   );
                 })}
               </div>
+
+              {isSupplier && (
+                <div style={{ marginTop: 20 }}>
+                  <Field label={t("supplierCategoryLabel")} hint={t("supplierCategoryHint")}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {itemCategories.map((cat) => {
+                        const selected = supplierCategory === cat.key;
+                        return (
+                          <button
+                            key={cat.key}
+                            type="button"
+                            onClick={() => setSupplierCategory(cat.key)}
+                            style={{
+                              background: selected ? "#0f1f3d" : "#111827",
+                              border: `1px solid ${selected ? "#3B82F6" : "#1F2937"}`,
+                              borderRadius: 10,
+                              padding: "12px 16px",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12,
+                              transition: "border-color 0.15s, background 0.15s",
+                            }}
+                          >
+                            <div style={{
+                              width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                              background: selected ? "#3B82F6" : "transparent",
+                              border: `2px solid ${selected ? "#3B82F6" : "#374151"}`,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}>
+                              {selected && (
+                                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff" }} />
+                              )}
+                            </div>
+                            <span style={{ color: selected ? "#93C5FD" : "#D1D5DB", fontSize: 13, fontWeight: 600 }}>
+                              {cat.labelUa}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                </div>
+              )}
             </div>
           )}
 
@@ -342,14 +396,14 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={createTenant.isPending || modules.length === 0}
+              disabled={createTenant.isPending || modules.length === 0 || !canGoStep3}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "8px 18px", borderRadius: 8,
-                cursor: createTenant.isPending || modules.length === 0 ? "default" : "pointer",
-                background: createTenant.isPending || modules.length === 0 ? "#1F2937" : "#3B82F6",
+                cursor: createTenant.isPending || modules.length === 0 || !canGoStep3 ? "default" : "pointer",
+                background: createTenant.isPending || modules.length === 0 || !canGoStep3 ? "#1F2937" : "#3B82F6",
                 border: "none",
-                color: createTenant.isPending || modules.length === 0 ? "#374151" : "#fff",
+                color: createTenant.isPending || modules.length === 0 || !canGoStep3 ? "#374151" : "#fff",
                 fontSize: 13, fontWeight: 600,
               }}
             >

@@ -3,6 +3,29 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-667 — read-only single category + collapsible profile sections + supplier-category at tenant creation
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Frontend only.
+Consumes TASK-665 (backend, `de8f1632`) + TASK-666 (`f5036244`).
+Log: `.claude/logs/tasks/667_2026-09-01_profile-forms-and-category-selector_frontend-developer.md`
+
+New `frontend/components/ui/CollapsibleSection.tsx` — generic `{ title, defaultOpen=true,
+children }` dark panel (lucide chevron header, `aria-expanded`). Both supplier profile forms
+(`CabinetProfileForm`, `SupplierProfileForm`): categories checklist / `TagInput` → read-only
+single-category line (`itemCategories.find(c => c.key === (profile.categories ?? [])[0])?.labelUa`
+or `categoryNone`); `categories` dropped from the update payload (`SupplierProfileUpdateRequest.
+categories` now optional). Four `CollapsibleSection`s (all `defaultOpen`): general (region+website),
+category, delivery coverage, schedule+payment; save/publish/plan controls stay outside. Region
+field relabelled `regionLabel` → "Регіон відправлення" / "Origin region" + new `regionHint`.
+Provider `CreateTenantWizard` step 2 + admin `CreateTenantModal`: single-select "Категорія товарів"
+(from `useItemCategories()`, 4 opts) shown only for `businessType==="supplier"`, required to
+proceed / submit, threaded as `supplierCategory` into the create payload only for suppliers.
+`provider/types.ts` + `admin/types.ts` `CreateTenantRequest += supplierCategory?: string` (api/hook
+layers pass through untouched). i18n both locales: profileForm `sectionGeneralLabel`/
+`sectionScheduleLabel`/`regionHint`/`categoryReadonlyLabel`/`categoryNone` (×2 subtrees),
+wizard + modal `supplierCategoryLabel`/`supplierCategoryHint` (+ modal `supplierCategoryPlaceholder`).
+tsc/lint/vitest(59)/uk-en parity(0 drift) all clean.
+
 ## TASK-666 — structured per-region delivery fields in coverage editor + display panels
 
 **Status:** done (committed to main) · **Agent:** frontend-developer · Frontend only. Consumes

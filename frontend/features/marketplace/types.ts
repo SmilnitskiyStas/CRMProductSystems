@@ -189,7 +189,12 @@ export interface CreateReviewRequest {
 
 export interface SupplierProfileUpdateRequest {
   region: string;
-  categories: string[];
+  /**
+   * Single primary category, set at tenant creation and read-only afterward
+   * (TASK-665/667). Still returned by GET (0 or 1 element) so the profile form can
+   * display it; the update endpoint ignores it, so it is never sent in the payload.
+   */
+  categories?: string[];
   website?: string;
   /**
    * Structured delivery coverage (TASK-655) — replaces the legacy free-text
