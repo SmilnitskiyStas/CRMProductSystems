@@ -3,6 +3,28 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-669 (QA) — verification + regression: structured delivery fields + primary category
+
+**Status:** done · **Agent:** qa-tester · **Verdict: SHIP.** Covers TASK-665..668 (HEAD `c2e33f62`).
+Log: `.claude/logs/tasks/669_2026-09-01_coverage-fields-qa_qa-tester.md`
+
+No blocking bugs. Automated: build 0 err / 1 known warn; `dotnet test` **2158/2158**; frontend
+tsc+lint clean, vitest **59/59**; uk⇄en parity 4636=4636; mobile+worker tsc clean; EF snapshot
+consistent (no schema change). E2E (backend from source `:5050` on dev DB, frontend `:3001`,
+browser): all 9 steps PASS — structured coverage save/reload (DB JSON has the 4 fields, no `terms`),
+buyer display panel + `/coverage` `buyerRegionEntry`, contract PDF §5 «РЕГІОНИ ТА УМОВИ ДОСТАВКИ»
+line "1–3 дні, від 5000 грн, <note>" in correct Ukrainian, provider create-tenant supplier-category
+(valid 201 / bogus 400 / non-supplier ignored) + wizard gating, category read-only on both profile
+PUT paths, `PUT .../supplier-category` (204 / 400 bogus / 204 null-clear / 400 non-supplier / 404),
+collapsible sections toggle, legacy `terms`→`note` self-heal + rewrite-without-`terms` on save,
+mobile static. Regression: region filter still matches served entries with extra keys, non-registry
+category (`dairy`) doesn't crash profile/list/PDF (degrades to `categoryNone`), `DeliveryCoverageBackfill
+--apply` idempotent, existing marketplace flows 200.
+
+**Non-blocking:** LOW — uk day-plural grammar fixed strings ("до 1 днів"); LOW — web read-only
+category shows `categoryNone` (not raw string) for legacy non-registry keys like `dairy`/`test`.
+Dev-DB left with structured coverage on `alpha@supplier.local` + 3 `QA669 *` test tenants.
+
 ## TASK-669 (docs) — document structured delivery-coverage fields + primary supplier category
 
 **Status:** done · **Agent:** documentation-writer · Docs only.
