@@ -622,6 +622,41 @@ data behind a given metric (`known-issues.md` KI-038). `deliverySampleSize` ≥ 
 only). `rating` is the only metric still written synchronously (at review time); `qualityScore` has
 no data source and is always null; `orderAccuracy`/`cancellationRate` are 0–1 fractions.
 
+#### `GET /api/marketplace/suppliers/{id}/metrics-history` — supplier metric trend-chart data (TASK-671, ADR-036 amendment)
+
+```
+GET /api/marketplace/suppliers/{id}/metrics-history?days=90   [Authorize] + [RequireModule("marketplace")]
+  Query: days={int}  — clamped to [7, 365], default 90
+  200: SupplierMetricsHistoryPointDto[]   — oldest→newest (ascending SnapshotDate)
+  404: supplier missing/unpublished
+```
+
+Returns the supplier's historical daily snapshots (from `supplier_metrics_snapshots` table, written
+by the nightly worker job, TASK-671). Each point carries the full snapshot of metrics on that date — a
+point-in-time copy of `SupplierMetrics` values (including `Rating` and `QualityScore`) frozen for
+that calendar day. Used by the buyer-facing `/marketplace/{id}/metrics` detail page to render
+trend charts.
+
+```ts
+SupplierMetricsHistoryPointDto {
+  date: string (ISO format: "2026-09-01")
+  rating: number | null
+  avgDeliveryDays: number | null
+  orderAccuracy: number | null    (0–1 fraction)
+  qualityScore: number | null
+  cancellationRate: number | null  (0–1 fraction)
+  responseTimeHours: number | null
+  deliverySampleSize: number | null
+  responseSampleSize: number | null
+}
+```
+
+**Known limitation:** metric-history trend charts stay empty until `supplier_metrics_snapshots`
+accrues ≥2 daily rows (i.e., ~2 days after the feature ships and the nightly job has run twice) —
+see `known-issues.md` KI-042. `QualityScore` has no data source and is permanently null; its
+detail-page chart and section remain in the UI but render an empty state.
+Cross-tenant read: uses `IProviderRlsOverride` (same pattern as `/coverage` endpoint, ADR-035).
+
 #### `SupplierProfileUpdateDto` / `CabinetProfileUpdateDto` — `deliveryCoverage` patch field
 ```
 PUT /api/settings/supplier-profile        (SupplierProfileUpdateDto)

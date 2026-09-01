@@ -621,6 +621,13 @@ now populates the rest.
 - `orderAccuracy`/`cancellationRate` are 0–1 fractions on the wire (KI-037 — the mobile tiles that
   rendered them as `Math.round(x)%` were fixed in TASK-660).
 
+### SupplierMetricsSnapshot — append-only daily history (TASK-670..672)
+EF entity `SupplierMetricsSnapshot` → table `supplier_metrics_snapshots` (one row per supplier per calendar date). An append-only audit trail of each supplier's metrics, written by the nightly `supplier-metrics-recompute` job (TASK-671) immediately after the live `supplier_metrics` upsert. The job reads the full metric set (including `Rating` and `QualityScore`, which live in the just-updated `supplier_metrics` row) and upserts one snapshot row per supplier per day with `ON CONFLICT (SupplierId, SnapshotDate) DO UPDATE` — idempotent, same-day re-runs overwrite without duplicating.
+
+Unique key: `(SupplierId, SnapshotDate)`. Columns: all the same metric fields as `SupplierMetrics` (`AvgDeliveryDays`, `OrderAccuracy`, `QualityScore`, `Rating`, `CancellationRate`, `ResponseTimeHours`, `DeliverySampleSize`, `ResponseSampleSize` — all nullable), plus `Id` (PK), `SupplierId` (FK→suppliers, CASCADE), `TenantId` (FK→tenants, RESTRICT), `SnapshotDate` (date), `CreatedAt` (timestamptz, NOW() default). Fields are all `set`-only in the C# entity (worker can overwrite); identity/date/CreatedAt are `init`-only.
+
+The snapshot table's own distinct UNIQUE key means nothing else writes to it (no clobber risk with the synchronous `Rating` writer on the live `supplier_metrics` row) — it is purely append-only history. Read by the buyer-facing metrics-history endpoint `GET /api/marketplace/suppliers/{id}/metrics-history` (TASK-671) which fetches ≥2 snapshots for trend-chart visualization.
+
 ### Location.RegionCode / MarketplaceOrder.DestinationRegionCode (TASK-649)
 - **`Location.RegionCode` (varchar(20), nullable)** — the location's Ukraine region code, set
   through the location form (`LocationService` validates it via `UkraineRegions.IsValid`). NULL for

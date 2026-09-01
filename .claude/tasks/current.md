@@ -3,6 +3,18 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-673 (docs) — document supplier metrics history + detail page
+
+**Status:** done · **Agent:** documentation-writer · Docs only.
+Log: `.claude/logs/tasks/673_2026-09-01_metrics-detail-page-docs_documentation-writer.md`
+
+Extended ADR-036 with 2026-09-01 amendment explaining TASK-670..672: separate append-only
+`supplier_metrics_snapshots` table design, no concurrency risk with live metrics, charts empty until
+≥2 snapshots (known issue KI-043). Added `SupplierMetricsSnapshot` to domain-model; documented
+`GET /api/marketplace/suppliers/{id}/metrics-history` endpoint in api-contracts; verified TASK-670
+section complete in database-schema; added KI-043 (trend charts warm-up + QualityScore null) to
+known-issues. All files bumped to 2026-09-01. Docs-only commit (not pushed).
+
 ## TASK-672 (frontend) — buyer-facing supplier-metrics detail page + trend charts + deep-link tiles
 
 **Status:** done · **Agent:** frontend-developer · Builds on TASK-671. Not pushed.

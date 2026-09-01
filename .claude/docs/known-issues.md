@@ -82,6 +82,17 @@ valid key via `PUT /api/provider/tenants/{id}/supplier-category`. New suppliers 
 TASK-665) always have a valid registry key or null.
 Resolution: none required.
 
+### KI-043: Supplier metric-history trend charts stay empty until ≥2 daily snapshots accrue (~2 days after deploy)
+Severity: low (expected behavior during initial rollout, not a bug — metric-history feature depends on accumulated daily data)
+Status: open — accepted by design (TASK-670..672, ADR-036 amendment)
+Description: the nightly `supplier-metrics-recompute` worker job (TASK-671) writes one row per supplier to `supplier_metrics_snapshots` on each run. The buyer-facing `/marketplace/{id}/metrics` detail page (TASK-672) renders 7 metric sections, each with a Recharts trend chart — the chart shows as empty-state until the history endpoint returns ≥2 points (`supplier_metrics_snapshots` rows, at least 1 day apart). On the day TASK-670..672 ships, zero snapshots exist. After the first nightly job run, exactly 1 row per supplier exists — the chart still shows empty (needs 2 points for a trend). After the second run (~24 hours later), the chart renders with 2 points.
+
+Also: `QualityScore` has no data source and is permanently null — the quality metric's section and chart remain in the UI but render "—" / empty-state permanently, a placeholder for future data-source wiring.
+
+Related: **KI-038** describes structural measurement limitations of the live metrics themselves (sparse per-region data, receipt-finalization bias, answered-sessions-only response latency) — KI-043 is only about the trend chart's initial warm-up period, not those metrics' own data quality.
+
+Resolution: none required — normal accumulation as the job continues to run nightly.
+
 ### KI-042: `admin/CreateTenantModal` has no render site in the current app; component exists but is dead code
 Severity: low (dead code only — the component is correctly implemented, just unreachable from the
 active UI)

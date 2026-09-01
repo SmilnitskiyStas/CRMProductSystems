@@ -169,6 +169,24 @@ after the fact if needed.
 Implemented: TASK-665 (backend), TASK-666 (frontend), TASK-667 (frontend forms + tenant
 creation), TASK-668 (mobile display). No migration; no production deploy yet.
 
+### 2026-09-01 amendment: supplier metric history + buyer-facing detail page (TASK-670..672)
+
+Builds on the main ADR-036 design (delivery coverage + performance metrics recomputed nightly). The metric-history design extends the `supplier-metrics-recompute` job to also write a separate append-only snapshot table for trend-chart visualization.
+
+**Decision: separate append-only `supplier_metrics_snapshots` table, not mutations to the live `supplier_metrics` row itself.** TASK-670 adds a new table `supplier_metrics_snapshots` — one row per (supplier, calendar-date) pair, keyed UNIQUE `(SupplierId, SnapshotDate)`. The nightly `supplier-metrics-recompute` job (TASK-671) runs its normal `supplier_metrics` upsert (Decision 4's write-boundary applies: `AvgDeliveryDays`, `ResponseTimeHours`, `CancellationRate`, `OrderAccuracy`, `DeliverySampleSize`, `ResponseSampleSize`, `AggregatesComputedAt` — never `Rating` or `QualityScore`), and then **also upserts one snapshot row per supplier, copying the full metric set including `Rating`/`QualityScore`**.
+
+Why this doesn't violate the `supplier_metrics` write-boundary rule: the snapshot table is a distinct, append-only entity with its own UNIQUE key — nothing else writes to it, no clobber risk, no concurrency-token conflict with the synchronous `Rating` writer. The copied `Rating`/`QualityScore` are read from the just-updated live row (so they're always in-sync) rather than independently computed. `supplier_metrics` remains a single point of truth for current metrics; `supplier_metrics_snapshots` is a pure append-only audit trail for history.
+
+TASK-671 adds a buyer-facing endpoint `GET /api/marketplace/suppliers/{id}/metrics-history?days=[7-365]` that reads from this snapshot table and returns `SupplierMetricsHistoryPointDto[]` (oldest→newest) — every metric field is optional (nullable) so missing data renders as gaps in the trend chart. TASK-672 implements a new `/marketplace/{id}/metrics` page with 7 metric sections (rating, delivery, accuracy, quality, response, cancellation, coverage), each showing the current value, a plain-language explanation, and a Recharts trend chart populated from the history endpoint.
+
+Consequences:
+- The buyer can now see how a supplier's metrics have changed over time (trend charts).
+- The snapshot table inherits RLS from creation (`tenant_isolation` / `provider_bypass` / `worker_bypass` triad, FORCE RLS).
+- `QualityScore` stays permanently null (no data source, as per Decision 4 above) — its detail-page chart and section title remain in the UI but show "—" / empty-state, not an error.
+- Metric-history trend charts stay empty until `supplier_metrics_snapshots` accrues ≥2 daily rows (i.e., ~2 days after the nightly job has run twice) — documented in `known-issues.md` KI-042.
+
+Implemented: TASK-670 (database-engineer, new table + RLS + indexes), TASK-671 (backend-developer, worker snapshot write + endpoint), TASK-672 (frontend-developer, detail page + trend charts).
+
 ## ADR-035: `IProviderRlsOverride` — scoping the marketplace provider bypass to one repository method, replacing session-level `SET app.role`
 Date: 2026-08-30
 Status: accepted — implemented (TASK-643 + 643b remediation), independently reviewed pre-impl
