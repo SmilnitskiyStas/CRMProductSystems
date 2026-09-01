@@ -1268,10 +1268,21 @@
     "geo": {
       "coverageEditor": {
         "servedLabel": "Обслуговувані регіони",
-        "servedTermsPlaceholder": "напр. 2-3 дні, від 5000 грн",
+        "daysFromLabel": "Днів доставки: від",
+        "daysToLabel": "до",
+        "minOrderAmountLabel": "Мін. сума замовлення, грн",
+        "regionNoteLabel": "Примітка",
+        "regionNotePlaceholder": "напр. Новою Поштою за домовленістю",
         "notServedLabel": "Не обслуговуються",
         "noteLabel": "Загальна примітка",
         "notePlaceholder": "напр. Доставка Новою Поштою за домовленістю"
+      },
+      "deliveryTerms": {
+        "daysRange": "{min}–{max} дні",
+        "daysExact": "{days} дн.",
+        "daysFrom": "від {min} днів",
+        "daysTo": "до {max} днів",
+        "minAmount": "від {amount} грн"
       },
       "regionMultiSelect": {
         "loading": "Завантаження регіонів…",

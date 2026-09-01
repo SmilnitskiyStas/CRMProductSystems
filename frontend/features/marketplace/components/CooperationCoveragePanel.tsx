@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRegionLabel } from "@/features/geo/hooks/useRegions";
+import { formatDeliveryTerms } from "@/features/geo/lib/formatDeliveryTerms";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import { useSupplierCoverageForBuyer } from "../hooks/useMarketplace";
 
@@ -33,6 +34,7 @@ export function CooperationCoveragePanel({ supplierId }: Props) {
   const t = useTranslations(
     "Dashboard.marketplace.cooperationRequestModal.coverage"
   );
+  const tTerms = useTranslations("Dashboard.geo.deliveryTerms");
   const regionLabel = useRegionLabel();
   const [regionOverride, setRegionOverride] = useState<string | null>(null);
   const { data, isLoading } = useSupplierCoverageForBuyer(
@@ -50,7 +52,7 @@ export function CooperationCoveragePanel({ supplierId }: Props) {
     coverage,
     buyerRegionStatus,
     buyerRegionCode,
-    buyerRegionTerms,
+    buyerRegionEntry,
     measuredAvgDeliveryDaysToBuyerRegion,
     measuredSampleSize,
   } = data;
@@ -61,6 +63,13 @@ export function CooperationCoveragePanel({ supplierId }: Props) {
   const note = coverage?.note?.trim() ? coverage.note : null;
   const hasSummary = served.length > 0 || notServed.length > 0 || !!note;
 
+  const buyerRegionTerms = buyerRegionEntry
+    ? formatDeliveryTerms(buyerRegionEntry, tTerms)
+    : "";
+  const buyerRegionNote = buyerRegionEntry?.note?.trim()
+    ? buyerRegionEntry.note
+    : null;
+
   return (
     <div style={boxStyle}>
       {buyerRegionStatus === "served" && (
@@ -68,9 +77,14 @@ export function CooperationCoveragePanel({ supplierId }: Props) {
           <div style={{ color: "#34D399", fontWeight: 600 }}>
             {t("servesYourRegion", { region: regionName })}
           </div>
-          {buyerRegionTerms?.trim() && (
+          {buyerRegionTerms && (
             <div style={{ color: "#9CA3AF" }}>
               {t("termsLabel", { terms: buyerRegionTerms })}
+            </div>
+          )}
+          {buyerRegionNote && (
+            <div style={{ color: "#9CA3AF", whiteSpace: "pre-wrap" }}>
+              {buyerRegionNote}
             </div>
           )}
           {measuredAvgDeliveryDaysToBuyerRegion != null && (
@@ -134,24 +148,43 @@ export function CooperationCoveragePanel({ supplierId }: Props) {
             gap: 6,
           }}
         >
-          {served.map((entry) => (
-            <div
-              key={entry.regionCode}
-              style={{
-                display: "flex",
-                gap: 6,
-                flexWrap: "wrap",
-                alignItems: "baseline",
-              }}
-            >
-              <span style={{ color: "#E8EDF5", fontWeight: 600 }}>
-                {regionLabel(entry.regionCode)}
-              </span>
-              <span style={{ color: "#6B7280", fontSize: 11.5 }}>
-                {entry.terms?.trim() ? entry.terms : t("termsByAgreement")}
-              </span>
-            </div>
-          ))}
+          {served.map((entry) => {
+            const terms = formatDeliveryTerms(entry, tTerms);
+            const regionNote = entry.note?.trim() ? entry.note : null;
+            return (
+              <div
+                key={entry.regionCode}
+                style={{ display: "flex", flexDirection: "column", gap: 2 }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    flexWrap: "wrap",
+                    alignItems: "baseline",
+                  }}
+                >
+                  <span style={{ color: "#E8EDF5", fontWeight: 600 }}>
+                    {regionLabel(entry.regionCode)}
+                  </span>
+                  <span style={{ color: "#6B7280", fontSize: 11.5 }}>
+                    {terms || t("termsByAgreement")}
+                  </span>
+                </div>
+                {regionNote && (
+                  <span
+                    style={{
+                      color: "#9CA3AF",
+                      fontSize: 11.5,
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {regionNote}
+                  </span>
+                )}
+              </div>
+            );
+          })}
 
           {notServed.length > 0 && (
             <div style={{ color: "#6B7280", fontSize: 11.5 }}>

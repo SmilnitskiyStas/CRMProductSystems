@@ -1268,10 +1268,21 @@
     "geo": {
       "coverageEditor": {
         "servedLabel": "Served regions",
-        "servedTermsPlaceholder": "e.g. 2-3 days, from UAH 5000",
+        "daysFromLabel": "Delivery days: from",
+        "daysToLabel": "to",
+        "minOrderAmountLabel": "Min. order amount, UAH",
+        "regionNoteLabel": "Note",
+        "regionNotePlaceholder": "e.g. Nova Poshta by arrangement",
         "notServedLabel": "Not served",
         "noteLabel": "General note",
         "notePlaceholder": "e.g. Delivery via Nova Poshta by arrangement"
+      },
+      "deliveryTerms": {
+        "daysRange": "{min}–{max} d.",
+        "daysExact": "{days} d.",
+        "daysFrom": "from {min} d.",
+        "daysTo": "up to {max} d.",
+        "minAmount": "from {amount} UAH"
       },
       "regionMultiSelect": {
         "loading": "Loading regions…",

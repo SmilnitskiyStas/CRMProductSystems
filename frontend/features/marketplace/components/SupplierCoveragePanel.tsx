@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useRegionLabel } from "@/features/geo/hooks/useRegions";
+import { formatDeliveryTerms } from "@/features/geo/lib/formatDeliveryTerms";
 import type { DeliveryCoverage } from "../types";
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
  */
 export function SupplierCoveragePanel({ coverage }: Props) {
   const t = useTranslations("Dashboard.marketplace.coverage");
+  const tTerms = useTranslations("Dashboard.geo.deliveryTerms");
   const regionLabel = useRegionLabel();
 
   const served = coverage?.served ?? [];
@@ -42,25 +44,46 @@ export function SupplierCoveragePanel({ coverage }: Props) {
           }}
         >
           {served.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {served.map((entry) => (
-                <div
-                  key={entry.regionCode}
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "baseline",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
-                    {regionLabel(entry.regionCode)}
-                  </span>
-                  <span style={{ color: "#6B7280", fontSize: 12 }}>
-                    {entry.terms?.trim() ? entry.terms : t("termsByAgreement")}
-                  </span>
-                </div>
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {served.map((entry) => {
+                const terms = formatDeliveryTerms(entry, tTerms);
+                const regionNote = entry.note?.trim() ? entry.note : null;
+                return (
+                  <div
+                    key={entry.regionCode}
+                    style={{ display: "flex", flexDirection: "column", gap: 2 }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "baseline",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span
+                        style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}
+                      >
+                        {regionLabel(entry.regionCode)}
+                      </span>
+                      <span style={{ color: "#6B7280", fontSize: 12 }}>
+                        {terms || t("termsByAgreement")}
+                      </span>
+                    </div>
+                    {regionNote && (
+                      <span
+                        style={{
+                          color: "#9CA3AF",
+                          fontSize: 11.5,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {regionNote}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 

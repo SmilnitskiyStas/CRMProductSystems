@@ -59,8 +59,10 @@ export interface SupplierCoverageForBuyer {
    *  buyer's oldest active location's region. `null` when neither could be resolved. */
   buyerRegionCode: string | null;
   buyerRegionStatus: BuyerRegionStatus;
-  /** Per-region delivery terms for the buyer's region when `buyerRegionStatus === "served"`. */
-  buyerRegionTerms: string | null;
+  /** The served-list entry matching the buyer's region (with its structured delivery
+   *  fields) when `buyerRegionStatus === "served"`; `null` when the region is unknown
+   *  or not in `served`. Matches backend `SupplierCoverageForBuyerDto.BuyerRegionEntry`. */
+  buyerRegionEntry: DeliveryCoverageEntry | null;
   /** Worker-measured average delivery time to the buyer's region; `null` until the
    *  nightly job has a sample for that region. */
   measuredAvgDeliveryDaysToBuyerRegion: number | null;

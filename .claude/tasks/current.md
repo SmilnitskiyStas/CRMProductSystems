@@ -3,6 +3,24 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-666 — structured per-region delivery fields in coverage editor + display panels
+
+**Status:** done (committed to main) · **Agent:** frontend-developer · Frontend only. Consumes
+TASK-665 (backend, de8f1632); sibling of TASK-668 (mobile).
+Log: `.claude/logs/tasks/666_2026-09-01_coverage-editor-structured-fields_frontend-developer.md`
+
+`DeliveryCoverageEntry` (geo/types) `{regionCode,terms}` → `{regionCode,deliveryDaysMin,
+deliveryDaysMax,minOrderAmount,note}`. `SupplierCoverageForBuyer.buyerRegionTerms` →
+`buyerRegionEntry: DeliveryCoverageEntry | null`. New `features/geo/lib/formatDeliveryTerms.ts`
+(+9 vitest cases) builds `"1–3 дні · від 5000 грн"` from the structured fields; per-region `note`
+rendered separately by callers. `DeliveryCoverageEditor` — 3 number inputs + note input per served
+region, 3 sub-sections behind local collapsible headers (expanded by default; `CollapsibleSection`
+= TASK-667). `SupplierCoveragePanel` + `CooperationCoveragePanel` render the formatted string
+(`termsByAgreement` fallback) + note line. New i18n `Dashboard.geo.deliveryTerms.*` (5 keys) +
+`coverageEditor.*` (5 labels); dropped orphan `servedTermsPlaceholder`. tsc/lint/vitest(59)/uk-en
+parity(4621) all clean. Interactive verify blocked — no local backend (port 5000 taken by an
+unrelated container); staging predates TASK-665.
+
 ## TASK-668 — mobile coverage display for the new structured delivery fields
 
 **Status:** done (committed to main) · **Agent:** mobile-developer · Mobile only. Follows TASK-665
