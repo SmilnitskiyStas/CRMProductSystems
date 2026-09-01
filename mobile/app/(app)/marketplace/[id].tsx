@@ -20,7 +20,7 @@ import {
 } from '@/features/marketplace/hooks/useMarketplace';
 import type { SupplierItem, SupplierMetrics } from '@/features/marketplace/types';
 import { useRegionLabel } from '@/features/geo/hooks';
-import type { DeliveryCoverage } from '@/features/geo/types';
+import type { DeliveryCoverage, DeliveryCoverageEntry } from '@/features/geo/types';
 import { useAuthStore } from '@/features/auth/store';
 
 // ── Star picker ────────────────────────────────────────────────────────────────
@@ -90,6 +90,44 @@ function MetricTile({
 
 // ── Delivery coverage (read-only; supplier editing is web-only) ─────────────────
 
+/**
+ * Compact Ukrainian delivery-terms string from a served region's structured
+ * fields (TASK-665):
+ *   - days:  min + max  → "1–3 дні"   (min === max → "2 дн.")
+ *            min only   → "від 2 днів"
+ *            max only   → "до 3 днів"
+ *            neither    → skipped
+ *   - amount: minOrderAmount → "від 5000 грн"
+ * Present parts are joined with " · "; an entry with no structured data yields
+ * the "за домовленістю" fallback. The per-region `entry.note` is rendered on its
+ * own line by the caller, never folded in here.
+ */
+function formatDeliveryTerms(entry: DeliveryCoverageEntry): string {
+  const parts: string[] = [];
+
+  let min = entry.deliveryDaysMin;
+  let max = entry.deliveryDaysMax;
+  // Backend normalises reversed pairs, but never trust the wire.
+  if (min != null && max != null && min > max) {
+    [min, max] = [max, min];
+  }
+
+  if (min != null && max != null) {
+    parts.push(min === max ? `${min} дн.` : `${min}–${max} дні`);
+  } else if (min != null) {
+    parts.push(`від ${min} днів`);
+  } else if (max != null) {
+    parts.push(`до ${max} днів`);
+  }
+
+  if (entry.minOrderAmount != null && Number.isFinite(entry.minOrderAmount)) {
+    const amount = Math.round(entry.minOrderAmount * 100) / 100;
+    parts.push(`від ${amount} грн`);
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : 'за домовленістю';
+}
+
 function DeliveryCoverageBlock({ coverage }: { coverage: DeliveryCoverage }) {
   const regionLabel = useRegionLabel();
   const served = coverage.served ?? [];
@@ -105,17 +143,25 @@ function DeliveryCoverageBlock({ coverage }: { coverage: DeliveryCoverage }) {
       </Text>
 
       {served.length > 0 ? (
-        <View className="gap-1 mb-1">
-          {served.map((entry) => (
-            <View key={entry.regionCode} className="flex-row flex-wrap items-baseline">
-              <Text className="text-sm text-gray-700 font-medium">
-                {regionLabel(entry.regionCode)}
-              </Text>
-              <Text className="text-xs text-gray-400 ml-1.5">
-                {entry.terms?.trim() ? entry.terms : 'за домовленістю'}
-              </Text>
-            </View>
-          ))}
+        <View className="gap-2 mb-1">
+          {served.map((entry) => {
+            const entryNote = entry.note?.trim() ? entry.note : null;
+            return (
+              <View key={entry.regionCode}>
+                <View className="flex-row flex-wrap items-baseline">
+                  <Text className="text-sm text-gray-700 font-medium">
+                    {regionLabel(entry.regionCode)}
+                  </Text>
+                  <Text className="text-xs text-gray-400 ml-1.5">
+                    {formatDeliveryTerms(entry)}
+                  </Text>
+                </View>
+                {entryNote ? (
+                  <Text className="text-xs text-gray-400 italic mt-0.5">{entryNote}</Text>
+                ) : null}
+              </View>
+            );
+          })}
         </View>
       ) : null}
 

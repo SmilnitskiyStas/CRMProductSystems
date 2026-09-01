@@ -14,10 +14,23 @@ export interface Region {
   parentCode: string | null;
 }
 
-/** One served region plus optional free-text delivery terms for that region. */
+/**
+ * One served region with structured per-region delivery terms (TASK-665). Every
+ * field is optional. Mirrors the backend `DeliveryCoverageEntryDto`
+ * `(regionCode, deliveryDaysMin, deliveryDaysMax, minOrderAmount, note)`.
+ * The legacy single free-text `terms` string was replaced by these — the backend
+ * self-heals a legacy `terms` value into `note` on read. Read-only on mobile.
+ */
 export interface DeliveryCoverageEntry {
   regionCode: string;
-  terms: string | null;
+  /** Lower bound of the delivery-time range, in whole days. */
+  deliveryDaysMin: number | null;
+  /** Upper bound of the delivery-time range, in whole days. */
+  deliveryDaysMax: number | null;
+  /** Minimum order amount for this region, in UAH. */
+  minOrderAmount: number | null;
+  /** Free-text per-region note (delivery carrier, conditions, …). */
+  note: string | null;
 }
 
 /**

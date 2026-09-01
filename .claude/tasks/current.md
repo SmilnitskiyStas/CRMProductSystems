@@ -3,6 +3,21 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-668 — mobile coverage display for the new structured delivery fields
+
+**Status:** done (committed to main) · **Agent:** mobile-developer · Mobile only. Follows TASK-665
+(backend, commit de8f1632). Read-only display — no editing on mobile.
+Log: `.claude/logs/tasks/668_2026-09-01_mobile-coverage-structured-fields_mobile-developer.md`
+
+`mobile/features/geo/types.ts` (where `DeliveryCoverageEntry` is actually defined — `marketplace/types.ts`
+only re-imports it): served-entry `terms: string | null` → `(deliveryDaysMin, deliveryDaysMax,
+minOrderAmount, note)`, all `number | null` / `string | null`. `mobile/app/(app)/marketplace/[id].tsx`:
+new local `formatDeliveryTerms(entry)` helper flattens the structured fields into one Ukrainian line
+(days range "1–3 дні" / "від 2 днів" / "до 3 днів" / "N дн." · amount "від 5000 грн"; joined with " · ";
+"за домовленістю" when empty); per-region `entry.note` rendered on its own muted italic line below.
+`npx tsc --noEmit` clean. Concurrent web sibling task in progress (uncommitted `frontend/features/geo|marketplace/…`
++ new `frontend/features/geo/lib/formatDeliveryTerms.ts`) — not touched.
+
 ## TASK-665 — structured per-region delivery fields + single primary supplier category
 
 **Status:** done (committed to main) · **Agent:** backend-developer · Backend only. Modifies the
