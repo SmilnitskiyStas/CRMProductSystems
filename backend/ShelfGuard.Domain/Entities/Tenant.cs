@@ -65,7 +65,15 @@ public sealed class Tenant
             // registered now so Tenant.UpdateModules doesn't reject it once that feature
             // lands. Independent of each other: a tenant can run the bonus program without
             // the analytics dashboard.
-            "loyalty", "marketing_analytics"
+            "loyalty", "marketing_analytics",
+            // TASK-674: "mobile_app" gates the whole "Застосунок" admin section (bonus
+            // program settings, loyalty tiers, banners, promo campaigns/discounts, mobile
+            // catalog, App Builder) — distinct from "loyalty" which stays scoped to the POS
+            // QR accrual/redemption API only. "analytics" gates the "Аналітика" reports/
+            // dashboards section (AnalyticsController, per-action — the dashboard-home and
+            // Events-calendar endpoints on that controller stay ungated). Neither is in any
+            // DefaultModulesForBusinessType set — provider-granted only, no backfill.
+            "mobile_app", "analytics"
         };
         var unknown = modules.Where(m => !valid.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
         if (unknown.Count > 0)

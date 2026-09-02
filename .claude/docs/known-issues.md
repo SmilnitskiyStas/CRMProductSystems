@@ -399,6 +399,13 @@ near-launch clients, not a safe "objective best practice" fix. This needs a prod
 existing tenants be backfilled with them, (c) is per-endpoint module gating even the intended
 model for v2/v3 features, or were they deliberately left role-gated-only. Candidate for a
 dedicated task once the product question is answered — do not add `[RequireModule]` blind.
+Partially addressed (TASK-674, ADR-037): the "Застосунок" section (LoyaltySettings/
+LoyaltyTierSettings/Banners/Discounts/PromotionCampaigns/Mobile* controllers, `mobile_app`) and
+the "Аналітика" reports section (`AnalyticsController`, per-action, `analytics`) are now gated.
+Chosen model for those: new keys, **no backfill**, default-off (the product answer there was
+"clients who didn't pay for it should lose it"). The v2/v3 controllers listed above are still
+open — that answer does not generalise (breaking existing near-launch tenants on `pos`/`iot`/
+`auto_order` is a different risk calculus).
 
 ### KI-020: No frontend error tracking (Sentry or equivalent)
 Severity: medium (no visibility into production JS errors — a real error boundary was added in

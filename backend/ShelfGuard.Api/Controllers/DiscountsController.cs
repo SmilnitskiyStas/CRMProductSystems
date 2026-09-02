@@ -15,6 +15,9 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Route("api/discounts")]
 [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+// TASK-674: today this controller is consumed only by the consumer-app "Акційні товари"
+// admin screen (frontend/features/consumer-app), so it rides under the "mobile_app" module.
+[RequireModule("mobile_app")]
 public sealed class DiscountsController : ControllerBase
 {
     private readonly IDiscountService _service;

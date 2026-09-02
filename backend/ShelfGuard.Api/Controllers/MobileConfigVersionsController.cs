@@ -20,6 +20,7 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Route("api/v1/mobile/config/versions")]
 [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[RequireModule("mobile_app")] // TASK-674: App Builder is part of the "Застосунок" section
 public sealed class MobileConfigVersionsController : ControllerBase
 {
     private readonly IMobileConfigVersionHistoryService _history;

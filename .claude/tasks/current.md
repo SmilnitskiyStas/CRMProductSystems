@@ -6,6 +6,22 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## TASK-674 — Provider-керовані модулі `mobile_app` + `analytics`
+
+**Status:** review (не запушено) · **Agent:** main session · **Plan** `peaceful-chasing-piglet.md` · **ADR-037**
+Log: `.claude/logs/tasks/674_2026-09-02_mobile-app-analytics-modules_main-session.md`
+
+Розділи «Застосунок» (`consumer_app`) і «Аналітика» (`analytics`) показувались усім тенантам
+без огляду на модулі. Додано 2 нові ключі в `Tenant.UpdateModules` allow-list: `mobile_app`
+(весь розділ «Застосунок» + 12 контролерів class-level + 4 `customer-messages` екшени
+`NotificationsController`), `analytics` (14 з 17 екшенів `AnalyticsController` поштучно —
+дашборд-home і Events-календар лишились без гейта). `loyalty` не чіпали (лише каса).
+**Без backfill, default-off** — після деплою наявні тенанти втрачають обидва розділи, поки
+Провайдер не увімкне вручну (breaking, узгоджено). Frontend: 3 списки ключів, `Sidebar`
+`moduleKey` на 2 групи, новий `ModuleGate` + 2 nested `layout.tsx`, i18n uk/en. Build/tsc
+чисто, `dotnet test` 309/309 (RequireModule+Analytics). Browser E2E не проганявся.
+Далі: regen `openapi.json`; shopper-app при знятті `mobile_app` — окрема задача.
+
 ## TASK-673 (QA) — verification + regression for supplier metrics detail page
 
 **Status:** done · **Agent:** qa-tester · **Verdict: SHIP.** Verification only, no feature code changed.

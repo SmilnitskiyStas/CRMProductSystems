@@ -4322,7 +4322,9 @@
         "marketplace": "Supplier marketplace",
         "marketplace_supplier": "Supplier cabinet",
         "loyalty": "Loyalty Program",
-        "marketing_analytics": "Marketing Analytics"
+        "marketing_analytics": "Marketing Analytics",
+        "mobile_app": "Mobile App",
+        "analytics": "Analytics"
       },
       "moduleDescriptions": {
         "inventory": "Item catalog, stock, receiving, transfers, write-offs",
@@ -4333,7 +4335,9 @@
         "marketplace": "Search and compare suppliers, reviews, ratings",
         "marketplace_supplier": "Supplier self-service: catalog, orders, chat with clients",
         "loyalty": "Customer bonus program: QR membership card, point accrual and redemption at POS",
-        "marketing_analytics": "RFM customer segmentation, top products, cross-sell, AI-assisted recommendations"
+        "marketing_analytics": "RFM customer segmentation, top products, cross-sell, AI-assisted recommendations",
+        "mobile_app": "The \"App\" section: bonus program, loyalty tiers, banners, promotions, catalog, shopper-app screen builder",
+        "analytics": "The \"Analytics\" section: reports and dashboards for stock, write-offs, losses, POS sales and product movement"
       },
       "plans": {
         "basic": "Basic",
@@ -4438,7 +4442,9 @@
         "production": "Production",
         "marketplace": "Supplier marketplace",
         "loyalty": "Loyalty Program",
-        "marketing_analytics": "Marketing Analytics"
+        "marketing_analytics": "Marketing Analytics",
+        "mobile_app": "Mobile App",
+        "analytics": "Analytics"
       },
       "plans": {
         "trial": "Trial",
@@ -5300,6 +5306,18 @@
         "marketing_analytics": {
           "label": "Marketing Analytics",
           "description": "RFM customer segmentation, top products, cross-sell, AI-assisted recommendations."
+        },
+        "loyalty": {
+          "label": "Loyalty Program",
+          "description": "Point accrual and redemption at POS via the member QR card."
+        },
+        "mobile_app": {
+          "label": "Mobile App",
+          "description": "The \"App\" section: bonus program, loyalty tiers, banners, promotions, catalog, screen builder."
+        },
+        "analytics": {
+          "label": "Analytics",
+          "description": "The \"Analytics\" section: reports and dashboards for stock, write-offs, losses, POS and product movement."
         }
       },
       "businessTypes": {
@@ -5309,6 +5327,10 @@
         "restaurant": "Restaurant",
         "production": "Manufacturing",
         "distribution": "Distribution"
+      },
+      "gate": {
+        "title": "Module unavailable",
+        "body": "This section is not part of your plan. Contact your service provider to enable it."
       }
     },
     "roles": {

@@ -12,6 +12,7 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
 [Route("api/mobile-catalog-settings")]
+[RequireModule("mobile_app")] // TASK-674: "Застосунок" admin section
 public sealed class MobileCatalogSettingsController : ControllerBase
 {
     private readonly AppDbContext _db; private readonly ITenantContext _tenant; private readonly IWebHostEnvironment _environment;

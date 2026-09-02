@@ -27,6 +27,7 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Route("api/v1/mobile/blocks")]
 [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[RequireModule("mobile_app")] // TASK-674: App Builder is part of the "Застосунок" section
 public sealed class MobileBlocksController : ControllerBase
 {
     private readonly IBlockRegistryProvider _registry;

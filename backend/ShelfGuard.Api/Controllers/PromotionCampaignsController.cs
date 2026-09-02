@@ -16,6 +16,7 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
 [Route("api/promotion-campaigns")]
+[RequireModule("mobile_app")] // TASK-674: "Застосунок" admin section
 public sealed class PromotionCampaignsController : ControllerBase
 {
     private readonly IPromotionCampaignService _service;

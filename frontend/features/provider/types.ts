@@ -6,7 +6,10 @@ export type TenantModule =
   // TASK-405/406 (loyalty/RFM plan): backend Tenant.UpdateModules already accepts both keys.
   // TASK-413 registers them here too so the provider/admin panels can actually toggle them on
   // for a tenant — previously only a direct DB write could enable either module (TASK-409 log).
-  | "loyalty" | "marketing_analytics";
+  | "loyalty" | "marketing_analytics"
+  // TASK-674: "mobile_app" gates the whole "Застосунок" section, "analytics" gates the
+  // "Аналітика" reports section. Both provider-granted only (no business-type preset).
+  | "mobile_app" | "analytics";
 
 export type BusinessType =
   | "retail" | "auto_service" | "restaurant"
@@ -145,7 +148,7 @@ export const BUSINESS_TYPE_PRESETS: Record<BusinessType, TenantModule[]> = {
 
 export const ALL_MODULES: TenantModule[] = [
   "inventory", "procurement", "pos", "auto_service", "production", "marketplace",
-  "marketplace_supplier", "loyalty", "marketing_analytics",
+  "marketplace_supplier", "loyalty", "marketing_analytics", "mobile_app", "analytics",
 ];
 
 // ── Plans ────────────────────────────────────────────────────────────────────

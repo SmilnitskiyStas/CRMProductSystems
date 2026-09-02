@@ -1,15 +1,16 @@
 # Architecture Decisions (ADR Log)
 
 **Owner:** project-architect
-**Updated:** 2026-09-01 · reorganised 2026-09-02 (ADR-026 and older moved to `decisions-archive.md`)
+**Updated:** 2026-09-02 · reorganised 2026-09-02 (ADR-026 and older moved to `decisions-archive.md`)
 
 ## Index
 
-Full text for **ADR-036 … ADR-027** is in this file. **ADR-026 and older** →
+Full text for **ADR-037 … ADR-027** is in this file. **ADR-026 and older** →
 [`decisions-archive.md`](decisions-archive.md). `grep` either file by ADR-ID.
 
 | ADR | Decision |
 |---|---|
+| ADR-037 | Provider-controlled `mobile_app` + `analytics` module keys — whole "Застосунок" section and "Аналітика" reports section gated; per-action `[RequireModule]` on the shared `AnalyticsController`; no backfill, default-off |
 | ADR-036 | Supplier delivery coverage + performance metrics — Ukraine region registry, `MarketplaceOrder.DestinationRegionCode` snapshot, coverage not premium-gated, `supplier-metrics-recompute` worker write-boundary |
 | ADR-035 | `IProviderRlsOverride` — marketplace provider bypass scoped to one repository method, replacing session-level `SET app.role` |
 | ADR-034 | CRM loyalty tier ladder, consumer self-service, support tickets, reviews — phone-change verification, composite-score formula, per-item tier discount, worker write boundary |
@@ -46,6 +47,56 @@ Full text for **ADR-036 … ADR-027** is in this file. **ADR-026 and older** →
 | ADR-003 | Expo SDK 56 for mobile *(archive)* |
 | ADR-002 | Modular monolith over Turborepo *(archive)* |
 | ADR-001 | BullMQ with ASP.NET Core *(archive)* |
+
+## ADR-037: Provider-controlled `mobile_app` + `analytics` module keys
+Date: 2026-09-02
+Status: accepted — implemented (TASK-674, plan `peaceful-chasing-piglet.md`).
+
+Context: two sidebar sections — "Застосунок" (`consumer_app` NavGroup: bonus program, loyalty
+tiers, banners, promotions, catalog, App Builder, versions) and "Аналітика" (`analytics`
+NavGroup: `/analytics`, `/analytics/pos`) — rendered for every tenant regardless of what the
+Provider had enabled. The module-activation mechanism (ADR-015) simply was never wired to them:
+no `NavGroup.moduleKey`, and the backing controllers carried no `[RequireModule]`. The `loyalty`
+key (ADR-023) existed but only gated the POS QR accrual API (`LoyaltyController`). No `analytics`
+key existed at all (`marketing_analytics` is the separate "Маркетинг" section).
+
+Decision:
+
+### 1 — two new keys in `Tenant.UpdateModules` allow-list: `mobile_app` and `analytics`
+`mobile_app` gates the whole "Застосунок" section; `loyalty` is left untouched, still scoped to
+the POS accrual API only — a tenant running the bonus program end-to-end needs both. `analytics`
+gates the "Аналітика" reports section. Neither key is added to
+`Tenant.DefaultModulesForBusinessType` — provider-granted only.
+
+### 2 — no backfill
+Existing tenants get neither key on deploy: both sections disappear until the Provider enables
+the module per tenant. This is the intended outcome (remove the sections from tenants that never
+paid for them), and it means **no data migration at all** — only the allow-list and the gates.
+Deliberate deviation from the KI-012 `V4ModulesBackfill` precedent, which backfilled to preserve
+access. Breaking-change note is in the plan / task log; the Provider re-grants post-deploy.
+
+### 3 — `[RequireModule("analytics")]` is per-action on `AnalyticsController`, not class-level
+`AnalyticsController` is shared: `expiry-summary/compare` and `dashboard/weekly-kpi` back the
+main dashboard home (`features/dashboard`), and `pos/products/{productId}/trend` backs the Events
+calendar's linked-product-sales card (module `pos`). Those three actions stay ungated; the other
+14 (the dedicated reports) carry the attribute. `mobile_app` controllers are gated class-level
+(self-contained web-admin surface) except `MobileConfigController` (`[AllowAnonymous]`, serves
+the published config to the shopper app — must never be module-gated) and the 4
+`customer-messages` actions on `NotificationsController` (per-action, rest of that controller is
+core notifications).
+
+### 4 — page-level gate via nested `layout.tsx` + a reusable `ModuleGate`
+`frontend/features/modules/components/ModuleGate.tsx` (extracted from the inline pattern in
+`marketing-analytics/page.tsx`) wraps `app/(dashboard)/consumer-app/layout.tsx` and
+`app/(dashboard)/analytics/layout.tsx` — one gate per route subtree for the direct-URL case.
+`provider` role bypasses; loading state renders children (no lock-screen flash).
+
+**Consequence / out of scope:** the published shopper app (`api/consumer/*`, consumer JWT with no
+`tenant_id`) keeps serving even when `mobile_app` is revoked — `[RequireModule]` can't gate it and
+service-level `HasModule("loyalty")` checks for discovery already exist. Fully disabling a
+tenant's shopper app on module removal is a separate task. Also: `DiscountsController`
+(`AtLeastStoreManager`) is gated under `mobile_app` because today its only consumer is the
+consumer-app "Акційні товари" screen — revisit if discounts become a general pricing feature.
 
 ## ADR-036: Supplier delivery coverage + performance metrics — app-side Ukraine region registry, point-in-time `MarketplaceOrder.DestinationRegionCode` snapshot, coverage deliberately not premium-gated, and the `supplier-metrics-recompute` worker write-boundary
 Date: 2026-08-31

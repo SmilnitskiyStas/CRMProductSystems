@@ -195,10 +195,13 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     key: "analytics",
     label: t("analytics.label"),
     icon: <BarChart2 size={18} />,
+    // TASK-674: provider-controllable "analytics" module. Backend gate is per-action on
+    // AnalyticsController (the dashboard-home + Events-calendar endpoints on that controller
+    // stay ungated). "Аналітика застосунку" moved to the consumer_app group (module mobile_app).
+    moduleKey: "analytics",
     items: [
       { href: "/analytics",     label: t("analytics.analytics"),    icon: <BarChart2 size={16} />, roles: CAN_VIEW_ANALYTICS, exact: true, permission: "analytics" },
       { href: "/analytics/pos", label: t("analytics.posAnalytics"), icon: <BarChart3 size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
-      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
     ],
   },
   {
@@ -217,17 +220,21 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     // TASK-500 started this as a single page (loyalty/bonus program settings only). TASK-525
     // split it into one page per section — banners, promo products, and the read-only catalog
     // card each got their own route/sidebar item instead of stacking under the bonus program
-    // page. No moduleKey: LoyaltySettingsController/BannersController/DiscountsController have
-    // no [RequireModule] guard, so this group isn't module-gated either.
+    // page.
+    // TASK-674: the whole section is now gated by the "mobile_app" module — LoyaltySettings/
+    // LoyaltyTierSettings/Banners/Discounts/PromotionCampaigns/Mobile* controllers carry
+    // [RequireModule("mobile_app")], and consumer-app/layout.tsx applies the page-level gate.
     key: "consumer_app",
     label: t("consumerApp.label"),
     icon: <Smartphone size={18} />,
+    moduleKey: "mobile_app",
     items: [
       { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true },
       { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
       { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
       { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
       { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
       { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
       { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
       { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },

@@ -152,9 +152,13 @@ public sealed class NotificationsController : ControllerBase
         }
     }
 
+    // TASK-674: the "Повідомлення клієнтам" screen lives in the consumer-app ("Застосунок")
+    // section, so its 4 customer-messages endpoints are gated by the "mobile_app" module.
+    // The rest of this controller (notification settings/history/read state) is core and ungated.
     /// <summary>Creates a customer communication draft. Delivery starts after provider integration.</summary>
     [HttpGet("customer-messages")]
     [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(PagedResult<CustomerMessageCampaignDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCustomerMessages([FromQuery] PagedQuery query, CancellationToken ct)
     {
@@ -165,6 +169,7 @@ public sealed class NotificationsController : ControllerBase
 
     [HttpGet("customer-messages/{id:guid}")]
     [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(CustomerMessageCampaignDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCustomerMessage(Guid id, CancellationToken ct)
@@ -178,6 +183,7 @@ public sealed class NotificationsController : ControllerBase
     /// <summary>Creates a customer communication draft. Delivery starts after provider integration.</summary>
     [HttpPost("customer-messages")]
     [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(CreateCustomerMessageResult), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateCustomerMessage(
@@ -201,6 +207,7 @@ public sealed class NotificationsController : ControllerBase
     /// <summary>Submits an existing draft for immediate or scheduled delivery.</summary>
     [HttpPost("customer-messages/{id:guid}/submit")]
     [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(CustomerMessageCampaignDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]

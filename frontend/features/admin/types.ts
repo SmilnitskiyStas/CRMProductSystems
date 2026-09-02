@@ -54,7 +54,9 @@ export const PLAN_COLORS: Record<TenantPlan, { bg: string; border: string; text:
 // TenantDetailDrawer.tsx.
 // TASK-413: added "loyalty"/"marketing_analytics" (backend Tenant.UpdateModules already
 // accepted both since TASK-405/406) so the admin panel can actually enable them for a tenant.
-export const ALL_MODULES = ["inventory", "procurement", "pos", "auto_service", "production", "marketplace", "loyalty", "marketing_analytics"] as const;
+// TASK-674: added "mobile_app" (the "Застосунок" section) and "analytics" (the "Аналітика"
+// reports section) — provider-granted only, no business-type preset.
+export const ALL_MODULES = ["inventory", "procurement", "pos", "auto_service", "production", "marketplace", "loyalty", "marketing_analytics", "mobile_app", "analytics"] as const;
 export const ALL_PLANS: TenantPlan[] = ["trial", "basic", "standard", "enterprise"];
 
 // Mirrors backend Tenant.UpdateBusinessType valid values (ADR-014/016).

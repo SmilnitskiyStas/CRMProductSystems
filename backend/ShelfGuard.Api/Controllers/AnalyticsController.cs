@@ -10,6 +10,13 @@ namespace ShelfGuard.Api.Controllers;
 // ADR-020 (TASK-346): every action in this controller is a GET behind the same gate, so the
 // capability OR is applied once at the class level rather than duplicated onto ~9 identical
 // per-action attributes — functionally identical to decorating every method individually.
+//
+// TASK-674: [RequireModule("analytics")] is applied PER-ACTION, not at the class level, because
+// this controller is shared with two other features that must keep working for tenants without
+// the "analytics" module:
+//   • expiry-summary/compare + dashboard/weekly-kpi — the main dashboard home (features/dashboard)
+//   • pos/products/{productId}/trend — the Events calendar's linked-product-sales card (module "pos")
+// Every OTHER action is the dedicated "Аналітика" section and carries the module gate.
 [ApiController]
 [Route("api/analytics")]
 [Authorize(Policy = AppPolicies.AnalyticsViewOrCapability)]
@@ -22,6 +29,7 @@ public sealed class AnalyticsController : ControllerBase
     // TASK-610: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) — omitted
     // or empty means "all stores" (same convention as TASK-608's other multi-store endpoints).
     [HttpGet("expiry-summary")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(ExpirySummaryDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetExpirySummary(
         [FromQuery] Guid[]? storeIds,
@@ -72,6 +80,7 @@ public sealed class AnalyticsController : ControllerBase
 
     // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("write-offs")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(WriteOffAnalyticsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(WriteOffsComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetWriteOffAnalytics(
@@ -100,6 +109,7 @@ public sealed class AnalyticsController : ControllerBase
     }
 
     [HttpGet("movements")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(MovementAnalyticsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMovementAnalytics(
         [FromQuery] string? type,
@@ -117,6 +127,7 @@ public sealed class AnalyticsController : ControllerBase
 
     // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("by-zone")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(IReadOnlyList<ZoneAnalyticsDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByZone(
         [FromQuery] Guid[]? storeIds,
@@ -131,6 +142,7 @@ public sealed class AnalyticsController : ControllerBase
 
     // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("by-category")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(IReadOnlyList<CategoryAnalyticsDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByCategory(
         [FromQuery] Guid[]? storeIds,
@@ -150,6 +162,7 @@ public sealed class AnalyticsController : ControllerBase
     // selected (see AnalyticsRepository.GetCategoryProductBreakdownAsync) — a multi-store rollup
     // has no single meaningful ADU to divide by.
     [HttpGet("by-category/products")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(CategoryProductBreakdownDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByCategoryProducts(
         [FromQuery] Guid? category_id,
@@ -171,6 +184,7 @@ public sealed class AnalyticsController : ControllerBase
 
     // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("losses")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(LossesDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(LossesComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLosses(
@@ -202,6 +216,7 @@ public sealed class AnalyticsController : ControllerBase
     // already shown in aggregate to every store_manager+ caller today (ADR-027 §1).
     // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("losses/by-product")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(LossesByProductDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLossesByProduct(
         [FromQuery] Guid[]? storeIds,
@@ -225,6 +240,7 @@ public sealed class AnalyticsController : ControllerBase
     // LossAmount is already shown in aggregate to every store_manager+ caller today (ADR-027 §1).
     // TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     [HttpGet("losses/trend")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(LossesTrendDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLossesTrend(
         [FromQuery] Guid[]? storeIds,
@@ -245,6 +261,7 @@ public sealed class AnalyticsController : ControllerBase
     // ── POS analytics ─────────────────────────────────────────────────────
 
     [HttpGet("pos/summary")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(PosAnalyticsSummaryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(PosSummaryComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPosSummary(
@@ -273,6 +290,7 @@ public sealed class AnalyticsController : ControllerBase
     }
 
     [HttpGet("pos/revenue-trend")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(PosRevenueTrendDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(PosRevenueTrendComparisonDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPosRevenueTrend(
@@ -302,6 +320,7 @@ public sealed class AnalyticsController : ControllerBase
     }
 
     [HttpGet("pos/top-products")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(PosTopProductsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPosTopProducts(
         [FromQuery] Guid? store_id,
@@ -328,6 +347,7 @@ public sealed class AnalyticsController : ControllerBase
     // query shape. No margin gate: same sensitivity class as pos/top-products above (already
     // ungated for store_manager+).
     [HttpGet("pos/worst-products")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(WorstProductsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetWorstProducts(
         [FromQuery] Guid? store_id,
@@ -347,6 +367,7 @@ public sealed class AnalyticsController : ControllerBase
     }
 
     [HttpGet("pos/cashiers")]
+    [RequireModule("analytics")]
     [ProducesResponseType(typeof(PosCashierStatsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPosCashierStats(
         [FromQuery] Guid? store_id,

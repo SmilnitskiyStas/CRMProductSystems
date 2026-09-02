@@ -16,6 +16,7 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Route("api/banners")]
 [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[RequireModule("mobile_app")] // TASK-674: "Застосунок" admin section
 public sealed class BannersController : ControllerBase
 {
     private readonly IBannerService _service;
