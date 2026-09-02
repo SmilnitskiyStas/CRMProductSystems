@@ -4,16 +4,21 @@ namespace ShelfGuard.Domain.Interfaces;
 
 public interface IItemRepository
 {
+    // B2: `uncategorized` — true → only items with no category; overrides categoryId. When
+    // categoryId is set (and uncategorized is not true) the filter expands to that category's
+    // whole subtree, not an exact match. Appended at the very end (still before ct) so no
+    // pre-existing parameter's positional index shifts for existing callers/fakes.
     Task<List<Item>> GetAllAsync(
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
+        bool? uncategorized = null,
         CancellationToken ct = default);
 
     // TASK-640: minPrice/maxPrice — additive range filter on Item.PriceRetail for the frontend
-    // table filter UI. Appended at the very end (still before ct) so no pre-existing
-    // parameter's positional index shifts for existing callers/fakes (WriteOffServiceTests
-    // reads `ids` off a fixed positional index).
+    // table filter UI. B2: uncategorized — see GetAllAsync above. Both appended at the very end
+    // (still before ct) so no pre-existing parameter's positional index shifts for existing
+    // callers/fakes (WriteOffServiceTests reads `ids` off a fixed positional index).
     Task<(List<Item> Items, int Total)> GetPagedAsync(
         Guid? categoryId,
         Guid? segmentId,
@@ -26,6 +31,7 @@ public interface IItemRepository
         int pageSize,
         decimal? minPrice = null,
         decimal? maxPrice = null,
+        bool? uncategorized = null,
         CancellationToken ct = default);
 
     Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default);

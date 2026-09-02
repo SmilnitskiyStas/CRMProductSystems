@@ -387,7 +387,7 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
 
         // ── Category name: same null -> "Без категорії" convention as GetByCategoryAsync. ───
         var categoryName = categoryId.HasValue
-            ? await _db.Categories
+            ? await _db.PlatformCategories
                 .Where(c => c.Id == categoryId.Value)
                 .Select(c => c.Name)
                 .FirstOrDefaultAsync(ct) ?? "Unknown"

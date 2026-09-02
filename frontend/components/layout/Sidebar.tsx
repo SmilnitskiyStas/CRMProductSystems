@@ -50,6 +50,7 @@ import {
   ToggleLeft,
   History,
   Activity,
+  FolderTree,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -275,6 +276,7 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Shield size={18} />,
     items: [
       { href: "/provider", label: t("admin.provider"), icon: <Shield size={16} />,   roles: PROVIDER_TEAM, exact: true, permission: ["view_clients", "manage_clients"] },
+      { href: "/provider/categories", label: t("admin.categories"), icon: <FolderTree size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
       { href: "/admin",    label: t("admin.admin"),    icon: <Settings size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
     ],
   },

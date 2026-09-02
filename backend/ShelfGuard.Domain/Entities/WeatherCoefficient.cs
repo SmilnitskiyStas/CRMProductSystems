@@ -17,5 +17,5 @@ public sealed class WeatherCoefficient
     public string Source { get; set; } = "manual";
 
     public ProductSegment? Segment { get; init; }
-    public Category? Category { get; init; }
+    public PlatformCategory? Category { get; init; }
 }

@@ -5,16 +5,19 @@ namespace ShelfGuard.Application.Features.Catalog;
 
 public interface IItemService
 {
+    // B2: uncategorized — true → only items with no category (overrides categoryId); a set
+    // categoryId otherwise expands to that category's whole subtree. See IItemRepository.
     Task<List<ItemDto>> GetAllAsync(
         Guid tenantId,
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
+        bool? uncategorized = null,
         CancellationToken ct = default);
 
-    // TASK-640: minPrice/maxPrice — see IItemRepository.GetPagedAsync. Appended at the very end
-    // (still before ct) so no pre-existing parameter's positional index shifts for existing
-    // callers.
+    // TASK-640: minPrice/maxPrice — see IItemRepository.GetPagedAsync. B2: uncategorized — see
+    // GetAllAsync above. All appended at the very end (still before ct) so no pre-existing
+    // parameter's positional index shifts for existing callers.
     Task<PagedResult<ItemDto>> GetPagedAsync(
         Guid tenantId,
         Guid? categoryId,
@@ -28,6 +31,7 @@ public interface IItemService
         int pageSize,
         decimal? minPrice = null,
         decimal? maxPrice = null,
+        bool? uncategorized = null,
         CancellationToken ct = default);
 
     Task<ItemDto?> GetByIdAsync(Guid id, CancellationToken ct = default);

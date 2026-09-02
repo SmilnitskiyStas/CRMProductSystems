@@ -255,7 +255,7 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             var third = await verify.Items.AsNoTracking().SingleAsync(i => i.Id == f.ThirdItemId);
             Assert.Null(third.SourceSupplierItemId);
 
-            var cat = await verify.Categories.AsNoTracking().SingleAsync(c => c.Id == f.ThirdCategoryId);
+            var cat = await verify.PlatformCategories.AsNoTracking().SingleAsync(c => c.Id == f.ThirdCategoryId);
             Assert.Equal("SENTINEL-CAT-644", cat.Name);
 
             var sup = await verify.Suppliers.AsNoTracking().SingleAsync(s => s.Id == f.ThirdSupplierId);
@@ -291,7 +291,7 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             // would return a null OrderNumber and the insert would violate the NOT NULL column.
             new TenantSessionOverride(db),
             new ItemRepository(db),
-            new ItemService(new ItemRepository(db)),
+            new ItemService(new ItemRepository(db), new CategoryRepository(db)),
             new LocationRepository(db));
     }
 
@@ -385,9 +385,9 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
         };
         if (thirdItemHasGraph)
         {
-            var thirdCategory = new Category { TenantId = thirdTenant.Id, Name = "SENTINEL-CAT-644" };
+            var thirdCategory = new PlatformCategory { Name = "SENTINEL-CAT-644" };
             var thirdSupplier = new Supplier { TenantId = thirdTenant.Id, Name = "SENTINEL-SUP-644" };
-            db.Categories.Add(thirdCategory);
+            db.PlatformCategories.Add(thirdCategory);
             db.Suppliers.Add(thirdSupplier);
             thirdCategoryId = thirdCategory.Id;
             thirdSupplierId = thirdSupplier.Id;
@@ -457,8 +457,9 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             $"DELETE FROM items WHERE \"TenantId\" = ANY({tenantIds})");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM suppliers WHERE \"TenantId\" = ANY({tenantIds})");
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"DELETE FROM categories WHERE \"TenantId\" = ANY({tenantIds})");
+        // platform_categories is global now (B1) — no TenantId; the fixture uses a sentinel name.
+        await db.Database.ExecuteSqlRawAsync(
+            "DELETE FROM platform_categories WHERE \"Name\" = 'SENTINEL-CAT-644'");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM locations WHERE \"TenantId\" = ANY({tenantIds})");
         await db.Database.ExecuteSqlInterpolatedAsync(

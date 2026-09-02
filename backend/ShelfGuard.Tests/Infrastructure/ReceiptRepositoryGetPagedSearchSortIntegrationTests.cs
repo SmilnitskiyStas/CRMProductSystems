@@ -99,9 +99,9 @@ public sealed class ReceiptRepositoryGetPagedSearchSortIntegrationTests : IAsync
 
         // TASK-640: category_id/min_items/max_items fixtures. bySupplier has 1 line item (of the
         // categorized item), byDestination has 2, neither has 0 — distinct counts for each bound.
-        var category = new Category { TenantId = _tenantId, Name = $"Category {_run}" };
+        var category = new PlatformCategory { Name = $"Category {_run}" };
         _categoryId = category.Id;
-        db.Categories.Add(category);
+        db.PlatformCategories.Add(category);
 
         var categorizedItem = new Item { TenantId = _tenantId, Name = $"Categorized Item {_run}", ManagementType = "MTS", CategoryId = category.Id };
         var plainItem = new Item { TenantId = _tenantId, Name = $"Plain Item {_run}", ManagementType = "MTS" };
@@ -124,7 +124,7 @@ public sealed class ReceiptRepositoryGetPagedSearchSortIntegrationTests : IAsync
         // OnDelete(Cascade) — see AppDbContext's StockReceiptItem config).
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM stock_receipts WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
-        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM platform_categories WHERE \"Name\" LIKE {"%" + _run + "%"}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM suppliers WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");

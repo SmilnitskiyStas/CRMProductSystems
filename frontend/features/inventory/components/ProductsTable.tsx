@@ -6,6 +6,7 @@ import { Eye, Pencil, Trash2, BarChart2, ExternalLink } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import type { Product, ProductSortBy } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { BarcodeCell } from "./BarcodeCell";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   DetailDrawer,
@@ -190,9 +191,18 @@ function ProductDetail({ p }: { p: Product }) {
           <DrawerField
             label={t("barcode")}
             value={
-              <span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>
-                {p.barcodes?.[0] ?? "—"}
-              </span>
+              p.barcodes && p.barcodes.length > 0 ? (
+                <span style={{ fontFamily: "monospace", display: "flex", flexDirection: "column", gap: 2 }}>
+                  {p.barcodes.map((b, i) => (
+                    <span key={b} style={{ color: i === 0 ? "#E8EDF5" : "#9CA3AF" }}>
+                      {i === 0 ? "★ " : ""}
+                      {b}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span style={{ color: "#9CA3AF" }}>—</span>
+              )
             }
           />
           <DrawerField label={t("unit")} value={p.unit} />
@@ -348,7 +358,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
       header: tFields("barcode"),
       sortKey: "barcode",
       cellStyle: { fontFamily: "monospace", fontSize: 12, color: "#4B5563" },
-      render: (product) => product.barcodes?.[0] ?? "—",
+      render: (product) => <BarcodeCell barcodes={product.barcodes} />,
     },
     {
       key: "class",

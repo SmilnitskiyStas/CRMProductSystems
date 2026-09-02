@@ -10,15 +10,44 @@ public sealed class CategoryRepository : ICategoryRepository
 
     public CategoryRepository(AppDbContext db) => _db = db;
 
-    // TASK-632: no explicit TenantId filter here, by design — mirrors ItemRepository exactly.
-    // `categories` already has RLS enabled (tenant_isolation + provider_bypass policies, added in
-    // the initial FullSchema migration) and TenantConnectionInterceptor sets the
-    // `app.tenant_id` session var per request, so isolation happens at the DB level the same way
-    // it does for Items/Locations — adding a redundant `.Where(c => c.TenantId == tenantId)` here
-    // would just be a second, easy-to-drift copy of what RLS already guarantees.
-    public Task<List<Category>> GetAllActiveAsync(CancellationToken ct = default) =>
-        _db.Categories
+    // B1: `platform_categories` is a global, provider-curated table — no TenantId, no RLS.
+    // Every tenant reads the same rows; B2 narrows the result to the caller's
+    // Tenant.BusinessType (in CategoryService, in memory — jsonb List<string> doesn't
+    // translate to a LINQ-to-SQL Where, same gotcha as ItemRepository's barcode column).
+    public Task<List<PlatformCategory>> GetAllActiveAsync(CancellationToken ct = default) =>
+        _db.PlatformCategories
             .Where(c => c.IsActive)
             .OrderBy(c => c.Name)
             .ToListAsync(ct);
+
+    public Task<List<PlatformCategory>> GetAllAsync(CancellationToken ct = default) =>
+        _db.PlatformCategories
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
+            .ToListAsync(ct);
+
+    public Task<PlatformCategory?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+        _db.PlatformCategories.FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    public Task<bool> ActiveExistsAsync(Guid id, CancellationToken ct = default) =>
+        _db.PlatformCategories.AnyAsync(c => c.Id == id && c.IsActive, ct);
+
+    public Task<bool> HasActiveChildrenAsync(Guid parentId, CancellationToken ct = default) =>
+        _db.PlatformCategories.AnyAsync(c => c.ParentId == parentId && c.IsActive, ct);
+
+    public async Task<IReadOnlyDictionary<Guid, int>> CountItemsByCategoryAsync(CancellationToken ct = default) =>
+        await _db.Items
+            .Where(i => i.CategoryId != null)
+            .GroupBy(i => i.CategoryId!.Value)
+            .Select(g => new { CategoryId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CategoryId, x => x.Count, ct);
+
+    public Task AddAsync(PlatformCategory category, CancellationToken ct = default) =>
+        _db.PlatformCategories.AddAsync(category, ct).AsTask();
+
+    public void Update(PlatformCategory category) =>
+        _db.PlatformCategories.Update(category);
+
+    public Task SaveChangesAsync(CancellationToken ct = default) =>
+        _db.SaveChangesAsync(ct);
 }

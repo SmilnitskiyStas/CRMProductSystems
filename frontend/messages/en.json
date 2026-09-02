@@ -459,6 +459,7 @@
         "admin": {
           "label": "Admin",
           "provider": "Provider",
+          "categories": "Categories",
           "admin": "Admin"
         },
         "supplierCabinet": {
@@ -709,6 +710,7 @@
         "toastDeleted": "Product deleted",
         "searchPlaceholder": "Search by name or barcode…",
         "allCategories": "All categories",
+        "uncategorized": "Uncategorized",
         "priceRangeLabel": "Price, ₴"
       },
       "itemTypes": {
@@ -760,6 +762,8 @@
         "namePlaceholder": "Milk 2.5% 1L",
         "barcodesLabel": "Barcodes",
         "barcodePlaceholder": "4820029300128",
+        "barcodeMakePrimary": "Set as primary",
+        "barcodePrimaryHint": "The first barcode is the primary (active) one. Hover a barcode to make it primary.",
         "lookupSearching": "Searching…",
         "lookupFind": "Find",
         "lookupError": "Barcode not found in the OpenFoodFacts database",
@@ -769,6 +773,8 @@
         "imageRemove": "Remove",
         "unitLabel": "Unit *",
         "unitPlaceholder": "kg, pcs, l, pack…",
+        "categoryLabel": "Category",
+        "categoryNone": "no category",
         "managementTypeLabel": "Management type",
         "managementTypeMts": "MTS — to stock",
         "managementTypeMto": "MTO — to order",
@@ -807,6 +813,9 @@
         },
         "empty": "No products yet. Add your first product.",
         "openFullPage": "Open full page",
+        "barcodeMore": "+{count}",
+        "barcodeAllTitle": "All barcodes",
+        "barcodePrimary": "Primary",
         "actionMenu": {
           "view": "View",
           "analytics": "Analytics",
@@ -4344,6 +4353,51 @@
         "standard": "Standard",
         "enterprise": "Enterprise",
         "trial": "Trial"
+      }
+    },
+    "providerCategories": {
+      "loading": "Loading…",
+      "title": "Product Categories",
+      "subtitle": "A single global category tree served to every tenant, filtered by their business type.",
+      "addButton": "Add category",
+      "empty": "No categories yet. Add the first one.",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "edit": "Edit",
+      "delete": "Delete",
+      "addSubCategory": "Add sub-category",
+      "inactivePill": "Inactive",
+      "allBusinessTypes": "all business types",
+      "itemCountBadge": "{count, plural, one {# item} other {# items}}",
+      "deleteDialog": {
+        "title": "Delete category?",
+        "body": "\"{name}\" will be deactivated. Items keep their reference but the category stops showing to tenants.",
+        "cancel": "Cancel",
+        "confirm": "Delete",
+        "deleting": "Deleting…"
+      },
+      "toasts": {
+        "created": "Category created",
+        "updated": "Category updated",
+        "deleted": "Category deleted",
+        "error": "Something went wrong"
+      },
+      "modal": {
+        "createTitle": "New category",
+        "editTitle": "Edit category",
+        "nameLabel": "Name",
+        "namePlaceholder": "Dairy products",
+        "parentLabel": "Parent category",
+        "parentNone": "top level",
+        "businessTypesLabel": "Business types",
+        "businessTypesAllHint": "No business types selected — the category is visible to every business type.",
+        "sortOrderLabel": "Sort order",
+        "activeLabel": "Active",
+        "cancel": "Cancel",
+        "save": "Save changes",
+        "create": "Create",
+        "saving": "Saving…",
+        "errorNameRequired": "Name is required"
       }
     },
     "admin": {

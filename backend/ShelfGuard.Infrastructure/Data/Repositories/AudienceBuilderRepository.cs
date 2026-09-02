@@ -56,15 +56,15 @@ public sealed class AudienceBuilderRepository : IAudienceBuilderRepository
     {
         var term = search?.Trim() ?? string.Empty;
 
-        // Same accepted-Seq-Scan tradeoff as every ILIKE below (see class remarks / TASK-428) —
-        // categories.Name has no leakproof-compatible index path under RLS either; acceptable at
-        // typical per-tenant category-tree sizes (tens to low hundreds of rows). Params:
-        // {0}=tenantId {1}=search {2}=limit
+        // B1: platform_categories is a global, provider-curated table (no RLS, no TenantId) —
+        // every tenant sees the same list. The ILIKE has no leakproof concern here (no RLS on the
+        // table); the per-tenant item count keeps an explicit i."TenantId" = {0} filter so it is
+        // correct regardless of the caller's RLS session. Params: {0}=tenantId {1}=search {2}=limit
         const string sql = """
             SELECT c."Id" AS "CategoryId", c."Name" AS "Name",
-                   (SELECT COUNT(*)::int FROM items i WHERE i."CategoryId" = c."Id") AS "ItemCount"
-            FROM categories c
-            WHERE c."TenantId" = {0} AND c."IsActive" = true
+                   (SELECT COUNT(*)::int FROM items i WHERE i."CategoryId" = c."Id" AND i."TenantId" = {0}) AS "ItemCount"
+            FROM platform_categories c
+            WHERE c."IsActive" = true
               AND ({1} = '' OR c."Name" ILIKE '%' || {1} || '%')
             ORDER BY c."Name"
             LIMIT {2}

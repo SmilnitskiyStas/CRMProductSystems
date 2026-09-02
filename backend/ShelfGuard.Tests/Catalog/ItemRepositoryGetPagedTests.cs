@@ -86,4 +86,103 @@ public sealed class ItemRepositoryGetPagedTests
         Assert.Equal(2, items.Count);
         Assert.Equal("A Item", items[0].Name); // OrderBy(Name) unchanged
     }
+
+    // ── B2: uncategorized filter + parent-category subtree expansion ─────────
+
+    private static (PlatformCategory Parent, PlatformCategory Child) MakeTwoLevelTree()
+    {
+        var parent = new PlatformCategory { Name = "Напої" };
+        var child = new PlatformCategory { Name = "Вода", ParentId = parent.Id };
+        return (parent, child);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_UncategorizedTrue_ReturnsOnlyNullCategoryItems()
+    {
+        await using var db = MakeDb();
+        var tenantId = Guid.NewGuid();
+        var (parent, child) = MakeTwoLevelTree();
+        db.PlatformCategories.AddRange(parent, child);
+
+        var noCat = new Item { TenantId = tenantId, Name = "No cat", ManagementType = "MTS" };
+        var withCat = new Item { TenantId = tenantId, Name = "Has cat", ManagementType = "MTS", CategoryId = parent.Id };
+        db.Items.AddRange(noCat, withCat);
+        await db.SaveChangesAsync();
+
+        var repo = new ItemRepository(db);
+        var (items, total) = await repo.GetPagedAsync(
+            categoryId: parent.Id, segmentId: null, managementType: null, search: null,
+            ids: null, sortBy: null, sortDescending: null, page: 1, pageSize: 50,
+            uncategorized: true); // overrides categoryId
+
+        Assert.Equal(1, total);
+        Assert.Equal(noCat.Id, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_ParentCategory_IncludesChildSubtreeItems()
+    {
+        await using var db = MakeDb();
+        var tenantId = Guid.NewGuid();
+        var (parent, child) = MakeTwoLevelTree();
+        db.PlatformCategories.AddRange(parent, child);
+
+        var onParent = new Item { TenantId = tenantId, Name = "On parent", ManagementType = "MTS", CategoryId = parent.Id };
+        var onChild = new Item { TenantId = tenantId, Name = "On child", ManagementType = "MTS", CategoryId = child.Id };
+        var unrelated = new Item { TenantId = tenantId, Name = "Unrelated", ManagementType = "MTS" };
+        db.Items.AddRange(onParent, onChild, unrelated);
+        await db.SaveChangesAsync();
+
+        var repo = new ItemRepository(db);
+        var (items, total) = await repo.GetPagedAsync(
+            categoryId: parent.Id, segmentId: null, managementType: null, search: null,
+            ids: null, sortBy: null, sortDescending: null, page: 1, pageSize: 50);
+
+        Assert.Equal(2, total);
+        Assert.Contains(items, i => i.Id == onParent.Id);
+        Assert.Contains(items, i => i.Id == onChild.Id);
+        Assert.DoesNotContain(items, i => i.Id == unrelated.Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_LeafCategory_ReturnsOnlyThatCategory()
+    {
+        await using var db = MakeDb();
+        var tenantId = Guid.NewGuid();
+        var (parent, child) = MakeTwoLevelTree();
+        db.PlatformCategories.AddRange(parent, child);
+
+        var onParent = new Item { TenantId = tenantId, Name = "On parent", ManagementType = "MTS", CategoryId = parent.Id };
+        var onChild = new Item { TenantId = tenantId, Name = "On child", ManagementType = "MTS", CategoryId = child.Id };
+        db.Items.AddRange(onParent, onChild);
+        await db.SaveChangesAsync();
+
+        var repo = new ItemRepository(db);
+        var (items, total) = await repo.GetPagedAsync(
+            categoryId: child.Id, segmentId: null, managementType: null, search: null,
+            ids: null, sortBy: null, sortDescending: null, page: 1, pageSize: 50);
+
+        Assert.Equal(1, total);
+        Assert.Equal(onChild.Id, items.Single().Id);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_ParentCategory_IncludesChildSubtreeItems()
+    {
+        await using var db = MakeDb();
+        var tenantId = Guid.NewGuid();
+        var (parent, child) = MakeTwoLevelTree();
+        db.PlatformCategories.AddRange(parent, child);
+
+        var onChild = new Item { TenantId = tenantId, Name = "On child", ManagementType = "MTS", CategoryId = child.Id };
+        var unrelated = new Item { TenantId = tenantId, Name = "Unrelated", ManagementType = "MTS" };
+        db.Items.AddRange(onChild, unrelated);
+        await db.SaveChangesAsync();
+
+        var repo = new ItemRepository(db);
+        var items = await repo.GetAllAsync(categoryId: parent.Id, segmentId: null, managementType: null);
+
+        Assert.Single(items);
+        Assert.Equal(onChild.Id, items[0].Id);
+    }
 }

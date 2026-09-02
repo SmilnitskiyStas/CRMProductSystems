@@ -8,6 +8,8 @@ import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import type { CreateProductPayload, Product, UpdateProductPayload } from "../types";
 import { productsApi } from "../api/products";
+import { useCategories } from "../hooks/useCategories";
+import { flattenTree, indentLabel } from "../lib/categoryTree";
 
 export const PERISHABILITY_CLASS_VALUES = ["fresh", "chilled", "standard", "durable"] as const;
 
@@ -28,6 +30,7 @@ function buildProductSchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
     name:           z.string().min(1, t("validationRequired")).max(200),
     unit:           z.string().min(1, t("validationRequired")).max(50),
+    categoryId:     z.string().optional(),
     managementType: z.enum(["MTS", "MTO"]),
     itemType:       z.string().min(1),
     minStock:       z.coerce.number().min(0),
@@ -50,7 +53,7 @@ type FormValues = z.infer<ReturnType<typeof buildProductSchema>>;
 // Ukrainian abbreviation in the English UI — everything else here is language-neutral.
 function buildDefaultValues(locale: string): FormValues {
   return {
-    name: "", unit: locale === "en" ? "pcs" : "шт", managementType: "MTS", itemType: "product",
+    name: "", unit: locale === "en" ? "pcs" : "шт", categoryId: "", managementType: "MTS", itemType: "product",
     minStock: 0, maxStock: 100, safetyBuffer: 5,
     shelfLifeDays: "", vatRate: 20,
     pricePurchase: "", priceRetail: "",
@@ -107,6 +110,8 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
   const [lookupError, setLookupError] = useState<string | null>(null);
 
   const productSchema = useMemo(() => buildProductSchema(t), [t]);
+  const { data: categories = [] } = useCategories();
+  const categoryOptions = useMemo(() => flattenTree(categories), [categories]);
 
   const {
     register,
@@ -125,6 +130,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
         ? {
             name:           product.name,
             unit:           product.unit,
+            categoryId:     product.categoryId ?? "",
             managementType: (product.managementType as "MTS" | "MTO") ?? "MTS",
             itemType:       product.itemType ?? "product",
             minStock:       product.minStock,
@@ -165,6 +171,12 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
     setBarcodes(prev => prev.filter(x => x !== b));
   }
 
+  // First barcode in the list is the primary/active one (project-wide convention — POS,
+  // receipts and analytics all read Barcodes[0]). "Make primary" moves it to the front.
+  function makePrimary(b: string) {
+    setBarcodes(prev => [b, ...prev.filter(x => x !== b)]);
+  }
+
   async function handleLookup() {
     const bc = barcodes[0] ?? barcodeInput.trim();
     if (!bc) return;
@@ -191,6 +203,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
       name:          values.name,
       barcodes:      barcodes.length > 0 ? barcodes : undefined,
       unit:          values.unit,
+      categoryId:    values.categoryId || undefined,
       managementType: values.managementType,
       itemType:      values.itemType,
       minStock:      values.minStock,
@@ -289,24 +302,39 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             {/* Штрихкоди */}
             <div>
               <label style={labelStyle}>{t("barcodesLabel")}</label>
+              {barcodes.length > 1 && (
+                <p style={{ color: "#4B5563", fontSize: 11, margin: "0 0 6px" }}>{t("barcodePrimaryHint")}</p>
+              )}
 
               {/* Теги */}
               {barcodes.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                  {barcodes.map(b => (
-                    <span key={b} style={{
-                      display: "flex", alignItems: "center", gap: 4,
-                      background: "#0F1F3D", border: "1px solid #1E3A5F",
-                      borderRadius: 6, padding: "3px 8px",
-                      color: "#93C5FD", fontSize: 12,
-                    }}>
-                      {b}
-                      <button type="button" onClick={() => removeBarcode(b)}
-                        style={{ background: "none", border: "none", color: "#60A5FA", cursor: "pointer", padding: 0, fontSize: 13, lineHeight: 1 }}>
-                        ×
-                      </button>
-                    </span>
-                  ))}
+                  {barcodes.map((b, i) => {
+                    const isPrimary = i === 0;
+                    return (
+                      <span key={b} style={{
+                        display: "flex", alignItems: "center", gap: 4,
+                        background: isPrimary ? "#0F2D1A" : "#0F1F3D",
+                        border: `1px solid ${isPrimary ? "#166534" : "#1E3A5F"}`,
+                        borderRadius: 6, padding: "3px 8px",
+                        color: isPrimary ? "#4ADE80" : "#93C5FD", fontSize: 12,
+                      }}>
+                        {isPrimary ? (
+                          <span title={t("barcodePrimaryHint")} style={{ fontSize: 11 }}>★</span>
+                        ) : (
+                          <button type="button" onClick={() => makePrimary(b)} title={t("barcodeMakePrimary")}
+                            style={{ background: "none", border: "none", color: "#60A5FA", cursor: "pointer", padding: 0, fontSize: 12, lineHeight: 1 }}>
+                            ☆
+                          </button>
+                        )}
+                        {b}
+                        <button type="button" onClick={() => removeBarcode(b)}
+                          style={{ background: "none", border: "none", color: isPrimary ? "#4ADE80" : "#60A5FA", cursor: "pointer", padding: 0, fontSize: 13, lineHeight: 1 }}>
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
                 </div>
               )}
 
@@ -383,6 +411,19 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
               {errors.unit && (
                 <p style={{ color: "#EF4444", fontSize: 11, marginTop: 3 }}>{errors.unit.message}</p>
               )}
+            </div>
+
+            {/* Category */}
+            <div>
+              <label style={labelStyle}>{t("categoryLabel")}</label>
+              <select {...register("categoryId")} style={{ ...inputStyle, cursor: "pointer" }}>
+                <option value="">— {t("categoryNone")} —</option>
+                {categoryOptions.map(({ category, depth }) => (
+                  <option key={category.id} value={category.id}>
+                    {indentLabel(category.name, depth)}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* ManagementType + ItemType */}

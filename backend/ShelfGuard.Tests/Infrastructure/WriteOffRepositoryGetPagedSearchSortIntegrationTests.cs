@@ -103,9 +103,9 @@ public sealed class WriteOffRepositoryGetPagedSearchSortIntegrationTests : IAsyn
 
         // TASK-640: category_id fixture — byStore has 1 line item of the categorized item, the
         // other two have none.
-        var category = new Category { TenantId = _tenantId, Name = $"Category {_run}" };
+        var category = new PlatformCategory { Name = $"Category {_run}" };
         _categoryId = category.Id;
-        db.Categories.Add(category);
+        db.PlatformCategories.Add(category);
 
         var categorizedItem = new Item { TenantId = _tenantId, Name = $"Categorized Item {_run}", ManagementType = "MTS", CategoryId = category.Id };
         db.Items.Add(categorizedItem);
@@ -124,7 +124,7 @@ public sealed class WriteOffRepositoryGetPagedSearchSortIntegrationTests : IAsyn
         // OnDelete(Cascade) — see AppDbContext's WriteOffItem config).
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM write_offs WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
-        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM platform_categories WHERE \"Name\" LIKE {"%" + _run + "%"}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }

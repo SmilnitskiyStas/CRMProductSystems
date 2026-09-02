@@ -644,39 +644,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("banner_products", (string)null);
                 });
 
-            modelBuilder.Entity("ShelfGuard.Domain.Entities.Category", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ParentId");
-
-                    b.HasIndex("TenantId", "ParentId", "IsActive")
-                        .HasDatabaseName("idx_categories_tenant_parent_active");
-
-                    b.ToTable("categories", (string)null);
-                });
-
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3172,6 +3139,53 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("notification_settings", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PlatformCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<List<string>>("BusinessTypes")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive", "SortOrder")
+                        .HasDatabaseName("idx_platform_categories_active_sort");
+
+                    b.HasIndex("ParentId", "IsActive")
+                        .HasDatabaseName("idx_platform_categories_parent_active");
+
+                    b.ToTable("platform_categories", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PosShift", b =>
@@ -6958,24 +6972,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ShelfGuard.Domain.Entities.Category", b =>
-                {
-                    b.HasOne("ShelfGuard.Domain.Entities.Category", "Parent")
-                        .WithMany()
-                        .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Parent");
-
-                    b.Navigation("Tenant");
-                });
-
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ChatMessage", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.ChatSession", "Session")
@@ -7206,7 +7202,7 @@ namespace ShelfGuard.Infrastructure.Migrations
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.Item", b =>
                 {
-                    b.HasOne("ShelfGuard.Domain.Entities.Category", "Category")
+                    b.HasOne("ShelfGuard.Domain.Entities.PlatformCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -7658,6 +7654,16 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PlatformCategory", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.PlatformCategory", "Parent")
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PosShift", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.User", "Cashier")
@@ -7821,7 +7827,7 @@ namespace ShelfGuard.Infrastructure.Migrations
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductSegment", b =>
                 {
-                    b.HasOne("ShelfGuard.Domain.Entities.Category", "Category")
+                    b.HasOne("ShelfGuard.Domain.Entities.PlatformCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -8700,10 +8706,10 @@ namespace ShelfGuard.Infrastructure.Migrations
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.WeatherCoefficient", b =>
                 {
-                    b.HasOne("ShelfGuard.Domain.Entities.Category", "Category")
+                    b.HasOne("ShelfGuard.Domain.Entities.PlatformCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("ShelfGuard.Domain.Entities.ProductSegment", "Segment")
                         .WithMany()

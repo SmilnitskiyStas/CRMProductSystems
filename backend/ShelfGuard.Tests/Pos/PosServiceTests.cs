@@ -127,10 +127,10 @@ file sealed class FakeCatalogRepo : IItemRepository
     public Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<Item>>(Products.Where(p => p.Barcodes.Any(barcodes.Contains)).ToList());
 
-    public Task<List<Item>> GetAllAsync(Guid? categoryId, Guid? segmentId, string? managementType, CancellationToken ct = default) =>
+    public Task<List<Item>> GetAllAsync(Guid? categoryId, Guid? segmentId, string? managementType, bool? uncategorized = null, CancellationToken ct = default) =>
         Task.FromResult(Products);
 
-    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids, string? sortBy, bool? sortDescending, int page, int pageSize, decimal? minPrice = null, decimal? maxPrice = null, CancellationToken ct = default) =>
+    public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids, string? sortBy, bool? sortDescending, int page, int pageSize, decimal? minPrice = null, decimal? maxPrice = null, bool? uncategorized = null, CancellationToken ct = default) =>
         Task.FromResult((Products, Products.Count));
 
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

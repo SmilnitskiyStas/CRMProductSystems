@@ -67,11 +67,11 @@ public sealed class ItemRepositoryGetPagedSortIntegrationTests : IAsyncLifetime
         _tenantId = tenant.Id;
         db.Tenants.Add(tenant);
 
-        var categoryAlpha = new Category { TenantId = _tenantId, Name = $"Alpha Category {_run}" };
-        var categoryZebra = new Category { TenantId = _tenantId, Name = $"Zebra Category {_run}" };
+        var categoryAlpha = new PlatformCategory { Name = $"Alpha Category {_run}" };
+        var categoryZebra = new PlatformCategory { Name = $"Zebra Category {_run}" };
         _categoryAlphaId = categoryAlpha.Id;
         _categoryZebraId = categoryZebra.Id;
-        db.Categories.AddRange(categoryAlpha, categoryZebra);
+        db.PlatformCategories.AddRange(categoryAlpha, categoryZebra);
 
         var itemAlpha = new Item
         {
@@ -105,7 +105,7 @@ public sealed class ItemRepositoryGetPagedSortIntegrationTests : IAsyncLifetime
 
         await using var db = NewContext();
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
-        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM platform_categories WHERE \"Name\" LIKE {"%" + _run + "%"}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
 

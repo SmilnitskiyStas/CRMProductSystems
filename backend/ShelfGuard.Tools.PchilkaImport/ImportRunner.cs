@@ -166,8 +166,10 @@ public sealed class ImportRunner(
         {
             await SetEnterpriseAdminRoleAsync(ct);
 
-            // Categories: one per distinct non-null product-group name among selected products.
-            var existingCategoryRows = await db.Categories.Where(c => c.TenantId == tenantId).ToListAsync(ct);
+            // Categories are global now (B1): match each distinct non-null product-group name
+            // to an existing platform_categories row by trimmed, case-insensitive name; create
+            // a global row (no TenantId) for any unmatched name.
+            var existingCategoryRows = await db.PlatformCategories.ToListAsync(ct);
             var existingCategories = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
             foreach (var c in existingCategoryRows)
                 existingCategories.TryAdd(c.Name.Trim(), c.Id);
@@ -185,8 +187,8 @@ public sealed class ImportRunner(
                     continue;
                 }
 
-                var category = new Category { TenantId = tenantId, Name = groupName };
-                db.Categories.Add(category);
+                var category = new PlatformCategory { Name = groupName, BusinessTypes = [] };
+                db.PlatformCategories.Add(category);
                 groupNameToCategoryId[groupName] = category.Id;
                 categoriesCreated++;
             }

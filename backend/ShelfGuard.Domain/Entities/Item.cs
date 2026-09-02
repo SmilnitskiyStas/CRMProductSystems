@@ -41,7 +41,7 @@ public sealed class Item
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public Tenant? Tenant { get; init; }
-    public Category? Category { get; init; }
+    public PlatformCategory? Category { get; init; }
     public ProductSegment? Segment { get; init; }
     public Supplier? DefaultSupplier { get; init; }
     public SupplierItem? SourceSupplierItem { get; init; }

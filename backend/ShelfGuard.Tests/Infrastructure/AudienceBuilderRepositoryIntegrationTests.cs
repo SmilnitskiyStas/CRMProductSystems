@@ -39,6 +39,10 @@ public sealed class AudienceBuilderRepositoryIntegrationTests : IAsyncLifetime
     private string _connectionString = DefaultConnectionString;
     private bool _dbAvailable;
 
+    // platform_categories is global (B1) — a run token keeps this test's category name unique so
+    // typeahead assertions are not disturbed by other tenants' / other tests' rows.
+    private readonly string _run = Guid.NewGuid().ToString("N");
+
     private Guid _tenantId;
     private Guid _locationId;
     private Guid _catDrinksId;
@@ -86,7 +90,7 @@ public sealed class AudienceBuilderRepositoryIntegrationTests : IAsyncLifetime
         var location = new Location { TenantId = _tenantId, Name = "Test Store" };
         _locationId = location.Id;
 
-        var catDrinks = new Category { TenantId = _tenantId, Name = "Напої", IsActive = true };
+        var catDrinks = new PlatformCategory { Name = $"Напої {_run}", IsActive = true };
         _catDrinksId = catDrinks.Id;
 
         var itemCola = new Item { TenantId = _tenantId, Name = "Кока-Кола 1,75л", ItemType = "product" };
@@ -102,7 +106,7 @@ public sealed class AudienceBuilderRepositoryIntegrationTests : IAsyncLifetime
 
         db.Tenants.Add(tenant);
         db.Locations.Add(location);
-        db.Categories.Add(catDrinks);
+        db.PlatformCategories.Add(catDrinks);
         db.Items.AddRange(itemCola, itemComboBundle, itemFanta, itemPepsi, itemSprite);
 
         Guid NewCustomer(string name, string? phone = null)
@@ -193,7 +197,7 @@ public sealed class AudienceBuilderRepositoryIntegrationTests : IAsyncLifetime
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM pos_transactions WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM customers WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
-        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM platform_categories WHERE \"Id\" = {_catDrinksId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
@@ -208,12 +212,14 @@ public sealed class AudienceBuilderRepositoryIntegrationTests : IAsyncLifetime
         await using var db = NewContext();
         var repo = new AudienceBuilderRepository(db);
 
-        var bySearch = await repo.SearchCategoriesAsync(_tenantId, "апо", 20);
+        // Search by the run token — unique to this test's category in the global table.
+        var bySearch = await repo.SearchCategoriesAsync(_tenantId, _run[..8], 20);
         var row = Assert.Single(bySearch);
         Assert.Equal(_catDrinksId, row.CategoryId);
-        Assert.Equal(2, row.ItemCount); // itemPepsi + itemSprite
+        Assert.Equal(2, row.ItemCount); // itemPepsi + itemSprite (ItemCount is tenant-scoped)
 
-        var noSearch = await repo.SearchCategoriesAsync(_tenantId, "", 20);
+        // Empty search returns the whole global list; a generous limit keeps this category in it.
+        var noSearch = await repo.SearchCategoriesAsync(_tenantId, "", 1000);
         Assert.Contains(noSearch, c => c.CategoryId == _catDrinksId);
 
         var noMatch = await repo.SearchCategoriesAsync(_tenantId, "zzz-no-such-category", 20);

@@ -240,7 +240,23 @@ export default function ProductPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <Field label={t("name")} value={product.name} />
                 <Grid>
-                  <Field label={t("barcode")} value={<span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>{product.barcodes?.[0] ?? "—"}</span>} />
+                  <Field
+                    label={t("barcode")}
+                    value={
+                      product.barcodes && product.barcodes.length > 0 ? (
+                        <span style={{ fontFamily: "monospace", display: "flex", flexDirection: "column", gap: 2 }}>
+                          {product.barcodes.map((b, i) => (
+                            <span key={b} style={{ color: i === 0 ? "#E8EDF5" : "#9CA3AF" }}>
+                              {i === 0 ? "★ " : ""}
+                              {b}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span style={{ fontFamily: "monospace", color: "#9CA3AF" }}>—</span>
+                      )
+                    }
+                  />
                   <Field label={tProductPage("unitLabel")} value={product.unit} />
                   <Field label={t("category")} value={product.categoryName ?? "—"} />
                   <Field label={t("segment")} value={product.segmentName ?? "—"} />

@@ -10,5 +10,5 @@ public sealed class ProductSegment
     public bool IsActive { get; set; } = true;
 
     public Tenant? Tenant { get; init; }
-    public Category? Category { get; init; }
+    public PlatformCategory? Category { get; init; }
 }

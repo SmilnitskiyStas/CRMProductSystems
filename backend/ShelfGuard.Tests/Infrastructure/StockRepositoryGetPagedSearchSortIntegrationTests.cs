@@ -80,9 +80,9 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
         // would be flaky against real data.
         // TASK-640: a category assigned to just one item (productByName), so category_id can be
         // asserted against a known single matching stock row.
-        var category = new Category { TenantId = _tenantId, Name = $"Category {_run}" };
+        var category = new PlatformCategory { Name = $"Category {_run}" };
         _categoryId = category.Id;
-        db.Categories.Add(category);
+        db.PlatformCategories.Add(category);
 
         var productByName = new Item { TenantId = _tenantId, Name = $"Product {NameNeedle} Extra", Barcodes = [$"BC-{_run}-other-a"], ManagementType = "MTS", CategoryId = category.Id };
         var productByBarcode = new Item { TenantId = _tenantId, Name = $"Unrelated Name A {_run}", Barcodes = [Barcode], ManagementType = "MTS" };
@@ -131,7 +131,7 @@ public sealed class StockRepositoryGetPagedSearchSortIntegrationTests : IAsyncLi
         await using var db = NewContext();
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM product_stock WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
-        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM categories WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM platform_categories WHERE \"Name\" LIKE {"%" + _run + "%"}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }

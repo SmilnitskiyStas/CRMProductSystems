@@ -22,7 +22,7 @@ public sealed class AppDbContext : DbContext
     // Structure
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<LocationZone> LocationZones => Set<LocationZone>();
-    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<PlatformCategory> PlatformCategories => Set<PlatformCategory>();
     public DbSet<ProductSegment> ProductSegments => Set<ProductSegment>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
 
@@ -380,19 +380,29 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(z => z.LocationId).OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ── Category ────────────────────────────────────────────────────────
-        builder.Entity<Category>(e =>
+        // ── PlatformCategory ────────────────────────────────────────────────
+        // Global, provider-curated category catalogue (B1). No TenantId, no RLS:
+        // reference data readable by every authenticated tenant, written only via the
+        // provider-only endpoints. Tenants filter it by Tenant.BusinessType (B2).
+        builder.Entity<PlatformCategory>(e =>
         {
-            e.ToTable("categories");
+            e.ToTable("platform_categories");
             e.HasKey(c => c.Id);
             e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(c => c.Name).HasMaxLength(255).IsRequired();
+            // jsonb string array — same EnableDynamicJson path as Item.Barcodes, no value converter.
+            e.Property(c => c.BusinessTypes)
+             .HasColumnType("jsonb")
+             .HasDefaultValueSql("'[]'::jsonb");
+            e.Property(c => c.SortOrder).HasDefaultValue(0);
             e.Property(c => c.IsActive).HasDefaultValue(true);
-            // Hierarchical category tree navigation per tenant
-            e.HasIndex(c => new { c.TenantId, c.ParentId, c.IsActive })
-             .HasDatabaseName("idx_categories_tenant_parent_active");
-            e.HasOne(c => c.Tenant).WithMany()
-             .HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(c => c.CreatedAt).HasDefaultValueSql("NOW()");
+            // Tree walk: children of a parent, active only.
+            e.HasIndex(c => new { c.ParentId, c.IsActive })
+             .HasDatabaseName("idx_platform_categories_parent_active");
+            // Flat active list ordered for display (the GET /api/categories shape).
+            e.HasIndex(c => new { c.IsActive, c.SortOrder })
+             .HasDatabaseName("idx_platform_categories_active_sort");
             e.HasOne(c => c.Parent).WithMany()
              .HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         });
@@ -1079,8 +1089,10 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(w => w.TenantId);
             e.HasOne(w => w.Segment).WithMany()
              .HasForeignKey(w => w.SegmentId).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
+            // SetNull, not Cascade: PlatformCategory is global — soft-deleting/removing a
+            // category must never cascade-delete a tenant's weather coefficient rows.
             e.HasOne(w => w.Category).WithMany()
-             .HasForeignKey(w => w.CategoryId).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
+             .HasForeignKey(w => w.CategoryId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── SupplySchedule (v2) ─────────────────────────────────────────────

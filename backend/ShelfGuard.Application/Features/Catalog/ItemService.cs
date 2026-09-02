@@ -9,17 +9,23 @@ namespace ShelfGuard.Application.Features.Catalog;
 public sealed class ItemService : IItemService
 {
     private readonly IItemRepository _repo;
+    private readonly ICategoryRepository _categoryRepo;
 
-    public ItemService(IItemRepository repo) => _repo = repo;
+    public ItemService(IItemRepository repo, ICategoryRepository categoryRepo)
+    {
+        _repo = repo;
+        _categoryRepo = categoryRepo;
+    }
 
     public async Task<List<ItemDto>> GetAllAsync(
         Guid tenantId,
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
+        bool? uncategorized = null,
         CancellationToken ct = default)
     {
-        var products = await _repo.GetAllAsync(categoryId, segmentId, managementType, ct);
+        var products = await _repo.GetAllAsync(categoryId, segmentId, managementType, uncategorized, ct);
         return products.Select(ToDto).ToList();
     }
 
@@ -36,11 +42,12 @@ public sealed class ItemService : IItemService
         int pageSize,
         decimal? minPrice = null,
         decimal? maxPrice = null,
+        bool? uncategorized = null,
         CancellationToken ct = default)
     {
         var (products, total) = await _repo.GetPagedAsync(
             categoryId, segmentId, managementType, search, ids, sortBy, sortDescending, page, pageSize,
-            minPrice, maxPrice, ct);
+            minPrice, maxPrice, uncategorized, ct);
         return new PagedResult<ItemDto>
         {
             Items = products.Select(ToDto).ToList(),
@@ -79,11 +86,16 @@ public sealed class ItemService : IItemService
         if (!string.IsNullOrWhiteSpace(request.PerishabilityClass) && !PerishabilityClass.IsValid(request.PerishabilityClass))
             return (null, $"Invalid perishability class '{request.PerishabilityClass}'. Valid values: fresh, chilled, standard, durable.");
 
+        // B2: category now points at the global platform_categories catalogue — reject an id
+        // that doesn't resolve to an active row (a soft-deleted / unknown category).
+        if (request.CategoryId is Guid createCatId && !await _categoryRepo.ActiveExistsAsync(createCatId, ct))
+            return (null, "Category not found or inactive.");
+
         var product = new Item
         {
             TenantId = tenantId,
             Name = request.Name.Trim(),
-            Barcodes = request.Barcodes ?? [],
+            Barcodes = NormalizeBarcodes(request.Barcodes),
             CategoryId = request.CategoryId,
             SegmentId = request.SegmentId,
             Unit = string.IsNullOrWhiteSpace(request.Unit) ? "шт" : request.Unit.Trim(),
@@ -133,8 +145,13 @@ public sealed class ItemService : IItemService
         if (!string.IsNullOrWhiteSpace(request.PerishabilityClass) && !PerishabilityClass.IsValid(request.PerishabilityClass))
             return (null, $"Invalid perishability class '{request.PerishabilityClass}'. Valid values: fresh, chilled, standard, durable.");
 
+        // B2: category now points at the global platform_categories catalogue — reject an id
+        // that doesn't resolve to an active row (a soft-deleted / unknown category).
+        if (request.CategoryId is Guid updateCatId && !await _categoryRepo.ActiveExistsAsync(updateCatId, ct))
+            return (null, "Category not found or inactive.");
+
         product.Name = request.Name.Trim();
-        product.Barcodes = request.Barcodes ?? [];
+        product.Barcodes = NormalizeBarcodes(request.Barcodes);
         product.CategoryId = request.CategoryId;
         product.SegmentId = request.SegmentId;
         product.Unit = string.IsNullOrWhiteSpace(request.Unit) ? "шт" : request.Unit.Trim();
@@ -326,6 +343,26 @@ public sealed class ItemService : IItemService
         await _repo.SaveChangesAsync(ct);
 
         return (url, null);
+    }
+
+    /// <summary>
+    /// Trims, drops blanks and de-duplicates barcodes while preserving order. The first
+    /// surviving entry is the primary/active barcode — POS, receipts and analytics all read
+    /// <c>Barcodes[0]</c>, and the catalog form's "make primary" action reorders the list.
+    /// </summary>
+    private static List<string> NormalizeBarcodes(IEnumerable<string>? barcodes)
+    {
+        if (barcodes is null) return [];
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<string>();
+        foreach (var raw in barcodes)
+        {
+            var b = raw?.Trim();
+            if (string.IsNullOrEmpty(b)) continue;
+            if (seen.Add(b)) result.Add(b);
+        }
+        return result;
     }
 
     private static string? GetString(System.Text.Json.JsonElement el, string prop)

@@ -163,3 +163,32 @@ export const PLAN_COLORS: Record<TenantPlan, { bg: string; border: string; text:
 };
 
 export const ALL_PLANS: TenantPlan[] = ["trial", "basic", "standard", "enterprise"];
+
+// ── Platform categories (B3) ─────────────────────────────────────────────────
+
+// Provider-facing view of a global `platform_categories` row. The tenant-facing flat
+// `CategoryDto` (features/inventory/types.ts) is the business-type-filtered subset of this.
+export interface PlatformCategoryDto {
+  id: string;
+  name: string;
+  parentId: string | null;
+  businessTypes: string[];
+  sortOrder: number;
+  isActive: boolean;
+  itemCount: number;
+}
+
+export interface CreateCategoryBody {
+  name: string;
+  parentId?: string | null;
+  businessTypes: string[];
+  sortOrder?: number;
+}
+
+export interface UpdateCategoryBody {
+  name: string;
+  parentId: string | null;
+  businessTypes: string[];
+  sortOrder: number;
+  isActive: boolean;
+}

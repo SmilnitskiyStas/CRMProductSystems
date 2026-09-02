@@ -15,6 +15,7 @@ import {
   useUpdateProduct,
 } from "@/features/inventory/hooks/useProducts";
 import { useCategories } from "@/features/inventory/hooks/useCategories";
+import { flattenTree, indentLabel } from "@/features/inventory/lib/categoryTree";
 import { RangeFilter } from "@/components/ui/RangeFilter";
 import type { CreateProductPayload, Product, ProductSortBy, UpdateProductPayload } from "@/features/inventory/types";
 
@@ -75,7 +76,8 @@ export default function InventoryPage() {
 
   const { data, isLoading, isError } = useProductsPaged({
     search: debouncedSearch || undefined,
-    category_id: categoryId || undefined,
+    category_id: categoryId && categoryId !== "__none__" ? categoryId : undefined,
+    uncategorized: categoryId === "__none__" ? true : undefined,
     min_price: minPrice,
     max_price: maxPrice,
     page,
@@ -88,6 +90,7 @@ export default function InventoryPage() {
   const totalPages = data?.totalPages ?? Math.ceil(totalCount / PAGE_SIZE);
 
   const { data: categories = [] } = useCategories();
+  const categoryOptions = flattenTree(categories);
 
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -186,9 +189,10 @@ export default function InventoryPage() {
           style={{ ...inputStyle, cursor: "pointer" }}
         >
           <option value="">{t("allCategories")}</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+          <option value="__none__">{t("uncategorized")}</option>
+          {categoryOptions.map(({ category, depth }) => (
+            <option key={category.id} value={category.id}>
+              {indentLabel(category.name, depth)}
             </option>
           ))}
         </select>

@@ -459,6 +459,7 @@
         "admin": {
           "label": "Адмін",
           "provider": "Провайдер",
+          "categories": "Категорії",
           "admin": "Адмін"
         },
         "supplierCabinet": {
@@ -709,6 +710,7 @@
         "toastDeleted": "Товар видалено",
         "searchPlaceholder": "Пошук по назві або штрихкоду…",
         "allCategories": "Всі категорії",
+        "uncategorized": "Без категорії",
         "priceRangeLabel": "Ціна, ₴"
       },
       "itemTypes": {
@@ -760,6 +762,8 @@
         "namePlaceholder": "Молоко 2,5% Галичина 1л",
         "barcodesLabel": "Штрихкоди",
         "barcodePlaceholder": "4820029300128",
+        "barcodeMakePrimary": "Зробити основним",
+        "barcodePrimaryHint": "Перший штрихкод — основний (актуальний). Наведіть на нього, щоб зробити основним інший.",
         "lookupSearching": "Пошук…",
         "lookupFind": "Знайти",
         "lookupError": "Штрихкод не знайдено у базі OpenFoodFacts",
@@ -769,6 +773,8 @@
         "imageRemove": "Видалити",
         "unitLabel": "Одиниця *",
         "unitPlaceholder": "кг, шт, л, упак…",
+        "categoryLabel": "Категорія",
+        "categoryNone": "без категорії",
         "managementTypeLabel": "Тип управління",
         "managementTypeMts": "MTS — на склад",
         "managementTypeMto": "MTO — на замовлення",
@@ -807,6 +813,9 @@
         },
         "empty": "Товарів ще немає. Додайте перший товар.",
         "openFullPage": "Відкрити на повній сторінці",
+        "barcodeMore": "+{count}",
+        "barcodeAllTitle": "Усі штрихкоди",
+        "barcodePrimary": "Основний",
         "actionMenu": {
           "view": "Переглянути",
           "analytics": "Аналітика",
@@ -4344,6 +4353,51 @@
         "standard": "Standard",
         "enterprise": "Enterprise",
         "trial": "Trial"
+      }
+    },
+    "providerCategories": {
+      "loading": "Завантаження…",
+      "title": "Категорії товарів",
+      "subtitle": "Єдине глобальне дерево категорій для всіх тенантів, відфільтроване за їхнім типом бізнесу.",
+      "addButton": "Додати категорію",
+      "empty": "Категорій ще немає. Додайте першу.",
+      "expand": "Розгорнути",
+      "collapse": "Згорнути",
+      "edit": "Редагувати",
+      "delete": "Видалити",
+      "addSubCategory": "Додати підкатегорію",
+      "inactivePill": "Неактивна",
+      "allBusinessTypes": "усі типи бізнесу",
+      "itemCountBadge": "{count, plural, one {# товар} other {# товарів}}",
+      "deleteDialog": {
+        "title": "Видалити категорію?",
+        "body": "«{name}» буде деактивовано. Товари збережуть посилання, але категорія перестане показуватись тенантам.",
+        "cancel": "Скасувати",
+        "confirm": "Видалити",
+        "deleting": "Видалення…"
+      },
+      "toasts": {
+        "created": "Категорію створено",
+        "updated": "Категорію оновлено",
+        "deleted": "Категорію видалено",
+        "error": "Щось пішло не так"
+      },
+      "modal": {
+        "createTitle": "Нова категорія",
+        "editTitle": "Редагувати категорію",
+        "nameLabel": "Назва",
+        "namePlaceholder": "Молочні продукти",
+        "parentLabel": "Батьківська категорія",
+        "parentNone": "верхній рівень",
+        "businessTypesLabel": "Типи бізнесу",
+        "businessTypesAllHint": "Жодного типу бізнесу не обрано — категорія видима для всіх типів бізнесу.",
+        "sortOrderLabel": "Порядок сортування",
+        "activeLabel": "Активна",
+        "cancel": "Скасувати",
+        "save": "Зберегти зміни",
+        "create": "Створити",
+        "saving": "Збереження…",
+        "errorNameRequired": "Назва обов'язкова"
       }
     },
     "admin": {

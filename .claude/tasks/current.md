@@ -542,3 +542,85 @@ accuracy — лише замовлення з фіналізованим receipt
 скомпільований job прогнано e2e через BullMQ: 8 постачальників, `Rating` 5.00/5.00/4.00 і
 `UpdatedAt` збережені.
 
+## TASK-675 — Каталог: керування штрихкодами (Частина A)
+
+**Status:** done · **Agent:** main-session · План `.claude/plans/1-giggly-catmull.md` (Частина A).
+Log: `.claude/logs/tasks/675_2026-09-02_catalog-barcodes_main-session.md`
+
+Без зміни схеми: `Barcodes[0]` = основний ШК (вже фактична конвенція POS/receipts/analytics/mobile).
+Новий `features/inventory/components/BarcodeCell.tsx` — у колонці primary + пілюля «+N» + hover/click
+портальний поповер зі списком (★ на primary), патерн `ActionMenu.tsx`. `ProductForm` — «☆ Зробити
+основним» на кожному не-первинному чипі (перемістити на початок). `ItemService.NormalizeBarcodes()` —
+trim/дедуп/порядок у Create+Update. Drawer + detail-page показують весь список. i18n uk+en.
+`tsc`+`dotnet build` чисто; e2e в браузері на демо-дані — товар з 3 ШК, make-primary, поповер. Не деплоєно.
+Частини B (глобальний каталог категорій) — окремо.
+
+## TASK-676 — B1: глобальний `platform_categories` + міграція
+
+**Status:** done · **Agent:** database-engineer · План `.claude/plans/1-giggly-catmull.md` (Частина B/B1).
+Log: `.claude/logs/tasks/676_2026-09-02_platform-categories-migration_database-engineer.md`
+
+Per-tenant `Category` → єдина глобальна provider-керована `PlatformCategory` (`platform_categories`,
+**без `TenantId`, без RLS**). AppDbContext/repos/services/seeder/import-tool перепідключено;
+`WeatherCoefficient.CategoryId` FK `Cascade`→`SetNull`; `AudienceBuilderRepository.SearchCategoriesAsync`
+raw-SQL перероблено на глобальну таблицю; 8 тест-файлів (entity swap + raw-SQL cleanup).
+Міграція `20260902114742_AddPlatformCategories` (одна транзакція): create → `NO FORCE RLS` на
+categories/items/product_segments/weather_coefficients (міграції йдуть під owner-роллю без
+`app.tenant_id` — інакше data-кроки бачать 0 рядків) → seed (union назв по всіх тенантах +
+`BusinessTypes` з `tenants.BusinessType`) → drop старих FK (**до** repoint) → repoint по назві →
+add нових FK (усі `SET NULL`) → `DROP TABLE categories` → restore `FORCE RLS`. `Down()` — структурне
+відновлення + RLS-тріада, дані не відновлюються (irreversible, як `MigrateOrphanSuppliersToTenants`).
+Верифікація на dev БД: `items."CategoryId"` non-null **199→199** (0 orphan), `platform_categories`
+**86** (= distinct-name старих), row-for-row звірка з бекапом — 0 розбіжностей; `dotnet build` 0/0;
+**повний `dotnet test` 2174/2174**; RLS-audit тест green. Backend :5000 зупинено для білду —
+**треба перезапустити**. Не закомічено. openapi.json regen — контракт не змінювався (`CategoryDto`
+той самий). Далі — B2 (provider CRUD + business_type фільтр).
+
+## TASK-677 — B2: category backend (provider CRUD + business_type фільтр + item-валідація + uncategorized/subtree)
+
+**Status:** done (не закомічено) · **Agent:** backend-developer · План `.claude/plans/1-giggly-catmull.md` (Частина B/B2).
+Log: `.claude/logs/tasks/677_2026-09-02_category-backend_backend-developer.md`
+
+`GET /api/categories` тепер фільтрується по `Tenant.BusinessType` (in-memory — jsonb `List<string>`
+не транслюється в LINQ-to-SQL; null tenantId=provider → без фільтра; порожній `BusinessTypes` →
+видно всім). Новий `ProviderCategoriesController` @ `api/provider/categories` `[ProviderOnly]`
+(GET дерево з inactive / POST / PUT / DELETE soft-delete) + `IProviderCategoryService` +
+`PlatformCategoryDto`; валідація: name ≤255, business-type allow-list, parent існує + без циклу,
+DELETE блокується активними дітьми; `ItemCount` — один grouped-query (provider_bypass → platform-wide).
+`ICategoryRepository` розширено (GetAll/GetById/ActiveExists/HasActiveChildren/CountItemsByCategory/
+Add/Update/Save). `ItemService` ctor +`ICategoryRepository`, Create+Update валідують `CategoryId`
+(`"Category not found or inactive."`). Новий `bool? uncategorized` наскрізь у `IItemService`/
+`IItemRepository` `GetAllAsync`+`GetPagedAsync` (перед `ct`, index 4=`ids` збережено) +
+`ItemsController`; `ItemRepository.ApplyCategoryFilterAsync` — `uncategorized` → `CategoryId==null`,
+інакше set `categoryId` розгортається в усе піддерево (Id/ParentId дерево тягнеться раз, замикається
+в пам'яті). Analytics лишено exact-match (drill-down/звіт, не фільтр каталогу) — задокументовано.
+2 хендмейд-фейки + NSubstitute call-sites оновлено. `dotnet build` 0 err; **повний `dotnet test`
+2200/2200 (+26, 0 regress)**; curl-smoke на dev :5000 — усі кейси (business-type фільтр, provider
+CRUD 201/400/403/404, cycle, has-children, uncategorized 18/217, subtree 4→5→4, item-валідація 400).
+Backend :5000 перезапущено. openapi.json regen — pending (нові provider-ендпоінти + `uncategorized`).
+Далі — B3 (frontend).
+
+## TASK-678 — B3: category frontend (form picker + nested filter + provider management page)
+
+**Status:** review (не закомічено) · **Agent:** frontend-developer · План `.claude/plans/1-giggly-catmull.md` (Частина B/B3).
+Log: `.claude/logs/tasks/678_2026-09-02_category-frontend_frontend-developer.md`
+
+Спільні хелпери `features/inventory/lib/categoryTree.ts` (`flattenTree`/`indentLabel`) +
+`features/provider/lib/categoryTree.ts` (`buildChildrenMap`/`flattenPlatformTree`/`subtreeIds`).
+**D1** `ProductForm`: zod `+categoryId`, новий indented `<select>` (— no category — + дерево)
+біля Unit. **D2** `inventory/page.tsx` фільтр: `""`=всі, `__none__`=Без категорії, далі дерево;
+query → `category_id`/`uncategorized`; `products.ts`+`useProducts.ts` `+uncategorized?:boolean`.
+**D3** нова `/provider/categories` (PROVIDER_ROLES guard) → `<CategoryTreeManager>` (nested tree,
+itemCount badge, business-type chips, inactive pill, expand/collapse, add-sub/edit/delete +
+confirm-dialog, 400 через `toast.error`) + `<CategoryFormModal>` (`components/ui/Modal`; name,
+parent-select мінус self+нащадки, business-types чекбокси з `Dashboard.provider.businessTypes`,
+sort, active тільки edit). Нові `providerCategories.ts` API + `useProviderCategories.ts` хуки
+(інвалідують `["provider","categories"]` **і** `["categories"]`). `provider/types.ts`
++`PlatformCategoryDto`/`CreateCategoryBody`/`UpdateCategoryBody`. `Sidebar` — пункт у групі `admin`
+(`FolderTree`, `PROVIDER_ONLY`+`admin_panel`). i18n uk/en (5333==5333 keys, 0 diff).
+`tsc`/`lint` чисто; `next build` exit 0 (`/provider/categories` ○ 7.35 kB). Browser E2E обидва
+логіни — усі кейси pass (form→save→Category-колонка, uncategorized 18, subtree-фільтр, indented
+dropdown, business-type visibility, provider CRUD + "has sub-categories" 400 + soft-delete pill).
+Тестові дані вичищено з dev БД. **⚠️ `next build` побив `.next` запущеного `frontend-dev` —
+видалив `.next` + перезапустив (новий serverId).** openapi.json regen — все ще pending з B1/B2.
+

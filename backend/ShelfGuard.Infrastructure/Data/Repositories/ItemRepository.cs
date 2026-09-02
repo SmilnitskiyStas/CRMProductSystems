@@ -16,6 +16,7 @@ public sealed class ItemRepository : IItemRepository
         Guid? categoryId,
         Guid? segmentId,
         string? managementType,
+        bool? uncategorized = null,
         CancellationToken ct = default)
     {
         var query = _db.Items
@@ -24,8 +25,7 @@ public sealed class ItemRepository : IItemRepository
             .Include(p => p.DefaultSupplier)
             .AsQueryable();
 
-        if (categoryId.HasValue)
-            query = query.Where(p => p.CategoryId == categoryId);
+        query = await ApplyCategoryFilterAsync(query, categoryId, uncategorized, ct);
 
         if (segmentId.HasValue)
             query = query.Where(p => p.SegmentId == segmentId);
@@ -43,6 +43,7 @@ public sealed class ItemRepository : IItemRepository
         string? sortBy, bool? sortDescending,
         int page, int pageSize,
         decimal? minPrice = null, decimal? maxPrice = null,
+        bool? uncategorized = null,
         CancellationToken ct = default)
     {
         var query = _db.Items
@@ -51,8 +52,7 @@ public sealed class ItemRepository : IItemRepository
             .Include(p => p.DefaultSupplier)
             .AsQueryable();
 
-        if (categoryId.HasValue)
-            query = query.Where(p => p.CategoryId == categoryId);
+        query = await ApplyCategoryFilterAsync(query, categoryId, uncategorized, ct);
         if (segmentId.HasValue)
             query = query.Where(p => p.SegmentId == segmentId);
         if (!string.IsNullOrWhiteSpace(managementType))
@@ -85,6 +85,40 @@ public sealed class ItemRepository : IItemRepository
             .ToListAsync(ct);
 
         return (items, total);
+    }
+
+    /// <summary>
+    /// B2 category filter. <c>uncategorized == true</c> → items with no category (overrides
+    /// <paramref name="categoryId"/>). Otherwise a set <paramref name="categoryId"/> expands to
+    /// that category's whole subtree: the <c>platform_categories</c> (Id, ParentId) pairs are
+    /// pulled once and the descendant set is closed in memory (the tree is ~100 rows, flat
+    /// today) — cheaper and simpler than a recursive CTE, and provider-safe (no RLS on
+    /// platform_categories).
+    /// </summary>
+    private async Task<IQueryable<Item>> ApplyCategoryFilterAsync(
+        IQueryable<Item> query, Guid? categoryId, bool? uncategorized, CancellationToken ct)
+    {
+        if (uncategorized == true)
+            return query.Where(p => p.CategoryId == null);
+
+        if (!categoryId.HasValue)
+            return query;
+
+        var tree = await _db.PlatformCategories
+            .Select(c => new { c.Id, c.ParentId })
+            .ToListAsync(ct);
+
+        var wanted = new HashSet<Guid> { categoryId.Value };
+        var grew = true;
+        while (grew)
+        {
+            grew = false;
+            foreach (var n in tree)
+                if (n.ParentId is Guid p && wanted.Contains(p) && wanted.Add(n.Id))
+                    grew = true;
+        }
+
+        return query.Where(p => p.CategoryId != null && wanted.Contains(p.CategoryId.Value));
     }
 
     private static IQueryable<Item> ApplySort(IQueryable<Item> query, string? sortBy, bool? sortDescending)

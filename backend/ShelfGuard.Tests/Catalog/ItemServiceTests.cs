@@ -10,10 +10,17 @@ namespace ShelfGuard.Tests.Catalog;
 public sealed class ItemServiceTests
 {
     private readonly IItemRepository _repo = Substitute.For<IItemRepository>();
+    private readonly ICategoryRepository _categoryRepo = Substitute.For<ICategoryRepository>();
     private readonly ItemService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
 
-    public ItemServiceTests() => _sut = new ItemService(_repo);
+    public ItemServiceTests()
+    {
+        // Default: any category id the create/update path checks resolves to an active row.
+        // The negative test overrides this for a specific id.
+        _categoryRepo.ActiveExistsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        _sut = new ItemService(_repo, _categoryRepo);
+    }
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -127,28 +134,66 @@ public sealed class ItemServiceTests
         _repo.Received(1).Update(existing);
     }
 
+    // ── CategoryId validation (B2) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_UnknownOrInactiveCategoryId_ReturnsError()
+    {
+        var catId = Guid.NewGuid();
+        _categoryRepo.ActiveExistsAsync(catId, Arg.Any<CancellationToken>()).Returns(false);
+
+        var req = new CreateProductRequest(
+            "Test", null, catId, null, "шт", "MTS", null,
+            0, 0, 0, null, null, null, null, 20, null, null, null, null, null, null);
+
+        var (product, error) = await _sut.CreateAsync(_tenantId, req);
+
+        Assert.Null(product);
+        Assert.Equal("Category not found or inactive.", error);
+        await _repo.DidNotReceive().AddAsync(Arg.Any<Item>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_UnknownOrInactiveCategoryId_ReturnsError()
+    {
+        var existing = new Item { TenantId = _tenantId, Name = "Old", ManagementType = "MTS", Unit = "шт" };
+        _repo.GetByIdAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
+        var catId = Guid.NewGuid();
+        _categoryRepo.ActiveExistsAsync(catId, Arg.Any<CancellationToken>()).Returns(false);
+
+        var req = new UpdateProductRequest(
+            "New", null, catId, null, "шт", "MTS", null,
+            0, 0, 0, null, null, null, null, 20, null, null, null, true, null, null, null);
+
+        var (product, error) = await _sut.UpdateAsync(existing.Id, req);
+
+        Assert.Null(product);
+        Assert.Equal("Category not found or inactive.", error);
+        _repo.DidNotReceive().Update(Arg.Any<Item>());
+    }
+
     // ── GetPaged (search/ids passthrough — TASK-572) ─────────────────────────
 
     [Fact]
     public async Task GetPagedAsync_NoSearchOrIds_PassesNullsThrough()
     {
-        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item>(), 0));
 
         await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, null, null, 1, 50);
 
-        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task GetPagedAsync_WithSearch_PassesSearchThrough()
     {
-        _repo.GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item>(), 0));
 
         await _sut.GetPagedAsync(_tenantId, null, null, null, "молок", null, null, null, 1, 50);
 
-        await _repo.Received(1).GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, null, null, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, "молок", null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -157,24 +202,24 @@ public sealed class ItemServiceTests
         var a = new Item { TenantId = _tenantId, Name = "A", ManagementType = "MTS" };
         var b = new Item { TenantId = _tenantId, Name = "Z", ManagementType = "MTS" };
         var ids = new List<Guid> { a.Id, b.Id };
-        _repo.GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, null, null, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, null, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item> { a, b }, 2));
 
         var result = await _sut.GetPagedAsync(_tenantId, null, null, null, null, ids, null, null, 1, 30);
 
         Assert.Equal(2, result.Items.Count);
-        await _repo.Received(1).GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, null, null, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, ids, null, null, 1, 30, null, null, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task GetPagedAsync_WithSortByAndSortDescending_PassesBothThrough()
     {
-        _repo.GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, null, null, Arg.Any<CancellationToken>())
+        _repo.GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, null, null, null, Arg.Any<CancellationToken>())
             .Returns((new List<Item>(), 0));
 
         await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, "retailprice", true, 1, 50);
 
-        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, null, null, Arg.Any<CancellationToken>());
+        await _repo.Received(1).GetPagedAsync(null, null, null, null, null, "retailprice", true, 1, 50, null, null, null, Arg.Any<CancellationToken>());
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────

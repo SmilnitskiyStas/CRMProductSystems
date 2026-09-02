@@ -46,15 +46,15 @@ public static class DbSeeder
 
         db.Users.AddRange(provider, entAdmin, netMgr, manager, keeper, merch1, merch2);
 
-        // ── Categories ────────────────────────────────────────────────────────
-        var catDairy   = new Category { TenantId = tenant.Id, Name = "Молочні продукти" };
-        var catVeg     = new Category { TenantId = tenant.Id, Name = "Овочі та фрукти" };
-        var catMeat    = new Category { TenantId = tenant.Id, Name = "М'ясо та ковбаса" };
-        var catDry     = new Category { TenantId = tenant.Id, Name = "Бакалія" };
-        var catDrinks  = new Category { TenantId = tenant.Id, Name = "Напої" };
-        var catBread   = new Category { TenantId = tenant.Id, Name = "Хлібобулочні" };
+        // ── Categories (global platform_categories — B1) ──────────────────────
+        var catDairy   = new PlatformCategory { Name = "Молочні продукти", BusinessTypes = ["retail"], SortOrder = 1 };
+        var catVeg     = new PlatformCategory { Name = "Овочі та фрукти",  BusinessTypes = ["retail"], SortOrder = 2 };
+        var catMeat    = new PlatformCategory { Name = "М'ясо та ковбаса", BusinessTypes = ["retail"], SortOrder = 3 };
+        var catDry     = new PlatformCategory { Name = "Бакалія",          BusinessTypes = ["retail"], SortOrder = 4 };
+        var catDrinks  = new PlatformCategory { Name = "Напої",            BusinessTypes = ["retail"], SortOrder = 5 };
+        var catBread   = new PlatformCategory { Name = "Хлібобулочні",     BusinessTypes = ["retail"], SortOrder = 6 };
 
-        db.Categories.AddRange(catDairy, catVeg, catMeat, catDry, catDrinks, catBread);
+        db.PlatformCategories.AddRange(catDairy, catVeg, catMeat, catDry, catDrinks, catBread);
 
         // ── Supplier ──────────────────────────────────────────────────────────
         var supplier = new Supplier
