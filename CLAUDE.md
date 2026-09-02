@@ -251,18 +251,55 @@ docker compose logs -f  # tail logs
 
 ## Multi-Agent Workflow
 
-This repository uses a **mandatory** multi-agent system. Agents are defined in `.claude/agents/`.
+This repository has a multi-agent system. Role definitions live in `.claude/agents/`.
 
-> **RULE: Never implement code directly in the main session.**
-> For any implementation task — always spawn the appropriate role agent.
-> The main session orchestrates; agents implement.
+> **The main session does the small, safe, local work itself. It spawns a role agent
+> for work that is genuinely multi-file, multi-layer, risky, or long.**
+>
+> Spawning is not free: every agent starts cold — it re-reads `CLAUDE.md`, its role
+> file, and re-explores the codebase, and none of that cost is shared with the main
+> session's cache. An unnecessary spawn is pure overhead. Right-size the delegation
+> (below) before reaching for `Agent()`.
 
-### Clarify scope before implementing (MANDATORY gate)
+### When the main session works directly
 
-Spawned agents run from a written brief and cannot interactively chat with the user —
-background agents work async, so a question raised mid-task comes back to the main
-session, not to the user, in real time. So clarification happens **before** spawning,
-in the main session, not inside the agent:
+No agent — just do it in the main session:
+- Reading / exploring code, `tsc --noEmit`, `dotnet build`, `git`, lint.
+- A change confined to 1 file (or 2–3 tightly-coupled ones) up to ~60 lines, low-risk.
+- A localized bug fix.
+- Docs / task-log / task-status updates.
+- Small follow-ups on an agent's output (a lint fix, a rename, an extra test).
+
+### When to spawn a role agent
+
+Spawn one when the task is any of:
+- a change across 3+ files and more than one layer, or a new feature / module;
+- a destructive or otherwise irreversible migration;
+- a change to an auth / RLS / permission boundary, or to a money-movement calculation;
+- concurrency-sensitive work (races, write boundaries, locking);
+- a large exploratory effort where keeping the main session's context clean is worth it.
+
+### Right-size the delegation
+
+- **Don't fan out for a routine feature.** The main session already has the project
+  context cached — it explores the relevant files itself and spawns **one**
+  implementation agent with a tight brief. No separate Explore/Plan agents for
+  ordinary work.
+- **Explore agent(s)** — only for genuinely broad uncertainty (3+ unfamiliar areas,
+  unclear scope).
+- **Plan agent** — only for architecture-level design, not an ordinary feature.
+- **One agent, end to end.** The implementing agent also runs its own build/test
+  verification, writes its own task log, and appends its own short `current.md`
+  entry. Do **not** chain a separate `qa-tester` + `documentation-writer` for small
+  or medium changes. Spawn a separate `qa-tester` only for a full regression pass on
+  a large or risky feature; spawn `documentation-writer` only for a substantial ADR
+  or API-contract change.
+
+### Clarify scope before spawning (gate)
+
+A spawned agent runs from a written brief and cannot interactively chat with the user —
+a question it raises mid-task comes back to the main session, not to the user in real
+time. So clarification happens **before** spawning, in the main session:
 
 - If the request leaves a decision only the user can make (product/UX choice, content,
   priority between tradeoffs, branding, scope — what to build vs skip) — ask first, via
@@ -279,71 +316,82 @@ in the main session, not inside the agent:
 
 ### How to spawn an agent
 
-Agents in `.claude/agents/` are **not** built-in subagent types.
-Always spawn as `general-purpose` with an instruction to read the role file first:
+Role files in `.claude/agents/` are **not** built-in subagent types. Spawn as
+`general-purpose` and point the agent at its role file:
 
 ```
 Agent({
   subagent_type: "general-purpose",
+  model: "sonnet",   // set explicitly — see Model tiers
   description: "frontend-developer: <short task description>",
   prompt: `Read .claude/agents/frontend-developer.md first, then implement:
-<detailed task description with file paths, requirements, context>`
+<brief — see the brief template below>`
 })
 ```
 
+### Brief template (keep the cold-start small)
+
+The brief — not a doc trawl — carries the context. Include:
+- the task, stated concretely (what changes, expected result);
+- the **exact file paths** to read and change (5–15 files, not a directory);
+- ~10–20 lines of the surrounding context / constraints;
+- a pointer to the **one** relevant `v*-spec.md` section and, if needed, the **one**
+  relevant `.claude/docs/` file — by name and heading;
+- explicit: *don't read the full `.claude/docs/` set or `current.md` wholesale; if you
+  need a specific ADR or past task, `grep` for it by ID.*
+
 ### Model tiers (which model to spawn per task)
 
-Every `Agent()` call should pass an explicit `model` matching the task's actual difficulty —
-don't let every spawned agent silently default to inheriting the main session's model
-regardless of how simple or how hard the work is. Three tiers, mapped to Claude Code's model
-aliases:
+Every `Agent()` call passes an explicit `model` matching the task's real difficulty —
+don't let a spawn silently inherit the main session's model.
 
-| Tier | `model` value | Use for |
+| Tier | `model` | Use for |
 |---|---|---|
-| `cheap` | `haiku` | Routing/triage, file discovery, simple research, summarization, docs sync, mechanical find-and-replace edits, basic classification |
-| `standard` | `sonnet` (default) or `haiku` (downgrade — see below) | Ordinary coding: frontend, backend, DB changes, normal debugging, tests, normal review, UI implementation |
-| `reasoning` | `opus` | Architecture, hard debugging, security-sensitive design, destructive migrations, concurrency, cross-system design, hard ambiguity |
+| `cheap` | `haiku` | Routing/triage, file discovery, simple research, summarization, docs sync, mechanical find-and-replace, i18n string sweeps, data backfills of a known shape, boilerplate CRUD from an existing template, applying an already-designed pattern to more files |
+| `standard` | `sonnet` | Ordinary coding: frontend, backend, DB changes, normal debugging, tests, normal review, UI implementation, non-trivial business logic, first-of-its-kind work |
+| `reasoning` | `opus` | **Rare (~1 task in 15).** Design of a destructive/irreversible migration; design or review of an RLS / tenant-isolation / auth boundary; subtle concurrency (races, write boundaries, locking); cross-system architecture with real unresolved ambiguity |
 
-**`standard`-tier downgrade rule** — `standard` is not one fixed model; judge each
-implementation task's actual difficulty within the tier, not just which tier it landed in:
-- **Design / first-of-its-kind work → `sonnet`.** Building a new shared component or pattern
-  from scratch, non-trivial business logic, a task with real design decisions still open, the
-  first time this exact kind of change is made in the codebase.
-- **Mechanical repetition of an already-proven pattern → downgrade to `haiku`.** Once the hard
-  design work has been done once (by a `sonnet`/`opus` agent) and verified working, applying
-  that *exact same* pattern to more files/endpoints/components rarely needs `sonnet`'s
-  judgment. Concrete example from this project's own history: the agent that designed
-  `components/ui/Table.tsx` from scratch needed `sonnet`; the later batches that each just
-  applied that already-designed component to more files, following the identical approach,
-  could have run on `haiku`.
-- When unsure which side of the line a task falls on, default to `sonnet` — a wrong downgrade
-  produces silently-worse code with no error to catch it, while a wrong non-downgrade only
-  costs a bit more.
+**Haiku is under-used — reach for it.** Once the hard design was done once (by a
+`sonnet`/`opus` agent) and verified, applying that same pattern to more
+files/endpoints/components is `haiku` work, not `sonnet`. Example from this project:
+designing `components/ui/Table.tsx` needed `sonnet`; the later batches applying it to
+30+ files were `haiku`. When genuinely unsure which of `haiku`/`sonnet` a task is,
+pick `sonnet` — a wrong downgrade produces silently-worse code with no error to catch it.
 
-Head rule: use the cheapest model that can reliably complete the task. Never downgrade
-`reasoning`-tier work, and escalate when the task carries a risk flag — security, financial
-flow, destructive migration, concurrency. A manual instruction from the user ("use reasoning
-tier", "keep it cheap", "don't use Opus") overrides the heuristic unless it breaks a safety or
-project rule.
+**`reasoning`/Opus is a deliberate, rare choice — not "harder than average."**
+- It is the short list in the table above, nothing else.
+- The escalation trigger is a **change to** an auth/RLS/permission boundary or a
+  money-movement calculation — not any code that merely sits near one. "Touches
+  security" is too broad; it caught half the backend.
+- Opus consumes the usage limit at a much higher rate than Sonnet, and Max plans have
+  a separate, smaller weekly Opus cap. **"Use Opus to save limits" is false.**
+- When you do spawn Opus: surgical brief, exact files, and **explicitly tell it not
+  to read the big context set.** An Opus cold-start reading 300 KB of docs is the
+  single most expensive thing this workflow can do.
 
-Example — a cheap-tier Explore-style lookup delegated to a role agent:
+Head rule: use the cheapest model that can reliably complete the task. A manual
+instruction from the user ("use reasoning tier", "keep it cheap", "don't use Opus")
+overrides the heuristic unless it breaks a safety or project rule.
+
+Example — a cheap-tier delegation:
 ```
 Agent({
   subagent_type: "general-purpose",
   model: "haiku",
-  description: "docs-writer: sync glossary term",
+  description: "documentation-writer: sync glossary term",
   prompt: `Read .claude/agents/documentation-writer.md first, then: <task>`
 })
 ```
 
-(Note: this project's `.agent-system/`-based agent-system-v2 migration, on branch
-`chore/agent-system-v2`, has its own richer version of this — per-agent `default_model_tier` +
-risk-escalation rules resolved via `.agent-system/adapters/*/model-map.yaml`. Until that branch
-is merged, apply the table above manually per spawn.)
+(A richer per-agent `default_model_tier` + risk-escalation system exists on the
+unmerged branch `chore/agent-system-v2` — not active on `main`. Apply the table above
+manually per spawn.)
 
-### Agent → Task mapping (MANDATORY)
+### Which role fits which task
 
-| Task type | Agent to spawn |
+When you do spawn (per "When to spawn a role agent" above), pick the role by task type:
+
+| Task type | Role file |
 |---|---|
 | New page / component / form / hook (Next.js/React) | `frontend-developer` |
 | API endpoint / service / domain logic (C#) | `backend-developer` |
@@ -356,31 +404,37 @@ is merged, apply the table above manually per spawn.)
 | Docker / CI/CD / deployment | `devops-engineer` |
 | Docs / API contracts / ADR | `documentation-writer` |
 
-### When the main session acts directly (exceptions)
+### Agent Workflow (all spawned agents follow this)
 
-The main session may act without spawning an agent **only** for:
-- Reading files / exploring codebase
-- Running `tsc --noEmit`, `git status`, `git push`, lint
-- Quick isolated fix in a single well-known file (< 10 lines)
-- Answering architecture questions without writing code
+1. Load **only** what the brief names: `CLAUDE.md`, the one relevant `v*-spec.md`
+   section, the named `.claude/docs/` file(s) if any, and the listed source files.
+   Do **not** read the whole `.claude/docs/` set or `.claude/tasks/current.md` in
+   full — `grep` by TASK-ID / ADR-ID for anything specific.
+2. Check task dependencies before starting.
+3. Implement only the assigned scope.
+4. Run the build/tests you can (`tsc --noEmit`, `dotnet build`, the relevant
+   `dotnet test` filter, `next build` if a route changed).
+5. Write a **short** task log in `.claude/logs/tasks/` (what changed, build/test
+   status, issues — no process narration).
+6. Append a **short** entry (a few lines) to `.claude/tasks/current.md`.
+7. Write a handoff in `.claude/logs/handoffs/` **only** if another agent must
+   genuinely pick up unfinished work. Update `.claude/docs/` only when architecture
+   or documented domain behavior actually changed.
 
-### Agent Workflow (all agents must follow)
+### `/code-review` effort levels
 
-1. Load context: read `CLAUDE.md` → relevant `v*-spec.md` → `.claude/docs/` → `.claude/tasks/current.md`
-2. Check task dependencies before starting
-3. Implement only assigned responsibilities
-4. Create task log in `.claude/logs/tasks/`
-5. Create handoff in `.claude/logs/handoffs/` if next agent needed
-6. Update task status in `.claude/tasks/`
-7. Update `.claude/docs/` if architecture or domain behavior changes
+`/code-review` at normal effort, or `codex review`, is the everyday check.
+`/code-review ultra` launches a **5-agent Opus cloud fleet ($5–25, heavy limit
+burn)** — reserve it for a genuinely high-stakes diff (security-sensitive, RLS,
+pre-release), never routine review.
 
 ### Codex CLI as a parallel channel (optional)
 
 `codex` (OpenAI Codex CLI, ChatGPT-login auth — no API billing) is available on this
 machine and can run **alongside** Claude agents for extra throughput. It is not a
-replacement for the mandatory role-agent workflow above — use it to parallelize an
-independent workstream, or as a second-opinion reviewer, never as the only implementer
-of record for a task.
+replacement for the role-agent workflow above — use it to parallelize an independent
+workstream, or as a second-opinion reviewer, never as the only implementer of record
+for a task.
 
 Invoke non-interactively via Bash (`run_in_background: true`), same briefing discipline
 as a Claude agent prompt (self-contained, cites CLAUDE.md/spec/file paths). `exec` mode
@@ -418,7 +472,7 @@ shared across every project on this machine; always pass `-m`/`-c` per call inst
 
 ### Task ID Format
 ```
-TASK-001, TASK-002, ...  (current max: TASK-278)
+TASK-001, TASK-002, ...  (current max: TASK-673)
 ```
 
 ### Task Log File Format
@@ -433,35 +487,46 @@ Example: .claude/logs/tasks/278_2026-06-21_live-chat_backend-developer.md
 
 ## Documentation
 
-Architecture decisions and domain context live in `.claude/docs/`.
-**Read these files before asking architecture or domain questions.**
+Architecture decisions and domain context live in `.claude/docs/`. Consult the
+**one** file a question needs — don't read the set end to end. The large files
+(`decisions.md`, `api-contracts.md`, `database-schema.md`, `known-issues.md`) are
+reference material: `grep` by ADR-ID / endpoint / KI-ID rather than reading whole.
 
 ```
 .claude/docs/
-├── architecture.md        # Key decisions and rationale (ADR-001..015)
-├── domain-model.md        # Core entities and relationships
-├── api-contracts.md       # Shared request/response shapes
-├── database-schema.md     # Schema decisions, RLS patterns
-├── frontend-structure.md  # Frontend conventions and patterns
-├── backend-structure.md   # Backend layer conventions
-├── integrations.md        # Claude API, Telegram, BullMQ, Open-Meteo, Checkbox, MQTT
-├── decisions.md           # Architecture decision log (ADR)
-├── known-issues.md        # Known bugs and limitations
-└── glossary.md            # Domain terms (FEFO, CDA, ADU, MOQ, USQ, etc.)
+├── architecture.md         # Key decisions and rationale (ADR-001..015)
+├── domain-model.md         # Core entities and relationships
+├── api-contracts.md        # Shared request/response shapes
+├── database-schema.md      # Schema decisions, RLS patterns
+├── frontend-structure.md   # Frontend conventions and patterns
+├── backend-structure.md    # Backend layer conventions
+├── integrations.md         # Claude API, Telegram, BullMQ, Open-Meteo, Checkbox, MQTT
+├── decisions.md            # ADR log — index + recent ADRs in full
+├── decisions-archive.md    # Older ADRs, full text (grep by ADR-ID)
+├── known-issues.md         # Open bugs and limitations
+├── known-issues-archive.md # Resolved / historical issues
+└── glossary.md             # Domain terms (FEFO, CDA, ADU, MOQ, USQ, etc.)
 ```
 
 ## AI Workflow
 
 - **Read `v*-spec.md` first** for domain requirements — these are the source of truth.
-- **Read `.claude/docs/` next** for architecture decisions.
-- **Plan before code** for anything larger than a single function.
+- **Consult the one relevant `.claude/docs/` file** when a task needs an architecture
+  decision — not the whole set.
+- **Plan before code** for a new feature or module — a short plan in the main session,
+  not necessarily a Plan agent.
 - **File structure before code** when introducing a new feature or module.
 - **Log completed work** in `.claude/logs/tasks/`.
-- **Create handoff** when passing work to another agent.
+- **Create handoff** only when another agent must genuinely pick up unfinished work.
 
 ## Token Efficiency
 
+- **Small change → main session, not a spawn.** A fresh agent re-pays the whole
+  context cost (`CLAUDE.md` + role file + re-exploration), none of it shared with the
+  main session's cache. Spawn only per the "When to spawn a role agent" criteria.
 - Reference `.claude/docs/` and `v*-spec.md` by name rather than pasting content.
 - Scope prompts to one feature and one layer at a time.
 - Include file path and relevant line range rather than quoting large blocks.
+- Keep `.claude/tasks/current.md` and `.claude/docs/decisions.md` lean — archive
+  finished sprints / old ADRs so every future cold-start reads less.
 - **Short reports.** Звіти про роботу і завершення задач — стислі: що зроблено, статус build/tests/deploy, знайдені проблеми. Без таблиць, повторів контексту й переказу процесу. Стосується фінальних відповідей, agent report-back і task logs.
