@@ -172,6 +172,27 @@ public sealed class ItemServiceTests
         _repo.DidNotReceive().Update(Arg.Any<Item>());
     }
 
+    [Fact]
+    public async Task UpdateAsync_UnchangedCategoryNowInactive_IsGrandfathered()
+    {
+        // Provider soft-deleted / retagged the category after the item was linked. An unrelated
+        // edit must still save — the guard only fires for a *newly assigned* category (QA BUG-1).
+        var catId = Guid.NewGuid();
+        var existing = new Item { TenantId = _tenantId, Name = "Old", ManagementType = "MTS", Unit = "шт", CategoryId = catId };
+        _repo.GetByIdAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
+        _categoryRepo.ActiveExistsAsync(catId, Arg.Any<CancellationToken>()).Returns(false);
+
+        var req = new UpdateProductRequest(
+            "New name", null, catId, null, "шт", "MTS", null,
+            0, 0, 0, null, null, null, null, 20, null, null, null, true, null, null, null);
+
+        var (product, error) = await _sut.UpdateAsync(existing.Id, req);
+
+        Assert.Null(error);
+        Assert.NotNull(product);
+        _repo.Received().Update(Arg.Any<Item>());
+    }
+
     // ── GetPaged (search/ids passthrough — TASK-572) ─────────────────────────
 
     [Fact]

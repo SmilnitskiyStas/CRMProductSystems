@@ -145,9 +145,13 @@ public sealed class ItemService : IItemService
         if (!string.IsNullOrWhiteSpace(request.PerishabilityClass) && !PerishabilityClass.IsValid(request.PerishabilityClass))
             return (null, $"Invalid perishability class '{request.PerishabilityClass}'. Valid values: fresh, chilled, standard, durable.");
 
-        // B2: category now points at the global platform_categories catalogue — reject an id
-        // that doesn't resolve to an active row (a soft-deleted / unknown category).
-        if (request.CategoryId is Guid updateCatId && !await _categoryRepo.ActiveExistsAsync(updateCatId, ct))
+        // B2: category now points at the global platform_categories catalogue — reject a *newly
+        // assigned* id that doesn't resolve to an active row. An unchanged category is grandfathered:
+        // the provider may have retagged or soft-deleted it after the item was linked, and that must
+        // not block every future save of an otherwise-valid item (QA BUG-1).
+        if (request.CategoryId is Guid updateCatId
+            && updateCatId != product.CategoryId
+            && !await _categoryRepo.ActiveExistsAsync(updateCatId, ct))
             return (null, "Category not found or inactive.");
 
         product.Name = request.Name.Trim();

@@ -624,3 +624,32 @@ dropdown, business-type visibility, provider CRUD + "has sub-categories" 400 + s
 Тестові дані вичищено з dev БД. **⚠️ `next build` побив `.next` запущеного `frontend-dev` —
 видалив `.next` + перезапустив (новий serverId).** openapi.json regen — все ще pending з B1/B2.
 
+## QA regression pass — catalog barcodes + platform categories (TASK-675..678)
+
+**Status:** done · **Agent:** qa-tester · **Verdict:** SHIP-WITH-FIXES
+Review: `.claude/logs/reviews/2026-09-02_catalog-barcodes-platform-categories-qa.md`
+
+Автоматика вся зелена: `dotnet build` 0 err · **повний `dotnet test` 2200/2200, 0 skipped**
+(точний baseline) · has-pending-model-changes none · **міграція Down/Up round-trip на scratch
+БД чиста** (Down відновлює `categories` + RLS-тріаду, FK swap-back коректний) · frontend
+`tsc`/`lint`/`build` чисто · i18n uk==en 4710/4710, 0 diff · `worker`/`mobile` `tsc` чисто.
+RLS: `platform_categories` справді глобальна (no RLS/FORCE), RLS-audit тест проходить з
+правильної причини, `items`/`product_segments`/`weather_coefficients` FORCE RLS збережено.
+Barcodes (normalize/primary/lookup), provider CRUD 11/11 edge-кейсів, uncategorized+subtree,
+audience-builder, mobile by-barcode — усі pass. Browser E2E обидва логіни — pass, 0 console
+errors на свіжому сервері (стара `seed`-вкладка мала stale MISSING_MESSAGE — не баг).
+
+**2 баги, обидва на стику `ItemService` category-валідації та provider soft-delete:**
+- **BUG-1 (medium):** після provider soft-delete категорії, до якої привʼязані items тенанта,
+  будь-яке збереження правки такого item → 400 `"Category not found or inactive."` (форма
+  ресабмітить застарілий `categoryId`, а новий `ActiveExistsAsync`-guard його відхиляє).
+  Регресія — до цього коміту `UpdateAsync` не валідував `CategoryId`. Фікс: валідувати
+  `CategoryId` лише коли він змінився (`id != product.CategoryId`).
+- **BUG-2 (low, косметика):** у формі редагування item категорія-`<select>` порожня, якщо
+  категорія item прихована від тенанта (retag на інший business-type / soft-delete) — назва
+  ніде не показана. Save лінк зберігає (крім кейсу BUG-1). Той самий missing-`<option>`.
+
+Аналітику `by-category` та POS loyalty-exclusion не вдалося E2E (модуль `analytics` не
+активний для demo-тенанта; активація заблокована) — code review чистий + покрито тестами в
+2200. Уся QA-тестова дата вичищено (БД: 86 platform_categories / 224 items). Не закомічено.
+
