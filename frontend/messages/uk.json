@@ -3223,9 +3223,7 @@
         "cancellationRate": "Відмови",
         "basedOnOrders": "на основі {n} замовлень",
         "basedOnInquiries": "на основі {n} звернень",
-        "responseTimeInsufficient": "недостатньо даних",
-        "regionsToggleShow": "детальніше по регіонах",
-        "regionsToggleHide": "приховати регіони"
+        "responseTimeInsufficient": "недостатньо даних"
       },
       "coverage": {
         "title": "Регіони доставки",

@@ -3223,9 +3223,7 @@
         "cancellationRate": "Cancellations",
         "basedOnOrders": "based on {n} orders",
         "basedOnInquiries": "based on {n} inquiries",
-        "responseTimeInsufficient": "not enough data",
-        "regionsToggleShow": "details by region",
-        "regionsToggleHide": "hide regions"
+        "responseTimeInsufficient": "not enough data"
       },
       "coverage": {
         "title": "Delivery regions",
