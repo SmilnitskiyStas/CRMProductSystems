@@ -3,6 +3,27 @@
 Джерело: security audit `.claude/logs/reviews/2026-07-09_security-audit_auth-infra.md`
 (TASK-329..332). Паралельні власники: TASK-331 — frontend, TASK-332 — devops.
 
+## TASK-673 (QA) — verification + regression for supplier metrics detail page
+
+**Status:** done · **Agent:** qa-tester · **Verdict: SHIP.** Verification only, no feature code changed.
+Log: `.claude/logs/tasks/673_2026-09-02_metrics-detail-page-qa_qa-tester.md`
+
+Feature TASK-670..672 (`e01bd61f` / `7f43a496` / `c7ffdf53`), docs `1db8ffd8`. Automated: build 0
+err / 1 known warn, `dotnet test` **2174/2174** (0 skipped), ForceRls-triad test green with
+`supplier_metrics_snapshots`, tsc/lint clean, vitest 59/59, `next build` OK (route present),
+uk/en parity 4652==4652, worker+mobile tsc clean, ef `has-pending-model-changes` none, 3 RLS
+policies + FORCE RLS on the new table. E2E on a live dev stack (API :5080 / next :3007 / worker
+BullMQ harness): worker snapshot write idempotent + Rating/QualityScore read-back correct;
+`metrics-history` endpoint clamp `[7,365]` + 404 (missing/unpublished) + 401 verified; profile
+tiles deep-link to `/metrics#anchor` and scroll; all 7 detail sections render (current value +
+explanation + trend chart, quality→empty state, delivery→declared-vs-measured by-region table,
+coverage→SupplierCoveragePanel); profile region-toggle removed cleanly; cross-tenant RLS isolates
+the snapshot table while the endpoint still serves buyers via the provider override. Regression:
+marketplace flows, `supplier_metrics` write-boundary, DeliveryCoverageBackfill idempotency — all
+clean. Findings: 1 low nit (orphaned `metrics.regionsToggleShow/Hide` i18n keys, parity intact) +
+3 info notes (recompute nulls live metrics w/o source data — pre-existing; dev left with QA seed
+data; uk not live-retested this run — covered by parity + commit review). Not pushed.
+
 ## TASK-673 (docs) — document supplier metrics history + detail page
 
 **Status:** done · **Agent:** documentation-writer · Docs only.
