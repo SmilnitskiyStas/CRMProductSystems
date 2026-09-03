@@ -51,6 +51,8 @@ import type {
   ShipSuggestion,
   ShipOrderRequest,
   ShipOrderResult,
+  SupplierAnalytics,
+  SupplierMetricsHistoryResponse,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 import type { PagedResult as ApiPagedResult } from "@/lib/api-types";
@@ -108,6 +110,29 @@ export const supplierCabinetApi = {
 
   /** GET /api/supplier-cabinet/metrics */
   getMetrics: () => api.get<CabinetMetrics>(`${BASE}/metrics`),
+
+  /** GET /api/supplier-cabinet/metrics-history?days= — own daily metric snapshots (oldest→newest)
+   *  + period-over-period deltas (Phase 6c). days clamps to [7, 365] server-side. */
+  getMetricsHistory: (days: number) =>
+    api.get<SupplierMetricsHistoryResponse>(`${BASE}/metrics-history?days=${days}`),
+
+  /** GET /api/supplier-cabinet/analytics?from=&to= — demand analytics over the supplier's own
+   *  marketplace order history (Phase 6b). Both omitted → last 30 days; range capped at 366d. */
+  getAnalytics: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const query = qs.toString();
+    return api.get<SupplierAnalytics>(`${BASE}/analytics${query ? `?${query}` : ""}`);
+  },
+
+  /** GET /api/supplier-cabinet/orders/unseen-count — "new order arrived" badge (Phase 6a). */
+  getUnseenOrderCount: () =>
+    api.get<{ count: number }>(`${BASE}/orders/unseen-count`),
+
+  /** POST /api/supplier-cabinet/orders/mark-seen — drops the badge to 0 for the calling user
+   *  until the next order arrives. Idempotent, 204. */
+  markOrdersSeen: () => api.post<void>(`${BASE}/orders/mark-seen`),
 
   /** GET /api/supplier-cabinet/staff */
   getStaff: () => api.get<UserDto[]>(`${BASE}/staff`),

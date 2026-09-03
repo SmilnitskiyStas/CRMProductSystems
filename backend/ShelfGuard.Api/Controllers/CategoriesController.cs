@@ -15,7 +15,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/categories")]
-[Authorize(Policy = AppPolicies.CanViewStock)]
+[Authorize]
 public sealed class CategoriesController : ControllerBase
 {
     private readonly ICategoryService _categories;
@@ -28,6 +28,7 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = AppPolicies.CanViewStock)]
     [ProducesResponseType(typeof(List<CategoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
@@ -40,6 +41,10 @@ public sealed class CategoriesController : ControllerBase
     /// over ALL active categories (not business-type-filtered — a supplier sells across
     /// verticals). <c>limit</c> defaults to 20, capped at 50. Each hit carries its parent name
     /// (disambiguation) and the caller tenant's own item count in that category.
+    /// Authenticated-only (not <see cref="AppPolicies.CanViewStock"/>): <c>platform_categories</c>
+    /// is global provider-curated reference data, and <c>supplier_admin</c> — deliberately absent
+    /// from every tenant-staff policy — needs it to tag its marketplace catalog. The result leaks
+    /// nothing tenant-scoped (item counts are the caller's own, 0 for a pure supplier tenant).
     /// </summary>
     [HttpGet("search")]
     [ProducesResponseType(typeof(IReadOnlyList<CategorySearchResultDto>), StatusCodes.Status200OK)]

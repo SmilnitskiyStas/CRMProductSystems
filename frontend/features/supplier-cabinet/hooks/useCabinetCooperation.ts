@@ -129,6 +129,33 @@ export function useCabinetOrders() {
   });
 }
 
+// ── "New order arrived" badge (supplier-portal expansion #3, Phase 6a) ─────────
+
+/** Poll-driven count of this supplier's non-cancelled orders created since the calling user
+ *  last opened the orders tab. Mirrors `useSupplierChatSessions` — fetched only for the sidebar
+ *  badge, refetched on an interval. Guard `enabled` with `isSupplierAdmin` at the call site. */
+export function useUnseenOrderCount(enabled = true) {
+  return useQuery({
+    queryKey: ["supplier", "orders", "unseen-count"] as const,
+    queryFn: supplierCabinetApi.getUnseenOrderCount,
+    enabled,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+}
+
+/** POST .../orders/mark-seen — call once when the orders page mounts so opening it clears the
+ *  badge. Invalidates the unseen-count query. */
+export function useMarkOrdersSeen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: supplierCabinetApi.markOrdersSeen,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["supplier", "orders", "unseen-count"] });
+    },
+  });
+}
+
 export function useUpdateCabinetOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({

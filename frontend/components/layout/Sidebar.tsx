@@ -60,6 +60,7 @@ import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useSupplierChatSessions } from "@/features/supplier-cabinet/hooks/useSupplierCabinet";
+import { useUnseenOrderCount } from "@/features/supplier-cabinet/hooks/useCabinetCooperation";
 import type { ModuleKey } from "@/features/modules/types";
 import {
   AppRoles,
@@ -316,7 +317,11 @@ function buildSupplierNavGroup(t: SidebarGroupsT): NavGroup {
     { href: "/supplier/warehouses", label: t("supplierCabinet.warehouses"), icon: <Warehouse size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
     { href: "/supplier/inventory", label: t("supplierCabinet.inventory"), icon: <Boxes size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
     { href: "/supplier/schedules", label: t("supplierCabinet.schedules"), icon: <CalendarDays size={16} />, roles: SUPPLIER_ONLY, permission: "workforce_management", moduleKey: "supplier_workforce" },
+    // Supplier-portal expansion Phase 6b/6c — no moduleKey (both ride the always-on
+    // marketplace_supplier gate; the backend action-gates on the permission below).
+    { href: "/supplier/analytics", label: t("supplierCabinet.analytics"), icon: <BarChart3 size={16} />, roles: SUPPLIER_ONLY, permission: "analytics_view" },
     { href: "/supplier/reviews", label: t("supplierCabinet.reviews"),  icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
+    { href: "/supplier/performance", label: t("supplierCabinet.performance"), icon: <TrendingUp size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
     { href: "/supplier/tasks",   label: t("supplierCabinet.tasks"),    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
     { href: "/supplier/clients", label: t("supplierCabinet.clients"), icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
     { href: "/supplier/team",    label: t("supplierCabinet.team"),    icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
@@ -791,6 +796,11 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     ? (chatSessions ?? []).reduce((sum, s) => sum + (s.unreadCount ?? 0), 0)
     : 0;
 
+  // "New order arrived" badge for the supplier cabinet "Замовлення" nav item (Phase 6a).
+  // Same pattern as the chat badge above — polled, supplier_admin only.
+  const { data: unseenOrders } = useUnseenOrderCount(isSupplierAdmin);
+  const supplierUnseenOrders = isSupplierAdmin ? unseenOrders?.count ?? 0 : 0;
+
   // Only bare provider sessions have no tenant_id — /api/settings/modules would 403.
   // enterprise_admin (real clients AND impersonation sessions) must go through module
   // gating so only their tenant's enabled modules are visible.
@@ -868,12 +878,16 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     .filter(({ visibleItems }) => visibleItems.length > 0)
     .map(({ group, visibleItems }) => ({
       group,
-      // Attach the aggregate unread badge to the supplier "Повідомлення" item only.
-      visibleItems: visibleItems.map((item) =>
-        item.href === "/supplier/messages" && supplierUnreadTotal > 0
-          ? { ...item, badge: supplierUnreadTotal }
-          : item,
-      ),
+      // Attach the unread/unseen badges to the supplier "Повідомлення" / "Замовлення" items.
+      visibleItems: visibleItems.map((item) => {
+        if (item.href === "/supplier/messages" && supplierUnreadTotal > 0) {
+          return { ...item, badge: supplierUnreadTotal };
+        }
+        if (item.href === "/supplier/orders" && supplierUnseenOrders > 0) {
+          return { ...item, badge: supplierUnseenOrders };
+        }
+        return item;
+      }),
     }));
 
   const W = collapsed ? 64 : 240;

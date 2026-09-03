@@ -21,6 +21,9 @@ export interface SupplierListItemDto {
   rating: number | null;
   avgDeliveryDays: number | null;
   isPublic: boolean;
+  /** TASK-689 (Phase 6d): equal-weight composite quality score, 0..1. Null until the nightly
+   *  supplier-metrics worker job has at least one component to average. */
+  compositeScore: number | null;
 }
 
 /** Measured average delivery time to one destination region, produced by the nightly
@@ -45,6 +48,10 @@ export interface SupplierMetricsDto {
   deliverySampleSize?: number | null;
   responseSampleSize?: number | null;
   aggregatesComputedAt?: string | null;
+  // TASK-689 (Phase 6d): worker-computed composite quality score (0..1) and on-time delivery
+  // rate (0..1). Null until the nightly job has components / a delivered sample to work with.
+  compositeScore?: number | null;
+  onTimeDeliveryRate?: number | null;
 }
 
 /** One day's point-in-time copy of a supplier's performance metrics, from
@@ -65,6 +72,9 @@ export interface SupplierMetricsHistoryPoint {
   responseTimeHours: number | null;
   deliverySampleSize: number | null;
   responseSampleSize: number | null;
+  // TASK-689 (Phase 6d): per-snapshot composite quality score + on-time delivery rate (both 0..1).
+  compositeScore: number | null;
+  onTimeDeliveryRate: number | null;
 }
 
 /** Supplier delivery coverage resolved against the calling buyer's region.

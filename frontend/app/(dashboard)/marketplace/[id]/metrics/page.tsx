@@ -122,6 +122,7 @@ export default function SupplierMetricsDetailPage() {
     });
 
   const pct = (v: number) => v * 100;
+  const score100 = (v: number) => Math.round(v * 100);
 
   const chart = (
     points: MetricTrendPoint[],
@@ -170,6 +171,20 @@ export default function SupplierMetricsDetailPage() {
           : t("notComputed")}
       </div>
 
+      {/* Composite quality score (Phase 6d) */}
+      <MetricSection
+        id="composite"
+        title={tMetrics("compositeScore")}
+        explanation={t("explainComposite")}
+        value={
+          metrics?.compositeScore != null
+            ? `${Math.round(metrics.compositeScore * 100)} / 100`
+            : "—"
+        }
+      >
+        {chart(series((h) => h.compositeScore, score100), "score", tMetrics("compositeScore"), "#818CF8")}
+      </MetricSection>
+
       {/* Rating */}
       <MetricSection
         id="rating"
@@ -214,6 +229,20 @@ export default function SupplierMetricsDetailPage() {
         ) : (
           <DeliveryByRegionPanel stats={metrics?.deliveryByRegion} />
         )}
+      </MetricSection>
+
+      {/* On-time delivery rate (Phase 6d) */}
+      <MetricSection
+        id="ontime"
+        title={tMetrics("onTimeDeliveryRate")}
+        explanation={t("explainOnTime")}
+        value={
+          metrics?.onTimeDeliveryRate != null
+            ? `${(metrics.onTimeDeliveryRate * 100).toFixed(0)}%`
+            : "—"
+        }
+      >
+        {chart(series((h) => h.onTimeDeliveryRate, pct), "percent", tMetrics("onTimeDeliveryRate"), "#34D399")}
       </MetricSection>
 
       {/* Order accuracy */}

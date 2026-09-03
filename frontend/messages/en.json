@@ -477,7 +477,9 @@
           "orders": "Orders",
           "contractSettings": "Contract Details",
           "support": "Support",
-          "messages": "Messages"
+          "messages": "Messages",
+          "analytics": "Analytics",
+          "performance": "My performance"
         }
       }
     },
@@ -586,6 +588,13 @@
       },
       "accessDenied": {
         "body": "You don't have access to this section. Contact your store manager or administrator."
+      },
+      "categoryTypeahead": {
+        "placeholder": "Search categories",
+        "minChars": "Type at least 2 characters",
+        "searching": "Searching…",
+        "empty": "Nothing found",
+        "clear": "Clear"
       }
     },
     "profile": {
@@ -3198,7 +3207,9 @@
         "allCategoriesOption": "All categories"
       },
       "card": {
-        "deliveryDays": "{days}-day delivery"
+        "deliveryDays": "{days}-day delivery",
+        "qualityScore": "Quality: {score}",
+        "qualityScoreTooltip": "Composite quality score: on-time delivery, picking accuracy, response speed, reviews"
       },
       "profileForm": {
         "loading": "Loading profile…",
@@ -3239,7 +3250,9 @@
         "cancellationRate": "Cancellations",
         "basedOnOrders": "based on {n} orders",
         "basedOnInquiries": "based on {n} inquiries",
-        "responseTimeInsufficient": "not enough data"
+        "responseTimeInsufficient": "not enough data",
+        "compositeScore": "Composite quality score",
+        "onTimeDeliveryRate": "On-time deliveries"
       },
       "coverage": {
         "title": "Delivery regions",
@@ -3268,7 +3281,9 @@
         "explainQuality": "Product-quality score based on order-intake results. Calculated once enough data has accumulated.",
         "explainResponse": "Median time to the supplier's first reply in chat over the last 180 days.",
         "explainCancellation": "Share of confirmed orders the supplier later cancelled over the last 365 days.",
-        "explainCoverage": "Regions the supplier declares delivery to, with stated lead times and minimum order amounts."
+        "explainCoverage": "Regions the supplier declares delivery to, with stated lead times and minimum order amounts.",
+        "explainComposite": "Equal-weight average of the supplier's available metrics: on-time delivery, picking accuracy, response speed and rating from reviews. From 0 to 100.",
+        "explainOnTime": "Share of delivered orders received no later than the expected delivery date over the last 365 days."
       },
       "reviewsTab": {
         "errorLoad": "Failed to load reviews.",
@@ -3629,6 +3644,16 @@
           "title": "Clients",
           "subtitle": "Supplier cabinet clients — reviews, tasks",
           "noAccess": "You don't have access to clients."
+        },
+        "analytics": {
+          "title": "Demand analytics",
+          "subtitle": "What to sell, how much you've sold and which items are in demand — from your marketplace orders",
+          "noAccess": "No access to analytics."
+        },
+        "performance": {
+          "title": "My performance",
+          "subtitle": "Composite quality score and your metric trends with period-over-period comparison",
+          "noAccess": "No access to performance metrics."
         }
       },
       "schedules": {
@@ -3661,7 +3686,8 @@
         "deleteTitle": "Delete",
         "confirmYes": "Yes",
         "deletePending": "…",
-        "confirmNo": "No"
+        "confirmNo": "No",
+        "headerPlatformCategory": "Category"
       },
       "itemModal": {
         "titleEdit": "Edit item",
@@ -3680,7 +3706,10 @@
         "cancel": "Cancel",
         "saving": "Saving…",
         "save": "Save",
-        "add": "Add"
+        "add": "Add",
+        "platformCategoryLabel": "Catalog category",
+        "platformCategoryPlaceholder": "Start typing a category name",
+        "platformCategoryHint": "Platform category used for marketplace search. Independent of the attribute set above."
       },
       "warehousesTab": {
         "title": "Warehouses",
@@ -3941,7 +3970,15 @@
         "cancelled": "Cancelled"
       },
       "tasksCalendar": {
-        "weekdayLabels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "weekdayLabels": [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun"
+        ],
         "todayButton": "Today",
         "noTasksForDay": "No tasks for this day.",
         "addTaskButton": "Add task",
@@ -4142,6 +4179,45 @@
         "terminateModalLabel": "Termination reason",
         "terminateModalConfirm": "Terminate",
         "toastTerminated": "Cooperation terminated"
+      },
+      "analytics": {
+        "from": "From",
+        "to": "To",
+        "presetDays": "{n}d",
+        "vsPreviousPeriod": "vs previous period",
+        "kpiRevenue": "Revenue",
+        "kpiOrders": "Orders",
+        "kpiUnits": "Units sold",
+        "trendTitle": "Revenue trend",
+        "trendEmpty": "No orders in the selected period.",
+        "topItemsTitle": "Top items",
+        "slowItemsTitle": "Slowest",
+        "byBuyerTitle": "By buyer",
+        "colItem": "Item",
+        "colQtySold": "Sold",
+        "colRevenue": "Revenue",
+        "colOrders": "Orders",
+        "colBuyer": "Buyer",
+        "noData": "No data",
+        "errorLoad": "Failed to load analytics."
+      },
+      "performance": {
+        "daysOption": "{n}d",
+        "vsPreviousPeriod": "vs previous period",
+        "vsPreviousPeriodShort": "vs prev. period",
+        "compositeTitle": "Composite quality score",
+        "outOf100": "out of 100",
+        "compositeExplain": "Equal-weight average of the available components: on-time delivery, picking accuracy, chat response speed and rating from reviews.",
+        "rating": "Rating",
+        "onTimeDelivery": "On-time deliveries",
+        "orderAccuracy": "Picking accuracy",
+        "avgDeliveryDays": "Average delivery time",
+        "responseTime": "Response time",
+        "daySuffix": " d.",
+        "hourSuffix": " h.",
+        "sparseHistory": "Data is still accumulating — trends will appear after a few nightly recalculations.",
+        "errorLoad": "Failed to load metrics.",
+        "updatedAt": "updated {date}"
       }
     },
     "provider": {
@@ -5199,14 +5275,24 @@
         "primaryBarColor": "Navigation background",
         "primaryColorError": "Use a color in #2563EB format",
         "primarySize": "Size",
-        "primarySizes": { "large": "Large", "xlarge": "Extra large" },
+        "primarySizes": {
+          "large": "Large",
+          "xlarge": "Extra large"
+        },
         "primaryStyle": "Highlight style",
-        "primaryStyles": { "floating": "Floating button", "raisedContour": "Raised bar contour" },
+        "primaryStyles": {
+          "floating": "Floating button",
+          "raisedContour": "Raised bar contour"
+        },
         "primaryRaised": "Raise",
         "primaryGlow": "Glow",
         "primaryGlowAnimated": "Pulsing glow",
         "primaryGlowSpeed": "Pulse speed",
-        "primaryGlowSpeeds": { "slow": "Slow", "normal": "Normal", "fast": "Fast" },
+        "primaryGlowSpeeds": {
+          "slow": "Slow",
+          "normal": "Normal",
+          "fast": "Fast"
+        },
         "navTypes": {
           "home": "Home",
           "promotions": "Promotions",
@@ -6000,25 +6086,82 @@
         "integration_pending": "Waiting for service integration"
       },
       "eventSource": {
-        "stockExpiryWarning": { "service": "Inventory module", "actor": "Expiry date monitoring" },
-        "stockExpiryCritical": { "service": "Inventory module", "actor": "Expiry date monitoring" },
-        "stockExpired": { "service": "Inventory module", "actor": "Quality control" },
-        "stockNeedsVerification": { "service": "Inventory module", "actor": "Quality control" },
-        "weeklyReport": { "service": "Task scheduler", "actor": "Automatic report" },
-        "receiptCreated": { "service": "Receiving module", "actor": "Delivery confirmation" },
-        "orderReplenishmentSuggested": { "service": "AI ordering", "actor": "Automatic forecast" },
-        "supplierMessage": { "service": "Marketplace", "actor": "Supplier chat" },
-        "supplierAgreementSigned": { "service": "Marketplace", "actor": "Cooperation agreement" },
-        "iotTempAlert": { "service": "IoT monitoring", "actor": "Temperature sensor" },
-        "iotOffline": { "service": "IoT monitoring", "actor": "Device status" },
-        "accessTemporaryExpiringSoon": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
-        "accessTemporaryExpired": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
-        "authPasswordResetRequested": { "service": "Authentication", "actor": "Password reset" },
-        "customerMessageCreated": { "service": "Marketing messages", "actor": "Network administrator" },
-        "marketplaceOrderCreated": { "service": "Marketplace", "actor": "Client order" },
-        "marketplaceOrderShipped": { "service": "Marketplace", "actor": "Supplier shipment" },
-        "marketplaceOrderDelayReasonAdded": { "service": "Marketplace", "actor": "Supplier — delay reason" },
-        "marketplaceOrderDeliveryRescheduled": { "service": "Marketplace", "actor": "Supplier — new delivery date" }
+        "stockExpiryWarning": {
+          "service": "Inventory module",
+          "actor": "Expiry date monitoring"
+        },
+        "stockExpiryCritical": {
+          "service": "Inventory module",
+          "actor": "Expiry date monitoring"
+        },
+        "stockExpired": {
+          "service": "Inventory module",
+          "actor": "Quality control"
+        },
+        "stockNeedsVerification": {
+          "service": "Inventory module",
+          "actor": "Quality control"
+        },
+        "weeklyReport": {
+          "service": "Task scheduler",
+          "actor": "Automatic report"
+        },
+        "receiptCreated": {
+          "service": "Receiving module",
+          "actor": "Delivery confirmation"
+        },
+        "orderReplenishmentSuggested": {
+          "service": "AI ordering",
+          "actor": "Automatic forecast"
+        },
+        "supplierMessage": {
+          "service": "Marketplace",
+          "actor": "Supplier chat"
+        },
+        "supplierAgreementSigned": {
+          "service": "Marketplace",
+          "actor": "Cooperation agreement"
+        },
+        "iotTempAlert": {
+          "service": "IoT monitoring",
+          "actor": "Temperature sensor"
+        },
+        "iotOffline": {
+          "service": "IoT monitoring",
+          "actor": "Device status"
+        },
+        "accessTemporaryExpiringSoon": {
+          "service": "Access management",
+          "actor": "Temporary grants (ADR-019)"
+        },
+        "accessTemporaryExpired": {
+          "service": "Access management",
+          "actor": "Temporary grants (ADR-019)"
+        },
+        "authPasswordResetRequested": {
+          "service": "Authentication",
+          "actor": "Password reset"
+        },
+        "customerMessageCreated": {
+          "service": "Marketing messages",
+          "actor": "Network administrator"
+        },
+        "marketplaceOrderCreated": {
+          "service": "Marketplace",
+          "actor": "Client order"
+        },
+        "marketplaceOrderShipped": {
+          "service": "Marketplace",
+          "actor": "Supplier shipment"
+        },
+        "marketplaceOrderDelayReasonAdded": {
+          "service": "Marketplace",
+          "actor": "Supplier — delay reason"
+        },
+        "marketplaceOrderDeliveryRescheduled": {
+          "service": "Marketplace",
+          "actor": "Supplier — new delivery date"
+        }
       }
     },
     "serviceDesk": {
@@ -6170,7 +6313,15 @@
         "custom": "Other"
       },
       "calendar": {
-        "weekdayLabels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "weekdayLabels": [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun"
+        ],
         "eventTooltip": "{name} ({type}, coefficients: {count})",
         "moreEvents": "+{count} more"
       },

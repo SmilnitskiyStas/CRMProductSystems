@@ -987,3 +987,34 @@ per-action `client_reviews` (як `GET /metrics`). Нові DTO `SupplierMetrics
 empty, clamp Theory, no-profile→null), `MarketplaceServiceTests` (compositeScore на картці лістингу +
 composite/onTime через history). `.claude/docs/{decisions,api-contracts}.md` оновлено. openapi.json —
 спільний борг. `mobile/`/`frontend/`/`SupplierItem`/`SupplierAnalytics/` не чіпав. НЕ закомічено.
+
+## TASK-690 — Supplier Phase 6 (frontend: 6a–6e) — фінальний агент програми
+
+**Status:** review (НЕ закомічено) · **Agent:** frontend-developer · Plan `1-partitioned-book.md` Phase 6
+Log: `.claude/logs/tasks/690_2026-09-03_supplier-phase6-frontend_frontend-developer.md`
+
+**6a** бейдж нового замовлення: `getUnseenOrderCount`/`markOrdersSeen` API + `useUnseenOrderCount`
+(key `["supplier","orders","unseen-count"]`, `refetchInterval 60s`) / `useMarkOrdersSeen`; `Sidebar.tsx`
+чіпляє badge на `/supplier/orders` (дзеркало chat-badge); `orders/page.tsx` кличе `markSeen` на mount.
+**6b** аналітика: `SupplierAnalytics` типи + `useSupplierAnalytics` + `app/(dashboard)/supplier/analytics/page.tsx`
+(`SUPPLIER_ONLY`+`analytics_view`); `SupplierAnalyticsDashboard` (date-range + 30/90/365, 3 KPI-картки з
+period-over-period `TrendIndicator`, тренд-графік `SupplierRevenueTrendChart` — локальний thin Recharts,
+топ/повільні/по-покупцях таблиці). Nav `/supplier/analytics` (BarChart3).
+**6c/6d** «Моя ефективність»: `compositeScore`+`onTimeDeliveryRate` у marketplace `SupplierMetricsDto`/
+`SupplierListItemDto`/`SupplierMetricsHistoryPoint` + cabinet `CabinetMetrics`; `SupplierMetricsHistoryResponse`;
+`useSupplierMetricsHistory(days)`; `app/(dashboard)/supplier/performance/page.tsx` (`client_reviews`) +
+`SupplierPerformanceView` — **композитний бал рендериться 0–100** (`round(x*100)` «зі 100»), кожна метрика з
+direction-aware `DeltaBadge` + тренд-графік (реюз `SupplierMetricTrendChart`), `<2` точки → нота «накопичується».
+Nav `/supplier/performance` (TrendingUp). Buyer-side: `SupplierCard` пілюля «Якість: 87»; `SupplierMetrics`
+дві нові плитки; `marketplace/[id]/metrics` секції `#composite`+`#ontime`.
+**6e** typeahead категорій: **дім = `features/catalog/components/CategoryTypeahead.tsx`** (portal-dropdown,
+debounce 250ms, clearable); `searchCategories`/`useCategorySearch` у `features/catalog`; `CabinetItem`+
+`platformCategoryId/Name`, add/update DTO += `platformCategoryId?`; поле «Категорія в каталозі» у
+`CabinetItemModal` (patch: unchanged→omit, cleared→all-zero-guid, changed→id); колонка в `CabinetItemsTable`.
+Фільтр категорії на `WarehouseStockTable` — **ВІДКЛАДЕНО** (план дозволяв).
+
+**i18n:** `messages/{uk,en}.json` +63 ключі кожен, **parity 5775 == 5775** (structural OK).
+**Верифікація:** `tsc --noEmit` clean · `next lint` (touched) clean · `next build` OK · HEAD `877576c4` без змін.
+**⚠️ Блокер бекенду (не мій скоуп):** `GET /api/categories/search` gated `CanViewStock` — `supplier_admin`
+НЕ в `CanViewStockRoles` → 6e typeahead 403 для постачальника, поки бекенд не відкриє endpoint цій ролі.
+openapi.json — спільний борг. `mobile/`/backend/worker/retail analytics|schedules internals не чіпав. НЕ закомічено.

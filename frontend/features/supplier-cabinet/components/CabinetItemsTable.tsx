@@ -141,6 +141,12 @@ export function CabinetItemsTable() {
       render: (item) => item.unit ?? "—",
     },
     {
+      key: "platformCategory",
+      header: t("headerPlatformCategory"),
+      cellStyle: { color: "#9CA3AF" },
+      render: (item) => item.platformCategoryName ?? "—",
+    },
+    {
       key: "availability",
       header: t("headerAvailability"),
       render: (item) => (

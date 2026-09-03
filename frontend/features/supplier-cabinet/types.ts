@@ -3,7 +3,10 @@
 // (SupplierProfileDto, SupplierItemDto, PublicSupplierReviewDto, SupplierMetricsDto).
 
 import type { DeliveryCoverage } from "@/features/geo/types";
-import type { MarketplaceOrderDto } from "@/features/marketplace/types";
+import type {
+  MarketplaceOrderDto,
+  SupplierMetricsHistoryPoint,
+} from "@/features/marketplace/types";
 
 export type SupplierPlan = "free" | "premium";
 
@@ -15,6 +18,10 @@ export interface CabinetMetrics {
   cancellationRate: number | null;
   responseTimeHours: number | null;
   updatedAt: string;
+  // TASK-689 (Phase 6d): worker-computed composite quality score + on-time delivery rate
+  // (both 0..1). Null until the nightly job has components / a delivered sample.
+  compositeScore?: number | null;
+  onTimeDeliveryRate?: number | null;
 }
 
 /** GET /api/supplier-cabinet/profile — own profile with metrics. */
@@ -63,7 +70,13 @@ export interface CabinetItem {
   minQty: number | null;
   unit: string | null;
   isAvailable: boolean;
+  /** Legacy attribute-schema key (SupplierItemCategories registry). Independent of the browse
+   *  taxonomy below. */
   category: string | null;
+  /** Browse-taxonomy link into platform_categories (supplier-portal expansion #8, Phase 6e).
+   *  Name resolved on read; null when unset. */
+  platformCategoryId: string | null;
+  platformCategoryName: string | null;
   attributes: Record<string, unknown> | null;
   brand: string | null;
   manufacturer: string | null;
@@ -98,6 +111,8 @@ export interface CabinetAddItemRequest {
   widthCm?: number;
   barcodes?: string[];
   imageUrls?: string[];
+  /** Browse-taxonomy link (Phase 6e). Must be an existing, active platform_categories row. */
+  platformCategoryId?: string;
 }
 
 /** PUT /api/supplier-cabinet/items/{id} — patch semantics; barcodes/imageUrls
@@ -120,6 +135,10 @@ export interface CabinetUpdateItemRequest {
   widthCm?: number;
   barcodes?: string[];
   imageUrls?: string[];
+  /** Browse-taxonomy link (Phase 6e). Patch semantics: omit / undefined — leave untouched;
+   *  the all-zero guid `"00000000-0000-0000-0000-000000000000"` — clear it; any other value —
+   *  set it (validated existing + active). */
+  platformCategoryId?: string;
 }
 
 /** Review as returned by GET /api/supplier-cabinet/reviews (reviewer by display name). */
@@ -529,4 +548,85 @@ export interface ShipSuggestion {
 export interface ShipOrderResult {
   order: MarketplaceOrderDto;
   warnings: string[];
+}
+
+// ── Demand analytics (supplier-portal expansion #7, Phase 6b) ─────────────────
+// GET /api/supplier-cabinet/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD (default last 30d).
+// Gated: "marketplace_supplier" module + "analytics_view" permission. Read-only, no
+// cross-buyer leakage. Backend DTOs: ShelfGuard.Application/Features/SupplierAnalytics/Dtos.
+
+/** Period-over-period movement (backend PeriodMetricDto). `percentChange` null when the
+ *  preceding window was zero. */
+export interface SupplierPeriodMetric {
+  current: number;
+  previous: number;
+  percentChange: number | null;
+}
+
+/** One row in `topItems` / `slowItems`. */
+export interface SupplierAnalyticsItem {
+  /** Null when the order line's supplier catalog entry was deleted (FK SET NULL). */
+  supplierItemId: string | null;
+  itemName: string;
+  qtySold: number;
+  revenue: number;
+  orderCount: number;
+}
+
+/** One buyer's slice of the window. */
+export interface SupplierAnalyticsBuyer {
+  clientTenantId: string;
+  clientName: string;
+  orderCount: number;
+  revenue: number;
+}
+
+/** One day on the revenue trend line. */
+export interface SupplierAnalyticsTrendPoint {
+  /** "YYYY-MM-DD" */
+  date: string;
+  revenue: number;
+  orderCount: number;
+}
+
+export interface SupplierAnalytics {
+  /** Resolved window (may differ from the request when capped at 366 days). "YYYY-MM-DD". */
+  from: string;
+  to: string;
+  totalRevenue: number;
+  orderCount: number;
+  itemsSold: number;
+  revenueDelta: SupplierPeriodMetric;
+  orderCountDelta: SupplierPeriodMetric;
+  itemsSoldDelta: SupplierPeriodMetric;
+  /** Up to 10, highest Σqty first. */
+  topItems: SupplierAnalyticsItem[];
+  /** Up to 10 of the available catalog with the least demand (zero-demand included), lowest first. */
+  slowItems: SupplierAnalyticsItem[];
+  /** Per buyer, highest revenue first. */
+  byBuyer: SupplierAnalyticsBuyer[];
+  /** Daily points, oldest first (chart-ready). */
+  revenueTrend: SupplierAnalyticsTrendPoint[];
+}
+
+// ── Self-service metric history + period deltas (Phase 6c, request #9) ────────
+// GET /api/supplier-cabinet/metrics-history?days=[7..365] (default 90). Gated:
+// "marketplace_supplier" module + "client_reviews" permission. Mirrors the buyer-facing
+// GET /api/marketplace/suppliers/{id}/metrics-history. Backend: SupplierMetricsHistoryResponseDto.
+
+/** Period-over-period movement for one headline metric — null when either endpoint has no value. */
+export interface SupplierMetricsHistoryDeltas {
+  compositeScore: SupplierPeriodMetric | null;
+  avgDeliveryDays: SupplierPeriodMetric | null;
+  orderAccuracy: SupplierPeriodMetric | null;
+  onTimeDeliveryRate: SupplierPeriodMetric | null;
+  rating: SupplierPeriodMetric | null;
+  responseTimeHours: SupplierPeriodMetric | null;
+}
+
+export interface SupplierMetricsHistoryResponse {
+  /** Oldest → newest daily snapshots (chart-ready). Same shape as the buyer-facing point. */
+  points: SupplierMetricsHistoryPoint[];
+  /** Latest snapshot in the window vs. the oldest. */
+  deltas: SupplierMetricsHistoryDeltas;
 }

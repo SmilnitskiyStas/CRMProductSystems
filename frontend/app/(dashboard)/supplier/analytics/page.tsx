@@ -1,22 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { CabinetOrdersTab } from "@/features/supplier-cabinet/components/CabinetOrdersTab";
-import { useMarkOrdersSeen } from "@/features/supplier-cabinet/hooks/useCabinetCooperation";
+import { SupplierAnalyticsDashboard } from "@/features/supplier-cabinet/components/SupplierAnalyticsDashboard";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { SUPPLIER_ONLY, hasRole } from "@/lib/roles";
 
-export default function SupplierOrdersPage() {
+export default function SupplierAnalyticsPage() {
   const t = useTranslations("Dashboard.supplierCabinet.pages");
   const { data: me } = useMe();
-
-  // Opening the orders tab clears the "new order arrived" sidebar badge (Phase 6a).
-  const markSeen = useMarkOrdersSeen();
-  const markSeenMutate = markSeen.mutate;
-  useEffect(() => {
-    markSeenMutate();
-  }, [markSeenMutate]);
 
   if (me && !hasRole(me.role, SUPPLIER_ONLY)) {
     return (
@@ -26,17 +17,27 @@ export default function SupplierOrdersPage() {
     );
   }
 
+  // null permissions = full/owner access; a restricted staff role without analytics_view
+  // should not reach this page directly by URL either (the backend also action-gates it).
+  if (me?.permissions && !me.permissions.analytics_view) {
+    return (
+      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
+        {t("analytics.noAccess")}
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: "28px 32px" }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("orders.title")}
+          {t("analytics.title")}
         </h1>
         <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          {t("orders.subtitle")}
+          {t("analytics.subtitle")}
         </p>
       </div>
-      <CabinetOrdersTab />
+      <SupplierAnalyticsDashboard />
     </div>
   );
 }

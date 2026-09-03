@@ -74,6 +74,24 @@ export function SupplierMetrics({ metrics, supplierId }: Props) {
         }}
       >
         <MetricItem
+          href={`${base}#composite`}
+          label={t("compositeScore")}
+          value={
+            metrics?.compositeScore != null
+              ? `${Math.round(metrics.compositeScore * 100)} / 100`
+              : "—"
+          }
+        />
+        <MetricItem
+          href={`${base}#ontime`}
+          label={t("onTimeDeliveryRate")}
+          value={
+            metrics?.onTimeDeliveryRate != null
+              ? `${(metrics.onTimeDeliveryRate * 100).toFixed(0)}%`
+              : "—"
+          }
+        />
+        <MetricItem
           href={`${base}#rating`}
           label={t("rating")}
           value={

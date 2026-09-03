@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
-import type { CatalogProductDto } from "../types";
+import type { CatalogProductDto, CategorySearchResult } from "../types";
 
 export const catalogApi = {
   getAll: (params?: { category_id?: string; management_type?: string; search?: string; ids?: string[] }) => {
@@ -18,4 +18,11 @@ export const catalogApi = {
   getById: (id: string) => api.get<CatalogProductDto>(`/api/items/${id}`),
 
   getByBarcode: (code: string) => api.get<CatalogProductDto>(`/api/items/by-barcode/${code}`),
+
+  /** GET /api/categories/search — case-insensitive name match over all active platform
+   *  categories, for the category typeahead (Phase 6e). `limit` caps at 50 server-side. */
+  searchCategories: (q: string, limit = 20) => {
+    const qs = new URLSearchParams({ q, limit: String(limit) });
+    return api.get<CategorySearchResult[]>(`/api/categories/search?${qs.toString()}`);
+  },
 };

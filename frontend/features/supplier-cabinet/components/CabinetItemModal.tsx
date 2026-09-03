@@ -11,7 +11,14 @@ import {
   extraFieldsFromItem,
   parseExtraFields,
 } from "@/features/marketplace/components/SupplierItemExtraFields";
+import {
+  CategoryTypeahead,
+  type CategoryRef,
+} from "@/features/catalog/components/CategoryTypeahead";
 import type { CabinetItem } from "../types";
+
+/** Sentinel the cabinet update endpoint reads as "clear the platform category" (Phase 6e). */
+const CLEAR_PLATFORM_CATEGORY = "00000000-0000-0000-0000-000000000000";
 
 interface Props {
   /** When set — edit mode; otherwise create mode. */
@@ -54,6 +61,12 @@ export function CabinetItemModal({ item, onClose }: Props) {
   const [unit, setUnit] = useState(item?.unit ?? "");
   const [isAvailable, setIsAvailable] = useState(item?.isAvailable ?? true);
   const [category, setCategory] = useState(item?.category ?? "");
+  const initialPlatformCategoryId = item?.platformCategoryId ?? null;
+  const [platformCategory, setPlatformCategory] = useState<CategoryRef | null>(
+    item?.platformCategoryId
+      ? { id: item.platformCategoryId, name: item.platformCategoryName ?? "" }
+      : null
+  );
   const [attributes, setAttributes] = useState<Record<string, string>>(
     (item?.attributes as Record<string, string>) ?? {}
   );
@@ -103,6 +116,19 @@ export function CabinetItemModal({ item, onClose }: Props) {
       ? { category, attributes: attributes as Record<string, unknown> }
       : {};
 
+    // Phase 6e — browse-taxonomy link. Add mode: send the id only when one is picked.
+    // Edit mode (patch): send nothing when unchanged, the clear-sentinel when removed,
+    // the new id when changed.
+    const currentPlatformCategoryId = platformCategory?.id ?? null;
+    let platformCategoryId: string | undefined;
+    if (isEdit) {
+      if (currentPlatformCategoryId !== initialPlatformCategoryId) {
+        platformCategoryId = currentPlatformCategoryId ?? CLEAR_PLATFORM_CATEGORY;
+      }
+    } else if (currentPlatformCategoryId) {
+      platformCategoryId = currentPlatformCategoryId;
+    }
+
     const extraFields = {
       brand: parsedExtra.brand,
       manufacturer: parsedExtra.manufacturer,
@@ -128,6 +154,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
             minQty,
             unit: unit.trim() || undefined,
             isAvailable,
+            platformCategoryId,
             ...categoryFields,
             ...extraFields,
           },
@@ -142,6 +169,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
           minQty,
           unit: unit.trim() || undefined,
           isAvailable,
+          platformCategoryId,
           ...categoryFields,
           ...extraFields,
         },
@@ -219,6 +247,21 @@ export function CabinetItemModal({ item, onClose }: Props) {
             attributes={attributes}
             onAttributesChange={setAttributes}
           />
+
+          <div>
+            <label style={LABEL_STYLE} htmlFor="cabinetItemPlatformCategory">
+              {t("platformCategoryLabel")}
+            </label>
+            <CategoryTypeahead
+              inputId="cabinetItemPlatformCategory"
+              value={platformCategory}
+              onChange={setPlatformCategory}
+              placeholder={t("platformCategoryPlaceholder")}
+            />
+            <p style={{ color: "#4B5563", fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+              {t("platformCategoryHint")}
+            </p>
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>

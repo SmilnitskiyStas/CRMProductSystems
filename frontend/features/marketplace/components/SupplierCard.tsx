@@ -73,6 +73,22 @@ export function SupplierCard({ supplier }: Props) {
               ({tMarketplace("reviewCount", { count: reviewCount })})
             </span>
           )}
+          {supplier.compositeScore != null && (
+            <span
+              title={t("qualityScoreTooltip")}
+              style={{
+                padding: "2px 8px",
+                background: "#1E293B",
+                borderRadius: 4,
+                color: "#93C5FD",
+                fontSize: 11,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {t("qualityScore", { score: Math.round(supplier.compositeScore * 100) })}
+            </span>
+          )}
           {supplier.avgDeliveryDays != null && (
             <span style={{ color: "#4B5563", fontSize: 12, marginLeft: "auto" }}>
               {t("deliveryDays", { days: supplier.avgDeliveryDays })}

@@ -148,6 +148,21 @@ export function useCabinetMetrics() {
   });
 }
 
+/**
+ * GET /api/supplier-cabinet/metrics-history?days= — the own supplier's daily metric snapshots
+ * (oldest → newest) plus period-over-period deltas ("Моя ефективність", Phase 6c). `days` is
+ * clamped server-side to [7, 365]. 404 (tenant has no owner-managed supplier) surfaces as an
+ * ApiError the page treats as "empty".
+ */
+export function useSupplierMetricsHistory(days: number) {
+  return useQuery({
+    queryKey: ["supplier", "metrics-history", days] as const,
+    queryFn: () => supplierCabinetApi.getMetricsHistory(days),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
 // ─── Staff ────────────────────────────────────────────────────────────────────
 
 export function useCabinetStaff() {

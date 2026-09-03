@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { catalogApi } from "../api/catalog";
 
 export function useCatalogProducts(params?: {
@@ -11,6 +11,22 @@ export function useCatalogProducts(params?: {
     queryKey: ["catalog", params],
     queryFn: () => catalogApi.getAll(params),
     enabled: options?.enabled ?? true,
+  });
+}
+
+/**
+ * Category typeahead search (Phase 6e). Pass an already-debounced query string; the query only
+ * runs once it's at least 2 characters. `keepPreviousData` keeps the last result list visible
+ * while the next keystroke's request is in flight (no dropdown flicker).
+ */
+export function useCategorySearch(q: string, limit = 20) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: ["categories", "search", term, limit],
+    queryFn: () => catalogApi.searchCategories(term, limit),
+    enabled: term.length >= 2,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 }
 

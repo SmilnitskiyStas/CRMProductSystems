@@ -1,3 +1,16 @@
+/**
+ * One hit from the category typeahead — `GET /api/categories/search?q=&limit=`
+ * (supplier-portal expansion #8, Phase 6e). `parentName` disambiguates same-named leaves;
+ * `itemCount` is the caller tenant's own catalog items in that category (0 for a pure supplier
+ * tenant — harmless). Matches backend `CategorySearchResultDto`.
+ */
+export interface CategorySearchResult {
+  id: string;
+  name: string;
+  parentName: string | null;
+  itemCount: number;
+}
+
 export interface CatalogProductDto {
   id: string;
   barcode: string | null;

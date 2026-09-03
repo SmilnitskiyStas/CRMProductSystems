@@ -477,7 +477,9 @@
           "orders": "Замовлення",
           "contractSettings": "Реквізити договору",
           "support": "Підтримка",
-          "messages": "Повідомлення"
+          "messages": "Повідомлення",
+          "analytics": "Аналітика",
+          "performance": "Моя ефективність"
         }
       }
     },
@@ -586,6 +588,13 @@
       },
       "accessDenied": {
         "body": "У вас немає доступу до цього розділу. Зверніться до менеджера магазину або адміністратора."
+      },
+      "categoryTypeahead": {
+        "placeholder": "Пошук категорії",
+        "minChars": "Введіть щонайменше 2 символи",
+        "searching": "Пошук…",
+        "empty": "Нічого не знайдено",
+        "clear": "Очистити"
       }
     },
     "profile": {
@@ -3198,7 +3207,9 @@
         "allCategoriesOption": "Всі категорії"
       },
       "card": {
-        "deliveryDays": "{days} дн. доставки"
+        "deliveryDays": "{days} дн. доставки",
+        "qualityScore": "Якість: {score}",
+        "qualityScoreTooltip": "Композитний бал якості: доставки вчасно, точність комплектації, швидкість відповіді, відгуки"
       },
       "profileForm": {
         "loading": "Завантаження профілю…",
@@ -3239,7 +3250,9 @@
         "cancellationRate": "Відмови",
         "basedOnOrders": "на основі {n} замовлень",
         "basedOnInquiries": "на основі {n} звернень",
-        "responseTimeInsufficient": "недостатньо даних"
+        "responseTimeInsufficient": "недостатньо даних",
+        "compositeScore": "Композитний бал якості",
+        "onTimeDeliveryRate": "Доставки вчасно"
       },
       "coverage": {
         "title": "Регіони доставки",
@@ -3268,7 +3281,9 @@
         "explainQuality": "Оцінка якості товарів за результатами приймання замовлень. Розраховується, коли накопичиться достатньо даних.",
         "explainResponse": "Медіана часу до першої відповіді постачальника у чаті за останні 180 днів.",
         "explainCancellation": "Частка підтверджених замовлень, які постачальник згодом скасував, за останні 365 днів.",
-        "explainCoverage": "Регіони, куди постачальник декларує доставку, із заявленими термінами та мінімальними сумами замовлення."
+        "explainCoverage": "Регіони, куди постачальник декларує доставку, із заявленими термінами та мінімальними сумами замовлення.",
+        "explainComposite": "Рівнозважене середнє наявних показників постачальника: доставки вчасно, точність комплектації, швидкість відповіді та рейтинг з відгуків. Від 0 до 100.",
+        "explainOnTime": "Частка доставлених замовлень, отриманих не пізніше за очікувану дату доставки, за останні 365 днів."
       },
       "reviewsTab": {
         "errorLoad": "Не вдалося завантажити відгуки.",
@@ -3629,6 +3644,16 @@
           "title": "Клієнти",
           "subtitle": "Клієнти кабінету постачальника — відгуки, завдання",
           "noAccess": "Немає доступу до клієнтів."
+        },
+        "analytics": {
+          "title": "Аналітика попиту",
+          "subtitle": "Що продавати, скільки продано та який товар має попит — за вашими marketplace-замовленнями",
+          "noAccess": "Немає доступу до аналітики."
+        },
+        "performance": {
+          "title": "Моя ефективність",
+          "subtitle": "Композитний бал якості та динаміка ваших показників із порівнянням періодів",
+          "noAccess": "Немає доступу до показників ефективності."
         }
       },
       "schedules": {
@@ -3661,7 +3686,8 @@
         "deleteTitle": "Видалити",
         "confirmYes": "Так",
         "deletePending": "…",
-        "confirmNo": "Ні"
+        "confirmNo": "Ні",
+        "headerPlatformCategory": "Категорія"
       },
       "itemModal": {
         "titleEdit": "Редагувати товар",
@@ -3680,7 +3706,10 @@
         "cancel": "Скасувати",
         "saving": "Збереження…",
         "save": "Зберегти",
-        "add": "Додати"
+        "add": "Додати",
+        "platformCategoryLabel": "Категорія в каталозі",
+        "platformCategoryPlaceholder": "Почніть вводити назву категорії",
+        "platformCategoryHint": "Категорія платформи для пошуку в маркетплейсі. Не повʼязана з набором атрибутів вище."
       },
       "warehousesTab": {
         "title": "Склади",
@@ -3941,7 +3970,15 @@
         "cancelled": "Скасовано"
       },
       "tasksCalendar": {
-        "weekdayLabels": ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"],
+        "weekdayLabels": [
+          "Пн",
+          "Вт",
+          "Ср",
+          "Чт",
+          "Пт",
+          "Сб",
+          "Нд"
+        ],
         "todayButton": "Сьогодні",
         "noTasksForDay": "Завдань на цей день немає.",
         "addTaskButton": "Додати завдання",
@@ -4142,6 +4179,45 @@
         "terminateModalLabel": "Причина розірвання",
         "terminateModalConfirm": "Розірвати",
         "toastTerminated": "Співпрацю розірвано"
+      },
+      "analytics": {
+        "from": "З дати",
+        "to": "По дату",
+        "presetDays": "{n} дн.",
+        "vsPreviousPeriod": "проти попереднього періоду",
+        "kpiRevenue": "Виторг",
+        "kpiOrders": "Замовлення",
+        "kpiUnits": "Продано одиниць",
+        "trendTitle": "Динаміка виторгу",
+        "trendEmpty": "За обраний період немає замовлень.",
+        "topItemsTitle": "Топ товарів",
+        "slowItemsTitle": "Найповільніші",
+        "byBuyerTitle": "За покупцями",
+        "colItem": "Товар",
+        "colQtySold": "Продано",
+        "colRevenue": "Виторг",
+        "colOrders": "Замовлень",
+        "colBuyer": "Покупець",
+        "noData": "Немає даних",
+        "errorLoad": "Не вдалося завантажити аналітику."
+      },
+      "performance": {
+        "daysOption": "{n} дн.",
+        "vsPreviousPeriod": "проти попереднього періоду",
+        "vsPreviousPeriodShort": "проти попер. періоду",
+        "compositeTitle": "Композитний бал якості",
+        "outOf100": "зі 100",
+        "compositeExplain": "Рівнозважене середнє наявних показників: доставки вчасно, точність комплектації, швидкість відповіді у чаті та рейтинг з відгуків.",
+        "rating": "Рейтинг",
+        "onTimeDelivery": "Доставки вчасно",
+        "orderAccuracy": "Точність комплектації",
+        "avgDeliveryDays": "Середній термін доставки",
+        "responseTime": "Час відповіді",
+        "daySuffix": " дн.",
+        "hourSuffix": " год.",
+        "sparseHistory": "Дані ще накопичуються — динаміка зʼявиться після кількох нічних розрахунків.",
+        "errorLoad": "Не вдалося завантажити показники.",
+        "updatedAt": "оновлено {date}"
       }
     },
     "provider": {
@@ -5199,14 +5275,24 @@
         "primaryBarColor": "Колір фону панелі",
         "primaryColorError": "Вкажіть колір у форматі #2563EB",
         "primarySize": "Розмір",
-        "primarySizes": { "large": "Велика", "xlarge": "Дуже велика" },
+        "primarySizes": {
+          "large": "Велика",
+          "xlarge": "Дуже велика"
+        },
         "primaryStyle": "Стиль виділення",
-        "primaryStyles": { "floating": "Плаваюча кнопка", "raisedContour": "Піднятий контур панелі" },
+        "primaryStyles": {
+          "floating": "Плаваюча кнопка",
+          "raisedContour": "Піднятий контур панелі"
+        },
         "primaryRaised": "Підняти",
         "primaryGlow": "Світіння",
         "primaryGlowAnimated": "Мерехтіння",
         "primaryGlowSpeed": "Швидкість мерехтіння",
-        "primaryGlowSpeeds": { "slow": "Повільна", "normal": "Звичайна", "fast": "Швидка" },
+        "primaryGlowSpeeds": {
+          "slow": "Повільна",
+          "normal": "Звичайна",
+          "fast": "Швидка"
+        },
         "navTypes": {
           "home": "Головна",
           "promotions": "Акції",
@@ -6000,25 +6086,82 @@
         "integration_pending": "Очікує підключення сервісу"
       },
       "eventSource": {
-        "stockExpiryWarning": { "service": "Модуль інвентаризації", "actor": "Моніторинг терміну придатності" },
-        "stockExpiryCritical": { "service": "Модуль інвентаризації", "actor": "Моніторинг терміну придатності" },
-        "stockExpired": { "service": "Модуль інвентаризації", "actor": "Контроль якості" },
-        "stockNeedsVerification": { "service": "Модуль інвентаризації", "actor": "Контроль якості" },
-        "weeklyReport": { "service": "Планувальник завдань", "actor": "Автоматичний звіт" },
-        "receiptCreated": { "service": "Модуль надходжень", "actor": "Підтвердження поставки" },
-        "orderReplenishmentSuggested": { "service": "AI замовлення", "actor": "Автоматичний прогноз" },
-        "supplierMessage": { "service": "Маркетплейс", "actor": "Чат з постачальником" },
-        "supplierAgreementSigned": { "service": "Маркетплейс", "actor": "Угода про співпрацю" },
-        "iotTempAlert": { "service": "IoT моніторинг", "actor": "Датчик температури" },
-        "iotOffline": { "service": "IoT моніторинг", "actor": "Стан пристрою" },
-        "accessTemporaryExpiringSoon": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
-        "accessTemporaryExpired": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
-        "authPasswordResetRequested": { "service": "Автентифікація", "actor": "Відновлення пароля" },
-        "customerMessageCreated": { "service": "Маркетингові повідомлення", "actor": "Адміністратор мережі" },
-        "marketplaceOrderCreated": { "service": "Маркетплейс", "actor": "Замовлення клієнта" },
-        "marketplaceOrderShipped": { "service": "Маркетплейс", "actor": "Відвантаження постачальником" },
-        "marketplaceOrderDelayReasonAdded": { "service": "Маркетплейс", "actor": "Постачальник — причина затримки" },
-        "marketplaceOrderDeliveryRescheduled": { "service": "Маркетплейс", "actor": "Постачальник — нова дата доставки" }
+        "stockExpiryWarning": {
+          "service": "Модуль інвентаризації",
+          "actor": "Моніторинг терміну придатності"
+        },
+        "stockExpiryCritical": {
+          "service": "Модуль інвентаризації",
+          "actor": "Моніторинг терміну придатності"
+        },
+        "stockExpired": {
+          "service": "Модуль інвентаризації",
+          "actor": "Контроль якості"
+        },
+        "stockNeedsVerification": {
+          "service": "Модуль інвентаризації",
+          "actor": "Контроль якості"
+        },
+        "weeklyReport": {
+          "service": "Планувальник завдань",
+          "actor": "Автоматичний звіт"
+        },
+        "receiptCreated": {
+          "service": "Модуль надходжень",
+          "actor": "Підтвердження поставки"
+        },
+        "orderReplenishmentSuggested": {
+          "service": "AI замовлення",
+          "actor": "Автоматичний прогноз"
+        },
+        "supplierMessage": {
+          "service": "Маркетплейс",
+          "actor": "Чат з постачальником"
+        },
+        "supplierAgreementSigned": {
+          "service": "Маркетплейс",
+          "actor": "Угода про співпрацю"
+        },
+        "iotTempAlert": {
+          "service": "IoT моніторинг",
+          "actor": "Датчик температури"
+        },
+        "iotOffline": {
+          "service": "IoT моніторинг",
+          "actor": "Стан пристрою"
+        },
+        "accessTemporaryExpiringSoon": {
+          "service": "Управління доступом",
+          "actor": "Тимчасові гранти (ADR-019)"
+        },
+        "accessTemporaryExpired": {
+          "service": "Управління доступом",
+          "actor": "Тимчасові гранти (ADR-019)"
+        },
+        "authPasswordResetRequested": {
+          "service": "Автентифікація",
+          "actor": "Відновлення пароля"
+        },
+        "customerMessageCreated": {
+          "service": "Маркетингові повідомлення",
+          "actor": "Адміністратор мережі"
+        },
+        "marketplaceOrderCreated": {
+          "service": "Маркетплейс",
+          "actor": "Замовлення клієнта"
+        },
+        "marketplaceOrderShipped": {
+          "service": "Маркетплейс",
+          "actor": "Відвантаження постачальником"
+        },
+        "marketplaceOrderDelayReasonAdded": {
+          "service": "Маркетплейс",
+          "actor": "Постачальник — причина затримки"
+        },
+        "marketplaceOrderDeliveryRescheduled": {
+          "service": "Маркетплейс",
+          "actor": "Постачальник — нова дата доставки"
+        }
       }
     },
     "serviceDesk": {
@@ -6170,7 +6313,15 @@
         "custom": "Інше"
       },
       "calendar": {
-        "weekdayLabels": ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"],
+        "weekdayLabels": [
+          "Пн",
+          "Вт",
+          "Ср",
+          "Чт",
+          "Пт",
+          "Сб",
+          "Нд"
+        ],
         "eventTooltip": "{name} ({type}, коефіцієнтів: {count})",
         "moreEvents": "+{count} ще"
       },
