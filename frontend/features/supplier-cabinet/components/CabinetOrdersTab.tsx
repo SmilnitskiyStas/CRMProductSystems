@@ -162,6 +162,12 @@ export function CabinetOrdersTab() {
       render: (order) => order.clientName,
     },
     {
+      key: "createdBy",
+      header: t("headerCreatedBy"),
+      cellStyle: { color: "#9CA3AF" },
+      render: (order) => order.createdByUserName ?? "—",
+    },
+    {
       key: "date",
       header: t("headerDate"),
       cellStyle: { color: "#9CA3AF", whiteSpace: "nowrap" },

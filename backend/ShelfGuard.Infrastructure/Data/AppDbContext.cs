@@ -245,6 +245,8 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.IsActive).HasDefaultValue(true);
             e.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(u => u.InvitedByName).HasMaxLength(255).IsRequired(false);
+            // Supplier-portal expansion (plan #3): per-user "last opened supplier orders" marker.
+            e.Property(u => u.SupplierOrdersLastViewedAt).IsRequired(false);
             e.Property(u => u.ProviderRoleId).IsRequired(false);
             e.HasOne<ProviderRole>().WithMany()
              .HasForeignKey(u => u.ProviderRoleId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
@@ -2097,6 +2099,11 @@ public sealed class AppDbContext : DbContext
             // TASK-586, ADR-033 Decision 2: nullable at the DB — historical orders have no
             // backfill value. Application-layer validation enforces it for new orders.
             e.Property(x => x.DestinationStoreId).IsRequired(false);
+            // Supplier-portal expansion: #4 — denormalized snapshot of the client user who placed
+            // the order (avoids a cross-tenant users join under a supplier session).
+            e.Property(x => x.CreatedByUserName).HasMaxLength(255).IsRequired(false);
+            // D5 — mutable supplier-set expected delivery date (date only). Landed in Phase 1.
+            e.Property(x => x.ExpectedDeliveryDate).IsRequired(false);
             // TASK-649: destination region code, snapshotted at order creation (not a live
             // join through DestinationStoreId). varchar(20) — same sizing as Location.RegionCode.
             e.Property(x => x.DestinationRegionCode).HasMaxLength(20);

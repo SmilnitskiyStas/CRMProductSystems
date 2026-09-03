@@ -99,7 +99,10 @@ export type NotificationEventType =
   | "access.temporary_expiring_soon"
   | "access.temporary_expired"
   | "auth.password_reset_requested"
-  | "customer_message.created";
+  | "customer_message.created"
+  | "marketplace_order.created"
+  | "marketplace_order.shipped"
+  | "marketplace_order.delay_reason_added";
 
 export interface NotificationSetting {
   id: string;
@@ -171,6 +174,9 @@ export const EVENT_TYPE_I18N_KEY: Record<NotificationEventType, string> = {
   "access.temporary_expired": "accessTemporaryExpired",
   "auth.password_reset_requested": "authPasswordResetRequested",
   "customer_message.created": "customerMessageCreated",
+  "marketplace_order.created": "marketplaceOrderCreated",
+  "marketplace_order.shipped": "marketplaceOrderShipped",
+  "marketplace_order.delay_reason_added": "marketplaceOrderDelayReasonAdded",
 };
 
 /** Translated event-type label. `t` must be scoped to `Dashboard.notifications.eventTypes`. */

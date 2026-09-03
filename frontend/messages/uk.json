@@ -466,6 +466,7 @@
           "label": "Кабінет",
           "profile": "Профіль",
           "myItems": "Мої товари",
+          "warehouses": "Склади",
           "reviews": "Відгуки",
           "tasks": "Завдання",
           "clients": "Клієнти",
@@ -3519,6 +3520,7 @@
           "empty": "Замовлень ще немає. Оформіть перше замовлення на сторінці постачальника з активною співпрацею.",
           "headerNumber": "Номер",
           "headerSupplier": "Постачальник",
+          "headerCreatedBy": "Замовив",
           "headerDate": "Дата",
           "headerStatus": "Статус",
           "headerTotal": "Сума",
@@ -3565,6 +3567,11 @@
         "items": {
           "title": "Мої товари",
           "subtitle": "Каталог товарів, який бачать клієнти в маркетплейсі"
+        },
+        "warehouses": {
+          "title": "Склади",
+          "subtitle": "Ваші склади: залишки, партії й терміни придатності, графіки працівників",
+          "noAccess": "Немає доступу до управління складами."
         },
         "reviews": {
           "title": "Відгуки та рейтинг",
@@ -3649,6 +3656,36 @@
         "saving": "Збереження…",
         "save": "Зберегти",
         "add": "Додати"
+      },
+      "warehousesTab": {
+        "title": "Склади",
+        "subtitle": "Створіть склад, щоб вести залишки з термінами придатності й формувати графіки працівників",
+        "addButton": "Додати склад",
+        "empty": "Складів ще немає — додайте перший.",
+        "errorLoad": "Не вдалося завантажити склади.",
+        "errorDefault": "Не вдалося зберегти склад.",
+        "headerName": "Назва",
+        "headerAddress": "Адреса",
+        "headerRegion": "Регіон",
+        "headerStatus": "Статус",
+        "statusActive": "Активний",
+        "statusInactive": "Неактивний",
+        "editButton": "Змінити",
+        "deactivateButton": "Деактивувати",
+        "deactivateConfirm": "Деактивувати склад «{name}»?",
+        "createTitle": "Новий склад",
+        "editTitle": "Редагувати склад",
+        "nameLabel": "Назва складу",
+        "namePlaceholder": "Центральний склад",
+        "addressLabel": "Адреса (необов'язково)",
+        "addressPlaceholder": "вул. Складська, 5, Київ",
+        "regionLabel": "Регіон (необов'язково)",
+        "regionPlaceholder": "Оберіть регіон",
+        "validationName": "Вкажіть назву складу.",
+        "cancel": "Скасувати",
+        "saving": "Збереження…",
+        "saveButton": "Зберегти",
+        "createButton": "Створити"
       },
       "staffPanel": {
         "title": "Співробітники",
@@ -3861,6 +3898,7 @@
         "empty": "Замовлень ще немає — вони з'являться після активації співпраці з клієнтами.",
         "headerNumber": "Номер",
         "headerClient": "Клієнт",
+        "headerCreatedBy": "Замовив",
         "headerDate": "Дата",
         "headerStatus": "Статус",
         "headerDelivery": "Доставка",
@@ -4333,7 +4371,9 @@
         "loyalty": "Програма лояльності",
         "marketing_analytics": "Маркетингова аналітика",
         "mobile_app": "Мобільний застосунок",
-        "analytics": "Аналітика"
+        "analytics": "Аналітика",
+        "supplier_inventory": "Склад постачальника",
+        "supplier_workforce": "Графіки постачальника"
       },
       "moduleDescriptions": {
         "inventory": "Каталог товарів, залишки, прийомка, переміщення, списання",
@@ -4346,7 +4386,9 @@
         "loyalty": "Бонусна програма для клієнтів: QR-картка учасника, нарахування і списання балів на касі",
         "marketing_analytics": "RFM-сегментація клієнтів, топ-товари, крос-сел, AI-рекомендації",
         "mobile_app": "Розділ «Застосунок»: бонусна програма, рівні лояльності, банери, акції, каталог, конструктор екранів застосунку для покупців",
-        "analytics": "Розділ «Аналітика»: звіти й дашборди по залишках, списаннях, втратах, POS-продажах і русі товарів"
+        "analytics": "Розділ «Аналітика»: звіти й дашборди по залишках, списаннях, втратах, POS-продажах і русі товарів",
+        "supplier_inventory": "Склади постачальника, залишки з партіями й термінами придатності, відвантаження замовлень зі списанням партій",
+        "supplier_workforce": "Працівники постачальника та формування робочих графіків по складах"
       },
       "plans": {
         "basic": "Basic",
@@ -5372,6 +5414,14 @@
         "analytics": {
           "label": "Аналітика",
           "description": "Розділ «Аналітика»: звіти й дашборди по залишках, списаннях, втратах, POS та русі товарів."
+        },
+        "supplier_inventory": {
+          "label": "Склад постачальника",
+          "description": "Склади постачальника, залишки з партіями й термінами придатності, відвантаження замовлень зі списанням партій."
+        },
+        "supplier_workforce": {
+          "label": "Графіки постачальника",
+          "description": "Працівники постачальника та формування робочих графіків по складах."
         }
       },
       "businessTypes": {
@@ -5779,7 +5829,10 @@
         "accessTemporaryExpiringSoon": "Тимчасовий доступ незабаром закінчується",
         "accessTemporaryExpired": "Тимчасовий доступ закінчився",
         "authPasswordResetRequested": "Запит на відновлення пароля",
-        "customerMessageCreated": "Повідомлення покупцям"
+        "customerMessageCreated": "Повідомлення покупцям",
+        "marketplaceOrderCreated": "Нове замовлення",
+        "marketplaceOrderShipped": "Замовлення відправлено",
+        "marketplaceOrderDelayReasonAdded": "Затримка доставки"
       },
       "channels": {
         "telegram": "Telegram",
@@ -5811,7 +5864,10 @@
         "accessTemporaryExpiringSoon": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
         "accessTemporaryExpired": { "service": "Управління доступом", "actor": "Тимчасові гранти (ADR-019)" },
         "authPasswordResetRequested": { "service": "Автентифікація", "actor": "Відновлення пароля" },
-        "customerMessageCreated": { "service": "Маркетингові повідомлення", "actor": "Адміністратор мережі" }
+        "customerMessageCreated": { "service": "Маркетингові повідомлення", "actor": "Адміністратор мережі" },
+        "marketplaceOrderCreated": { "service": "Маркетплейс", "actor": "Замовлення клієнта" },
+        "marketplaceOrderShipped": { "service": "Маркетплейс", "actor": "Відвантаження постачальником" },
+        "marketplaceOrderDelayReasonAdded": { "service": "Маркетплейс", "actor": "Постачальник — причина затримки" }
       }
     },
     "serviceDesk": {

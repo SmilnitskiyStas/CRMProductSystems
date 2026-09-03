@@ -55,6 +55,28 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
     roles: ["store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
   },
+  // Supplier-portal expansion (plan 1-partitioned-book.md, Phase 1).
+  // marketplace_order.created — MarketplaceOrderService.CreateOrderAsync enqueues this against the
+  // SUPPLIER tenant (order.SupplierTenantId) when a client places a new order. Recipient is the
+  // supplier tenant's own admins — supplier_admin is the only staff role a supplier tenant has
+  // (AppRoles.SupplierAdmin, ADR-016).
+  "marketplace_order.created": {
+    roles: ["supplier_admin"],
+    channels: ["telegram", "push"],
+  },
+  // marketplace_order.shipped / marketplace_order.delay_reason_added — MarketplaceOrderService
+  // already enqueues both against the CLIENT tenant (order.ClientTenantId), but neither had a row
+  // in this matrix, so dispatchOne() logged "unknown eventType" and dropped them silently. Same
+  // warehouse-staff audience as "receipt.created" above (a marketplace order arriving IS an
+  // incoming delivery) — "merchandiser", not "storekeeper": matches receipt.created's roles.
+  "marketplace_order.shipped": {
+    roles: ["merchandiser", "store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  "marketplace_order.delay_reason_added": {
+    roles: ["merchandiser", "store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
 };
 
 // TASK-342 / ADR-019 §5: default channel set for targeted (UserId IS NOT NULL) outbox rows,
@@ -106,6 +128,9 @@ function formatText(row: PendingIntentRow): string {
     "supplier_support_ticket.opened": "⚠️",
     "access.temporary_expiring_soon": "⏳",
     "access.temporary_expired": "🔒",
+    "marketplace_order.created": "🆕",
+    "marketplace_order.shipped": "🚚",
+    "marketplace_order.delay_reason_added": "⏱️",
   };
   const icon = icons[row.event_type] ?? "🔔";
   return `${icon} <b>ShelfGuard</b>\n\n${row.title ?? "Нове сповіщення"}`;

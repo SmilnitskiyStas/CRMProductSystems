@@ -466,6 +466,7 @@
           "label": "Cabinet",
           "profile": "Profile",
           "myItems": "My Items",
+          "warehouses": "Warehouses",
           "reviews": "Reviews",
           "tasks": "Tasks",
           "clients": "Clients",
@@ -3519,6 +3520,7 @@
           "empty": "No orders yet. Place your first order on a supplier's page with an active cooperation agreement.",
           "headerNumber": "Number",
           "headerSupplier": "Supplier",
+          "headerCreatedBy": "Ordered by",
           "headerDate": "Date",
           "headerStatus": "Status",
           "headerTotal": "Total",
@@ -3565,6 +3567,11 @@
         "items": {
           "title": "My items",
           "subtitle": "The item catalog clients see in the marketplace"
+        },
+        "warehouses": {
+          "title": "Warehouses",
+          "subtitle": "Your warehouses: stock, batches and expiry dates, employee schedules",
+          "noAccess": "No access to warehouse management."
         },
         "reviews": {
           "title": "Reviews & rating",
@@ -3649,6 +3656,36 @@
         "saving": "Saving…",
         "save": "Save",
         "add": "Add"
+      },
+      "warehousesTab": {
+        "title": "Warehouses",
+        "subtitle": "Create a warehouse to track batch stock with expiry dates and build employee schedules",
+        "addButton": "Add warehouse",
+        "empty": "No warehouses yet — add the first one.",
+        "errorLoad": "Failed to load warehouses.",
+        "errorDefault": "Failed to save the warehouse.",
+        "headerName": "Name",
+        "headerAddress": "Address",
+        "headerRegion": "Region",
+        "headerStatus": "Status",
+        "statusActive": "Active",
+        "statusInactive": "Inactive",
+        "editButton": "Edit",
+        "deactivateButton": "Deactivate",
+        "deactivateConfirm": "Deactivate warehouse \"{name}\"?",
+        "createTitle": "New warehouse",
+        "editTitle": "Edit warehouse",
+        "nameLabel": "Warehouse name",
+        "namePlaceholder": "Central warehouse",
+        "addressLabel": "Address (optional)",
+        "addressPlaceholder": "5 Skladska St, Kyiv",
+        "regionLabel": "Region (optional)",
+        "regionPlaceholder": "Select a region",
+        "validationName": "Enter the warehouse name.",
+        "cancel": "Cancel",
+        "saving": "Saving…",
+        "saveButton": "Save",
+        "createButton": "Create"
       },
       "staffPanel": {
         "title": "Staff",
@@ -3861,6 +3898,7 @@
         "empty": "No orders yet — they will appear once cooperation with clients is activated.",
         "headerNumber": "Number",
         "headerClient": "Client",
+        "headerCreatedBy": "Ordered by",
         "headerDate": "Date",
         "headerStatus": "Status",
         "headerDelivery": "Delivery",
@@ -4333,7 +4371,9 @@
         "loyalty": "Loyalty Program",
         "marketing_analytics": "Marketing Analytics",
         "mobile_app": "Mobile App",
-        "analytics": "Analytics"
+        "analytics": "Analytics",
+        "supplier_inventory": "Supplier warehouse",
+        "supplier_workforce": "Supplier schedules"
       },
       "moduleDescriptions": {
         "inventory": "Item catalog, stock, receiving, transfers, write-offs",
@@ -4346,7 +4386,9 @@
         "loyalty": "Customer bonus program: QR membership card, point accrual and redemption at POS",
         "marketing_analytics": "RFM customer segmentation, top products, cross-sell, AI-assisted recommendations",
         "mobile_app": "The \"App\" section: bonus program, loyalty tiers, banners, promotions, catalog, shopper-app screen builder",
-        "analytics": "The \"Analytics\" section: reports and dashboards for stock, write-offs, losses, POS sales and product movement"
+        "analytics": "The \"Analytics\" section: reports and dashboards for stock, write-offs, losses, POS sales and product movement",
+        "supplier_inventory": "Supplier warehouses, batch stock with expiry dates, shipping orders by consuming batches",
+        "supplier_workforce": "Supplier employees and building work schedules per warehouse"
       },
       "plans": {
         "basic": "Basic",
@@ -5372,6 +5414,14 @@
         "analytics": {
           "label": "Analytics",
           "description": "The \"Analytics\" section: reports and dashboards for stock, write-offs, losses, POS and product movement."
+        },
+        "supplier_inventory": {
+          "label": "Supplier warehouse",
+          "description": "Supplier warehouses, batch stock with expiry dates, and shipping orders by consuming batches."
+        },
+        "supplier_workforce": {
+          "label": "Supplier schedules",
+          "description": "Supplier employees and building work schedules per warehouse."
         }
       },
       "businessTypes": {
@@ -5779,7 +5829,10 @@
         "accessTemporaryExpiringSoon": "Temporary access expiring soon",
         "accessTemporaryExpired": "Temporary access expired",
         "authPasswordResetRequested": "Password reset requested",
-        "customerMessageCreated": "Customer message"
+        "customerMessageCreated": "Customer message",
+        "marketplaceOrderCreated": "New order",
+        "marketplaceOrderShipped": "Order shipped",
+        "marketplaceOrderDelayReasonAdded": "Delivery delay"
       },
       "channels": {
         "telegram": "Telegram",
@@ -5811,7 +5864,10 @@
         "accessTemporaryExpiringSoon": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
         "accessTemporaryExpired": { "service": "Access management", "actor": "Temporary grants (ADR-019)" },
         "authPasswordResetRequested": { "service": "Authentication", "actor": "Password reset" },
-        "customerMessageCreated": { "service": "Marketing messages", "actor": "Network administrator" }
+        "customerMessageCreated": { "service": "Marketing messages", "actor": "Network administrator" },
+        "marketplaceOrderCreated": { "service": "Marketplace", "actor": "Client order" },
+        "marketplaceOrderShipped": { "service": "Marketplace", "actor": "Supplier shipment" },
+        "marketplaceOrderDelayReasonAdded": { "service": "Marketplace", "actor": "Supplier — delay reason" }
       }
     },
     "serviceDesk": {

@@ -36,6 +36,9 @@ import type {
   UpsertContractSettingsRequest,
   UpdateMarketplaceOrderStatusRequest,
   SetOrderDelayReasonRequest,
+  SupplierWarehouse,
+  CreateSupplierWarehouseRequest,
+  UpdateSupplierWarehouseRequest,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 
@@ -237,4 +240,21 @@ export const supplierCabinetApi = {
   /** POST /api/supplier-cabinet/support-tickets/{id}/status */
   updateSupportTicketStatus: (id: string, status: SupportTicketStatus) =>
     api.post<SupplierSupportTicketDto>(`${BASE}/support-tickets/${id}/status`, { status }),
+
+  // ── Warehouses (supplier-portal expansion) ─────────────────────────────────
+
+  /** GET /api/supplier-cabinet/warehouses */
+  getWarehouses: () => api.get<SupplierWarehouse[]>(`${BASE}/warehouses`),
+
+  /** POST /api/supplier-cabinet/warehouses */
+  createWarehouse: (body: CreateSupplierWarehouseRequest) =>
+    api.post<SupplierWarehouse>(`${BASE}/warehouses`, body),
+
+  /** PUT /api/supplier-cabinet/warehouses/{id} */
+  updateWarehouse: (id: string, body: UpdateSupplierWarehouseRequest) =>
+    api.put<SupplierWarehouse>(`${BASE}/warehouses/${id}`, body),
+
+  /** POST /api/supplier-cabinet/warehouses/{id}/deactivate */
+  deactivateWarehouse: (id: string) =>
+    api.post<void>(`${BASE}/warehouses/${id}/deactivate`),
 };

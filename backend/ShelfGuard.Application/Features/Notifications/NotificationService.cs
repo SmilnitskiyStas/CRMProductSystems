@@ -355,6 +355,13 @@ public sealed class NotificationService : INotificationService
         "order.replenishment_suggested",
         "supplier.message",
         "supplier_agreement.signed",
+        // Supplier-portal expansion (plan 1-partitioned-book.md, Phase 1): supplier gets
+        // "new order" alerts; client gets shipped / delay-reason alerts. Registered so both
+        // sides can toggle them in notification settings (the dispatch matrix lives in the
+        // worker's notification-dispatch.job.ts).
+        "marketplace_order.created",
+        "marketplace_order.shipped",
+        "marketplace_order.delay_reason_added",
         "access.temporary_expiring_soon",
         "access.temporary_expired",
         "auth.password_reset_requested",

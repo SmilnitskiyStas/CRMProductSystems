@@ -51,6 +51,7 @@ import {
   History,
   Activity,
   FolderTree,
+  Warehouse,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -92,6 +93,12 @@ interface NavItem {
   exact?: boolean;
   /** Optional unread-count badge (currently only set on the supplier "Повідомлення" item). */
   badge?: number;
+  /**
+   * Item-level module gate. Retail nav items leave this unset (their whole GROUP is
+   * module-gated instead); supplier-cabinet items use it because they all live in one
+   * group that is never module-gated. No-op when the module set hasn't loaded yet.
+   */
+  moduleKey?: ModuleKey;
 }
 
 interface NavGroup {
@@ -303,6 +310,9 @@ function buildSupplierNavGroup(t: SidebarGroupsT): NavGroup {
     // profile_management to GET the profile, only to edit/publish it.
     { href: "/supplier/profile", label: t("supplierCabinet.profile"),  icon: <Store size={16} />,        roles: SUPPLIER_ONLY },
     { href: "/supplier/items",   label: t("supplierCabinet.myItems"),  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
+    // Supplier-portal expansion — gated by the provider-granted "supplier_inventory" module
+    // (item-level moduleKey; the cabinet group itself is never module-gated).
+    { href: "/supplier/warehouses", label: t("supplierCabinet.warehouses"), icon: <Warehouse size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
     { href: "/supplier/reviews", label: t("supplierCabinet.reviews"),  icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
     { href: "/supplier/tasks",   label: t("supplierCabinet.tasks"),    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
     { href: "/supplier/clients", label: t("supplierCabinet.clients"), icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
@@ -782,7 +792,10 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   // enterprise_admin (real clients AND impersonation sessions) must go through module
   // gating so only their tenant's enabled modules are visible.
   const isModuleAdmin = userRole === "provider";
-  const { data: modulesData } = useModules(!!userRole && !isModuleAdmin && !isSupplierAdmin);
+  // supplier_admin now needs its modules too — the supplier cabinet has item-level
+  // module gates (e.g. /supplier/warehouses ← "supplier_inventory"). Group-level gating
+  // still never touches the cabinet group (it has no moduleKey).
+  const { data: modulesData } = useModules(!!userRole && !isModuleAdmin);
   // null = user is provider (show all) OR data still loading (show all until resolved)
   const modulesSet = isModuleAdmin
     ? null
@@ -832,6 +845,10 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         if (tabsSet) return tabsSet.has(item.href) || tabsSet.has(group.key);
         // Role check (existing logic)
         if (item.roles && !item.roles.has(userRole)) return false;
+        // Item-level module gate (supplier-portal expansion): retail NavItems carry no
+        // item-level moduleKey (their groups do), so this is a no-op for them; supplier
+        // cabinet items use it because they all live in one non-module-gated group.
+        if (item.moduleKey && !isModuleActive(item.moduleKey, modulesSet)) return false;
         // Permission check: only applied for PROVIDER_TEAM users on permission-gated items
         if (effectivePermissions && item.permission) {
           const perms = Array.isArray(item.permission) ? item.permission : [item.permission];

@@ -86,6 +86,15 @@ public sealed class User
     /// </summary>
     public string? InvitedByName { get; private set; }
 
+    /// <summary>
+    /// Per-user "last opened the supplier orders tab" marker (supplier-portal expansion, plan
+    /// #3). Drives the "new order arrived" badge — the count is supplier orders created after
+    /// this timestamp. Null = never opened (all orders count as new). Updated via
+    /// <see cref="MarkSupplierOrdersViewed"/>. The column is landed in Phase 1; the badge
+    /// endpoint that reads/writes it arrives in Phase 6a.
+    /// </summary>
+    public DateTime? SupplierOrdersLastViewedAt { get; private set; }
+
     public Tenant? Tenant { get; private set; }
     public ICollection<RefreshToken> RefreshTokens { get; private set; } = new List<RefreshToken>();
 
@@ -115,6 +124,9 @@ public sealed class User
     };
 
     public void UpdateLastActive() => LastActiveAt = DateTime.UtcNow;
+
+    /// <summary>Stamps the supplier-orders "seen" marker to now (supplier-portal expansion, plan #3).</summary>
+    public void MarkSupplierOrdersViewed() => SupplierOrdersLastViewedAt = DateTime.UtcNow;
 
     public void UpdatePushToken(string? token) => PushToken = token;
 

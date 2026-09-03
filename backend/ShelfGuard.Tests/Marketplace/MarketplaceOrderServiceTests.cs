@@ -26,6 +26,7 @@ public sealed class MarketplaceOrderServiceTests
     private readonly IItemRepository _items = Substitute.For<IItemRepository>();
     private readonly IItemService _itemService = Substitute.For<IItemService>();
     private readonly ILocationRepository _locations = Substitute.For<ILocationRepository>();
+    private readonly IUserRepository _users = Substitute.For<IUserRepository>();
     private readonly MarketplaceOrderService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -37,10 +38,14 @@ public sealed class MarketplaceOrderServiceTests
     {
         _sut = new MarketplaceOrderService(
             _orders, _agreements, _marketplace, _tenantNames, _notifications, _tenantSessionOverride,
-            _items, _itemService, _locations);
+            _items, _itemService, _locations, _users);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);
+
+        // #4: CreateOrderAsync snapshots the placing user's display name onto the order.
+        _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>())
+            .Returns(User.Create(_clientTenantId, "buyer@example.com", "Олена Замовниця", "hash", "store_manager"));
         _tenantNames.GetTenantDisplayNameAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns("Tenant");
 
@@ -155,6 +160,71 @@ public sealed class MarketplaceOrderServiceTests
         // only observable against a live DB — see MarketplaceProviderBypassScopeRlsIntegrationTests.)
         await _tenantSessionOverride.Received(1).ExecuteAsync(
             _supplierTenantId, Arg.Any<Func<Task<string>>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_SnapshotsCreatorNameAndNotifiesSupplierTenant()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 12m);
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        MarketplaceOrder? created = null;
+        _orders.AddAsync(Arg.Do<MarketplaceOrder>(o => created = o), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(created);
+        Assert.Equal("Олена Замовниця", created!.CreatedByUserName);
+        Assert.Equal(_userId, dto!.CreatedByUserId);
+        Assert.Equal("Олена Замовниця", dto.CreatedByUserName);
+
+        // #3: the "new order" outbox row targets the SUPPLIER tenant (not the client), and the
+        // enqueue runs under an explicit override of the supplier tenant's RLS context.
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            _supplierTenantId, Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n =>
+                n.TenantId == _supplierTenantId &&
+                n.UserId == null &&
+                n.Channel == "system" &&
+                n.Status == "pending" &&
+                n.EventType == "marketplace_order.created"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_UnknownCreator_LeavesCreatorNameNull()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+        _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>()).Returns((User?)null);
+
+        var item = CatalogItem(price: 12m);
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        MarketplaceOrder? created = null;
+        _orders.AddAsync(Arg.Do<MarketplaceOrder>(o => created = o), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var (_, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(created);
+        Assert.Null(created!.CreatedByUserName);
+        Assert.Equal(_userId, created.CreatedByUserId);
     }
 
     [Fact]

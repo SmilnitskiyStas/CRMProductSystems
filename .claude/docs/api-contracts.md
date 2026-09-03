@@ -499,11 +499,34 @@ POST /api/supplier-cabinet/support-tickets/{id}/messages  { body } -> 201 Suppor
 POST /api/supplier-cabinet/support-tickets/{id}/status  { status } -> dto (open|in_progress|resolved|closed)
 ```
 
+`MarketplaceOrderDto` now also carries `createdByUserId` + `createdByUserName` (supplier-portal
+expansion #4) — `createdByUserName` is a snapshot of the client user who placed the order, taken
+at creation (a supplier session can't join into the client's `users` table); both null on seed
+data / pre-migration orders. `POST /api/marketplace/suppliers/{supplierId}/orders` now also
+enqueues a `marketplace_order.created` outbox notification to the **supplier** tenant's
+`supplier_admin` users (telegram/push).
+
 Key DTOs (`Features/Marketplace/Dtos/CooperationDtos.cs`): full shapes in
 `.claude/logs/handoffs/317-to-318_frontend-developer.md`. Contract numbers «ДС-{yyyy}-{NNN}»,
 order numbers «MP-{yyyy}-{NNN}» — sequential per supplier. Termination reason is stored in
 `rejectionReason`. Вчасно integration: `PUT /api/integrations/vchasno` with config `{ "api_key" }`
 (masked on GET like ПРРО secrets).
+
+#### Supplier cabinet — warehouses (supplier-portal expansion Phase 1, plan `1-partitioned-book.md` D1)
+
+`SupplierCabinet` policy + module `supplier_inventory` (provider-granted, default-off) + per-action
+supplier permission `warehouse_management`. A warehouse is a `Location` row of type `"warehouse"`;
+this is the thin supplier wrapper over `ILocationService` (no zones / floor-plan / store-scope).
+```
+GET  /api/supplier-cabinet/warehouses                       -> 200 SupplierWarehouseDto[] (active + inactive)
+POST /api/supplier-cabinet/warehouses  { name, address?, regionCode? }        -> 201 SupplierWarehouseDto | 400 (name/region invalid)
+PUT  /api/supplier-cabinet/warehouses/{id}  { name, address?, regionCode?, isActive }  -> 200 dto | 404 (not an own-tenant warehouse) | 400
+POST /api/supplier-cabinet/warehouses/{id}/deactivate       -> 204 | 404 | 400
+```
+`SupplierWarehouseDto { id, name, address?, regionCode?, isActive }`. `regionCode` is an ISO
+3166-2:UA code validated by `LocationService` (blank = cleared). All operations are tenant-scoped
+from the JWT — no location id from another tenant is ever accepted (403 on foreign tenant / 404 on
+non-warehouse id).
 
 ---
 

@@ -653,3 +653,54 @@ errors на свіжому сервері (стара `seed`-вкладка ма
 активний для demo-тенанта; активація заблокована) — code review чистий + покрито тестами в
 2200. Уся QA-тестова дата вичищено (БД: 86 platform_categories / 224 items). Не закомічено.
 
+## TASK-679 — Supplier-portal expansion Phase 1 (backend + worker)
+
+**Status:** review (не запушено) · **Agent:** backend-developer · Plan `1-partitioned-book.md` Phase 1
+Log: `.claude/logs/tasks/679_2026-09-02_supplier-phase1-backend_backend-developer.md`
+
+Міграція `AddSupplierExpansionFoundations` — 3 nullable колонки, **без RLS-змін**:
+`marketplace_orders.CreatedByUserName varchar(255)` (#4), `marketplace_orders.ExpectedDeliveryDate date`
+(D5, колонку заводимо зараз), `users.SupplierOrdersLastViewedAt timestamptz` (#3 seen-marker).
+**Не застосовано до жодної БД.** Нова `Application/Features/SupplierInventory/` — `ISupplierWarehouseService`
+(тонкий врапер над `ILocationService`, форсить `Location.Type="warehouse"`; entity `LocationType` мертвий,
+не чіпаємо — рішення в лозі) + `SupplierCabinetWarehousesController` (`api/supplier-cabinet/warehouses`,
+gate `supplier_inventory` + `warehouse_management`). #4: `MarketplaceOrderService.CreateOrderAsync` пише
+`CreatedByUserName` з клієнт-сесії (`IUserRepository`, новий ctor-параметр), `MarketplaceOrderDto` +=
+`createdByUserId`/`createdByUserName`. #3: `CreateOrderAsync` тепер шле `marketplace_order.created` outbox
+постачальнику (крос-тенант через `ITenantSessionOverride`). Worker `notification-dispatch.job.ts`:
++`marketplace_order.created` (supplier_admin) + виправлено `marketplace_order.shipped` /
+`.delay_reason_added` (мовчки відкидались — не було в матриці; ролі = як у `receipt.created`, тобто
+merchandiser). `NotificationService.ValidEventTypes` += 3 типи. `api-contracts.md` оновлено.
+
+`dotnet build -c Release` 0 err (Debug заблоковано — інша сесія тримає running API + DLL-локи);
+worker `tsc` чисто; нові unit-тести (SupplierWarehouseService ×8, CreatedByUserName ×2) зелені;
+RLS-audit зелений. **5 інтеграційних тестів червоні — виключно через незастосовану міграцію**
+(`42703: column "SupplierOrdersLastViewedAt" does not exist` на тест-БД `localhost:5435/crm`) —
+до цього коміту зелені; RLS regression pass має спершу зробити `dotnet ef database update` на тест-БД.
+Frontend (nav + warehouse UI + «Замовив» колонка + i18n 3 подій) — окремий Phase 1 frontend-агент.
+
+
+## TASK-680 — Supplier-portal expansion Phase 1 (frontend)
+
+**Status:** review (не запушено) · головна сесія (frontend-агент двічі впав на інфра-помилках:
+rate-limit, потім stream-watchdog — нічого не встиг; зроблено вручну)
+Log: `.claude/logs/tasks/680_2026-09-03_supplier-phase1-frontend_main-session.md`
+
+Міграцію `AddSupplierExpansionFoundations` **застосовано до dev/test-БД** `localhost:5435/crm`
+(docker `crmproductsystems-postgres-1`, ідемпотентний SQL через `psql`) — 5 раніше-червоних
+інтеграційних тестів тепер зелені (749 passed у широкому прогоні Marketplace|Notification|Tenant|
+Order|Supplier|Location).
+
+Frontend: `ModuleKey` + `TenantModule` унії += `supplier_inventory`/`supplier_workforce`
+(2 списки: `features/modules/types.ts`, `features/provider/types.ts`). `Sidebar.tsx` — `useModules`
+тепер вантажиться і для `supplier_admin`; новий item-level `moduleKey` гейт (`NavItem.moduleKey`);
+пункт `/supplier/warehouses` (gate `supplier_inventory` + `warehouse_management`). Нова фіча
+`features/supplier-cabinet/{api,hooks/useSupplierWarehouses,components/WarehousesTab}` + сторінка
+`app/(dashboard)/supplier/warehouses/page.tsx` (CRUD складів через тонкий бек-врапер, RegionSelect).
+#4: `MarketplaceOrderDto` FE-тип += `createdByUserId`/`createdByUserName`; колонка «Замовив» у
+`marketplace/orders/page.tsx` і `CabinetOrdersTab.tsx`. `NotificationEventType` += 3 marketplace-події
+(+ `EVENT_TYPE_I18N_KEY`). i18n uk+en (parity 5569==5569): nav, warehousesTab (повний блок), pages,
+headerCreatedBy ×2, eventTypes/eventSource ×3, modules.catalog + provider.modules/moduleDescriptions.
+
+`tsc --noEmit` чисто; `next lint` (тільки прееxist warnings у чужому файлі); `next build` OK
+(`/supplier/warehouses` 8.03 kB); backend `dotnet build -c Release` чисто.

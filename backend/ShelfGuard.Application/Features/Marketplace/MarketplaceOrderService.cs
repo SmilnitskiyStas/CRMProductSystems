@@ -62,6 +62,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     private readonly IItemRepository _items;
     private readonly IItemService _itemService;
     private readonly ILocationRepository _locations;
+    private readonly IUserRepository _users;
 
     public MarketplaceOrderService(
         IMarketplaceOrderRepository orders,
@@ -72,7 +73,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         ITenantSessionOverride tenantSessionOverride,
         IItemRepository items,
         IItemService itemService,
-        ILocationRepository locations)
+        ILocationRepository locations,
+        IUserRepository users)
     {
         _orders      = orders;
         _agreements  = agreements;
@@ -83,6 +85,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         _items       = items;
         _itemService = itemService;
         _locations   = locations;
+        _users       = users;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -163,6 +166,11 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
                 return (null, execError, false);
         }
 
+        // #4: snapshot the placing client user's display name, resolved under the caller's own
+        // (client) RLS context — a supplier session that later reads this order cannot join into
+        // the client's users table. Unknown id → null, which is acceptable.
+        var creator = await _users.GetByIdAsync(userId, ct);
+
         var order = new MarketplaceOrder
         {
             OrderNumber      = await NextOrderNumberAsync(supplierTenantId.Value, ct),
@@ -173,6 +181,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             Comment          = NormalizeComment(request.Comment),
             TotalAmount      = orderItems.Sum(i => i.LineTotal),
             CreatedByUserId  = userId,
+            CreatedByUserName = creator?.FullName,
             DestinationStoreId = request.DestinationStoreId,
             DestinationRegionCode = destination?.RegionCode,
         };
@@ -185,6 +194,20 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
 
         await _orders.AddAsync(order, ct);
         await _orders.SaveChangesAsync(ct);
+
+        // #3/#4: the supplier tenant's staff gets a "new order" outbox notification (until now
+        // CreateOrderAsync fired nothing at all). notification_queue's tenant_isolation is
+        // session-tenant-only and this method runs on the CLIENT session, so the enqueue runs
+        // under an explicit override of the SUPPLIER tenant's RLS context — same pattern as the
+        // shipped-notification branch in UpdateOrderStatusAsync. order.SupplierTenantId is already
+        // trusted here (it came from GetSupplierTenantIdAsync and passed the ACTIVE-agreement
+        // gate). Best-effort: a failed enqueue must not fail an already-persisted order, so this
+        // is a separate step, not folded into the order insert above.
+        await _tenantSessionOverride.ExecuteAsync(order.SupplierTenantId, async () =>
+        {
+            await EnqueueCreatedNotificationAsync(order, clientTenantId, ct);
+            return true;
+        }, ct);
 
         return (await ToDtoAsync(order, ct), null, false);
     }
@@ -559,6 +582,44 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     }
 
     /// <summary>
+    /// Supplier-portal expansion (#3): Postgres outbox row (EventType = "marketplace_order.created")
+    /// for the SUPPLIER tenant when a client places a new order — mirrors
+    /// <see cref="EnqueueShippedNotificationAsync"/> but pointed the other way (recipient is the
+    /// supplier's own staff). UserId = null, Channel = "system", Status = "pending"; the worker's
+    /// notification-dispatch job resolves it to the supplier tenant's supplier_admin users.
+    /// Must be called inside a <see cref="ITenantSessionOverride"/> for the supplier tenant —
+    /// notification_queue's tenant_isolation is session-tenant-only and CreateOrderAsync runs on
+    /// the client session.
+    /// </summary>
+    private async Task EnqueueCreatedNotificationAsync(
+        MarketplaceOrder order, Guid clientTenantId, CancellationToken ct)
+    {
+        var clientName = await _tenantNames.GetTenantDisplayNameAsync(clientTenantId, ct)
+                         ?? "Замовник";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            clientName,
+            totalAmount = order.TotalAmount,
+            itemCount = order.Items.Count,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = order.SupplierTenantId,
+            UserId    = null,
+            StoreId   = null,
+            Title     = $"Нове замовлення {order.OrderNumber} від «{clientName}»",
+            Channel   = "system",
+            EventType = "marketplace_order.created",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
+    }
+
+    /// <summary>
     /// ADR-018 §2: Postgres outbox row (EventType = "marketplace_order.shipped") for the client
     /// tenant, picked up by the worker's notification-dispatch job. UserId = null,
     /// Channel = "system", Status = "pending". Directly closes the "nowhere shows the order is
@@ -702,6 +763,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             o.EstimatedDeliveryDays,
             o.DeliveredAt,
             o.DelayReason,
+            o.CreatedByUserId,
+            o.CreatedByUserName,
             o.Items
                 .OrderBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase)
                 .Select(i => new MarketplaceOrderItemDto(

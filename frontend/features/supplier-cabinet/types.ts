@@ -321,3 +321,31 @@ export interface UpdateMarketplaceOrderStatusRequest {
 export interface SetOrderDelayReasonRequest {
   reason: string;
 }
+
+// ── Warehouses (supplier-portal expansion, plan phase 1) ─────────────────────
+// A supplier "warehouse" is a Location row (type "warehouse"). Gated by the
+// provider-granted "supplier_inventory" module + "warehouse_management" permission.
+
+export interface SupplierWarehouse {
+  id: string;
+  name: string;
+  address: string | null;
+  /** ISO 3166-2:UA region code (same picker as the supplier profile / delivery coverage). */
+  regionCode: string | null;
+  isActive: boolean;
+}
+
+/** POST /api/supplier-cabinet/warehouses */
+export interface CreateSupplierWarehouseRequest {
+  name: string;
+  address?: string | null;
+  regionCode?: string | null;
+}
+
+/** PUT /api/supplier-cabinet/warehouses/{id} — full replace. */
+export interface UpdateSupplierWarehouseRequest {
+  name: string;
+  address?: string | null;
+  regionCode?: string | null;
+  isActive: boolean;
+}

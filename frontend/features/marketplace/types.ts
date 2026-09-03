@@ -370,6 +370,10 @@ export interface MarketplaceOrderDto {
   deliveredAt: string | null;
   /** Supplier's free-text explanation for a delay (TASK-585). Null until set. */
   delayReason: string | null;
+  /** Client-side user who placed the order. Null on orders placed before this column existed. */
+  createdByUserId: string | null;
+  /** Denormalized display name of {@link createdByUserId} at order-creation time. Null when unknown. */
+  createdByUserName: string | null;
   /** Store the goods are headed to. Null on orders placed before TASK-586 — permanent/expected
    * there (historical orders can never be received through the new flow), not a loading state. */
   destinationStoreId: string | null;

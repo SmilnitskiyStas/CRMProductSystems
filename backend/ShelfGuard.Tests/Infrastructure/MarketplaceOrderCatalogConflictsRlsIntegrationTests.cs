@@ -292,7 +292,8 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             new TenantSessionOverride(db),
             new ItemRepository(db),
             new ItemService(new ItemRepository(db), new CategoryRepository(db)),
-            new LocationRepository(db));
+            new LocationRepository(db),
+            new UserRepository(db));
     }
 
     private static async Task<string?> CurrentRoleAsync(AppDbContext db)

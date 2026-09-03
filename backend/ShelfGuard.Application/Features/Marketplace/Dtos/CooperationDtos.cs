@@ -153,6 +153,14 @@ public record MarketplaceOrderDto(
     int? EstimatedDeliveryDays,
     DateTimeOffset? DeliveredAt,
     string? DelayReason,
+    /// <summary>
+    /// Client-side user who placed the order + their denormalized display name (supplier-portal
+    /// expansion, plan #4). CreatedByUserName is a snapshot taken at creation — a supplier session
+    /// can render "who ordered" without a cross-tenant users join. Both nullable — seed data and
+    /// orders placed before the column existed have no value.
+    /// </summary>
+    Guid? CreatedByUserId,
+    string? CreatedByUserName,
     IReadOnlyList<MarketplaceOrderItemDto> Items,
     /// <summary>
     /// Read-only (TASK-586, ADR-033 Decision 2). Nullable — orders placed before this column

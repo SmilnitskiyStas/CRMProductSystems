@@ -9,7 +9,10 @@ export type TenantModule =
   | "loyalty" | "marketing_analytics"
   // TASK-674: "mobile_app" gates the whole "Застосунок" section, "analytics" gates the
   // "Аналітика" reports section. Both provider-granted only (no business-type preset).
-  | "mobile_app" | "analytics";
+  | "mobile_app" | "analytics"
+  // Supplier-portal expansion: supplier warehouses/batch stock + supplier work schedules.
+  // Provider-granted only, no business-type preset.
+  | "supplier_inventory" | "supplier_workforce";
 
 export type BusinessType =
   | "retail" | "auto_service" | "restaurant"
@@ -149,6 +152,7 @@ export const BUSINESS_TYPE_PRESETS: Record<BusinessType, TenantModule[]> = {
 export const ALL_MODULES: TenantModule[] = [
   "inventory", "procurement", "pos", "auto_service", "production", "marketplace",
   "marketplace_supplier", "loyalty", "marketing_analytics", "mobile_app", "analytics",
+  "supplier_inventory", "supplier_workforce",
 ];
 
 // ── Plans ────────────────────────────────────────────────────────────────────

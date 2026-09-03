@@ -1,10 +1,13 @@
 export const SUPPLIER_PERMISSIONS: Record<string, string> = {
-  catalog_management: "Управління каталогом",
-  client_reviews:      "Відгуки клієнтів",
-  task_board:          "Дошка завдань",
-  staff_management:    "Управління командою",
-  profile_management:  "Профіль компанії",
-  client_management:   "Клієнти",
+  catalog_management:   "Управління каталогом",
+  client_reviews:       "Відгуки клієнтів",
+  task_board:           "Дошка завдань",
+  staff_management:     "Управління командою",
+  profile_management:   "Профіль компанії",
+  client_management:    "Клієнти",
+  warehouse_management: "Склади та залишки",
+  workforce_management: "Графіки працівників",
+  analytics_view:       "Аналітика",
 };
 
 export const ALL_SUPPLIER_PERMISSIONS = Object.keys(SUPPLIER_PERMISSIONS);

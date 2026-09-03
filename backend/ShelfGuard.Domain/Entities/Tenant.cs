@@ -73,7 +73,14 @@ public sealed class Tenant
             // dashboards section (AnalyticsController, per-action — the dashboard-home and
             // Events-calendar endpoints on that controller stay ungated). Neither is in any
             // DefaultModulesForBusinessType set — provider-granted only, no backfill.
-            "mobile_app", "analytics"
+            "mobile_app", "analytics",
+            // Supplier-portal expansion: "supplier_inventory" gates the supplier's own
+            // warehouses + batch stock + batch-consuming shipment (SupplierCabinetWarehouses
+            // controller, per-action); "supplier_workforce" gates the supplier's employee
+            // work schedules (SupplierCabinetSchedules controller). Both provider-granted,
+            // default-off, no backfill — a drop-ship supplier never turns them on, and the
+            // legacy confirmed→shipped flow keeps working while "supplier_inventory" is off.
+            "supplier_inventory", "supplier_workforce"
         };
         var unknown = modules.Where(m => !valid.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
         if (unknown.Count > 0)

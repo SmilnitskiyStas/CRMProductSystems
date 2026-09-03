@@ -44,6 +44,14 @@ public sealed class MarketplaceOrder
     public DateTimeOffset? ShippedAt { get; set; }
     /// <summary>Supplier-entered delivery estimate (in days), captured at ship time.</summary>
     public int? EstimatedDeliveryDays { get; set; }
+    /// <summary>
+    /// Mutable supplier-set expected delivery date (supplier-portal expansion, plan D5). Distinct
+    /// from <see cref="EstimatedDeliveryDays"/> (a one-time whole-day estimate captured at ship
+    /// time): this is an absolute date the supplier can reschedule as many times as needed while
+    /// the order is still shipped. Nullable — the column is landed here in Phase 1; the endpoint
+    /// that sets/reschedules it and the "in transit" auto-order integration arrive in Phase 4.
+    /// </summary>
+    public DateOnly? ExpectedDeliveryDate { get; set; }
     /// <summary>Set by the service layer when Status transitions to delivered.</summary>
     public DateTimeOffset? DeliveredAt { get; set; }
     /// <summary>Supplier-entered explanation when delivery runs past the estimated window.</summary>
@@ -51,6 +59,14 @@ public sealed class MarketplaceOrder
 
     /// <summary>Client-side user who placed the order.</summary>
     public Guid? CreatedByUserId { get; set; }
+    /// <summary>
+    /// Denormalized display name of the client user who placed the order (supplier-portal
+    /// expansion, plan #4). Snapshotted at creation so a supplier session can show "who ordered"
+    /// without a cross-tenant join into the client's <c>users</c> table (which its RLS forbids).
+    /// Same pattern as <see cref="User.InvitedByName"/>. Nullable — pre-migration orders and
+    /// seed data have no value.
+    /// </summary>
+    public string? CreatedByUserName { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

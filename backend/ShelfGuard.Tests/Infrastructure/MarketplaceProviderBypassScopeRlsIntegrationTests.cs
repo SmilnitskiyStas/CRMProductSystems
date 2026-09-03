@@ -401,7 +401,8 @@ public sealed class MarketplaceProviderBypassScopeRlsIntegrationTests : IAsyncLi
             new TenantSessionOverride(db),
             new ItemRepository(db),
             new ItemService(new ItemRepository(db), new CategoryRepository(db)),
-            new LocationRepository(db));
+            new LocationRepository(db),
+            new UserRepository(db));
     }
 
     private sealed record TwoClientOrderFixture(

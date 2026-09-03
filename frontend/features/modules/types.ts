@@ -16,7 +16,13 @@ export type ModuleKey =
   //   analytics   — the "Аналітика" reports/dashboards section (AnalyticsController, per-action)
   | "loyalty"
   | "mobile_app"
-  | "analytics";
+  | "analytics"
+  // Supplier-portal expansion: "supplier_inventory" gates the supplier's own warehouses +
+  // batch stock + batch-consuming shipment; "supplier_workforce" gates the supplier's
+  // employee work schedules. Both provider-granted, default-off (not in any business-type
+  // preset).
+  | "supplier_inventory"
+  | "supplier_workforce";
 
 /** GET /api/settings/modules response */
 export interface ModulesSettings {
@@ -37,6 +43,8 @@ export const ALL_MODULE_KEYS: ModuleKey[] = [
   "loyalty",
   "mobile_app",
   "analytics",
+  "supplier_inventory",
+  "supplier_workforce",
 ];
 
 // Labels live in i18n (Dashboard.modules.businessTypes.*, `useTranslations`) — see

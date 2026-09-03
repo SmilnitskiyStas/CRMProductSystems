@@ -82,6 +82,11 @@ services.AddScoped<IAuthService, AuthService>();
         // v4.1 - Supplier self-service cabinet (TASK-284, ADR-016)
         services.AddScoped<ISupplierCabinetService, SupplierCabinetService>();
 
+        // Supplier-portal expansion Phase 1 (plan 1-partitioned-book.md, D1) — supplier warehouses
+        // as a thin wrapper over ILocationService, gated by the "supplier_inventory" module.
+        services.AddScoped<Features.SupplierInventory.ISupplierWarehouseService,
+            Features.SupplierInventory.SupplierWarehouseService>();
+
         // TASK-306 - Supplier staff roles + task board
         services.AddScoped<ISupplierRolesService, SupplierRolesService>();
         services.AddScoped<ISupplierTaskService, SupplierTaskService>();
