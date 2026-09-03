@@ -87,6 +87,13 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.SupplierInventory.ISupplierWarehouseService,
             Features.SupplierInventory.SupplierWarehouseService>();
 
+        // Supplier-portal expansion Phase 2 (plan 1-partitioned-book.md, D2/D3) — supplier
+        // warehouse batch inventory + manual "what actually arrived" receiving.
+        services.AddScoped<Features.SupplierInventory.ISupplierStockService,
+            Features.SupplierInventory.SupplierStockService>();
+        services.AddScoped<Features.SupplierInventory.ISupplierStockReceiptService,
+            Features.SupplierInventory.SupplierStockReceiptService>();
+
         // TASK-306 - Supplier staff roles + task board
         services.AddScoped<ISupplierRolesService, SupplierRolesService>();
         services.AddScoped<ISupplierTaskService, SupplierTaskService>();

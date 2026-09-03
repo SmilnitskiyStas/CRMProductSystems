@@ -101,6 +101,12 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierItemBarcode> SupplierItemBarcodes => Set<SupplierItemBarcode>();
     public DbSet<SupplierItemImage>   SupplierItemImages   => Set<SupplierItemImage>();
 
+    // Supplier-portal expansion Phase 2 — supplier warehouse inventory (D2, D3)
+    public DbSet<SupplierStock>              SupplierStocks             => Set<SupplierStock>();
+    public DbSet<SupplierStockMovement>      SupplierStockMovements     => Set<SupplierStockMovement>();
+    public DbSet<SupplierStockReceipt>       SupplierStockReceipts      => Set<SupplierStockReceipt>();
+    public DbSet<SupplierStockReceiptItem>   SupplierStockReceiptItems  => Set<SupplierStockReceiptItem>();
+
     // v4 Phase 4 — Auto Service Module
     public DbSet<AsCustomer>      AsCustomers      => Set<AsCustomer>();
     public DbSet<AsVehicle>       AsVehicles       => Set<AsVehicle>();
@@ -1434,6 +1440,105 @@ public sealed class AppDbContext : DbContext
             e.HasOne(img => img.Tenant).WithMany()
              .HasForeignKey(img => img.TenantId).OnDelete(DeleteBehavior.Restrict);
             // SupplierItemId FK is wired via SupplierItem.HasMany above (Cascade)
+        });
+
+        // ── SupplierStock (supplier-portal expansion Phase 2, D2) ──────────
+        // Parallel to ProductStock — keyed on SupplierItemId + WarehouseId, NO store_scope
+        // RLS policy (supplier tenants have no user_locations). FEFO logic is duplicated,
+        // not extracted (see SupplierStockService).
+        builder.Entity<SupplierStock>(e =>
+        {
+            e.ToTable("supplier_stock");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Quantity).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(s => s.QuantityInitial).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(s => s.ExpiryDate).HasColumnType("date").IsRequired();
+            e.Property(s => s.BatchNumber).HasMaxLength(100);
+            e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("safe");
+            e.Property(s => s.SourceType).HasMaxLength(40);
+            e.Property(s => s.AddedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.LastCheckedAt).HasDefaultValueSql("NOW()");
+            // TASK-681: same optimistic-concurrency token as ProductStock (TASK-356) — two
+            // concurrent writers decrementing the same batch's Quantity (a shipment racing an
+            // adjust) would otherwise last-write-wins and silently oversell. No schema change —
+            // xmin already exists on every row.
+            e.Property<uint>("xmin").IsRowVersion().HasColumnName("xmin");
+            // FEFO active stock — the critical query path (mirrors idx_stock_fefo_active).
+            e.HasIndex(s => new { s.TenantId, s.WarehouseId, s.SupplierItemId, s.ExpiryDate })
+             .HasDatabaseName("ix_supplier_stock_fefo")
+             .HasFilter("\"Quantity\" > 0");
+            e.HasOne(s => s.SupplierItem).WithMany()
+             .HasForeignKey(s => s.SupplierItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Warehouse).WithMany()
+             .HasForeignKey(s => s.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── SupplierStockMovement (supplier-portal expansion Phase 2, D2) ──
+        builder.Entity<SupplierStockMovement>(e =>
+        {
+            e.ToTable("supplier_stock_movements");
+            e.HasKey(m => m.Id);
+            e.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(m => m.MovementType).HasMaxLength(20).IsRequired();
+            e.Property(m => m.Quantity).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(m => m.QuantityBefore).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(m => m.QuantityAfter).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(m => m.ReferenceType).HasMaxLength(40);
+            e.Property(m => m.Notes).HasMaxLength(500);
+            e.Property(m => m.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(m => new { m.TenantId, m.SupplierStockId })
+             .HasDatabaseName("ix_supplier_stock_movements_tenant_stock");
+            e.HasIndex(m => new { m.TenantId, m.CreatedAt })
+             .HasDatabaseName("ix_supplier_stock_movements_tenant_created");
+            e.HasOne<SupplierStock>().WithMany()
+             .HasForeignKey(m => m.SupplierStockId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<SupplierItem>().WithMany()
+             .HasForeignKey(m => m.SupplierItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(m => m.FromWarehouseId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(m => m.ToWarehouseId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+        });
+
+        // ── SupplierStockReceipt (supplier-portal expansion Phase 2, D3) ───
+        builder.Entity<SupplierStockReceipt>(e =>
+        {
+            e.ToTable("supplier_stock_receipts");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.Status).HasMaxLength(20).HasDefaultValue("draft");
+            e.Property(r => r.Reference).HasMaxLength(100);
+            e.Property(r => r.Notes).HasMaxLength(500);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => new { r.TenantId, r.WarehouseId, r.Status })
+             .HasDatabaseName("ix_supplier_stock_receipts_tenant_warehouse_status");
+            e.HasOne(r => r.Warehouse).WithMany()
+             .HasForeignKey(r => r.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(r => r.Items).WithOne(i => i.Receipt)
+             .HasForeignKey(i => i.ReceiptId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupplierStockReceiptItem (supplier-portal expansion Phase 2, D3) ─
+        // N rows may share SupplierItemId — one row per (expiry, batch). TenantId is
+        // denormalized so RLS stays a plain tenant_isolation with no join.
+        builder.Entity<SupplierStockReceiptItem>(e =>
+        {
+            e.ToTable("supplier_stock_receipt_items");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.Quantity).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(i => i.ExpiryDate).HasColumnType("date");
+            e.Property(i => i.BatchNumber).HasMaxLength(100);
+            e.Property(i => i.UnitCost).HasColumnType("numeric(12,2)");
+            e.Property(i => i.Notes).HasMaxLength(300);
+            e.HasIndex(i => i.ReceiptId)
+             .HasDatabaseName("ix_supplier_stock_receipt_items_receipt");
+            e.HasIndex(i => i.TenantId)
+             .HasDatabaseName("ix_supplier_stock_receipt_items_tenant");
+            e.HasOne(i => i.SupplierItem).WithMany()
+             .HasForeignKey(i => i.SupplierItemId).OnDelete(DeleteBehavior.Restrict);
+            // ReceiptId FK is wired via SupplierStockReceipt.HasMany above (Cascade)
         });
 
         // ── SupplierMetrics (v4 Marketplace) ───────────────────────────────

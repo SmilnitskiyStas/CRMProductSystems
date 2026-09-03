@@ -54,6 +54,12 @@ public static class DependencyInjection
         // Stock
         services.AddScoped<IStockRepository, StockRepository>();
 
+        // Supplier-portal expansion Phase 2 — supplier warehouse batch inventory + receiving
+        services.AddScoped<Application.Features.SupplierInventory.ISupplierStockRepository,
+            Data.Repositories.SupplierStockRepository>();
+        services.AddScoped<Application.Features.SupplierInventory.ISupplierStockReceiptRepository,
+            Data.Repositories.SupplierStockReceiptRepository>();
+
         // Locations
         services.AddScoped<ILocationRepository, LocationRepository>();
 

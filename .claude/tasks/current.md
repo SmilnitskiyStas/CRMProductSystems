@@ -704,3 +704,55 @@ headerCreatedBy ×2, eventTypes/eventSource ×3, modules.catalog + provider.modu
 
 `tsc --noEmit` чисто; `next lint` (тільки прееxist warnings у чужому файлі); `next build` OK
 (`/supplier/warehouses` 8.03 kB); backend `dotnet build -c Release` чисто.
+
+
+## TASK-681 — Supplier-portal expansion Phase 2 (backend: складський + партійний облік, D2/D3)
+
+**Status:** review (не запушено) · backend-developer агент
+Log: `.claude/logs/tasks/681_2026-09-03_supplier-phase2-inventory_backend-developer.md`
+
+Міграція `20260903063008_AddSupplierInventory` — 4 нові таблиці (`supplier_stock` +
+`supplier_stock_movements` + `supplier_stock_receipts` + `supplier_stock_receipt_items`),
+паралельні до retail Stock/Receipts (D2/D3 — не реюз). Кожна: RLS-тріада (tenant_isolation
+NULLIF-guard + WITH CHECK, provider_bypass, worker_bypass) + FORCE RLS, **без `store_scope`**
+(документовано в міграції). `supplier_stock` — xmin rowversion + частковий FEFO-індекс
+`(TenantId,WarehouseId,SupplierItemId,ExpiryDate) WHERE Quantity>0`. **Застосовано до dev/test-БД**
+`localhost:5435/crm` (ідемпотентний SQL через `psql`, `__EFMigrationsHistory` оновлено).
+
+Backend: `Application/Features/SupplierInventory/` — `ISupplierStockRepository`/`SupplierStockRepository`
+(GetPaged FEFO, GetFefoOrdered — дзеркало `StockRepository`; DbUpdateConcurrencyException →
+`ConcurrencyConflictException`), `SupplierStockService` (AddBatch + receipt-рух, Adjust xmin-guarded
++ adjust-рух, FefoConsumeAsync — дублікат `StockService.FefoConsumeAsync`, повертає
+`SupplierFefoConsumeResult{QuantityConsumed,Shortfall,BatchesConsumed[]}` — нестача НЕ кидається,
+для Phase 3), `ISupplierStockReceiptRepository`/`SupplierStockReceiptService` (draft→addLine→finalize;
+finalize-гейт: усі рядки мають ExpiryDate + Quantity>0 → 1 `SupplierStock`+1 рух на рядок,
+`SourceType="supplier_receipt"`). Реюз `Features/Stock/StockStatus.cs`. DI у обох `DependencyInjection.cs`.
+
+API: новий `SupplierCabinetInventoryController` (`api/supplier-cabinet`, клас-гейт
+`[Authorize(SupplierCabinet)] [RequireModule("supplier_inventory")]`, per-action
+`HasPermission(User, WarehouseManagement)`): `GET/POST warehouses/{id}/stock`,
+`POST stock/{batchId}/adjust`, `GET/POST warehouses/{id}/receipts`, `GET/PUT receipts/{id}`,
+`POST/DELETE receipts/{id}/lines[/{lineId}]`, `POST receipts/{id}/finalize`.
+
+`dotnet build -c Release` 0 err; нові тести зелені — `SupplierStockServiceTests` ×13,
+`SupplierStockReceiptServiceTests` ×8, `SupplierStockRlsIntegrationTests` ×3 (крос-тенант SELECT
+proof на реальному Postgres) + RLS-audit `AllForceRlsTables_...` зелений з 4 новими таблицями;
+широкий прогін Stock|Receipt|Location|Marketplace = 540 passed. openapi.json regen — борг (з TASK-670..).
+
+## TASK-682 — Supplier Phase 2 FRONTEND (складський + партійний облік)
+
+**Status:** review (не запушено) · **Agent:** frontend-developer · Plan `1-partitioned-book.md` Phase 2
+Log: `.claude/logs/tasks/682_2026-09-03_supplier-phase2-frontend_frontend-developer.md`
+
+Nav `/supplier/inventory` (moduleKey `supplier_inventory` + permission `warehouse_management`, іконка
+`Boxes`). Нова сторінка `app/(dashboard)/supplier/inventory/page.tsx` — 2 вкладки «Залишки» /
+«Прийоми». `features/supplier-cabinet/`: +10 API-методів у `supplier-cabinet-api.ts`, +6 типів
+(`SupplierStock`, `SupplierStockReceipt(+Item)` + 5 request), новий `hooks/useSupplierInventory.ts`
+(10 hooks, ключі `["supplier","stock"|"receipts",…]`), компоненти `WarehouseStockTable`
+(FEFO-таблиця + adjust-modal, чіпи статусу реюзять `STATUS_COLOR` з `features/shelf`),
+`SupplierReceiptForm` (draft→pending rows→persist per line→finalize; N рядків на 1 supplierItemId,
+БЕЗ `isRowAdded`-guard; finalize-gate error 400 `{error}` показується as-is),
+`SupplierReceiptsList` (таблиця + фільтр статусу + «Новий прийом»). PagedResult для stock —
+`@/lib/api-types` (backend Common shape `totalCount/totalPages`), НЕ supplier-cabinet-локальний
+(той — marketplace reviews shape `total`). i18n +104 ключів кожна мова, парність 5673==5673.
+`tsc` clean · `next lint` clean · `next build` OK.

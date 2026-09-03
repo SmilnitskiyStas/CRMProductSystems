@@ -52,6 +52,7 @@ import {
   Activity,
   FolderTree,
   Warehouse,
+  Boxes,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -313,6 +314,7 @@ function buildSupplierNavGroup(t: SidebarGroupsT): NavGroup {
     // Supplier-portal expansion — gated by the provider-granted "supplier_inventory" module
     // (item-level moduleKey; the cabinet group itself is never module-gated).
     { href: "/supplier/warehouses", label: t("supplierCabinet.warehouses"), icon: <Warehouse size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
+    { href: "/supplier/inventory", label: t("supplierCabinet.inventory"), icon: <Boxes size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
     { href: "/supplier/reviews", label: t("supplierCabinet.reviews"),  icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
     { href: "/supplier/tasks",   label: t("supplierCabinet.tasks"),    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
     { href: "/supplier/clients", label: t("supplierCabinet.clients"), icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },

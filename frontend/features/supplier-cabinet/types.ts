@@ -349,3 +349,104 @@ export interface UpdateSupplierWarehouseRequest {
   regionCode?: string | null;
   isActive: boolean;
 }
+
+// ── Warehouse batch inventory + receiving (supplier-portal expansion, Phase 2) ─
+// Parallel to the retail Stock / Receipts model (decisions D2/D3): the supplier
+// catalog is SupplierItem (nullable ItemId), and there is no zone / store-scope
+// surface. Gated by "supplier_inventory" module + "warehouse_management" permission.
+// Backend DTOs: ShelfGuard.Application/Features/SupplierInventory/Dtos/SupplierStockDtos.cs.
+
+/** Batch status — same value set + chip colours as the retail shelf (StockStatus). */
+export type SupplierStockStatus =
+  | "safe"
+  | "warning"
+  | "critical"
+  | "expired"
+  | "sold_out"
+  | "archived"
+  | "needs_verification";
+
+/**
+ * One FEFO batch in a supplier warehouse.
+ * GET /api/supplier-cabinet/warehouses/{warehouseId}/stock (paged, FEFO-ordered).
+ */
+export interface SupplierStock {
+  id: string;
+  supplierItemId: string;
+  supplierItemName: string;
+  warehouseId: string;
+  warehouseName: string;
+  expiryDate: string; // "YYYY-MM-DD"
+  daysLeft: number;
+  quantity: number;
+  quantityInitial: number;
+  batchNumber: string | null;
+  status: SupplierStockStatus;
+  sourceType: string | null;
+  addedAt: string;
+  lastCheckedAt: string;
+}
+
+export type SupplierStockReceiptStatus = "draft" | "received" | "cancelled";
+
+/** One line of a supplier receipt — N rows may share a supplierItemId (one per batch). */
+export interface SupplierStockReceiptItem {
+  id: string;
+  supplierItemId: string;
+  supplierItemName: string;
+  expiryDate: string | null; // "YYYY-MM-DD"; nullable while draft, required to finalize
+  quantity: number;
+  batchNumber: string | null;
+  unitCost: number | null;
+  notes: string | null;
+}
+
+/** GET/POST /api/supplier-cabinet/.../receipts — items sorted by expiry asc. */
+export interface SupplierStockReceipt {
+  id: string;
+  warehouseId: string;
+  warehouseName: string;
+  status: SupplierStockReceiptStatus;
+  reference: string | null;
+  notes: string | null;
+  receivedAt: string | null;
+  createdAt: string;
+  items: SupplierStockReceiptItem[];
+}
+
+/** POST /api/supplier-cabinet/warehouses/{warehouseId}/stock */
+export interface AddSupplierBatchRequest {
+  supplierItemId: string;
+  expiryDate: string; // "YYYY-MM-DD" — must be in the future
+  quantity: number;
+  batchNumber?: string | null;
+}
+
+/** POST /api/supplier-cabinet/stock/{batchId}/adjust */
+export interface AdjustSupplierStockRequest {
+  quantity: number;
+  reason?: string | null;
+}
+
+/** POST /api/supplier-cabinet/warehouses/{warehouseId}/receipts */
+export interface CreateSupplierReceiptRequest {
+  reference?: string | null;
+  notes?: string | null;
+}
+
+/** PUT /api/supplier-cabinet/receipts/{id} — draft header only. */
+export interface UpdateSupplierReceiptRequest {
+  warehouseId: string;
+  reference?: string | null;
+  notes?: string | null;
+}
+
+/** POST /api/supplier-cabinet/receipts/{id}/lines */
+export interface AddSupplierReceiptLineRequest {
+  supplierItemId: string;
+  expiryDate?: string | null; // "YYYY-MM-DD" — optional on a draft line
+  quantity: number;
+  batchNumber?: string | null;
+  unitCost?: number | null;
+  notes?: string | null;
+}

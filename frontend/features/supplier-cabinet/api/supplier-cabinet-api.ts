@@ -39,8 +39,17 @@ import type {
   SupplierWarehouse,
   CreateSupplierWarehouseRequest,
   UpdateSupplierWarehouseRequest,
+  SupplierStock,
+  SupplierStockReceipt,
+  AddSupplierBatchRequest,
+  AdjustSupplierStockRequest,
+  CreateSupplierReceiptRequest,
+  UpdateSupplierReceiptRequest,
+  AddSupplierReceiptLineRequest,
+  SupplierStockReceiptStatus,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
+import type { PagedResult as ApiPagedResult } from "@/lib/api-types";
 
 const BASE = "/api/supplier-cabinet";
 
@@ -257,4 +266,64 @@ export const supplierCabinetApi = {
   /** POST /api/supplier-cabinet/warehouses/{id}/deactivate */
   deactivateWarehouse: (id: string) =>
     api.post<void>(`${BASE}/warehouses/${id}/deactivate`),
+
+  // ── Warehouse batch inventory (supplier-portal expansion Phase 2) ──────────
+
+  /** GET /api/supplier-cabinet/warehouses/{warehouseId}/stock — paged, FEFO-ordered. */
+  getWarehouseStock: (
+    warehouseId: string,
+    params: { supplierItemId?: string; page?: number; pageSize?: number } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (params.supplierItemId) qs.set("supplierItemId", params.supplierItemId);
+    if (params.page) qs.set("page", String(params.page));
+    if (params.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString();
+    return api.get<ApiPagedResult<SupplierStock>>(
+      `${BASE}/warehouses/${warehouseId}/stock${query ? `?${query}` : ""}`,
+    );
+  },
+
+  /** POST /api/supplier-cabinet/warehouses/{warehouseId}/stock — add one batch. */
+  addStockBatch: (warehouseId: string, body: AddSupplierBatchRequest) =>
+    api.post<SupplierStock>(`${BASE}/warehouses/${warehouseId}/stock`, body),
+
+  /** POST /api/supplier-cabinet/stock/{batchId}/adjust — stock-take / manual write-off. */
+  adjustStockBatch: (batchId: string, body: AdjustSupplierStockRequest) =>
+    api.post<SupplierStock>(`${BASE}/stock/${batchId}/adjust`, body),
+
+  // ── Manual "what actually arrived" receiving ──────────────────────────────
+
+  /** GET /api/supplier-cabinet/warehouses/{warehouseId}/receipts — bare array, newest first. */
+  listReceipts: (
+    warehouseId: string,
+    params: { status?: SupplierStockReceiptStatus } = {},
+  ) =>
+    api.get<SupplierStockReceipt[]>(
+      `${BASE}/warehouses/${warehouseId}/receipts${params.status ? `?status=${params.status}` : ""}`,
+    ),
+
+  /** POST /api/supplier-cabinet/warehouses/{warehouseId}/receipts — create a draft. */
+  createReceipt: (warehouseId: string, body: CreateSupplierReceiptRequest) =>
+    api.post<SupplierStockReceipt>(`${BASE}/warehouses/${warehouseId}/receipts`, body),
+
+  /** GET /api/supplier-cabinet/receipts/{id} */
+  getReceipt: (id: string) =>
+    api.get<SupplierStockReceipt>(`${BASE}/receipts/${id}`),
+
+  /** PUT /api/supplier-cabinet/receipts/{id} — draft header (warehouse / reference / notes). */
+  updateReceipt: (id: string, body: UpdateSupplierReceiptRequest) =>
+    api.put<SupplierStockReceipt>(`${BASE}/receipts/${id}`, body),
+
+  /** POST /api/supplier-cabinet/receipts/{id}/lines — one row per (item, expiry, batch). */
+  addReceiptLine: (id: string, body: AddSupplierReceiptLineRequest) =>
+    api.post<SupplierStockReceipt>(`${BASE}/receipts/${id}/lines`, body),
+
+  /** DELETE /api/supplier-cabinet/receipts/{id}/lines/{lineId} */
+  removeReceiptLine: (id: string, lineId: string) =>
+    api.delete<SupplierStockReceipt>(`${BASE}/receipts/${id}/lines/${lineId}`),
+
+  /** POST /api/supplier-cabinet/receipts/{id}/finalize — 400 { error } names lines missing expiry. */
+  finalizeReceipt: (id: string) =>
+    api.post<SupplierStockReceipt>(`${BASE}/receipts/${id}/finalize`),
 };
