@@ -10,6 +10,7 @@ Full text for **ADR-037 … ADR-027** is in this file. **ADR-026 and older** →
 
 | ADR | Decision |
 |---|---|
+| ADR-038 | Supplier-portal expansion — supplier warehouses reuse `Location` (`Type="warehouse"`); supplier stock/receipts are PARALLEL entities to retail (not reuse — nullable `SupplierItem.ItemId` + retail `store_scope` RLS); `marketplace_order_item_batches` doubles as stock-consumption ledger + buyer-receipt prefill with INVERSE split RLS; open marketplace orders fold into `OrderCalc` in-transit; schedules reuse the tenant-generic `IScheduleService`; two provider-granted default-off modules `supplier_inventory` / `supplier_workforce` |
 | ADR-037 | Provider-controlled `mobile_app` + `analytics` module keys — whole "Застосунок" section and "Аналітика" reports section gated; per-action `[RequireModule]` on the shared `AnalyticsController`; no backfill, default-off |
 | ADR-036 | Supplier delivery coverage + performance metrics — Ukraine region registry, `MarketplaceOrder.DestinationRegionCode` snapshot, coverage not premium-gated, `supplier-metrics-recompute` worker write-boundary · **amended 2026-09-03**: write-boundary set grows by `OnTimeDeliveryRate` + `CompositeScore` (worker-computed, same disjointness argument) |
 | ADR-035 | `IProviderRlsOverride` — marketplace provider bypass scoped to one repository method, replacing session-level `SET app.role` |
@@ -47,6 +48,94 @@ Full text for **ADR-037 … ADR-027** is in this file. **ADR-026 and older** →
 | ADR-003 | Expo SDK 56 for mobile *(archive)* |
 | ADR-002 | Modular monolith over Turborepo *(archive)* |
 | ADR-001 | BullMQ with ASP.NET Core *(archive)* |
+
+## ADR-038: Supplier-portal expansion — warehouses, batch inventory, batch-consuming shipment, replenishment in-transit, employee schedules
+Date: 2026-09-03 · Status: accepted · Plan: `.claude/plans/1-partitioned-book.md` (TASK-679..690, 8 commits `c72f473f`..`108b7954`) · Amends ADR-033 and ADR-036 (see their sections)
+
+10 user requests to make the marketplace supplier (`business_type = "supplier"`, ADR-016) a real
+operational portal, not just an order-taking surface. Request #1 (supplier-side order cancel) was
+deferred by the user; the other 9 shipped across 6 phases. Key decisions:
+
+**D1 — Supplier warehouses reuse `Location`.** A supplier "warehouse" is a `locations` row with
+`Type = "warehouse"`, created through a thin `/api/supplier-cabinet/warehouses` wrapper over
+`ILocationService` (NOT by widening `LocationsController`, which is gated on retail roles). `Location`
+is already the FK target for `WorkSchedule.LocationId` and `ProductStock.StoreId`, already carries the
+RLS triad, and `IsValidLocationType` already accepts `"warehouse"`. The entity's separate
+`LocationType` property is dead code — nothing in Application reads it; `LocationService` writes the
+request's type onto `Location.Type`.
+
+**D2 — Supplier stock is a PARALLEL model, not reuse of `ProductStock`.** New `supplier_stock` /
+`supplier_stock_movements` keyed on `(SupplierItemId, WarehouseId)`, mirroring `ProductStock`'s shape
+(`xmin` token, `ExpiryDate DateOnly NOT NULL`, `Status` via the shared `StockStatus` helper, partial
+FEFO index `WHERE "Quantity" > 0`). Two independent blockers ruled out reuse: (a) `ProductStock.ProductId → items`
+is mandatory but `SupplierItem.ItemId` is nullable (custom products); (b) `product_stock` carries the
+RESTRICTIVE `store_scope` policy (ADR-022) which a `supplier_admin` — with no `user_locations` rows and
+not a bypass role — reads as **zero rows**. The FEFO-consume walk is duplicated from
+`StockService.FefoConsumeAsync` rather than extracted.
+
+**D3 — Supplier receiving is "what physically arrived", parallel entities.** `supplier_stock_receipts` /
+`supplier_stock_receipt_items` → one `supplier_stock` batch + one movement per line on finalize (gate:
+every line has `ExpiryDate` + `Quantity > 0`). N receipt lines may share a `SupplierItemId` — one line per
+`(expiry, batch)` — so the UI keys lines by a synthetic id, unlike retail `CreateReceiptForm.tsx` which
+keys by `productId`. No sub-supplier PO / ordered-vs-received reconciliation (user decision).
+
+**D4 — `marketplace_order_item_batches` is the load-bearing table, with the INVERSE of ADR-033's split
+RLS.** ADR-033 gave `marketplace_order_receipts` a client-write / supplier-read split. This table is the
+other half of the handshake — which supplier batches shipped — so it gets the mirror image:
+`tenant_isolation` (FOR ALL + WITH CHECK) on `SupplierTenantId`, `client_read` (FOR SELECT) on
+`ClientTenantId`, plus the provider/worker bypasses. It doubles as (a) the stock-consumption ledger and
+(b) the source `MarketplaceOrderReceiptService.GetOrCreateDraftAsync` reads (client session, `client_read`)
+to build **N receipt items per order line** prefilled with expiry/batch — so a supplier session never
+writes a receipt row and the ADR-033 split stays intact. `ReceiveAsync` needed no change (it already
+emits one `ProductStock` per receipt item → N sub-rows become N correctly-dated buyer batches). Shipping
+is one code path: `MarketplaceOrderService.ShipOrderAsync`; the legacy `POST .../status {status:"shipped"}`
+delegates to it with no warehouse (nothing consumed) — byte-for-byte legacy while `supplier_inventory` is
+off. Under-coverage ships with a warning (user decision); an unknown line or a cross-warehouse batch is a
+hard 400. One source warehouse per order (`MarketplaceOrder.SourceWarehouseId`); partial / multi-warehouse
+fulfilment of one order is out of v1 scope.
+
+**D5 — Open marketplace orders fold into the replenishment in-transit term (the "double-order" fix).**
+`OrderCalcRepository.GetOpenMarketplaceInTransitAsync` joins `marketplace_order_items → marketplace_orders`
+and maps to the buyer's `Item` via `SupplierItemId == Item.SourceSupplierItemId`; status
+`new`/`confirmed`/`shipped`; **unit-mismatch lines excluded** (`oi.Unit != it.Unit`) to avoid a box-vs-each
+skew (documented v1 limitation). It is summed into the single existing `InTransit` term — no new formula
+input; `AiOrderService` inherits it through `CalculateAsync`. `MarketplaceOrder.ExpectedDeliveryDate` is a
+mutable date the supplier can reset repeatedly while `shipped`
+(`POST /api/supplier-cabinet/orders/{id}/expected-delivery-date`), separate from the write-once
+`EstimatedDeliveryDays`; each fills the other in. Also fixed: the worker's `notification-dispatch.job.ts`
+was silently dropping `marketplace_order.shipped` / `.delay_reason_added` (no matrix entry) — added, plus
+`.created` and `.delivery_rescheduled`.
+
+**D6 — Employee schedules reuse the shared `IScheduleService` unchanged.** It is already
+`tenantId`-parametrized and validates `LocationExistsAsync(locationId, tenantId)`; `work_schedules` /
+`schedule_shifts` RLS is the plain triad with **no `store_scope`**, so a supplier tenant sees only its own.
+`SupplierCabinetSchedulesController` is a thin pass-through (mutations gated by the new
+`workforce_management` supplier permission). The retail `features/schedules/` React components are coupled
+to retail hooks (`useUsers`, `useLocations`, `/api/schedules`), so 4 were forked into
+`features/supplier-cabinet/components/schedules/` with supplier hooks; the genuinely presentational
+`ShiftCard` / `ShiftForm` and the DTO types are reused as-is. No migration.
+
+**D7 — Two provider-granted, default-off, no-backfill modules.** `supplier_inventory` (D1–D5) and
+`supplier_workforce` (D6), added to `Tenant.UpdateModules`'s allow-list but NOT to
+`DefaultModulesForBusinessType` — a drop-ship supplier with no warehouse never turns them on, and the
+legacy `confirmed→shipped` flow keeps working while `supplier_inventory` is off (ADR-037 style).
+
+**D8 / #10 — composite quality score.** `supplier_metrics(_snapshots).CompositeScore` +
+`.OnTimeDeliveryRate`, computed by the nightly `supplier-metrics-recompute` worker job (equal-weight mean
+of the available components `{Rating/5, OrderAccuracy, OnTimeDeliveryRate, clamp(1 − ResponseTimeHours/48, 0, 1)}`,
+ADR-034 precedent). Both columns join the job's documented write-boundary set (worker-computed, disjoint
+columns / separate statement / no `xmin` — see the ADR-036 amendment). `QualityScore` stays permanently
+NULL — `compositeScore` is the headline "quality" number, rendered on a 0–100 scale.
+
+**Migrations (dev DB only, not prod):** `AddSupplierExpansionFoundations`, `AddSupplierInventory`,
+`AddMarketplaceOrderItemBatches`, `AddMarketplaceOrdersReplenishmentIndex`, `AddSupplierItemPlatformCategory`,
+`AddSupplierCompositeScore`. New supplier tables are owned by `crm`, not `shelfguard_app_dev` → prod deploy
+needs app-role GRANTs.
+
+**Consequences / debt:** prod deploy is a coordinated 6-migration + worker redeploy + per-tenant module
+grant; `openapi.json` regen still outstanding (debt since TASK-670); the mobile receiving screen must adopt
+the 1→N receipt-item shape (`.claude/logs/handoffs/phase3-mobile-receipt-batches.md`); `platform_categories`
+has no hierarchy yet so the #8 category typeahead has nothing to search.
 
 ## ADR-037: Provider-controlled `mobile_app` + `analytics` module keys
 Date: 2026-09-02

@@ -91,6 +91,31 @@ Audit trail for every quantity change.
 Types: receipt / transfer / production / discount / write_off / sale / adjustment / return
 Fields: id, tenant_id, movement_type, product_stock_id, product_id, from_store_id, to_store_id, quantity, quantity_before, quantity_after, unit_price, reference_id, performed_by
 
+### Supplier-portal inventory (ADR-038, 2026-09-03) — PARALLEL to the retail Stock model above
+A marketplace supplier (`business_type = "supplier"`) that has the `supplier_inventory` module gets
+its own warehouse stock, separate from the retail `product_stock` / `stock_receipts` chain because
+`SupplierItem.item_id` is nullable and `product_stock` carries the retail-only `store_scope` RLS.
+- **Location (`Type = "warehouse"`)** — a supplier "warehouse" is just a `locations` row; created via
+  `/api/supplier-cabinet/warehouses`.
+- **supplier_stock** — FEFO batches keyed on `(supplier_item_id, warehouse_id)`. Same shape as
+  `ProductStock`: `expiry_date DATE NOT NULL`, `quantity` (+ `xmin`), `batch_number`, `status`
+  (shared `StockStatus` values), `source_type`/`source_id`. Partial FEFO index `WHERE "Quantity" > 0`.
+- **supplier_stock_movements** — append-only ledger: `receipt` / `ship` / `adjust` / `write_off`.
+- **supplier_stock_receipts / supplier_stock_receipt_items** — manual "what physically arrived"
+  intake (`draft` → `received`). N item rows may share one `supplier_item_id` (one per `(expiry, batch)`).
+  Finalize → one `supplier_stock` batch + one movement per line.
+- **marketplace_order_item_batches** — records which supplier batches shipped on a marketplace order
+  line. INVERSE split RLS vs ADR-033: supplier-write (`tenant_isolation` on `SupplierTenantId`),
+  client-read (`client_read` on `ClientTenantId`). Doubles as the stock-consumption ledger and the
+  source `MarketplaceOrderReceiptService.GetOrCreateDraftAsync` reads to build N receipt items per
+  order line, prefilled with expiry/batch.
+- **marketplace_orders** gained `SourceWarehouseId` (ship-from), `ExpectedDeliveryDate` (mutable
+  supplier reschedule), `CreatedByUserName` (denormalized order-author snapshot).
+- **supplier_metrics / supplier_metrics_snapshots** gained `CompositeScore` (0..1, headline quality
+  number, 0–100 in the UI) + `OnTimeDeliveryRate` — worker-computed, see ADR-036 amendment.
+- **supplier_items** gained `PlatformCategoryId` FK → `platform_categories` (browse taxonomy, distinct
+  from the legacy `Category` attribute-schema key).
+
 ### StockEvent
 IoT/sensor event placeholder (v3). Stores confidence score for sensor readings.
 Fields: id, tenant_id, event_type, product_stock_id, source_device_id, quantity_delta, confidence (0-100), meta (JSONB)
