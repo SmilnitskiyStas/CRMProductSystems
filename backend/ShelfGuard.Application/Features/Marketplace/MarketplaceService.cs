@@ -10,12 +10,19 @@ public sealed class MarketplaceService : IMarketplaceService
 {
     private readonly IMarketplaceRepository _repo;
     private readonly ILocationRepository _locations;
+    private readonly ICategoryRepository _categories;
 
-    public MarketplaceService(IMarketplaceRepository repo, ILocationRepository locations)
+    public MarketplaceService(
+        IMarketplaceRepository repo, ILocationRepository locations, ICategoryRepository categories)
     {
         _repo = repo;
         _locations = locations;
+        _categories = categories;
     }
+
+    // ── Phase 6e: browse-taxonomy link validation ─────────────────────────────
+    public const string PlatformCategoryNotFoundError =
+        "Обрану категорію не знайдено або її вимкнено.";
 
     // ── Public listing ────────────────────────────────────────────────────────
 
@@ -60,7 +67,7 @@ public sealed class MarketplaceService : IMarketplaceService
         if (!await IsPublishedAsync(supplierId, ct)) return null;
 
         var items = await _repo.GetSupplierItemsAsync(supplierId, ct);
-        return items.Select(ToItemDto).ToList();
+        return items.Select(i => ToItemDto(i)).ToList();
     }
 
     public async Task<IReadOnlyList<SupplierListItemDto>> SearchSuppliersAsync(
@@ -353,6 +360,15 @@ public sealed class MarketplaceService : IMarketplaceService
         if (request.MinQty.HasValue && request.MaxQty.HasValue && request.MaxQty.Value < request.MinQty.Value)
             return (null, "MaxQty must be greater than or equal to MinQty.");
 
+        // Phase 6e: validate the browse-taxonomy link (must be an existing, active global category).
+        PlatformCategory? platformCategory = null;
+        if (request.PlatformCategoryId is { } addCatId && addCatId != Guid.Empty)
+        {
+            platformCategory = await _categories.GetByIdAsync(addCatId, ct);
+            if (platformCategory is null || !platformCategory.IsActive)
+                return (null, PlatformCategoryNotFoundError);
+        }
+
         var supplier = await _repo.GetSupplierByRawIdAsync(supplierId, ct);
         if (supplier is null)
             return (null, "Supplier not found.");
@@ -368,6 +384,7 @@ public sealed class MarketplaceService : IMarketplaceService
             IsAvailable         = request.IsAvailable,
             Category            = request.Category,
             Attributes          = request.Attributes,
+            PlatformCategoryId  = platformCategory?.Id,
             Brand               = request.Brand?.Trim(),
             Manufacturer        = request.Manufacturer?.Trim(),
             ManufacturerCountry = request.ManufacturerCountry?.Trim(),
@@ -388,7 +405,7 @@ public sealed class MarketplaceService : IMarketplaceService
         await _repo.AddSupplierItemAsync(item, ct);
         await _repo.SaveChangesAsync(ct);
 
-        return (ToItemDto(item), null);
+        return (ToItemDto(item, platformCategory?.Name), null);
     }
 
     public async Task<(SupplierItemDto? Item, string? Error)> AdminUpdateSupplierItemAsync(
@@ -416,6 +433,24 @@ public sealed class MarketplaceService : IMarketplaceService
         var effectiveMaxQty = request.MaxQty ?? item.MaxQty;
         if (effectiveMinQty.HasValue && effectiveMaxQty.HasValue && effectiveMaxQty.Value < effectiveMinQty.Value)
             return (null, "MaxQty must be greater than or equal to MinQty.");
+
+        // Phase 6e: patch the browse-taxonomy link. null → leave; Guid.Empty → clear;
+        // otherwise validate it is an existing, active global category and set it.
+        PlatformCategory? platformCategory = null;
+        if (request.PlatformCategoryId is { } patchCatId)
+        {
+            if (patchCatId == Guid.Empty)
+            {
+                item.PlatformCategoryId = null;
+            }
+            else
+            {
+                platformCategory = await _categories.GetByIdAsync(patchCatId, ct);
+                if (platformCategory is null || !platformCategory.IsActive)
+                    return (null, PlatformCategoryNotFoundError);
+                item.PlatformCategoryId = platformCategory.Id;
+            }
+        }
 
         if (request.CustomName is not null)      item.CustomName = request.CustomName.Trim();
         if (request.Price.HasValue)              item.Price       = request.Price;
@@ -458,7 +493,13 @@ public sealed class MarketplaceService : IMarketplaceService
 
         await _repo.SaveChangesAsync(ct);
 
-        return (ToItemDto(item), null);
+        // Resolve the browse-category name for the response: a fresh patch uses the just-loaded
+        // row, a clear yields null, an untouched link falls back to the Included navigation.
+        var resolvedCategoryName = request.PlatformCategoryId is { } pcid
+            ? (pcid == Guid.Empty ? null : platformCategory?.Name)
+            : item.PlatformCategory?.Name;
+
+        return (ToItemDto(item, resolvedCategoryName), null);
     }
 
     /// <summary>
@@ -613,7 +654,7 @@ public sealed class MarketplaceService : IMarketplaceService
         public int SampleSize { get; set; }
     }
 
-    private static SupplierItemDto ToItemDto(SupplierItem i) =>
+    private static SupplierItemDto ToItemDto(SupplierItem i, string? platformCategoryName = null) =>
         new(i.Id, i.ItemId, i.CustomName, i.Item?.Name, i.Price, i.MinQty, i.Unit, i.IsAvailable,
             i.Category, i.Attributes,
             i.Brand, i.Manufacturer, i.ManufacturerCountry, i.MaxQty,
@@ -621,7 +662,9 @@ public sealed class MarketplaceService : IMarketplaceService
             i.Barcodes.OrderByDescending(b => b.Kind == "primary").ThenBy(b => b.CreatedAt)
                       .Select(b => b.Barcode).ToList(),
             i.Images.OrderBy(img => img.SortOrder)
-                    .Select(img => new SupplierItemImageDto(img.Url, img.Kind, img.SortOrder)).ToList());
+                    .Select(img => new SupplierItemImageDto(img.Url, img.Kind, img.SortOrder)).ToList(),
+            i.PlatformCategoryId,
+            platformCategoryName ?? i.PlatformCategory?.Name);
 
     private static SupplierReviewDto ToReviewDto(SupplierReview r) =>
         new(r.Id, r.Rating, r.Comment, r.CreatedAt);

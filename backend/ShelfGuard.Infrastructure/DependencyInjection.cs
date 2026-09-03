@@ -60,6 +60,10 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.SupplierInventory.ISupplierStockReceiptRepository,
             Data.Repositories.SupplierStockReceiptRepository>();
 
+        // Supplier-portal expansion Phase 6b — supplier demand analytics
+        services.AddScoped<Application.Features.SupplierAnalytics.ISupplierAnalyticsRepository,
+            Data.Repositories.SupplierAnalyticsRepository>();
+
         // Locations
         services.AddScoped<ILocationRepository, LocationRepository>();
 

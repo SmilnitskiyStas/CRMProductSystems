@@ -1281,4 +1281,30 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         var rows = await _orders.ListAwaitingReceiptForClientAsync(clientTenantId, ct);
         return await ToDtosAsync(rows, ct);
     }
+
+    // ── "New order arrived" badge (supplier-portal expansion #3, Phase 6a) ──────
+
+    public async Task<int> GetUnseenOrderCountForSupplierAsync(
+        Guid supplierTenantId, Guid userId, CancellationToken ct = default)
+    {
+        // The user row is in the supplier's own tenant (this runs on the supplier session), so a
+        // plain repository read is enough — no ITenantSessionOverride.
+        var user = await _users.GetByIdAsync(userId, ct);
+
+        DateTimeOffset? since = user?.SupplierOrdersLastViewedAt is { } ts
+            ? new DateTimeOffset(DateTime.SpecifyKind(ts, DateTimeKind.Utc), TimeSpan.Zero)
+            : null;
+
+        return await _orders.CountUnseenForSupplierAsync(supplierTenantId, since, ct);
+    }
+
+    public async Task MarkSupplierOrdersSeenAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(userId, ct);
+        if (user is null) return;
+
+        user.MarkSupplierOrdersViewed();
+        _users.Update(user);
+        await _users.SaveChangesAsync(ct);
+    }
 }

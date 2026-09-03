@@ -75,6 +75,43 @@ public sealed class CategoryServiceTests
         await _tenantRepo.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
+    // ── SearchAsync (supplier-portal expansion #8, Phase 6e typeahead) ────────
+
+    [Fact]
+    public async Task SearchAsync_ClampsLimit_AndMapsRowsToDtos()
+    {
+        var tenantId = Guid.NewGuid();
+        var catId = Guid.NewGuid();
+        _repo.SearchActiveAsync(tenantId, "мол", Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<CategorySearchRow> { new(catId, "Молоко", "Продукти", 4) });
+
+        var result = await _sut.SearchAsync(tenantId, "мол", limit: 999);
+
+        var row = Assert.Single(result);
+        Assert.Equal(catId, row.Id);
+        Assert.Equal("Молоко", row.Name);
+        Assert.Equal("Продукти", row.ParentName);
+        Assert.Equal(4, row.ItemCount);
+        await _repo.Received(1).SearchActiveAsync(tenantId, "мол", 50, Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(-5, 20)]
+    [InlineData(10, 10)]
+    [InlineData(50, 50)]
+    [InlineData(51, 50)]
+    public async Task SearchAsync_LimitClamping(int requested, int expected)
+    {
+        var tenantId = Guid.NewGuid();
+        _repo.SearchActiveAsync(tenantId, Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<CategorySearchRow>());
+
+        await _sut.SearchAsync(tenantId, "x", requested);
+
+        await _repo.Received(1).SearchActiveAsync(tenantId, "x", expected, Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task GetAllAsync_BusinessTypeMatchIsCaseInsensitive()
     {

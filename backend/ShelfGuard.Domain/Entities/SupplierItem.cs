@@ -22,6 +22,14 @@ public sealed class SupplierItem
     /// <summary>Category-specific attributes (e.g. oem_number, dosage, expiry_date). Null when Category is null.</summary>
     public Dictionary<string, object?>? Attributes { get; set; }
 
+    /// <summary>
+    /// Browse-taxonomy link into the global provider-curated <see cref="PlatformCategory"/> tree
+    /// (supplier-portal expansion #8, Phase 6e). Independent of the legacy <see cref="Category"/>
+    /// string key above, which stays and keeps driving the attribute-schema registry. Nullable —
+    /// FK <c>ON DELETE SET NULL</c>; the provider may soft-delete/remove a global category.
+    /// </summary>
+    public Guid? PlatformCategoryId { get; set; }
+
     // ── Universal fields (apply regardless of Category) ────────────────────
     public string? Brand { get; set; }
     public string? Manufacturer { get; set; }
@@ -38,6 +46,7 @@ public sealed class SupplierItem
     public Supplier? Supplier { get; init; }
     public Tenant? Tenant { get; init; }
     public Item? Item { get; init; }
+    public PlatformCategory? PlatformCategory { get; init; }
     public ICollection<SupplierItemBarcode> Barcodes { get; init; } = new List<SupplierItemBarcode>();
     public ICollection<SupplierItemImage> Images { get; init; } = new List<SupplierItemImage>();
 }

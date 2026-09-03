@@ -645,6 +645,68 @@ New outbox event `marketplace_order.delivery_rescheduled` → client warehouse s
 (merchandiser/store_manager/network_manager/enterprise_admin, telegram+push), registered in
 `NotificationService.ValidEventTypes` + the worker `DISPATCH_EVENT_ROLES` matrix.
 
+#### Supplier cabinet — Phase 6 marketplace insights (plan `1-partitioned-book.md`)
+
+**6a — "new order arrived" badge.** `SupplierCabinet` policy + module `marketplace_supplier`; no
+extra permission (any `supplier_admin`). Uses the per-user `users.SupplierOrdersLastViewedAt`
+marker landed in Phase 1.
+```
+GET  /api/supplier-cabinet/orders/unseen-count   -> 200 { count: number }
+POST /api/supplier-cabinet/orders/mark-seen      -> 204   (stamps the caller's marker to now; idempotent — a second call still 204, count then 0)
+```
+`count` = the supplier's **non-cancelled** orders with `CreatedAt > SupplierOrdersLastViewedAt`;
+a user who never opened the tab (null marker) counts every non-cancelled order. Cancelled orders
+are excluded on both paths (not an actionable "new order").
+
+**6b — supplier demand analytics.** `SupplierCabinet` policy + module `marketplace_supplier`
+(controller) + supplier permission `analytics_view` (action). Read-only over the supplier's own
+marketplace order history — **no cross-buyer leakage** (every figure filtered to
+`marketplace_order_items.SupplierTenantId == me`, order `Status != 'cancelled'`).
+```
+GET /api/supplier-cabinet/analytics?from=&to=   -> 200 SupplierAnalyticsDto
+```
+`from`/`to` are `YYYY-MM-DD`, both inclusive; both omitted → the last 30 days. Range capped at
+366 days server-side (a wider request is clamped by moving `from` forward; the effective window is
+echoed on the DTO). `from > to` is swapped, not rejected.
+```ts
+SupplierAnalyticsDto {
+  from, to: string                                  // effective window (YYYY-MM-DD)
+  totalRevenue: number                              // Σ LineTotal
+  orderCount: number                                // distinct non-cancelled orders
+  itemsSold: number                                 // Σ Qty
+  revenueDelta, orderCountDelta, itemsSoldDelta: PeriodMetricDto   // vs the equal-length preceding window (TASK-336 PeriodMetricDto: { current, previous, percentChange })
+  topItems:  SupplierAnalyticsItemDto[]             // top 10 by Σ Qty, desc
+  slowItems: SupplierAnalyticsItemDto[]             // 10 available catalog items with LEAST demand incl. zero-demand, asc
+  byBuyer:   { clientTenantId, clientName, orderCount, revenue }[]   // per ClientTenantId, highest revenue first
+  revenueTrend: { date: string, revenue, orderCount }[]             // daily, oldest first
+}
+SupplierAnalyticsItemDto { supplierItemId: string|null, itemName, qtySold, revenue, orderCount }
+```
+`slowItems` LEFT-JOINs the window's demand onto `supplier_items WHERE TenantId = me AND IsAvailable`
+so a never-ordered item shows up with `qtySold/revenue/orderCount = 0`. Buyer names resolved via
+the same tenant-name helper `MarketplaceOrderService` uses (`ISupplierChatRepository.GetTenantDisplayNameAsync`).
+
+**6e — SupplierItem ↔ platform category + category typeahead.**
+```
+GET /api/categories/search?q=&limit=   -> 200 CategorySearchResultDto[]   ([Authorize CanViewStock], tenant-authed)
+CategorySearchResultDto { id, name, parentName: string|null, itemCount: number }
+```
+Case-insensitive `Name ILIKE '%q%'` over **all active** `platform_categories` (NOT
+business-type-filtered — a supplier sells across verticals). `parentName` = one self-join for
+typeahead disambiguation; `itemCount` = the **caller tenant's own** `items` in that category (0
+for a pure supplier tenant). `limit` default 20, clamped 1..50. Blank `q` → the first `limit`
+active categories by name.
+
+`SupplierItemDto` gains `platformCategoryId: string|null` + `platformCategoryName: string|null`
+(a real browse-taxonomy link, independent of the legacy `category` string key which still drives
+the attribute-schema registry). `AdminAddSupplierItemDto` / `AdminUpdateSupplierItemDto` gain
+`platformCategoryId?` — on add, a non-empty value is validated to be an existing **active**
+`platform_categories` row (else 400 «Обрану категорію не знайдено або її вимкнено.»); on update
+(patch semantics) `null`/omitted leaves it, `Guid.Empty` (`"00000000-…"`) clears it, any other
+value validates + sets. New nullable FK `supplier_items.PlatformCategoryId` → `platform_categories`
+`ON DELETE SET NULL`, index `(TenantId, PlatformCategoryId)`; no RLS change (column inherits the
+existing triad, `store_scope` deliberately absent). Migration `20260903124945_AddSupplierItemPlatformCategory`.
+
 ---
 
 ### Geo taxonomy + marketplace delivery coverage & performance metrics (v4.4 — TASK-648..661, ADR-036)

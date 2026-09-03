@@ -20,6 +20,16 @@ public interface ICategoryRepository
     /// <summary>Full tree incl. inactive rows, ordered <c>SortOrder</c> then <c>Name</c> — the provider CRUD list.</summary>
     Task<List<PlatformCategory>> GetAllAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Case-insensitive <c>Name ILIKE '%term%'</c> typeahead over active categories (Phase 6e),
+    /// ordered by name, capped at <paramref name="limit"/>. Blank <paramref name="term"/> returns
+    /// the first <paramref name="limit"/> active categories. Each hit carries its parent's name
+    /// (one self-join) and the item count for <paramref name="tenantId"/>'s own <c>items</c> in
+    /// that category. Mirrors <c>AudienceBuilderRepository.SearchCategoriesAsync</c>.
+    /// </summary>
+    Task<IReadOnlyList<CategorySearchRow>> SearchActiveAsync(
+        Guid tenantId, string? term, int limit, CancellationToken ct = default);
+
     Task<PlatformCategory?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>True when a category with this id exists and is <c>IsActive</c>. Backs the Item.CategoryId validation.</summary>
@@ -38,3 +48,6 @@ public interface ICategoryRepository
     void Update(PlatformCategory category);
     Task SaveChangesAsync(CancellationToken ct = default);
 }
+
+/// <summary>Repository row for <see cref="ICategoryRepository.SearchActiveAsync"/> (Phase 6e typeahead).</summary>
+public sealed record CategorySearchRow(Guid Id, string Name, string? ParentName, int ItemCount);

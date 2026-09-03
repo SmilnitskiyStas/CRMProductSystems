@@ -34,5 +34,15 @@ public sealed class CategoryService : ICategoryService
         return visible.Select(ToDto).ToList();
     }
 
+    public async Task<IReadOnlyList<CategorySearchResultDto>> SearchAsync(
+        Guid tenantId, string? query, int limit, CancellationToken ct = default)
+    {
+        var safeLimit = Math.Clamp(limit <= 0 ? 20 : limit, 1, 50);
+        var rows = await _repo.SearchActiveAsync(tenantId, query, safeLimit, ct);
+        return rows
+            .Select(r => new CategorySearchResultDto(r.Id, r.Name, r.ParentName, r.ItemCount))
+            .ToList();
+    }
+
     private static CategoryDto ToDto(PlatformCategory c) => new(c.Id, c.Name, c.ParentId);
 }

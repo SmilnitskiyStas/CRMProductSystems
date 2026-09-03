@@ -908,3 +908,46 @@ Backend `dotnet build -c Release` clean · `dotnet test --filter "Schedule|RlsCr
 Frontend `tsc --noEmit` clean · `next lint` (touched) clean · `next build` EXIT 0 (77 routes,
 `/supplier/schedules` present). Doc: `.claude/docs/api-contracts.md` оновлено. openapi.json — спільний
 борг. НЕ закомічено.
+
+## TASK-688 — Supplier Phase 6a/6b/6e: badge + demand analytics + platform-category link (backend)
+
+**Status:** review (НЕ закомічено) · **Agent:** backend-developer · Plan `1-partitioned-book.md` Phase 6
+Log: `.claude/logs/tasks/688_2026-09-03_supplier-phase6a-6b-6e-backend_backend-developer.md`
+(6c/6d — окремий агент.)
+
+**6a бейдж (#3):** `IMarketplaceOrderRepository.CountUnseenForSupplierAsync` (non-cancelled;
+`since` null → всі, інакше `CreatedAt > since`). `IMarketplaceOrderService` +=
+`GetUnseenOrderCountForSupplierAsync` / `MarkSupplierOrdersSeenAsync` (юзер у власному tenant,
+без override). `SupplierCabinetCooperationController`: `GET /orders/unseen-count → {count}`,
+`POST /orders/mark-seen → 204` — клас-гейт `SupplierCabinet`+`marketplace_supplier`, без extra
+permission. `UnseenOrdersCountDto`.
+
+**6b аналітика (#7):** нова `Application/Features/SupplierAnalytics/` — `ISupplierAnalyticsService`
+(`GetAsync(tenantId, from, to)`, in-memory roll-up, вікно ≤ 366 днів, prev-window рівної довжини,
+реюз `PeriodMetricDto.Of`). `ISupplierAnalyticsRepository` + impl:
+`GetOrderLinesAsync` (`marketplace_order_items ⋈ marketplace_orders`, `SupplierTenantId==me`,
+`Status!=cancelled`, вікно), `GetAvailableCatalogAsync` (`supplier_items TenantId==me + IsAvailable`).
+`SupplierAnalyticsDto`: totals + deltas, `topItems`/`slowItems` (zero-demand через LEFT JOIN),
+`byBuyer` (назви через `ISupplierChatRepository`), `revenueTrend` (денний). Новий
+`SupplierCabinetAnalyticsController` `GET /api/supplier-cabinet/analytics?from=&to=` —
+`marketplace_supplier` + permission `analytics_view`, дефолт 30 днів. DI обидва шари.
+
+**6e категорії (#8):** міграція `20260903124945_AddSupplierItemPlatformCategory` —
+`supplier_items.PlatformCategoryId uuid NULL` FK→`platform_categories` SET NULL, індекс
+`(TenantId, PlatformCategoryId)` (EF згорнув standalone `IX_supplier_items_TenantId` у композит),
+БЕЗ зміни RLS. **Застосовано до dev `:5435/crm`**, НЕ prod. `SupplierItem.PlatformCategoryId` + nav
++ EF config + snapshot. `SupplierItemDto` += `platformCategoryId`/`platformCategoryName` (останні
+позиційні). `AdminAdd/UpdateSupplierItemDto` += `platformCategoryId?`. `MarketplaceService` ctor +=
+`ICategoryRepository`; add/update валідують FK (existing + `IsActive`, інакше tuple-error), update
+patch: null=лишити / `Guid.Empty`=очистити / інше=валідувати+set. `MarketplaceRepository` 3 читання
+Include `PlatformCategory`. `ICategoryRepository.SearchActiveAsync` + `ICategoryService.SearchAsync`
+(limit 1..50, деф. 20) + `CategoriesController` `GET /api/categories/search?q=&limit=` →
+`CategorySearchResultDto {id,name,parentName?,itemCount}`, ILIKE по ВСІХ активних (без фільтра
+business-type).
+
+`dotnet build -c Release` clean · `dotnet test --filter "SupplierAnalytics|MarketplaceOrder|Category|Marketplace|RlsCrossTenant"`
+**465 passed, 0 skipped** (integration проти dev Postgres), RLS-audit green · adjacent buckets 423 passed.
+Нові тести: `SupplierAnalyticsServiceTests` (8), `SupplierAnalyticsRepositoryIntegrationTests` (3),
+6a у `MarketplaceOrderServiceTests` (5), 6e у `MarketplaceServiceTests` (7) + `CategoryServiceTests` (limit/mapping) +
+`CategoryRepositorySearchIntegrationTests` (3). `.claude/docs/api-contracts.md` оновлено. openapi.json —
+спільний борг. `mobile/`/worker/`supplier_metrics*` не чіпав. НЕ закомічено.

@@ -133,7 +133,11 @@ public record SupplierItemDto(
     decimal? DepthCm = null,
     decimal? WidthCm = null,
     IReadOnlyList<string>? Barcodes = null,
-    IReadOnlyList<SupplierItemImageDto>? Images = null);
+    IReadOnlyList<SupplierItemImageDto>? Images = null,
+    // ── Browse-taxonomy link into platform_categories (supplier-portal expansion #8, Phase 6e).
+    //    Independent of the legacy Category string key above. Name resolved on read; null when unset. ──
+    Guid? PlatformCategoryId = null,
+    string? PlatformCategoryName = null);
 
 /// <summary>A single supplier-item image, ordered by SortOrder. Kind is 'main' | 'gallery'.</summary>
 public record SupplierItemImageDto(string Url, string Kind, int SortOrder);
@@ -197,7 +201,9 @@ public record AdminAddSupplierItemDto(
     /// <summary>Plain barcode strings. First = primary, rest = alternate. Null/blank/duplicate entries are skipped.</summary>
     List<string>? Barcodes = null,
     /// <summary>Plain image URLs. First = main, rest = gallery (SortOrder = list index). Null/blank entries are skipped.</summary>
-    List<string>? ImageUrls = null);
+    List<string>? ImageUrls = null,
+    /// <summary>Browse-taxonomy link (Phase 6e). Must be an existing, active <c>platform_categories</c> row or the add is rejected.</summary>
+    Guid? PlatformCategoryId = null);
 
 /// <summary>Patch-semantics item update — only non-null fields are applied.
 /// Barcodes/ImageUrls collections are only replaced when the corresponding list is
@@ -219,7 +225,13 @@ public record AdminUpdateSupplierItemDto(
     decimal? DepthCm = null,
     decimal? WidthCm = null,
     List<string>? Barcodes = null,
-    List<string>? ImageUrls = null);
+    List<string>? ImageUrls = null,
+    /// <summary>
+    /// Browse-taxonomy link (Phase 6e). Patch semantics: omit / null — leave untouched;
+    /// <c>Guid.Empty</c> — clear it; any other value — set it (validated to be an existing,
+    /// active <c>platform_categories</c> row).
+    /// </summary>
+    Guid? PlatformCategoryId = null);
 
 // ── Supplier cabinet (v4.1, TASK-284, ADR-016) ───────────────────────────────
 

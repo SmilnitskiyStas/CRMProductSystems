@@ -94,6 +94,7 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
                 .Include(i => i.Item)
                 .Include(i => i.Barcodes)
                 .Include(i => i.Images)
+                .Include(i => i.PlatformCategory)
                 .Where(i => i.SupplierId == supplierId && i.IsAvailable)
                 .OrderBy(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty))
                 .ToListAsync(ct),
@@ -248,6 +249,7 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
         _db.SupplierItems
             .Include(i => i.Barcodes)
             .Include(i => i.Images)
+            .Include(i => i.PlatformCategory)
             .FirstOrDefaultAsync(i => i.Id == itemId && i.SupplierId == supplierId, ct);
 
     public void RemoveSupplierItem(SupplierItem item) =>
@@ -345,6 +347,7 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
             .Include(i => i.Item)
             .Include(i => i.Barcodes)
             .Include(i => i.Images)
+            .Include(i => i.PlatformCategory)
             .Where(i => i.SupplierId == supplierId)
             .OrderBy(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty))
             .ToListAsync(ct);

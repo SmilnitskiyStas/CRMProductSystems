@@ -69,5 +69,20 @@ public sealed class MarketplaceOrderRepository : IMarketplaceOrderRepository
     public Task<int> CountForSupplierAsync(Guid supplierTenantId, CancellationToken ct = default) =>
         _db.MarketplaceOrders.CountAsync(o => o.SupplierTenantId == supplierTenantId, ct);
 
+    // Phase 6a: a cancelled order is never an actionable "new order", so it is excluded on both
+    // the null-marker (never opened) and the since-marker paths.
+    public Task<int> CountUnseenForSupplierAsync(
+        Guid supplierTenantId, DateTimeOffset? since, CancellationToken ct = default)
+    {
+        var query = _db.MarketplaceOrders.AsNoTracking()
+            .Where(o => o.SupplierTenantId == supplierTenantId
+                     && o.Status != MarketplaceOrderStatus.Cancelled);
+
+        if (since is not null)
+            query = query.Where(o => o.CreatedAt > since.Value);
+
+        return query.CountAsync(ct);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

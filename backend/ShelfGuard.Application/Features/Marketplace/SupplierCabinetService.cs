@@ -423,7 +423,9 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
             i.Barcodes.OrderByDescending(b => b.Kind == "primary").ThenBy(b => b.CreatedAt)
                       .Select(b => b.Barcode).ToList(),
             i.Images.OrderBy(img => img.SortOrder)
-                    .Select(img => new SupplierItemImageDto(img.Url, img.Kind, img.SortOrder)).ToList());
+                    .Select(img => new SupplierItemImageDto(img.Url, img.Kind, img.SortOrder)).ToList(),
+            i.PlatformCategoryId,
+            i.PlatformCategory?.Name);
 
     private static string[]? DeserializeStringArray(string? json)
     {

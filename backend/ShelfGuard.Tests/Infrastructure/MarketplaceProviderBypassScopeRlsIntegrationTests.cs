@@ -159,7 +159,8 @@ public sealed class MarketplaceProviderBypassScopeRlsIntegrationTests : IAsyncLi
             {
                 var service = new MarketplaceService(
                     new MarketplaceRepository(session.Db, new ProviderRlsOverride(session.Db)),
-                    new LocationRepository(session.Db));
+                    new LocationRepository(session.Db),
+                    new CategoryRepository(session.Db));
 
                 var (review, error, isDuplicate) = await service.CreateReviewAsync(
                     s.SupplierId, reviewer, new SupplierReviewCreateDto(5, "Чудовий постачальник"));
@@ -201,7 +202,8 @@ public sealed class MarketplaceProviderBypassScopeRlsIntegrationTests : IAsyncLi
             {
                 var service = new MarketplaceService(
                     new MarketplaceRepository(session1.Db, new ProviderRlsOverride(session1.Db)),
-                    new LocationRepository(session1.Db));
+                    new LocationRepository(session1.Db),
+                    new CategoryRepository(session1.Db));
                 var (_, error, _) = await service.CreateReviewAsync(
                     s.SupplierId, reviewer1, new SupplierReviewCreateDto(4, "Добре"));
                 Assert.Null(error);
@@ -217,7 +219,8 @@ public sealed class MarketplaceProviderBypassScopeRlsIntegrationTests : IAsyncLi
             {
                 var service = new MarketplaceService(
                     new MarketplaceRepository(session2.Db, new ProviderRlsOverride(session2.Db)),
-                    new LocationRepository(session2.Db));
+                    new LocationRepository(session2.Db),
+                    new CategoryRepository(session2.Db));
                 var (_, error, _) = await service.CreateReviewAsync(
                     s.SupplierId, reviewer2, new SupplierReviewCreateDto(2, "Погано"));
                 Assert.Null(error);

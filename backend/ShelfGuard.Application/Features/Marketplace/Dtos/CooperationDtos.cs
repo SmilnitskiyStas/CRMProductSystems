@@ -201,6 +201,12 @@ public record MarketplaceOrderDto(
 
 public record CancelMarketplaceOrderDto(string Reason);
 
+/// <summary>
+/// "New order arrived" badge payload (supplier-portal expansion #3, Phase 6a) —
+/// <c>GET /api/supplier-cabinet/orders/unseen-count</c>.
+/// </summary>
+public record UnseenOrdersCountDto(int Count);
+
 // ── Batch-consuming shipment (Phase 3, plan D4) ──────────────────────────────
 
 /// <summary>One <c>supplier_stock</c> batch and how much of it goes onto an order line.</summary>

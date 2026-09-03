@@ -1650,6 +1650,83 @@ public sealed class MarketplaceOrderServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    // ── "New order arrived" badge (supplier-portal expansion #3, Phase 6a) ─────
+
+    [Fact]
+    public async Task GetUnseenOrderCount_NullMarker_CountsEveryNonCancelledOrder()
+    {
+        _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>())
+            .Returns(User.Create(_supplierTenantId, "admin@supplier.com", "Адмін", "hash", "supplier_admin"));
+        _orders.CountUnseenForSupplierAsync(_supplierTenantId, null, Arg.Any<CancellationToken>())
+            .Returns(7);
+
+        var count = await _sut.GetUnseenOrderCountForSupplierAsync(_supplierTenantId, _userId);
+
+        Assert.Equal(7, count);
+        await _orders.Received(1).CountUnseenForSupplierAsync(
+            _supplierTenantId, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetUnseenOrderCount_WithMarker_PassesTheMarkerToTheRepository()
+    {
+        var user = User.Create(_supplierTenantId, "admin@supplier.com", "Адмін", "hash", "supplier_admin");
+        user.MarkSupplierOrdersViewed();
+        _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>()).Returns(user);
+        _orders.CountUnseenForSupplierAsync(
+                _supplierTenantId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(2);
+
+        var count = await _sut.GetUnseenOrderCountForSupplierAsync(_supplierTenantId, _userId);
+
+        Assert.Equal(2, count);
+        await _orders.Received(1).CountUnseenForSupplierAsync(
+            _supplierTenantId,
+            Arg.Is<DateTimeOffset?>(d => d != null && d.Value.UtcDateTime == user.SupplierOrdersLastViewedAt!.Value),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task MarkSupplierOrdersSeen_StampsTheMarkerAndSaves()
+    {
+        var user = User.Create(_supplierTenantId, "admin@supplier.com", "Адмін", "hash", "supplier_admin");
+        _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>()).Returns(user);
+
+        await _sut.MarkSupplierOrdersSeenAsync(_userId);
+
+        Assert.NotNull(user.SupplierOrdersLastViewedAt);
+        _users.Received(1).Update(user);
+        await _users.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task MarkSupplierOrdersSeen_ThenUnseenCountReturnsZero()
+    {
+        // A real user instance whose marker MarkSupplierOrdersSeenAsync mutates; the repository
+        // stub reflects "nothing created after the marker".
+        var user = User.Create(_supplierTenantId, "admin@supplier.com", "Адмін", "hash", "supplier_admin");
+        _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>()).Returns(user);
+        _orders.CountUnseenForSupplierAsync(
+                _supplierTenantId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.ArgAt<DateTimeOffset?>(1) is null ? 3 : 0);
+
+        Assert.Equal(3, await _sut.GetUnseenOrderCountForSupplierAsync(_supplierTenantId, _userId));
+
+        await _sut.MarkSupplierOrdersSeenAsync(_userId);
+
+        Assert.Equal(0, await _sut.GetUnseenOrderCountForSupplierAsync(_supplierTenantId, _userId));
+    }
+
+    [Fact]
+    public async Task MarkSupplierOrdersSeen_UnknownUser_IsNoOp()
+    {
+        _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>()).Returns((User?)null);
+
+        await _sut.MarkSupplierOrdersSeenAsync(_userId);
+
+        await _users.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static CreateMarketplaceOrderDto OrderRequest() =>

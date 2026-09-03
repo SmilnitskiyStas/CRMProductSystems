@@ -218,6 +218,40 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
     }
 
     /// <summary>
+    /// "New order arrived" badge count (supplier-portal expansion #3, Phase 6a): the calling
+    /// supplier's non-cancelled orders created since this user last opened the orders tab. Any
+    /// supplier_admin may call it — no extra permission beyond the class gate.
+    /// </summary>
+    [HttpGet("orders/unseen-count")]
+    [ProducesResponseType(typeof(UnseenOrdersCountDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUnseenOrdersCount(CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        var count = await _orders.GetUnseenOrderCountForSupplierAsync(tenantId.Value, userId.Value, ct);
+        return Ok(new UnseenOrdersCountDto(count));
+    }
+
+    /// <summary>
+    /// Marks the orders tab as seen for the calling user (drops the badge to 0 until the next
+    /// order arrives). Idempotent — a second call returns 204 and the count stays 0.
+    /// </summary>
+    [HttpPost("orders/mark-seen")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> MarkOrdersSeen(CancellationToken ct)
+    {
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        await _orders.MarkSupplierOrdersSeenAsync(userId.Value, ct);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Changes an order status. Allowed: new → confirmed | cancelled;
     /// confirmed → shipped | cancelled. Cancelling requires Reason. No transition out of
     /// shipped is reachable here any more (TASK-586, ADR-033) — a status update of "delivered"

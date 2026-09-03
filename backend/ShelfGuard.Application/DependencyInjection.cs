@@ -94,6 +94,11 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.SupplierInventory.ISupplierStockReceiptService,
             Features.SupplierInventory.SupplierStockReceiptService>();
 
+        // Supplier-portal expansion Phase 6b (plan 1-partitioned-book.md, #7) — read-only demand
+        // analytics over the supplier's own marketplace order history.
+        services.AddScoped<Features.SupplierAnalytics.ISupplierAnalyticsService,
+            Features.SupplierAnalytics.SupplierAnalyticsService>();
+
         // TASK-306 - Supplier staff roles + task board
         services.AddScoped<ISupplierRolesService, SupplierRolesService>();
         services.AddScoped<ISupplierTaskService, SupplierTaskService>();

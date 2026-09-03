@@ -1400,12 +1400,19 @@ public sealed class AppDbContext : DbContext
             e.Property(i => i.WidthCm).HasColumnType("numeric(10,2)");
             e.HasIndex(i => new { i.SupplierId, i.TenantId });
             e.HasIndex(i => i.ItemId);
+            // Phase 6e — browse-taxonomy filter (TenantId first: the cabinet always scopes to
+            // its own catalog before narrowing by category).
+            e.HasIndex(i => new { i.TenantId, i.PlatformCategoryId });
             e.HasOne(i => i.Supplier).WithMany()
              .HasForeignKey(i => i.SupplierId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(i => i.Tenant).WithMany()
              .HasForeignKey(i => i.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(i => i.Item).WithMany()
              .HasForeignKey(i => i.ItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // SetNull, not Cascade: PlatformCategory is global provider-curated reference data —
+            // removing a category must never delete a supplier's catalog rows (mirrors items.Category).
+            e.HasOne(i => i.PlatformCategory).WithMany()
+             .HasForeignKey(i => i.PlatformCategoryId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasMany(i => i.Barcodes).WithOne(b => b.SupplierItem)
              .HasForeignKey(b => b.SupplierItemId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(i => i.Images).WithOne(img => img.SupplierItem)

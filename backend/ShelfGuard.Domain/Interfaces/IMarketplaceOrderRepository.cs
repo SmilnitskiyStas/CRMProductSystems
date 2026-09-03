@@ -45,5 +45,15 @@ public interface IMarketplaceOrderRepository
     /// <summary>Total number of orders ever placed with a supplier — used to generate the next OrderNumber.</summary>
     Task<int> CountForSupplierAsync(Guid supplierTenantId, CancellationToken ct = default);
 
+    /// <summary>
+    /// "New order arrived" badge count (supplier-portal expansion #3, Phase 6a): non-cancelled
+    /// orders of <paramref name="supplierTenantId"/>. When <paramref name="since"/> is non-null
+    /// only orders with <c>CreatedAt &gt; since</c> are counted (the calling user's
+    /// <c>SupplierOrdersLastViewedAt</c> marker); null <paramref name="since"/> — the user never
+    /// opened the tab — counts every non-cancelled order. Runs on the supplier's own session.
+    /// </summary>
+    Task<int> CountUnseenForSupplierAsync(
+        Guid supplierTenantId, DateTimeOffset? since, CancellationToken ct = default);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }

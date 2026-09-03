@@ -104,4 +104,22 @@ public interface IMarketplaceOrderService
     /// </summary>
     Task<IReadOnlyList<MarketplaceOrderDto>> ListAwaitingReceiptForClientAsync(
         Guid clientTenantId, CancellationToken ct = default);
+
+    // ── "New order arrived" badge (supplier-portal expansion #3, Phase 6a) ─────
+
+    /// <summary>
+    /// Count of the supplier tenant's non-cancelled orders created after the calling user last
+    /// opened the orders tab (<see cref="User.SupplierOrdersLastViewedAt"/>). A user who never
+    /// opened it (null marker) sees every non-cancelled order counted. <paramref name="userId"/>
+    /// is the supplier-side user; the row lives in the supplier's own tenant so no cross-tenant
+    /// override is needed.
+    /// </summary>
+    Task<int> GetUnseenOrderCountForSupplierAsync(
+        Guid supplierTenantId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Stamps the calling user's "supplier orders seen" marker to now (drops the badge to 0 until
+    /// the next order arrives). No-op when the user id resolves to nothing.
+    /// </summary>
+    Task MarkSupplierOrdersSeenAsync(Guid userId, CancellationToken ct = default);
 }

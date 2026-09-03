@@ -11,6 +11,7 @@ public sealed class MarketplaceServiceTests
 {
     private readonly IMarketplaceRepository _repo = Substitute.For<IMarketplaceRepository>();
     private readonly ILocationRepository _locations = Substitute.For<ILocationRepository>();
+    private readonly ICategoryRepository _categories = Substitute.For<ICategoryRepository>();
     private readonly MarketplaceService _sut;
 
     private readonly Guid _supplierIdA = Guid.NewGuid();
@@ -20,7 +21,7 @@ public sealed class MarketplaceServiceTests
     public MarketplaceServiceTests()
     {
         _locations.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Location>());
-        _sut = new MarketplaceService(_repo, _locations);
+        _sut = new MarketplaceService(_repo, _locations, _categories);
     }
 
     // ── Helper builders ───────────────────────────────────────────────────────
@@ -1009,6 +1010,117 @@ public sealed class MarketplaceServiceTests
         Assert.Equal("https://a/2.jpg", item.Images[1].Url);
         Assert.Equal("gallery", item.Images[1].Kind);
         Assert.Equal(1, item.Images[1].SortOrder);
+    }
+
+    // ── Platform-category browse link (supplier-portal expansion #8, Phase 6e) ──
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_PlatformCategoryId_ValidatesPersistsAndResolvesName()
+    {
+        var catId = Guid.NewGuid();
+        _categories.GetByIdAsync(catId, Arg.Any<CancellationToken>())
+            .Returns(new PlatformCategory { Id = catId, Name = "Молочні продукти", IsActive = true });
+        _repo.GetSupplierByRawIdAsync(_supplierIdA, Arg.Any<CancellationToken>())
+            .Returns(MakeSupplier(_supplierIdA, "Supplier A"));
+
+        SupplierItem? persisted = null;
+        _repo.When(r => r.AddSupplierItemAsync(Arg.Any<SupplierItem>(), Arg.Any<CancellationToken>()))
+             .Do(ci => persisted = ci.Arg<SupplierItem>());
+
+        var (dto, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, null, "pcs", true, PlatformCategoryId: catId));
+
+        Assert.Null(error);
+        Assert.Equal(catId, persisted!.PlatformCategoryId);
+        Assert.Equal(catId, dto!.PlatformCategoryId);
+        Assert.Equal("Молочні продукти", dto.PlatformCategoryName);
+    }
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_UnknownPlatformCategory_ReturnsErrorAndDoesNotPersist()
+    {
+        var catId = Guid.NewGuid();
+        _categories.GetByIdAsync(catId, Arg.Any<CancellationToken>()).Returns((PlatformCategory?)null);
+
+        var (dto, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, null, "pcs", true, PlatformCategoryId: catId));
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceService.PlatformCategoryNotFoundError, error);
+        await _repo.DidNotReceive().AddSupplierItemAsync(Arg.Any<SupplierItem>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminAddSupplierItemAsync_InactivePlatformCategory_ReturnsError()
+    {
+        var catId = Guid.NewGuid();
+        _categories.GetByIdAsync(catId, Arg.Any<CancellationToken>())
+            .Returns(new PlatformCategory { Id = catId, Name = "Архів", IsActive = false });
+
+        var (_, error) = await _sut.AdminAddSupplierItemAsync(
+            _supplierIdA,
+            new AdminAddSupplierItemDto("Milk 1L", 30m, null, "pcs", true, PlatformCategoryId: catId));
+
+        Assert.Equal(MarketplaceService.PlatformCategoryNotFoundError, error);
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_PlatformCategoryId_SetThenClearWithEmptyGuid()
+    {
+        var catId = Guid.NewGuid();
+        var item = new SupplierItem { SupplierId = _supplierIdA, CustomName = "Milk 1L", IsAvailable = true };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>()).Returns(item);
+        _categories.GetByIdAsync(catId, Arg.Any<CancellationToken>())
+            .Returns(new PlatformCategory { Id = catId, Name = "Бакалія", IsActive = true });
+
+        var (setDto, setErr) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id, new AdminUpdateSupplierItemDto(null, null, null, null, null, PlatformCategoryId: catId));
+        Assert.Null(setErr);
+        Assert.Equal(catId, item.PlatformCategoryId);
+        Assert.Equal("Бакалія", setDto!.PlatformCategoryName);
+
+        var (clrDto, clrErr) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id, new AdminUpdateSupplierItemDto(null, null, null, null, null, PlatformCategoryId: Guid.Empty));
+        Assert.Null(clrErr);
+        Assert.Null(item.PlatformCategoryId);
+        Assert.Null(clrDto!.PlatformCategoryName);
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_UnknownPlatformCategory_ReturnsErrorAndDoesNotSave()
+    {
+        var catId = Guid.NewGuid();
+        var item = new SupplierItem { SupplierId = _supplierIdA, CustomName = "Milk 1L", IsAvailable = true };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>()).Returns(item);
+        _categories.GetByIdAsync(catId, Arg.Any<CancellationToken>()).Returns((PlatformCategory?)null);
+
+        var (dto, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id, new AdminUpdateSupplierItemDto(null, null, null, null, null, PlatformCategoryId: catId));
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceService.PlatformCategoryNotFoundError, error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdminUpdateSupplierItemAsync_PlatformCategoryIdOmitted_LeavesExistingLinkUntouched()
+    {
+        var existingCatId = Guid.NewGuid();
+        var item = new SupplierItem
+        {
+            SupplierId = _supplierIdA, CustomName = "Milk 1L", IsAvailable = true,
+            PlatformCategoryId = existingCatId,
+        };
+        _repo.GetSupplierItemByIdAsync(_supplierIdA, item.Id, Arg.Any<CancellationToken>()).Returns(item);
+
+        var (_, error) = await _sut.AdminUpdateSupplierItemAsync(
+            _supplierIdA, item.Id, new AdminUpdateSupplierItemDto(null, 42m, null, null, null));
+
+        Assert.Null(error);
+        Assert.Equal(existingCatId, item.PlatformCategoryId);
+        await _categories.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
