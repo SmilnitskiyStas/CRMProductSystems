@@ -17,6 +17,17 @@ public interface IMarketplaceOrderReceiptRepository
 
     Task<MarketplaceOrderReceipt?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>
+    /// The supplier's shipped batch allocations for one order (Phase 3, plan D4), ordered
+    /// nearest-expiry-first. Read from the CLIENT session through
+    /// <c>marketplace_order_item_batches</c>' inverted <c>client_read</c> FOR SELECT policy —
+    /// the client may read these rows and may never write them. Empty for legacy orders and for
+    /// shipments made with the supplier's <c>supplier_inventory</c> module off, in which case
+    /// draft creation falls back to one receipt item per order line.
+    /// </summary>
+    Task<IReadOnlyList<MarketplaceOrderItemBatch>> GetOrderItemBatchesAsync(
+        Guid marketplaceOrderId, CancellationToken ct = default);
+
     Task AddAsync(MarketplaceOrderReceipt receipt, CancellationToken ct = default);
 
     void Update(MarketplaceOrderReceipt receipt);

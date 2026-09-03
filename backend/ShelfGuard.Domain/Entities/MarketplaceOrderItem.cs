@@ -23,4 +23,12 @@ public sealed class MarketplaceOrderItem
     public decimal LineTotal { get; set; }
 
     public MarketplaceOrder? Order { get; init; }
+
+    /// <summary>
+    /// Supplier-allocated batches for this line, written at ship time (Phase 3, plan D4).
+    /// Empty for legacy orders and for shipments made while the supplier's
+    /// <c>supplier_inventory</c> module is off — the client's receiving draft then falls back
+    /// to one receipt item per line, exactly as before.
+    /// </summary>
+    public ICollection<MarketplaceOrderItemBatch> Batches { get; init; } = new List<MarketplaceOrderItemBatch>();
 }

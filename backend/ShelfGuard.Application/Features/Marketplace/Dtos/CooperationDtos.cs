@@ -126,6 +126,20 @@ public record MarketplaceOrderConflictDto(
     Guid SupplierItemId,
     MarketplaceOrderConflictingItemDto ExistingItem);
 
+/// <summary>
+/// One batch the supplier allocated to an order line at ship time (Phase 3, plan D4). The
+/// warehouse these came from is the order's <see cref="MarketplaceOrderDto.SourceWarehouseId"/>
+/// — one source warehouse per order, so it is not repeated per batch. Empty list for legacy
+/// orders and for shipments made while the supplier's <c>supplier_inventory</c> module is off.
+/// </summary>
+public record MarketplaceOrderItemBatchDto(
+    Guid Id,
+    DateOnly ExpiryDate,
+    string? BatchNumber,
+    decimal Qty,
+    /// <summary>Source supplier_stock row; null once that batch row has been purged.</summary>
+    Guid? SupplierStockId);
+
 public record MarketplaceOrderItemDto(
     Guid Id,
     Guid? SupplierItemId,
@@ -133,7 +147,13 @@ public record MarketplaceOrderItemDto(
     string? Unit,
     decimal Price,
     decimal Qty,
-    decimal LineTotal);
+    decimal LineTotal,
+    /// <summary>
+    /// Supplier-allocated batches for this line (Phase 3, plan D4). Always present, possibly
+    /// empty. Both parties can read it: the supplier through the table's own
+    /// <c>tenant_isolation</c>, the client through the inverted <c>client_read</c> policy.
+    /// </summary>
+    IReadOnlyList<MarketplaceOrderItemBatchDto> Batches);
 
 public record MarketplaceOrderDto(
     Guid Id,
@@ -166,9 +186,90 @@ public record MarketplaceOrderDto(
     /// Read-only (TASK-586, ADR-033 Decision 2). Nullable — orders placed before this column
     /// existed have no value and can never be received through the new client-confirmation flow.
     /// </summary>
-    Guid? DestinationStoreId = null);
+    Guid? DestinationStoreId = null,
+    /// <summary>
+    /// Supplier warehouse the order was picked from (Phase 3, plan D4). One source warehouse per
+    /// order. Null for legacy orders and for shipments made with the supplier's
+    /// <c>supplier_inventory</c> module off.
+    /// </summary>
+    Guid? SourceWarehouseId = null,
+    /// <summary>
+    /// Supplier-set expected delivery date. Filled at ship time from the request, or derived as
+    /// <c>ShippedAt + EstimatedDeliveryDays</c>. Phase 4 adds the reschedule endpoint.
+    /// </summary>
+    DateOnly? ExpectedDeliveryDate = null);
 
 public record CancelMarketplaceOrderDto(string Reason);
+
+// ── Batch-consuming shipment (Phase 3, plan D4) ──────────────────────────────
+
+/// <summary>One <c>supplier_stock</c> batch and how much of it goes onto an order line.</summary>
+public record ShipAllocationDto(Guid SupplierStockId, decimal Qty);
+
+/// <summary>
+/// Per-order-line allocation plan. An empty/omitted <see cref="Allocations"/> list means
+/// "decide for me" — the service auto-FEFOs that line from the source warehouse. Explicit
+/// allocations always win over auto-FEFO.
+/// </summary>
+public record ShipLineDto(Guid OrderItemId, List<ShipAllocationDto>? Allocations = null);
+
+/// <summary>
+/// Supplier-side ship request (Phase 3, plan D4). Every field is optional so that the legacy
+/// <c>POST /orders/{id}/status {status:"shipped"}</c> path maps onto the very same service
+/// method: with no <see cref="SourceWarehouseId"/> nothing is consumed and the order simply
+/// moves to shipped, exactly as before.
+///
+/// <see cref="EstimatedDeliveryDays"/> and <see cref="ExpectedDeliveryDate"/> fill each other in
+/// — supply either one (at least one is required).
+/// </summary>
+public record ShipOrderRequest(
+    Guid? SourceWarehouseId = null,
+    DateOnly? ExpectedDeliveryDate = null,
+    int? EstimatedDeliveryDays = null,
+    List<ShipLineDto>? Lines = null);
+
+/// <summary>
+/// Ship result. <see cref="Warnings"/> lists the lines the supplier could not fully cover from
+/// stock — a shortfall is deliberately allowed (user decision 2026-09-02): the goods still ship,
+/// the uncovered quantity simply arrives without batch data and the client types the expiry in
+/// by hand, exactly as before Phase 3.
+/// </summary>
+public record ShipOrderResultDto(
+    MarketplaceOrderDto Order,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>One proposed batch pick in a FEFO ship suggestion.</summary>
+public record ShipSuggestionAllocationDto(
+    Guid SupplierStockId,
+    DateOnly ExpiryDate,
+    string? BatchNumber,
+    /// <summary>Quantity currently on that batch — the editable cap for this pick.</summary>
+    decimal Available,
+    /// <summary>Proposed quantity to take from this batch.</summary>
+    decimal Qty);
+
+public record ShipSuggestionLineDto(
+    Guid OrderItemId,
+    Guid? SupplierItemId,
+    string ItemName,
+    string? Unit,
+    decimal Qty,
+    /// <summary>Sum of the proposed allocations — less than <see cref="Qty"/> when stock is short.</summary>
+    decimal Covered,
+    decimal Shortfall,
+    IReadOnlyList<ShipSuggestionAllocationDto> Allocations);
+
+/// <summary>
+/// Editable FEFO proposal for shipping an order out of one warehouse (Phase 3, plan D4). The
+/// supplier UI renders it, lets the user adjust quantities/batches, and posts the result back as
+/// <see cref="ShipOrderRequest.Lines"/>.
+/// </summary>
+public record ShipSuggestionDto(
+    Guid OrderId,
+    Guid? WarehouseId,
+    string? WarehouseName,
+    IReadOnlyList<ShipSuggestionLineDto> Lines,
+    IReadOnlyList<string> Warnings);
 
 /// <summary>
 /// Supplier-side status change. Reason is required when Status = cancelled.
@@ -216,7 +317,14 @@ public record MarketplaceOrderReceiptItemDto(
     /// that, it falls back to the order line's linked SupplierItem's primary image (Kind ==
     /// "main", else the lowest SortOrder) — null when neither is available.
     /// </summary>
-    string? ReferenceImageUrl);
+    string? ReferenceImageUrl,
+    /// <summary>
+    /// The supplier-shipped batch this sub-row was prefilled from (Phase 3, plan D4). Non-null
+    /// means ExpiryDate/BatchNumber/QuantityOrdered arrived from the supplier's allocation and
+    /// the employee only has to scan the product and confirm the count. Null on legacy /
+    /// module-off orders, where a line still produces exactly one blank receipt item.
+    /// </summary>
+    Guid? SourceOrderItemBatchId = null);
 
 public record MarketplaceOrderReceiptDto(
     Guid Id,

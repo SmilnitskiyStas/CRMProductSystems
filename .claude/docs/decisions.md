@@ -14,7 +14,7 @@ Full text for **ADR-037 … ADR-027** is in this file. **ADR-026 and older** →
 | ADR-036 | Supplier delivery coverage + performance metrics — Ukraine region registry, `MarketplaceOrder.DestinationRegionCode` snapshot, coverage not premium-gated, `supplier-metrics-recompute` worker write-boundary |
 | ADR-035 | `IProviderRlsOverride` — marketplace provider bypass scoped to one repository method, replacing session-level `SET app.role` |
 | ADR-034 | CRM loyalty tier ladder, consumer self-service, support tickets, reviews — phone-change verification, composite-score formula, per-item tier discount, worker write boundary |
-| ADR-033 | Marketplace order receiving — client-confirmed receipt (scan/qty/expiry) replaces supplier one-click Deliver; split client-write / supplier-read RLS |
+| ADR-033 | Marketplace order receiving — client-confirmed receipt (scan/qty/expiry) replaces supplier one-click Deliver; split client-write / supplier-read RLS · **amended 2026-09-03**: `marketplace_order_item_batches` with the INVERSE split (supplier-write / client-read), receipt items now 1→N per order line |
 | ADR-032 | Catalog curation — `productIds` block-prop kind + catalog-by-ids read path |
 | ADR-031 | App Builder live preview — web-native mirror components (not RN-web reuse), client-side, resizable size props on the Block Registry |
 | ADR-030 | SubscriptionPlan → Features — `Tenant.Plan` gates consumer features via the TASK-543 flag hook; no billing/enforcement yet |
@@ -568,7 +568,49 @@ build against directly. Mobile hand-off doc: `.claude/logs/handoffs/623-to-mobil
 
 ## ADR-033: Marketplace order receiving — client-confirmed receipt (scan/qty/expiry) replaces the supplier one-click Deliver; new `MarketplaceOrderReceipt`/`Item` entities, `MarketplaceOrder.DestinationStoreId`, split client-write/supplier-read RLS
 Date: 2026-08-21
-Status: accepted
+Status: accepted · **amended 2026-09-03** (supplier-portal expansion Phase 3, plan
+`1-partitioned-book.md` D4, TASK-683)
+
+### Amendment 2026-09-03 — batch handoff: receipt items become 1→N per order line
+
+Three things change; everything else in this ADR stands.
+
+**1. New table `marketplace_order_item_batches`, with the INVERSE of this ADR's split RLS.**
+Decision 3 gave `marketplace_order_receipts`/`_items` a client-write + supplier-read split
+(`tenant_isolation` on `ClientTenantId`, `supplier_read` FOR SELECT on `SupplierTenantId`),
+because the client is the party that physically receives. The new table records the opposite
+half of the same handshake — which `supplier_stock` batches the SUPPLIER picked and shipped —
+so it gets the mirror image: `tenant_isolation` (FOR ALL + WITH CHECK) on `SupplierTenantId`,
+plus `client_read` (FOR SELECT only) on `ClientTenantId`, plus the usual
+`provider_bypass`/`worker_bypass`, all under FORCE RLS. This is the only marketplace table
+pointing that way, and it is proved on real Postgres by
+`MarketplaceOrderItemBatchRlsIntegrationTests` (supplier writes; client selects but gets 42501
+on insert and zero rows on update/delete; a third supplier tenant and a RESET session see
+nothing). Documented residual: a client session *can* insert a row naming ITSELF as the
+supplier — that row is invisible to the real supplier and can only affect the client's own
+draft prefill, whose expiry/batch fields the client already types by hand, so it is not an
+escalation; a test pins it so it stays understood rather than discovered.
+
+**2. `MarketplaceOrderReceiptItem` is no longer 1:1 with an order line.** When a shipped order
+carries batch allocations, `GetOrCreateDraftAsync` creates one receipt item **per batch**,
+prefilled with `QuantityOrdered = batch.Qty`, `ExpiryDate`, `BatchNumber` and the new FK
+`SourceOrderItemBatchId`. `ProductId`/`QuantityReceived` stay null, so Decision 5's finalize
+gate is untouched — only its expiry third arrives pre-answered, the scan and the count still
+happen. Orders with no batches (legacy rows, or a shipment made while the supplier's
+`supplier_inventory` module is off) keep the original one-item-per-line shape. `ReceiveAsync`
+needed **no change at all**: it already iterates `receipt.Items` producing one `ProductStock` +
+one `StockMovement` each, so N sub-rows naturally become N correctly-dated client batches —
+which is the whole point of the handoff. It remains the only code path that may set
+`Delivered` (Decision 4).
+
+**3. `Shipped` still has no entry in `AllowedTransitions`,** and shipping now has exactly one
+implementation: `MarketplaceOrderService.ShipOrderAsync`. The legacy
+`POST /api/supplier-cabinet/orders/{id}/status {status:"shipped"}` delegates to it with no
+warehouse and no allocations, which reproduces the pre-Phase-3 behaviour exactly; the new
+`POST .../ship` is the same method with a source warehouse and an allocation plan. Consequence
+worth stating: with the module ON, a supplier that ships through the legacy endpoint ships
+without consuming stock — the frontend routes to `/ship` when the module is on, and nothing in
+the data model is corrupted either way (the client simply falls back to hand-entered expiries).
 
 Context: `MarketplaceOrderService.UpdateOrderStatusAsync` today lets the **supplier** flip a B2B
 marketplace order `Shipped → Delivered` with one click, no verification of what actually arrived.

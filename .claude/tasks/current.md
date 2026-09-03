@@ -756,3 +756,64 @@ Nav `/supplier/inventory` (moduleKey `supplier_inventory` + permission `warehous
 `@/lib/api-types` (backend Common shape `totalCount/totalPages`), НЕ supplier-cabinet-локальний
 (той — marketplace reviews shape `total`). i18n +104 ключів кожна мова, парність 5673==5673.
 `tsc` clean · `next lint` clean · `next build` OK.
+
+## TASK-683 — Supplier Phase 3 BACKEND (відвантаження зі списанням партій + передача замовнику, D4)
+
+**Status:** review (не запушено) · **Agent:** backend-developer · Plan `1-partitioned-book.md` Phase 3
+Log: `.claude/logs/tasks/683_2026-09-03_supplier-phase3-shipping_backend-developer.md`
+
+Міграція `20260903071530_AddMarketplaceOrderItemBatches` — нова `marketplace_order_item_batches`
+зі **split-RLS навпаки** (`tenant_isolation` FOR ALL+WITH CHECK на `SupplierTenantId`, `client_read`
+FOR SELECT на `ClientTenantId`, + provider/worker bypass, FORCE RLS) + `marketplace_orders.SourceWarehouseId`
++ `marketplace_order_receipt_items.SourceOrderItemBatchId`. Застосовано до dev/test `:5435/crm`,
+`pg_policies`/`relforcerowsecurity` перевірено. **Prod — окремо.**
+
+`MarketplaceOrderService.ShipOrderAsync` — **єдиний** шлях у `shipped`: легасі
+`POST orders/{id}/status {status:"shipped"}` тепер делегує в нього з порожнім запитом (нічого не
+списує, поведінка байт-у-байт як була). Модуль ON + склад → явні розподіли або авто-FEFO; нестача
+= попередження, не помилка. Списання+рухи+партії+статус замовлення — ОДИН атомарний коміт під
+supplier-сесією (свідомо НЕ через `FefoConsumeAsync` — вона комітить по-рядково); outbox окремо під
+client-override. Нові `POST orders/{id}/ship`, `GET orders/{id}/ship-suggestion?warehouseId=`
+(`[RequireModule("supplier_inventory")]` + `warehouse_management`).
+
+`GetOrCreateDraftAsync` — N рядків прийомки на 1 лінію (передзаповнені expiry/batch/qty +
+`SourceOrderItemBatchId`), fallback 1/лінію коли партій немає. `ReceiveAsync` без змін.
+
+`dotnet build -c Release` 0 err · повний прогін `dotnet test -c Release` = **2257 passed, 0 failed**.
+Новий `MarketplaceOrderItemBatchRlsIntegrationTests` ×5 на реальному Postgres: постачальник пише,
+замовник SELECT-ить але отримує **42501** на INSERT і 0 рядків на UPDATE/DELETE, чужий постачальник
+і RESET-сесія бачать 0. RLS-audit зелений. Docs: api-contracts.md + амендмент ADR-033.
+Mobile handoff: `.claude/logs/handoffs/phase3-mobile-receipt-batches.md`. openapi.json — борг.
+
+## TASK-684 — Supplier Phase 3 FRONTEND (ship modal з партіями + відображення партій, D4)
+
+**Status:** review (не закомічено) · **Agent:** frontend-developer · Plan `1-partitioned-book.md` Phase 3
+Log: `.claude/logs/tasks/684_2026-09-03_supplier-phase3-frontend_frontend-developer.md`
+
+`EstimateDeliveryModal.tsx` → перейменовано (`git mv`) у `ShipOrderModal.tsx`, компонент
+`ShipOrderModal({ order, onClose })` — сам робить мутації + тости. Модуль OFF (`useModules()` →
+`modules.modules.includes("supplier_inventory")`) — старий флоу днів → `useUpdateCabinetOrderStatus`
+`{status:"shipped"}`. Модуль ON — `<select>` складу (`useSupplierWarehouses`, дефолт перший
+активний) → `useShipSuggestion(orderId, warehouseId)` (enabled поки модалка відкрита) → редаговна
+per-line таблиця розподілу (термін/партія/доступно/**кількість**, префіл із suggestion) + чіп
+нестачі; дата АБО днів (одне обовʼязкове, деривація дати з днів у підказці) → `useShipOrder`
+(POST `/orders/{id}/ship`), warnings з результату → `toast.warning` (не error). Нема активних
+складів → fallback: шле `/ship` лише з ETA (легасі-гілка бекенду). `CabinetOrdersTab.tsx` —
+імпорт+виклик оновлено (прибрано локальну ship-логіку).
+
+Відображення партій (read-only): `CabinetOrdersTab` + `app/(dashboard)/marketplace/orders/page.tsx`
+розгорнутий рядок — під лінією підсписок `item.batches` (термін · партія · к-сть) під міткою
+«Партії»; `ShippingDetail` тепер віддає перевагу `order.expectedDeliveryDate` над клієнт-derived
+датою (реюз ключа `estimatedDeliveryLabel`). Прийомка замовника (`ReceiptItemsTable`) — N рядків на
+лінію рендериться без структурних змін (перевірено).
+
+Типи: `marketplace/types.ts` += `MarketplaceOrderItemBatchDto`, `MarketplaceOrderItemDto.batches`,
+`MarketplaceOrderDto.{sourceWarehouseId,expectedDeliveryDate}`, `MarketplaceOrderReceiptItemDto.sourceOrderItemBatchId`;
+`supplier-cabinet/types.ts` += `Ship{Allocation,Line,OrderRequest,Suggestion,SuggestionLine,SuggestionAllocation,OrderResult}`.
+API +2 (`getShipSuggestion`, `shipOrder`), hooks +2 у `useCabinetCooperation.ts`
+(`useShipSuggestion`, `useShipOrder` — invalidate orders + supplier stock).
+
+i18n +23 ключі кожна мова (`Dashboard.supplierCabinet.ordersTab` ship modal +22, `batchesLabel` в
+обох ordersTab-неймспейсах). Парність тримається (5513==5513 шляхів, 0 diff).
+`tsc --noEmit` clean · `next lint` (touched) clean · `next build` exit 0.
+Не чіпав backend / mobile. openapi.json — борг (спільний). НЕ закомічено.

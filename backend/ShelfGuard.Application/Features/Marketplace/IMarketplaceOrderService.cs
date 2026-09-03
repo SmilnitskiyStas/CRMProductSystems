@@ -53,6 +53,35 @@ public interface IMarketplaceOrderService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Ships a confirmed order (supplier-portal expansion Phase 3, plan D4) — the single code
+    /// path into <c>shipped</c>. <see cref="UpdateOrderStatusAsync"/>'s legacy
+    /// <c>confirmed → shipped</c> branch delegates here with an empty request, so both endpoints
+    /// share one implementation.
+    ///
+    /// With the supplier's <c>supplier_inventory</c> module OFF (or no
+    /// <see cref="ShipOrderRequest.SourceWarehouseId"/> given), nothing is consumed and the order
+    /// simply moves to shipped — the pre-Phase-3 behaviour, unchanged.
+    ///
+    /// With the module ON and a source warehouse, each line is covered from
+    /// <c>supplier_stock</c>: explicit <see cref="ShipLineDto.Allocations"/> when sent, otherwise
+    /// auto-FEFO. Every consumed batch writes a <c>ship</c> movement and one
+    /// <c>MarketplaceOrderItemBatch</c>, which the client later reads to prefill its receiving
+    /// draft. A line the warehouse cannot fully cover is NOT an error — it ships anyway and comes
+    /// back in Warnings (user decision 2026-09-02).
+    /// </summary>
+    Task<(MarketplaceOrderDto? Order, string? Error, IReadOnlyList<string> Warnings)> ShipOrderAsync(
+        Guid supplierTenantId, Guid orderId, ShipOrderRequest request, Guid performedByUserId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Editable FEFO allocation proposal for shipping an order out of one warehouse (Phase 3).
+    /// Read-only — consumes nothing. <paramref name="warehouseId"/> null → the supplier's first
+    /// active warehouse.
+    /// </summary>
+    Task<(ShipSuggestionDto? Suggestion, string? Error)> GetShipSuggestionAsync(
+        Guid supplierTenantId, Guid orderId, Guid? warehouseId, CancellationToken ct = default);
+
+    /// <summary>
     /// Records why a shipped order's delivery is running late (TASK-585). Only allowed
     /// while the order is still status = shipped; notifies the client tenant.
     /// </summary>

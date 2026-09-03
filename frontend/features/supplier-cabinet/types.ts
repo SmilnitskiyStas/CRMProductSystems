@@ -3,6 +3,7 @@
 // (SupplierProfileDto, SupplierItemDto, PublicSupplierReviewDto, SupplierMetricsDto).
 
 import type { DeliveryCoverage } from "@/features/geo/types";
+import type { MarketplaceOrderDto } from "@/features/marketplace/types";
 
 export type SupplierPlan = "free" | "premium";
 
@@ -449,4 +450,73 @@ export interface AddSupplierReceiptLineRequest {
   batchNumber?: string | null;
   unitCost?: number | null;
   notes?: string | null;
+}
+
+// ── Batch-consuming shipment (supplier-portal expansion Phase 3, plan D4) ──────
+// Only exercised when the provider-granted "supplier_inventory" module is on. With it
+// off, CabinetOrdersTab keeps using UpdateMarketplaceOrderStatusRequest {status:"shipped"}.
+// Backend DTOs: ShelfGuard.Application/Features/Marketplace/Dtos/CooperationDtos.cs.
+
+/** One supplier_stock batch and how much of it goes onto an order line. */
+export interface ShipAllocation {
+  supplierStockId: string;
+  qty: number;
+}
+
+/** Per-order-line allocation plan. An empty / omitted allocations list means "auto-FEFO
+ *  this line" server-side; explicit allocations always win over auto-FEFO. */
+export interface ShipLine {
+  orderItemId: string;
+  allocations?: ShipAllocation[];
+}
+
+/**
+ * POST /api/supplier-cabinet/orders/{id}/ship — every field is optional so the legacy
+ * {status:"shipped"} path maps onto the very same handler. At least one of
+ * estimatedDeliveryDays (> 0) / expectedDeliveryDate is required; each derives the other.
+ */
+export interface ShipOrderRequest {
+  sourceWarehouseId?: string | null;
+  expectedDeliveryDate?: string | null; // "YYYY-MM-DD"
+  estimatedDeliveryDays?: number | null;
+  lines?: ShipLine[];
+}
+
+/** One proposed batch pick in a FEFO ship suggestion. */
+export interface ShipSuggestionAllocation {
+  supplierStockId: string;
+  expiryDate: string; // "YYYY-MM-DD"
+  batchNumber: string | null;
+  /** Quantity currently on that batch — the editable cap for this pick. */
+  available: number;
+  /** Proposed quantity to take from this batch. */
+  qty: number;
+}
+
+export interface ShipSuggestionLine {
+  orderItemId: string;
+  supplierItemId: string | null;
+  itemName: string;
+  unit: string | null;
+  qty: number;
+  /** Sum of the proposed allocations — less than qty when stock is short. */
+  covered: number;
+  shortfall: number;
+  allocations: ShipSuggestionAllocation[];
+}
+
+/** GET /api/supplier-cabinet/orders/{id}/ship-suggestion?warehouseId= — editable FEFO plan. */
+export interface ShipSuggestion {
+  orderId: string;
+  warehouseId: string | null;
+  warehouseName: string | null;
+  lines: ShipSuggestionLine[];
+  warnings: string[];
+}
+
+/** POST .../ship result. warnings lists lines shipped short — NOT an error (the goods still
+ *  ship; the uncovered qty arrives without batch data and the client types the expiry by hand). */
+export interface ShipOrderResult {
+  order: MarketplaceOrderDto;
+  warnings: string[];
 }

@@ -475,8 +475,11 @@ clientTenantId, supplierTenantId, destinationStoreId, destinationStoreName, stat
 createdByUserId?, receivedByUserId?, receivedAt?, createdAt, updatedAt, items: [...] }`,
 `MarketplaceOrderReceiptItemDto { id, marketplaceOrderItemId, productId?, itemNameSnapshot,
 productName?, quantityOrdered, quantityReceived?, expiryDate?, batchNumber?, discrepancyNotes?,
-isResolved }` (`isResolved` = productId + quantityReceived + expiryDate all set — the exact
-per-item finalize-gate condition, precomputed so callers don't re-implement it).
+isResolved, price, referenceImageUrl?, sourceOrderItemBatchId? }` (`isResolved` = productId +
+quantityReceived + expiryDate all set — the exact per-item finalize-gate condition, precomputed
+so callers don't re-implement it; `sourceOrderItemBatchId` is Phase 3 — non-null marks a sub-row
+prefilled from a supplier-shipped batch, and several items may now share one
+`marketplaceOrderItemId`, see "batch-consuming shipment" below).
 
 Supplier cabinet (`SupplierCabinet` policy + module `marketplace_supplier`):
 ```
@@ -527,6 +530,66 @@ POST /api/supplier-cabinet/warehouses/{id}/deactivate       -> 204 | 404 | 400
 3166-2:UA code validated by `LocationService` (blank = cleared). All operations are tenant-scoped
 from the JWT — no location id from another tenant is ever accepted (403 on foreign tenant / 404 on
 non-warehouse id).
+
+#### Supplier cabinet — batch-consuming shipment (Phase 3, plan `1-partitioned-book.md` D4)
+
+`SupplierCabinet` policy + module `marketplace_supplier` (controller) + module
+`supplier_inventory` (these two actions) + supplier permission `warehouse_management`.
+```
+GET  /api/supplier-cabinet/orders/{id}/ship-suggestion?warehouseId=   -> 200 ShipSuggestionDto | 404 order | 400 (unknown/foreign warehouse, no active warehouse)
+POST /api/supplier-cabinet/orders/{id}/ship  ShipOrderRequest         -> 200 ShipOrderResultDto | 404 order | 400
+```
+```ts
+ShipOrderRequest {
+  sourceWarehouseId?: string   // omit -> nothing is consumed, the order just moves to shipped
+  expectedDeliveryDate?: string // "YYYY-MM-DD"
+  estimatedDeliveryDays?: number
+  lines?: { orderItemId: string; allocations?: { supplierStockId: string; qty: number }[] }[]
+}
+ShipOrderResultDto { order: MarketplaceOrderDto; warnings: string[] }
+ShipSuggestionDto  { orderId, warehouseId, warehouseName, lines: ShipSuggestionLineDto[], warnings: string[] }
+ShipSuggestionLineDto {
+  orderItemId, supplierItemId?, itemName, unit?, qty, covered, shortfall,
+  allocations: { supplierStockId, expiryDate, batchNumber?, available, qty }[]
+}
+```
+`ship-suggestion` is read-only (consumes nothing) and returns an **editable** nearest-expiry-first
+proposal; omit `warehouseId` to use the supplier's first active warehouse. Post the edited result
+back as `lines`.
+
+`ship` rules: order must be `confirmed`; at least one of `estimatedDeliveryDays`(>0) /
+`expectedDeliveryDate` (each derives the other). A line with explicit `allocations` uses them
+verbatim; a line without them is auto-FEFO'd from `sourceWarehouseId`. **A shortfall is not an
+error** — the order ships anyway and the uncovered lines come back in `warnings`
+(`«{itemName}»: розподілено {covered} з {qty}`); the client then types those expiries in by hand
+exactly as before. Per consumed batch: `supplier_stock.Quantity` decremented, one
+`supplier_stock_movements` row (`movementType:"ship"`, `referenceType:"marketplace_order"`), one
+`marketplace_order_item_batches` row. Stock + movements + batches + the order's status change
+commit in **one** transaction; the `marketplace_order.shipped` outbox row is a separate
+best-effort commit under the client tenant's RLS override. 400s: `SupplierInventoryDisabledError`
+(allocations sent with the module off), `SourceWarehouseNotFoundError`,
+`BatchWarehouseMismatchError`, `BatchItemMismatchError`, `UnknownOrderLineError`,
+`StockChangedConcurrentlyError` (xmin conflict — reload and retry, nothing was written).
+
+`POST /api/supplier-cabinet/orders/{id}/status  {status:"shipped"}` is unchanged and still works
+(it routes into the same service method with no warehouse and no allocations) — that stays the
+path for suppliers without the `supplier_inventory` module.
+
+**`MarketplaceOrderDto` additions (Phase 3):** `sourceWarehouseId?`, `expectedDeliveryDate?`, and
+per item `batches: { id, expiryDate, batchNumber?, qty, supplierStockId? }[]` (always present,
+possibly empty; nearest-expiry-first). Both parties see `batches`: the supplier through
+`marketplace_order_item_batches`' own `tenant_isolation`, the client through that table's
+inverted `client_read` FOR SELECT policy.
+
+**Receiving becomes 1→N per order line (amends ADR-033).** When a shipped order carries batch
+allocations, `POST /api/marketplace/orders/{orderId}/receipt` creates **one
+`MarketplaceOrderReceiptItem` per batch** instead of one per order line, prefilled with
+`quantityOrdered = batch.qty`, `expiryDate`, `batchNumber` and the new
+`sourceOrderItemBatchId`. `productId`/`quantityReceived` stay null — the employee still scans and
+counts, so the finalize gate is unchanged; only its expiry half arrives pre-answered. Orders with
+no batches (legacy, or a module-off shipment) keep the original one-item-per-line shape with
+`sourceOrderItemBatchId: null`. Finalize therefore produces one client `ProductStock` batch per
+shipped supplier batch — the correct FEFO outcome — with no change to `ReceiveAsync` itself.
 
 ---
 

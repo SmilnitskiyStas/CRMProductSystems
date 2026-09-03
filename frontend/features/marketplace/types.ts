@@ -336,6 +336,20 @@ export type MarketplaceOrderStatus =
   | "delivered"
   | "cancelled";
 
+/** One supplier-allocated batch on an order line (Phase 3, plan D4). Written by the
+ *  supplier at ship time; readable by both parties (supplier via the table's own
+ *  tenant_isolation, client via the inverted client_read policy). Ordered nearest-expiry
+ *  first. Matches backend MarketplaceOrderItemBatchDto. */
+export interface MarketplaceOrderItemBatchDto {
+  id: string;
+  /** "YYYY-MM-DD" */
+  expiryDate: string;
+  batchNumber: string | null;
+  qty: number;
+  /** Source supplier_stock row; null once that batch row has been purged. */
+  supplierStockId: string | null;
+}
+
 /** Line item snapshot at order time. */
 export interface MarketplaceOrderItemDto {
   id: string;
@@ -345,6 +359,9 @@ export interface MarketplaceOrderItemDto {
   price: number;
   qty: number;
   lineTotal: number;
+  /** Supplier-allocated batches for this line (Phase 3, plan D4). Always present, possibly
+   *  empty (legacy orders, or shipments made with the supplier's supplier_inventory module off). */
+  batches: MarketplaceOrderItemBatchDto[];
 }
 
 export interface MarketplaceOrderDto {
@@ -377,6 +394,13 @@ export interface MarketplaceOrderDto {
   /** Store the goods are headed to. Null on orders placed before TASK-586 — permanent/expected
    * there (historical orders can never be received through the new flow), not a loading state. */
   destinationStoreId: string | null;
+  /** Supplier warehouse the order was picked from (Phase 3, plan D4). One source warehouse per
+   * order. Null for legacy orders and for shipments made with the supplier's supplier_inventory
+   * module off. */
+  sourceWarehouseId: string | null;
+  /** Supplier-set expected delivery date ("YYYY-MM-DD"). Filled at ship time from the request,
+   * or derived as shippedAt + estimatedDeliveryDays. Null until shipped. */
+  expectedDeliveryDate: string | null;
   items: MarketplaceOrderItemDto[];
 }
 
@@ -435,6 +459,10 @@ export interface MarketplaceOrderReceiptItemDto {
   batchNumber: string | null;
   discrepancyNotes: string | null;
   isResolved: boolean;
+  /** The supplier-shipped batch this sub-row was prefilled from (Phase 3, plan D4). Non-null
+   *  means expiry/batch/ordered-qty arrived from the supplier's allocation. Null on legacy /
+   *  module-off orders, where a line still produces exactly one blank receipt item. */
+  sourceOrderItemBatchId: string | null;
 }
 
 export interface MarketplaceOrderReceiptDto {

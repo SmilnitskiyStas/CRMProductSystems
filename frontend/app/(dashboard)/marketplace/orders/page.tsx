@@ -207,6 +207,7 @@ function OrderExpandedContent({
       <ShippingDetail
         shippedAt={order.shippedAt}
         estimatedDeliveryDays={order.estimatedDeliveryDays}
+        expectedDeliveryDate={order.expectedDeliveryDate}
         deliveredAt={order.deliveredAt}
         delayReason={order.delayReason}
         intlLocale={intlLocale}
@@ -230,6 +231,17 @@ function OrderExpandedContent({
                 {item.itemName}
                 {item.unit && (
                   <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>
+                )}
+                {item.batches.length > 0 && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>
+                    <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{t("batchesLabel")}</span>
+                    {item.batches.map((b) => (
+                      <div key={b.id}>
+                        {new Date(`${b.expiryDate}T12:00:00`).toLocaleDateString(intlLocale)} ·{" "}
+                        {b.batchNumber || "—"} · {b.qty}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </td>
               <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
@@ -284,12 +296,14 @@ function ShippingEtaHint({ order }: { order: MarketplaceOrderDto }) {
 function ShippingDetail({
   shippedAt,
   estimatedDeliveryDays,
+  expectedDeliveryDate,
   deliveredAt,
   delayReason,
   intlLocale,
 }: {
   shippedAt: string | null;
   estimatedDeliveryDays: number | null;
+  expectedDeliveryDate: string | null;
   deliveredAt: string | null;
   delayReason: string | null;
   intlLocale: string;
@@ -297,17 +311,22 @@ function ShippingDetail({
   const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
   if (!shippedAt) return null;
   const eta = getShippingEta(shippedAt, estimatedDeliveryDays);
+  // Prefer the authoritative supplier-set date (Phase 3, plan D4); fall back to the
+  // client-side derived one for orders shipped before that column was populated.
+  const expectedLabel = expectedDeliveryDate
+    ? new Date(`${expectedDeliveryDate}T12:00:00`).toLocaleDateString(intlLocale)
+    : eta
+    ? formatDate(eta.estimatedDeliveryDate.toISOString(), intlLocale)
+    : null;
 
   return (
     <>
       <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
         {t("shippedAtLabel", { date: formatDate(shippedAt, intlLocale) })}
-        {!deliveredAt && eta && (
+        {!deliveredAt && expectedLabel && (
           <>
             {" · "}
-            {t("estimatedDeliveryLabel", {
-              date: formatDate(eta.estimatedDeliveryDate.toISOString(), intlLocale),
-            })}
+            {t("estimatedDeliveryLabel", { date: expectedLabel })}
           </>
         )}
       </div>

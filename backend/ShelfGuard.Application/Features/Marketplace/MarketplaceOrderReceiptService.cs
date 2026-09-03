@@ -99,8 +99,42 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
             CreatedByUserId = userId,
         };
 
+        // Phase 3 (plan D4), amends ADR-033: a receipt is 1→N per order line now. Read on the
+        // CLIENT session through marketplace_order_item_batches' inverted `client_read` FOR
+        // SELECT policy — the client may read the supplier's allocations and may never write
+        // them. Empty for legacy orders and for shipments made with the supplier's
+        // supplier_inventory module off, which fall back to the original one-item-per-line shape.
+        var batchesByLine = (await _receipts.GetOrderItemBatchesAsync(order.Id, ct))
+            .GroupBy(b => b.OrderItemId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(b => b.ExpiryDate).ThenBy(b => b.CreatedAt).ToList());
+
         foreach (var item in order.Items)
         {
+            if (batchesByLine.TryGetValue(item.Id, out var batches) && batches.Count > 0)
+            {
+                // One sub-row per shipped batch, prefilled with what the supplier actually sent.
+                // ProductId and QuantityReceived stay null on purpose: the employee still scans
+                // the physical item and confirms the count, so the finalize gate
+                // (ProductId + QuantityReceived + ExpiryDate) is not weakened — only the expiry
+                // half of it arrives pre-answered.
+                foreach (var batch in batches)
+                {
+                    receipt.Items.Add(new MarketplaceOrderReceiptItem
+                    {
+                        ReceiptId = receipt.Id,
+                        MarketplaceOrderItemId = item.Id,
+                        ClientTenantId = clientTenantId,
+                        SupplierTenantId = order.SupplierTenantId,
+                        ItemNameSnapshot = item.ItemName,
+                        QuantityOrdered = batch.Qty,
+                        ExpiryDate = batch.ExpiryDate,
+                        BatchNumber = batch.BatchNumber,
+                        SourceOrderItemBatchId = batch.Id,
+                    });
+                }
+                continue;
+            }
+
             receipt.Items.Add(new MarketplaceOrderReceiptItem
             {
                 ReceiptId = receipt.Id,
@@ -412,5 +446,6 @@ public sealed class MarketplaceOrderReceiptService : IMarketplaceOrderReceiptSer
         Price: i.OrderItem?.Price ?? 0m,
         ReferenceImageUrl: i.ProductId.HasValue
             ? i.Product?.ImageUrl
-            : PrimarySupplierItemImageUrl(i.OrderItem?.SupplierItemId, imagesBySupplierItem));
+            : PrimarySupplierItemImageUrl(i.OrderItem?.SupplierItemId, imagesBySupplierItem),
+        SourceOrderItemBatchId: i.SourceOrderItemBatchId);
 }

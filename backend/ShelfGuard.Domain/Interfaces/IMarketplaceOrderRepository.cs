@@ -30,6 +30,18 @@ public interface IMarketplaceOrderRepository
 
     void Update(MarketplaceOrder order);
 
+    /// <summary>
+    /// Registers one supplier-allocated shipment batch (Phase 3, plan D4). Deliberately does NOT
+    /// save — the whole shipment (stock decrements + movements + these rows + the order's status
+    /// change) commits in a single <c>SaveChangesAsync</c> so a mid-way failure can never leave
+    /// stock consumed for an order that never shipped.
+    ///
+    /// Must be called on the SUPPLIER session: <c>marketplace_order_item_batches</c>'
+    /// <c>tenant_isolation</c> WITH CHECK is keyed on SupplierTenantId (the inverse of every
+    /// other marketplace table — see the migration).
+    /// </summary>
+    Task AddOrderItemBatchAsync(MarketplaceOrderItemBatch batch, CancellationToken ct = default);
+
     /// <summary>Total number of orders ever placed with a supplier — used to generate the next OrderNumber.</summary>
     Task<int> CountForSupplierAsync(Guid supplierTenantId, CancellationToken ct = default);
 

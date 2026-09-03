@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
@@ -244,6 +245,69 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
         return Ok(order);
     }
 
+    /// <summary>
+    /// Ships a confirmed order, consuming the supplier's own warehouse batches
+    /// (supplier-portal expansion Phase 3, plan D4). Requires the "supplier_inventory" module and
+    /// the "warehouse_management" permission — the module-off tenants keep using
+    /// <c>POST orders/{id}/status {status:"shipped"}</c>, which routes into the same service
+    /// method with no allocations.
+    ///
+    /// A line the warehouse cannot fully cover still ships; the uncovered quantity comes back in
+    /// <c>warnings</c> (user decision 2026-09-02).
+    /// </summary>
+    [HttpPost("orders/{id:guid}/ship")]
+    [RequireModule("supplier_inventory")]
+    [ProducesResponseType(typeof(ShipOrderResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ShipOrder(
+        Guid id, [FromBody] ShipOrderRequest request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+        if (!HasWarehousePermission()) return Forbid();
+
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        var (order, error, warnings) = await _orders.ShipOrderAsync(
+            tenantId.Value, id, request, userId.Value, ct);
+
+        if (error == MarketplaceOrderService.OrderNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(new ShipOrderResultDto(order!, warnings));
+    }
+
+    /// <summary>
+    /// Editable FEFO allocation proposal for shipping an order out of one warehouse (Phase 3).
+    /// Read-only — consumes nothing. Omit warehouseId to use the supplier's first active warehouse.
+    /// </summary>
+    [HttpGet("orders/{id:guid}/ship-suggestion")]
+    [RequireModule("supplier_inventory")]
+    [ProducesResponseType(typeof(ShipSuggestionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetShipSuggestion(
+        Guid id, [FromQuery] Guid? warehouseId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+        if (!HasWarehousePermission()) return Forbid();
+
+        var (suggestion, error) = await _orders.GetShipSuggestionAsync(
+            tenantId.Value, id, warehouseId, ct);
+
+        if (error == MarketplaceOrderService.OrderNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(suggestion);
+    }
+
     /// <summary>Records why a shipped order's delivery is running late. Only allowed while status = shipped.</summary>
     [HttpPost("orders/{id:guid}/delay-reason")]
     [ProducesResponseType(typeof(MarketplaceOrderDto), StatusCodes.Status200OK)]
@@ -360,6 +424,13 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
         return Ok(new { imageUrl = url });
     }
+
+    /// <summary>
+    /// Phase 3: the ship endpoints touch supplier warehouse stock, so they carry the same
+    /// per-action permission SupplierCabinetInventoryController applies to every batch operation.
+    /// </summary>
+    private bool HasWarehousePermission() =>
+        SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.WarehouseManagement);
 
     private IActionResult MapAgreementResult(CooperationAgreementDto? agreement, string? error)
     {

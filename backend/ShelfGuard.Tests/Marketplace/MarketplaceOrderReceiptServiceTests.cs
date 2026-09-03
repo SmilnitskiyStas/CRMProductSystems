@@ -43,6 +43,11 @@ public sealed class MarketplaceOrderReceiptServiceTests
         _marketplace.GetSupplierItemImagesByIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<Guid, IReadOnlyList<SupplierItemImage>>());
 
+        // Phase 3 (plan D4): no supplier batch allocations by default — legacy orders and
+        // module-off shipments, where a draft still gets exactly one item per order line.
+        _receipts.GetOrderItemBatchesAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<MarketplaceOrderItemBatch>());
+
         // Same pure pass-through convention as MarketplaceOrderServiceTests (TASK-584): invokes
         // the delegate immediately instead of opening a real transaction/RLS override.
         _tenantSessionOverride
@@ -186,6 +191,182 @@ public sealed class MarketplaceOrderReceiptServiceTests
         await _receipts.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
         Assert.NotNull(dto);
         Assert.Equal(2, dto!.Items.Count);
+    }
+
+    // ── Phase 3 (plan D4): 1→N prefill from the supplier's shipped batches ───────
+
+    [Fact]
+    public async Task GetOrCreateDraft_LineWithThreeBatches_CreatesThreePrefilledItems()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        var line = OrderItem(order, "Молоко 2.5%", 120m);
+        order.Items.Add(line);
+
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>())
+            .Returns((MarketplaceOrderReceipt?)null);
+
+        var b1 = Batch(order, line, new DateOnly(2026, 12, 1), 60m, "B-1");
+        var b2 = Batch(order, line, new DateOnly(2027, 1, 15), 40m, "B-2");
+        var b3 = Batch(order, line, new DateOnly(2027, 3, 1), 20m, null);
+        _receipts.GetOrderItemBatchesAsync(order.Id, Arg.Any<CancellationToken>())
+            .Returns([b3, b1, b2]); // deliberately out of order — the service sorts FEFO
+
+        MarketplaceOrderReceipt? created = null;
+        _receipts.AddAsync(Arg.Do<MarketplaceOrderReceipt>(r => created = r), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _receipts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => created);
+
+        var (dto, error) = await _sut.GetOrCreateDraftAsync(_clientTenantId, order.Id, _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(created);
+        Assert.Equal(3, created!.Items.Count);
+        Assert.All(created.Items, i =>
+        {
+            Assert.Equal(line.Id, i.MarketplaceOrderItemId);
+            Assert.Equal("Молоко 2.5%", i.ItemNameSnapshot);
+            // The employee still scans + counts — only the expiry half of the finalize gate
+            // arrives pre-answered.
+            Assert.Null(i.ProductId);
+            Assert.Null(i.QuantityReceived);
+            Assert.NotNull(i.ExpiryDate);
+            Assert.NotNull(i.SourceOrderItemBatchId);
+        });
+
+        var ordered = created.Items.OrderBy(i => i.ExpiryDate).ToList();
+        Assert.Equal(new DateOnly(2026, 12, 1), ordered[0].ExpiryDate);
+        Assert.Equal(60m, ordered[0].QuantityOrdered);
+        Assert.Equal("B-1", ordered[0].BatchNumber);
+        Assert.Equal(b1.Id, ordered[0].SourceOrderItemBatchId);
+        Assert.Equal(20m, ordered[2].QuantityOrdered);
+        Assert.Null(ordered[2].BatchNumber);
+
+        Assert.NotNull(dto);
+        Assert.Equal(3, dto!.Items.Count);
+        Assert.All(dto.Items, i => Assert.NotNull(i.SourceOrderItemBatchId));
+    }
+
+    [Fact]
+    public async Task GetOrCreateDraft_NoBatches_FallsBackToOneItemPerLine()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        var line1 = OrderItem(order, "Молоко 2.5%", 5m);
+        var line2 = OrderItem(order, "Хліб житній", 10m);
+        order.Items.Add(line1);
+        order.Items.Add(line2);
+
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>())
+            .Returns((MarketplaceOrderReceipt?)null);
+        // Constructor default: no batches at all (legacy / module-off shipment).
+
+        MarketplaceOrderReceipt? created = null;
+        _receipts.AddAsync(Arg.Do<MarketplaceOrderReceipt>(r => created = r), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _receipts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => created);
+
+        var (_, error) = await _sut.GetOrCreateDraftAsync(_clientTenantId, order.Id, _userId);
+
+        Assert.Null(error);
+        Assert.Equal(2, created!.Items.Count);
+        Assert.All(created.Items, i =>
+        {
+            Assert.Null(i.SourceOrderItemBatchId);
+            Assert.Null(i.ExpiryDate);
+            Assert.Null(i.BatchNumber);
+        });
+        Assert.Equal(5m, Assert.Single(created.Items, i => i.MarketplaceOrderItemId == line1.Id).QuantityOrdered);
+    }
+
+    [Fact]
+    public async Task GetOrCreateDraft_MixedLines_PrefillsOnlyTheShippedOne()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        var shipped = OrderItem(order, "Молоко 2.5%", 100m);
+        var uncovered = OrderItem(order, "Хліб житній", 20m); // shortfall — shipped with no batch
+        order.Items.Add(shipped);
+        order.Items.Add(uncovered);
+
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>())
+            .Returns((MarketplaceOrderReceipt?)null);
+        _receipts.GetOrderItemBatchesAsync(order.Id, Arg.Any<CancellationToken>())
+            .Returns([Batch(order, shipped, new DateOnly(2026, 12, 1), 100m, "B-1")]);
+
+        MarketplaceOrderReceipt? created = null;
+        _receipts.AddAsync(Arg.Do<MarketplaceOrderReceipt>(r => created = r), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _receipts.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(ci => created);
+
+        var (_, error) = await _sut.GetOrCreateDraftAsync(_clientTenantId, order.Id, _userId);
+
+        Assert.Null(error);
+        Assert.Equal(2, created!.Items.Count);
+
+        var prefilled = Assert.Single(created.Items, i => i.MarketplaceOrderItemId == shipped.Id);
+        Assert.Equal(new DateOnly(2026, 12, 1), prefilled.ExpiryDate);
+        Assert.NotNull(prefilled.SourceOrderItemBatchId);
+
+        var blank = Assert.Single(created.Items, i => i.MarketplaceOrderItemId == uncovered.Id);
+        Assert.Null(blank.ExpiryDate);
+        Assert.Null(blank.SourceOrderItemBatchId);
+        Assert.Equal(20m, blank.QuantityOrdered);
+    }
+
+    [Fact]
+    public async Task Receive_TwoBatchSublinesOfOneOrderLine_CreatesTwoStockBatchesAndDelivers()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped, _storeId);
+        var line = OrderItem(order, "Молоко 2.5%", 120m);
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        // What GetOrCreateDraftAsync would have produced from two shipped batches.
+        var productId = Guid.NewGuid();
+        var receipt = Receipt(order, "draft");
+        var sub1 = ReceiptItem(receipt, line);
+        sub1.ExpiryDate = new DateOnly(2026, 12, 1);
+        sub1.BatchNumber = "B-1";
+        sub1.SourceOrderItemBatchId = Guid.NewGuid();
+        sub1.ProductId = productId;
+        sub1.QuantityReceived = 100m;
+        var sub2 = ReceiptItem(receipt, line);
+        sub2.ExpiryDate = new DateOnly(2027, 2, 1);
+        sub2.BatchNumber = "B-2";
+        sub2.SourceOrderItemBatchId = Guid.NewGuid();
+        sub2.ProductId = productId;
+        sub2.QuantityReceived = 20m;
+        receipt.Items.Add(sub1);
+        receipt.Items.Add(sub2);
+        _receipts.GetByOrderIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(receipt);
+
+        var (dto, error) = await _sut.ReceiveAsync(_clientTenantId, order.Id, _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+
+        // One ProductStock per BATCH, not per order line — the whole point of the D4 handoff.
+        await _receipts.Received(2).AddStockAsync(Arg.Any<ProductStock>(), Arg.Any<CancellationToken>());
+        await _receipts.Received(1).AddStockAsync(
+            Arg.Is<ProductStock>(s =>
+                s.ProductId == productId
+                && s.Quantity == 100m
+                && s.BatchNumber == "B-1"
+                && s.ExpiryDate == new DateOnly(2026, 12, 1)
+                && s.StoreId == _storeId),
+            Arg.Any<CancellationToken>());
+        await _receipts.Received(1).AddStockAsync(
+            Arg.Is<ProductStock>(s =>
+                s.Quantity == 20m
+                && s.BatchNumber == "B-2"
+                && s.ExpiryDate == new DateOnly(2027, 2, 1)),
+            Arg.Any<CancellationToken>());
+        await _receipts.Received(2).AddMovementAsync(Arg.Any<StockMovement>(), Arg.Any<CancellationToken>());
+
+        Assert.Equal("received", receipt.Status);
+        Assert.Equal(MarketplaceOrderStatus.Delivered, order.Status);
+        Assert.NotNull(order.DeliveredAt);
     }
 
     // ── GetAsync ──────────────────────────────────────────────────────────────────
@@ -622,6 +803,19 @@ public sealed class MarketplaceOrderReceiptServiceTests
         SupplierTenantId = _supplierTenantId,
         DestinationStoreId = _storeId,
         Status = status,
+    };
+
+    private MarketplaceOrderItemBatch Batch(
+        MarketplaceOrder order, MarketplaceOrderItem line, DateOnly expiry, decimal qty, string? batchNumber) => new()
+    {
+        OrderItemId = line.Id,
+        OrderId = order.Id,
+        SupplierTenantId = _supplierTenantId,
+        ClientTenantId = _clientTenantId,
+        SupplierStockId = Guid.NewGuid(),
+        ExpiryDate = expiry,
+        BatchNumber = batchNumber,
+        Qty = qty,
     };
 
     private MarketplaceOrderReceiptItem ReceiptItem(

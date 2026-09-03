@@ -24,6 +24,15 @@ public sealed class MarketplaceOrderReceiptItem
     public string? BatchNumber { get; set; }
     public string? DiscrepancyNotes { get; set; }
 
+    /// <summary>
+    /// The supplier's shipped batch this sub-row was prefilled from (Phase 3, plan D4). Set at
+    /// draft-creation time when the order line carries <see cref="MarketplaceOrderItemBatch"/>
+    /// rows — one receipt item per batch, with <see cref="ExpiryDate"/>/<see cref="BatchNumber"/>
+    /// prefilled. Null for legacy / module-off orders (one receipt item per order line, nothing
+    /// prefilled). FK SET NULL — losing the source batch must not delete receiving history.
+    /// </summary>
+    public Guid? SourceOrderItemBatchId { get; set; }
+
     public MarketplaceOrderReceipt? Receipt { get; init; }
     public MarketplaceOrderItem? OrderItem { get; init; }
     public Item? Product { get; set; }

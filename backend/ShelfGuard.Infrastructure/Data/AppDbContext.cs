@@ -144,6 +144,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<MarketplaceOrder> MarketplaceOrders => Set<MarketplaceOrder>();
     public DbSet<MarketplaceOrderItem> MarketplaceOrderItems => Set<MarketplaceOrderItem>();
 
+    // Supplier-shipped batch allocations — supplier-write / client-read split RLS (Phase 3, D4)
+    public DbSet<MarketplaceOrderItemBatch> MarketplaceOrderItemBatches => Set<MarketplaceOrderItemBatch>();
+
     // Marketplace order receiving — client-confirmed receipt (TASK-586, ADR-033)
     public DbSet<MarketplaceOrderReceipt> MarketplaceOrderReceipts => Set<MarketplaceOrderReceipt>();
     public DbSet<MarketplaceOrderReceiptItem> MarketplaceOrderReceiptItems => Set<MarketplaceOrderReceiptItem>();
@@ -2209,6 +2212,9 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.CreatedByUserName).HasMaxLength(255).IsRequired(false);
             // D5 — mutable supplier-set expected delivery date (date only). Landed in Phase 1.
             e.Property(x => x.ExpectedDeliveryDate).IsRequired(false);
+            // D4 (Phase 3) — supplier warehouse the order was picked from. One source location
+            // per order; nullable for legacy / module-off shipments.
+            e.Property(x => x.SourceWarehouseId).IsRequired(false);
             // TASK-649: destination region code, snapshotted at order creation (not a live
             // join through DestinationStoreId). varchar(20) — same sizing as Location.RegionCode.
             e.Property(x => x.DestinationRegionCode).HasMaxLength(20);
@@ -2225,6 +2231,8 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasOne<Location>().WithMany()
              .HasForeignKey(x => x.DestinationStoreId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+            e.HasOne<Location>().WithMany()
+             .HasForeignKey(x => x.SourceWarehouseId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
             e.HasMany(x => x.Items)
              .WithOne(x => x.Order)
              .HasForeignKey(x => x.OrderId)
@@ -2250,6 +2258,39 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(x => x.OrderId);
             e.HasOne<SupplierItem>().WithMany()
              .HasForeignKey(x => x.SupplierItemId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(x => x.Batches)
+             .WithOne(x => x.OrderItem)
+             .HasForeignKey(x => x.OrderItemId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── MarketplaceOrderItemBatch (Phase 3, plan D4) ──────────────────────
+        // The supplier's per-line batch allocation at ship time. RLS is the MIRROR IMAGE of
+        // ADR-033's receipt split: supplier writes (tenant_isolation on SupplierTenantId),
+        // client only reads (client_read FOR SELECT on ClientTenantId) — see
+        // 20260903*_AddMarketplaceOrderItemBatches. Both tenant ids are denormalized onto the
+        // row so neither policy needs a join, same convention MarketplaceOrderItem established.
+        builder.Entity<MarketplaceOrderItemBatch>(e =>
+        {
+            e.ToTable("marketplace_order_item_batches");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.OrderItemId).IsRequired();
+            e.Property(x => x.OrderId).IsRequired();
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.ExpiryDate).IsRequired();
+            e.Property(x => x.BatchNumber).HasMaxLength(100);
+            // numeric(12,3) — same precision as MarketplaceOrderItem.Qty and SupplierStock.Quantity,
+            // so an allocation reconciles against both sides without rounding drift.
+            e.Property(x => x.Qty).HasColumnType("numeric(12,3)").IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => x.OrderId);
+            e.HasIndex(x => x.OrderItemId);
+            // SET NULL, not Restrict: a consumed batch row may be archived later, but the
+            // shipped-history allocation must survive it.
+            e.HasOne<SupplierStock>().WithMany()
+             .HasForeignKey(x => x.SupplierStockId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── MarketplaceOrderReceipt (TASK-586, ADR-033) ────────────────────────
@@ -2314,6 +2355,10 @@ public sealed class AppDbContext : DbContext
             // block or cascade-delete the historical receipt record.
             e.HasOne(x => x.Product).WithMany()
              .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // Phase 3 (D4): which supplier-shipped batch this sub-row was prefilled from.
+            // SET NULL — losing the source allocation must not delete receiving history.
+            e.HasOne<MarketplaceOrderItemBatch>().WithMany()
+             .HasForeignKey(x => x.SourceOrderItemBatchId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // ── SupplierSupportTicket (TASK-316) ──────────────────────────────────

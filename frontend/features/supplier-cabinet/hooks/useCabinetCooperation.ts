@@ -14,7 +14,9 @@ import type {
   UpsertContractSettingsRequest,
   UpdateMarketplaceOrderStatusRequest,
   SetOrderDelayReasonRequest,
+  ShipOrderRequest,
 } from "../types";
+import { SUPPLIER_INVENTORY_KEYS } from "./useSupplierInventory";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
@@ -134,6 +136,35 @@ export function useUpdateCabinetOrderStatus() {
       supplierCabinetApi.updateOrderStatus(id, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CABINET_COOP_KEYS.orders });
+    },
+  });
+}
+
+// ── Batch-consuming shipment (supplier-portal expansion Phase 3, plan D4) ──────
+
+/** GET .../ship-suggestion — editable FEFO allocation plan for one warehouse. Enable only
+ *  while the ship modal is open with the module on and a warehouse picked. */
+export function useShipSuggestion(orderId: string | null, warehouseId: string | null) {
+  return useQuery({
+    queryKey: ["supplier-cabinet", "ship-suggestion", orderId, warehouseId] as const,
+    queryFn: () => supplierCabinetApi.getShipSuggestion(orderId!, warehouseId ?? undefined),
+    enabled: Boolean(orderId) && Boolean(warehouseId),
+    staleTime: 10_000,
+    retry: false,
+  });
+}
+
+/** POST .../ship — consumes the allocated supplier_stock batches and moves the order to
+ *  shipped. Invalidates the cabinet orders list and the supplier stock (batches were drawn
+ *  down). result.warnings is surfaced by the caller as non-error toasts. */
+export function useShipOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ShipOrderRequest }) =>
+      supplierCabinetApi.shipOrder(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_COOP_KEYS.orders });
+      queryClient.invalidateQueries({ queryKey: SUPPLIER_INVENTORY_KEYS.stockRoot });
     },
   });
 }

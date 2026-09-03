@@ -52,6 +52,15 @@ public sealed class MarketplaceOrder
     /// that sets/reschedules it and the "in transit" auto-order integration arrive in Phase 4.
     /// </summary>
     public DateOnly? ExpectedDeliveryDate { get; set; }
+    /// <summary>
+    /// Supplier warehouse (<see cref="Location"/> of type "warehouse") the goods were picked
+    /// from (supplier-portal expansion Phase 3, plan D4). One source location per order —
+    /// partial / multi-warehouse fulfilment of a single order is out of v1 scope. Nullable:
+    /// legacy orders, and shipments made while the supplier's <c>supplier_inventory</c> module
+    /// is off, have no source warehouse.
+    /// </summary>
+    public Guid? SourceWarehouseId { get; set; }
+
     /// <summary>Set by the service layer when Status transitions to delivered.</summary>
     public DateTimeOffset? DeliveredAt { get; set; }
     /// <summary>Supplier-entered explanation when delivery runs past the estimated window.</summary>

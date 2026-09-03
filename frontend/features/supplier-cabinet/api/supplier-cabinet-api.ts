@@ -47,6 +47,9 @@ import type {
   UpdateSupplierReceiptRequest,
   AddSupplierReceiptLineRequest,
   SupplierStockReceiptStatus,
+  ShipSuggestion,
+  ShipOrderRequest,
+  ShipOrderResult,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 import type { PagedResult as ApiPagedResult } from "@/lib/api-types";
@@ -231,6 +234,24 @@ export const supplierCabinetApi = {
   /** POST /api/supplier-cabinet/orders/{id}/delay-reason — тільки для status "shipped" */
   setOrderDelayReason: (id: string, body: SetOrderDelayReasonRequest) =>
     api.post<MarketplaceOrderDto>(`${BASE}/orders/${id}/delay-reason`, body),
+
+  // ── Batch-consuming shipment (supplier-portal expansion Phase 3, plan D4) ────
+  // Gated: "supplier_inventory" module + "warehouse_management" permission. When the
+  // module is off the cabinet keeps shipping via updateOrderStatus {status:"shipped"}.
+
+  /** GET /api/supplier-cabinet/orders/{id}/ship-suggestion?warehouseId= — editable FEFO
+   *  allocation plan; consumes nothing. Omit warehouseId to use the first active warehouse. */
+  getShipSuggestion: (orderId: string, warehouseId?: string) =>
+    api.get<ShipSuggestion>(
+      `${BASE}/orders/${orderId}/ship-suggestion${
+        warehouseId ? `?warehouseId=${warehouseId}` : ""
+      }`,
+    ),
+
+  /** POST /api/supplier-cabinet/orders/{id}/ship — consumes the allocated batches and moves
+   *  the order to shipped. result.warnings names lines shipped short (not an error). */
+  shipOrder: (orderId: string, body: ShipOrderRequest) =>
+    api.post<ShipOrderResult>(`${BASE}/orders/${orderId}/ship`, body),
 
   // ── Support tickets (TASK-318) ──────────────────────────────────────────────
 

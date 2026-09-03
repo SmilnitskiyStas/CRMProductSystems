@@ -3,6 +3,7 @@ using ShelfGuard.Application.Features.Catalog;
 using ShelfGuard.Application.Features.Catalog.Dtos;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Features.SupplierInventory;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
@@ -27,6 +28,8 @@ public sealed class MarketplaceOrderServiceTests
     private readonly IItemService _itemService = Substitute.For<IItemService>();
     private readonly ILocationRepository _locations = Substitute.For<ILocationRepository>();
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
+    private readonly ITenantRepository _tenants = Substitute.For<ITenantRepository>();
+    private readonly ISupplierStockRepository _supplierStock = Substitute.For<ISupplierStockRepository>();
     private readonly MarketplaceOrderService _sut;
 
     private readonly Guid _supplierId = Guid.NewGuid();        // public marketplace supplier id
@@ -38,10 +41,16 @@ public sealed class MarketplaceOrderServiceTests
     {
         _sut = new MarketplaceOrderService(
             _orders, _agreements, _marketplace, _tenantNames, _notifications, _tenantSessionOverride,
-            _items, _itemService, _locations, _users);
+            _items, _itemService, _locations, _users, _tenants, _supplierStock);
 
         _marketplace.GetSupplierTenantIdAsync(_supplierId, Arg.Any<CancellationToken>())
             .Returns(_supplierTenantId);
+
+        // Phase 3 (plan D4): supplier_inventory is provider-granted and default-OFF, so the
+        // legacy confirmed→shipped flow every pre-existing test exercises must keep working with
+        // no warehouse module at all. Dedicated shipping tests below opt in per case.
+        _tenants.GetByIdAsync(_supplierTenantId, Arg.Any<CancellationToken>())
+            .Returns(Tenant.Create("Постачальник", "supplier-tenant"));
 
         // #4: CreateOrderAsync snapshots the placing user's display name onto the order.
         _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>())
@@ -998,6 +1007,462 @@ public sealed class MarketplaceOrderServiceTests
         Assert.Null(dto);
         Assert.Contains("Невідомий статус", error);
     }
+
+    // ── Phase 3 (plan D4): batch-consuming shipment ─────────────────────────────
+
+    [Fact]
+    public async Task ShipOrder_ModuleOff_ShipsWithoutTouchingStock()
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        order.Items.Add(OrderLine(order, "Молоко 2.5%", 10m, Guid.NewGuid()));
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error, warnings) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(EstimatedDeliveryDays: 3), _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Empty(warnings);
+        Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);
+        Assert.Equal(3, order.EstimatedDeliveryDays);
+        Assert.NotNull(order.ShippedAt);
+        Assert.Null(order.SourceWarehouseId);
+
+        // Nothing consumed, nothing allocated — the pre-Phase-3 behaviour, byte for byte.
+        await _supplierStock.DidNotReceive().GetFefoOrderedAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _orders.DidNotReceive().AddOrderItemBatchAsync(
+            Arg.Any<MarketplaceOrderItemBatch>(), Arg.Any<CancellationToken>());
+        await _supplierStock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // The client still gets its shipped notification, under the client RLS override.
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            order.ClientTenantId, Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n => n.EventType == "marketplace_order.shipped"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShipOrder_ModuleOffButAllocationsSent_IsRejected()
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        var line = OrderLine(order, "Молоко 2.5%", 10m, Guid.NewGuid());
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(
+                SourceWarehouseId: Guid.NewGuid(),
+                EstimatedDeliveryDays: 2,
+                Lines: [new ShipLineDto(line.Id, [new ShipAllocationDto(Guid.NewGuid(), 5m)])]),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.SupplierInventoryDisabledError, error);
+        Assert.Equal(MarketplaceOrderStatus.Confirmed, order.Status);
+    }
+
+    [Fact]
+    public async Task ShipOrder_NotConfirmed_ReturnsError()
+    {
+        var order = Order(MarketplaceOrderStatus.New);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id, new ShipOrderRequest(EstimatedDeliveryDays: 1), _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.OnlyConfirmedCanShipError, error);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task ShipOrder_WithoutAnyDeliveryEstimate_ReturnsError(int? days)
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id, new ShipOrderRequest(EstimatedDeliveryDays: days), _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.EstimatedDeliveryDaysRequiredError, error);
+        Assert.Equal(MarketplaceOrderStatus.Confirmed, order.Status);
+    }
+
+    [Fact]
+    public async Task ShipOrder_ExpectedDateOnly_DerivesEstimatedDays()
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var expected = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5);
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(ExpectedDeliveryDate: expected), _userId);
+
+        Assert.Null(error);
+        Assert.Equal(expected, order.ExpectedDeliveryDate);
+        Assert.Equal(5, order.EstimatedDeliveryDays);
+        Assert.Equal(expected, dto!.ExpectedDeliveryDate);
+    }
+
+    [Fact]
+    public async Task ShipOrder_ModuleOnFullCoverage_ConsumesBatchesWritesMovementsAndShips()
+    {
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        var line = OrderLine(order, "Молоко 2.5%", 120m, supplierItemId);
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var near = Batch(supplierItemId, warehouseId, new DateOnly(2026, 12, 1), 100m, "B-1");
+        var far  = Batch(supplierItemId, warehouseId, new DateOnly(2027, 2, 1), 50m, "B-2");
+        StubWarehouse(warehouseId);
+        StubFefo(supplierItemId, warehouseId, near, far);
+
+        var (dto, error, warnings) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(SourceWarehouseId: warehouseId, EstimatedDeliveryDays: 3),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Empty(warnings);
+
+        // FEFO: the nearest-expiry batch is drained first, the remainder comes off the next one.
+        Assert.Equal(0m, near.Quantity);
+        Assert.Equal(30m, far.Quantity);
+
+        await _supplierStock.Received(2).AddMovementAsync(
+            Arg.Is<SupplierStockMovement>(m =>
+                m.MovementType == "ship"
+                && m.FromWarehouseId == warehouseId
+                && m.ReferenceType == "marketplace_order"
+                && m.ReferenceId == order.Id
+                && m.PerformedBy == _userId),
+            Arg.Any<CancellationToken>());
+
+        await _orders.Received(1).AddOrderItemBatchAsync(
+            Arg.Is<MarketplaceOrderItemBatch>(b =>
+                b.OrderItemId == line.Id
+                && b.OrderId == order.Id
+                && b.SupplierTenantId == _supplierTenantId
+                && b.ClientTenantId == _clientTenantId
+                && b.SupplierStockId == near.Id
+                && b.BatchNumber == "B-1"
+                && b.Qty == 100m),
+            Arg.Any<CancellationToken>());
+        await _orders.Received(1).AddOrderItemBatchAsync(
+            Arg.Is<MarketplaceOrderItemBatch>(b => b.SupplierStockId == far.Id && b.Qty == 20m),
+            Arg.Any<CancellationToken>());
+
+        // One atomic commit for stock + movements + batches + the order's status change …
+        await _supplierStock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);
+        Assert.Equal(warehouseId, order.SourceWarehouseId);
+        Assert.NotNull(order.ShippedAt);
+
+        // … and the outbox row separately, under the CLIENT tenant's RLS override.
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            order.ClientTenantId, Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n =>
+                n.TenantId == order.ClientTenantId && n.EventType == "marketplace_order.shipped"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShipOrder_ModuleOnShortfall_ShipsAnywayWithWarningAndPartialBatches()
+    {
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        order.Items.Add(OrderLine(order, "Молоко 2.5%", 120m, supplierItemId));
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var only = Batch(supplierItemId, warehouseId, new DateOnly(2026, 12, 1), 40m, "B-1");
+        StubWarehouse(warehouseId);
+        StubFefo(supplierItemId, warehouseId, only);
+
+        var (dto, error, warnings) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(SourceWarehouseId: warehouseId, EstimatedDeliveryDays: 3),
+            _userId);
+
+        // User decision 2026-09-02: a shortfall never blocks the shipment.
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);
+        Assert.Equal(0m, only.Quantity);
+
+        var warning = Assert.Single(warnings);
+        Assert.Contains("Молоко 2.5%", warning);
+        Assert.Contains("40", warning);
+        Assert.Contains("120", warning);
+
+        await _orders.Received(1).AddOrderItemBatchAsync(
+            Arg.Is<MarketplaceOrderItemBatch>(b => b.Qty == 40m), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShipOrder_ExplicitAllocations_WinOverAutoFefo()
+    {
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        var line = OrderLine(order, "Молоко 2.5%", 30m, supplierItemId);
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var near = Batch(supplierItemId, warehouseId, new DateOnly(2026, 12, 1), 100m, "B-1");
+        var far  = Batch(supplierItemId, warehouseId, new DateOnly(2027, 2, 1), 50m, "B-2");
+        StubWarehouse(warehouseId);
+        StubFefo(supplierItemId, warehouseId, near, far);
+        StubBatchById(near, far);
+
+        // Supplier deliberately picks the LATER batch — the explicit plan must be honoured
+        // verbatim, not silently re-FEFO'd.
+        var (dto, error, warnings) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(
+                SourceWarehouseId: warehouseId,
+                EstimatedDeliveryDays: 2,
+                Lines: [new ShipLineDto(line.Id, [new ShipAllocationDto(far.Id, 30m)])]),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Empty(warnings);
+        Assert.Equal(100m, near.Quantity);
+        Assert.Equal(20m, far.Quantity);
+
+        await _orders.Received(1).AddOrderItemBatchAsync(
+            Arg.Is<MarketplaceOrderItemBatch>(b => b.SupplierStockId == far.Id && b.Qty == 30m),
+            Arg.Any<CancellationToken>());
+        await _supplierStock.DidNotReceive().GetFefoOrderedAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShipOrder_ExplicitAllocationFromAnotherWarehouse_IsRejected()
+    {
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        var line = OrderLine(order, "Молоко 2.5%", 10m, supplierItemId);
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var foreignWarehouseBatch = Batch(
+            supplierItemId, Guid.NewGuid(), new DateOnly(2026, 12, 1), 100m, "B-9");
+        StubWarehouse(warehouseId);
+        StubBatchById(foreignWarehouseBatch);
+
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(
+                SourceWarehouseId: warehouseId,
+                EstimatedDeliveryDays: 2,
+                Lines: [new ShipLineDto(line.Id, [new ShipAllocationDto(foreignWarehouseBatch.Id, 5m)])]),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.BatchWarehouseMismatchError, error);
+        Assert.Equal(MarketplaceOrderStatus.Confirmed, order.Status);
+        Assert.Equal(100m, foreignWarehouseBatch.Quantity);
+    }
+
+    [Fact]
+    public async Task ShipOrder_UnknownWarehouse_ReturnsError()
+    {
+        EnableSupplierInventory();
+
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _supplierStock.WarehouseExistsAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(SourceWarehouseId: Guid.NewGuid(), EstimatedDeliveryDays: 2),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.SourceWarehouseNotFoundError, error);
+    }
+
+    [Fact]
+    public async Task ShipOrder_ForeignSupplierTenant_ReturnsNotFound()
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            Guid.NewGuid(), order.Id, new ShipOrderRequest(EstimatedDeliveryDays: 2), _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.OrderNotFoundError, error);
+        Assert.Equal(MarketplaceOrderStatus.Confirmed, order.Status);
+    }
+
+    [Fact]
+    public async Task UpdateOrderStatus_Ship_RoutesThroughShipOrderAsync_LegacyBehaviourUnchanged()
+    {
+        // Regression guard for the one-code-path refactor: the legacy status endpoint must keep
+        // behaving exactly as it did (no warehouse, no allocations, ETA required, client notified)
+        // even on a tenant whose supplier_inventory module is ON.
+        EnableSupplierInventory();
+
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        order.Items.Add(OrderLine(order, "Молоко 2.5%", 10m, Guid.NewGuid()));
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.UpdateOrderStatusAsync(
+            _supplierTenantId, order.Id,
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: 4));
+
+        Assert.Null(error);
+        Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);
+        Assert.Equal(4, order.EstimatedDeliveryDays);
+        Assert.Null(order.SourceWarehouseId);
+        Assert.Equal(4, dto!.EstimatedDeliveryDays);
+
+        await _orders.DidNotReceive().AddOrderItemBatchAsync(
+            Arg.Any<MarketplaceOrderItemBatch>(), Arg.Any<CancellationToken>());
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n => n.EventType == "marketplace_order.shipped"),
+            Arg.Any<CancellationToken>());
+    }
+
+    // ── Phase 3: FEFO ship suggestion (read-only) ───────────────────────────────
+
+    [Fact]
+    public async Task GetShipSuggestion_ProposesFefoSplitAndReportsShortfall()
+    {
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        var line = OrderLine(order, "Молоко 2.5%", 200m, supplierItemId);
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var near = Batch(supplierItemId, warehouseId, new DateOnly(2026, 12, 1), 100m, "B-1");
+        var far  = Batch(supplierItemId, warehouseId, new DateOnly(2027, 2, 1), 50m, "B-2");
+        StubFefo(supplierItemId, warehouseId, near, far);
+        _locations.GetByIdAsync(warehouseId, Arg.Any<CancellationToken>())
+            .Returns(new Location { Id = warehouseId, TenantId = _supplierTenantId, Name = "Основний", Type = "warehouse" });
+
+        var (suggestion, error) = await _sut.GetShipSuggestionAsync(
+            _supplierTenantId, order.Id, warehouseId);
+
+        Assert.Null(error);
+        Assert.NotNull(suggestion);
+        Assert.Equal("Основний", suggestion!.WarehouseName);
+
+        var proposed = Assert.Single(suggestion.Lines);
+        Assert.Equal(line.Id, proposed.OrderItemId);
+        Assert.Equal(150m, proposed.Covered);
+        Assert.Equal(50m, proposed.Shortfall);
+        Assert.Equal(2, proposed.Allocations.Count);
+        Assert.Equal(near.Id, proposed.Allocations[0].SupplierStockId);
+        Assert.Equal(100m, proposed.Allocations[0].Qty);
+        Assert.Equal(50m, proposed.Allocations[1].Qty);
+        Assert.Single(suggestion.Warnings);
+
+        // Read-only: nothing decremented, nothing written.
+        Assert.Equal(100m, near.Quantity);
+        Assert.Equal(50m, far.Quantity);
+        await _orders.DidNotReceive().AddOrderItemBatchAsync(
+            Arg.Any<MarketplaceOrderItemBatch>(), Arg.Any<CancellationToken>());
+        await _supplierStock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetShipSuggestion_ForeignWarehouse_ReadsAsNotFound()
+    {
+        EnableSupplierInventory();
+
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var foreignWarehouseId = Guid.NewGuid();
+        _locations.GetByIdAsync(foreignWarehouseId, Arg.Any<CancellationToken>())
+            .Returns(new Location { Id = foreignWarehouseId, TenantId = Guid.NewGuid(), Name = "Чужий", Type = "warehouse" });
+
+        var (suggestion, error) = await _sut.GetShipSuggestionAsync(
+            _supplierTenantId, order.Id, foreignWarehouseId);
+
+        Assert.Null(suggestion);
+        Assert.Equal(MarketplaceOrderService.SourceWarehouseNotFoundError, error);
+    }
+
+    // ── Phase 3 helpers ─────────────────────────────────────────────────────────
+
+    private void EnableSupplierInventory()
+    {
+        var tenant = Tenant.Create("Постачальник", "supplier-tenant");
+        tenant.UpdateModules(["marketplace_supplier", "supplier_inventory"]);
+        _tenants.GetByIdAsync(_supplierTenantId, Arg.Any<CancellationToken>()).Returns(tenant);
+    }
+
+    private void StubWarehouse(Guid warehouseId) =>
+        _supplierStock.WarehouseExistsAsync(_supplierTenantId, warehouseId, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+    private void StubFefo(Guid supplierItemId, Guid warehouseId, params SupplierStock[] batches) =>
+        _supplierStock.GetFefoOrderedAsync(
+                _supplierTenantId, supplierItemId, warehouseId, Arg.Any<CancellationToken>())
+            .Returns(_ => batches.OrderBy(b => b.ExpiryDate).ToList());
+
+    private void StubBatchById(params SupplierStock[] batches)
+    {
+        foreach (var batch in batches)
+            _supplierStock.GetByIdAsync(_supplierTenantId, batch.Id, Arg.Any<CancellationToken>())
+                .Returns(batch);
+    }
+
+    private static SupplierStock Batch(
+        Guid supplierItemId, Guid warehouseId, DateOnly expiry, decimal qty, string? batchNumber) => new()
+    {
+        SupplierItemId = supplierItemId,
+        WarehouseId = warehouseId,
+        ExpiryDate = expiry,
+        Quantity = qty,
+        QuantityInitial = qty,
+        BatchNumber = batchNumber,
+        Status = "safe",
+    };
+
+    private MarketplaceOrderItem OrderLine(
+        MarketplaceOrder order, string name, decimal qty, Guid? supplierItemId) => new()
+    {
+        OrderId = order.Id,
+        SupplierTenantId = _supplierTenantId,
+        ClientTenantId = _clientTenantId,
+        SupplierItemId = supplierItemId,
+        ItemName = name,
+        Unit = "шт",
+        Price = 10m,
+        Qty = qty,
+        LineTotal = 10m * qty,
+    };
 
     // ── TASK-585: recording a shipping delay reason ─────────────────────────────
 

@@ -16,15 +16,18 @@ public sealed class MarketplaceOrderRepository : IMarketplaceOrderRepository
 
     public MarketplaceOrderRepository(AppDbContext db) => _db = db;
 
+    // Phase 3 (plan D4): Items.Batches is included everywhere an order is projected to a DTO —
+    // both parties may read it (the supplier through marketplace_order_item_batches'
+    // tenant_isolation, the client through the inverted client_read FOR SELECT policy).
     public Task<MarketplaceOrder?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.MarketplaceOrders
-            .Include(o => o.Items)
+            .Include(o => o.Items).ThenInclude(i => i.Batches)
             .FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<IReadOnlyList<MarketplaceOrder>> ListForSupplierAsync(
         Guid supplierTenantId, CancellationToken ct = default) =>
         await _db.MarketplaceOrders.AsNoTracking()
-            .Include(o => o.Items)
+            .Include(o => o.Items).ThenInclude(i => i.Batches)
             .Where(o => o.SupplierTenantId == supplierTenantId)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(ct);
@@ -32,7 +35,7 @@ public sealed class MarketplaceOrderRepository : IMarketplaceOrderRepository
     public async Task<IReadOnlyList<MarketplaceOrder>> ListForClientAsync(
         Guid clientTenantId, CancellationToken ct = default) =>
         await _db.MarketplaceOrders.AsNoTracking()
-            .Include(o => o.Items)
+            .Include(o => o.Items).ThenInclude(i => i.Batches)
             .Where(o => o.ClientTenantId == clientTenantId)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(ct);
@@ -46,7 +49,7 @@ public sealed class MarketplaceOrderRepository : IMarketplaceOrderRepository
     public async Task<IReadOnlyList<MarketplaceOrder>> ListAwaitingReceiptForClientAsync(
         Guid clientTenantId, CancellationToken ct = default) =>
         await _db.MarketplaceOrders.AsNoTracking()
-            .Include(o => o.Items)
+            .Include(o => o.Items).ThenInclude(i => i.Batches)
             .Where(o => o.ClientTenantId == clientTenantId && o.Status == MarketplaceOrderStatus.Shipped)
             .Where(o => !_db.MarketplaceOrderReceipts.Any(
                 r => r.MarketplaceOrderId == o.Id && r.Status != "draft"))
@@ -58,6 +61,10 @@ public sealed class MarketplaceOrderRepository : IMarketplaceOrderRepository
 
     public void Update(MarketplaceOrder order) =>
         _db.MarketplaceOrders.Update(order);
+
+    public async Task AddOrderItemBatchAsync(
+        MarketplaceOrderItemBatch batch, CancellationToken ct = default) =>
+        await _db.MarketplaceOrderItemBatches.AddAsync(batch, ct);
 
     public Task<int> CountForSupplierAsync(Guid supplierTenantId, CancellationToken ct = default) =>
         _db.MarketplaceOrders.CountAsync(o => o.SupplierTenantId == supplierTenantId, ct);

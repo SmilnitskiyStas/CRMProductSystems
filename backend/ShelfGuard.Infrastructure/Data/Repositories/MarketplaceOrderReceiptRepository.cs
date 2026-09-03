@@ -30,6 +30,18 @@ public sealed class MarketplaceOrderReceiptRepository : IMarketplaceOrderReceipt
             .Include(r => r.DestinationStore)
             .FirstOrDefaultAsync(r => r.Id == id, ct);
 
+    /// <summary>
+    /// Phase 3 (plan D4). AsNoTracking — these rows are read-only to the client by construction
+    /// (the table's <c>client_read</c> policy is FOR SELECT), they only seed the draft's items.
+    /// </summary>
+    public async Task<IReadOnlyList<MarketplaceOrderItemBatch>> GetOrderItemBatchesAsync(
+        Guid marketplaceOrderId, CancellationToken ct = default) =>
+        await _db.MarketplaceOrderItemBatches.AsNoTracking()
+            .Where(b => b.OrderId == marketplaceOrderId)
+            .OrderBy(b => b.ExpiryDate)
+            .ThenBy(b => b.CreatedAt)
+            .ToListAsync(ct);
+
     public async Task AddAsync(MarketplaceOrderReceipt receipt, CancellationToken ct = default) =>
         await _db.MarketplaceOrderReceipts.AddAsync(receipt, ct);
 

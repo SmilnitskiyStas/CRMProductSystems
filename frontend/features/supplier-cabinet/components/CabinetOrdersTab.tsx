@@ -14,7 +14,7 @@ import { Table, type TableColumn } from "@/components/ui/Table";
 import { OrderStatusBadge } from "@/features/marketplace/components/CooperationBadges";
 import { getShippingEta, getDeliveryOutcome } from "@/features/marketplace/utils";
 import type { MarketplaceOrderDto } from "@/features/marketplace/types";
-import { EstimateDeliveryModal } from "./EstimateDeliveryModal";
+import { ShipOrderModal } from "./ShipOrderModal";
 import {
   useCabinetOrders,
   useUpdateCabinetOrderStatus,
@@ -246,23 +246,7 @@ export function CabinetOrdersTab() {
       )}
 
       {shipTarget && (
-        <EstimateDeliveryModal
-          title={t("shipModalTitle", { number: shipTarget.orderNumber })}
-          pending={updateStatus.isPending}
-          onConfirm={(estimatedDeliveryDays) =>
-            updateStatus.mutate(
-              { id: shipTarget.id, body: { status: "shipped", estimatedDeliveryDays } },
-              {
-                onSuccess: () => {
-                  toast.success(t("toastUpdated", { number: shipTarget.orderNumber }));
-                  setShipTarget(null);
-                },
-                onError: (err) => toast.error(err.message),
-              }
-            )
-          }
-          onClose={() => setShipTarget(null)}
-        />
+        <ShipOrderModal order={shipTarget} onClose={() => setShipTarget(null)} />
       )}
 
       {delayReasonTarget && (
@@ -315,6 +299,7 @@ function OrderExpandedContent({
       <ShippingDetail
         shippedAt={order.shippedAt}
         estimatedDeliveryDays={order.estimatedDeliveryDays}
+        expectedDeliveryDate={order.expectedDeliveryDate}
         deliveredAt={order.deliveredAt}
         delayReason={order.delayReason}
         intlLocale={intlLocale}
@@ -335,6 +320,17 @@ function OrderExpandedContent({
                 {item.itemName}
                 {item.unit && (
                   <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>
+                )}
+                {item.batches.length > 0 && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>
+                    <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{t("batchesLabel")}</span>
+                    {item.batches.map((b) => (
+                      <div key={b.id}>
+                        {new Date(`${b.expiryDate}T12:00:00`).toLocaleDateString(intlLocale)} ·{" "}
+                        {b.batchNumber || "—"} · {b.qty}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </td>
               <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
@@ -429,12 +425,14 @@ function DeliveryOutcomeCell({ order }: { order: MarketplaceOrderDto }) {
 function ShippingDetail({
   shippedAt,
   estimatedDeliveryDays,
+  expectedDeliveryDate,
   deliveredAt,
   delayReason,
   intlLocale,
 }: {
   shippedAt: string | null;
   estimatedDeliveryDays: number | null;
+  expectedDeliveryDate: string | null;
   deliveredAt: string | null;
   delayReason: string | null;
   intlLocale: string;
@@ -442,17 +440,22 @@ function ShippingDetail({
   const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
   if (!shippedAt) return null;
   const eta = getShippingEta(shippedAt, estimatedDeliveryDays);
+  // Prefer the authoritative supplier-set date (Phase 3, plan D4); fall back to the
+  // client-side derived one for orders shipped before that column was populated.
+  const expectedLabel = expectedDeliveryDate
+    ? new Date(`${expectedDeliveryDate}T12:00:00`).toLocaleDateString(intlLocale)
+    : eta
+    ? formatDate(eta.estimatedDeliveryDate.toISOString(), intlLocale)
+    : null;
 
   return (
     <>
       <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
         {t("shippedAtLabel", { date: formatDate(shippedAt, intlLocale) })}
-        {!deliveredAt && eta && (
+        {!deliveredAt && expectedLabel && (
           <>
             {" · "}
-            {t("estimatedDeliveryLabel", {
-              date: formatDate(eta.estimatedDeliveryDate.toISOString(), intlLocale),
-            })}
+            {t("estimatedDeliveryLabel", { date: expectedLabel })}
           </>
         )}
       </div>

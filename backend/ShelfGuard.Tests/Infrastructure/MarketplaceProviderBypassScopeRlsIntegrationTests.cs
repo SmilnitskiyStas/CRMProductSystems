@@ -402,7 +402,11 @@ public sealed class MarketplaceProviderBypassScopeRlsIntegrationTests : IAsyncLi
             new ItemRepository(db),
             new ItemService(new ItemRepository(db), new CategoryRepository(db)),
             new LocationRepository(db),
-            new UserRepository(db));
+            new UserRepository(db),
+            // Phase 3 (plan D4) — unused by this class's order-creation scenarios, but wired to
+            // the same AppDbContext so nothing runs on a substitute.
+            new TenantRepository(db),
+            new SupplierStockRepository(db));
     }
 
     private sealed record TwoClientOrderFixture(

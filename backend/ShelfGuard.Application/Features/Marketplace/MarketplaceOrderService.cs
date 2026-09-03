@@ -1,10 +1,14 @@
+using System.Globalization;
 using System.Text.Json;
 using ShelfGuard.Application.Features.Catalog;
 using ShelfGuard.Application.Features.Catalog.Dtos;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
+using ShelfGuard.Application.Features.Stock;
+using ShelfGuard.Application.Features.SupplierInventory;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Exceptions;
 using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Application.Features.Marketplace;
@@ -28,6 +32,23 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string DelayReasonRequiredError = "Вкажіть причину затримки доставки.";
     public const string OnlyShippedCanHaveDelayReasonError = "Причину затримки можна вказати лише для відправленого замовлення.";
     public const string DestinationStoreRequiredError = "Оберіть магазин-призначення для замовлення.";
+
+    // ── Phase 3 (plan D4): batch-consuming shipment ─────────────────────────────
+    public const string OnlyConfirmedCanShipError = "Відвантажити можна лише підтверджене замовлення.";
+    public const string SourceWarehouseNotFoundError = "Склад-джерело не знайдено.";
+    public const string SourceWarehouseRequiredError = "Оберіть склад, з якого відвантажуєте партії.";
+    public const string SupplierInventoryDisabledError =
+        "Складський облік постачальника вимкнено — відвантаження партій недоступне.";
+    public const string UnknownOrderLineError = "Позицію не знайдено в цьому замовленні.";
+    public const string BatchNotFoundError = "Партію не знайдено на складі.";
+    public const string BatchWarehouseMismatchError = "Партія належить іншому складу.";
+    public const string BatchItemMismatchError = "Партія не відповідає товару позиції замовлення.";
+    public const string NoActiveWarehouseError = "У вас ще немає активного складу.";
+    public const string StockChangedConcurrentlyError =
+        "Залишки щойно змінила інша операція. Оновіть дані та спробуйте ще раз.";
+
+    /// <summary>Module key gating supplier warehouses/batches (plan D7, provider-granted, default-off).</summary>
+    private const string SupplierInventoryModuleKey = "supplier_inventory";
 
     // ── TASK-598: marketplace catalog auto-provisioning ─────────────────────────
     public const string BarcodeCollisionError =
@@ -63,6 +84,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     private readonly IItemService _itemService;
     private readonly ILocationRepository _locations;
     private readonly IUserRepository _users;
+    private readonly ITenantRepository _tenants;
+    private readonly ISupplierStockRepository _supplierStock;
 
     public MarketplaceOrderService(
         IMarketplaceOrderRepository orders,
@@ -74,7 +97,9 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         IItemRepository items,
         IItemService itemService,
         ILocationRepository locations,
-        IUserRepository users)
+        IUserRepository users,
+        ITenantRepository tenants,
+        ISupplierStockRepository supplierStock)
     {
         _orders      = orders;
         _agreements  = agreements;
@@ -86,6 +111,8 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         _itemService = itemService;
         _locations   = locations;
         _users       = users;
+        _tenants     = tenants;
+        _supplierStock = supplierStock;
     }
 
     // ── Client side ───────────────────────────────────────────────────────────
@@ -330,51 +357,433 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
 
         if (request.Status == MarketplaceOrderStatus.Shipped)
         {
-            if (request.EstimatedDeliveryDays is null or <= 0)
-                return (null, EstimatedDeliveryDaysRequiredError);
-            order.ShippedAt = DateTimeOffset.UtcNow;
-            order.EstimatedDeliveryDays = request.EstimatedDeliveryDays;
+            // Phase 3 (plan D4): ONE ship code path. This legacy endpoint is exactly a
+            // ShipOrderAsync call with no source warehouse and no allocations — nothing is
+            // consumed from supplier_stock and the order simply moves to shipped, the
+            // pre-Phase-3 behaviour byte for byte (ETA validation, ShippedAt, the cross-tenant
+            // shipped notification). Keeping the two entry points on one implementation is what
+            // stops the richer /ship endpoint and this one from drifting apart on the invariants
+            // that matter (the confirmed-only gate, and who may write the outbox row).
+            //
+            // performedByUserId is Guid.Empty here: this endpoint's DTO carries no user, and the
+            // value is only ever used as SupplierStockMovement.PerformedBy — which this path
+            // never writes, because it never allocates.
+            var (shipped, shipError, _) = await ShipOrderAsync(
+                supplierTenantId, orderId,
+                new ShipOrderRequest(EstimatedDeliveryDays: request.EstimatedDeliveryDays),
+                performedByUserId: Guid.Empty, ct);
+            return (shipped, shipError);
         }
-        else if (request.Status == MarketplaceOrderStatus.Delivered)
-        {
+
+        if (request.Status == MarketplaceOrderStatus.Delivered)
             order.DeliveredAt = DateTimeOffset.UtcNow;
-        }
 
         order.Status    = request.Status;
         order.UpdatedAt = DateTimeOffset.UtcNow;
 
-        if (request.Status == MarketplaceOrderStatus.Shipped)
-        {
-            // TASK-584: mirrors TASK-582's SupplierAgreementService.MarkSignedAsync fix — the
-            // notification-queue insert below targets order.ClientTenantId (the recipient), while
-            // the ambient DB session here is authenticated as the SUPPLIER tenant (whoever called
-            // this endpoint). notification_queue's plain tenant_isolation RLS policy only allows
-            // TenantId = session tenant, so an unscoped insert would throw an unhandled Postgres
-            // RLS-violation exception (42501) that surfaces to the client as a masked 500/CORS
-            // error. Run the enqueue and the final SaveChangesAsync under an explicit override of
-            // the CLIENT tenant's RLS context instead — safe because order.ClientTenantId is
-            // already a trusted value at this point (the SupplierTenantId ownership check above
-            // already confirmed this order belongs to the calling supplier tenant), and
-            // marketplace_orders' own RLS policy is OR-based on both SupplierTenantId/
-            // ClientTenantId, so the status-change columns flushed by this same SaveChangesAsync
-            // call still satisfy their RLS under either tenant. Bonus: the status change and the
-            // outbox row commit atomically.
-            _orders.Update(order);
-            await _tenantSessionOverride.ExecuteAsync(order.ClientTenantId, async () =>
-            {
-                await EnqueueShippedNotificationAsync(order, ct);
-                await _orders.SaveChangesAsync(ct);
-                return true;
-            }, ct);
-        }
-        else
-        {
-            _orders.Update(order);
-            await _orders.SaveChangesAsync(ct);
-        }
+        _orders.Update(order);
+        await _orders.SaveChangesAsync(ct);
 
         return (await ToDtoAsync(order, ct), null);
     }
+
+    // ── Phase 3 (plan D4): batch-consuming shipment ─────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<(MarketplaceOrderDto? Order, string? Error, IReadOnlyList<string> Warnings)> ShipOrderAsync(
+        Guid supplierTenantId, Guid orderId, ShipOrderRequest request, Guid performedByUserId,
+        CancellationToken ct = default)
+    {
+        var order = await _orders.GetByIdAsync(orderId, ct);
+        if (order is null || order.SupplierTenantId != supplierTenantId)
+            return (null, OrderNotFoundError, []);
+
+        // Same gate the AllowedTransitions matrix enforces for the legacy endpoint, restated here
+        // because /ship is a second entry point that never consults that table.
+        if (order.Status != MarketplaceOrderStatus.Confirmed)
+            return (null, OnlyConfirmedCanShipError, []);
+
+        var (days, expectedDate, etaError) = ResolveDeliveryEstimate(request);
+        if (etaError is not null)
+            return (null, etaError, []);
+
+        var moduleOn = await SupplierInventoryEnabledAsync(supplierTenantId, ct);
+        var hasExplicitAllocations =
+            request.Lines?.Any(l => l.Allocations is { Count: > 0 }) == true;
+
+        var warnings = new List<string>();
+        var consumedStock = false;
+
+        if (request.SourceWarehouseId is not null || hasExplicitAllocations)
+        {
+            // Allocating is only meaningful with the warehouse module on — otherwise the tenant
+            // has no supplier_stock to consume and the request is a client-side mistake, not
+            // something to silently drop.
+            if (!moduleOn)
+                return (null, SupplierInventoryDisabledError, []);
+
+            if (request.SourceWarehouseId is null)
+                return (null, SourceWarehouseRequiredError, []);
+
+            var warehouseId = request.SourceWarehouseId.Value;
+            if (!await _supplierStock.WarehouseExistsAsync(supplierTenantId, warehouseId, ct))
+                return (null, SourceWarehouseNotFoundError, []);
+
+            var allocationError = await AllocateBatchesAsync(
+                order, warehouseId, request.Lines, performedByUserId, warnings, ct);
+            if (allocationError is not null)
+                return (null, allocationError, []);
+
+            order.SourceWarehouseId = warehouseId;
+            consumedStock = true;
+        }
+
+        order.EstimatedDeliveryDays = days;
+        order.ExpectedDeliveryDate  = expectedDate;
+        order.ShippedAt             = DateTimeOffset.UtcNow;
+        order.Status                = MarketplaceOrderStatus.Shipped;
+        order.UpdatedAt             = DateTimeOffset.UtcNow;
+        _orders.Update(order);
+
+        if (consumedStock)
+        {
+            // ONE atomic commit under the SUPPLIER session: the supplier_stock decrements, their
+            // ship movements, the marketplace_order_item_batches rows, and the order's own status
+            // change. Every one of those tables is writable by the supplier session
+            // (marketplace_orders' tenant_isolation is OR-based on both tenants;
+            // marketplace_order_item_batches' is keyed on SupplierTenantId), so nothing here
+            // needs an override — and it MUST flush before the client-override block below, or
+            // the still-pending batch inserts would be flushed with app.tenant_id set to the
+            // CLIENT, failing their WITH CHECK with a 42501.
+            //
+            // Deliberately not routed through SupplierStockService.FefoConsumeAsync even though
+            // it implements the same walk: that method commits per call, so a failure on line 3
+            // would leave lines 1-2's stock consumed for an order that never shipped, and a
+            // retry would consume them a second time. Shipment is one write boundary.
+            try
+            {
+                await _supplierStock.SaveChangesAsync(ct);
+            }
+            catch (ConcurrencyConflictException)
+            {
+                // supplier_stock.Quantity carries an xmin token — a concurrent adjust/shipment
+                // touched a batch we were allocating. Nothing was written (single transaction);
+                // ask the caller to reload and retry rather than overwrite.
+                return (null, StockChangedConcurrentlyError, []);
+            }
+        }
+
+        // TASK-584: mirrors TASK-582's SupplierAgreementService.MarkSignedAsync fix — the
+        // notification-queue insert below targets order.ClientTenantId (the recipient), while the
+        // ambient DB session here is authenticated as the SUPPLIER tenant (whoever called this
+        // endpoint). notification_queue's plain tenant_isolation RLS policy only allows TenantId =
+        // session tenant, so an unscoped insert would throw an unhandled Postgres RLS-violation
+        // exception (42501) that surfaces to the client as a masked 500/CORS error. Run the
+        // enqueue and the SaveChangesAsync tail under an explicit override of the CLIENT tenant's
+        // RLS context instead — safe because order.ClientTenantId is already a trusted value at
+        // this point (the SupplierTenantId ownership check above already confirmed this order
+        // belongs to the calling supplier tenant), and marketplace_orders' own RLS policy is
+        // OR-based on both tenants, so the status-change columns flushed by this same call still
+        // satisfy their RLS under either tenant.
+        //
+        // On the allocation path the order row was already committed above, so this call only
+        // flushes the outbox row — a failed enqueue can no longer roll back a shipment whose
+        // stock has already moved.
+        await _tenantSessionOverride.ExecuteAsync(order.ClientTenantId, async () =>
+        {
+            await EnqueueShippedNotificationAsync(order, ct);
+            await _orders.SaveChangesAsync(ct);
+            return true;
+        }, ct);
+
+        return (await ToDtoAsync(order, ct), null, warnings);
+    }
+
+    /// <inheritdoc />
+    public async Task<(ShipSuggestionDto? Suggestion, string? Error)> GetShipSuggestionAsync(
+        Guid supplierTenantId, Guid orderId, Guid? warehouseId, CancellationToken ct = default)
+    {
+        var order = await _orders.GetByIdAsync(orderId, ct);
+        if (order is null || order.SupplierTenantId != supplierTenantId)
+            return (null, OrderNotFoundError);
+
+        var (warehouse, warehouseError) = await ResolveWarehouseAsync(supplierTenantId, warehouseId, ct);
+        if (warehouseError is not null)
+            return (null, warehouseError);
+
+        var lines = new List<ShipSuggestionLineDto>();
+        var warnings = new List<string>();
+
+        // Two order lines can reference the same SupplierItem; without this the proposal would
+        // hand the same physical batch quantity to both of them.
+        var claimed = new Dictionary<Guid, decimal>();
+
+        foreach (var line in order.Items.OrderBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase))
+        {
+            var allocations = new List<ShipSuggestionAllocationDto>();
+            var remaining = line.Qty;
+
+            if (line.SupplierItemId is not null)
+            {
+                var batches = await _supplierStock.GetFefoOrderedAsync(
+                    supplierTenantId, line.SupplierItemId.Value, warehouse!.Id, ct);
+
+                foreach (var batch in batches)
+                {
+                    if (remaining <= 0) break;
+
+                    var available = batch.Quantity - claimed.GetValueOrDefault(batch.Id);
+                    if (available <= 0) continue;
+
+                    var take = Math.Min(available, remaining);
+                    claimed[batch.Id] = claimed.GetValueOrDefault(batch.Id) + take;
+                    remaining -= take;
+
+                    allocations.Add(new ShipSuggestionAllocationDto(
+                        batch.Id, batch.ExpiryDate, batch.BatchNumber, batch.Quantity, take));
+                }
+            }
+
+            var covered = line.Qty - remaining;
+            if (remaining > 0)
+                warnings.Add(ShortfallWarning(line.ItemName, covered, line.Qty));
+
+            lines.Add(new ShipSuggestionLineDto(
+                line.Id, line.SupplierItemId, line.ItemName, line.Unit,
+                line.Qty, covered, remaining, allocations));
+        }
+
+        return (new ShipSuggestionDto(order.Id, warehouse!.Id, warehouse.Name, lines, warnings), null);
+    }
+
+    /// <summary>
+    /// Explicit <paramref name="warehouseId"/> → validated to be an active warehouse Location of
+    /// this supplier tenant (a foreign id reads exactly like a missing one — never confirm that
+    /// some other tenant owns it). Omitted → the tenant's first active warehouse, which is the
+    /// only one most suppliers will ever have.
+    /// </summary>
+    private async Task<(Location? Warehouse, string? Error)> ResolveWarehouseAsync(
+        Guid supplierTenantId, Guid? warehouseId, CancellationToken ct)
+    {
+        if (warehouseId is not null)
+        {
+            var explicitWarehouse = await _locations.GetByIdAsync(warehouseId.Value, ct);
+            return explicitWarehouse is null
+                   || explicitWarehouse.TenantId != supplierTenantId
+                   || explicitWarehouse.Type != "warehouse"
+                   || !explicitWarehouse.IsActive
+                ? (null, SourceWarehouseNotFoundError)
+                : (explicitWarehouse, null);
+        }
+
+        var owned = await _locations.GetAllAsync(ct);
+        var first = owned
+            .Where(l => l.TenantId == supplierTenantId && l.IsActive && l.Type == "warehouse")
+            .OrderBy(l => l.CreatedAt)
+            .FirstOrDefault();
+
+        return first is null ? (null, NoActiveWarehouseError) : (first, null);
+    }
+
+    /// <summary>
+    /// Covers every order line from <paramref name="warehouseId"/>: explicit allocations when the
+    /// caller sent any for that line, auto-FEFO otherwise. Writes the decrements, the <c>ship</c>
+    /// movements and the <c>MarketplaceOrderItemBatch</c> rows into the change tracker WITHOUT
+    /// saving — the caller commits everything, including the order's status change, in one go.
+    ///
+    /// An under-covered line is not an error (user decision 2026-09-02: a shortfall ships with a
+    /// warning; the uncovered quantity arrives without batch data and the client types the expiry
+    /// in by hand). Returning a non-null error means the request itself was malformed — an
+    /// unknown order line, or a batch that does not belong to this warehouse/item.
+    /// </summary>
+    private async Task<string?> AllocateBatchesAsync(
+        MarketplaceOrder order, Guid warehouseId, List<ShipLineDto>? lines,
+        Guid performedByUserId, List<string> warnings, CancellationToken ct)
+    {
+        var explicitByLine = (lines ?? [])
+            .Where(l => l.Allocations is { Count: > 0 })
+            .GroupBy(l => l.OrderItemId)
+            .ToDictionary(g => g.Key, g => g.SelectMany(l => l.Allocations!).ToList());
+
+        // Fail loudly on a line id that isn't part of this order rather than silently ignoring it
+        // — that shape of mistake would otherwise ship goods with no batch record at all.
+        if (explicitByLine.Keys.Any(id => order.Items.All(i => i.Id != id)))
+            return UnknownOrderLineError;
+
+        foreach (var line in order.Items)
+        {
+            decimal covered;
+
+            if (explicitByLine.TryGetValue(line.Id, out var allocations))
+            {
+                var (explicitCovered, error) = await ApplyExplicitAllocationsAsync(
+                    order, line, warehouseId, allocations, performedByUserId, ct);
+                if (error is not null) return error;
+                covered = explicitCovered;
+            }
+            else if (line.SupplierItemId is not null)
+            {
+                covered = await ApplyFefoAsync(order, line, warehouseId, performedByUserId, ct);
+            }
+            else
+            {
+                // The supplier catalog entry behind this line was deleted (FK SET NULL) — there
+                // is nothing left to FEFO against. Ships uncovered, with a warning.
+                covered = 0m;
+            }
+
+            if (covered < line.Qty)
+                warnings.Add(ShortfallWarning(line.ItemName, covered, line.Qty));
+        }
+
+        return null;
+    }
+
+    private async Task<(decimal Covered, string? Error)> ApplyExplicitAllocationsAsync(
+        MarketplaceOrder order, MarketplaceOrderItem line, Guid warehouseId,
+        List<ShipAllocationDto> allocations, Guid performedByUserId, CancellationToken ct)
+    {
+        var covered = 0m;
+
+        foreach (var allocation in allocations)
+        {
+            if (allocation.Qty <= 0) continue;
+
+            // Tenant-scoped by the repository AND by RLS; a foreign batch id resolves to null.
+            var batch = await _supplierStock.GetByIdAsync(order.SupplierTenantId, allocation.SupplierStockId, ct);
+            if (batch is null) return (0m, BatchNotFoundError);
+            if (batch.WarehouseId != warehouseId) return (0m, BatchWarehouseMismatchError);
+            if (line.SupplierItemId is null || batch.SupplierItemId != line.SupplierItemId.Value)
+                return (0m, BatchItemMismatchError);
+
+            // The supplier may ask for more than the batch holds (a stale UI, or a concurrent
+            // adjust): clamp instead of failing — the difference simply becomes a shortfall
+            // warning, exactly like the auto-FEFO path.
+            var take = Math.Min(allocation.Qty, batch.Quantity);
+            if (take <= 0) continue;
+
+            await ConsumeBatchAsync(order, line, batch, take, warehouseId, performedByUserId, ct);
+            covered += take;
+        }
+
+        return (covered, null);
+    }
+
+    /// <summary>
+    /// Auto-FEFO fallback for a line the caller sent no explicit allocations for: nearest expiry
+    /// first, exactly like <c>SupplierStockService.FefoConsumeAsync</c> — but without its internal
+    /// SaveChanges, so the whole shipment stays one write boundary (see ShipOrderAsync).
+    /// </summary>
+    private async Task<decimal> ApplyFefoAsync(
+        MarketplaceOrder order, MarketplaceOrderItem line, Guid warehouseId,
+        Guid performedByUserId, CancellationToken ct)
+    {
+        var batches = await _supplierStock.GetFefoOrderedAsync(
+            order.SupplierTenantId, line.SupplierItemId!.Value, warehouseId, ct);
+
+        var remaining = line.Qty;
+        foreach (var batch in batches)
+        {
+            if (remaining <= 0) break;
+
+            // The Quantity > 0 filter ran in the DB against the pre-shipment value; a batch an
+            // earlier line of this same order already drained is still in the result set.
+            if (batch.Quantity <= 0) continue;
+
+            var take = Math.Min(batch.Quantity, remaining);
+            await ConsumeBatchAsync(order, line, batch, take, warehouseId, performedByUserId, ct);
+            remaining -= take;
+        }
+
+        return line.Qty - remaining;
+    }
+
+    /// <summary>
+    /// Decrements one batch and records the two rows that make the shipment auditable and
+    /// re-playable on the client side: a <c>ship</c> <see cref="SupplierStockMovement"/> (supplier
+    /// ledger) and a <see cref="MarketplaceOrderItemBatch"/> (the hand-off the client reads to
+    /// prefill its receiving draft). Never saves.
+    /// </summary>
+    private async Task ConsumeBatchAsync(
+        MarketplaceOrder order, MarketplaceOrderItem line, SupplierStock batch, decimal take,
+        Guid warehouseId, Guid performedByUserId, CancellationToken ct)
+    {
+        var before = batch.Quantity;
+        batch.Quantity -= take;
+        batch.Status = StockStatus.Compute(batch.Quantity, batch.ExpiryDate, batch.LastCheckedAt);
+        _supplierStock.Update(batch);
+
+        await _supplierStock.AddMovementAsync(new SupplierStockMovement
+        {
+            TenantId        = order.SupplierTenantId,
+            MovementType    = "ship",
+            SupplierStockId = batch.Id,
+            SupplierItemId  = batch.SupplierItemId,
+            FromWarehouseId = warehouseId,
+            Quantity        = take,
+            QuantityBefore  = before,
+            QuantityAfter   = batch.Quantity,
+            ReferenceType   = "marketplace_order",
+            ReferenceId     = order.Id,
+            PerformedBy     = performedByUserId,
+        }, ct);
+
+        // ExpiryDate/BatchNumber are SNAPSHOTS, never a live join back to supplier_stock — the
+        // project's "expiry_date and batch_number never change on transfer" rule, applied across
+        // the tenant boundary.
+        await _orders.AddOrderItemBatchAsync(new MarketplaceOrderItemBatch
+        {
+            OrderItemId      = line.Id,
+            OrderId          = order.Id,
+            SupplierTenantId = order.SupplierTenantId,
+            ClientTenantId   = order.ClientTenantId,
+            SupplierStockId  = batch.Id,
+            ExpiryDate       = batch.ExpiryDate,
+            BatchNumber      = batch.BatchNumber,
+            Qty              = take,
+        }, ct);
+    }
+
+    /// <summary>
+    /// The two delivery-estimate forms fill each other in — the legacy status endpoint only ever
+    /// sends <c>EstimatedDeliveryDays</c>, the Phase 3 ship modal may send either or both. At
+    /// least one is required: the client-facing "shipped" notification quotes the day count, and
+    /// Phase 4's in-transit maths needs the date.
+    /// </summary>
+    private static (int? Days, DateOnly? Expected, string? Error) ResolveDeliveryEstimate(
+        ShipOrderRequest request)
+    {
+        var days = request.EstimatedDeliveryDays;
+        var expected = request.ExpectedDeliveryDate;
+
+        if (days is <= 0)
+            return (null, null, EstimatedDeliveryDaysRequiredError);
+        if (days is null && expected is null)
+            return (null, null, EstimatedDeliveryDaysRequiredError);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        days ??= Math.Max(1, expected!.Value.DayNumber - today.DayNumber);
+        expected ??= today.AddDays(days.Value);
+
+        return (days, expected, null);
+    }
+
+    private async Task<bool> SupplierInventoryEnabledAsync(Guid supplierTenantId, CancellationToken ct)
+    {
+        // Runs on the supplier's own session, so tenants' tenant_isolation resolves exactly this
+        // one row — the same lookup RequireModuleAttribute performs for controller-level gating.
+        var tenant = await _tenants.GetByIdAsync(supplierTenantId, ct);
+        return tenant is not null && tenant.HasModule(SupplierInventoryModuleKey);
+    }
+
+    private static string ShortfallWarning(string itemName, decimal covered, decimal ordered) =>
+        $"«{itemName}»: розподілено {FormatQty(covered)} з {FormatQty(ordered)}";
+
+    /// <summary>Trims the numeric(12,3) trailing zeros so "5" reads as "5", not "5.000".</summary>
+    private static string FormatQty(decimal value) =>
+        value == decimal.Truncate(value)
+            ? decimal.Truncate(value).ToString(CultureInfo.InvariantCulture)
+            : value.ToString("0.###", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Records why a shipped order's delivery is running late (TASK-585). Notifies the
@@ -768,9 +1177,19 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             o.Items
                 .OrderBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase)
                 .Select(i => new MarketplaceOrderItemDto(
-                    i.Id, i.SupplierItemId, i.ItemName, i.Unit, i.Price, i.Qty, i.LineTotal))
+                    i.Id, i.SupplierItemId, i.ItemName, i.Unit, i.Price, i.Qty, i.LineTotal,
+                    // Phase 3 (D4): FEFO order, so the client's prefilled receiving sub-rows come
+                    // out nearest-expiry-first without the UI having to re-sort them.
+                    i.Batches
+                        .OrderBy(b => b.ExpiryDate)
+                        .ThenBy(b => b.CreatedAt)
+                        .Select(b => new MarketplaceOrderItemBatchDto(
+                            b.Id, b.ExpiryDate, b.BatchNumber, b.Qty, b.SupplierStockId))
+                        .ToList()))
                 .ToList(),
-            o.DestinationStoreId);
+            o.DestinationStoreId,
+            o.SourceWarehouseId,
+            o.ExpectedDeliveryDate);
 
     // ── Order receiving support (TASK-586) ──────────────────────────────────────
 

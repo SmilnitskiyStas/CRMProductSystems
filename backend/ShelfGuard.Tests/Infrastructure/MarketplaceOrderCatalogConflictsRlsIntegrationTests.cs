@@ -293,7 +293,12 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             new ItemRepository(db),
             new ItemService(new ItemRepository(db), new CategoryRepository(db)),
             new LocationRepository(db),
-            new UserRepository(db));
+            new UserRepository(db),
+            // Phase 3 (plan D4): real repositories — these two only participate in the shipping
+            // path, which this class never exercises, but they must resolve against the same
+            // AppDbContext so nothing here silently runs on a substitute.
+            new TenantRepository(db),
+            new SupplierStockRepository(db));
     }
 
     private static async Task<string?> CurrentRoleAsync(AppDbContext db)
