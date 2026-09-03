@@ -730,6 +730,8 @@ same Domain-constant→endpoint pattern as `GET /api/marketplace/item-categories
 GET /api/marketplace/suppliers?regionCode=&category=&plan=&page=&pageSize=   [AllowAnonymous]
   -> 200 PagedResult<SupplierListItemDto>
 ```
+`SupplierListItemDto` gained `compositeScore: number | null` (TASK-689, 0.000–1.000) — the
+worker-computed composite quality score, for the listing card.
 `regionCode` is a structured region code and filters on **declared delivery coverage**, not the
 free-text HQ region: a supplier matches when `DeliveryCoverage.served` contains the code **and** the
 code is not in `DeliveryCoverage.notServed`. A profile with `DeliveryCoverage = null` (legacy,
@@ -809,20 +811,25 @@ fields (`deliveryDaysMin`, `deliveryDaysMax`, `minOrderAmount`, `note`) are all 
 legacy `deliveryRegions: string[]` field stays on the wire (deprecated, fed from the obsolete
 `supplier_profiles.DeliveryRegions` column) until the TASK-661 backfill runs.
 
-#### `SupplierMetricsDto` — 4 new worker-computed fields
+#### `SupplierMetricsDto` — worker-computed fields
 ```json
 {
   "deliveryByRegion": [ { "regionCode": "UA-30", "avgDeliveryDays": 3.5, "sampleSize": 2 } ],
   "deliverySampleSize": 4,
   "responseSampleSize": 2,
-  "aggregatesComputedAt": "2026-08-31T02:00:00Z"
+  "aggregatesComputedAt": "2026-08-31T02:00:00Z",
+  "compositeScore": 0.874,
+  "onTimeDeliveryRate": 0.9231
 }
 ```
 All nullable — the nightly `supplier-metrics-recompute` job may not have run, or there may be no
 data behind a given metric (`known-issues.md` KI-038). `deliverySampleSize` ≥ Σ
 `deliveryByRegion[].sampleSize` (orders with a null `DestinationRegionCode` feed the overall average
 only). `rating` is the only metric still written synchronously (at review time); `qualityScore` has
-no data source and is always null; `orderAccuracy`/`cancellationRate` are 0–1 fractions.
+no data source and is always null; `orderAccuracy`/`cancellationRate`/`onTimeDeliveryRate` are 0–1
+fractions; `compositeScore` (TASK-689, 0.000–1.000) is the equal-weight mean of the available
+non-null components `{ rating/5, orderAccuracy, onTimeDeliveryRate, clamp(1 − responseTimeHours/48, 0, 1) }`
+— it, not the dead `qualityScore`, is the headline "quality" signal.
 
 #### `GET /api/marketplace/suppliers/{id}/metrics-history` — supplier metric trend-chart data (TASK-671, ADR-036 amendment)
 
@@ -850,6 +857,8 @@ SupplierMetricsHistoryPointDto {
   responseTimeHours: number | null
   deliverySampleSize: number | null
   responseSampleSize: number | null
+  compositeScore: number | null       (0.000–1.000, TASK-689)
+  onTimeDeliveryRate: number | null    (0–1 fraction, TASK-689)
 }
 ```
 
@@ -858,6 +867,32 @@ accrues ≥2 daily rows (i.e., ~2 days after the feature ships and the nightly j
 see `known-issues.md` KI-042. `QualityScore` has no data source and is permanently null; its
 detail-page chart and section remain in the UI but render an empty state.
 Cross-tenant read: uses `IProviderRlsOverride` (same pattern as `/coverage` endpoint, ADR-035).
+
+#### `GET /api/supplier-cabinet/metrics-history` — the supplier's own metric history + period deltas (TASK-689, Phase 6c, request #9)
+
+```
+GET /api/supplier-cabinet/metrics-history?days=90
+  [Authorize SupplierCabinet] + [RequireModule("marketplace_supplier")] + supplier permission client_reviews (same gate as GET /metrics)
+  Query: days={int}  — clamped to [7, 365], default 90
+  200: SupplierMetricsHistoryResponseDto
+  404: { error }   — calling tenant has no owner-managed supplier
+```
+The cabinet mirror of the buyer-facing `metrics-history` endpoint: the supplier reads its **own**
+daily snapshots (resolved from the calling tenant, same `ResolveAsync` as `GET /metrics` — no id
+accepted from the client). Reuses `SupplierMetricsHistoryPointDto` (now incl. `compositeScore` /
+`onTimeDeliveryRate`).
+```ts
+SupplierMetricsHistoryResponseDto {
+  points: SupplierMetricsHistoryPointDto[]   // oldest→newest
+  deltas: {                                  // latest snapshot in window vs. the oldest in window
+    compositeScore, avgDeliveryDays, orderAccuracy,
+    onTimeDeliveryRate, rating, responseTimeHours: PeriodMetricDto | null
+  }
+}
+// PeriodMetricDto (TASK-336): { current, previous, percentChange: number | null }
+```
+Each delta is `null` when either endpoint (oldest / latest) has no value for that metric. `points`
+empty ⇒ every delta `null`. Snapshots come from the same `supplier_metrics_snapshots` table.
 
 #### `SupplierProfileUpdateDto` / `CabinetProfileUpdateDto` — `deliveryCoverage` patch field
 ```

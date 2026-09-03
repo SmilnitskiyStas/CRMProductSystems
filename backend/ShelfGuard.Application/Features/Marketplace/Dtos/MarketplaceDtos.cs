@@ -1,6 +1,12 @@
+using ShelfGuard.Application.Features.Analytics.Dtos;
+
 namespace ShelfGuard.Application.Features.Marketplace.Dtos;
 
 /// <summary>Compact supplier card for the public marketplace listing.</summary>
+/// <param name="CompositeScore">
+/// TASK-689 (Phase 6d): equal-weight composite quality score 0.000–1.000, or null when the nightly
+/// worker job has no components to average yet.
+/// </param>
 public record SupplierListItemDto(
     Guid Id,
     string Name,
@@ -9,7 +15,8 @@ public record SupplierListItemDto(
     string[]? Categories,
     decimal? Rating,
     int? AvgDeliveryDays,
-    bool IsPublic);
+    bool IsPublic,
+    decimal? CompositeScore = null);
 
 /// <summary>Full supplier profile. Premium fields are null for unauthenticated / free-plan callers.</summary>
 /// <remarks>
@@ -45,7 +52,11 @@ public record SupplierMetricsDto(
     IReadOnlyList<RegionDeliveryStatDto>? DeliveryByRegion = null,
     int? DeliverySampleSize = null,
     int? ResponseSampleSize = null,
-    DateTimeOffset? AggregatesComputedAt = null);
+    DateTimeOffset? AggregatesComputedAt = null,
+    // TASK-689 (Phase 6d): worker-computed composite quality score (0.000–1.000) and on-time
+    // delivery rate (0.0000–1.0000). Null until the nightly job has components to work with.
+    decimal? CompositeScore = null,
+    decimal? OnTimeDeliveryRate = null);
 
 // ── Delivery coverage (TASK-650 / plan «eventual-whistling-rabbit», TASK-665) ─
 
@@ -111,7 +122,33 @@ public record SupplierMetricsHistoryPointDto(
     decimal? CancellationRate,
     decimal? ResponseTimeHours,
     int? DeliverySampleSize,
-    int? ResponseSampleSize);
+    int? ResponseSampleSize,
+    // TASK-689 (Phase 6d): composite quality score + on-time delivery rate for this snapshot day.
+    decimal? CompositeScore = null,
+    decimal? OnTimeDeliveryRate = null);
+
+/// <summary>
+/// Supplier self-service metric history (TASK-689, Phase 6c, request #9) — the cabinet mirror of
+/// the buyer-facing <c>GET /api/marketplace/suppliers/{id}/metrics-history</c>, served by
+/// <c>GET /api/supplier-cabinet/metrics-history</c>. <see cref="Points"/> are oldest-first daily
+/// snapshots; <see cref="Deltas"/> compares the latest snapshot in the window against the oldest.
+/// </summary>
+public record SupplierMetricsHistoryResponseDto(
+    IReadOnlyList<SupplierMetricsHistoryPointDto> Points,
+    SupplierMetricsHistoryDeltasDto Deltas);
+
+/// <summary>
+/// Period-over-period movement for the supplier's headline metrics (latest snapshot vs. the
+/// snapshot closest to <c>days</c> ago, or the first available). Each field is null when either
+/// endpoint has no value for that metric. Reuses the analytics <see cref="PeriodMetricDto"/>.
+/// </summary>
+public record SupplierMetricsHistoryDeltasDto(
+    PeriodMetricDto? CompositeScore,
+    PeriodMetricDto? AvgDeliveryDays,
+    PeriodMetricDto? OrderAccuracy,
+    PeriodMetricDto? OnTimeDeliveryRate,
+    PeriodMetricDto? Rating,
+    PeriodMetricDto? ResponseTimeHours);
 
 public record SupplierItemDto(
     Guid Id,

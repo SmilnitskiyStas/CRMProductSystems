@@ -164,18 +164,7 @@ public sealed class MarketplaceService : IMarketplaceService
         var clampedDays = Math.Clamp(days, MetricsHistoryMinDays, MetricsHistoryMaxDays);
         var rows = await _repo.GetMetricsHistoryAsync(supplierId, clampedDays, ct);
 
-        return rows
-            .Select(s => new SupplierMetricsHistoryPointDto(
-                s.SnapshotDate,
-                s.Rating,
-                s.AvgDeliveryDays,
-                s.OrderAccuracy,
-                s.QualityScore,
-                s.CancellationRate,
-                s.ResponseTimeHours,
-                s.DeliverySampleSize,
-                s.ResponseSampleSize))
-            .ToList();
+        return rows.Select(ToHistoryPointDto).ToList();
     }
 
     /// <summary>
@@ -586,7 +575,8 @@ public sealed class MarketplaceService : IMarketplaceService
             DeserializeStringArray(p.Categories),
             m?.Rating,
             m?.AvgDeliveryDays.HasValue == true ? (int?)Math.Round(m.AvgDeliveryDays!.Value) : null,
-            p.IsPublic);
+            p.IsPublic,
+            m?.CompositeScore);
 
     private static SupplierProfileDto ToFullProfileDto(
         SupplierProfile p, Supplier s, SupplierMetrics? m, bool showPremium,
@@ -618,7 +608,18 @@ public sealed class MarketplaceService : IMarketplaceService
         new(m.Rating, m.AvgDeliveryDays, m.OrderAccuracy, m.QualityScore,
             m.CancellationRate, m.ResponseTimeHours, m.UpdatedAt,
             ParseDeliveryByRegion(m.DeliveryByRegion),
-            m.DeliverySampleSize, m.ResponseSampleSize, m.AggregatesComputedAt);
+            m.DeliverySampleSize, m.ResponseSampleSize, m.AggregatesComputedAt,
+            m.CompositeScore, m.OnTimeDeliveryRate);
+
+    /// <summary>
+    /// Maps one <see cref="SupplierMetricsSnapshot"/> row to its chart-ready DTO. Shared by the
+    /// buyer-facing history endpoint and the supplier-cabinet self-stats endpoint (TASK-689) so the
+    /// two stay in lockstep.
+    /// </summary>
+    internal static SupplierMetricsHistoryPointDto ToHistoryPointDto(SupplierMetricsSnapshot s) =>
+        new(s.SnapshotDate, s.Rating, s.AvgDeliveryDays, s.OrderAccuracy, s.QualityScore,
+            s.CancellationRate, s.ResponseTimeHours, s.DeliverySampleSize, s.ResponseSampleSize,
+            s.CompositeScore, s.OnTimeDeliveryRate);
 
     private static readonly JsonSerializerOptions JsonbReadOptions = new()
     {

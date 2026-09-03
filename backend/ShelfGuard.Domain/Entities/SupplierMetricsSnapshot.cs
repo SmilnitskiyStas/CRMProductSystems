@@ -27,6 +27,17 @@ public sealed class SupplierMetricsSnapshot
     public decimal? CancellationRate { get; set; }
     /// <summary>Average response time in hours.</summary>
     public decimal? ResponseTimeHours { get; set; }
+    /// <summary>
+    /// TASK-689: fraction of delivered orders that arrived on/before their promised
+    /// <c>ExpectedDeliveryDate</c> (0.0000–1.0000). Point-in-time copy of
+    /// <see cref="SupplierMetrics.OnTimeDeliveryRate"/> for this calendar day.
+    /// </summary>
+    public decimal? OnTimeDeliveryRate { get; set; }
+    /// <summary>
+    /// TASK-689: equal-weight composite quality score (0.000–1.000). Point-in-time copy of
+    /// <see cref="SupplierMetrics.CompositeScore"/> for this calendar day.
+    /// </summary>
+    public decimal? CompositeScore { get; set; }
     /// <summary>Number of delivered orders behind <see cref="AvgDeliveryDays"/>.</summary>
     public int? DeliverySampleSize { get; set; }
     /// <summary>Number of chat sessions behind <see cref="ResponseTimeHours"/>.</summary>

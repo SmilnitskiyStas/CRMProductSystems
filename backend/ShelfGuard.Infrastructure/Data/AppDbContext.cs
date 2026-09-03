@@ -1563,6 +1563,9 @@ public sealed class AppDbContext : DbContext
             e.Property(m => m.Rating).HasColumnType("numeric(3,2)");
             e.Property(m => m.CancellationRate).HasColumnType("numeric(5,4)");
             e.Property(m => m.ResponseTimeHours).HasColumnType("numeric(6,2)");
+            // TASK-689 (Phase 6d): worker-computed composite quality signals.
+            e.Property(m => m.OnTimeDeliveryRate).HasColumnType("numeric(5,4)");
+            e.Property(m => m.CompositeScore).HasColumnType("numeric(4,3)");
             // TASK-649: worker-computed aggregates. DeliveryByRegion is a jsonb array
             // [{ regionCode, avgDeliveryDays, sampleSize }]; the other three use default mapping.
             e.Property(m => m.DeliveryByRegion).HasColumnType("jsonb");
@@ -1595,6 +1598,9 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.Rating).HasColumnType("numeric(3,2)");
             e.Property(s => s.CancellationRate).HasColumnType("numeric(5,4)");
             e.Property(s => s.ResponseTimeHours).HasColumnType("numeric(6,2)");
+            // TASK-689 (Phase 6d): worker-computed composite quality signals (mirror SupplierMetrics).
+            e.Property(s => s.OnTimeDeliveryRate).HasColumnType("numeric(5,4)");
+            e.Property(s => s.CompositeScore).HasColumnType("numeric(4,3)");
             e.Property(s => s.DeliverySampleSize).HasColumnType("integer");
             e.Property(s => s.ResponseSampleSize).HasColumnType("integer");
             e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");

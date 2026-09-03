@@ -23,6 +23,23 @@ public sealed class SupplierMetrics
     public decimal? ResponseTimeHours { get; set; }
 
     /// <summary>
+    /// TASK-689 (plan `1-partitioned-book.md` Phase 6d, request #10): fraction of delivered orders
+    /// that arrived on or before their promised <c>ExpectedDeliveryDate</c> (0.0000–1.0000).
+    /// Worker-computed over the same 365-day delivered sample as <see cref="AvgDeliveryDays"/>,
+    /// counting only orders that carried an <c>ExpectedDeliveryDate</c>. Null when no delivered
+    /// order in the window had a promised date.
+    /// </summary>
+    public decimal? OnTimeDeliveryRate { get; set; }
+    /// <summary>
+    /// TASK-689: equal-weight mean of the available (non-null) components
+    /// { <see cref="Rating"/>/5, <see cref="OrderAccuracy"/>, <see cref="OnTimeDeliveryRate"/>,
+    /// clamp(1 − <see cref="ResponseTimeHours"/>/48, 0, 1) }, rounded to 3 decimals (0.000–1.000).
+    /// Worker-computed; null when every component is null. <c>QualityScore</c> stays permanently dead
+    /// (no data source) — this is the composite quality signal the marketplace UI renders instead.
+    /// </summary>
+    public decimal? CompositeScore { get; set; }
+
+    /// <summary>
     /// TASK-649: JSONB array of measured delivery time per destination region, computed by the
     /// nightly supplier-metrics worker job. Shape:
     /// [{ "regionCode": "UA-32", "avgDeliveryDays": 2.4, "sampleSize": 17 }].

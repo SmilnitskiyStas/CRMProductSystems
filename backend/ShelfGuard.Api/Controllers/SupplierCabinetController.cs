@@ -199,6 +199,25 @@ public sealed class SupplierCabinetController : ControllerBase
         return error is not null ? NotFound(new { error }) : Ok(metrics);
     }
 
+    /// <summary>
+    /// TASK-689 (Phase 6c, request #9): the own supplier's daily metric-snapshot history plus
+    /// period-over-period deltas (read-only). <paramref name="days"/> clamps to [7, 365], default 90.
+    /// </summary>
+    [HttpGet("metrics-history")]
+    [ProducesResponseType(typeof(SupplierMetricsHistoryResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMetricsHistory([FromQuery] int days = 90, CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+        if (!SupplierPermissionAuthorization.HasPermission(User, SupplierPermissions.ClientReviews)) return Forbid();
+
+        var result = await _cabinet.GetMetricsHistoryAsync(tenantId.Value, days, ct);
+        return result is null
+            ? NotFound(new { error = SupplierCabinetService.CabinetNotAvailableError })
+            : Ok(result);
+    }
+
     /// <summary>Posts/updates the own supplier's reply to a review left for it.</summary>
     [HttpPut("reviews/{id:guid}/reply")]
     [ProducesResponseType(typeof(PublicSupplierReviewDto), StatusCodes.Status200OK)]

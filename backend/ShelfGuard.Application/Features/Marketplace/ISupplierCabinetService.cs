@@ -41,6 +41,15 @@ public interface ISupplierCabinetService
         Guid tenantId, CancellationToken ct = default);
 
     /// <summary>
+    /// TASK-689 (Phase 6c, request #9): the caller's own daily metric snapshots (oldest-first) plus
+    /// period-over-period deltas — the cabinet mirror of the buyer-facing
+    /// <c>GET /api/marketplace/suppliers/{id}/metrics-history</c>. <paramref name="days"/> is clamped
+    /// to [7, 365]. Returns null when the calling tenant has no owner-managed supplier (→ 404).
+    /// </summary>
+    Task<SupplierMetricsHistoryResponseDto?> GetMetricsHistoryAsync(
+        Guid supplierTenantId, int days, CancellationToken ct = default);
+
+    /// <summary>
     /// Posts/updates the caller's own supplier's reply to a review. Returns an error
     /// (without leaking whether the review exists for a different supplier) if the
     /// review does not belong to the caller's own supplier.

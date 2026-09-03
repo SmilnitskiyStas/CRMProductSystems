@@ -80,6 +80,23 @@ public sealed class MarketplaceServiceTests
         Assert.Empty(result.Items);
     }
 
+    [Fact]
+    public async Task GetPublicSuppliersAsync_MapsCompositeScoreFromMetrics()
+    {
+        // TASK-689 (Phase 6d): the listing card surfaces the worker-computed composite quality score.
+        var profileA = MakeProfile(_supplierIdA, _tenantId, isPublic: true);
+        var supplierA = MakeSupplier(_supplierIdA, "Supplier A");
+        var metricsA = new SupplierMetrics { SupplierId = _supplierIdA, TenantId = _tenantId, CompositeScore = 0.874m };
+
+        _repo.GetPublicSuppliersAsync(null, null, null, 1, 20, Arg.Any<CancellationToken>())
+             .Returns(new List<(SupplierProfile, Supplier, SupplierMetrics?)> { (profileA, supplierA, metricsA) });
+        _repo.CountPublicSuppliersAsync(null, null, null, Arg.Any<CancellationToken>()).Returns(1);
+
+        var result = await _sut.GetPublicSuppliersAsync(null, null, null, 1, 20);
+
+        Assert.Equal(0.874m, result.Items[0].CompositeScore);
+    }
+
     /// <summary>
     /// Sets up the repo so that _supplierIdA belongs to another tenant and the
     /// reviewer (_tenantId) is an ordinary client tenant — the happy review path.
@@ -813,6 +830,7 @@ public sealed class MarketplaceServiceTests
                      Rating = 4.50m, AvgDeliveryDays = 2.40m, OrderAccuracy = 0.9800m,
                      QualityScore = null, CancellationRate = 0.0100m, ResponseTimeHours = 5.50m,
                      DeliverySampleSize = 12, ResponseSampleSize = 4,
+                     CompositeScore = 0.912m, OnTimeDeliveryRate = 0.8750m,
                  },
                  new()
                  {
@@ -835,10 +853,14 @@ public sealed class MarketplaceServiceTests
         Assert.Equal(5.50m, result[0].ResponseTimeHours);
         Assert.Equal(12, result[0].DeliverySampleSize);
         Assert.Equal(4, result[0].ResponseSampleSize);
+        Assert.Equal(0.912m, result[0].CompositeScore);
+        Assert.Equal(0.8750m, result[0].OnTimeDeliveryRate);
 
         Assert.Equal(d2, result[1].Date);
         Assert.Equal(4.60m, result[1].Rating);
         Assert.Null(result[1].OrderAccuracy);
+        Assert.Null(result[1].CompositeScore);
+        Assert.Null(result[1].OnTimeDeliveryRate);
     }
 
     // ── AdminUpdateSupplierItemAsync (TASK-284) ───────────────────────────────

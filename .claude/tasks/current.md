@@ -951,3 +951,39 @@ business-type).
 6a у `MarketplaceOrderServiceTests` (5), 6e у `MarketplaceServiceTests` (7) + `CategoryServiceTests` (limit/mapping) +
 `CategoryRepositorySearchIntegrationTests` (3). `.claude/docs/api-contracts.md` оновлено. openapi.json —
 спільний борг. `mobile/`/worker/`supplier_metrics*` не чіпав. НЕ закомічено.
+
+## TASK-689 — Supplier Phase 6c/6d: metrics history + композитний бал якості (backend + worker)
+
+**Status:** review (НЕ закомічено) · **Agent:** backend-developer · Plan `1-partitioned-book.md` Phase 6d/6c · **амендмент ADR-036**
+Log: `.claude/logs/tasks/689_2026-09-03_supplier-phase6c-6d-metrics_backend-developer.md`
+
+**6d (#10):** міграція `20260903131322_AddSupplierCompositeScore` — `CompositeScore numeric(4,3)` +
+`OnTimeDeliveryRate numeric(5,4)` на `supplier_metrics` І `supplier_metrics_snapshots`, БЕЗ зміни RLS.
+**Застосовано до dev `:5435/crm`**, НЕ prod. Entities + EF config + snapshot regen.
+Worker `supplier-metrics-recompute.job.ts`: **розширено write-boundary набір** (ASCII-бокс оновлено —
+disjoint/окремий-statement/no-xmin інваріант збережено). `computeOnTimeDeliveryRate` (на тій самій
+365-дн delivered-вибірці що `AvgDeliveryDays`; лише замовлення з `ExpectedDeliveryDate`; null-ETA
+викл. з num+denom; denom 0 → null) + `computeCompositeScore` (рівнозважене середнє наявних
+`{Rating/5, OrderAccuracy, OnTimeDeliveryRate, clamp(1−ResponseTimeHours/48,0,1)}`, 3dp).
+**Rating-ordering: варіант (a)** — дешевий `SELECT "Rating"` ПЕРЕД upsert, `CompositeScore` рахується
+в JS і пишеться в ОДНОМУ `UPSERT_METRICS_SQL` разом з `OnTimeDeliveryRate` (без 2-го UPDATE, без
+whole-row upsert). Snapshot INSERT теж розширено. `Rating` тільки читається, ніколи не пишеться.
+DTO: `SupplierMetricsDto` / `SupplierListItemDto` / `SupplierMetricsHistoryPointDto` += нові поля;
+`MarketplaceService.ToMetricsDto`/`ToListItemDto` + новий спільний `ToHistoryPointDto`.
+
+**6c (#9):** `ISupplierCabinetService.GetMetricsHistoryAsync(supplierTenantId, days)` →
+`SupplierMetricsHistoryResponseDto? { points, deltas }` (null ⇒ 404). Impl: `ResolveAsync` (як
+`GetMetricsAsync`) → реюз `_repo.GetMetricsHistoryAsync` (oldest-first, вікно). `deltas` =
+`PeriodMetricDto.Of(latest-in-window, oldest-in-window)` для compositeScore/avgDeliveryDays/
+orderAccuracy/onTimeDeliveryRate/rating/responseTimeHours; кожна null коли будь-який кінець null;
+порожні points ⇒ усі deltas null. `days` clamp 7..365. Контролер:
+`GET /api/supplier-cabinet/metrics-history?days=` — клас-гейт `SupplierCabinet`+`marketplace_supplier`,
+per-action `client_reviews` (як `GET /metrics`). Нові DTO `SupplierMetricsHistoryResponseDto` +
+`SupplierMetricsHistoryDeltasDto`.
+
+`dotnet build -c Release` clean · `dotnet test --filter "SupplierMetrics|SupplierCabinet|Marketplace|RlsCrossTenant"`
+**417 passed, 0 failed** (integration проти dev Postgres), RLS-audit green · worker `tsc --noEmit` clean.
+Нові тести: `SupplierCabinetServiceTests` (6: oldest-first, delta latest-vs-oldest, missing-endpoint→null,
+empty, clamp Theory, no-profile→null), `MarketplaceServiceTests` (compositeScore на картці лістингу +
+composite/onTime через history). `.claude/docs/{decisions,api-contracts}.md` оновлено. openapi.json —
+спільний борг. `mobile/`/`frontend/`/`SupplierItem`/`SupplierAnalytics/` не чіпав. НЕ закомічено.

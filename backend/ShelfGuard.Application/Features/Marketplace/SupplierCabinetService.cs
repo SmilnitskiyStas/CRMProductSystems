@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ShelfGuard.Application.Features.Analytics.Dtos;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Users;
 using ShelfGuard.Application.Features.Users.Dtos;
@@ -186,6 +187,49 @@ public sealed class SupplierCabinetService : ISupplierCabinetService
             return (new SupplierMetricsDto(null, null, null, null, null, null, DateTimeOffset.UtcNow), null);
 
         return (MarketplaceService.ToMetricsDto(m), null);
+    }
+
+    private const int MetricsHistoryMinDays = 7;
+    private const int MetricsHistoryMaxDays = 365;
+
+    public async Task<SupplierMetricsHistoryResponseDto?> GetMetricsHistoryAsync(
+        Guid supplierTenantId, int days, CancellationToken ct = default)
+    {
+        var resolved = await ResolveAsync(supplierTenantId, ct);
+        if (resolved is null) return null;
+
+        var clampedDays = Math.Clamp(days, MetricsHistoryMinDays, MetricsHistoryMaxDays);
+        // Same snapshot source as the buyer-facing endpoint. The rows come back oldest-first and
+        // already windowed to SnapshotDate >= today - clampedDays, so the first row IS "the
+        // snapshot closest to `days` ago (or the first available)".
+        var rows = await _repo.GetMetricsHistoryAsync(resolved.Value.Supplier.Id, clampedDays, ct);
+
+        var points = rows.Select(MarketplaceService.ToHistoryPointDto).ToList();
+
+        SupplierMetricsHistoryDeltasDto deltas;
+        if (points.Count == 0)
+        {
+            deltas = new SupplierMetricsHistoryDeltasDto(null, null, null, null, null, null);
+        }
+        else
+        {
+            var first = points[0];
+            var last = points[^1];
+            deltas = new SupplierMetricsHistoryDeltasDto(
+                Delta(last.CompositeScore, first.CompositeScore),
+                Delta(last.AvgDeliveryDays, first.AvgDeliveryDays),
+                Delta(last.OrderAccuracy, first.OrderAccuracy),
+                Delta(last.OnTimeDeliveryRate, first.OnTimeDeliveryRate),
+                Delta(last.Rating, first.Rating),
+                Delta(last.ResponseTimeHours, first.ResponseTimeHours));
+        }
+
+        return new SupplierMetricsHistoryResponseDto(points, deltas);
+
+        static PeriodMetricDto? Delta(decimal? current, decimal? previous) =>
+            current.HasValue && previous.HasValue
+                ? PeriodMetricDto.Of(current.Value, previous.Value)
+                : null;
     }
 
     public const int MaxReplyTextLength = 2000;

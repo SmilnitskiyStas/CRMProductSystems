@@ -24,8 +24,14 @@ import { db } from "../db";
 // ║ This job writes ONLY these `supplier_metrics` columns:                                    ║
 // ║     AvgDeliveryDays · DeliverySampleSize · DeliveryByRegion ·                              ║
 // ║     ResponseTimeHours · ResponseSampleSize ·                                              ║
-// ║     CancellationRate · OrderAccuracy · AggregatesComputedAt                                ║
+// ║     CancellationRate · OrderAccuracy · OnTimeDeliveryRate · CompositeScore ·               ║
+// ║     AggregatesComputedAt                                                                   ║
 // ║ (plus SupplierId / TenantId on the INSERT branch, when the row does not exist yet).       ║
+// ║ TASK-689 (plan 1-partitioned-book.md Phase 6d, ADR-036 amendment) added `OnTimeDeliveryRate`║
+// ║ and `CompositeScore` to this set — both worker-computed, both written in the SAME single    ║
+// ║ `UPSERT_METRICS_SQL` statement as the columns above, so the disjointness argument below is  ║
+// ║ unchanged. `CompositeScore` is DERIVED partly from `Rating`, but `Rating` is only READ      ║
+// ║ (a cheap `RATING_PRE_READ_SQL` before the upsert) — never written here.                     ║
 // ║                                                                                           ║
 // ║ It must NEVER write `Rating` — that column is owned by the synchronous review path         ║
 // ║ (MarketplaceRepository.UpsertMetricsRatingAsync, ADR-035), which also owns `UpdatedAt`.    ║
@@ -49,7 +55,9 @@ import { db } from "../db";
 // (`SupplierId`, `SnapshotDate`) index — so the copy carries no clobber risk and a same-day re-run
 // is an idempotent overwrite (`ON CONFLICT DO UPDATE`). `Rating` / `QualityScore` for the snapshot
 // are read straight back from the `supplier_metrics` row this loop just upserted (this job computes
-// neither column). Feeds `GET /api/marketplace/suppliers/{id}/metrics-history`.
+// neither column); `OnTimeDeliveryRate` / `CompositeScore` (TASK-689) ARE computed here and copied
+// into the snapshot from the same values written to the live row. Feeds both
+// `GET /api/marketplace/suppliers/{id}/metrics-history` and `GET /api/supplier-cabinet/metrics-history`.
 //
 // Population: every `suppliers` row that has a `supplier_profiles` row — deliberately NO
 // `IsPublic` filter, so the numbers are already there the moment a supplier publishes.
@@ -81,10 +89,16 @@ type SupplierRow = {
   tenant_id: string;
 };
 
-/** One delivered order: how long it took, and where it went (NULL for historical orders). */
+/**
+ * One delivered order: how long it took, where it went (NULL for historical orders), and whether
+ * it beat its promised date. `onTime` is `null` when the order carried no `ExpectedDeliveryDate`
+ * (every order shipped before that column existed, plus orders shipped without an ETA) — those are
+ * excluded from the on-time rate entirely, numerator and denominator both (TASK-689).
+ */
 export type DeliverySampleRow = {
   regionCode: string | null;
   days: number;
+  onTime: boolean | null;
 };
 
 export type RegionDeliveryStat = {
@@ -184,6 +198,54 @@ export function computeOrderAccuracy(accurate: number, evaluated: number): numbe
   return roundTo(accurate / evaluated, 4);
 }
 
+/**
+ * TASK-689: on-time / (on-time + late), over the SAME 365-day delivered sample as
+ * `computeAvgDeliveryDays`, but counting ONLY the orders that carried an `ExpectedDeliveryDate`
+ * (`row.onTime !== null`). An order with no promised date can't be judged on-time, so it is
+ * excluded from both sides of the ratio. Returns `null` when no delivered order in the window had
+ * a promised date. Fraction 0.0000–1.0000, rounded to 4dp (matches the `numeric(5,4)` column).
+ */
+export function computeOnTimeDeliveryRate(rows: DeliverySampleRow[]): number | null {
+  const judged = rows.filter((r) => r.onTime !== null);
+  if (judged.length === 0) return null;
+  const onTime = judged.filter((r) => r.onTime === true).length;
+  return roundTo(onTime / judged.length, 4);
+}
+
+/**
+ * TASK-689 (plan 1-partitioned-book.md Phase 6d, request #10) — composite quality score: the
+ * equal-weight mean of whichever of these four components is available (non-null):
+ *   · `Rating` / 5                                  (review score, 1–5 → 0–1)
+ *   · `OrderAccuracy`                               (0–1 fraction)
+ *   · `OnTimeDeliveryRate`                          (0–1 fraction)
+ *   · clamp(1 − `ResponseTimeHours` / 48, 0, 1)     (48h+ to first reply ⇒ 0; instant ⇒ 1)
+ * Nulls are skipped, not treated as 0 (a supplier with no reviews yet is not "a zero-star
+ * supplier"). Returns `null` only when ALL four are null. Rounded to 3dp (`numeric(4,3)`).
+ * Precedent: ADR-034's `(R+F+M)/3` loyalty score.
+ */
+export function computeCompositeScore(components: {
+  rating: number | null;
+  orderAccuracy: number | null;
+  onTimeDeliveryRate: number | null;
+  responseTimeHours: number | null;
+}): number | null {
+  const parts: number[] = [];
+  if (components.rating !== null) parts.push(clamp01(components.rating / 5));
+  if (components.orderAccuracy !== null) parts.push(clamp01(components.orderAccuracy));
+  if (components.onTimeDeliveryRate !== null) parts.push(clamp01(components.onTimeDeliveryRate));
+  if (components.responseTimeHours !== null)
+    parts.push(clamp01(1 - components.responseTimeHours / 48));
+
+  if (parts.length === 0) return null;
+  return roundTo(parts.reduce((sum, p) => sum + p, 0) / parts.length, 3);
+}
+
+/** Clamp to [0, 1]; guards non-finite input to 0. */
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
 // ── SQL ──────────────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -205,10 +267,20 @@ const SUPPLIERS_SQL = `
  *
  * `DeliveredAt >= ShippedAt` drops clock-skew / manual-correction rows that would otherwise
  * contribute a negative duration.
+ *
+ * TASK-689: `on_time` rides on this same sample so the on-time rate and the delivery average are
+ * always derived from exactly the same set of orders. It is NULL when the order has no
+ * `ExpectedDeliveryDate` (a `date` column, added by the supplier-portal expansion; NULL for every
+ * order shipped before it existed or shipped without an ETA) — such orders are dropped from the
+ * on-time ratio entirely. Otherwise it is `DeliveredAt::date <= ExpectedDeliveryDate`.
  */
 const DELIVERY_SAMPLES_SQL = `
   SELECT o."DestinationRegionCode" AS region_code,
-         (EXTRACT(EPOCH FROM (o."DeliveredAt" - o."ShippedAt")) / 86400.0)::float8 AS days
+         (EXTRACT(EPOCH FROM (o."DeliveredAt" - o."ShippedAt")) / 86400.0)::float8 AS days,
+         CASE
+           WHEN o."ExpectedDeliveryDate" IS NULL THEN NULL
+           ELSE (o."DeliveredAt"::date <= o."ExpectedDeliveryDate")
+         END AS on_time
   FROM marketplace_orders o
   WHERE o."SupplierTenantId" = $1
     AND o."Status" = 'delivered'
@@ -302,20 +374,33 @@ const ACCURACY_COUNTS_SQL = `
 `;
 
 /**
+ * TASK-689: `Rating` read BEFORE the upsert, so `CompositeScore` (computed in JS and written in the
+ * one `UPSERT_METRICS_SQL` statement below) can use the current review score. Returns no row for
+ * the ~majority of suppliers that have never been reviewed — `rating` is then simply null, which is
+ * also what `CompositeScore` would see post-upsert (the upsert never touches `Rating`). This is a
+ * plain READ; `Rating` stays owned by the synchronous review path.
+ */
+const RATING_PRE_READ_SQL = `
+  SELECT "Rating" FROM supplier_metrics WHERE "SupplierId" = $1
+`;
+
+/**
  * Load-or-create in one statement. Most suppliers have NO `supplier_metrics` row at all — the
  * only thing that creates one today is UpsertMetricsRatingAsync, on the first review — so this
  * cannot be a bare UPDATE. Conflict target is the UNIQUE index on "SupplierId"
  * (IX_supplier_metrics_SupplierId), the same 1-to-1 key that repository path uses.
  *
- * The DO UPDATE list is the write boundary from the header, verbatim. "TenantId" is set on
- * insert only; "Rating", "QualityScore" and "UpdatedAt" appear nowhere in this statement.
+ * The DO UPDATE list is the write boundary from the header, verbatim (TASK-689 added
+ * "OnTimeDeliveryRate" + "CompositeScore" — still one statement, still disjoint from the
+ * synchronous "Rating"/"UpdatedAt"/"QualityScore" writer). "TenantId" is set on insert only;
+ * "Rating", "QualityScore" and "UpdatedAt" appear nowhere in this statement.
  */
 const UPSERT_METRICS_SQL = `
   INSERT INTO supplier_metrics
     ("SupplierId", "TenantId", "AvgDeliveryDays", "DeliverySampleSize", "DeliveryByRegion",
      "ResponseTimeHours", "ResponseSampleSize", "CancellationRate", "OrderAccuracy",
-     "AggregatesComputedAt")
-  VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, NOW())
+     "OnTimeDeliveryRate", "CompositeScore", "AggregatesComputedAt")
+  VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())
   ON CONFLICT ("SupplierId") DO UPDATE SET
     "AvgDeliveryDays"      = EXCLUDED."AvgDeliveryDays",
     "DeliverySampleSize"   = EXCLUDED."DeliverySampleSize",
@@ -324,6 +409,8 @@ const UPSERT_METRICS_SQL = `
     "ResponseSampleSize"   = EXCLUDED."ResponseSampleSize",
     "CancellationRate"     = EXCLUDED."CancellationRate",
     "OrderAccuracy"        = EXCLUDED."OrderAccuracy",
+    "OnTimeDeliveryRate"   = EXCLUDED."OnTimeDeliveryRate",
+    "CompositeScore"       = EXCLUDED."CompositeScore",
     "AggregatesComputedAt" = EXCLUDED."AggregatesComputedAt"
 `;
 
@@ -351,8 +438,8 @@ const SNAPSHOT_UPSERT_SQL = `
   INSERT INTO supplier_metrics_snapshots
     ("Id", "SupplierId", "TenantId", "SnapshotDate", "AvgDeliveryDays", "OrderAccuracy",
      "QualityScore", "Rating", "CancellationRate", "ResponseTimeHours", "DeliverySampleSize",
-     "ResponseSampleSize", "CreatedAt")
-  VALUES (gen_random_uuid(), $1, $2, CURRENT_DATE, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+     "ResponseSampleSize", "OnTimeDeliveryRate", "CompositeScore", "CreatedAt")
+  VALUES (gen_random_uuid(), $1, $2, CURRENT_DATE, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
   ON CONFLICT ("SupplierId", "SnapshotDate") DO UPDATE SET
     "AvgDeliveryDays"    = EXCLUDED."AvgDeliveryDays",
     "OrderAccuracy"      = EXCLUDED."OrderAccuracy",
@@ -361,7 +448,9 @@ const SNAPSHOT_UPSERT_SQL = `
     "CancellationRate"   = EXCLUDED."CancellationRate",
     "ResponseTimeHours"  = EXCLUDED."ResponseTimeHours",
     "DeliverySampleSize" = EXCLUDED."DeliverySampleSize",
-    "ResponseSampleSize" = EXCLUDED."ResponseSampleSize"
+    "ResponseSampleSize" = EXCLUDED."ResponseSampleSize",
+    "OnTimeDeliveryRate" = EXCLUDED."OnTimeDeliveryRate",
+    "CompositeScore"     = EXCLUDED."CompositeScore"
 `;
 
 async function runSupplierMetricsRecompute(): Promise<void> {
@@ -381,18 +470,21 @@ async function runSupplierMetricsRecompute(): Promise<void> {
     for (const supplier of suppliersRes.rows) {
       const tenantId = supplier.tenant_id;
 
-      const deliveryRes = await client.query<{ region_code: string | null; days: number }>(
-        DELIVERY_SAMPLES_SQL,
-        [tenantId, DELIVERY_WINDOW_DAYS]
-      );
+      const deliveryRes = await client.query<{
+        region_code: string | null;
+        days: number;
+        on_time: boolean | null;
+      }>(DELIVERY_SAMPLES_SQL, [tenantId, DELIVERY_WINDOW_DAYS]);
       const deliverySamples: DeliverySampleRow[] = deliveryRes.rows.map((r) => ({
         regionCode: r.region_code,
         days: Number(r.days),
+        onTime: r.on_time,
       }));
 
       const { avgDeliveryDays, sampleSize: deliverySampleSize } =
         computeAvgDeliveryDays(deliverySamples);
       const regionBreakdown = buildRegionBreakdown(deliverySamples);
+      const onTimeDeliveryRate = computeOnTimeDeliveryRate(deliverySamples);
       regionRowsWritten += regionBreakdown.length;
       if (deliverySampleSize > 0) withDeliveryData++;
 
@@ -423,6 +515,22 @@ async function runSupplierMetricsRecompute(): Promise<void> {
         accuracyRes.rows[0]?.evaluated ?? 0
       );
 
+      // TASK-689: read the current review score BEFORE the upsert so CompositeScore (written in the
+      // one UPSERT_METRICS_SQL statement) can factor it in. No row for a never-reviewed supplier →
+      // rating stays null. This is a plain READ — Rating remains owned by the synchronous review
+      // path and is never written here.
+      const preRatingRes = await client.query<{ Rating: string | null }>(RATING_PRE_READ_SQL, [
+        supplier.supplier_id,
+      ]);
+      const ratingForComposite =
+        preRatingRes.rows[0]?.Rating != null ? Number(preRatingRes.rows[0].Rating) : null;
+      const compositeScore = computeCompositeScore({
+        rating: ratingForComposite,
+        orderAccuracy,
+        onTimeDeliveryRate,
+        responseTimeHours,
+      });
+
       // Sample sizes are written as real counts (0, never NULL) — "based on 0 orders" is a fact
       // the UI can render, whereas NULL is indistinguishable from "this job never ran".
       // DeliveryByRegion is NULL rather than '[]' when there is nothing to break down, matching
@@ -437,6 +545,8 @@ async function runSupplierMetricsRecompute(): Promise<void> {
         responseSampleSize,
         cancellationRate === null ? null : cancellationRate.toFixed(4),
         orderAccuracy === null ? null : orderAccuracy.toFixed(4),
+        onTimeDeliveryRate === null ? null : onTimeDeliveryRate.toFixed(4),
+        compositeScore === null ? null : compositeScore.toFixed(3),
       ]);
 
       // TASK-671: append-only daily snapshot — a FULL copy of the metric set. Rating and
@@ -459,6 +569,8 @@ async function runSupplierMetricsRecompute(): Promise<void> {
         responseTimeHours === null ? null : responseTimeHours.toFixed(2),
         deliverySampleSize,
         responseSampleSize,
+        onTimeDeliveryRate === null ? null : onTimeDeliveryRate.toFixed(4),
+        compositeScore === null ? null : compositeScore.toFixed(3),
       ]);
       snapshotsWritten++;
     }

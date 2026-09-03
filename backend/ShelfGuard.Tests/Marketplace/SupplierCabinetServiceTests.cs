@@ -309,6 +309,126 @@ public sealed class SupplierCabinetServiceTests
         Assert.Null(metrics!.Rating);
     }
 
+    // ── GetMetricsHistoryAsync (TASK-689, Phase 6c) ──────────────────────────────
+
+    private static SupplierMetricsSnapshot Snap(
+        DateOnly date, decimal? composite = null, decimal? avgDelivery = null,
+        decimal? orderAccuracy = null, decimal? onTime = null, decimal? rating = null,
+        decimal? responseHours = null) =>
+        new()
+        {
+            SnapshotDate = date,
+            CompositeScore = composite,
+            AvgDeliveryDays = avgDelivery,
+            OrderAccuracy = orderAccuracy,
+            OnTimeDeliveryRate = onTime,
+            Rating = rating,
+            ResponseTimeHours = responseHours,
+        };
+
+    [Fact]
+    public async Task GetMetricsHistoryAsync_NoOwnerManagedProfile_ReturnsNull_DoesNotQueryHistory()
+    {
+        ArrangeNoCabinet();
+
+        Assert.Null(await _sut.GetMetricsHistoryAsync(_tenantId, 90));
+        await _repo.DidNotReceive().GetMetricsHistoryAsync(
+            Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetMetricsHistoryAsync_ReturnsSnapshotsOldestFirst_PreservingRepoOrder()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        var d1 = new DateOnly(2026, 8, 1);
+        var d2 = new DateOnly(2026, 8, 20);
+        _repo.GetMetricsHistoryAsync(supplier.Id, Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierMetricsSnapshot>
+             {
+                 Snap(d1, composite: 0.700m, onTime: 0.6000m),
+                 Snap(d2, composite: 0.850m, onTime: 0.9000m),
+             });
+
+        var result = await _sut.GetMetricsHistoryAsync(_tenantId, 90);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.Points.Count);
+        Assert.Equal(d1, result.Points[0].Date);
+        Assert.Equal(0.700m, result.Points[0].CompositeScore);
+        Assert.Equal(d2, result.Points[1].Date);
+        Assert.Equal(0.9000m, result.Points[1].OnTimeDeliveryRate);
+    }
+
+    [Fact]
+    public async Task GetMetricsHistoryAsync_DeltaIsLatestVsOldestInWindow()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        _repo.GetMetricsHistoryAsync(supplier.Id, Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierMetricsSnapshot>
+             {
+                 Snap(new DateOnly(2026, 8, 1), composite: 0.60m, rating: 4.0m),
+                 Snap(new DateOnly(2026, 8, 10), composite: 0.70m, rating: 4.2m),
+                 Snap(new DateOnly(2026, 8, 20), composite: 0.90m, rating: 4.5m),
+             });
+
+        var result = await _sut.GetMetricsHistoryAsync(_tenantId, 90);
+
+        Assert.Equal(0.90m, result!.Deltas.CompositeScore!.Current);
+        Assert.Equal(0.60m, result.Deltas.CompositeScore.Previous);
+        Assert.Equal(4.5m, result.Deltas.Rating!.Current);
+        Assert.Equal(4.0m, result.Deltas.Rating.Previous);
+    }
+
+    [Fact]
+    public async Task GetMetricsHistoryAsync_MissingMetricEndpoint_YieldsNullDelta()
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        _repo.GetMetricsHistoryAsync(supplier.Id, Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierMetricsSnapshot>
+             {
+                 Snap(new DateOnly(2026, 8, 1), composite: null, onTime: 0.5000m),
+                 Snap(new DateOnly(2026, 8, 20), composite: 0.80m, onTime: null),
+             });
+
+        var result = await _sut.GetMetricsHistoryAsync(_tenantId, 90);
+
+        Assert.Null(result!.Deltas.CompositeScore);      // oldest endpoint null
+        Assert.Null(result.Deltas.OnTimeDeliveryRate);   // latest endpoint null
+    }
+
+    [Fact]
+    public async Task GetMetricsHistoryAsync_NoSnapshots_EmptyPointsAllNullDeltas()
+    {
+        ArrangeOwnSupplier();
+        _repo.GetMetricsHistoryAsync(Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierMetricsSnapshot>());
+
+        var result = await _sut.GetMetricsHistoryAsync(_tenantId, 90);
+
+        Assert.NotNull(result);
+        Assert.Empty(result!.Points);
+        Assert.Null(result.Deltas.CompositeScore);
+        Assert.Null(result.Deltas.Rating);
+    }
+
+    [Theory]
+    [InlineData(0, 7)]
+    [InlineData(3, 7)]
+    [InlineData(90, 90)]
+    [InlineData(365, 365)]
+    [InlineData(9999, 365)]
+    public async Task GetMetricsHistoryAsync_ClampsDaysTo7To365(int requested, int expected)
+    {
+        var (_, supplier) = ArrangeOwnSupplier();
+        _repo.GetMetricsHistoryAsync(supplier.Id, Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(new List<SupplierMetricsSnapshot>());
+
+        await _sut.GetMetricsHistoryAsync(_tenantId, requested);
+
+        await _repo.Received(1).GetMetricsHistoryAsync(
+            supplier.Id, expected, Arg.Any<CancellationToken>());
+    }
+
     // ── Lazy backfill (TASK-289): self-heal a supplier tenant with no profile yet ──
 
     [Fact]

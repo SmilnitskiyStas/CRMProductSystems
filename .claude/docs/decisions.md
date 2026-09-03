@@ -11,7 +11,7 @@ Full text for **ADR-037 … ADR-027** is in this file. **ADR-026 and older** →
 | ADR | Decision |
 |---|---|
 | ADR-037 | Provider-controlled `mobile_app` + `analytics` module keys — whole "Застосунок" section and "Аналітика" reports section gated; per-action `[RequireModule]` on the shared `AnalyticsController`; no backfill, default-off |
-| ADR-036 | Supplier delivery coverage + performance metrics — Ukraine region registry, `MarketplaceOrder.DestinationRegionCode` snapshot, coverage not premium-gated, `supplier-metrics-recompute` worker write-boundary |
+| ADR-036 | Supplier delivery coverage + performance metrics — Ukraine region registry, `MarketplaceOrder.DestinationRegionCode` snapshot, coverage not premium-gated, `supplier-metrics-recompute` worker write-boundary · **amended 2026-09-03**: write-boundary set grows by `OnTimeDeliveryRate` + `CompositeScore` (worker-computed, same disjointness argument) |
 | ADR-035 | `IProviderRlsOverride` — marketplace provider bypass scoped to one repository method, replacing session-level `SET app.role` |
 | ADR-034 | CRM loyalty tier ladder, consumer self-service, support tickets, reviews — phone-change verification, composite-score formula, per-item tier discount, worker write boundary |
 | ADR-033 | Marketplace order receiving — client-confirmed receipt (scan/qty/expiry) replaces supplier one-click Deliver; split client-write / supplier-read RLS · **amended 2026-09-03**: `marketplace_order_item_batches` with the INVERSE split (supplier-write / client-read), receipt items now 1→N per order line |
@@ -281,6 +281,36 @@ Consequences:
 - Metric-history trend charts stay empty until `supplier_metrics_snapshots` accrues ≥2 daily rows (i.e., ~2 days after the nightly job has run twice) — documented in `known-issues.md` KI-042.
 
 Implemented: TASK-670 (database-engineer, new table + RLS + indexes), TASK-671 (backend-developer, worker snapshot write + endpoint), TASK-672 (frontend-developer, detail page + trend charts).
+
+### 2026-09-03 amendment: composite quality score + on-time delivery rate (TASK-689, plan `1-partitioned-book.md` Phase 6d/6c)
+
+Amends **Decision 4** (the `supplier-metrics-recompute` write-boundary). The job's fixed disjoint
+`supplier_metrics` column set now also includes **`OnTimeDeliveryRate` `numeric(5,4)`** and
+**`CompositeScore` `numeric(4,3)`** — both worker-computed, both written in the *same single*
+`UPSERT_METRICS_SQL` statement as the existing worker-owned columns, so the safety argument is
+unchanged: still one worker `UPDATE` touching columns disjoint from the synchronous
+`Rating`/`UpdatedAt`/`QualityScore` writer, still no `xmin` needed, still no whole-row upsert.
+`CompositeScore` is *derived* partly from `Rating` but `Rating` is only **read** (a cheap
+`SELECT "Rating"` before the upsert — no row for a never-reviewed supplier → treated as null);
+it is never written here. `QualityScore` stays permanently dead (no data source).
+
+- **`OnTimeDeliveryRate`** = on-time / (on-time + late) over the *same* 365-day delivered sample as
+  `AvgDeliveryDays`, counting only orders that carried an `ExpectedDeliveryDate` (D5) —
+  `DeliveredAt::date <= ExpectedDeliveryDate`. Orders with a null `ExpectedDeliveryDate` are excluded
+  from both numerator and denominator (can't judge on-time without a promised date). Null when the
+  window has no order with a promised date.
+- **`CompositeScore`** = equal-weight mean of the *available* (non-null) components
+  `{ Rating/5, OrderAccuracy, OnTimeDeliveryRate, clamp(1 − ResponseTimeHours/48, 0, 1) }`, rounded
+  to 3dp; null only when all four are null. Precedent: ADR-034's `(R+F+M)/3`.
+- Both columns are mirrored onto `supplier_metrics_snapshots` (same migration
+  `20260903131322_AddSupplierCompositeScore`) and copied into the nightly snapshot from the same
+  values written to the live row. No RLS change — the columns inherit the existing triad on both
+  tables; no new table, RLS audit surface unchanged.
+- Surfaced on `SupplierMetricsDto`, `SupplierListItemDto.CompositeScore`, and
+  `SupplierMetricsHistoryPointDto`. Phase 6c adds `GET /api/supplier-cabinet/metrics-history` — the
+  cabinet mirror of the buyer-facing history endpoint, returning `{ points, deltas }` where `deltas`
+  is period-over-period (`PeriodMetricDto`) for compositeScore / avgDeliveryDays / orderAccuracy /
+  onTimeDeliveryRate / rating / responseTimeHours (latest snapshot vs. the oldest in the window).
 
 ## ADR-035: `IProviderRlsOverride` — scoping the marketplace provider bypass to one repository method, replacing session-level `SET app.role`
 Date: 2026-08-30
