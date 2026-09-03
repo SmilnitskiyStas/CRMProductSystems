@@ -496,6 +496,7 @@ POST /api/supplier-cabinet/contract-settings/signature-image|stamp-image  multip
 GET  /api/supplier-cabinet/orders                                  -> MarketplaceOrderDto[]
 POST /api/supplier-cabinet/orders/{id}/status  { status, reason?, estimatedDeliveryDays? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled; cancel requires reason, ship requires estimatedDeliveryDays (>0, TASK-584) and enqueues client notification "marketplace_order.shipped". No transition out of shipped any more (TASK-586, ADR-033) — status:"delivered" on a shipped order always 400s "Перехід зі статусу 'shipped' у 'delivered' неможливий."; delivered is now set only by the client's own receiving flow, see "Marketplace order receiving" below.
 POST /api/supplier-cabinet/orders/{id}/delay-reason  { reason }    -> dto | 400 (empty reason / order not shipped) | 404; supplier-only, only while status=shipped (TASK-585), enqueues client notification "marketplace_order.delay_reason_added"
+POST /api/supplier-cabinet/orders/{id}/expected-delivery-date  { expectedDeliveryDate: "YYYY-MM-DD" }  -> dto | 400 (order not shipped / date in the past) | 404; supplier-only, only while status=shipped, REPEATABLE (no "already set" guard), enqueues client notification "marketplace_order.delivery_rescheduled" (Phase 4, plan D5). Same auth shape as delay-reason — no supplier_inventory/warehouse-permission gate.
 GET  /api/supplier-cabinet/support-tickets                         -> SupplierSupportTicketDto[]
 GET  /api/supplier-cabinet/support-tickets/{id}                    -> dto with messages
 POST /api/supplier-cabinet/support-tickets/{id}/messages  { body } -> 201 SupportTicketMessageDto
@@ -590,6 +591,28 @@ counts, so the finalize gate is unchanged; only its expiry half arrives pre-answ
 no batches (legacy, or a module-off shipment) keep the original one-item-per-line shape with
 `sourceOrderItemBatchId: null`. Finalize therefore produces one client `ProductStock` batch per
 shipped supplier batch — the correct FEFO outcome — with no change to `ReceiveAsync` itself.
+
+#### "In transit" now counts open marketplace orders + mutable delivery date (Phase 4, plan `1-partitioned-book.md` D5 / п.2)
+
+**`POST /api/orders/calculate` and AI order generation** — `OrderLineDto.inTransit` is now
+`draft supplier receipts + open marketplace orders headed to this store`, one combined figure the
+order formula subtracts (`Raw = Buffer + SafetyBuffer − StockOnHand − InTransit`). This closes the
+double-order bug: a product the buyer already has on an unreceived B2B marketplace order
+(status `new`/`confirmed`/`shipped`) no longer gets re-recommended. `OrderLineDto` gains
+**`inTransitFromMarketplace: number`** (always ≤ `inTransit`) — the marketplace slice, for a
+source-breakdown tooltip in the order-review UI. Mapping: `MarketplaceOrderItem.SupplierItemId →
+Item.SourceSupplierItemId`, scoped to the buyer tenant's catalog. **v1 limitation:** a line whose
+order-time snapshot unit (`MarketplaceOrderItem.Unit`) differs from the buyer item's `Unit` is
+excluded from the sum (avoids a units-mismatch skew, e.g. "box" ≠ "each"). Same combined number
+flows into the AI order Claude context (`AiStockLine.inTransit`) with no separate change there.
+
+**`POST /api/supplier-cabinet/orders/{id}/expected-delivery-date`** (see the supplier-cabinet
+orders block above) — the supplier's mutable, repeatable reschedule of a shipped order's
+`expectedDeliveryDate`. `MarketplaceOrderDto.expectedDeliveryDate` (added Phase 3) is the field it
+updates; it is already set at ship time (from the request, or `ShippedAt + EstimatedDeliveryDays`).
+New outbox event `marketplace_order.delivery_rescheduled` → client warehouse staff
+(merchandiser/store_manager/network_manager/enterprise_admin, telegram+push), registered in
+`NotificationService.ValidEventTypes` + the worker `DISPATCH_EVENT_ROLES` matrix.
 
 ---
 

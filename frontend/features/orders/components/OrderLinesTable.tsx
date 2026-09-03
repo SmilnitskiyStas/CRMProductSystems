@@ -47,7 +47,24 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
       key: "inTransit",
       header: t("headers.inTransit"),
       cellStyle: { fontFamily: "monospace" },
-      render: (l) => (l.inTransit > 0 ? l.inTransit : "—"),
+      // inTransit now combines draft supplier receipts + open B2B marketplace orders (Phase 4,
+      // plan D5). When any of it comes from the marketplace, expose the split on hover; for
+      // tenants not using the marketplace (inTransitFromMarketplace === 0) the cell is unchanged.
+      render: (l) => {
+        if (l.inTransit <= 0) return "—";
+        if (l.inTransitFromMarketplace <= 0) return l.inTransit;
+        const title = [
+          t("inTransitTooltip.supplierReceipts", {
+            qty: l.inTransit - l.inTransitFromMarketplace,
+          }),
+          t("inTransitTooltip.marketplaceOrders", { qty: l.inTransitFromMarketplace }),
+        ].join("\n");
+        return (
+          <span title={title} style={{ cursor: "help", borderBottom: "1px dotted #4B5563" }}>
+            {l.inTransit}
+          </span>
+        );
+      },
     },
     {
       key: "safetyBuffer",

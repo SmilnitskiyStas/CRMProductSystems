@@ -1545,6 +1545,10 @@
           "actions": "Дії"
         },
         "covered": "покрито",
+        "inTransitTooltip": {
+          "supplierReceipts": "Прийоми постачальників: {qty}",
+          "marketplaceOrders": "Відкриті marketplace-замовлення: {qty}"
+        },
         "actionMenu": {
           "productAnalytics": "Аналітика товару"
         }
@@ -4059,6 +4063,9 @@
         "delayReasonModalConfirm": "Зберегти причину",
         "toastDelayReasonSaved": "Причину затримки збережено",
         "delayReasonLabel": "Причина затримки: {reason}",
+        "rescheduleLabel": "Перенести дату доставки",
+        "rescheduleSaveButton": "Зберегти",
+        "rescheduleToastSaved": "Нову дату доставки збережено",
         "headerProduct": "Товар",
         "headerPrice": "Ціна",
         "headerQty": "К-сть",
@@ -5962,7 +5969,8 @@
         "customerMessageCreated": "Повідомлення покупцям",
         "marketplaceOrderCreated": "Нове замовлення",
         "marketplaceOrderShipped": "Замовлення відправлено",
-        "marketplaceOrderDelayReasonAdded": "Затримка доставки"
+        "marketplaceOrderDelayReasonAdded": "Затримка доставки",
+        "marketplaceOrderDeliveryRescheduled": "Нова дата доставки"
       },
       "channels": {
         "telegram": "Telegram",
@@ -5997,7 +6005,8 @@
         "customerMessageCreated": { "service": "Маркетингові повідомлення", "actor": "Адміністратор мережі" },
         "marketplaceOrderCreated": { "service": "Маркетплейс", "actor": "Замовлення клієнта" },
         "marketplaceOrderShipped": { "service": "Маркетплейс", "actor": "Відвантаження постачальником" },
-        "marketplaceOrderDelayReasonAdded": { "service": "Маркетплейс", "actor": "Постачальник — причина затримки" }
+        "marketplaceOrderDelayReasonAdded": { "service": "Маркетплейс", "actor": "Постачальник — причина затримки" },
+        "marketplaceOrderDeliveryRescheduled": { "service": "Маркетплейс", "actor": "Постачальник — нова дата доставки" }
       }
     },
     "serviceDesk": {

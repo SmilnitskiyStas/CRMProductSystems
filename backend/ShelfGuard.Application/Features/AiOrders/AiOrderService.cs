@@ -98,7 +98,11 @@ public sealed class AiOrderService : IAiOrderService
         if (storeName is null)
             return (null, "Store not found.");
 
-        // 1-2. Base order via the mathematical formula (ADU → buffer → coefficients → MOQ/USQ)
+        // 1-2. Base order via the mathematical formula (ADU → buffer → coefficients → MOQ/USQ).
+        // Phase 4 (plan D5): CalculateAsync's per-line InTransit now also counts open B2B
+        // marketplace orders headed to this store, so the "already on the way" quantity the AI
+        // sees (l.InTransit, fed into the Claude context below) includes them with no change
+        // here — this service never computes in-transit independently of CalculateAsync.
         var (calc, calcError) = await _orderCalc.CalculateAsync(storeId, ct);
         if (calcError is not null) return (null, calcError);
 

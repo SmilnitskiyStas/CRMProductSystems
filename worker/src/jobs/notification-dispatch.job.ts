@@ -77,6 +77,14 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
     roles: ["merchandiser", "store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
   },
+  // Phase 4 (plan 1-partitioned-book.md, D5): MarketplaceOrderService.SetExpectedDeliveryDateAsync
+  // enqueues this against the CLIENT tenant when the supplier moves a shipped order's expected
+  // delivery date. Same warehouse-staff audience/channels as marketplace_order.shipped — it is
+  // the same incoming delivery, just with a revised ETA.
+  "marketplace_order.delivery_rescheduled": {
+    roles: ["merchandiser", "store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
 };
 
 // TASK-342 / ADR-019 §5: default channel set for targeted (UserId IS NOT NULL) outbox rows,
@@ -131,6 +139,7 @@ function formatText(row: PendingIntentRow): string {
     "marketplace_order.created": "🆕",
     "marketplace_order.shipped": "🚚",
     "marketplace_order.delay_reason_added": "⏱️",
+    "marketplace_order.delivery_rescheduled": "📅",
   };
   const icon = icons[row.event_type] ?? "🔔";
   return `${icon} <b>ShelfGuard</b>\n\n${row.title ?? "Нове сповіщення"}`;

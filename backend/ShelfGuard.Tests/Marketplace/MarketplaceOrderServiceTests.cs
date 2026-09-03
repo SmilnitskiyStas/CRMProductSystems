@@ -1553,6 +1553,103 @@ public sealed class MarketplaceOrderServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    // ── Phase 4 (plan D5): mutable delivery-date reschedule ─────────────────────
+
+    [Fact]
+    public async Task SetExpectedDeliveryDate_ShippedOrder_SetsDateAndNotifiesClient()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        var newDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5);
+
+        var (dto, error) = await _sut.SetExpectedDeliveryDateAsync(_supplierTenantId, order.Id, newDate);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(newDate, order.ExpectedDeliveryDate);
+        Assert.Equal(newDate, dto!.ExpectedDeliveryDate);
+
+        // Same cross-tenant RLS guard as the delay-reason branch: enqueue + SaveChanges under the
+        // CLIENT tenant's override.
+        await _tenantSessionOverride.Received(1).ExecuteAsync(
+            order.ClientTenantId, Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _notifications.Received(1).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n =>
+                n.TenantId == order.ClientTenantId &&
+                n.UserId == null &&
+                n.Channel == "system" &&
+                n.Status == "pending" &&
+                n.EventType == "marketplace_order.delivery_rescheduled"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(MarketplaceOrderStatus.New)]
+    [InlineData(MarketplaceOrderStatus.Confirmed)]
+    [InlineData(MarketplaceOrderStatus.Delivered)]
+    [InlineData(MarketplaceOrderStatus.Cancelled)]
+    public async Task SetExpectedDeliveryDate_NotShipped_ReturnsError(string status)
+    {
+        var order = Order(status);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.SetExpectedDeliveryDateAsync(
+            _supplierTenantId, order.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(3));
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.OnlyShippedCanRescheduleError, error);
+        Assert.Null(order.ExpectedDeliveryDate);
+        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetExpectedDeliveryDate_PastDate_ReturnsError()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.SetExpectedDeliveryDateAsync(
+            _supplierTenantId, order.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1));
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.RescheduleDateInPastError, error);
+        Assert.Null(order.ExpectedDeliveryDate);
+    }
+
+    [Fact]
+    public async Task SetExpectedDeliveryDate_ForeignSupplierTenant_ReturnsNotFound()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.SetExpectedDeliveryDateAsync(
+            Guid.NewGuid(), order.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(2));
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.OrderNotFoundError, error);
+        Assert.Null(order.ExpectedDeliveryDate);
+    }
+
+    [Fact]
+    public async Task SetExpectedDeliveryDate_IsRepeatable()
+    {
+        var order = Order(MarketplaceOrderStatus.Shipped);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        var first = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(4);
+        var second = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(9);
+
+        var (_, e1) = await _sut.SetExpectedDeliveryDateAsync(_supplierTenantId, order.Id, first);
+        var (dto, e2) = await _sut.SetExpectedDeliveryDateAsync(_supplierTenantId, order.Id, second);
+
+        Assert.Null(e1);
+        Assert.Null(e2);
+        Assert.Equal(second, order.ExpectedDeliveryDate);
+        Assert.Equal(second, dto!.ExpectedDeliveryDate);
+        await _notifications.Received(2).EnqueueAsync(
+            Arg.Is<NotificationQueue>(n => n.EventType == "marketplace_order.delivery_rescheduled"),
+            Arg.Any<CancellationToken>());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static CreateMarketplaceOrderDto OrderRequest() =>

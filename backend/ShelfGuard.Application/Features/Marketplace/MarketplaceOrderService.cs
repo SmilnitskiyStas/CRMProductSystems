@@ -31,6 +31,10 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string EstimatedDeliveryDaysRequiredError = "Вкажіть орієнтовну кількість днів до доставки.";
     public const string DelayReasonRequiredError = "Вкажіть причину затримки доставки.";
     public const string OnlyShippedCanHaveDelayReasonError = "Причину затримки можна вказати лише для відправленого замовлення.";
+
+    // ── Phase 4 (plan D5): mutable, repeatable delivery-date reschedule ─────────
+    public const string OnlyShippedCanRescheduleError = "Змінити дату доставки можна лише для відправленого замовлення.";
+    public const string RescheduleDateInPastError = "Дата доставки не може бути в минулому.";
     public const string DestinationStoreRequiredError = "Оберіть магазин-призначення для замовлення.";
 
     // ── Phase 3 (plan D4): batch-consuming shipment ─────────────────────────────
@@ -822,6 +826,46 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         return (await ToDtoAsync(order, ct), null);
     }
 
+    /// <summary>
+    /// Reschedules a shipped order's expected delivery date (supplier-portal expansion Phase 4,
+    /// plan D5). Unlike <see cref="SetDelayReasonAsync"/> there is no "already set" guard — the
+    /// supplier may push the date as many times as reality demands while the order is still in
+    /// transit. Notifies the client tenant the same cross-tenant-outbox way.
+    /// </summary>
+    public async Task<(MarketplaceOrderDto? Order, string? Error)> SetExpectedDeliveryDateAsync(
+        Guid supplierTenantId, Guid orderId, DateOnly date, CancellationToken ct = default)
+    {
+        var order = await _orders.GetByIdAsync(orderId, ct);
+        if (order is null || order.SupplierTenantId != supplierTenantId)
+            return (null, OrderNotFoundError);
+
+        if (order.Status != MarketplaceOrderStatus.Shipped)
+            return (null, OnlyShippedCanRescheduleError);
+
+        if (date < DateOnly.FromDateTime(DateTime.UtcNow))
+            return (null, RescheduleDateInPastError);
+
+        order.ExpectedDeliveryDate = date;
+        order.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Same cross-tenant guard as SetDelayReasonAsync: the notification-queue insert targets
+        // order.ClientTenantId while the ambient session is the SUPPLIER tenant, so the enqueue +
+        // SaveChanges tail runs under an explicit override of the CLIENT tenant's RLS context.
+        // order.ClientTenantId is trusted here — the SupplierTenantId ownership check above
+        // confirmed this order belongs to the calling supplier — and marketplace_orders' RLS is
+        // OR-based on both tenants, so the ExpectedDeliveryDate column flushed by this same call
+        // still satisfies its policy under the client identity.
+        _orders.Update(order);
+        await _tenantSessionOverride.ExecuteAsync(order.ClientTenantId, async () =>
+        {
+            await EnqueueDeliveryRescheduledNotificationAsync(order, ct);
+            await _orders.SaveChangesAsync(ct);
+            return true;
+        }, ct);
+
+        return (await ToDtoAsync(order, ct), null);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1087,6 +1131,38 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             Title     = $"Затримка доставки: {order.OrderNumber}",
             Channel   = "system",
             EventType = "marketplace_order.delay_reason_added",
+            Payload   = payload,
+            Status    = "pending",
+        }, ct);
+    }
+
+    /// <summary>
+    /// Phase 4 (plan D5): Postgres outbox row (EventType = "marketplace_order.delivery_rescheduled")
+    /// for the client tenant when the supplier moves a shipped order's expected delivery date.
+    /// Mirrors <see cref="EnqueueDelayReasonNotificationAsync"/> — must run inside a client-tenant
+    /// <see cref="ITenantSessionOverride"/> (notification_queue's tenant_isolation is session-only).
+    /// </summary>
+    private async Task EnqueueDeliveryRescheduledNotificationAsync(MarketplaceOrder order, CancellationToken ct)
+    {
+        var supplierName = await _tenantNames.GetTenantDisplayNameAsync(order.SupplierTenantId, ct)
+                           ?? "Постачальник";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            supplierName,
+            expectedDeliveryDate = order.ExpectedDeliveryDate,
+        });
+
+        await _notifications.EnqueueAsync(new NotificationQueue
+        {
+            TenantId  = order.ClientTenantId,
+            UserId    = null,
+            StoreId   = null,
+            Title     = $"Нова дата доставки для {order.OrderNumber}: {order.ExpectedDeliveryDate:dd.MM.yyyy}",
+            Channel   = "system",
+            EventType = "marketplace_order.delivery_rescheduled",
             Payload   = payload,
             Status    = "pending",
         }, ct);

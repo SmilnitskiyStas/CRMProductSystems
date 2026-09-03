@@ -1,4 +1,5 @@
 using ShelfGuard.Application.Features.Orders.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 
@@ -10,15 +11,18 @@ public sealed class OrderCalcService : IOrderCalcService
     private readonly IEventRepository _events;
     private readonly IWeatherRepository _weather;
     private readonly ICannibalizationRepository _promo;
+    private readonly ITenantContext _tenant;
 
     public OrderCalcService(
         IOrderCalcRepository repo, IEventRepository events,
-        IWeatherRepository weather, ICannibalizationRepository promo)
+        IWeatherRepository weather, ICannibalizationRepository promo,
+        ITenantContext tenant)
     {
         _repo = repo;
         _events = events;
         _weather = weather;
         _promo = promo;
+        _tenant = tenant;
     }
 
     public async Task<(OrderCalcResult? Result, string? Error)> CalculateAsync(
@@ -34,6 +38,17 @@ public sealed class OrderCalcService : IOrderCalcService
         var productIds = buffers.Select(b => b.ProductId).ToList();
         var stock = await _repo.GetStockOnHandAsync(storeId, productIds, ct);
         var inTransit = await _repo.GetInTransitAsync(storeId, productIds, ct);
+
+        // Phase 4 (plan D5): fold open B2B marketplace orders into the same "in transit" figure
+        // the formula already subtracts — a product the buyer has on an unreceived marketplace
+        // order must stop the engine from recommending it again (the double-order bug). Kept as
+        // ONE combined InTransit term, not a new formula input. tenantId scopes the buyer-catalog
+        // join; on the authorized endpoints that reach here it is always present, but skip the
+        // extra query rather than pass Guid.Empty if it somehow is not.
+        var marketplaceInTransit = _tenant.TenantId is { } tid
+            ? await _repo.GetOpenMarketplaceInTransitAsync(storeId, productIds, tid, ct)
+            : new Dictionary<Guid, decimal>();
+
         var moqUsq = await _repo.GetMoqUsqAsync(productIds, ct);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -47,7 +62,9 @@ public sealed class OrderCalcService : IOrderCalcService
         foreach (var buffer in buffers)
         {
             stock.TryGetValue(buffer.ProductId, out var onHand);
-            inTransit.TryGetValue(buffer.ProductId, out var transit);
+            inTransit.TryGetValue(buffer.ProductId, out var draftTransit);
+            marketplaceInTransit.TryGetValue(buffer.ProductId, out var mpTransit);
+            var transit = draftTransit + mpTransit;
             var (moq, usq) = moqUsq.TryGetValue(buffer.ProductId, out var mu) ? mu : (1m, 1m);
 
             var eventCoef = EventCoefficientResolver.Resolve(
@@ -79,7 +96,8 @@ public sealed class OrderCalcService : IOrderCalcService
                 calc.ToOrder,
                 moq,
                 usq,
-                calc.Rounding));
+                calc.Rounding,
+                mpTransit));
         }
 
         var ordered = lines

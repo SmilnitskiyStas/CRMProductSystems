@@ -1545,6 +1545,10 @@
           "actions": "Actions"
         },
         "covered": "covered",
+        "inTransitTooltip": {
+          "supplierReceipts": "Supplier deliveries: {qty}",
+          "marketplaceOrders": "Open marketplace orders: {qty}"
+        },
         "actionMenu": {
           "productAnalytics": "Product analytics"
         }
@@ -4059,6 +4063,9 @@
         "delayReasonModalConfirm": "Save reason",
         "toastDelayReasonSaved": "Delay reason saved",
         "delayReasonLabel": "Delay reason: {reason}",
+        "rescheduleLabel": "Reschedule delivery date",
+        "rescheduleSaveButton": "Save",
+        "rescheduleToastSaved": "New delivery date saved",
         "headerProduct": "Item",
         "headerPrice": "Price",
         "headerQty": "Qty",
@@ -5962,7 +5969,8 @@
         "customerMessageCreated": "Customer message",
         "marketplaceOrderCreated": "New order",
         "marketplaceOrderShipped": "Order shipped",
-        "marketplaceOrderDelayReasonAdded": "Delivery delay"
+        "marketplaceOrderDelayReasonAdded": "Delivery delay",
+        "marketplaceOrderDeliveryRescheduled": "Delivery date changed"
       },
       "channels": {
         "telegram": "Telegram",
@@ -5997,7 +6005,8 @@
         "customerMessageCreated": { "service": "Marketing messages", "actor": "Network administrator" },
         "marketplaceOrderCreated": { "service": "Marketplace", "actor": "Client order" },
         "marketplaceOrderShipped": { "service": "Marketplace", "actor": "Supplier shipment" },
-        "marketplaceOrderDelayReasonAdded": { "service": "Marketplace", "actor": "Supplier — delay reason" }
+        "marketplaceOrderDelayReasonAdded": { "service": "Marketplace", "actor": "Supplier — delay reason" },
+        "marketplaceOrderDeliveryRescheduled": { "service": "Marketplace", "actor": "Supplier — new delivery date" }
       }
     },
     "serviceDesk": {

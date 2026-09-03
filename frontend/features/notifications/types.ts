@@ -102,7 +102,8 @@ export type NotificationEventType =
   | "customer_message.created"
   | "marketplace_order.created"
   | "marketplace_order.shipped"
-  | "marketplace_order.delay_reason_added";
+  | "marketplace_order.delay_reason_added"
+  | "marketplace_order.delivery_rescheduled";
 
 export interface NotificationSetting {
   id: string;
@@ -177,6 +178,7 @@ export const EVENT_TYPE_I18N_KEY: Record<NotificationEventType, string> = {
   "marketplace_order.created": "marketplaceOrderCreated",
   "marketplace_order.shipped": "marketplaceOrderShipped",
   "marketplace_order.delay_reason_added": "marketplaceOrderDelayReasonAdded",
+  "marketplace_order.delivery_rescheduled": "marketplaceOrderDeliveryRescheduled",
 };
 
 /** Translated event-type label. `t` must be scoped to `Dashboard.notifications.eventTypes`. */

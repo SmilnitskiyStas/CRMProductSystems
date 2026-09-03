@@ -362,6 +362,8 @@ public sealed class NotificationService : INotificationService
         "marketplace_order.created",
         "marketplace_order.shipped",
         "marketplace_order.delay_reason_added",
+        // Phase 4 (plan D5): supplier reschedules a shipped order's expected delivery date.
+        "marketplace_order.delivery_rescheduled",
         "access.temporary_expiring_soon",
         "access.temporary_expired",
         "auth.password_reset_requested",

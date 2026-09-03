@@ -323,6 +323,16 @@ export interface SetOrderDelayReasonRequest {
   reason: string;
 }
 
+/**
+ * POST /api/supplier-cabinet/orders/{id}/expected-delivery-date — supplier reschedules a
+ * shipped order's expected delivery date (supplier-portal expansion Phase 4, plan D5).
+ * Repeatable while order.status === "shipped" (no "already set" guard); the date must not be
+ * in the past. 400 { error } (order not shipped / date in the past), 404 unknown/foreign.
+ */
+export interface SetOrderExpectedDeliveryDateRequest {
+  expectedDeliveryDate: string; // "YYYY-MM-DD"
+}
+
 // ── Warehouses (supplier-portal expansion, plan phase 1) ─────────────────────
 // A supplier "warehouse" is a Location row (type "warehouse"). Gated by the
 // provider-granted "supplier_inventory" module + "warehouse_management" permission.

@@ -36,6 +36,7 @@ import type {
   UpsertContractSettingsRequest,
   UpdateMarketplaceOrderStatusRequest,
   SetOrderDelayReasonRequest,
+  SetOrderExpectedDeliveryDateRequest,
   SupplierWarehouse,
   CreateSupplierWarehouseRequest,
   UpdateSupplierWarehouseRequest,
@@ -234,6 +235,14 @@ export const supplierCabinetApi = {
   /** POST /api/supplier-cabinet/orders/{id}/delay-reason — тільки для status "shipped" */
   setOrderDelayReason: (id: string, body: SetOrderDelayReasonRequest) =>
     api.post<MarketplaceOrderDto>(`${BASE}/orders/${id}/delay-reason`, body),
+
+  /** POST /api/supplier-cabinet/orders/{id}/expected-delivery-date — supplier reschedule of a
+   *  shipped order's expected delivery date. Repeatable while status "shipped"; 400 { error }
+   *  when the order is not shipped or the date is in the past (Phase 4, plan D5). */
+  setOrderExpectedDeliveryDate: (id: string, expectedDeliveryDate: string) =>
+    api.post<MarketplaceOrderDto>(`${BASE}/orders/${id}/expected-delivery-date`, {
+      expectedDeliveryDate,
+    } satisfies SetOrderExpectedDeliveryDateRequest),
 
   // ── Batch-consuming shipment (supplier-portal expansion Phase 3, plan D4) ────
   // Gated: "supplier_inventory" module + "warehouse_management" permission. When the

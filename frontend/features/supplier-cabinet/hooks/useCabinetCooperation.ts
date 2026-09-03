@@ -181,6 +181,20 @@ export function useSetOrderDelayReason() {
   });
 }
 
+/** POST .../expected-delivery-date — supplier moves a shipped order's expected delivery date
+ *  (Phase 4, plan D5). Repeatable while status === "shipped". Invalidates the cabinet orders
+ *  list so the new date shows in both the row ETA and the expanded detail. */
+export function useSetExpectedDeliveryDate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, expectedDeliveryDate }: { id: string; expectedDeliveryDate: string }) =>
+      supplierCabinetApi.setOrderExpectedDeliveryDate(id, expectedDeliveryDate),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CABINET_COOP_KEYS.orders });
+    },
+  });
+}
+
 // ─── Support tickets ──────────────────────────────────────────────────────────
 
 export function useCabinetSupportTickets() {

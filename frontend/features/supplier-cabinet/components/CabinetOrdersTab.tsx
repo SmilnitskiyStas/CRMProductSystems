@@ -19,6 +19,7 @@ import {
   useCabinetOrders,
   useUpdateCabinetOrderStatus,
   useSetOrderDelayReason,
+  useSetExpectedDeliveryDate,
 } from "../hooks/useCabinetCooperation";
 
 // Inline styles for the nested items table rendered inside an expanded order
@@ -304,6 +305,7 @@ function OrderExpandedContent({
         delayReason={order.delayReason}
         intlLocale={intlLocale}
       />
+      {order.status === "shipped" && <RescheduleDeliveryControl order={order} />}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
@@ -346,6 +348,75 @@ function OrderExpandedContent({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * Inline "reschedule the delivery date" control, shown in the expanded row of a
+ * shipped order (supplier-portal expansion Phase 4, plan D5). The supplier owns the
+ * date; the buyer only sees it (via ShippingDetail on both order views), so there is
+ * no matching edit control on app/(dashboard)/marketplace/orders/page.tsx. The
+ * endpoint is repeatable while the order is still "shipped" — a 400 surfaces the
+ * backend's Ukrainian reason as a toast.
+ */
+function RescheduleDeliveryControl({ order }: { order: MarketplaceOrderDto }) {
+  const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
+  const reschedule = useSetExpectedDeliveryDate();
+  const today = new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState(order.expectedDeliveryDate ?? "");
+
+  function save() {
+    if (!date) return;
+    reschedule.mutate(
+      { id: order.id, expectedDeliveryDate: date },
+      {
+        onSuccess: () => toast.success(t("rescheduleToastSaved")),
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 8,
+        flexWrap: "wrap",
+        marginBottom: 12,
+      }}
+    >
+      <label style={{ color: "#9CA3AF", fontSize: 12 }}>
+        {t("rescheduleLabel")}
+        <input
+          type="date"
+          min={today}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          style={{
+            display: "block",
+            marginTop: 4,
+            background: "#1F2937",
+            border: "1px solid #374151",
+            borderRadius: 6,
+            color: "#E8EDF5",
+            fontSize: 12,
+            padding: "6px 8px",
+            outline: "none",
+            fontFamily: "inherit",
+          }}
+        />
+      </label>
+      <Btn
+        size="sm"
+        disabled={
+          reschedule.isPending || !date || date === (order.expectedDeliveryDate ?? "")
+        }
+        onClick={save}
+      >
+        {t("rescheduleSaveButton")}
+      </Btn>
     </div>
   );
 }

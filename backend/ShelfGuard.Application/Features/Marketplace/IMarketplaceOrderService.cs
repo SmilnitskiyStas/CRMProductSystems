@@ -89,6 +89,15 @@ public interface IMarketplaceOrderService
         Guid supplierTenantId, Guid orderId, string reason, CancellationToken ct = default);
 
     /// <summary>
+    /// Reschedules a shipped order's expected delivery date (supplier-portal expansion Phase 4,
+    /// plan D5). Repeatable — the supplier may move the date as often as needed while the order
+    /// is still status = shipped. <paramref name="date"/> must not be in the past. Notifies the
+    /// client tenant (EventType "marketplace_order.delivery_rescheduled").
+    /// </summary>
+    Task<(MarketplaceOrderDto? Order, string? Error)> SetExpectedDeliveryDateAsync(
+        Guid supplierTenantId, Guid orderId, DateOnly date, CancellationToken ct = default);
+
+    /// <summary>
     /// Shipped orders of the calling client tenant that still need to be received (TASK-586) —
     /// no <see cref="MarketplaceOrderReceipt"/> yet, or one still in "draft". Used by
     /// <see cref="MarketplaceOrderReceiptService"/>.

@@ -817,3 +817,58 @@ i18n +23 ключі кожна мова (`Dashboard.supplierCabinet.ordersTab` s
 обох ordersTab-неймспейсах). Парність тримається (5513==5513 шляхів, 0 diff).
 `tsc --noEmit` clean · `next lint` (touched) clean · `next build` exit 0.
 Не чіпав backend / mobile. openapi.json — борг (спільний). НЕ закомічено.
+
+## TASK-685 — Supplier Phase 4: «в дорозі» для автозамовлення + мутабельна дата доставки (D5 / п.2)
+
+**Status:** review (не закомічено) · **Agent:** backend-developer · Plan `1-partitioned-book.md` Phase 4
+Log: `.claude/logs/tasks/685_2026-09-03_supplier-phase4-intransit_backend-developer.md`
+
+Фікс подвійного замовлення: відкрите marketplace-замовлення (`new`/`confirmed`/`shipped`) на
+магазин-призначення тепер бачить рушій `OrderCalcService`. Новий
+`OrderCalcRepository.GetOpenMarketplaceInTransitAsync` (`marketplace_order_items ⋈
+marketplace_orders ⋈ items` по `SupplierItemId==SourceSupplierItemId`, `it.TenantId==tenantId`,
+`oi.Unit==it.Unit` — рядки з розбіжною одиницею виключено, межа v1). `OrderCalcService` ін'єктить
+`ITenantContext`, поєднує `draftReceipts + openMarketplace` в **один** `InTransit`, який формула
+вже віднімає. `OrderLineDto` += `InTransitFromMarketplace` (зріз для tooltip). `AiOrderService` —
+лише коментар (читає in-transit через `CalculateAsync`).
+
+`MarketplaceOrderService.SetExpectedDeliveryDateAsync` — дзеркало `SetDelayReasonAsync`, гейти
+own-supplier + `status==shipped` + дата не в минулому, **повторюване** (без «already set»).
+Крос-тенантний outbox `marketplace_order.delivery_rescheduled` під `_tenantSessionOverride`
+(client). Ендпоінт `POST /api/supplier-cabinet/orders/{id}/expected-delivery-date` — форма як
+`delay-reason` (без `supplier_inventory`/`warehouse_management`). Worker `notification-dispatch.job.ts`
++ dispatch-рядок + іконка. `NotificationService.ValidEventTypes` += подія.
+
+Міграція `20260903112807_AddMarketplaceOrdersReplenishmentIndex` — частковий індекс
+`ix_marketplace_orders_open_by_dest` (raw SQL, не в snapshot). **Застосовано до dev DB `:5435`.**
+Не до prod.
+
+`dotnet build -c Release` 0 err · `dotnet test --filter "~OrderCalc|~AiOrder|~MarketplaceOrder"`
+= **147 passed**; RLS-audit зелений (нема нових таблиць); worker `tsc --noEmit` clean. Нові тести:
+`OrderCalcServiceTests`, `OrderCalcRepositoryOpenMarketplaceInTransitTests`, +5 у
+`MarketplaceOrderServiceTests`. Docs: `api-contracts.md`. Frontend (типи + редаговна дата +
+tooltip + i18n) — окремий агент. openapi.json — борг. НЕ закомічено, `mobile/` не чіпав.
+
+## TASK-686 — Supplier Phase 4 frontend: мутабельна дата доставки + tooltip «в дорозі» + i18n
+
+**Status:** review (не закомічено) · **Agent:** frontend-developer · Plan `1-partitioned-book.md` Phase 4
+Log: `.claude/logs/tasks/686_2026-09-03_supplier-phase4-frontend_frontend-developer.md`
+
+Постачальник переносить дату доставки на `shipped`-замовленні: `supplier-cabinet` api
+`setOrderExpectedDeliveryDate` + hook `useSetExpectedDeliveryDate` (invalidatе
+`["supplier-cabinet","orders"]`) + інлайн `RescheduleDeliveryControl` (date `min=today` + Btn) у
+розгорнутому рядку `CabinetOrdersTab` під `ShippingDetail`; 400 → `toast.error(err.message)`.
+Контролю замовнику НЕ додано (лише перегляд).
+
+Tooltip розбивки «в дорозі» — `features/orders/components/OrderLinesTable.tsx` колонка `inTransit`
+(єдине місце; ai-orders in-transit не показує, DTO не несе). `OrderLine.inTransitFromMarketplace`
+додано; `inTransitFromMarketplace===0` → плоске число (без змін для не-marketplace тенантів), інакше
+native `title` з двома рядками джерел.
+
+i18n обидві мови: `marketplaceOrderDeliveryRescheduled` (eventTypes + eventSource +
+`features/notifications/types.ts` union/map) = «Нова дата доставки» / "Delivery date changed";
+`Dashboard.supplierCabinet.ordersTab.reschedule{Label,SaveButton,ToastSaved}`;
+`Dashboard.orders.table.inTransitTooltip.{supplierReceipts,marketplaceOrders}`. Парність **5701==5701**.
+
+`tsc --noEmit` clean · `next lint` (7 touched) clean · `next build` EXIT 0 (76/76 pages).
+Backend / `mobile/` не чіпав. openapi.json — спільний борг. НЕ закомічено.

@@ -8,7 +8,13 @@ export interface OrderLine {
   bufferRed: number;
   safetyBuffer: number;
   stockOnHand: number;
+  /** Combined "already on the way" qty the formula subtracts: draft supplier receipts + open
+   *  B2B marketplace orders headed to this store (Phase 4, plan D5). */
   inTransit: number;
+  /** The marketplace slice of {@link inTransit} (open marketplace orders only). Always ≤
+   *  inTransit; 0 for tenants not receiving via the B2B marketplace. Drives the in-transit
+   *  source-breakdown tooltip in OrderLinesTable. */
+  inTransitFromMarketplace: number;
   quantityRaw: number;
   quantityToOrder: number;
   moq: number;

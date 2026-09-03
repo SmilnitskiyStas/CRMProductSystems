@@ -284,6 +284,13 @@ public record UpdateMarketplaceOrderStatusDto(string Status, string? Reason = nu
 /// </summary>
 public record SetOrderDelayReasonDto(string Reason);
 
+/// <summary>
+/// Supplier-set new expected delivery date for a shipped order (supplier-portal expansion
+/// Phase 4, plan D5). Repeatable while the order is still status = shipped; must not be in the
+/// past.
+/// </summary>
+public record SetOrderExpectedDeliveryDateDto(DateOnly ExpectedDeliveryDate);
+
 // ── Marketplace order receiving (TASK-586, ADR-033) ──────────────────────────
 // Client-confirmed receipt of a shipped MarketplaceOrder — replaces the supplier's one-click
 // Shipped -> Delivered transition. See ADR-033 Decision 5 for the full endpoint contract.
