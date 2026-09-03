@@ -532,6 +532,37 @@ POST /api/supplier-cabinet/warehouses/{id}/deactivate       -> 204 | 404 | 400
 from the JWT — no location id from another tenant is ever accepted (403 on foreign tenant / 404 on
 non-warehouse id).
 
+#### Supplier cabinet — employee work schedules (Phase 5, plan `1-partitioned-book.md` D6)
+
+`SupplierCabinetSchedulesController` — a thin pass-through to the **shared** `IScheduleService`
+(same service the retail `SchedulesController` wraps), tenant id resolved from the JWT. Gating:
+`SupplierCabinet` policy + module `supplier_workforce` (provider-granted, default-off). Every
+**mutation** additionally requires the supplier permission `workforce_management`; GET
+list/detail/my-shifts and the staff picker are open to any `supplier_admin` of a module-enabled
+tenant (mirrors the retail controller, where GET is not behind `SchedulesManageOrCapability`).
+No migration, no `ScheduleService` change — `work_schedules`/`schedule_shifts` RLS is
+`tenant_isolation` + `provider_bypass` + `worker_bypass` with **no** `store_scope`, so a supplier
+tenant sees only its own rows. A schedule's `locationId` must be one of the supplier's own
+warehouses (`Location` type `"warehouse"`) — enforced by the service's existing
+`LocationExistsAsync(locationId, tenantId)` check.
+```
+GET    /api/supplier-cabinet/schedules?locationId=&weekStart=          -> 200 WorkScheduleDto[]
+GET    /api/supplier-cabinet/schedules/{id}                            -> 200 WorkScheduleDetailDto | 404
+POST   /api/supplier-cabinet/schedules  CreateWorkScheduleDto          -> 201 WorkScheduleDto | 400 (name / WeekStart≠Monday / unknown warehouse / dup week) | 403 (no workforce_management)
+PUT    /api/supplier-cabinet/schedules/{id}  UpdateWorkScheduleDto     -> 200 dto | 400 (invalid status / publish-time shift overlap) | 404 | 403
+DELETE /api/supplier-cabinet/schedules/{id}                            -> 204 | 404 | 403
+POST   /api/supplier-cabinet/schedules/{id}/shifts  CreateShiftDto     -> 201 ScheduleShiftDto | 400 (times / overlap) | 404 | 403
+PUT    /api/supplier-cabinet/schedules/{sid}/shifts/{shiftId}  UpdateShiftDto -> 200 dto | 400 | 404 | 403
+DELETE /api/supplier-cabinet/schedules/{sid}/shifts/{shiftId}          -> 204 | 404 | 403
+GET    /api/supplier-cabinet/schedules/my-shifts?from=&to=             -> 200 ScheduleShiftDto[]  (caller's own shifts; no permission gate)
+GET    /api/supplier-cabinet/schedules/staff                          -> 200 UserDto[]  (shift-assignee options; gated by workforce_management, delegates to ISupplierCabinetService.GetStaffAsync)
+```
+Same DTO shapes as `/api/schedules` (`Features/Schedules/ScheduleDtos.cs`). Frontend reuses the
+retail `features/schedules/types` + the presentational `ShiftCard`/`ShiftForm`; the location-coupled
+`WeekGrid`/`ScheduleForm`/`ScheduleList`/`MyShifts` are forked under
+`features/supplier-cabinet/components/schedules/` with supplier hooks + `useSupplierWarehouses()`
+as the location picker. The retail `/schedules` page and components are untouched.
+
 #### Supplier cabinet — batch-consuming shipment (Phase 3, plan `1-partitioned-book.md` D4)
 
 `SupplierCabinet` policy + module `marketplace_supplier` (controller) + module

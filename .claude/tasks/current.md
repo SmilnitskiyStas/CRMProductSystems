@@ -872,3 +872,39 @@ i18n обидві мови: `marketplaceOrderDeliveryRescheduled` (eventTypes + 
 
 `tsc --noEmit` clean · `next lint` (7 touched) clean · `next build` EXIT 0 (76/76 pages).
 Backend / `mobile/` не чіпав. openapi.json — спільний борг. НЕ закомічено.
+
+## TASK-687 — Supplier Phase 5: графіки працівників постачальника (D6 / п.6)
+
+**Status:** review (не закомічено) · **Agent:** frontend-developer · Plan `1-partitioned-book.md` Phase 5
+Log: `.claude/logs/tasks/687_2026-09-03_supplier-phase5-schedules_frontend-developer.md`
+
+Новий тонкий `SupplierCabinetSchedulesController` (`api/supplier-cabinet/schedules`) — pass-through
+у спільний `IScheduleService` з tenantId з JWT (як `SupplierCabinetController.InviteStaffAsync →
+IUserService`). Клас-гейт `[Authorize(SupplierCabinet)] [RequireModule("supplier_workforce")]`;
+кожна мутація — `SupplierPermissionAuthorization.HasPermission(User, WorkforceManagement)` → 403;
+GET list/{id}/my-shifts без гейта. **Без міграції, без змін `ScheduleService`** (`work_schedules`/
+`schedule_shifts` RLS = tenant_isolation+provider_bypass+worker_bypass, БЕЗ store_scope; сервіс уже
+валідує `LocationExistsAsync(locationId, tenantId)` → постачальник чіпляє зміни лише до власних
+складів). Пікер виконавця — **новий** `GET /schedules/staff` (гейт `workforce_management`, не
+`staff_management`) → `_cabinet.GetStaffAsync`. Тест `SupplierCabinetSchedulesControllerTests`
+(10 fact: tenant з JWT, permission-гейт 403 на мутаціях, GET без гейта).
+
+Frontend: `supplierCabinetApi.schedules.*` + `hooks/useSupplierSchedules.ts` (ключі
+`["supplier","schedules"|"my-shifts"]`). Компоненти-форки під
+`features/supplier-cabinet/components/schedules/` — `SupplierScheduleList/Form/WeekGrid/MyShifts`
+(причина форку: retail `WeekGrid` тягне `useUsers` + retail `useSchedules`, `ScheduleForm` тягне
+`useLocations`). **Реюз as-is** презентаційних retail `ShiftCard` + `ShiftForm` (props-only) і
+retail `features/schedules/types`. Retail `/schedules` не чіпав. Сторінка
+`app/(dashboard)/supplier/schedules/page.tsx` — `SUPPLIER_ONLY` + `<ModuleGate
+moduleKey="supplier_workforce">`, вкладки «Розклади» (для `workforce_management`) / «Мій розклад»
+(усі). Sidebar `buildSupplierNavGroup` += `/supplier/schedules` (`CalendarDays`,
+`permission: "workforce_management"`, `moduleKey: "supplier_workforce"`).
+
+i18n обидві мови: nav `supplierCabinet.schedules` = «Графіки»/"Schedules"; `Dashboard.supplierCabinet.schedules.*`
+(page + tab + warehouse label); решта — реюз `Dashboard.schedules.*`. Парність **4893==4893**.
+`supplier_workforce` module-catalog label вже був (Phase 1).
+
+Backend `dotnet build -c Release` clean · `dotnet test --filter "Schedule|RlsCrossTenant"` 38/38 green.
+Frontend `tsc --noEmit` clean · `next lint` (touched) clean · `next build` EXIT 0 (77 routes,
+`/supplier/schedules` present). Doc: `.claude/docs/api-contracts.md` оновлено. openapi.json — спільний
+борг. НЕ закомічено.

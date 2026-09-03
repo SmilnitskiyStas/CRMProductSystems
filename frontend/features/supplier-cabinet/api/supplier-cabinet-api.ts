@@ -54,6 +54,15 @@ import type {
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 import type { PagedResult as ApiPagedResult } from "@/lib/api-types";
+import type {
+  WorkScheduleDto,
+  WorkScheduleDetailDto,
+  ScheduleShiftDto,
+  CreateSchedulePayload,
+  UpdateSchedulePayload,
+  AddShiftPayload,
+  UpdateShiftPayload,
+} from "@/features/schedules/types";
 
 const BASE = "/api/supplier-cabinet";
 
@@ -356,4 +365,60 @@ export const supplierCabinetApi = {
   /** POST /api/supplier-cabinet/receipts/{id}/finalize — 400 { error } names lines missing expiry. */
   finalizeReceipt: (id: string) =>
     api.post<SupplierStockReceipt>(`${BASE}/receipts/${id}/finalize`),
+
+  // ── Employee work schedules (supplier-portal expansion Phase 5, plan D6) ────
+  // Thin wrapper over the shared IScheduleService — same shapes as the retail
+  // /api/schedules, tenant-scoped to the supplier from the JWT. Gated: "supplier_workforce"
+  // module + "workforce_management" permission on every mutation (GET list/detail/my-shifts
+  // and the staff picker are open to any supplier_admin of a module-enabled tenant).
+  schedules: {
+    /** GET /api/supplier-cabinet/schedules?locationId=&weekStart= */
+    list: (locationId?: string, weekStart?: string): Promise<WorkScheduleDto[]> => {
+      const qs = new URLSearchParams();
+      if (locationId) qs.set("locationId", locationId);
+      if (weekStart) qs.set("weekStart", weekStart);
+      const query = qs.toString();
+      return api.get<WorkScheduleDto[]>(`${BASE}/schedules${query ? `?${query}` : ""}`);
+    },
+
+    /** GET /api/supplier-cabinet/schedules/{id} */
+    getById: (id: string): Promise<WorkScheduleDetailDto> =>
+      api.get<WorkScheduleDetailDto>(`${BASE}/schedules/${id}`),
+
+    /** POST /api/supplier-cabinet/schedules */
+    create: (data: CreateSchedulePayload): Promise<WorkScheduleDto> =>
+      api.post<WorkScheduleDto>(`${BASE}/schedules`, data),
+
+    /** PUT /api/supplier-cabinet/schedules/{id} */
+    update: (id: string, data: UpdateSchedulePayload): Promise<WorkScheduleDto> =>
+      api.put<WorkScheduleDto>(`${BASE}/schedules/${id}`, data),
+
+    /** DELETE /api/supplier-cabinet/schedules/{id} */
+    remove: (id: string): Promise<void> => api.delete<void>(`${BASE}/schedules/${id}`),
+
+    /** POST /api/supplier-cabinet/schedules/{scheduleId}/shifts */
+    addShift: (scheduleId: string, data: AddShiftPayload): Promise<ScheduleShiftDto> =>
+      api.post<ScheduleShiftDto>(`${BASE}/schedules/${scheduleId}/shifts`, data),
+
+    /** PUT /api/supplier-cabinet/schedules/{scheduleId}/shifts/{shiftId} */
+    updateShift: (
+      scheduleId: string,
+      shiftId: string,
+      data: UpdateShiftPayload,
+    ): Promise<ScheduleShiftDto> =>
+      api.put<ScheduleShiftDto>(`${BASE}/schedules/${scheduleId}/shifts/${shiftId}`, data),
+
+    /** DELETE /api/supplier-cabinet/schedules/{scheduleId}/shifts/{shiftId} */
+    deleteShift: (scheduleId: string, shiftId: string): Promise<void> =>
+      api.delete<void>(`${BASE}/schedules/${scheduleId}/shifts/${shiftId}`),
+
+    /** GET /api/supplier-cabinet/schedules/my-shifts?from=&to= */
+    myShifts: (from: string, to: string): Promise<ScheduleShiftDto[]> => {
+      const qs = new URLSearchParams({ from, to });
+      return api.get<ScheduleShiftDto[]>(`${BASE}/schedules/my-shifts?${qs.toString()}`);
+    },
+
+    /** GET /api/supplier-cabinet/schedules/staff — assignee options for the shift form. */
+    staff: (): Promise<UserDto[]> => api.get<UserDto[]>(`${BASE}/schedules/staff`),
+  },
 };

@@ -468,6 +468,7 @@
           "myItems": "Мої товари",
           "warehouses": "Склади",
           "inventory": "Склад",
+          "schedules": "Графіки",
           "reviews": "Відгуки",
           "tasks": "Завдання",
           "clients": "Клієнти",
@@ -3629,6 +3630,17 @@
           "subtitle": "Клієнти кабінету постачальника — відгуки, завдання",
           "noAccess": "Немає доступу до клієнтів."
         }
+      },
+      "schedules": {
+        "pageTitle": "Графіки працівників",
+        "pageSubtitle": "Робочі графіки та зміни персоналу ваших складів",
+        "schedulesTab": "Розклади",
+        "myShiftsTab": "Мій розклад",
+        "chooseScheduleHint": "Оберіть розклад зі списку",
+        "loadingShifts": "Завантаження змін…",
+        "warehouseLabel": "Склад *",
+        "warehousePlaceholder": "— Оберіть склад —",
+        "warehouseRequiredError": "Оберіть склад"
       },
       "itemsTable": {
         "errorLoad": "Не вдалося завантажити каталог.",

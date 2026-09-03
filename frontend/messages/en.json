@@ -468,6 +468,7 @@
           "myItems": "My Items",
           "warehouses": "Warehouses",
           "inventory": "Inventory",
+          "schedules": "Schedules",
           "reviews": "Reviews",
           "tasks": "Tasks",
           "clients": "Clients",
@@ -3629,6 +3630,17 @@
           "subtitle": "Supplier cabinet clients — reviews, tasks",
           "noAccess": "You don't have access to clients."
         }
+      },
+      "schedules": {
+        "pageTitle": "Employee schedules",
+        "pageSubtitle": "Work schedules and staff shifts for your warehouses",
+        "schedulesTab": "Schedules",
+        "myShiftsTab": "My schedule",
+        "chooseScheduleHint": "Pick a schedule from the list",
+        "loadingShifts": "Loading shifts…",
+        "warehouseLabel": "Warehouse *",
+        "warehousePlaceholder": "— Select a warehouse —",
+        "warehouseRequiredError": "Select a warehouse"
       },
       "itemsTable": {
         "errorLoad": "Failed to load the catalog.",
