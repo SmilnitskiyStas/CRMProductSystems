@@ -1063,4 +1063,20 @@ tenant-facing `CategoryDto` (null коли категорія нічого не 
 only**, поле з `dirtyFields[field]` не чіпається (дефолти йдуть за категорією, поки товарознавець
 не візьме поле на себе). `dotnet test` 2335/2335 (+5). tsc/lint/parity(4961) чисто. E2E: set →
 pick → fill; ручна правка тримається при зміні категорії; invalid → 400; tenant бачить defaults.
-Слайси 3–5 (підсвітка акцій, авто-буфери з продажів, банер в аналітиці) — не почато.
+
+## Каталог — підсвітка акційних товарів у таблиці (Слайс 3)
+
+**Status:** done · **Agent:** main session · Push `931a14f5` (авто-deploy, без міграції).
+
+Активна / майбутня акція фарбує рядок товару (зелений / жовтий) + бейдж
+«🏷 В акції −N%» / «🏷 Акція за N дн» біля назви. `ItemRepository.GetPromoStatesAsync` — 1 запит
+на сторінку каталогу по id, агрегація по всіх магазинах тенанта (сам список — tenant-wide).
+Рахуються лише `active` знижки з `reason=promo` або campaign-linked; `active` > `upcoming`;
+`upcoming` = старт у майбутньому в межах 14 днів. `ItemDto` += `promoState` (active|upcoming|null)
+/ `promoStartsAt` / `promoDiscountPercent` — заповнюються лише пейджед-списком, не single-item
+lookup'ами (`ToDto(p, promoStates?)` overload). `ProductsTable` — `<PromoBadge>` у клітинці назви
++ `Table rowStyle` тінт (Table.tsx уже підтримує `rowStyle`). Оновлено 2 hand-fake
+`IItemRepository` (Pos/Fiscalization). Без зміни схеми. `dotnet test` **2336/2336** (+1).
+tsc/lint/parity(4965) чисто. E2E на dev: active+upcoming знижки → тінт + бейдж, English UI.
+Слайси 4–5 (POS→daily_sales pipeline → авто-буфери; банер в аналітиці) — **не почато** (користувач
+попросив зупинитись на Слайсі 3). План + exploration: `.claude/plans/catalog-form-buffers-promo.md`.
