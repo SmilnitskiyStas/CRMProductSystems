@@ -1033,3 +1033,18 @@ openapi.json — спільний борг. `mobile/`/backend/worker/retail anal
 Live E2E: згортання за замовч. / розгортання / пошук-зі-шляхом / вибір вкладеної через пошук →
 save (товар лягає на обрану підкатегорію). Фільтр на `inventory/page.tsx` лишився нативним
 `<select>` — окремо, якщо треба.
+
+## Каталог — форма товару у згортуваних секціях (Слайс 1 з `.claude/plans/catalog-form-buffers-promo.md`)
+
+**Status:** done · **Agent:** main session · Push `86a3e187` (авто-deploy).
+
+`ProductForm` (~20 полів суцільним списком) → 5 `CollapsibleSection`: **General** (Одиниця,
+Штрихкоди, Фото, Категорія) / **Ціноутворення та податки** / **Управління запасами**
+(Тип управління, Мін/Макс) / **Властивості** (Тип товару, Клас, Виробник, Термін) / **Розширені
+налаштування** (Країна походження, Буфер безпеки — collapsed, прогресивне розкриття). Назва —
+завжди видима над секціями. Create → відкрито лише General; edit → усі крім Розширених
+(`defaultOpen={isEditing}`). Чиста реорганізація JSX — жодне поле, `register`/zod, ані `onSubmit`
+payload не змінені. i18n +5 ключів/локаль (`form.sectionMain/Pricing/Stock/Properties/Advanced`),
+parity 4958==4958. tsc/lint чисто. E2E: create+edit, expand/collapse, submit з дефолтами.
+Слайси 2–5 (дефолти категорій, підсвітка акцій, авто-буфери з продажів) — не почато;
+план + exploration у `catalog-form-buffers-promo.md`.
