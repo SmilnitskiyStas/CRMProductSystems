@@ -787,6 +787,8 @@
         "unitPlaceholder": "кг, шт, л, упак…",
         "categoryLabel": "Категорія",
         "categoryNone": "без категорії",
+        "categorySearch": "Пошук категорії…",
+        "categoryEmpty": "Категорій не знайдено",
         "managementTypeLabel": "Тип управління",
         "managementTypeMts": "MTS — на склад",
         "managementTypeMto": "MTO — на замовлення",

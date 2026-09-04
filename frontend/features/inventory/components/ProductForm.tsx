@@ -9,7 +9,7 @@ import { Btn } from "@/components/ui/Btn";
 import type { CreateProductPayload, Product, UpdateProductPayload } from "../types";
 import { productsApi } from "../api/products";
 import { useCategories } from "../hooks/useCategories";
-import { flattenTree, indentLabel } from "../lib/categoryTree";
+import { CategorySelect } from "./CategorySelect";
 
 export const PERISHABILITY_CLASS_VALUES = ["fresh", "chilled", "standard", "durable"] as const;
 
@@ -111,13 +111,12 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
 
   const productSchema = useMemo(() => buildProductSchema(t), [t]);
   const { data: categories = [] } = useCategories();
-  const categoryOptions = useMemo(() => flattenTree(categories), [categories]);
   // The current item may sit on a category the tenant can no longer pick from the list — the
   // provider retagged it to another business type or soft-deleted it. Surface it as its own
   // option so the field isn't blank and an unrelated edit doesn't silently drop the link
   // (QA BUG-2); the backend grandfathers an unchanged category (QA BUG-1).
   const orphanCategoryOption =
-    product?.categoryId && !categoryOptions.some(({ category }) => category.id === product.categoryId)
+    product?.categoryId && !categories.some((c) => c.id === product.categoryId)
       ? { id: product.categoryId, name: product.categoryName ?? product.categoryId }
       : null;
 
@@ -126,6 +125,7 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(productSchema),
@@ -424,17 +424,20 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
             {/* Category */}
             <div>
               <label style={labelStyle}>{t("categoryLabel")}</label>
-              <select {...register("categoryId")} style={{ ...inputStyle, cursor: "pointer" }}>
-                <option value="">— {t("categoryNone")} —</option>
-                {orphanCategoryOption && (
-                  <option value={orphanCategoryOption.id}>{orphanCategoryOption.name}</option>
-                )}
-                {categoryOptions.map(({ category, depth }) => (
-                  <option key={category.id} value={category.id}>
-                    {indentLabel(category.name, depth)}
-                  </option>
-                ))}
-              </select>
+              {/* Registered hidden input keeps `categoryId` in the form state; CategorySelect
+                  drives it via setValue/watch (no native <select> — it's a searchable tree). */}
+              <input type="hidden" {...register("categoryId")} />
+              <CategorySelect
+                value={watch("categoryId") ?? ""}
+                onChange={(id) => setValue("categoryId", id, { shouldDirty: true })}
+                categories={categories}
+                orphanOption={orphanCategoryOption}
+                noneLabel={`— ${t("categoryNone")} —`}
+                placeholder={`— ${t("categoryNone")} —`}
+                searchPlaceholder={t("categorySearch")}
+                emptyText={t("categoryEmpty")}
+                ariaLabel={t("categoryLabel")}
+              />
             </div>
 
             {/* ManagementType + ItemType */}

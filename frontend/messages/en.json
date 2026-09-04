@@ -787,6 +787,8 @@
         "unitPlaceholder": "kg, pcs, l, pack…",
         "categoryLabel": "Category",
         "categoryNone": "no category",
+        "categorySearch": "Search category…",
+        "categoryEmpty": "No categories found",
         "managementTypeLabel": "Management type",
         "managementTypeMts": "MTS — to stock",
         "managementTypeMto": "MTO — to order",
