@@ -295,6 +295,43 @@ public sealed class ItemRepository : IItemRepository
         return result;
     }
 
+    public async Task<ItemPromoDetail?> GetPromoDetailAsync(
+        Guid productId, int upcomingWithinDays, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var horizon = now.AddDays(Math.Max(1, upcomingWithinDays));
+
+        var rows = await _db.Discounts
+            .Where(d => d.ProductId == productId
+                        && d.Status == DiscountStatus.Active
+                        && (d.Reason == DiscountReason.Promo || d.PromotionCampaignId != null)
+                        && (d.ValidUntil == null || d.ValidUntil >= now)
+                        && d.ValidFrom <= horizon)
+            .Select(d => new { d.Id, d.ValidFrom, d.DiscountPercent })
+            .ToListAsync(ct);
+
+        if (rows.Count == 0) return null;
+
+        // Same active-beats-upcoming, best-by-percent / soonest-by-date resolution as
+        // GetPromoStatesAsync, scoped to this one product's own discounts across all stores.
+        var active = rows.Where(r => r.ValidFrom <= now).ToList();
+        var winner = active.Count > 0
+            ? active.OrderByDescending(r => r.DiscountPercent).First()
+            : rows.OrderBy(r => r.ValidFrom).First();
+        var state = active.Count > 0 ? "active" : "upcoming";
+
+        // The real order-formula forecast, never an invented one: only an APPLIED cannibalization
+        // row for this exact discount+product counts (CannibalizationService.PromoProductCoefficient,
+        // manager-approved). Most promos never go through that review — null here just means the
+        // banner falls back to its plain "order will increase automatically" wording.
+        var coefficient = await _db.PromoCannibalizations
+            .Where(pc => pc.IsApplied && pc.DiscountId == winner.Id && pc.AffectedProductId == productId)
+            .Select(pc => (decimal?)pc.OrderCoefficient)
+            .FirstOrDefaultAsync(ct);
+
+        return new ItemPromoDetail(state, active.Count > 0 ? null : winner.ValidFrom, winner.DiscountPercent, coefficient);
+    }
+
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) =>
         _db.ProductSupplierSettings
             .Include(s => s.Supplier)

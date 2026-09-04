@@ -860,7 +860,11 @@
       },
       "productPage": {
         "notFound": "Product not found",
-        "unitLabel": "Unit of measure"
+        "unitLabel": "Unit of measure",
+        "promoBannerActive": "🏷 Promo active on this item (−{pct}%)",
+        "promoBannerUpcoming": "🏷 Promo starts {date} on this item (−{pct}%)",
+        "promoForecastWithCoef": "Forecast ×{coef} — order volume is already increased automatically",
+        "promoForecastPlain": "Order volume will be increased automatically"
       },
       "analytics": {
         "series": {

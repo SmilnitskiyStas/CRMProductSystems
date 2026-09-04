@@ -1109,4 +1109,17 @@ tsc/lint/parity(4965) чисто. E2E на dev: active+upcoming знижки →
 `ItemDto` += `suggested{Min,Max,SafetyBuffer,AduEffective}` + `bufferCalculatedAt` (list-only). `ProductForm`
 секція «Управління запасами»: бокс «Система пропонує …» + «Застосувати» (edit-mode, не автозапис) + 4d
 примітка про акцію. Без міграції. `dotnet test` 2337/2337; worker tsc / frontend tsc+lint+parity(4970) чисто.
-SQL звірено на dev проти C#-формули (контрольований seed + 4736 реальних pos_transactions). Слайс 5 — не почато.
+SQL звірено на dev проти C#-формули (контрольований seed + 4736 реальних pos_transactions).
+
+## Каталог — банер «акція наближається» на сторінці товару (Слайс 5, фінал плану) — TASK-692
+
+**Status:** done · **Agent:** main session · не запушено · Log: `.claude/logs/tasks/692_2026-09-04_slice5-promo-forecast-banner_main-session.md`
+
+Банер над табами `/inventory/{id}`: «🏷 Акція діє/з DD.MM.YYYY (−N%). Прогноз ×K … / Замовлення буде
+збільшено автоматично.» Новий `ItemRepository.GetPromoDetailAsync` (окремий від пейджед-каталожного
+`GetPromoStatesAsync`) + `ItemDto.PromoOrderCoefficient` — реальний `CannibalizationService.
+PromoProductCoefficient` (2.0), лише коли **застосована** (`IsApplied`) пропозиція канібалізації
+існує для цього промо; інакше без числа. `PromoState/StartsAt/DiscountPercent` тепер і на
+`GetByIdAsync`, не лише list. Без міграції. 7 repo-level (EF InMemory) + 2 service-level тестів.
+`dotnet test` 2347/2347; tsc/lint/parity(4974) чисто. E2E на dev — обидва варіанти банера + «без
+промо» перевірено, seed прибрано. **Усі 5 слайсів плану `catalog-form-buffers-promo.md` завершено.**

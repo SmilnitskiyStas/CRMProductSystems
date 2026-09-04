@@ -142,6 +142,9 @@ file sealed class FakeCatalogRepo : IItemRepository
     public Task<IReadOnlyDictionary<Guid, ItemBufferSuggestion>> GetBufferSuggestionsAsync(IReadOnlyList<Guid> productIds, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyDictionary<Guid, ItemBufferSuggestion>>(new Dictionary<Guid, ItemBufferSuggestion>());
 
+    public Task<ItemPromoDetail?> GetPromoDetailAsync(Guid productId, int upcomingWithinDays, CancellationToken ct = default) =>
+        Task.FromResult<ItemPromoDetail?>(null);
+
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) => Task.FromResult(new List<ProductSupplierSetting>());
     public Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default) => Task.FromResult(false);
     public Task AddAsync(Item product, CancellationToken ct = default) => Task.CompletedTask;

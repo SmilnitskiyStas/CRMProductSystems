@@ -84,7 +84,20 @@ public sealed class ItemService : IItemService
     public async Task<ItemDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var product = await _repo.GetByIdAsync(id, ct);
-        return product is null ? null : ToDto(product);
+        if (product is null) return null;
+
+        // Slice 5: the single-product page (and its "promo approaching" banner) needs promo
+        // detail the paged catalog list doesn't — a dedicated one-shot query rather than
+        // reusing LoadPromoStatesAsync/GetPromoStatesAsync, so the high-traffic catalog page's
+        // query shape stays exactly as Slice 3/4 shipped it.
+        var promo = await _repo.GetPromoDetailAsync(id, PromoUpcomingWithinDays, ct);
+        return promo is null ? ToDto(product) : ToDto(product) with
+        {
+            PromoState = promo.State,
+            PromoStartsAt = promo.StartsAt,
+            PromoDiscountPercent = promo.DiscountPercent,
+            PromoOrderCoefficient = promo.OrderCoefficient,
+        };
     }
 
     public async Task<ItemDto?> GetByBarcodeAsync(string barcode, CancellationToken ct = default)
@@ -447,6 +460,7 @@ public sealed class ItemService : IItemService
             promo?.State,
             promo?.StartsAt,
             promo?.DiscountPercent,
+            null, // PromoOrderCoefficient — Slice 5, only set via the `with` expression in GetByIdAsync
             sug?.SuggestedMinStock,
             sug?.SuggestedMaxStock,
             sug?.SuggestedSafetyBuffer,

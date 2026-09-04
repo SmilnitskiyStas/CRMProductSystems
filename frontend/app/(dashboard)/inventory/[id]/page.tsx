@@ -9,6 +9,7 @@ import {
 import { useTranslations, useLocale } from "next-intl";
 import { useProduct } from "@/features/inventory/hooks/useProducts";
 import { ProductAnalyticsTab } from "@/features/inventory/components/ProductAnalyticsTab";
+import type { Product } from "@/features/inventory/types";
 
 // ── Tab ───────────────────────────────────────────────────────────────────────
 
@@ -117,6 +118,50 @@ function StatCard({
   );
 }
 
+// ── Promo banner (Slice 5) ──────────────────────────────────────────────────────
+//
+// Shown regardless of the active tab (info/analytics) — a page-level status, not a
+// chart annotation. Reuses the same active=green / upcoming=amber convention as the
+// catalog table's PromoBadge/rowStyle (Slice 3) and the product-form promo note
+// (Slice 4d). The ×K forecast only renders when the backend found a real, manager-
+// approved PromoCannibalization coefficient for this product's own promo
+// (ItemRepository.GetPromoDetailAsync) — never a guessed number.
+function PromoBanner({ product }: { product: Product }) {
+  const t = useTranslations("Dashboard.inventory.productPage");
+  const locale = useLocale();
+  const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+
+  if (!product.promoState) return null;
+
+  const active = product.promoState === "active";
+  const pct = Math.round(product.promoDiscountPercent ?? 0);
+  const headline = active
+    ? t("promoBannerActive", { pct })
+    : t("promoBannerUpcoming", {
+        pct,
+        date: product.promoStartsAt
+          ? new Date(product.promoStartsAt).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit", year: "numeric" })
+          : "",
+      });
+  const forecast = product.promoOrderCoefficient != null
+    ? t("promoForecastWithCoef", { coef: product.promoOrderCoefficient })
+    : t("promoForecastPlain");
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+      padding: "10px 16px", borderRadius: 10,
+      background: active ? "rgba(74,222,128,0.08)" : "rgba(251,191,36,0.08)",
+      border: `1px solid ${active ? "rgba(74,222,128,0.3)" : "rgba(251,191,36,0.3)"}`,
+      color: active ? "#4ADE80" : "#FCD9A0",
+      fontSize: 13,
+    }}>
+      <span style={{ fontWeight: 600 }}>{headline}.</span>
+      <span style={{ opacity: 0.85 }}>{forecast}.</span>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ProductPage() {
@@ -190,6 +235,8 @@ export default function ProductPage() {
           </p>
         </div>
       </div>
+
+      <PromoBanner product={product} />
 
       {/* Tabs */}
       <div style={{

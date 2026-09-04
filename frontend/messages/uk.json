@@ -860,7 +860,11 @@
       },
       "productPage": {
         "notFound": "Товар не знайдено",
-        "unitLabel": "Одиниця виміру"
+        "unitLabel": "Одиниця виміру",
+        "promoBannerActive": "🏷 Акція на товар діє (−{pct}%)",
+        "promoBannerUpcoming": "🏷 Акція на товар з {date} (−{pct}%)",
+        "promoForecastWithCoef": "Прогноз ×{coef} — замовлення вже збільшено автоматично",
+        "promoForecastPlain": "Замовлення буде збільшено автоматично"
       },
       "analytics": {
         "series": {

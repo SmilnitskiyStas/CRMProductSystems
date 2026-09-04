@@ -31,13 +31,21 @@ public sealed record ItemDto(
     string? CountryOrigin,
     string PerishabilityClass,
     // Slice 3 — promo highlight on the catalog table. Null unless the item has a running or
-    // near-future promo (only populated by the paged catalog list, not single-item lookups).
+    // near-future promo. PromoState/PromoStartsAt/PromoDiscountPercent are populated by BOTH the
+    // paged catalog list (Slice 3) and single-item GetByIdAsync (Slice 5, product detail banner) —
+    // each endpoint resolves them with its own query, see ItemRepository.GetPromoStatesAsync vs
+    // GetPromoDetailAsync.
     string? PromoState = null,           // "active" | "upcoming"
     DateTime? PromoStartsAt = null,      // set for "upcoming"
     decimal? PromoDiscountPercent = null,
+    // Slice 5 — real order-formula forecast (×K) for the product-page banner. Only populated by
+    // single-item GetByIdAsync; null on the paged catalog list (never queried there) and null
+    // whenever no *applied* PromoCannibalization row exists for this product's own promo yet.
+    decimal? PromoOrderCoefficient = null,
     // Slice 4c — the nightly replenishment engine's suggestion, rolled up as MAX across stores.
-    // Null until the engine has written a product_buffer row for the item (also only populated by
-    // the paged / list catalog endpoints, not single-item lookups — same as the promo fields).
+    // Null until the engine has written a product_buffer row for the item. Only populated by the
+    // paged / list catalog endpoints (unlike the promo fields above, this is NOT also loaded by
+    // single-item GetByIdAsync — the product form reads it off the list row it was opened from).
     decimal? SuggestedMinStock = null,
     decimal? SuggestedMaxStock = null,
     decimal? SuggestedSafetyBuffer = null,

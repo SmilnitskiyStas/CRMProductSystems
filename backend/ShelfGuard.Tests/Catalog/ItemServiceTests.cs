@@ -263,6 +263,39 @@ public sealed class ItemServiceTests
         Assert.Null(result.Items.Single(i => i.Id == plain.Id).SuggestedMinStock);
     }
 
+    // ── Slice 5: single-product promo detail (banner) ────────────────────────
+
+    [Fact]
+    public async Task GetByIdAsync_WithAppliedCannibalization_MapsPromoDetailIncludingCoefficient()
+    {
+        var product = new Item { TenantId = _tenantId, Name = "On sale", ManagementType = "MTS" };
+        _repo.GetByIdAsync(product.Id, Arg.Any<CancellationToken>()).Returns(product);
+        _repo.GetPromoDetailAsync(product.Id, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new ItemPromoDetail("active", null, 15m, 2.0m));
+
+        var dto = await _sut.GetByIdAsync(product.Id);
+
+        Assert.NotNull(dto);
+        Assert.Equal("active", dto!.PromoState);
+        Assert.Equal(15m, dto.PromoDiscountPercent);
+        Assert.Equal(2.0m, dto.PromoOrderCoefficient);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_NoPromo_LeavesPromoFieldsNull()
+    {
+        var product = new Item { TenantId = _tenantId, Name = "Plain", ManagementType = "MTS" };
+        _repo.GetByIdAsync(product.Id, Arg.Any<CancellationToken>()).Returns(product);
+        _repo.GetPromoDetailAsync(product.Id, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns((ItemPromoDetail?)null);
+
+        var dto = await _sut.GetByIdAsync(product.Id);
+
+        Assert.NotNull(dto);
+        Assert.Null(dto!.PromoState);
+        Assert.Null(dto.PromoOrderCoefficient);
+    }
+
     [Fact]
     public async Task GetPagedAsync_WithIds_PassesIdsThroughAndReturnsExactSet()
     {
