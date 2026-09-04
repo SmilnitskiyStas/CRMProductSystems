@@ -1018,3 +1018,18 @@ debounce 250ms, clearable); `searchCategories`/`useCategorySearch` у `features/
 **⚠️ Блокер бекенду (не мій скоуп):** `GET /api/categories/search` gated `CanViewStock` — `supplier_admin`
 НЕ в `CanViewStockRoles` → 6e typeahead 403 для постачальника, поки бекенд не відкриє endpoint цій ролі.
 openapi.json — спільний борг. `mobile/`/backend/worker/retail analytics|schedules internals не чіпав. НЕ закомічено.
+
+## Каталог — searchable/collapsible category picker у формі товару (follow-up до TASK-678)
+
+**Status:** done · **Agent:** main session · Push `be42dc1a`.
+
+Плоский `<select>` категорії у `ProductForm` замінено на новий
+`features/inventory/components/CategorySelect.tsx` — портальний dropdown: батьки з дітьми
+згорнуті за замовчуванням (chevron розгортає; шлях до вибраного авто-розгортається при
+відкритті), пошук (перемикає на плоский фільтрований список з батьківським шляхом як
+контекстом), опція «— без категорії —», X для очищення, Esc/outside-click закриває.
+`ProductForm` керує полем через registered hidden input + `setValue`/`watch`. i18n +2 ключі
+кожна локаль (`categorySearch`/`categoryEmpty`), parity 4953==4953. `tsc`/`next lint` clean.
+Live E2E: згортання за замовч. / розгортання / пошук-зі-шляхом / вибір вкладеної через пошук →
+save (товар лягає на обрану підкатегорію). Фільтр на `inventory/page.tsx` лишився нативним
+`<select>` — окремо, якщо треба.
