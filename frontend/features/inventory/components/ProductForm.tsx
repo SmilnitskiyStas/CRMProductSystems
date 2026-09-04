@@ -103,6 +103,38 @@ const sectionBodyStyle: React.CSSProperties = {
 };
 const twoColStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 };
 
+// Slice 4c/4d — the "system suggests …" box and the promo note inside the stock section.
+const noteBoxStyle: React.CSSProperties = {
+  background: "#0F1B2D",
+  border: "1px solid #1E3A5F",
+  borderRadius: 8,
+  padding: "10px 12px",
+  fontSize: 12,
+  color: "#B8C4D4",
+  lineHeight: 1.5,
+};
+const noteHeadStyle: React.CSSProperties = { color: "#93C5FD", fontWeight: 600, marginBottom: 4 };
+const applyBtnStyle: React.CSSProperties = {
+  marginTop: 8,
+  background: "#1D4ED8",
+  border: "none",
+  borderRadius: 6,
+  color: "#fff",
+  fontSize: 12,
+  fontWeight: 600,
+  padding: "5px 12px",
+  cursor: "pointer",
+};
+const promoNoteStyle: React.CSSProperties = {
+  background: "rgba(251,191,36,0.08)",
+  border: "1px solid rgba(251,191,36,0.3)",
+  borderRadius: 8,
+  padding: "10px 12px",
+  fontSize: 12,
+  color: "#FCD9A0",
+  lineHeight: 1.5,
+};
+
 export function ProductForm({ open, product, isPending, onClose, onCreate, onUpdate, onImageUpload }: Props) {
   const t = useTranslations("Dashboard.inventory.form");
   const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
@@ -159,6 +191,40 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
     fill("itemType", d.itemType);
     fill("shelfLifeDays", d.shelfLifeDays);
   }
+
+  // Slice 4c: the nightly replenishment engine's suggestion for this item, if it has produced one.
+  // Only offered while editing (a brand-new item has no sales history). "Застосувати" copies the
+  // three values into the form — the engine never overwrites Item.MinStock/MaxStock/SafetyBuffer
+  // on its own.
+  const suggestion =
+    isEditing && product?.bufferCalculatedAt != null && product.suggestedMinStock != null
+      ? {
+          min: product.suggestedMinStock,
+          max: product.suggestedMaxStock ?? product.suggestedMinStock,
+          safety: product.suggestedSafetyBuffer ?? 0,
+          calculatedAt: product.bufferCalculatedAt,
+        }
+      : null;
+
+  function applySuggestion() {
+    if (!suggestion) return;
+    setValue("minStock", suggestion.min, { shouldDirty: true });
+    setValue("maxStock", suggestion.max, { shouldDirty: true });
+    setValue("safetyBuffer", suggestion.safety, { shouldDirty: true });
+  }
+
+  // Slice 4d: a running / near-future promo shifts the order quantity automatically in the order
+  // engine — surfaced here so the merchandiser doesn't hand-inflate the buffer for it.
+  const promoNote = (() => {
+    if (!isEditing || !product?.promoState) return null;
+    if (product.promoState === "active") {
+      return t("promoNoteActive", { pct: Math.round(product.promoDiscountPercent ?? 0) });
+    }
+    const days = product.promoStartsAt
+      ? Math.max(0, Math.ceil((new Date(product.promoStartsAt).getTime() - Date.now()) / 86_400_000))
+      : 0;
+    return t("promoNoteUpcoming", { days });
+  })();
 
   useEffect(() => {
     reset(
@@ -516,6 +582,31 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                   <input {...register("maxStock")} type="number" step="0.01" min="0" style={inputStyle} />
                 </div>
               </div>
+
+              {suggestion && (
+                <div style={noteBoxStyle}>
+                  <div style={noteHeadStyle}>
+                    {t("bufferSuggestionTitle", {
+                      date: new Date(suggestion.calculatedAt).toLocaleDateString(
+                        locale === "en" ? "en-US" : "uk-UA",
+                        { day: "2-digit", month: "2-digit" },
+                      ),
+                    })}
+                  </div>
+                  {t("bufferSuggestionValues", {
+                    min: suggestion.min,
+                    max: suggestion.max,
+                    safety: suggestion.safety,
+                  })}
+                  <div>
+                    <button type="button" style={applyBtnStyle} onClick={applySuggestion}>
+                      {t("bufferSuggestionApply")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {promoNote && <div style={promoNoteStyle}>{promoNote}</div>}
             </div>
             </CollapsibleSection>
 

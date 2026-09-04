@@ -27,7 +27,8 @@ public sealed class ItemService : IItemService
     {
         var products = await _repo.GetAllAsync(categoryId, segmentId, managementType, uncategorized, ct);
         var promo = await LoadPromoStatesAsync(products, ct);
-        return products.Select(p => ToDto(p, promo)).ToList();
+        var suggestions = await LoadBufferSuggestionsAsync(products, ct);
+        return products.Select(p => ToDto(p, promo, suggestions)).ToList();
     }
 
     // Slice 3: one extra query per catalog page for the promo highlight.
@@ -39,6 +40,15 @@ public sealed class ItemService : IItemService
         if (products.Count == 0) return new Dictionary<Guid, ItemPromoInfo>();
         var states = await _repo.GetPromoStatesAsync(products.Select(p => p.Id).ToList(), PromoUpcomingWithinDays, ct);
         return states ?? new Dictionary<Guid, ItemPromoInfo>();
+    }
+
+    // Slice 4c: one extra query per catalog page for the nightly buffer suggestion.
+    private async Task<IReadOnlyDictionary<Guid, ItemBufferSuggestion>> LoadBufferSuggestionsAsync(
+        IReadOnlyCollection<Item> products, CancellationToken ct)
+    {
+        if (products.Count == 0) return new Dictionary<Guid, ItemBufferSuggestion>();
+        var s = await _repo.GetBufferSuggestionsAsync(products.Select(p => p.Id).ToList(), ct);
+        return s ?? new Dictionary<Guid, ItemBufferSuggestion>();
     }
 
     public async Task<PagedResult<ItemDto>> GetPagedAsync(
@@ -61,9 +71,10 @@ public sealed class ItemService : IItemService
             categoryId, segmentId, managementType, search, ids, sortBy, sortDescending, page, pageSize,
             minPrice, maxPrice, uncategorized, ct);
         var promo = await LoadPromoStatesAsync(products, ct);
+        var suggestions = await LoadBufferSuggestionsAsync(products, ct);
         return new PagedResult<ItemDto>
         {
-            Items = products.Select(p => ToDto(p, promo)).ToList(),
+            Items = products.Select(p => ToDto(p, promo, suggestions)).ToList(),
             TotalCount = total,
             Page = page,
             PageSize = pageSize,
@@ -394,11 +405,15 @@ public sealed class ItemService : IItemService
 
     // ── mapping ────────────────────────────────────────────────────────────
 
-    private static ItemDto ToDto(Item p) => ToDto(p, promoStates: null);
+    private static ItemDto ToDto(Item p) => ToDto(p, promoStates: null, suggestions: null);
 
-    private static ItemDto ToDto(Item p, IReadOnlyDictionary<Guid, ItemPromoInfo>? promoStates)
+    private static ItemDto ToDto(
+        Item p,
+        IReadOnlyDictionary<Guid, ItemPromoInfo>? promoStates,
+        IReadOnlyDictionary<Guid, ItemBufferSuggestion>? suggestions = null)
     {
         var promo = promoStates is not null && promoStates.TryGetValue(p.Id, out var pi) ? pi : null;
+        var sug = suggestions is not null && suggestions.TryGetValue(p.Id, out var si) ? si : null;
         return new(
             p.Id,
             p.Barcodes,
@@ -431,7 +446,12 @@ public sealed class ItemService : IItemService
             p.PerishabilityClass,
             promo?.State,
             promo?.StartsAt,
-            promo?.DiscountPercent);
+            promo?.DiscountPercent,
+            sug?.SuggestedMinStock,
+            sug?.SuggestedMaxStock,
+            sug?.SuggestedSafetyBuffer,
+            sug?.AduEffective,
+            sug?.CalculatedAt);
     }
 
     private static ProductSupplierSettingDto ToSupplierDto(ProductSupplierSetting s) => new(

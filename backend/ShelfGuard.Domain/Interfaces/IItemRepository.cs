@@ -9,6 +9,26 @@ namespace ShelfGuard.Domain.Interfaces;
 /// </summary>
 public sealed record ItemPromoInfo(string State, DateTime? StartsAt, decimal? DiscountPercent);
 
+/// <summary>
+/// Slice 4c — the replenishment engine's recommendation for a catalog row, rolled up across the
+/// tenant's stores. Each value is the <b>MAX</b> of the per-store figures (the highest single
+/// number is the safe tenant-wide default to offer). Sourced entirely from the nightly worker
+/// recompute (<c>product_buffer</c> + <c>product_adu</c>). A product is absent from the result
+/// until the engine has written a <c>product_buffer</c> row for it in at least one store.
+///
+///   <c>SuggestedMinStock</c>    — reorder point: MAX(red + yellow) — top of the yellow zone
+///   <c>SuggestedMaxStock</c>    — max on-hand target: MAX(total buffer) — top of the green zone
+///   <c>SuggestedSafetyBuffer</c>— MAX(red zone) — the DDMRP safety stock
+///   <c>AduEffective</c>         — MAX effective average daily usage (informational)
+///   <c>CalculatedAt</c>         — most recent <c>product_buffer.CalculatedAt</c> across stores
+/// </summary>
+public sealed record ItemBufferSuggestion(
+    decimal? SuggestedMinStock,
+    decimal? SuggestedMaxStock,
+    decimal? SuggestedSafetyBuffer,
+    decimal? AduEffective,
+    DateTime? CalculatedAt);
+
 public interface IItemRepository
 {
     // B2: `uncategorized` — true → only items with no category; overrides categoryId. When
@@ -53,6 +73,15 @@ public interface IItemRepository
     /// </summary>
     Task<IReadOnlyDictionary<Guid, ItemPromoInfo>> GetPromoStatesAsync(
         IReadOnlyList<Guid> productIds, int upcomingWithinDays, CancellationToken ct = default);
+
+    /// <summary>
+    /// Slice 4c: the nightly replenishment engine's suggested min/max/safety for the given
+    /// catalog-page product ids, each rolled up as the MAX across the tenant's stores. Products
+    /// with no <c>product_buffer</c> row yet are absent from the result. See
+    /// <see cref="ItemBufferSuggestion"/>.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, ItemBufferSuggestion>> GetBufferSuggestionsAsync(
+        IReadOnlyList<Guid> productIds, CancellationToken ct = default);
 
     Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default);
     Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default);

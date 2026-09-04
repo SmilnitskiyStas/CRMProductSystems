@@ -105,6 +105,12 @@ public sealed class BufferService : IBufferService
 /// <summary>
 /// Pure CDA buffer math (v2-spec §2). Side-effect-free for unit testing.
 ///
+/// ⚠️ PARITY: the nightly worker job re-implements this in SQL —
+/// worker/src/jobs/replenishment-recompute.job.ts (Phase 3). Any change to the zone
+/// formulas, the schedule → LT/OC derivation, or the variability clamp here must be
+/// mirrored there, or the "generate order" button and the nightly recompute produce
+/// divergent product_buffer rows.
+///
 ///   Green  = ADU × (LT + OC)        — demand over the full replenishment cycle
 ///   Yellow = ADU × OC × variability — reserve for demand unevenness
 ///   Red    = ADU × LT × safety      — safety stock for unexpected events

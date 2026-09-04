@@ -32,6 +32,15 @@ export interface Product {
   promoState: "active" | "upcoming" | null;
   promoStartsAt: string | null;
   promoDiscountPercent: number | null;
+  // Slice 4c — the nightly replenishment engine's suggestion (MAX across the tenant's stores).
+  // null until the engine has produced a buffer for the item; populated only by the paged
+  // catalog list, same as the promo fields. The product form only *offers* these — never writes
+  // them automatically.
+  suggestedMinStock: number | null;
+  suggestedMaxStock: number | null;
+  suggestedSafetyBuffer: number | null;
+  suggestedAduEffective: number | null;
+  bufferCalculatedAt: string | null;
 }
 
 export interface BarcodeProductLookup {

@@ -93,6 +93,11 @@ public sealed class AduService : IAduService
 /// Pure ADU math (v2-spec §1). Static and side-effect-free so it can be unit-tested
 /// without a database.
 ///
+/// ⚠️ PARITY: the nightly worker job re-implements this in SQL —
+/// worker/src/jobs/replenishment-recompute.job.ts (Phase 2). Any change to the window
+/// math or the grouping thresholds here must be mirrored there, or the "generate order"
+/// button and the nightly recompute produce divergent product_adu rows.
+///
 /// Valid day: not promo, not anomaly, and (sold > 0 OR end-of-day stock > 0).
 /// Days with no daily_sales row carry no information and are never valid.
 ///

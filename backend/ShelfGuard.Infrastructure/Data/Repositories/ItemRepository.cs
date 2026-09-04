@@ -257,6 +257,44 @@ public sealed class ItemRepository : IItemRepository
         return result;
     }
 
+    public async Task<IReadOnlyDictionary<Guid, ItemBufferSuggestion>> GetBufferSuggestionsAsync(
+        IReadOnlyList<Guid> productIds, CancellationToken ct = default)
+    {
+        if (productIds.Count == 0)
+            return new Dictionary<Guid, ItemBufferSuggestion>();
+
+        var ids = productIds as Guid[] ?? productIds.ToArray();
+
+        var bufferRows = await _db.ProductBuffers
+            .Where(b => ids.Contains(b.ProductId))
+            .Select(b => new { b.ProductId, b.BufferRed, b.BufferYellow, b.BufferTotal, b.CalculatedAt })
+            .ToListAsync(ct);
+
+        if (bufferRows.Count == 0)
+            return new Dictionary<Guid, ItemBufferSuggestion>();
+
+        var aduByProduct = (await _db.ProductAdus
+                .Where(a => ids.Contains(a.ProductId) && a.AduEffective != null)
+                .Select(a => new { a.ProductId, a.AduEffective })
+                .ToListAsync(ct))
+            .GroupBy(a => a.ProductId)
+            .ToDictionary(g => g.Key, g => g.Max(a => a.AduEffective));
+
+        var result = new Dictionary<Guid, ItemBufferSuggestion>();
+        foreach (var g in bufferRows.GroupBy(b => b.ProductId))
+        {
+            // MAX across stores — the highest single figure is the safe tenant-wide default.
+            var min = g.Max(b => b.BufferRed + b.BufferYellow); // reorder point (top of yellow)
+            var max = g.Max(b => b.BufferTotal);                // max on-hand target (top of green)
+            var safety = g.Max(b => b.BufferRed);               // DDMRP safety stock (red zone)
+            aduByProduct.TryGetValue(g.Key, out var adu);
+            result[g.Key] = new ItemBufferSuggestion(
+                Math.Round(min, 2), Math.Round(max, 2), Math.Round(safety, 2),
+                adu, g.Max(b => b.CalculatedAt));
+        }
+        return result;
+    }
+
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) =>
         _db.ProductSupplierSettings
             .Include(s => s.Supplier)

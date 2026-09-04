@@ -239,6 +239,31 @@ public sealed class ItemServiceTests
     }
 
     [Fact]
+    public async Task GetPagedAsync_MapsBufferSuggestionIntoDto()
+    {
+        var withBuffer = new Item { TenantId = _tenantId, Name = "Buffered", ManagementType = "MTS" };
+        var plain = new Item { TenantId = _tenantId, Name = "Plain", ManagementType = "MTS" };
+        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>())
+            .Returns((new List<Item> { withBuffer, plain }, 2));
+        _repo.GetBufferSuggestionsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, ItemBufferSuggestion>
+            {
+                [withBuffer.Id] = new(SuggestedMinStock: 12m, SuggestedMaxStock: 40m,
+                    SuggestedSafetyBuffer: 5m, AduEffective: 3.5m, CalculatedAt: new DateTime(2026, 9, 3)),
+            });
+
+        var result = await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, null, null, 1, 50);
+
+        var dto = result.Items.Single(i => i.Id == withBuffer.Id);
+        Assert.Equal(12m, dto.SuggestedMinStock);
+        Assert.Equal(40m, dto.SuggestedMaxStock);
+        Assert.Equal(5m, dto.SuggestedSafetyBuffer);
+        Assert.Equal(3.5m, dto.SuggestedAduEffective);
+        Assert.Equal(new DateTime(2026, 9, 3), dto.BufferCalculatedAt);
+        Assert.Null(result.Items.Single(i => i.Id == plain.Id).SuggestedMinStock);
+    }
+
+    [Fact]
     public async Task GetPagedAsync_WithIds_PassesIdsThroughAndReturnsExactSet()
     {
         var a = new Item { TenantId = _tenantId, Name = "A", ManagementType = "MTS" };

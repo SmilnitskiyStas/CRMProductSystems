@@ -34,7 +34,15 @@ public sealed record ItemDto(
     // near-future promo (only populated by the paged catalog list, not single-item lookups).
     string? PromoState = null,           // "active" | "upcoming"
     DateTime? PromoStartsAt = null,      // set for "upcoming"
-    decimal? PromoDiscountPercent = null
+    decimal? PromoDiscountPercent = null,
+    // Slice 4c — the nightly replenishment engine's suggestion, rolled up as MAX across stores.
+    // Null until the engine has written a product_buffer row for the item (also only populated by
+    // the paged / list catalog endpoints, not single-item lookups — same as the promo fields).
+    decimal? SuggestedMinStock = null,
+    decimal? SuggestedMaxStock = null,
+    decimal? SuggestedSafetyBuffer = null,
+    decimal? SuggestedAduEffective = null,
+    DateTime? BufferCalculatedAt = null
 );
 
 public sealed record CreateProductRequest(

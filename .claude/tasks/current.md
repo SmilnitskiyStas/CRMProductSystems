@@ -1096,3 +1096,17 @@ lookup'ами (`ToDto(p, promoStates?)` overload). `ProductsTable` — `<PromoBa
 tsc/lint/parity(4965) чисто. E2E на dev: active+upcoming знижки → тінт + бейдж, English UI.
 Слайси 4–5 (POS→daily_sales pipeline → авто-буфери; банер в аналітиці) — **не почато** (користувач
 попросив зупинитись на Слайсі 3). План + exploration: `.claude/plans/catalog-form-buffers-promo.md`.
+
+## Каталог — авто-буфери з продажів (Слайс 4) — TASK-691
+
+**Status:** done · **Agent:** main session · не запушено · Log: `.claude/logs/tasks/691_2026-09-04_slice4-replenishment-recompute_main-session.md`
+
+Новий нічний worker-джоб `replenishment-recompute.job.ts` (cron 00:20, чистий SQL, `SET app.role='worker'`,
+усі тенанти — патерн stock-snapshot). Phase 1: `pos_transactions` за 3 дні → `daily_sales`
+(`Source='pos'`, `ON CONFLICT … WHERE Source='pos'` не чіпає ручні/import). Phase 2: → `product_adu`
+(SQL-порт `AduCalculator`). Phase 3: → `product_buffer` (SQL-порт `CdaBufferCalculator`). Parity-коментарі
+в `AduService.cs`/`BufferService.cs`. 4c: `ItemRepository.GetBufferSuggestionsAsync` (MAX по магазинах) →
+`ItemDto` += `suggested{Min,Max,SafetyBuffer,AduEffective}` + `bufferCalculatedAt` (list-only). `ProductForm`
+секція «Управління запасами»: бокс «Система пропонує …» + «Застосувати» (edit-mode, не автозапис) + 4d
+примітка про акцію. Без міграції. `dotnet test` 2337/2337; worker tsc / frontend tsc+lint+parity(4970) чисто.
+SQL звірено на dev проти C#-формули (контрольований seed + 4736 реальних pos_transactions). Слайс 5 — не почато.

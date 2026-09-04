@@ -16,6 +16,7 @@ import { startLoyaltyTierRecomputeWorker } from "./jobs/loyalty-tier-recompute.j
 import { startLoyaltyAnnualResetWorker } from "./jobs/loyalty-annual-reset.job";
 import { startLoyaltyBonusExpiryWorker } from "./jobs/loyalty-bonus-expiry.job";
 import { startSupplierMetricsRecomputeWorker } from "./jobs/supplier-metrics-recompute.job";
+import { startReplenishmentRecomputeWorker } from "./jobs/replenishment-recompute.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -28,6 +29,17 @@ async function scheduleRecurringJobs(): Promise<void> {
   // hourly expiry-check cycle has settled each batch's status for the day.
   const stockSnapshotQueue = new Queue("stock-snapshot", { connection: redisConnection });
   await stockSnapshotQueue.upsertJobScheduler("stock-snapshot-cron", { pattern: "10 0 * * *" }, { name: "stock-snapshot" });
+
+  // TASK-691 / plan catalog-form-buffers-promo.md Slice 4: daily 00:20 — aggregate yesterday's
+  // POS sales into daily_sales, then recompute product_adu + product_buffer for every store.
+  // Runs after stock-snapshot (00:10), well before ai-order (05:00) so the AI order pass sees
+  // fresh buffers.
+  const replenishmentQueue = new Queue("replenishment-recompute", { connection: redisConnection });
+  await replenishmentQueue.upsertJobScheduler(
+    "replenishment-recompute-cron",
+    { pattern: "20 0 * * *" },
+    { name: "replenishment-recompute" }
+  );
 
   const weeklyQueue = new Queue("weekly-report", { connection: redisConnection });
   await weeklyQueue.upsertJobScheduler("weekly-report-cron", { pattern: "0 8 * * 0" }, { name: "weekly-report" });
@@ -106,6 +118,7 @@ async function main(): Promise<void> {
   startWeeklyReportWorker();
   startCleanupWorker();
   startSupplierMetricsRecomputeWorker();
+  startReplenishmentRecomputeWorker();
   startLoyaltyTierRecomputeWorker();
   startLoyaltyAnnualResetWorker();
   startLoyaltyBonusExpiryWorker();
