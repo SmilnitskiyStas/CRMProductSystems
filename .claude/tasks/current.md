@@ -1046,5 +1046,21 @@ save (товар лягає на обрану підкатегорію). Філ�
 (`defaultOpen={isEditing}`). Чиста реорганізація JSX — жодне поле, `register`/zod, ані `onSubmit`
 payload не змінені. i18n +5 ключів/локаль (`form.sectionMain/Pricing/Stock/Properties/Advanced`),
 parity 4958==4958. tsc/lint чисто. E2E: create+edit, expand/collapse, submit з дефолтами.
-Слайси 2–5 (дефолти категорій, підсвітка акцій, авто-буфери з продажів) — не почато;
-план + exploration у `catalog-form-buffers-promo.md`.
+
+## Каталог — дефолти полів від категорії (Слайс 2)
+
+**Status:** done · **Agent:** main session · Push `5104dc36` (авто-deploy, міграція).
+
+Provider задає дефолт ПДВ %, класу псуємості, типу управління, типу товару, терміну придатності
+на глобальній категорії → форма нового товару підставляє їх при виборі категорії (товарознавець
+валідує, не вводить з нуля). `PlatformCategory` +5 nullable `Default*` колонок (міграція
+`20260904103715_AddPlatformCategoryItemDefaults`, additive, `platform_categories` без RLS).
+`CategoryDefaults` record → `PlatformCategoryDto` / `Create`+`UpdatePlatformCategoryRequest` /
+tenant-facing `CategoryDto` (null коли категорія нічого не задала — DTO лишається lean).
+`ProviderCategoryService.ValidateDefaults` — enum-множини (perishability/mgmt=MTS|MTO/itemType)
++ range (VAT 0–100, shelfLife >0). `CategoryFormModal` — блок «Item defaults» (5 полів, порожнє
+= null). `ProductForm.applyCategoryDefaults()` на `CategorySelect.onChange` — **create mode
+only**, поле з `dirtyFields[field]` не чіпається (дефолти йдуть за категорією, поки товарознавець
+не візьме поле на себе). `dotnet test` 2335/2335 (+5). tsc/lint/parity(4961) чисто. E2E: set →
+pick → fill; ручна правка тримається при зміні категорії; invalid → 400; tenant бачить defaults.
+Слайси 3–5 (підсвітка акцій, авто-буфери з продажів, банер в аналітиці) — не почато.
