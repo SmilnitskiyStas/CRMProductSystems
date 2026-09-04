@@ -170,6 +170,23 @@ export const ALL_PLANS: TenantPlan[] = ["trial", "basic", "standard", "enterpris
 
 // ── Platform categories (B3) ─────────────────────────────────────────────────
 
+/** Item-attribute defaults the product form pre-fills when a category is picked (Slice 2). */
+export interface CategoryDefaults {
+  vatRate: number | null;
+  perishabilityClass: string | null;
+  managementType: string | null;
+  itemType: string | null;
+  shelfLifeDays: number | null;
+}
+
+export const EMPTY_CATEGORY_DEFAULTS: CategoryDefaults = {
+  vatRate: null,
+  perishabilityClass: null,
+  managementType: null,
+  itemType: null,
+  shelfLifeDays: null,
+};
+
 // Provider-facing view of a global `platform_categories` row. The tenant-facing flat
 // `CategoryDto` (features/inventory/types.ts) is the business-type-filtered subset of this.
 export interface PlatformCategoryDto {
@@ -180,6 +197,7 @@ export interface PlatformCategoryDto {
   sortOrder: number;
   isActive: boolean;
   itemCount: number;
+  defaults: CategoryDefaults;
 }
 
 export interface CreateCategoryBody {
@@ -187,6 +205,7 @@ export interface CreateCategoryBody {
   parentId?: string | null;
   businessTypes: string[];
   sortOrder?: number;
+  defaults?: CategoryDefaults;
 }
 
 export interface UpdateCategoryBody {
@@ -195,4 +214,5 @@ export interface UpdateCategoryBody {
   businessTypes: string[];
   sortOrder: number;
   isActive: boolean;
+  defaults?: CategoryDefaults;
 }

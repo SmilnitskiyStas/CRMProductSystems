@@ -135,11 +135,30 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm<FormValues>({
     resolver: zodResolver(productSchema),
     defaultValues,
   });
+
+  // Slice 2: picking a category pre-fills the item-attribute defaults the provider set on it
+  // ("Молочні продукти" → VAT 20, class "chilled", MTS …). Create mode only — an existing item
+  // keeps its own values. A field the user has already edited (dirty) is never overwritten, so
+  // the defaults follow the category until the merchandiser takes over.
+  function applyCategoryDefaults(categoryId: string) {
+    if (isEditing) return;
+    const d = categories.find(c => c.id === categoryId)?.defaults;
+    if (!d) return;
+    const fill = (field: keyof FormValues, value: string | number | null) => {
+      if (value == null || value === "" || dirtyFields[field]) return;
+      setValue(field, value as never, { shouldDirty: false });
+    };
+    fill("vatRate", d.vatRate);
+    fill("perishabilityClass", d.perishabilityClass);
+    fill("managementType", d.managementType);
+    fill("itemType", d.itemType);
+    fill("shelfLifeDays", d.shelfLifeDays);
+  }
 
   useEffect(() => {
     reset(
@@ -441,7 +460,10 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
               <input type="hidden" {...register("categoryId")} />
               <CategorySelect
                 value={watch("categoryId") ?? ""}
-                onChange={(id) => setValue("categoryId", id, { shouldDirty: true })}
+                onChange={(id) => {
+                  setValue("categoryId", id, { shouldDirty: true });
+                  applyCategoryDefaults(id);
+                }}
                 categories={categories}
                 orphanOption={orphanCategoryOption}
                 noneLabel={`— ${t("categoryNone")} —`}

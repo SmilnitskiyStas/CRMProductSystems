@@ -99,6 +99,82 @@ public sealed class ProviderCategoryServiceTests
         Assert.Equal(parent.Id, dto!.ParentId);
     }
 
+    // ── Item-attribute defaults (Slice 2) ──────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_WithDefaults_PersistsAndReturnsThem()
+    {
+        var req = new CreatePlatformCategoryRequest(
+            "Молочні", null, ["retail"], 0,
+            new CategoryDefaults(VatRate: 20m, PerishabilityClass: "chilled", ManagementType: "mts", ItemType: "product", ShelfLifeDays: 7));
+
+        var (dto, error) = await _sut.CreateAsync(req);
+
+        Assert.Null(error);
+        Assert.Equal(20m, dto!.Defaults.VatRate);
+        Assert.Equal("chilled", dto.Defaults.PerishabilityClass);
+        Assert.Equal("MTS", dto.Defaults.ManagementType); // upper-cased
+        Assert.Equal("product", dto.Defaults.ItemType);
+        Assert.Equal(7, dto.Defaults.ShelfLifeDays);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<PlatformCategory>(c => c.DefaultPerishabilityClass == "chilled" && c.DefaultManagementType == "MTS"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_NoDefaults_ReturnsEmptyDefaults()
+    {
+        var (dto, error) = await _sut.CreateAsync(new CreatePlatformCategoryRequest("X", null, [], null));
+
+        Assert.Null(error);
+        Assert.Equal(CategoryDefaults.Empty, dto!.Defaults);
+    }
+
+    [Theory]
+    [InlineData("spoiled", null, null, "perishability")]
+    [InlineData(null, "instant", null, "management type")]
+    [InlineData(null, null, "gadget", "item type")]
+    public async Task CreateAsync_InvalidDefaultEnum_ReturnsError(string? cls, string? mgmt, string? itemType, string fragment)
+    {
+        var req = new CreatePlatformCategoryRequest(
+            "X", null, [], null, new CategoryDefaults(null, cls, mgmt, itemType, null));
+
+        var (dto, error) = await _sut.CreateAsync(req);
+
+        Assert.Null(dto);
+        Assert.Contains(fragment, error, StringComparison.OrdinalIgnoreCase);
+        await _repo.DidNotReceive().AddAsync(Arg.Any<PlatformCategory>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(101)]
+    public async Task CreateAsync_DefaultVatOutOfRange_ReturnsError(double vat)
+    {
+        var req = new CreatePlatformCategoryRequest(
+            "X", null, [], null, new CategoryDefaults((decimal)vat, null, null, null, null));
+
+        var (dto, error) = await _sut.CreateAsync(req);
+
+        Assert.Null(dto);
+        Assert.Contains("VAT", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ClearsDefaults_WhenRequestOmitsThem()
+    {
+        var existing = new PlatformCategory { Name = "Old", DefaultVatRate = 20m, DefaultPerishabilityClass = "chilled" };
+        _repo.GetByIdAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
+
+        var (dto, error) = await _sut.UpdateAsync(
+            existing.Id, new UpdatePlatformCategoryRequest("Old", null, [], 0, true, Defaults: null));
+
+        Assert.Null(error);
+        Assert.Equal(CategoryDefaults.Empty, dto!.Defaults);
+        Assert.Null(existing.DefaultVatRate);
+        Assert.Null(existing.DefaultPerishabilityClass);
+    }
+
     // ── Update ─────────────────────────────────────────────────────────────
 
     [Fact]

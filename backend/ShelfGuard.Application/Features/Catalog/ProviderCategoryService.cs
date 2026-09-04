@@ -14,6 +14,16 @@ public sealed class ProviderCategoryService : IProviderCategoryService
         "production", "distribution", "pharmacy", "floristry", "supplier",
     };
 
+    // Allowed values for the per-category item defaults (Slice 2). Perishability + item type
+    // mirror PerishabilityClass / ItemService.IsValidItemType; management type is limited to the
+    // two the product form actually offers so a pre-filled value always matches a <select> option.
+    private static readonly string[] ValidPerishabilityClasses = { "fresh", "chilled", "standard", "durable" };
+    private static readonly string[] ValidManagementTypes = { "MTS", "MTO" };
+    private static readonly string[] ValidItemTypes =
+    {
+        "product", "service", "spare_part", "consumable", "raw_material", "kit", "packaging",
+    };
+
     private readonly ICategoryRepository _repo;
 
     public ProviderCategoryService(ICategoryRepository repo) => _repo = repo;
@@ -42,6 +52,9 @@ public sealed class ProviderCategoryService : IProviderCategoryService
                 return (null, parentError);
         }
 
+        if (ValidateDefaults(request.Defaults) is { } defError)
+            return (null, defError);
+
         var category = new PlatformCategory
         {
             Name = name,
@@ -50,6 +63,7 @@ public sealed class ProviderCategoryService : IProviderCategoryService
             SortOrder = request.SortOrder ?? 0,
             IsActive = true,
         };
+        CategoryDefaultsMapping.Apply(category, request.Defaults);
 
         await _repo.AddAsync(category, ct);
         await _repo.SaveChangesAsync(ct);
@@ -79,11 +93,15 @@ public sealed class ProviderCategoryService : IProviderCategoryService
                 return (null, parentError);
         }
 
+        if (ValidateDefaults(request.Defaults) is { } defError)
+            return (null, defError);
+
         category.Name = name;
         category.ParentId = request.ParentId;
         category.BusinessTypes = businessTypes;
         category.SortOrder = request.SortOrder;
         category.IsActive = request.IsActive;
+        CategoryDefaultsMapping.Apply(category, request.Defaults);
 
         _repo.Update(category);
         await _repo.SaveChangesAsync(ct);
@@ -135,6 +153,36 @@ public sealed class ProviderCategoryService : IProviderCategoryService
         return (normalized, null);
     }
 
+    /// <summary>Validates the optional per-category item defaults. Returns an error string, or null if OK.</summary>
+    private static string? ValidateDefaults(CategoryDefaults? d)
+    {
+        if (d is null) return null;
+
+        if (d.VatRate is { } vat && (vat < 0 || vat > 100))
+            return "Default VAT rate must be between 0 and 100.";
+
+        if (NotEmptyAndOutside(d.PerishabilityClass, ValidPerishabilityClasses, ignoreCase: true))
+            return $"Unknown default perishability class '{d.PerishabilityClass}'. Valid: {string.Join(", ", ValidPerishabilityClasses)}.";
+
+        if (NotEmptyAndOutside(d.ManagementType, ValidManagementTypes, ignoreCase: true))
+            return $"Unknown default management type '{d.ManagementType}'. Valid: {string.Join(", ", ValidManagementTypes)}.";
+
+        if (NotEmptyAndOutside(d.ItemType, ValidItemTypes, ignoreCase: true))
+            return $"Unknown default item type '{d.ItemType}'. Valid: {string.Join(", ", ValidItemTypes)}.";
+
+        if (d.ShelfLifeDays is { } days && days <= 0)
+            return "Default shelf life must be greater than 0.";
+
+        return null;
+    }
+
+    private static bool NotEmptyAndOutside(string? value, string[] allowed, bool ignoreCase)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var cmp = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        return !allowed.Contains(value.Trim(), cmp);
+    }
+
     /// <summary>
     /// Parent must resolve to an existing category and must not create a cycle: walk
     /// <c>ParentId</c> up from the proposed parent — reject if it reaches <paramref name="selfId"/>
@@ -169,5 +217,6 @@ public sealed class ProviderCategoryService : IProviderCategoryService
         c.BusinessTypes.ToArray(),
         c.SortOrder,
         c.IsActive,
-        counts.TryGetValue(c.Id, out var count) ? count : 0);
+        counts.TryGetValue(c.Id, out var count) ? count : 0,
+        CategoryDefaultsMapping.ToProviderDto(c));
 }

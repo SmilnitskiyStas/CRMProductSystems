@@ -32,6 +32,26 @@ public sealed class PlatformCategory
     /// hidden from tenant filters and the product form.</summary>
     public bool IsActive { get; set; } = true;
 
+    // ── Default item attributes ──────────────────────────────────────────────
+    // Suggested values the product form pre-fills when a merchandiser picks this category
+    // (e.g. "Молочні продукти" → VAT 20, class "chilled", MTS). All nullable — null means
+    // "no suggestion, keep the form's own default". The user always validates/overrides.
+
+    /// <summary>Suggested VAT rate (%), 0–100.</summary>
+    public decimal? DefaultVatRate { get; set; }
+
+    /// <summary>Suggested perishability class: <c>fresh</c> | <c>chilled</c> | <c>standard</c> | <c>durable</c>.</summary>
+    public string? DefaultPerishabilityClass { get; set; }
+
+    /// <summary>Suggested management type: <c>MTS</c> | <c>MTO</c> (matches the product form's options).</summary>
+    public string? DefaultManagementType { get; set; }
+
+    /// <summary>Suggested item type: <c>product</c> | <c>service</c> | <c>spare_part</c> | … .</summary>
+    public string? DefaultItemType { get; set; }
+
+    /// <summary>Suggested shelf life in days (&gt; 0).</summary>
+    public int? DefaultShelfLifeDays { get; set; }
+
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public PlatformCategory? Parent { get; init; }

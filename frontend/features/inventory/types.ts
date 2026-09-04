@@ -68,10 +68,21 @@ export interface UpdateProductPayload extends CreateProductPayload {
   isActive: boolean;
 }
 
+/** Item-attribute defaults the product form pre-fills when this category is picked (Slice 2). */
+export interface CategoryDefaults {
+  vatRate: number | null;
+  perishabilityClass: string | null;
+  managementType: string | null;
+  itemType: string | null;
+  shelfLifeDays: number | null;
+}
+
 export interface CategoryDto {
   id: string;
   name: string;
   parentId: string | null;
+  /** null when the category defines no defaults. */
+  defaults?: CategoryDefaults | null;
 }
 
 // Opaque sort keys passed straight through to GET /api/items's `sortBy` query param — must

@@ -44,5 +44,6 @@ public sealed class CategoryService : ICategoryService
             .ToList();
     }
 
-    private static CategoryDto ToDto(PlatformCategory c) => new(c.Id, c.Name, c.ParentId);
+    private static CategoryDto ToDto(PlatformCategory c) =>
+        new(c.Id, c.Name, c.ParentId, CategoryDefaultsMapping.ToDto(c));
 }

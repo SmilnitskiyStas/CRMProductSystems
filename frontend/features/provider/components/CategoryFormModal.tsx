@@ -5,9 +5,12 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
-import { ALL_BUSINESS_TYPES, type PlatformCategoryDto } from "../types";
+import { ALL_BUSINESS_TYPES, type CategoryDefaults, type PlatformCategoryDto } from "../types";
 import { useCreateCategory, useUpdateCategory } from "../hooks/useProviderCategories";
 import { flattenPlatformTree, indentLabel, subtreeIds } from "../lib/categoryTree";
+
+const PERISHABILITY_VALUES = ["fresh", "chilled", "standard", "durable"] as const;
+const ITEM_TYPE_VALUES = ["product", "service", "spare_part", "consumable", "raw_material", "kit"] as const;
 
 interface Props {
   /** null → create mode; a row → edit mode. */
@@ -41,6 +44,8 @@ const inputStyle: React.CSSProperties = {
 export function CategoryFormModal({ category, presetParentId, allCategories, onClose }: Props) {
   const t = useTranslations("Dashboard.providerCategories");
   const tBusinessTypes = useTranslations("Dashboard.provider.businessTypes");
+  const tForm = useTranslations("Dashboard.inventory.form");
+  const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
   const isEditing = category !== null;
 
   const createCategory = useCreateCategory();
@@ -54,6 +59,14 @@ export function CategoryFormModal({ category, presetParentId, allCategories, onC
   const [sortOrder, setSortOrder] = useState<string>(String(category?.sortOrder ?? 0));
   const [isActive, setIsActive] = useState(category?.isActive ?? true);
   const [error, setError] = useState<string | null>(null);
+
+  // ── Item-attribute defaults (Slice 2) ──────────────────────────────────
+  const d = category?.defaults;
+  const [defVat, setDefVat] = useState<string>(d?.vatRate != null ? String(d.vatRate) : "");
+  const [defClass, setDefClass] = useState<string>(d?.perishabilityClass ?? "");
+  const [defMgmt, setDefMgmt] = useState<string>(d?.managementType ?? "");
+  const [defItemType, setDefItemType] = useState<string>(d?.itemType ?? "");
+  const [defShelf, setDefShelf] = useState<string>(d?.shelfLifeDays != null ? String(d.shelfLifeDays) : "");
 
   // Parent options: the whole tree minus the node itself and its descendants (server also
   // guards against cycles, this just keeps the obvious ones out of the picker).
@@ -85,6 +98,15 @@ export function CategoryFormModal({ category, presetParentId, allCategories, onC
     const parsedSort = Number.parseInt(sortOrder, 10);
     const sort = Number.isFinite(parsedSort) ? parsedSort : 0;
 
+    const num = (s: string) => (s.trim() !== "" && Number.isFinite(Number(s)) ? Number(s) : null);
+    const defaults: CategoryDefaults = {
+      vatRate: num(defVat),
+      perishabilityClass: defClass || null,
+      managementType: defMgmt || null,
+      itemType: defItemType || null,
+      shelfLifeDays: num(defShelf),
+    };
+
     try {
       if (isEditing && category) {
         await updateCategory.mutateAsync({
@@ -95,6 +117,7 @@ export function CategoryFormModal({ category, presetParentId, allCategories, onC
             businessTypes,
             sortOrder: sort,
             isActive,
+            defaults,
           },
         });
         toast.success(t("toasts.updated"));
@@ -104,6 +127,7 @@ export function CategoryFormModal({ category, presetParentId, allCategories, onC
           parentId: parentId || null,
           businessTypes,
           sortOrder: sort,
+          defaults,
         });
         toast.success(t("toasts.created"));
       }
@@ -212,6 +236,62 @@ export function CategoryFormModal({ category, presetParentId, allCategories, onC
             onChange={(e) => setSortOrder(e.target.value)}
             style={inputStyle}
           />
+        </div>
+
+        {/* Item-attribute defaults (Slice 2) */}
+        <div style={{ border: "1px solid #1F2937", borderRadius: 8, padding: 12 }}>
+          <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+            {t("modal.defaultsTitle")}
+          </div>
+          <p style={{ color: "#6B7280", fontSize: 11, margin: "0 0 10px" }}>{t("modal.defaultsHint")}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={labelStyle}>{tForm("vatRateLabel")}</label>
+              <input
+                type="number" step="0.01" min="0" max="100"
+                value={defVat}
+                onChange={(e) => setDefVat(e.target.value)}
+                placeholder={t("modal.defaultsNone")}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>{tForm("shelfLifeLabel")}</label>
+              <input
+                type="number" min="1"
+                value={defShelf}
+                onChange={(e) => setDefShelf(e.target.value)}
+                placeholder={t("modal.defaultsNone")}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>{tForm("perishabilityLabel")}</label>
+              <select value={defClass} onChange={(e) => setDefClass(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+                <option value="">— {t("modal.defaultsNone")} —</option>
+                {PERISHABILITY_VALUES.map((v) => (
+                  <option key={v} value={v}>{tForm(`perishability.${v}`)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>{tForm("managementTypeLabel")}</label>
+              <select value={defMgmt} onChange={(e) => setDefMgmt(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+                <option value="">— {t("modal.defaultsNone")} —</option>
+                <option value="MTS">{tForm("managementTypeMts")}</option>
+                <option value="MTO">{tForm("managementTypeMto")}</option>
+              </select>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>{tForm("itemTypeLabel")}</label>
+              <select value={defItemType} onChange={(e) => setDefItemType(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+                <option value="">— {t("modal.defaultsNone")} —</option>
+                {ITEM_TYPE_VALUES.map((v) => (
+                  <option key={v} value={v}>{tItemTypes.has(v) ? tItemTypes(v) : v}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Active — edit only */}

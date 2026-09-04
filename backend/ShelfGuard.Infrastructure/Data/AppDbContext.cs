@@ -408,6 +408,11 @@ public sealed class AppDbContext : DbContext
             e.Property(c => c.SortOrder).HasDefaultValue(0);
             e.Property(c => c.IsActive).HasDefaultValue(true);
             e.Property(c => c.CreatedAt).HasDefaultValueSql("NOW()");
+            // Optional item-attribute defaults the product form pre-fills (B2 / Slice 2).
+            e.Property(c => c.DefaultVatRate).HasColumnType("decimal(5,2)");
+            e.Property(c => c.DefaultPerishabilityClass).HasMaxLength(20);
+            e.Property(c => c.DefaultManagementType).HasMaxLength(10);
+            e.Property(c => c.DefaultItemType).HasMaxLength(50);
             // Tree walk: children of a parent, active only.
             e.HasIndex(c => new { c.ParentId, c.IsActive })
              .HasDatabaseName("idx_platform_categories_parent_active");
