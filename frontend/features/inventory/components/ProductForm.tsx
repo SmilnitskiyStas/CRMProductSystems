@@ -10,6 +10,7 @@ import type { CreateProductPayload, Product, UpdateProductPayload } from "../typ
 import { productsApi } from "../api/products";
 import { useCategories } from "../hooks/useCategories";
 import { CategorySelect } from "./CategorySelect";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 
 export const PERISHABILITY_CLASS_VALUES = ["fresh", "chilled", "standard", "durable"] as const;
 
@@ -93,6 +94,14 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 500,
   marginBottom: 5,
 };
+
+// Vertical field stack inside a CollapsibleSection body.
+const sectionBodyStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 14,
+};
+const twoColStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 };
 
 export function ProductForm({ open, product, isPending, onClose, onCreate, onUpdate, onImageUpload }: Props) {
   const t = useTranslations("Dashboard.inventory.form");
@@ -297,13 +306,25 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
 
         {/* Form */}
         <form onSubmit={handleSubmit(onSubmit)} style={{ padding: 22 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {/* Name */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Name — always visible, the one field that can't be defaulted */}
             <div>
               <label style={labelStyle}>{t("nameLabel")}</label>
               <input {...register("name")} placeholder={t("namePlaceholder")} style={inputStyle} />
               {errors.name && (
                 <p style={{ color: "#EF4444", fontSize: 11, marginTop: 3 }}>{errors.name.message}</p>
+              )}
+            </div>
+
+            {/* ── Основне ─────────────────────────────────────────────── */}
+            <CollapsibleSection title={t("sectionMain")} defaultOpen>
+            <div style={sectionBodyStyle}>
+            {/* Unit */}
+            <div>
+              <label style={labelStyle}>{t("unitLabel")}</label>
+              <input {...register("unit")} placeholder={t("unitPlaceholder")} style={inputStyle} />
+              {errors.unit && (
+                <p style={{ color: "#EF4444", fontSize: 11, marginTop: 3 }}>{errors.unit.message}</p>
               )}
             </div>
 
@@ -412,15 +433,6 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
               </div>
             </div>
 
-            {/* Unit */}
-            <div>
-              <label style={labelStyle}>{t("unitLabel")}</label>
-              <input {...register("unit")} placeholder={t("unitPlaceholder")} style={inputStyle} />
-              {errors.unit && (
-                <p style={{ color: "#EF4444", fontSize: 11, marginTop: 3 }}>{errors.unit.message}</p>
-              )}
-            </div>
-
             {/* Category */}
             <div>
               <label style={labelStyle}>{t("categoryLabel")}</label>
@@ -439,9 +451,32 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                 ariaLabel={t("categoryLabel")}
               />
             </div>
+            </div>
+            </CollapsibleSection>
 
-            {/* ManagementType + ItemType */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {/* ── Ціноутворення та податки ──────────────────────────── */}
+            <CollapsibleSection title={t("sectionPricing")} defaultOpen={isEditing}>
+            <div style={sectionBodyStyle}>
+              <div style={twoColStyle}>
+                <div>
+                  <label style={labelStyle}>{t("pricePurchaseLabel")}</label>
+                  <input {...register("pricePurchase")} type="number" step="0.01" min="0" placeholder="0.00" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>{t("priceRetailLabel")}</label>
+                  <input {...register("priceRetail")} type="number" step="0.01" min="0" placeholder="0.00" style={inputStyle} />
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>{t("vatRateLabel")}</label>
+                <input {...register("vatRate")} type="number" step="0.01" min="0" max="100" style={inputStyle} />
+              </div>
+            </div>
+            </CollapsibleSection>
+
+            {/* ── Управління запасами ───────────────────────────────── */}
+            <CollapsibleSection title={t("sectionStock")} defaultOpen={isEditing}>
+            <div style={sectionBodyStyle}>
               <div>
                 <label style={labelStyle}>{t("managementTypeLabel")}</label>
                 <select {...register("managementType")} style={{ ...inputStyle, cursor: "pointer" }}>
@@ -449,6 +484,22 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                   <option value="MTO">{t("managementTypeMto")}</option>
                 </select>
               </div>
+              <div style={twoColStyle}>
+                <div>
+                  <label style={labelStyle}>{t("minStockLabel")}</label>
+                  <input {...register("minStock")} type="number" step="0.01" min="0" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>{t("maxStockLabel")}</label>
+                  <input {...register("maxStock")} type="number" step="0.01" min="0" style={inputStyle} />
+                </div>
+              </div>
+            </div>
+            </CollapsibleSection>
+
+            {/* ── Властивості ───────────────────────────────────────── */}
+            <CollapsibleSection title={t("sectionProperties")} defaultOpen={isEditing}>
+            <div style={sectionBodyStyle}>
               <div>
                 <label style={labelStyle}>{t("itemTypeLabel")}</label>
                 <select {...register("itemType")} style={{ ...inputStyle, cursor: "pointer" }}>
@@ -457,69 +508,42 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
                   ))}
                 </select>
               </div>
+              <div>
+                <label style={labelStyle}>{t("perishabilityLabel")}</label>
+                <select {...register("perishabilityClass")} style={{ ...inputStyle, cursor: "pointer" }}>
+                  {PERISHABILITY_CLASS_VALUES.map((value) => (
+                    <option key={value} value={value}>{t(`perishability.${value}`)}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={twoColStyle}>
+                <div>
+                  <label style={labelStyle}>{t("manufacturerLabel")}</label>
+                  <input {...register("manufacturer")} placeholder={t("manufacturerPlaceholder")} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>{t("shelfLifeLabel")}</label>
+                  <input {...register("shelfLifeDays")} type="number" min="1" placeholder="7" style={inputStyle} />
+                </div>
+              </div>
             </div>
+            </CollapsibleSection>
 
-            {/* ShelfLife + VatRate */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>{t("shelfLifeLabel")}</label>
-                <input {...register("shelfLifeDays")} type="number" min="1" placeholder="7" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>{t("vatRateLabel")}</label>
-                <input {...register("vatRate")} type="number" step="0.01" min="0" max="100" style={inputStyle} />
-              </div>
-            </div>
-
-            {/* PerishabilityClass */}
-            <div>
-              <label style={labelStyle}>{t("perishabilityLabel")}</label>
-              <select {...register("perishabilityClass")} style={{ ...inputStyle, cursor: "pointer" }}>
-                {PERISHABILITY_CLASS_VALUES.map((value) => (
-                  <option key={value} value={value}>{t(`perishability.${value}`)}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Manufacturer + CountryOrigin */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>{t("manufacturerLabel")}</label>
-                <input {...register("manufacturer")} placeholder={t("manufacturerPlaceholder")} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>{t("countryOriginLabel")}</label>
-                <input {...register("countryOrigin")} placeholder={t("countryOriginPlaceholder")} style={inputStyle} />
+            {/* ── Розширені налаштування (progressive disclosure) ───── */}
+            <CollapsibleSection title={t("sectionAdvanced")} defaultOpen={false}>
+            <div style={sectionBodyStyle}>
+              <div style={twoColStyle}>
+                <div>
+                  <label style={labelStyle}>{t("countryOriginLabel")}</label>
+                  <input {...register("countryOrigin")} placeholder={t("countryOriginPlaceholder")} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>{t("safetyBufferLabel")}</label>
+                  <input {...register("safetyBuffer")} type="number" step="0.01" min="0" style={inputStyle} />
+                </div>
               </div>
             </div>
-
-            {/* Stock levels */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>{t("minStockLabel")}</label>
-                <input {...register("minStock")} type="number" step="0.01" min="0" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>{t("maxStockLabel")}</label>
-                <input {...register("maxStock")} type="number" step="0.01" min="0" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>{t("safetyBufferLabel")}</label>
-                <input {...register("safetyBuffer")} type="number" step="0.01" min="0" style={inputStyle} />
-              </div>
-            </div>
-
-            {/* Prices */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>{t("pricePurchaseLabel")}</label>
-                <input {...register("pricePurchase")} type="number" step="0.01" min="0" placeholder="0.00" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>{t("priceRetailLabel")}</label>
-                <input {...register("priceRetail")} type="number" step="0.01" min="0" placeholder="0.00" style={inputStyle} />
-              </div>
-            </div>
+            </CollapsibleSection>
 
             {/* isActive — edit only */}
             {isEditing && (
