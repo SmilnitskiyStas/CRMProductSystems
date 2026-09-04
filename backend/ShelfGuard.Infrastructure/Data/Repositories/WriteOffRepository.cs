@@ -102,14 +102,14 @@ public sealed class WriteOffRepository : IWriteOffRepository
             .Include(w => w.Store)
             .FirstOrDefaultAsync(w => w.Id == id, ct);
 
-    public Task<ProductStock?> GetStockByIdAsync(Guid stockId, CancellationToken ct = default) =>
-        _db.ProductStocks.FirstOrDefaultAsync(s => s.Id == stockId, ct);
+    public Task<List<ProductStock>> GetStocksByIdsAsync(IReadOnlyCollection<Guid> stockIds, CancellationToken ct = default) =>
+        _db.ProductStocks.Where(s => stockIds.Contains(s.Id)).ToListAsync(ct);
 
-    public Task<List<ProductStock>> GetFefoOrderedAsync(Guid productId, Guid storeId, CancellationToken ct = default) =>
+    public Task<List<ProductStock>> GetFefoOrderedForProductsAsync(IReadOnlyCollection<Guid> productIds, Guid storeId, CancellationToken ct = default) =>
         _db.ProductStocks
-            .Where(s => s.ProductId == productId && s.StoreId == storeId && s.Quantity > 0
+            .Where(s => productIds.Contains(s.ProductId) && s.StoreId == storeId && s.Quantity > 0
                      && s.Status != "sold_out" && s.Status != "archived")
-            .OrderBy(s => s.ExpiryDate)
+            .OrderBy(s => s.ProductId).ThenBy(s => s.ExpiryDate)
             .ToListAsync(ct);
 
     public async Task AddAsync(WriteOff writeOff, CancellationToken ct = default) =>

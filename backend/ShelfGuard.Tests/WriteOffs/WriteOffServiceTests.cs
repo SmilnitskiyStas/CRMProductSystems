@@ -387,7 +387,7 @@ public sealed class WriteOffServiceTests
 
         var writeOff = BuildWriteOff(stock: stock);
         _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
-        _repo.GetStockByIdAsync(stock.Id, Arg.Any<CancellationToken>()).Returns(stock);
+        _repo.GetStocksByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).Returns([stock]);
         _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
 
         var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
@@ -430,7 +430,7 @@ public sealed class WriteOffServiceTests
 
         var writeOff = BuildWriteOff(stock: null, withStockRef: false); // item.Quantity = 10
         _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
-        _repo.GetFefoOrderedAsync(_productId, _storeId, Arg.Any<CancellationToken>())
+        _repo.GetFefoOrderedForProductsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), _storeId, Arg.Any<CancellationToken>())
              .Returns([nearExpiry, farExpiry]); // FEFO order: nearest expiry first
 
         var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
@@ -447,6 +447,59 @@ public sealed class WriteOffServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    // TASK-691: a write-off with many line items used to issue one GetFefoOrderedAsync (or
+    // GetStockByIdAsync) call per item — a 39-item bulk approval took minutes because of the
+    // per-item DB round trips and the change-tracker cost they triggered on every one of them.
+    // Batch-loading must happen exactly once per approval, no matter how many items it has.
+    [Fact]
+    public async Task ApproveAsync_ManyItemsWithoutStockRef_BatchLoadsFefoBatchesOnce()
+    {
+        var productIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToList();
+        var writeOff = new WriteOff
+        {
+            TenantId = _tenantId,
+            StoreId = _storeId,
+            Status = "pending_approval",
+            CreatedBy = _userId,
+        };
+        var batches = new List<ProductStock>();
+        foreach (var productId in productIds)
+        {
+            var batch = new ProductStock
+            {
+                TenantId = _tenantId, ProductId = productId, StoreId = _storeId,
+                Quantity = 100, QuantityInitial = 100,
+                ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
+                Status = "safe", LastCheckedAt = DateTime.UtcNow,
+            };
+            batches.Add(batch);
+
+            writeOff.Items.Add(new WriteOffItem
+            {
+                WriteOffId = writeOff.Id,
+                ProductStockId = null,
+                ProductId = productId,
+                Quantity = 5,
+                UnitPrice = 10m,
+                LossAmount = 50m,
+            });
+        }
+
+        _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
+        _repo.GetFefoOrderedForProductsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), _storeId, Arg.Any<CancellationToken>())
+             .Returns(batches);
+
+        var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
+
+        Assert.Null(error);
+        Assert.Equal("approved", writeOff.Status);
+        // The whole point of the fix: one batch query covering all 5 items, not 5 separate ones.
+        await _repo.Received(1).GetFefoOrderedForProductsAsync(
+            Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 5),
+            _storeId, Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().GetStocksByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task ApproveAsync_ItemWithoutStockRef_InsufficientStock_ReturnsErrorAndDoesNotSave()
     {
@@ -460,7 +513,7 @@ public sealed class WriteOffServiceTests
 
         var writeOff = BuildWriteOff(stock: null, withStockRef: false);
         _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
-        _repo.GetFefoOrderedAsync(_productId, _storeId, Arg.Any<CancellationToken>())
+        _repo.GetFefoOrderedForProductsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), _storeId, Arg.Any<CancellationToken>())
              .Returns([onlyBatch]);
 
         var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
@@ -484,7 +537,7 @@ public sealed class WriteOffServiceTests
 
         var writeOff = BuildWriteOff(stock: stock);
         _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
-        _repo.GetStockByIdAsync(stock.Id, Arg.Any<CancellationToken>()).Returns(stock);
+        _repo.GetStocksByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).Returns([stock]);
 
         var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
 
