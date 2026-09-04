@@ -2,6 +2,13 @@ using ShelfGuard.Domain.Entities;
 
 namespace ShelfGuard.Domain.Interfaces;
 
+/// <summary>
+/// Promo signal for a catalog row (Slice 3). <c>State</c> is <c>"active"</c> (a promo discount
+/// is running in at least one store right now) or <c>"upcoming"</c> (a promo starts within the
+/// look-ahead window). Active wins over upcoming when a product has both across stores.
+/// </summary>
+public sealed record ItemPromoInfo(string State, DateTime? StartsAt, decimal? DiscountPercent);
+
 public interface IItemRepository
 {
     // B2: `uncategorized` — true → only items with no category; overrides categoryId. When
@@ -37,6 +44,15 @@ public interface IItemRepository
     Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default);
     Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default);
+
+    /// <summary>
+    /// Slice 3: promo state for the given catalog-page product ids, aggregated across every store
+    /// of the tenant. Considers only <c>promo</c>-reason / campaign-linked discounts in
+    /// <c>active</c> status. "upcoming" = starts in the future but within
+    /// <paramref name="upcomingWithinDays"/>. Products with no promo are absent from the result.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, ItemPromoInfo>> GetPromoStatesAsync(
+        IReadOnlyList<Guid> productIds, int upcomingWithinDays, CancellationToken ct = default);
 
     Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default);
     Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default);

@@ -29,7 +29,12 @@ public sealed record ItemDto(
     DateTime CreatedAt,
     string? Manufacturer,
     string? CountryOrigin,
-    string PerishabilityClass
+    string PerishabilityClass,
+    // Slice 3 — promo highlight on the catalog table. Null unless the item has a running or
+    // near-future promo (only populated by the paged catalog list, not single-item lookups).
+    string? PromoState = null,           // "active" | "upcoming"
+    DateTime? PromoStartsAt = null,      // set for "upcoming"
+    decimal? PromoDiscountPercent = null
 );
 
 public sealed record CreateProductRequest(

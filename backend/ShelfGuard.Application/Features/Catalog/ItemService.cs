@@ -26,7 +26,19 @@ public sealed class ItemService : IItemService
         CancellationToken ct = default)
     {
         var products = await _repo.GetAllAsync(categoryId, segmentId, managementType, uncategorized, ct);
-        return products.Select(ToDto).ToList();
+        var promo = await LoadPromoStatesAsync(products, ct);
+        return products.Select(p => ToDto(p, promo)).ToList();
+    }
+
+    // Slice 3: one extra query per catalog page for the promo highlight.
+    private const int PromoUpcomingWithinDays = 14;
+
+    private async Task<IReadOnlyDictionary<Guid, ItemPromoInfo>> LoadPromoStatesAsync(
+        IReadOnlyCollection<Item> products, CancellationToken ct)
+    {
+        if (products.Count == 0) return new Dictionary<Guid, ItemPromoInfo>();
+        var states = await _repo.GetPromoStatesAsync(products.Select(p => p.Id).ToList(), PromoUpcomingWithinDays, ct);
+        return states ?? new Dictionary<Guid, ItemPromoInfo>();
     }
 
     public async Task<PagedResult<ItemDto>> GetPagedAsync(
@@ -48,9 +60,10 @@ public sealed class ItemService : IItemService
         var (products, total) = await _repo.GetPagedAsync(
             categoryId, segmentId, managementType, search, ids, sortBy, sortDescending, page, pageSize,
             minPrice, maxPrice, uncategorized, ct);
+        var promo = await LoadPromoStatesAsync(products, ct);
         return new PagedResult<ItemDto>
         {
-            Items = products.Select(ToDto).ToList(),
+            Items = products.Select(p => ToDto(p, promo)).ToList(),
             TotalCount = total,
             Page = page,
             PageSize = pageSize,
@@ -381,37 +394,45 @@ public sealed class ItemService : IItemService
 
     // ── mapping ────────────────────────────────────────────────────────────
 
-    private static ItemDto ToDto(Item p) => new(
-        p.Id,
-        p.Barcodes,
-        p.Name,
-        p.CategoryId,
-        p.Category?.Name,
-        p.SegmentId,
-        p.Segment?.Name,
-        p.Unit,
-        p.ManagementType,
-        p.ItemType,
-        p.MinStock,
-        p.MaxStock,
-        p.SafetyBuffer,
-        p.StorageTempMin,
-        p.StorageTempMax,
-        p.ShelfLifeDays,
-        p.DefaultSupplierId,
-        p.DefaultSupplier?.Name,
-        p.VatRate,
-        p.PricePurchase,
-        p.PriceRetail,
-        p.DefaultReimbursementType,
-        p.DefaultReimbursementValue,
-        p.ImageUrl,
-        p.IsActive,
-        p.CreatedAt,
-        p.Manufacturer,
-        p.CountryOrigin,
-        p.PerishabilityClass
-    );
+    private static ItemDto ToDto(Item p) => ToDto(p, promoStates: null);
+
+    private static ItemDto ToDto(Item p, IReadOnlyDictionary<Guid, ItemPromoInfo>? promoStates)
+    {
+        var promo = promoStates is not null && promoStates.TryGetValue(p.Id, out var pi) ? pi : null;
+        return new(
+            p.Id,
+            p.Barcodes,
+            p.Name,
+            p.CategoryId,
+            p.Category?.Name,
+            p.SegmentId,
+            p.Segment?.Name,
+            p.Unit,
+            p.ManagementType,
+            p.ItemType,
+            p.MinStock,
+            p.MaxStock,
+            p.SafetyBuffer,
+            p.StorageTempMin,
+            p.StorageTempMax,
+            p.ShelfLifeDays,
+            p.DefaultSupplierId,
+            p.DefaultSupplier?.Name,
+            p.VatRate,
+            p.PricePurchase,
+            p.PriceRetail,
+            p.DefaultReimbursementType,
+            p.DefaultReimbursementValue,
+            p.ImageUrl,
+            p.IsActive,
+            p.CreatedAt,
+            p.Manufacturer,
+            p.CountryOrigin,
+            p.PerishabilityClass,
+            promo?.State,
+            promo?.StartsAt,
+            promo?.DiscountPercent);
+    }
 
     private static ProductSupplierSettingDto ToSupplierDto(ProductSupplierSetting s) => new(
         s.Id,

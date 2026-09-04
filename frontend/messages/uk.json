@@ -835,6 +835,10 @@
         "barcodeMore": "+{count}",
         "barcodeAllTitle": "Усі штрихкоди",
         "barcodePrimary": "Основний",
+        "promoActive": "В акції",
+        "promoActivePct": "Акція −{pct}%",
+        "promoUpcoming": "Скоро акція",
+        "promoUpcomingDays": "Акція {days, plural, one {за # день} few {за # дні} other {за # днів}}",
         "actionMenu": {
           "view": "Переглянути",
           "analytics": "Аналітика",

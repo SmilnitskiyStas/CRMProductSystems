@@ -53,6 +53,46 @@ function PerishabilityBadge({ value }: { value: string }) {
   );
 }
 
+// ── Promo badge (Slice 3) ───────────────────────────────────────────────────
+function PromoBadge({ product }: { product: Product }) {
+  const t = useTranslations("Dashboard.inventory.table");
+  if (!product.promoState) return null;
+
+  const pct = product.promoDiscountPercent;
+  if (product.promoState === "active") {
+    return (
+      <span style={{ ...promoBadgeStyle, background: "#0F2D1A", border: "1px solid #166534", color: "#4ADE80" }}>
+        🏷 {pct != null ? t("promoActivePct", { pct: Math.round(pct) }) : t("promoActive")}
+      </span>
+    );
+  }
+
+  const days = product.promoStartsAt
+    ? Math.max(0, Math.ceil((new Date(product.promoStartsAt).getTime() - Date.now()) / 86_400_000))
+    : null;
+  return (
+    <span style={{ ...promoBadgeStyle, background: "#2A2000", border: "1px solid #854D0E", color: "#FCD34D" }}>
+      🏷 {days != null ? t("promoUpcomingDays", { days }) : t("promoUpcoming")}
+    </span>
+  );
+}
+
+const promoBadgeStyle: React.CSSProperties = {
+  display: "inline-block",
+  padding: "1px 7px",
+  borderRadius: 20,
+  fontSize: 10,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+/** Faint row tint for promo items — green (running) / amber (starts soon). */
+function promoRowStyle(product: Product): React.CSSProperties {
+  if (product.promoState === "active") return { background: "rgba(74,222,128,0.06)" };
+  if (product.promoState === "upcoming") return { background: "rgba(251,191,36,0.05)" };
+  return {};
+}
+
 // ── Confirm delete dialog ────────────────────────────────────────────────────
 function DeleteDialog({
   product,
@@ -351,7 +391,12 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
       header: tFields("name"),
       sortKey: "name",
       cellStyle: { color: "#E8EDF5", fontWeight: 500 },
-      render: (product) => product.name,
+      render: (product) => (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {product.name}
+          <PromoBadge product={product} />
+        </span>
+      ),
     },
     {
       key: "barcode",
@@ -476,6 +521,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
         columns={columns}
         rows={products}
         rowKey={(product) => product.id}
+        rowStyle={promoRowStyle}
         sortBy={sortBy}
         sortDescending={sortDescending}
         onSort={onSort}

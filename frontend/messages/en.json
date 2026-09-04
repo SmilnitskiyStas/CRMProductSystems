@@ -835,6 +835,10 @@
         "barcodeMore": "+{count}",
         "barcodeAllTitle": "All barcodes",
         "barcodePrimary": "Primary",
+        "promoActive": "On sale",
+        "promoActivePct": "On sale −{pct}%",
+        "promoUpcoming": "Sale soon",
+        "promoUpcomingDays": "Sale in {days, plural, one {# day} other {# days}}",
         "actionMenu": {
           "view": "View",
           "analytics": "Analytics",

@@ -216,6 +216,47 @@ public sealed class ItemRepository : IItemRepository
             .ToListAsync(ct);
     }
 
+    // Slice 3: promo highlight on the catalog table. One query over the page's product ids,
+    // aggregated across the tenant's stores (the catalog list itself is tenant-wide, not
+    // store-scoped). Only `active` promo-reason / campaign-linked discounts count; an expiry /
+    // overstock markdown is a different UX concern. RLS scopes `discounts` to the tenant.
+    public async Task<IReadOnlyDictionary<Guid, ItemPromoInfo>> GetPromoStatesAsync(
+        IReadOnlyList<Guid> productIds, int upcomingWithinDays, CancellationToken ct = default)
+    {
+        if (productIds.Count == 0)
+            return new Dictionary<Guid, ItemPromoInfo>();
+
+        var now = DateTime.UtcNow;
+        var horizon = now.AddDays(Math.Max(1, upcomingWithinDays));
+        var ids = productIds as Guid[] ?? productIds.ToArray();
+
+        var rows = await _db.Discounts
+            .Where(d => ids.Contains(d.ProductId)
+                        && d.Status == DiscountStatus.Active
+                        && (d.Reason == DiscountReason.Promo || d.PromotionCampaignId != null)
+                        && (d.ValidUntil == null || d.ValidUntil >= now)
+                        && d.ValidFrom <= horizon)
+            .Select(d => new { d.ProductId, d.ValidFrom, d.DiscountPercent })
+            .ToListAsync(ct);
+
+        var result = new Dictionary<Guid, ItemPromoInfo>();
+        foreach (var g in rows.GroupBy(r => r.ProductId))
+        {
+            var active = g.Where(r => r.ValidFrom <= now).ToList();
+            if (active.Count > 0)
+            {
+                var best = active.OrderByDescending(r => r.DiscountPercent).First();
+                result[g.Key] = new ItemPromoInfo("active", null, best.DiscountPercent);
+            }
+            else
+            {
+                var soonest = g.OrderBy(r => r.ValidFrom).First();
+                result[g.Key] = new ItemPromoInfo("upcoming", soonest.ValidFrom, soonest.DiscountPercent);
+            }
+        }
+        return result;
+    }
+
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) =>
         _db.ProductSupplierSettings
             .Include(s => s.Supplier)

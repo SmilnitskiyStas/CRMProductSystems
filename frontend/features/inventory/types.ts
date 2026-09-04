@@ -27,6 +27,11 @@ export interface Product {
   manufacturer: string | null;    // НОВЕ
   countryOrigin: string | null;   // НОВЕ
   perishabilityClass: string;     // НОВЕ
+  // Slice 3 — promo highlight on the catalog table. null unless the item has a running or
+  // near-future promo (populated only by the paged catalog list).
+  promoState: "active" | "upcoming" | null;
+  promoStartsAt: string | null;
+  promoDiscountPercent: number | null;
 }
 
 export interface BarcodeProductLookup {

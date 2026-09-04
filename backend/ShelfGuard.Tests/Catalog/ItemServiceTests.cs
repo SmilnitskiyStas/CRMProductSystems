@@ -218,6 +218,27 @@ public sealed class ItemServiceTests
     }
 
     [Fact]
+    public async Task GetPagedAsync_MapsPromoStateIntoDto()
+    {
+        var promo = new Item { TenantId = _tenantId, Name = "On sale", ManagementType = "MTS" };
+        var plain = new Item { TenantId = _tenantId, Name = "Plain", ManagementType = "MTS" };
+        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>())
+            .Returns((new List<Item> { promo, plain }, 2));
+        _repo.GetPromoStatesAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, ItemPromoInfo>
+            {
+                [promo.Id] = new("active", null, 15m),
+            });
+
+        var result = await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, null, null, 1, 50);
+
+        var promoDto = result.Items.Single(i => i.Id == promo.Id);
+        Assert.Equal("active", promoDto.PromoState);
+        Assert.Equal(15m, promoDto.PromoDiscountPercent);
+        Assert.Null(result.Items.Single(i => i.Id == plain.Id).PromoState);
+    }
+
+    [Fact]
     public async Task GetPagedAsync_WithIds_PassesIdsThroughAndReturnsExactSet()
     {
         var a = new Item { TenantId = _tenantId, Name = "A", ManagementType = "MTS" };
