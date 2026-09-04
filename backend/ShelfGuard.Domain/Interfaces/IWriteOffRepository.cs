@@ -15,15 +15,25 @@ public interface IWriteOffRepository
         Guid? categoryId = null, decimal? minLossAmount = null, decimal? maxLossAmount = null,
         CancellationToken ct = default);
     Task<WriteOff?> GetByIdAsync(Guid id, CancellationToken ct = default);
-    Task<ProductStock?> GetStockByIdAsync(Guid stockId, CancellationToken ct = default);
 
     /// <summary>
-    /// Batches for (productId, storeId) with quantity > 0, ordered by expiry_date ASC
-    /// (nearest-first — FEFO). Used by <c>ApproveAsync</c> to deduct stock for write-off
-    /// items that don't reference a specific batch (the only shape the mobile "quick
-    /// write-off" create flow sends today — see TASK-354 audit).
+    /// Batch lookup for explicit-batch write-off items — one round trip for every
+    /// <c>ProductStockId</c> an approval needs, instead of one query per item. Used by
+    /// <c>ApproveAsync</c> (see TASK-691 — a 39-item write-off took minutes to approve
+    /// because the old per-item <c>GetStockByIdAsync</c> loop issued a query per line and
+    /// kept growing the DbContext's change tracker on every one of them).
     /// </summary>
-    Task<List<ProductStock>> GetFefoOrderedAsync(Guid productId, Guid storeId, CancellationToken ct = default);
+    Task<List<ProductStock>> GetStocksByIdsAsync(IReadOnlyCollection<Guid> stockIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Batches for every product in <paramref name="productIds"/> at <paramref name="storeId"/>
+    /// with quantity > 0, ordered by ProductId then expiry_date ASC (nearest-first — FEFO) so
+    /// callers can group by ProductId and consume in FEFO order per product. Used by
+    /// <c>ApproveAsync</c> to deduct stock for write-off items that don't reference a specific
+    /// batch (the only shape the mobile "quick write-off" create flow sends today — see
+    /// TASK-354 audit) — fetched once for all such items instead of once per item (TASK-691).
+    /// </summary>
+    Task<List<ProductStock>> GetFefoOrderedForProductsAsync(IReadOnlyCollection<Guid> productIds, Guid storeId, CancellationToken ct = default);
 
     Task AddAsync(WriteOff writeOff, CancellationToken ct = default);
     Task AddMovementAsync(StockMovement movement, CancellationToken ct = default);

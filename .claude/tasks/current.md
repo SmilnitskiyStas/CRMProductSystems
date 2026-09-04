@@ -6,6 +6,22 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## TASK-691 (bugfix) — Bulk write-off approval hang (39+ items)
+
+**Status:** review (не запушено) · **Agent:** main session
+Log: `.claude/logs/tasks/691_2026-09-04_writeoff-bulk-approve-hang_main-session.md`
+
+`WriteOffService.ApproveAsync` робив 1 DB-запит **на кожну позицію** списання
+(`GetStockByIdAsync`/`GetFefoOrderedAsync` всередині `foreach`) — для 39 позицій це 39+
+послідовних round-trip'ів у ОДНОМУ EF DbContext, і кожен наступний запит змушує EF Core
+заново обробляти вже накопичений change tracker (fixup вже відстежуваних сутностей) — звідси
+нелінійне зростання часу (хвилини на 39 позиціях, миттєво на 1-2). Fix: 2 нові batch-методи
+репозиторію (`GetStocksByIdsAsync`, `GetFefoOrderedForProductsAsync`) — вся вибірка тепер
+відбувається ДО циклу мутацій (макс. 3 запити незалежно від кількості позицій), поведінка й
+повідомлення про помилки не змінені. 4 існуючих тести оновлено під нові batch-стаби, доданий
+регресійний тест на "рівно 1 виклик batch-методу для 5 позицій". `dotnet` SDK недоступний у
+цій сесії — build/test не прогнано, потрібна верифікація перед merge.
+
 ## TASK-674 — Provider-керовані модулі `mobile_app` + `analytics`
 
 **Status:** review (не запушено) · **Agent:** main session · **Plan** `peaceful-chasing-piglet.md` · **ADR-037**

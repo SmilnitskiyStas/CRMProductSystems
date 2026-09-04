@@ -192,6 +192,32 @@ public sealed class WriteOffService : IWriteOffService
         if (writeOff.Status == "rejected")
             return (null, "Cannot approve a rejected write-off.");
 
+        // Batch-load everything the loop below needs BEFORE mutating anything, instead of
+        // querying once per item. The old code called GetStockByIdAsync/GetFefoOrderedAsync
+        // inside the foreach — one DB round trip per line item — which was fine for a 1-2 item
+        // write-off but made a 39-item bulk approval take minutes: each extra query also forces
+        // EF Core to re-run change detection over an ever-growing set of tracked entities, so
+        // cost grew with item count instead of staying flat (TASK-691).
+        var explicitStockIds = writeOff.Items
+            .Where(i => i.ProductStockId.HasValue)
+            .Select(i => i.ProductStockId!.Value)
+            .Distinct()
+            .ToList();
+        var stocksById = explicitStockIds.Count == 0
+            ? new Dictionary<Guid, ProductStock>()
+            : (await _repo.GetStocksByIdsAsync(explicitStockIds, ct)).ToDictionary(s => s.Id);
+
+        var fefoProductIds = writeOff.Items
+            .Where(i => !i.ProductStockId.HasValue)
+            .Select(i => i.ProductId)
+            .Distinct()
+            .ToList();
+        var fefoBatchesByProduct = fefoProductIds.Count == 0
+            ? new Dictionary<Guid, List<ProductStock>>()
+            : (await _repo.GetFefoOrderedForProductsAsync(fefoProductIds, writeOff.StoreId, ct))
+                .GroupBy(s => s.ProductId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
         // Deduct stock and log movements for every item. Two shapes are supported:
         //  - item.ProductStockId set  → deduct that exact batch (explicit selection).
         //  - item.ProductStockId null → FEFO-consume across the product's batches at
@@ -207,8 +233,7 @@ public sealed class WriteOffService : IWriteOffService
         {
             if (item.ProductStockId.HasValue)
             {
-                var stock = await _repo.GetStockByIdAsync(item.ProductStockId.Value, ct);
-                if (stock is null)
+                if (!stocksById.TryGetValue(item.ProductStockId.Value, out var stock))
                     return (null, $"Stock batch {item.ProductStockId} not found.");
 
                 if (stock.Quantity < item.Quantity)
@@ -239,7 +264,9 @@ public sealed class WriteOffService : IWriteOffService
             }
             else
             {
-                var batches = await _repo.GetFefoOrderedAsync(item.ProductId, writeOff.StoreId, ct);
+                var batches = fefoBatchesByProduct.TryGetValue(item.ProductId, out var productBatches)
+                    ? productBatches
+                    : [];
                 var remaining = item.Quantity;
 
                 foreach (var batch in batches)
