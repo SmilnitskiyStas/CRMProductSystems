@@ -135,7 +135,7 @@ function OrdersTab() {
       key: "actions",
       header: "",
       render: (order) =>
-        order.status === "new" ? (
+        order.status === "new" || order.status === "confirmed" ? (
           <div onClick={(e) => e.stopPropagation()}>
             <Btn size="sm" variant="danger" onClick={() => setCancelTarget(order)}>
               {t("cancelButton")}

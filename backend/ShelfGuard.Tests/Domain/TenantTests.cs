@@ -10,7 +10,8 @@ public sealed class TenantTests
     [InlineData("auto_service", new[] { "auto_service", "procurement" })]
     [InlineData("restaurant", new[] { "inventory", "pos", "production" })]
     [InlineData("warehouse", new[] { "inventory", "procurement" })]
-    [InlineData("supplier", new[] { "marketplace_supplier" })]
+    // TASK-693 (Phase 7): supplier_inventory + supplier_workforce now default-ON for suppliers.
+    [InlineData("supplier", new[] { "marketplace_supplier", "supplier_inventory", "supplier_workforce" })]
     public void DefaultModulesForBusinessType_KnownTypes_ReturnsExpectedSet(string businessType, string[] expected)
     {
         var modules = Tenant.DefaultModulesForBusinessType(businessType);

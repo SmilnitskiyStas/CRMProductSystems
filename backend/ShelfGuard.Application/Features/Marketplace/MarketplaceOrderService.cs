@@ -27,7 +27,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     public const string OrderNotFoundError = "Замовлення не знайдено.";
     public const string EmptyOrderError = "Додайте хоча б одну позицію до замовлення.";
     public const string CancelReasonRequiredError = "Вкажіть причину скасування.";
-    public const string OnlyNewCancellableError = "Скасувати можна лише замовлення у статусі «нове».";
+    public const string OnlyNewCancellableError = "Скасувати замовлення можна лише до його відвантаження.";
     public const string EstimatedDeliveryDaysRequiredError = "Вкажіть орієнтовну кількість днів до доставки.";
     public const string DelayReasonRequiredError = "Вкажіть причину затримки доставки.";
     public const string OnlyShippedCanHaveDelayReasonError = "Причину затримки можна вказати лише для відправленого замовлення.";
@@ -315,7 +315,11 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         if (order is null || order.ClientTenantId != clientTenantId)
             return (null, OrderNotFoundError);
 
-        if (order.Status != MarketplaceOrderStatus.New)
+        // TASK-693 (Phase 7, request #1): the client may pull the order any time before it ships.
+        // A confirmed order has consumed nothing (supplier SupplierStock is only touched at
+        // shipped, Phase 3) so the cancel is byte-for-byte the same as a New cancel — status
+        // flips to cancelled with a reason, no stock reversal.
+        if (order.Status is not (MarketplaceOrderStatus.New or MarketplaceOrderStatus.Confirmed))
             return (null, OnlyNewCancellableError);
 
         order.Status       = MarketplaceOrderStatus.Cancelled;
@@ -339,7 +343,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
 
     public async Task<(MarketplaceOrderDto? Order, string? Error)> UpdateOrderStatusAsync(
         Guid supplierTenantId, Guid orderId, UpdateMarketplaceOrderStatusDto request,
-        CancellationToken ct = default)
+        Guid actingUserId, CancellationToken ct = default)
     {
         if (!MarketplaceOrderStatus.All.Contains(request.Status))
             return (null, $"Невідомий статус: '{request.Status}'.");
@@ -369,18 +373,29 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             // stops the richer /ship endpoint and this one from drifting apart on the invariants
             // that matter (the confirmed-only gate, and who may write the outbox row).
             //
-            // performedByUserId is Guid.Empty here: this endpoint's DTO carries no user, and the
-            // value is only ever used as SupplierStockMovement.PerformedBy — which this path
-            // never writes, because it never allocates.
+            // TASK-693: actingUserId (JWT-derived, controller-resolved) flows through as
+            // performedByUserId so ShipOrderAsync stamps ShippedByUserId/Name for this entry
+            // point too. This path never allocates, so it is never used as
+            // SupplierStockMovement.PerformedBy.
             var (shipped, shipError, _) = await ShipOrderAsync(
                 supplierTenantId, orderId,
                 new ShipOrderRequest(EstimatedDeliveryDays: request.EstimatedDeliveryDays),
-                performedByUserId: Guid.Empty, ct);
+                performedByUserId: actingUserId, ct);
             return (shipped, shipError);
         }
 
         if (request.Status == MarketplaceOrderStatus.Delivered)
             order.DeliveredAt = DateTimeOffset.UtcNow;
+
+        // TASK-693 (Phase 7, request #2): snapshot which supplier employee confirmed the order.
+        // The acting user is in the supplier's own tenant (this runs on the supplier session), so
+        // a plain repository read resolves the display name — same denormalized-snapshot pattern
+        // as CreatedByUserName. Only the confirmed transition captures an actor.
+        if (request.Status == MarketplaceOrderStatus.Confirmed && actingUserId != Guid.Empty)
+        {
+            order.ConfirmedByUserId   = actingUserId;
+            order.ConfirmedByUserName = (await _users.GetByIdAsync(actingUserId, ct))?.FullName;
+        }
 
         order.Status    = request.Status;
         order.UpdatedAt = DateTimeOffset.UtcNow;
@@ -447,6 +462,17 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         order.ShippedAt             = DateTimeOffset.UtcNow;
         order.Status                = MarketplaceOrderStatus.Shipped;
         order.UpdatedAt             = DateTimeOffset.UtcNow;
+
+        // TASK-693 (Phase 7, request #2): snapshot the supplier employee who shipped it. Covers
+        // both entry points — the /ship endpoint (real userId) and the legacy /status {shipped}
+        // path, which now forwards its acting user instead of Guid.Empty. Same own-tenant read /
+        // denormalized-name pattern as ConfirmedByUserName.
+        if (performedByUserId != Guid.Empty)
+        {
+            order.ShippedByUserId   = performedByUserId;
+            order.ShippedByUserName = (await _users.GetByIdAsync(performedByUserId, ct))?.FullName;
+        }
+
         _orders.Update(order);
 
         if (consumedStock)
@@ -1250,6 +1276,10 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             o.DelayReason,
             o.CreatedByUserId,
             o.CreatedByUserName,
+            o.ConfirmedByUserId,
+            o.ConfirmedByUserName,
+            o.ShippedByUserId,
+            o.ShippedByUserName,
             o.Items
                 .OrderBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase)
                 .Select(i => new MarketplaceOrderItemDto(

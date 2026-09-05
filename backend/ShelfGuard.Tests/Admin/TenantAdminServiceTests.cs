@@ -166,7 +166,8 @@ public sealed class TenantAdminServiceTests
         Assert.Null(error);
         Assert.NotNull(tenant);
         Assert.Equal("supplier", tenant.BusinessType);
-        Assert.Equal(new[] { "marketplace_supplier" }, tenant.Modules);
+        // TASK-693 (Phase 7): supplier tenants now get supplier_inventory + supplier_workforce too.
+        Assert.Equal(new[] { "marketplace_supplier", "supplier_inventory", "supplier_workforce" }, tenant.Modules);
 
         // First user gets the supplier_admin role, not enterprise_admin
         await _repo.Received(1).AddUserAsync(

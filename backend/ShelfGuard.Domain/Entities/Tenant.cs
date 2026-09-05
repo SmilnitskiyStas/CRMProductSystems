@@ -77,9 +77,10 @@ public sealed class Tenant
             // Supplier-portal expansion: "supplier_inventory" gates the supplier's own
             // warehouses + batch stock + batch-consuming shipment (SupplierCabinetWarehouses
             // controller, per-action); "supplier_workforce" gates the supplier's employee
-            // work schedules (SupplierCabinetSchedules controller). Both provider-granted,
-            // default-off, no backfill — a drop-ship supplier never turns them on, and the
-            // legacy confirmed→shipped flow keeps working while "supplier_inventory" is off.
+            // work schedules (SupplierCabinetSchedules controller). TASK-693 (Phase 7): both are
+            // in DefaultModulesForBusinessType("supplier") and were backfilled onto existing
+            // supplier tenants — the legacy confirmed→shipped flow still works with
+            // "supplier_inventory" off, but a provider would now have to explicitly remove it.
             "supplier_inventory", "supplier_workforce"
         };
         var unknown = modules.Where(m => !valid.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
@@ -133,7 +134,10 @@ public sealed class Tenant
             "distribution" => ["inventory", "procurement", "marketplace"],
             "pharmacy"     => ["inventory", "procurement", "pos"],
             "floristry"    => ["inventory", "procurement", "pos"],
-            "supplier"     => ["marketplace_supplier"],
+            // TASK-693 (Phase 7): supplier_inventory + supplier_workforce now ship ON for every
+            // supplier tenant (reverses the 2026-09-02 default-off). BackfillSupplierModules
+            // merges the two keys into existing supplier tenants.
+            "supplier"     => ["marketplace_supplier", "supplier_inventory", "supplier_workforce"],
             _              => ["inventory"],
         };
 

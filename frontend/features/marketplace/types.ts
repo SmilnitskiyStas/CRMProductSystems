@@ -401,6 +401,16 @@ export interface MarketplaceOrderDto {
   createdByUserId: string | null;
   /** Denormalized display name of {@link createdByUserId} at order-creation time. Null when unknown. */
   createdByUserName: string | null;
+  /** Supplier-side employee who confirmed the order (TASK-694). Null until the order is confirmed
+   * and on orders confirmed before this column existed. */
+  confirmedByUserId: string | null;
+  /** Denormalized display name of {@link confirmedByUserId} at confirm time. Null when unknown. */
+  confirmedByUserName: string | null;
+  /** Supplier-side employee who shipped the order (TASK-694). Null until the order is shipped
+   * and on orders shipped before this column existed. */
+  shippedByUserId: string | null;
+  /** Denormalized display name of {@link shippedByUserId} at ship time. Null when unknown. */
+  shippedByUserName: string | null;
   /** Store the goods are headed to. Null on orders placed before TASK-586 — permanent/expected
    * there (historical orders can never be received through the new flow), not a loading state. */
   destinationStoreId: string | null;

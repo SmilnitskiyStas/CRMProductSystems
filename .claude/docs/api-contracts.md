@@ -439,7 +439,7 @@ GET  /api/marketplace/cooperation/{id}/contract                                 
 POST /api/marketplace/suppliers/{supplierId}/orders  { items:[{supplierItemId,qty}], comment?, destinationStoreId }
                                                                                        -> 201 MarketplaceOrderDto | 403 (no ACTIVE agreement) | 400 (empty items / missing destinationStoreId, TASK-586) | 404
 GET  /api/marketplace/my-orders                                                        -> MarketplaceOrderDto[] (now carries destinationStoreId, null on pre-TASK-586 orders)
-POST /api/marketplace/orders/{id}/cancel  { reason }                                   -> MarketplaceOrderDto | 400 (only status=new) | 404
+POST /api/marketplace/orders/{id}/cancel  { reason }                                   -> MarketplaceOrderDto | 400 (only while status=new|confirmed — i.e. before it ships, TASK-693) | 404
 POST /api/marketplace/suppliers/{supplierId}/support-tickets  { subject, message }     -> 201 SupplierSupportTicketDto (no agreement required)
 GET  /api/marketplace/my-support-tickets                                               -> SupplierSupportTicketDto[]
 GET  /api/marketplace/support-tickets/{id}                                             -> SupplierSupportTicketDto (with messages) | 404
@@ -494,7 +494,7 @@ GET  /api/supplier-cabinet/cooperation-requests/{id}/contract      -> applicatio
 GET|PUT /api/supplier-cabinet/contract-settings                    -> SupplierContractSettingsDto (PUT body: UpsertContractSettingsDto, legalName required)
 POST /api/supplier-cabinet/contract-settings/signature-image|stamp-image  multipart file png/jpg <=2MB -> { imageUrl }
 GET  /api/supplier-cabinet/orders                                  -> MarketplaceOrderDto[]
-POST /api/supplier-cabinet/orders/{id}/status  { status, reason?, estimatedDeliveryDays? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled; cancel requires reason, ship requires estimatedDeliveryDays (>0, TASK-584) and enqueues client notification "marketplace_order.shipped". No transition out of shipped any more (TASK-586, ADR-033) — status:"delivered" on a shipped order always 400s "Перехід зі статусу 'shipped' у 'delivered' неможливий."; delivered is now set only by the client's own receiving flow, see "Marketplace order receiving" below.
+POST /api/supplier-cabinet/orders/{id}/status  { status, reason?, estimatedDeliveryDays? } -> dto; new->confirmed|cancelled, confirmed->shipped|cancelled; cancel requires reason, ship requires estimatedDeliveryDays (>0, TASK-584) and enqueues client notification "marketplace_order.shipped". No transition out of shipped any more (TASK-586, ADR-033) — status:"delivered" on a shipped order always 400s "Перехід зі статусу 'shipped' у 'delivered' неможливий."; delivered is now set only by the client's own receiving flow, see "Marketplace order receiving" below. TASK-693: the confirm transition snapshots `confirmedByUserId`/`confirmedByUserName`, the ship transition snapshots `shippedByUserId`/`shippedByUserName` (the acting supplier employee, JWT-derived) — `/ship` does the same.
 POST /api/supplier-cabinet/orders/{id}/delay-reason  { reason }    -> dto | 400 (empty reason / order not shipped) | 404; supplier-only, only while status=shipped (TASK-585), enqueues client notification "marketplace_order.delay_reason_added"
 POST /api/supplier-cabinet/orders/{id}/expected-delivery-date  { expectedDeliveryDate: "YYYY-MM-DD" }  -> dto | 400 (order not shipped / date in the past) | 404; supplier-only, only while status=shipped, REPEATABLE (no "already set" guard), enqueues client notification "marketplace_order.delivery_rescheduled" (Phase 4, plan D5). Same auth shape as delay-reason — no supplier_inventory/warehouse-permission gate.
 GET  /api/supplier-cabinet/support-tickets                         -> SupplierSupportTicketDto[]
@@ -509,6 +509,14 @@ at creation (a supplier session can't join into the client's `users` table); bot
 data / pre-migration orders. `POST /api/marketplace/suppliers/{supplierId}/orders` now also
 enqueues a `marketplace_order.created` outbox notification to the **supplier** tenant's
 `supplier_admin` users (telegram/push).
+
+TASK-693 (Phase 7): `MarketplaceOrderDto` additionally carries `confirmedByUserId` +
+`confirmedByUserName` and `shippedByUserId` + `shippedByUserName` — denormalized snapshots of the
+**supplier**-side employees who confirmed / shipped the order (same cross-tenant-safe pattern as
+`createdByUserName`; a client session reads the name without joining the supplier's `users`
+table). All four null until the respective transition happens / on pre-migration orders. Also:
+the client may now cancel an order while it is `new` **or** `confirmed` (any time before it
+ships) — a `confirmed` order has consumed no stock, so cancel is unchanged mechanically.
 
 Key DTOs (`Features/Marketplace/Dtos/CooperationDtos.cs`): full shapes in
 `.claude/logs/handoffs/317-to-318_frontend-developer.md`. Contract numbers «ДС-{yyyy}-{NNN}»,

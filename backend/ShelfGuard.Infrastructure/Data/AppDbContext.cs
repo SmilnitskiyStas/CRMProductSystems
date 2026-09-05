@@ -2228,6 +2228,11 @@ public sealed class AppDbContext : DbContext
             // Supplier-portal expansion: #4 — denormalized snapshot of the client user who placed
             // the order (avoids a cross-tenant users join under a supplier session).
             e.Property(x => x.CreatedByUserName).HasMaxLength(255).IsRequired(false);
+            // TASK-693 (Phase 7): denormalized snapshots of the supplier employees who confirmed /
+            // shipped the order — same cross-tenant-safe pattern as CreatedByUserName. Ids are
+            // plain columns (no FK): the name is the display path and the row must outlive staff.
+            e.Property(x => x.ConfirmedByUserName).HasMaxLength(255).IsRequired(false);
+            e.Property(x => x.ShippedByUserName).HasMaxLength(255).IsRequired(false);
             // D5 — mutable supplier-set expected delivery date (date only). Landed in Phase 1.
             e.Property(x => x.ExpectedDeliveryDate).IsRequired(false);
             // D4 (Phase 3) — supplier warehouse the order was picked from. One source location

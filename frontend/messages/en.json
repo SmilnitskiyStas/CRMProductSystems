@@ -4096,6 +4096,8 @@
         "toastCancelled": "Order cancelled",
         "commentLabel": "Client comment: {comment}",
         "cancelReasonLabel": "Cancellation reason: {reason}",
+        "confirmedByLabel": "Confirmed by: {name}",
+        "shippedByLabel": "Shipped by: {name}",
         "shipModalTitle": "Ship order {number}?",
         "shipModalLabel": "Estimated delivery time (days)",
         "shipModalPlaceholder": "E.g. 3",

@@ -269,7 +269,10 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
 
-        var (order, error) = await _orders.UpdateOrderStatusAsync(tenantId.Value, id, request, ct);
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        var (order, error) = await _orders.UpdateOrderStatusAsync(tenantId.Value, id, request, userId.Value, ct);
 
         if (error == MarketplaceOrderService.OrderNotFoundError)
             return NotFound(new { error });

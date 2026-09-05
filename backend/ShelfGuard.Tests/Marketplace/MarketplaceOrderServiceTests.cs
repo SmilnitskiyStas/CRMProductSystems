@@ -36,6 +36,7 @@ public sealed class MarketplaceOrderServiceTests
     private readonly Guid _supplierTenantId = Guid.NewGuid();
     private readonly Guid _clientTenantId = Guid.NewGuid();
     private readonly Guid _userId = Guid.NewGuid();
+    private readonly Guid _supplierUserId = Guid.NewGuid();    // TASK-693: supplier-side actor for status changes
 
     public MarketplaceOrderServiceTests()
     {
@@ -55,6 +56,11 @@ public sealed class MarketplaceOrderServiceTests
         // #4: CreateOrderAsync snapshots the placing user's display name onto the order.
         _users.GetByIdAsync(_userId, Arg.Any<CancellationToken>())
             .Returns(User.Create(_clientTenantId, "buyer@example.com", "Олена Замовниця", "hash", "store_manager"));
+
+        // TASK-693 (Phase 7): UpdateOrderStatusAsync / ShipOrderAsync snapshot the supplier-side
+        // acting user's display name onto the order (ConfirmedByUserName / ShippedByUserName).
+        _users.GetByIdAsync(_supplierUserId, Arg.Any<CancellationToken>())
+            .Returns(User.Create(_supplierTenantId, "petro@supplier.com", "Петро Постачальник", "hash", "supplier_admin"));
         _tenantNames.GetTenantDisplayNameAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns("Tenant");
 
@@ -809,10 +815,12 @@ public sealed class MarketplaceOrderServiceTests
 
     // ── Client cancellation ────────────────────────────────────────────────────
 
-    [Fact]
-    public async Task CancelOrder_NewOrder_SetsCancelledWithReason()
+    [Theory]
+    [InlineData(MarketplaceOrderStatus.New)]
+    [InlineData(MarketplaceOrderStatus.Confirmed)]   // TASK-693 (Phase 7): cancellable until it ships
+    public async Task CancelOrder_BeforeShipping_SetsCancelledWithReason(string status)
     {
-        var order = Order(MarketplaceOrderStatus.New);
+        var order = Order(status);
         _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
         var (dto, error) = await _sut.CancelOrderAsync(_clientTenantId, order.Id, "Передумали");
@@ -824,11 +832,10 @@ public sealed class MarketplaceOrderServiceTests
     }
 
     [Theory]
-    [InlineData(MarketplaceOrderStatus.Confirmed)]
     [InlineData(MarketplaceOrderStatus.Shipped)]
     [InlineData(MarketplaceOrderStatus.Delivered)]
     [InlineData(MarketplaceOrderStatus.Cancelled)]
-    public async Task CancelOrder_NotNew_ReturnsError(string status)
+    public async Task CancelOrder_ShippedOrLater_ReturnsError(string status)
     {
         var order = Order(status);
         _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
@@ -877,7 +884,7 @@ public sealed class MarketplaceOrderServiceTests
         // unconditionally keeps this matrix test focused on the transition check itself.
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
             _supplierTenantId, order.Id,
-            new UpdateMarketplaceOrderStatusDto(to, "причина", EstimatedDeliveryDays: 3));
+            new UpdateMarketplaceOrderStatusDto(to, "причина", EstimatedDeliveryDays: 3), _supplierUserId);
 
         if (allowed)
         {
@@ -901,7 +908,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
             _supplierTenantId, order.Id,
-            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Cancelled, "  "));
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Cancelled, "  "), _supplierUserId);
 
         Assert.Null(dto);
         Assert.Equal(MarketplaceOrderService.CancelReasonRequiredError, error);
@@ -921,7 +928,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
             _supplierTenantId, order.Id,
-            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: days));
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: days), _supplierUserId);
 
         Assert.Null(dto);
         Assert.Equal(MarketplaceOrderService.EstimatedDeliveryDaysRequiredError, error);
@@ -938,7 +945,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
             _supplierTenantId, order.Id,
-            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: 3));
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: 3), _supplierUserId);
 
         Assert.Null(error);
         Assert.NotNull(dto);
@@ -973,7 +980,7 @@ public sealed class MarketplaceOrderServiceTests
         _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
-            _supplierTenantId, order.Id, new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Delivered));
+            _supplierTenantId, order.Id, new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Delivered), _supplierUserId);
 
         Assert.Null(dto);
         Assert.NotNull(error);
@@ -992,7 +999,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
             Guid.NewGuid(), order.Id,
-            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Confirmed));
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Confirmed), _supplierUserId);
 
         Assert.Null(dto);
         Assert.Equal(MarketplaceOrderService.OrderNotFoundError, error);
@@ -1002,10 +1009,77 @@ public sealed class MarketplaceOrderServiceTests
     public async Task UpdateOrderStatus_UnknownStatus_ReturnsError()
     {
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
-            _supplierTenantId, Guid.NewGuid(), new UpdateMarketplaceOrderStatusDto("bogus"));
+            _supplierTenantId, Guid.NewGuid(), new UpdateMarketplaceOrderStatusDto("bogus"), _supplierUserId);
 
         Assert.Null(dto);
         Assert.Contains("Невідомий статус", error);
+    }
+
+    // ── TASK-693 (Phase 7): supplier-side actor snapshot on confirm / ship ──────
+
+    [Fact]
+    public async Task UpdateOrderStatus_Confirm_SnapshotsConfirmingSupplierUser()
+    {
+        var order = Order(MarketplaceOrderStatus.New);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.UpdateOrderStatusAsync(
+            _supplierTenantId, order.Id,
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Confirmed), _supplierUserId);
+
+        Assert.Null(error);
+        Assert.Equal(_supplierUserId, order.ConfirmedByUserId);
+        Assert.Equal("Петро Постачальник", order.ConfirmedByUserName);
+        Assert.Equal(_supplierUserId, dto!.ConfirmedByUserId);
+        Assert.Equal("Петро Постачальник", dto.ConfirmedByUserName);
+        // Confirming never touches the shipped actor.
+        Assert.Null(order.ShippedByUserId);
+        Assert.Null(order.ShippedByUserName);
+    }
+
+    [Fact]
+    public async Task UpdateOrderStatus_Ship_LegacyPath_SnapshotsShippingSupplierUser()
+    {
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        order.Items.Add(OrderLine(order, "Молоко 2.5%", 10m, Guid.NewGuid()));
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var (dto, error) = await _sut.UpdateOrderStatusAsync(
+            _supplierTenantId, order.Id,
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: 2),
+            _supplierUserId);
+
+        Assert.Null(error);
+        Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);
+        Assert.Equal(_supplierUserId, order.ShippedByUserId);
+        Assert.Equal("Петро Постачальник", order.ShippedByUserName);
+        Assert.Equal("Петро Постачальник", dto!.ShippedByUserName);
+    }
+
+    [Fact]
+    public async Task ShipOrder_SnapshotsShippingSupplierUser()
+    {
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        order.Items.Add(OrderLine(order, "Молоко 2.5%", 40m, supplierItemId));
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var only = Batch(supplierItemId, warehouseId, new DateOnly(2026, 12, 1), 40m, "B-1");
+        StubWarehouse(warehouseId);
+        StubFefo(supplierItemId, warehouseId, only);
+
+        var (dto, error, _) = await _sut.ShipOrderAsync(
+            _supplierTenantId, order.Id,
+            new ShipOrderRequest(SourceWarehouseId: warehouseId, EstimatedDeliveryDays: 3),
+            _supplierUserId);
+
+        Assert.Null(error);
+        Assert.Equal(_supplierUserId, order.ShippedByUserId);
+        Assert.Equal("Петро Постачальник", order.ShippedByUserName);
+        Assert.Equal("Петро Постачальник", dto!.ShippedByUserName);
     }
 
     // ── Phase 3 (plan D4): batch-consuming shipment ─────────────────────────────
@@ -1334,7 +1408,7 @@ public sealed class MarketplaceOrderServiceTests
 
         var (dto, error) = await _sut.UpdateOrderStatusAsync(
             _supplierTenantId, order.Id,
-            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: 4));
+            new UpdateMarketplaceOrderStatusDto(MarketplaceOrderStatus.Shipped, EstimatedDeliveryDays: 4), _supplierUserId);
 
         Assert.Null(error);
         Assert.Equal(MarketplaceOrderStatus.Shipped, order.Status);

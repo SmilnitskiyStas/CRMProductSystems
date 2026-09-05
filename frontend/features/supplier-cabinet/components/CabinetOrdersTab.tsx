@@ -285,6 +285,13 @@ function OrderExpandedContent({
   intlLocale: string;
 }) {
   const t = useTranslations("Dashboard.supplierCabinet.ordersTab");
+  // Which supplier employee moved the order forward (TASK-694). "Підтвердив" is
+  // meaningful once the order is confirmed or later; "Відвантажив" once shipped.
+  const showConfirmedBy =
+    order.status === "confirmed" ||
+    order.status === "shipped" ||
+    order.status === "delivered";
+  const showShippedBy = order.status === "shipped" || order.status === "delivered";
   return (
     <div style={{ background: "#0D1117", padding: "12px 24px 16px 44px" }}>
       {order.comment && (
@@ -295,6 +302,16 @@ function OrderExpandedContent({
       {order.cancelReason && (
         <div style={{ color: "#F87171", fontSize: 12, marginBottom: 8 }}>
           {t("cancelReasonLabel", { reason: order.cancelReason })}
+        </div>
+      )}
+      {showConfirmedBy && (
+        <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
+          {t("confirmedByLabel", { name: order.confirmedByUserName ?? "—" })}
+        </div>
+      )}
+      {showShippedBy && (
+        <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
+          {t("shippedByLabel", { name: order.shippedByUserName ?? "—" })}
         </div>
       )}
       <ShippingDetail

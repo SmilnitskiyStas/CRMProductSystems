@@ -1123,3 +1123,32 @@ PromoProductCoefficient` (2.0), лише коли **застосована** (`I
 `GetByIdAsync`, не лише list. Без міграції. 7 repo-level (EF InMemory) + 2 service-level тестів.
 `dotnet test` 2347/2347; tsc/lint/parity(4974) чисто. E2E на dev — обидва варіанти банера + «без
 промо» перевірено, seed прибрано. **Усі 5 слайсів плану `catalog-form-buffers-promo.md` завершено.**
+
+## Supplier portal «Phase 7» — фронт — TASK-694
+
+**Status:** review · **Agent:** frontend-developer · не запушено · Log: `.claude/logs/tasks/694_2026-09-03_supplier-phase7-frontend_frontend-developer.md`
+
+Продовження TASK-693. (1) Кнопка «Скасувати» в клієнтському `marketplace/orders/page.tsx` тепер
+для `status ∈ {new, confirmed}` (було лише `new`); `toast.error(err.message)` вже піднімає новий
+бекендовий текст помилки через `ApiError` — стара строка помилки в фронті відсутня (grep чисто).
+(2) `CabinetOrdersTab` (кабінет постачальника) — у розгорнутому рядку два inline-рядки
+«Підтвердив: …» / «Відвантажив: …» (status-gated, стиль сусідніх detail-рядків); у buyer-в'ю НЕ
+додано (за скоупом). (3) `MarketplaceOrderDto` (`features/marketplace/types.ts`, єдине
+визначення — supplier-cabinet реімпортує) += `confirmed/shippedByUserId` + `…UserName`.
+(4) i18n `supplierCabinet.ordersTab.confirmedByLabel`/`shippedByLabel` (uk+en, parity 4976).
+`tsc` / `next lint` (touched) / `next build` (79/79) чисто. Без міграції, не комічено.
+
+## Supplier portal «Phase 7» — 3 доробки — TASK-693
+
+**Status:** review · **Agent:** backend-developer · не запушено · Log: `.claude/logs/tasks/693_2026-09-03_supplier-phase7-followups_backend-developer.md`
+
+(1) `supplier_inventory` + `supplier_workforce` тепер **default-ON** для supplier-тенантів
+(`Tenant.DefaultModulesForBusinessType`) + міграція `BackfillSupplierModules` (data-only, jsonb
+merge, ідемпотентна) — застосовано на dev, усі 11 реальних supplier-тенантів оновлено. (2) Клієнт
+може скасувати замовлення поки воно `new` **або** `confirmed` (до відвантаження) —
+`CancelOrderAsync` + новий текст помилки. (3) Міграція `AddMarketplaceOrderSupplierActors`:
+`marketplace_orders` += `Confirmed/ShippedByUserId` + `…UserName` (денорм-снапшот, без FK);
+`UpdateOrderStatusAsync(+Guid actingUserId)` фіксує хто підтвердив/відвантажив (обидва входи →
+`ShipOrderAsync`); `MarketplaceOrderDto` +4 поля. `dotnet build -c Release` чисто; `dotnet test`
+**2350/2350** (RLS-audit green). Фронт — окремим агентом (кнопка cancel для `new|confirmed`, нові
+DTO-поля «Підтвердив/Відвантажив», змінений рядок помилки).

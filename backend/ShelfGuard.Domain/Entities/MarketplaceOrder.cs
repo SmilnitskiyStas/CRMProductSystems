@@ -76,6 +76,25 @@ public sealed class MarketplaceOrder
     /// seed data have no value.
     /// </summary>
     public string? CreatedByUserName { get; set; }
+
+    /// <summary>
+    /// Supplier-side user who confirmed the order (TASK-693, Phase 7, request #2) + their
+    /// denormalized display name, snapshotted at confirm time. Mirrors <see cref="CreatedByUserName"/>
+    /// — a client session shows "who confirmed" without a cross-tenant join into the supplier's
+    /// <c>users</c> table. Nullable: not-yet-confirmed orders and pre-migration data have no value.
+    /// </summary>
+    public Guid? ConfirmedByUserId { get; set; }
+    public string? ConfirmedByUserName { get; set; }
+
+    /// <summary>
+    /// Supplier-side user who shipped the order (TASK-693, Phase 7, request #2) + their
+    /// denormalized display name, snapshotted at ship time. Populated for both ship entry points
+    /// (the Phase 3 <c>/ship</c> endpoint and the legacy <c>/status {shipped}</c> path). Nullable:
+    /// not-yet-shipped orders and pre-migration data have no value.
+    /// </summary>
+    public Guid? ShippedByUserId { get; set; }
+    public string? ShippedByUserName { get; set; }
+
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

@@ -190,7 +190,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
         return Ok(await _orders.ListForClientAsync(tenantId.Value, ct));
     }
 
-    /// <summary>Cancels an own order. Only orders still in status "new" can be cancelled by the client.</summary>
+    /// <summary>Cancels an own order. The client may cancel any time before it ships — status "new" or "confirmed" (TASK-693).</summary>
     [HttpPost("orders/{id:guid}/cancel")]
     [ProducesResponseType(typeof(MarketplaceOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]

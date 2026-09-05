@@ -181,6 +181,16 @@ public record MarketplaceOrderDto(
     /// </summary>
     Guid? CreatedByUserId,
     string? CreatedByUserName,
+    /// <summary>
+    /// Supplier-side employees who confirmed / shipped the order + their denormalized name
+    /// snapshots (TASK-693, Phase 7). Same cross-tenant-safe pattern as CreatedByUserName — a
+    /// client session reads the name without a join into the supplier's users table. All nullable:
+    /// not-yet-confirmed / not-yet-shipped orders, and orders processed before the columns existed.
+    /// </summary>
+    Guid? ConfirmedByUserId,
+    string? ConfirmedByUserName,
+    Guid? ShippedByUserId,
+    string? ShippedByUserName,
     IReadOnlyList<MarketplaceOrderItemDto> Items,
     /// <summary>
     /// Read-only (TASK-586, ADR-033 Decision 2). Nullable — orders placed before this column

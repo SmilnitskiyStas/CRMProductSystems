@@ -32,7 +32,10 @@ public interface IMarketplaceOrderService
     Task<IReadOnlyList<MarketplaceOrderDto>> ListForClientAsync(
         Guid clientTenantId, CancellationToken ct = default);
 
-    /// <summary>Client may cancel only orders still in status "new".</summary>
+    /// <summary>
+    /// Client may cancel an order any time before it ships — status "new" or "confirmed"
+    /// (TASK-693, Phase 7). A confirmed order has consumed nothing, so no stock reversal.
+    /// </summary>
     Task<(MarketplaceOrderDto? Order, string? Error)> CancelOrderAsync(
         Guid clientTenantId, Guid orderId, string reason, CancellationToken ct = default);
 
@@ -46,11 +49,13 @@ public interface IMarketplaceOrderService
     /// supplier-initiated transition exists out of shipped any more (TASK-586, ADR-033 Decision
     /// 4) — delivered is now set exclusively by <see cref="MarketplaceOrderReceiptService"/>'s
     /// client-confirmed receiving flow; a status update of "delivered" always 400s here.
-    /// Cancelling requires a reason.
+    /// Cancelling requires a reason. <paramref name="actingUserId"/> is the supplier-side user
+    /// performing the change — snapshotted onto the order as ConfirmedByUserName on the confirmed
+    /// transition and ShippedByUserName on the shipped transition (TASK-693, Phase 7).
     /// </summary>
     Task<(MarketplaceOrderDto? Order, string? Error)> UpdateOrderStatusAsync(
         Guid supplierTenantId, Guid orderId, UpdateMarketplaceOrderStatusDto request,
-        CancellationToken ct = default);
+        Guid actingUserId, CancellationToken ct = default);
 
     /// <summary>
     /// Ships a confirmed order (supplier-portal expansion Phase 3, plan D4) — the single code

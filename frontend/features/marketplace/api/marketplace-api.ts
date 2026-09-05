@@ -177,7 +177,7 @@ export const marketplaceApi = {
   /** GET /api/marketplace/my-orders */
   getMyOrders: () => api.get<MarketplaceOrderDto[]>("/api/marketplace/my-orders"),
 
-  /** POST /api/marketplace/orders/{orderId}/cancel — лише зі статусу new */
+  /** POST /api/marketplace/orders/{orderId}/cancel — зі статусу new або confirmed (до відвантаження) */
   cancelOrder: (orderId: string, reason: string) =>
     api.post<MarketplaceOrderDto>(`/api/marketplace/orders/${orderId}/cancel`, { reason }),
 

@@ -4096,6 +4096,8 @@
         "toastCancelled": "Замовлення скасовано",
         "commentLabel": "Коментар клієнта: {comment}",
         "cancelReasonLabel": "Причина скасування: {reason}",
+        "confirmedByLabel": "Підтвердив: {name}",
+        "shippedByLabel": "Відвантажив: {name}",
         "shipModalTitle": "Відвантажити замовлення {number}?",
         "shipModalLabel": "Орієнтовна кількість днів до доставки",
         "shipModalPlaceholder": "Напр. 3",
