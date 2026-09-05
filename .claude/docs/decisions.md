@@ -10,6 +10,7 @@ Full text for **ADR-037 … ADR-027** is in this file. **ADR-026 and older** →
 
 | ADR | Decision |
 |---|---|
+| ADR-039 | Supplier portal Phase 8 — per-employee buyer ratings (`supplier_employee_reviews`, ADR-033 split RLS + `ClientTenantId <> SupplierTenantId` self-rating guard); supplier-internal only (never on the public profile, never in `SupplierMetrics.Rating`); team-performance is an in-memory rollup (low B2B volume) on the supplier's own session; `MarketplaceOrder.ConfirmedAt` for the confirm-timing KPI |
 | ADR-038 | Supplier-portal expansion — supplier warehouses reuse `Location` (`Type="warehouse"`); supplier stock/receipts are PARALLEL entities to retail (not reuse — nullable `SupplierItem.ItemId` + retail `store_scope` RLS); `marketplace_order_item_batches` doubles as stock-consumption ledger + buyer-receipt prefill with INVERSE split RLS; open marketplace orders fold into `OrderCalc` in-transit; schedules reuse the tenant-generic `IScheduleService`; two provider-granted default-off modules `supplier_inventory` / `supplier_workforce` |
 | ADR-037 | Provider-controlled `mobile_app` + `analytics` module keys — whole "Застосунок" section and "Аналітика" reports section gated; per-action `[RequireModule]` on the shared `AnalyticsController`; no backfill, default-off |
 | ADR-036 | Supplier delivery coverage + performance metrics — Ukraine region registry, `MarketplaceOrder.DestinationRegionCode` snapshot, coverage not premium-gated, `supplier-metrics-recompute` worker write-boundary · **amended 2026-09-03**: write-boundary set grows by `OnTimeDeliveryRate` + `CompositeScore` (worker-computed, same disjointness argument) |
@@ -48,6 +49,41 @@ Full text for **ADR-037 … ADR-027** is in this file. **ADR-026 and older** →
 | ADR-003 | Expo SDK 56 for mobile *(archive)* |
 | ADR-002 | Modular monolith over Turborepo *(archive)* |
 | ADR-001 | BullMQ with ASP.NET Core *(archive)* |
+
+## ADR-039: Supplier portal Phase 8 — per-employee buyer ratings + team performance
+Date: 2026-09-05 · Status: accepted — implemented (TASK-695, backend) · not yet deployed
+
+User decision (2026-09-03): a buyer rates a supplier **employee** (not just the company) via two
+paths — after a **delivered order** they rate the responsible manager (`MarketplaceOrder.ConfirmedByUserId`,
+one rating per order), and from a **chat thread** they rate a supplier staff member who replied in
+it (one rating per session). These ratings + the derived KPI view are **supplier-internal**: not
+shown on the public supplier profile, not rolled into `SupplierMetrics.Rating` (which stays the
+company-level average from `SupplierReview`). Per-employee KPI view is the full set.
+
+**D1 — `supplier_employee_reviews` gets the ADR-033 split RLS, plus a self-rating guard.** Buyer
+writes (`tenant_isolation` on `ClientTenantId`), supplier reads (`supplier_read` FOR SELECT on
+`SupplierTenantId`) — the same direction as `marketplace_order_receipts`. One extra clause on
+`tenant_isolation`: `AND "ClientTenantId" <> "SupplierTenantId"`. Without it a supplier session
+could name **itself** as the buyer (satisfying the WITH CHECK `ClientTenantId = app.tenant_id`)
+and fabricate a rating of its own employee that surfaces in its own team-performance view — a
+self-deception on an internal metric, not a cross-tenant escalation, but free to close since a
+real buyer↔supplier pair is always two distinct tenants. Proved on real Postgres
+(`SupplierEmployeeReviewRlsIntegrationTests`): supplier INSERT → 42501 under both attributions,
+UPDATE/DELETE → 0 rows. The triad audit picks the table up automatically.
+
+**D2 — team performance is an in-memory rollup, mirroring `SupplierAnalyticsService`.** Marketplace
+volume is low (B2B), so `SupplierTeamPerformanceService` does 4 broad pulls (orders /
+finalized-receipt flags / chat messages / employee reviews, all on the supplier's own session via
+OR-based `tenant_isolation` + `supplier_read`) and aggregates per staff user in C#. Each KPI
+carries a `PeriodMetricDto` delta vs the equal-length preceding window; a rate/hours figure is
+`null` (not `0`) when its denominator is zero. Discrepancy signal = a finalized
+(`Status == "received"`) `MarketplaceOrderReceipt` with no item carrying a non-empty
+`DiscrepancyNotes` — the same condition that opens the TASK-599 auto-ticket.
+
+**D3 — `MarketplaceOrder.ConfirmedAt`** (nullable, no backfill) is added purely for the "avg hours
+to confirm" KPI (`ConfirmedAt − CreatedAt`); it is **not** exposed on `MarketplaceOrderDto`.
+`ordersConfirmed` is windowed by `CreatedAt` (not `ConfirmedAt`) so historical confirmed orders —
+which have a null `ConfirmedAt` — stay countable; only the timing means drop them.
 
 ## ADR-038: Supplier-portal expansion — warehouses, batch inventory, batch-consuming shipment, replenishment in-transit, employee schedules
 Date: 2026-09-03 · Status: accepted · Plan: `.claude/plans/1-partitioned-book.md` (TASK-679..690, 8 commits `c72f473f`..`108b7954`) · Amends ADR-033 and ADR-036 (see their sections)

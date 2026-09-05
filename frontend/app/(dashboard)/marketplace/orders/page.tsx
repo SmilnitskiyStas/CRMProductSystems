@@ -11,12 +11,16 @@ import {
   useMyMarketplaceOrders,
   useCancelMarketplaceOrder,
   useMarketplaceOrderReceipt,
+  useOrderManagerRating,
+  useRateOrderManager,
 } from "@/features/marketplace/hooks/useCooperation";
 import { marketplaceApi } from "@/features/marketplace/api/marketplace-api";
 import {
   AgreementStatusBadge,
   OrderStatusBadge,
 } from "@/features/marketplace/components/CooperationBadges";
+import { RateEmployeeModal } from "@/features/marketplace/components/RateEmployeeModal";
+import { StarRating } from "@/features/marketplace/components/StarRating";
 import { getShippingEta } from "@/features/marketplace/utils";
 import { SigningMethodChoice } from "@/features/marketplace/components/SigningMethodChoice";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -213,7 +217,10 @@ function OrderExpandedContent({
         intlLocale={intlLocale}
       />
       {order.status === "delivered" && (
-        <ReceiptDetail orderId={order.id} intlLocale={intlLocale} />
+        <>
+          <ReceiptDetail orderId={order.id} intlLocale={intlLocale} />
+          {order.confirmedByUserName && <ManagerRatingRow order={order} />}
+        </>
       )}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
@@ -423,6 +430,85 @@ function ReceiptItemsTable({
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * "Оцінка менеджера" row shown once an order is delivered and has a responsible manager
+ * (`confirmedByUserName`) — TASK-696, Phase 8. Shows the manager's name plus either the
+ * existing rating (read-only stars + "змінити") or a "Оцінити" button, both opening the
+ * shared rating modal. Supplier-internal — never surfaced on the public supplier profile.
+ */
+function ManagerRatingRow({ order }: { order: MarketplaceOrderDto }) {
+  const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
+  const rt = useTranslations("Dashboard.marketplace.rateEmployee");
+  const { data: rating } = useOrderManagerRating(order.id);
+  const rateManager = useRateOrderManager();
+  const [modalOpen, setModalOpen] = useState(false);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexWrap: "wrap",
+        marginTop: 4,
+        marginBottom: 12,
+      }}
+    >
+      <span style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>
+        {t("managerRatingLabel")}
+      </span>
+      <span style={{ color: "#6B7280", fontSize: 12 }}>{order.confirmedByUserName}</span>
+      {rating ? (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <StarRating value={rating.rating} size={13} />
+          <button
+            onClick={() => setModalOpen(true)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              color: "#60A5FA",
+              fontSize: 12,
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            {t("editRating")}
+          </button>
+        </span>
+      ) : (
+        <Btn size="sm" variant="ghost" onClick={() => setModalOpen(true)}>
+          {t("rateButton")}
+        </Btn>
+      )}
+
+      {modalOpen && (
+        <RateEmployeeModal
+          title={t("managerRatingLabel")}
+          personName={order.confirmedByUserName ?? ""}
+          initialRating={rating?.rating ?? 0}
+          initialComment={rating?.comment ?? ""}
+          isEdit={Boolean(rating)}
+          pending={rateManager.isPending}
+          onSubmit={(r, c) =>
+            rateManager.mutate(
+              { orderId: order.id, rating: r, comment: c },
+              {
+                onSuccess: () => {
+                  toast.success(rt("toastSuccess"));
+                  setModalOpen(false);
+                },
+                onError: (err) => toast.error(err.message),
+              },
+            )
+          }
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 

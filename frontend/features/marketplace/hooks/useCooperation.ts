@@ -4,6 +4,7 @@
 // support tickets. Server state — React Query only (frontend-structure.md).
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiError } from "@/lib/api";
 import { marketplaceApi } from "../api/marketplace-api";
 import type {
   CreateCooperationRequestBody,
@@ -20,6 +21,8 @@ export const COOPERATION_KEYS = {
   myTickets: ["marketplace", "my-support-tickets"] as const,
   ticket: (id: string) => ["marketplace", "support-ticket", id] as const,
   orderReceipt: (orderId: string) => ["marketplace", "order-receipt", orderId] as const,
+  orderManagerRating: (orderId: string) =>
+    ["marketplace", "order-manager-rating", orderId] as const,
 };
 
 // ─── Agreements ───────────────────────────────────────────────────────────────
@@ -113,6 +116,47 @@ export function useMarketplaceOrderReceipt(orderId: string, enabled: boolean) {
     enabled: enabled && Boolean(orderId),
     staleTime: 15_000,
     retry: false,
+  });
+}
+
+// ─── Per-employee ratings, buyer side (TASK-696, Phase 8) ─────────────────────
+
+/** The calling tenant's rating of a delivered order's responsible manager, or `null` when
+ * not rated yet (the endpoint 404s — swallowed here, `retry: false` so it doesn't spin). */
+export function useOrderManagerRating(orderId: string) {
+  return useQuery({
+    queryKey: COOPERATION_KEYS.orderManagerRating(orderId),
+    queryFn: async () => {
+      try {
+        return await marketplaceApi.getOrderManagerRating(orderId);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
+    enabled: Boolean(orderId),
+    retry: false,
+    staleTime: 15_000,
+  });
+}
+
+export function useRateOrderManager() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      rating,
+      comment,
+    }: {
+      orderId: string;
+      rating: number;
+      comment?: string;
+    }) => marketplaceApi.rateOrderManager(orderId, { rating, comment }),
+    onSuccess: (_data, { orderId }) => {
+      queryClient.invalidateQueries({
+        queryKey: COOPERATION_KEYS.orderManagerRating(orderId),
+      });
+    },
   });
 }
 

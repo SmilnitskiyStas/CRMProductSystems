@@ -1,14 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { CabinetStaffPanel } from "@/features/supplier-cabinet/components/CabinetStaffPanel";
 import { RolesTab } from "@/features/supplier-cabinet/components/RolesTab";
+import { TeamPerformanceView } from "@/features/supplier-cabinet/components/TeamPerformanceView";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { SUPPLIER_ONLY, hasRole } from "@/lib/roles";
+
+type ActiveTab = "team" | "performance";
 
 export default function SupplierTeamPage() {
   const t = useTranslations("Dashboard.supplierCabinet.pages");
   const { data: me } = useMe();
+  const [activeTab, setActiveTab] = useState<ActiveTab>("team");
 
   if (me && !hasRole(me.role, SUPPLIER_ONLY)) {
     return (
@@ -28,6 +33,19 @@ export default function SupplierTeamPage() {
     );
   }
 
+  const tabStyle = (tab: ActiveTab): React.CSSProperties => ({
+    padding: "10px 20px",
+    background: "transparent",
+    border: "none",
+    borderBottom: activeTab === tab ? "2px solid #3B82F6" : "2px solid transparent",
+    color: activeTab === tab ? "#3B82F6" : "#6B7280",
+    fontSize: 13,
+    fontWeight: activeTab === tab ? 600 : 400,
+    cursor: "pointer",
+    marginBottom: -1,
+    transition: "color 0.15s",
+  });
+
   return (
     <div style={{ padding: "28px 32px" }}>
       <div style={{ marginBottom: 24 }}>
@@ -38,17 +56,31 @@ export default function SupplierTeamPage() {
           {t("team.subtitle")}
         </p>
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          gap: 24,
-        }}
-        className="lg:grid-cols-2"
-      >
-        <CabinetStaffPanel />
-        <RolesTab />
+
+      <div style={{ borderBottom: "1px solid #1F2937", marginBottom: 24, display: "flex" }}>
+        <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>
+          {t("team.tabTeam")}
+        </button>
+        <button style={tabStyle("performance")} onClick={() => setActiveTab("performance")}>
+          {t("team.tabPerformance")}
+        </button>
       </div>
+
+      {activeTab === "team" ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: 24,
+          }}
+          className="lg:grid-cols-2"
+        >
+          <CabinetStaffPanel />
+          <RolesTab />
+        </div>
+      ) : (
+        <TeamPerformanceView />
+      )}
     </div>
   );
 }

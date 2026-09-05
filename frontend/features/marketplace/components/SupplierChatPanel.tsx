@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Send, X } from "lucide-react";
+import { MessageCircle, Send, Star, X } from "lucide-react";
+import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import {
   useSupplierChatMessages,
   useSendSupplierChatMessage,
+  useMyChatParticipantRatings,
+  useRateChatParticipant,
 } from "../hooks/useMarketplace";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
+import { StarRating } from "./StarRating";
+import { RateEmployeeModal } from "./RateEmployeeModal";
 
 interface Props {
   supplierId: string;
@@ -17,15 +22,20 @@ interface Props {
 }
 
 /** Client-side chat panel for supplier↔client chat, opened from a supplier's
- * public marketplace page (TASK-314, Частина 2). */
+ * public marketplace page (TASK-314, Частина 2). Supplier-side participants can be
+ * rated per person from their message-group header (TASK-696, Phase 8). */
 export function SupplierChatPanel({ supplierId, supplierName, onClose }: Props) {
   const t = useTranslations("Dashboard.marketplace.chatPanel");
+  const rt = useTranslations("Dashboard.marketplace.rateEmployee");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: me } = useMe();
   const { data: messages = [] } = useSupplierChatMessages(supplierId);
   const sendMessage = useSendSupplierChatMessage(supplierId);
+  const { data: participantRatings = [] } = useMyChatParticipantRatings(supplierId);
+  const rateParticipant = useRateChatParticipant(supplierId);
   const [text, setText] = useState("");
+  const [rateTarget, setRateTarget] = useState<{ userId: string; name: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,6 +47,9 @@ export function SupplierChatPanel({ supplierId, supplierName, onClose }: Props) 
     await sendMessage.mutateAsync({ body: text.trim() });
     setText("");
   }
+
+  const ratingFor = (userId: string) =>
+    participantRatings.find((r) => r.supplierUserId === userId);
 
   return (
     <div
@@ -88,10 +101,72 @@ export function SupplierChatPanel({ supplierId, supplierName, onClose }: Props) 
               {t("emptyMessages")}
             </div>
           )}
-          {messages.map((m) => {
+          {messages.map((m, i) => {
             const isMe = me?.tenantId ? m.senderTenantId === me.tenantId : false;
+            const prev = messages[i - 1];
+            const prevIsMe = prev
+              ? me?.tenantId
+                ? prev.senderTenantId === me.tenantId
+                : false
+              : null;
+            const isFirstOfRun =
+              !prev || prev.senderUserId !== m.senderUserId || prevIsMe !== isMe;
+            const existingRating = ratingFor(m.senderUserId);
+
             return (
-              <div key={m.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
+              <div
+                key={m.id}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: isMe ? "flex-end" : "flex-start",
+                  gap: 3,
+                }}
+              >
+                {!isMe && isFirstOfRun && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 2px" }}>
+                    <span style={{ color: "#9CA3AF", fontSize: 11, fontWeight: 600 }}>
+                      {m.senderName}
+                    </span>
+                    {existingRating ? (
+                      <button
+                        type="button"
+                        onClick={() => setRateTarget({ userId: m.senderUserId, name: m.senderName })}
+                        title={t("rateParticipantTooltip")}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <StarRating value={existingRating.rating} size={10} />
+                        <span style={{ color: "#60A5FA", fontSize: 10 }}>{t("editRating")}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setRateTarget({ userId: m.senderUserId, name: m.senderName })}
+                        title={t("rateParticipant")}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "none",
+                          border: "none",
+                          padding: 2,
+                          cursor: "pointer",
+                          color: "#4B5563",
+                        }}
+                      >
+                        <Star size={12} />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div
                   style={{
                     maxWidth: "70%",
@@ -101,11 +176,6 @@ export function SupplierChatPanel({ supplierId, supplierName, onClose }: Props) 
                     padding: "8px 12px",
                   }}
                 >
-                  {!isMe && (
-                    <p style={{ color: "#9CA3AF", fontSize: 11, margin: "0 0 3px", fontWeight: 600 }}>
-                      {m.senderName}
-                    </p>
-                  )}
                   <p style={{ color: "#E8EDF5", fontSize: 13, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                     {m.body}
                   </p>
@@ -151,6 +221,30 @@ export function SupplierChatPanel({ supplierId, supplierName, onClose }: Props) 
             {""}
           </Btn>
         </div>
+
+        {rateTarget && (
+          <RateEmployeeModal
+            title={t("rateParticipant")}
+            personName={rateTarget.name}
+            initialRating={ratingFor(rateTarget.userId)?.rating ?? 0}
+            initialComment={ratingFor(rateTarget.userId)?.comment ?? ""}
+            isEdit={Boolean(ratingFor(rateTarget.userId))}
+            pending={rateParticipant.isPending}
+            onSubmit={(r, c) =>
+              rateParticipant.mutate(
+                { supplierUserId: rateTarget.userId, rating: r, comment: c },
+                {
+                  onSuccess: () => {
+                    toast.success(rt("toastSuccess"));
+                    setRateTarget(null);
+                  },
+                  onError: (err) => toast.error(err.message),
+                },
+              )
+            }
+            onClose={() => setRateTarget(null)}
+          />
+        )}
     </div>
   );
 }

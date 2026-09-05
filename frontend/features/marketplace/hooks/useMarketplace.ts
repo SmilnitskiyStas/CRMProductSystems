@@ -7,6 +7,7 @@ import type {
   SupplierProfileUpdateRequest,
   AddSupplierItemRequest,
   SendSupplierChatMessageRequest,
+  RateChatParticipantRequest,
 } from "../types";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -32,6 +33,8 @@ export const MARKETPLACE_KEYS = {
   itemCategories: ["marketplace", "item-categories"] as const,
   supplierChatMessages: (supplierId: string) =>
     ["marketplace", "supplier-chat-messages", supplierId] as const,
+  chatParticipantRatings: (supplierId: string | null) =>
+    ["marketplace", "chat-participant-ratings", supplierId] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -242,6 +245,33 @@ export function useSendSupplierChatMessage(supplierId: string | null) {
       if (supplierId) {
         queryClient.invalidateQueries({ queryKey: MARKETPLACE_KEYS.supplierChatMessages(supplierId) });
       }
+    },
+  });
+}
+
+// ─── Per-chat-participant ratings, buyer side (TASK-696, Phase 8) ──────────────
+
+/** Every chat-thread rating the calling tenant has left for this supplier's staff — used to
+ * render "you already rated ★★★★" beside a participant. Always 200 (possibly empty). */
+export function useMyChatParticipantRatings(supplierId: string | null) {
+  return useQuery({
+    queryKey: MARKETPLACE_KEYS.chatParticipantRatings(supplierId),
+    queryFn: () => marketplaceApi.getMyChatParticipantRatings(supplierId!),
+    enabled: Boolean(supplierId),
+    retry: false,
+    staleTime: 15_000,
+  });
+}
+
+export function useRateChatParticipant(supplierId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RateChatParticipantRequest) =>
+      marketplaceApi.rateChatParticipant(supplierId!, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: MARKETPLACE_KEYS.chatParticipantRatings(supplierId),
+      });
     },
   });
 }

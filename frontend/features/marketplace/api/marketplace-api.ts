@@ -27,6 +27,9 @@ import type {
   CreateSupportTicketRequest,
   BarcodeConflict,
   SupplierCoverageForBuyer,
+  SupplierEmployeeReviewDto,
+  RateSupplierEmployeeRequest,
+  RateChatParticipantRequest,
 } from "../types";
 
 export const marketplaceApi = {
@@ -186,6 +189,34 @@ export const marketplaceApi = {
    * some edge case) — treat as "nothing to show", not an error. */
   getOrderReceipt: (orderId: string) =>
     api.get<MarketplaceOrderReceiptDto>(`/api/marketplace/orders/${orderId}/receipt`),
+
+  // ── Per-employee supplier ratings, buyer side (TASK-696, Phase 8) ──────────
+  // Supplier-internal ratings — never on the public supplier profile. Both are upserts.
+
+  /** POST /api/marketplace/orders/{orderId}/rate-manager — rate the manager responsible for a
+   *  delivered order. 400 { error } if the order is not delivered or has no manager. */
+  rateOrderManager: (orderId: string, body: RateSupplierEmployeeRequest) =>
+    api.post<SupplierEmployeeReviewDto>(`/api/marketplace/orders/${orderId}/rate-manager`, body),
+
+  /** GET /api/marketplace/orders/{orderId}/manager-rating — the calling tenant's rating of an
+   *  order's manager. 404 when not rated yet. */
+  getOrderManagerRating: (orderId: string) =>
+    api.get<SupplierEmployeeReviewDto>(`/api/marketplace/orders/${orderId}/manager-rating`),
+
+  /** POST /api/marketplace/suppliers/{supplierId}/chat/rate-participant — rate a supplier staff
+   *  member who replied in the shared chat thread. 400 { error } if they never sent a message. */
+  rateChatParticipant: (supplierId: string, body: RateChatParticipantRequest) =>
+    api.post<SupplierEmployeeReviewDto>(
+      `/api/marketplace/suppliers/${supplierId}/chat/rate-participant`,
+      body,
+    ),
+
+  /** GET /api/marketplace/suppliers/{supplierId}/chat/my-participant-ratings — every chat-thread
+   *  rating the calling tenant has left for this supplier's staff (200, possibly empty). */
+  getMyChatParticipantRatings: (supplierId: string) =>
+    api.get<SupplierEmployeeReviewDto[]>(
+      `/api/marketplace/suppliers/${supplierId}/chat/my-participant-ratings`,
+    ),
 
   // ── Support tickets (TASK-318, без угоди — відкрито всім клієнтам) ──────────
 

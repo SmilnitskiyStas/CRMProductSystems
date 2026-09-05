@@ -715,6 +715,78 @@ value validates + sets. New nullable FK `supplier_items.PlatformCategoryId` → 
 `ON DELETE SET NULL`, index `(TenantId, PlatformCategoryId)`; no RLS change (column inherits the
 existing triad, `store_scope` deliberately absent). Migration `20260903124945_AddSupplierItemPlatformCategory`.
 
+#### Supplier portal — Phase 8: per-employee buyer ratings + team performance (TASK-695)
+
+Two migrations: `20260905165934_AddMarketplaceOrderConfirmedAt` (`marketplace_orders.ConfirmedAt
+timestamptz?`, stamped alongside `ConfirmedByUserId` on the new→confirmed transition — no
+`MarketplaceOrderDto` field, it only feeds the KPI below) and `20260905170057_AddSupplierEmployeeReviews`.
+
+**`supplier_employee_reviews`** — a buyer rates ONE supplier-side employee. Supplier-internal:
+**never** on the public supplier profile, **never** rolled into `SupplierMetrics.Rating`. Split RLS
+(ADR-033 direction): `tenant_isolation` on `ClientTenantId` (buyer writes, `+ ClientTenantId <>
+SupplierTenantId` so a supplier can't self-author), `supplier_read` FOR SELECT on `SupplierTenantId`
+(supplier reads), + `provider_bypass`/`worker_bypass`. Two paths — `Source ∈ {"order","chat"}` —
+one rating per (employee, buyer, order) / (employee, buyer, chat session) (partial unique indexes).
+
+Buyer side — `[Authorize]` + module `marketplace` (`MarketplaceCooperationController`):
+```
+POST /api/marketplace/orders/{orderId}/rate-manager  { rating: 1..5, comment? }
+     -> 200 SupplierEmployeeReviewDto | 404 (order not found / not caller's) | 400 (rating range; order not delivered; order has no ConfirmedByUserId)
+GET  /api/marketplace/orders/{orderId}/manager-rating              -> 200 SupplierEmployeeReviewDto | 404 (not rated yet)
+POST /api/marketplace/suppliers/{supplierId}/chat/rate-participant  { supplierUserId, rating: 1..5, comment? }
+     -> 200 SupplierEmployeeReviewDto | 404 (supplier not found; no chat thread with this supplier yet) | 400 (rating range; supplierUserId never sent a message in the thread from the supplier side)
+GET  /api/marketplace/suppliers/{supplierId}/chat/my-participant-ratings  -> 200 SupplierEmployeeReviewDto[]  (empty if no thread)
+```
+Both POSTs are **upserts** — a second call updates the existing rating (and re-snapshots the
+name). `rate-manager` rates `order.ConfirmedByUserId`; `rate-participant`'s only validation that
+`supplierUserId` is a real supplier actor is that they actually sent ≥1 message in the shared
+thread from the supplier side (the name is snapshotted from that message).
+```ts
+SupplierEmployeeReviewDto {
+  id, supplierUserId, supplierUserName: string,
+  rating: number, comment: string|null,
+  source: "order"|"chat", orderId: string|null, chatSessionId: string|null,
+  createdAt, updatedAt: string
+}
+```
+
+Supplier side — `SupplierCabinet` policy + module `marketplace_supplier` + supplier permission
+`staff_management` (`SupplierCabinetTeamPerformanceController`):
+```
+GET /api/supplier-cabinet/team-performance?from=&to=   -> 200 SupplierTeamPerformanceDto
+GET /api/supplier-cabinet/team/{userId}/reviews        -> 200 SupplierEmployeeReviewDetailDto[]  (newest first; empty if none)
+```
+`from`/`to` are `YYYY-MM-DD` inclusive; both omitted → last 30 days; capped at 366 days server-side
+(clamp `from` forward, effective window echoed); `from > to` swapped. One row per current staff
+user (`ISupplierCabinetService.GetStaffAsync`), ordered by name; a user with no activity still
+appears (zeroes/nulls).
+```ts
+SupplierTeamPerformanceDto { from, to: string, employees: SupplierEmployeePerformanceDto[] }
+SupplierEmployeePerformanceDto {
+  userId, userName: string
+  ordersConfirmed: number        // confirmed by them, order CreatedAt in window
+  ordersShipped: number          // shipped by them, ShippedAt in window
+  avgHoursToConfirm: number|null  // mean ConfirmedAt - CreatedAt over their confirmed orders (null if none carry ConfirmedAt)
+  avgHoursToShip: number|null     // mean ShippedAt - ConfirmedAt over their shipped orders that also have ConfirmedAt
+  onTimeDeliveryRate: number|null      // fraction 0..1; of their shipped+delivered orders with an ExpectedDeliveryDate, delivered on/before it
+  discrepancyFreeRate: number|null     // fraction 0..1; of their shipped orders with a finalized receipt, receipt had no item DiscrepancyNotes
+  chatMessagesSent: number
+  chatSessionsHandled: number      // distinct sessions they sent in, in window
+  medianFirstResponseHours: number|null  // per session they replied in: gap from the preceding client message to their first reply; median across sessions
+  avgBuyerRating: number|null      // mean of their supplier_employee_reviews created in window
+  buyerReviewCount: number
+  ordersShippedDelta, onTimeDeliveryRateDelta, avgBuyerRatingDelta: PeriodMetricDto  // vs equal-length preceding window; rate/rating deltas treat null as 0
+}
+SupplierEmployeeReviewDetailDto {   // = SupplierEmployeeReviewDto minus updatedAt, plus ratedByName
+  id, supplierUserId, supplierUserName, rating, comment, source, orderId, chatSessionId,
+  ratedByName: string|null, createdAt
+}
+```
+`null` on a rate/hours figure means "denominator zero" — distinct from `0`. The in-memory roll-up
+(low B2B volume) reads `marketplace_orders` (OR-based RLS), `marketplace_order_receipts`/`_items`
+(`supplier_read`), `supplier_chat_*` (OR-based) and `supplier_employee_reviews` (`supplier_read`),
+all on the supplier's own session.
+
 ---
 
 ### Geo taxonomy + marketplace delivery coverage & performance metrics (v4.4 — TASK-648..661, ADR-036)

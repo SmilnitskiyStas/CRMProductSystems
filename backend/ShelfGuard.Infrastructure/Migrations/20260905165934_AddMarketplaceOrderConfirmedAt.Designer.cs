@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ShelfGuard.Infrastructure.Data;
@@ -12,9 +13,11 @@ using ShelfGuard.Infrastructure.Data;
 namespace ShelfGuard.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905165934_AddMarketplaceOrderConfirmedAt")]
+    partial class AddMarketplaceOrderConfirmedAt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -5340,80 +5343,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("supplier_contract_settings", (string)null);
                 });
 
-            modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplierEmployeeReview", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("ChatSessionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ClientTenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Comment")
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid?>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RatedByName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<Guid>("RatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<short>("Rating")
-                        .HasColumnType("smallint");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<Guid>("SupplierTenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SupplierUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SupplierUserName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChatSessionId");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("SupplierTenantId", "SupplierUserId", "CreatedAt");
-
-                    b.HasIndex("SupplierUserId", "ClientTenantId", "ChatSessionId")
-                        .IsUnique()
-                        .HasFilter("\"ChatSessionId\" IS NOT NULL");
-
-                    b.HasIndex("SupplierUserId", "ClientTenantId", "OrderId")
-                        .IsUnique()
-                        .HasFilter("\"OrderId\" IS NOT NULL");
-
-                    b.ToTable("supplier_employee_reviews", (string)null);
-                });
-
             modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplierItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8768,19 +8697,6 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplierEmployeeReview", b =>
-                {
-                    b.HasOne("ShelfGuard.Domain.Entities.SupplierChatSession", null)
-                        .WithMany()
-                        .HasForeignKey("ChatSessionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ShelfGuard.Domain.Entities.MarketplaceOrder", null)
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.SupplierItem", b =>

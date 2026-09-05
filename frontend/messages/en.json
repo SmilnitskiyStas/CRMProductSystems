@@ -3432,7 +3432,22 @@
       },
       "chatPanel": {
         "emptyMessages": "No messages yet. Send the first one.",
-        "inputPlaceholder": "Write a message..."
+        "inputPlaceholder": "Write a message...",
+        "rateParticipant": "Rate manager",
+        "rateParticipantTooltip": "Rate this supplier staff member",
+        "editRating": "change"
+      },
+      "rateEmployee": {
+        "personLabel": "Staff member",
+        "ratingLabel": "Your rating",
+        "commentLabel": "Comment (optional)",
+        "commentPlaceholder": "Briefly about your experience…",
+        "submit": "Save rating",
+        "submitEdit": "Change rating",
+        "saving": "Saving…",
+        "cancel": "Cancel",
+        "errorSelectRating": "Select a rating from 1 to 5 stars.",
+        "toastSuccess": "Rating saved"
       },
       "supportPanel": {
         "headerFallback": "Support — {name}",
@@ -3590,7 +3605,10 @@
           "receiptHeaderReceived": "Received",
           "receiptHeaderBatch": "Batch",
           "receiptHeaderExpiry": "Expiry",
-          "receiptHeaderDiscrepancy": "Discrepancy"
+          "receiptHeaderDiscrepancy": "Discrepancy",
+          "managerRatingLabel": "Manager rating",
+          "rateButton": "Rate",
+          "editRating": "change"
         },
         "cooperationTab": {
           "loading": "Loading...",
@@ -3633,7 +3651,9 @@
         "team": {
           "title": "Team",
           "subtitle": "Supplier cabinet staff and access roles",
-          "noAccess": "You don't have access to team management."
+          "noAccess": "You don't have access to team management.",
+          "tabTeam": "Team",
+          "tabPerformance": "Performance"
         },
         "tasks": {
           "title": "Tasks",
@@ -4240,6 +4260,35 @@
         "sparseHistory": "Data is still accumulating — trends will appear after a few nightly recalculations.",
         "errorLoad": "Failed to load metrics.",
         "updatedAt": "updated {date}"
+      },
+      "teamPerformance": {
+        "from": "From",
+        "to": "To",
+        "presetDays": "{n}d",
+        "vsPreviousPeriod": "vs previous period",
+        "deltaPp": "pp",
+        "hoursSuffix": "h",
+        "colEmployee": "Employee",
+        "colConfirmed": "Confirmed",
+        "colShipped": "Shipped",
+        "colAvgConfirmH": "Avg h to confirm",
+        "colAvgShipH": "Avg h to ship",
+        "colOnTime": "On-time deliveries",
+        "colDiscrepancyFree": "Discrepancy-free",
+        "colChatMsgs": "Messages",
+        "colMedianResponseH": "Median response",
+        "colSessions": "Sessions",
+        "colBuyerRating": "Buyer rating",
+        "reviewsAction": "Reviews",
+        "empty": "No staff members or no data for the selected period.",
+        "errorLoad": "Failed to load team performance.",
+        "reviewsModalTitle": "Reviews of {name}",
+        "reviewsLoading": "Loading…",
+        "reviewsEmpty": "No buyer reviews yet.",
+        "ratedBy": "Rated by: {name}",
+        "sourceOrder": "order",
+        "sourceChat": "chat",
+        "close": "Close"
       }
     },
     "provider": {

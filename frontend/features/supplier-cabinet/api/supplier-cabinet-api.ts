@@ -53,6 +53,8 @@ import type {
   ShipOrderResult,
   SupplierAnalytics,
   SupplierMetricsHistoryResponse,
+  SupplierTeamPerformance,
+  SupplierEmployeeReviewDetail,
 } from "../types";
 import type { UserDto } from "@/features/users/types";
 import type { PagedResult as ApiPagedResult } from "@/lib/api-types";
@@ -125,6 +127,22 @@ export const supplierCabinetApi = {
     const query = qs.toString();
     return api.get<SupplierAnalytics>(`${BASE}/analytics${query ? `?${query}` : ""}`);
   },
+
+  /** GET /api/supplier-cabinet/team-performance?from=&to= — per-employee KPIs over the supplier's
+   *  marketplace history (Phase 8, TASK-696). Both omitted → last 30 days; range capped at 366d.
+   *  Gated: "staff_management" permission. */
+  getTeamPerformance: (params: { from?: string; to?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
+    const query = qs.toString();
+    return api.get<SupplierTeamPerformance>(`${BASE}/team-performance${query ? `?${query}` : ""}`);
+  },
+
+  /** GET /api/supplier-cabinet/team/{userId}/reviews — the individual buyer reviews behind one
+   *  employee's aggregate, newest first. Empty when the employee has no ratings (Phase 8). */
+  getEmployeeReviews: (userId: string) =>
+    api.get<SupplierEmployeeReviewDetail[]>(`${BASE}/team/${userId}/reviews`),
 
   /** GET /api/supplier-cabinet/orders/unseen-count — "new order arrived" badge (Phase 6a). */
   getUnseenOrderCount: () =>

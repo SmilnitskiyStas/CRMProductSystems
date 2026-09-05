@@ -24,17 +24,20 @@ public sealed class MarketplaceCooperationController : ControllerBase
     private readonly IMarketplaceOrderService _orders;
     private readonly ISupplierSupportService _support;
     private readonly IMarketplaceOrderReceiptService _receiving;
+    private readonly ISupplierEmployeeReviewService _employeeReviews;
 
     public MarketplaceCooperationController(
         ISupplierAgreementService agreements,
         IMarketplaceOrderService orders,
         ISupplierSupportService support,
-        IMarketplaceOrderReceiptService receiving)
+        IMarketplaceOrderReceiptService receiving,
+        ISupplierEmployeeReviewService employeeReviews)
     {
         _agreements = agreements;
         _orders     = orders;
         _support    = support;
         _receiving  = receiving;
+        _employeeReviews = employeeReviews;
     }
 
     // ── Cooperation requests / agreements ─────────────────────────────────────
@@ -322,6 +325,93 @@ public sealed class MarketplaceCooperationController : ControllerBase
             return BadRequest(new { error });
 
         return Ok(receipt);
+    }
+
+    // ── Per-employee supplier ratings (TASK-695, Phase 8) ─────────────────────
+    // Supplier-internal ratings — never on the public supplier profile, never rolled into the
+    // company SupplierMetrics.Rating. Two entry points: a delivered order (rate the responsible
+    // manager) and a chat thread (rate a staff member who replied). Both are upserts.
+
+    /// <summary>
+    /// Rates the manager responsible for a delivered order (<c>ConfirmedByUserId</c>). One rating
+    /// per order; a second call updates it. 400 if the order is not delivered or has no manager.
+    /// </summary>
+    [HttpPost("orders/{orderId:guid}/rate-manager")]
+    [ProducesResponseType(typeof(SupplierEmployeeReviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RateOrderManager(
+        Guid orderId, [FromBody] RateSupplierEmployeeDto request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        var (review, error) = await _employeeReviews.RateOrderManagerAsync(
+            tenantId.Value, orderId, request, userId.Value, ct);
+
+        if (error == SupplierEmployeeReviewService.OrderNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(review);
+    }
+
+    /// <summary>The calling tenant's rating of an order's manager, or 404 if not rated yet.</summary>
+    [HttpGet("orders/{orderId:guid}/manager-rating")]
+    [ProducesResponseType(typeof(SupplierEmployeeReviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetOrderManagerRating(Guid orderId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var review = await _employeeReviews.GetOrderManagerRatingAsync(tenantId.Value, orderId, ct);
+        return review is null ? NotFound() : Ok(review);
+    }
+
+    /// <summary>
+    /// Rates a supplier staff member who replied in the shared chat thread. <c>supplierUserId</c>
+    /// must be someone who actually sent ≥1 message in the thread. One rating per (staff, thread);
+    /// a second call updates it.
+    /// </summary>
+    [HttpPost("suppliers/{supplierId:guid}/chat/rate-participant")]
+    [ProducesResponseType(typeof(SupplierEmployeeReviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RateChatParticipant(
+        Guid supplierId, [FromBody] RateChatParticipantDto request, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var userId = ResolveUserId();
+        if (userId is null) return Forbid();
+
+        var (review, error) = await _employeeReviews.RateChatParticipantAsync(
+            tenantId.Value, supplierId, request, userId.Value, ct);
+
+        if (error is SupplierEmployeeReviewService.SupplierNotFoundError
+            or SupplierEmployeeReviewService.ChatNotFoundError)
+            return NotFound(new { error });
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return Ok(review);
+    }
+
+    /// <summary>Every chat-thread rating the calling tenant has left for this supplier's staff.</summary>
+    [HttpGet("suppliers/{supplierId:guid}/chat/my-participant-ratings")]
+    [ProducesResponseType(typeof(IReadOnlyList<SupplierEmployeeReviewDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyChatParticipantRatings(Guid supplierId, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        return Ok(await _employeeReviews.GetMyChatParticipantRatingsAsync(tenantId.Value, supplierId, ct));
     }
 
     // ── Supplier support tickets ───────────────────────────────────────────────

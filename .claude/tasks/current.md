@@ -6,6 +6,47 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Supplier portal «Phase 8» — team performance + per-employee ratings — TASK-695
+
+**Status:** review · **Agent:** backend-developer · не запушено · Log: `.claude/logs/tasks/695_2026-09-03_supplier-phase8-team-performance_backend-developer.md`
+
+2 міграції (застосовано на dev): `AddMarketplaceOrderConfirmedAt` (`marketplace_orders.ConfirmedAt`,
+стемпиться на new→confirmed) + `AddSupplierEmployeeReviews` (нова таблиця, ADR-033 split RLS —
+buyer пише `tenant_isolation` на `ClientTenantId` `+ <> SupplierTenantId`, supplier читає
+`supplier_read`). Рейтинги supplier-internal: НЕ на публічному профілі, НЕ в `SupplierMetrics.Rating`.
+Buyer: `ISupplierEmployeeReviewService` + 4 endpoint-и на `MarketplaceCooperationController`
+(`rate-manager` після delivered → `ConfirmedByUserId`; `chat/rate-participant` → учасник треду;
+обидва upsert; + GET-и «вже оцінено»). Supplier: `ISupplierTeamPerformanceService` (in-memory
+rollup) + `SupplierCabinetTeamPerformanceController` (`GET team-performance?from=&to=` + `GET
+team/{userId}/reviews`, gate `marketplace_supplier` + `staff_management`) — повний KPI-набір
+(orders confirmed/shipped, avg h to confirm/ship, on-time rate, discrepancy-free rate, chat
+counts + median first-response, avg buyer rating) + `PeriodMetricDto` дельти vs попереднє вікно.
+Discrepancy-signal = finalized receipt без непорожнього item `DiscrepancyNotes` (= той самий, що
+відкриває auto-ticket). `dotnet build -c Release` чисто; targeted `dotnet test` **436/436**,
+RLS-audit green. Не комічено. Фронт + openapi.json regen + ADR-039 — далі.
+
+### TASK-696 — Phase 8 frontend
+
+**Status:** review · **Agent:** frontend-developer · не комічено · Log: `.claude/logs/tasks/696_2026-09-03_supplier-phase8-frontend_frontend-developer.md`
+
+A. Supplier team performance: `useSupplierTeamPerformance` hook + `getTeamPerformance`/`getEmployeeReviews`
+API + `SupplierTeamPerformance`/`SupplierEmployeePerformance`/`SupplierEmployeeReviewDetail` types +
+`TeamPerformanceView` (range picker 30/90/365, per-employee KPI `Table` with ▲/▼ deltas on
+shipped/on-time/rating, `null` rates → "—", row/action → employee reviews modal). Added as 2nd tab
+("Ефективність") on `/supplier/team` — existing `staff_management` guard kept.
+B. Buyer rate-manager: `rateOrderManager`/`getOrderManagerRating` API + `useOrderManagerRating`
+(404→null, retry:false) / `useRateOrderManager` + `SupplierEmployeeReviewDto`/`RateSupplierEmployeeRequest`
+types. "Оцінка менеджера" row in the delivered-order expanded block (only when `confirmedByUserName`
+set) → shared `RateEmployeeModal`.
+C. Buyer rate chat participant: `rateChatParticipant`/`getMyChatParticipantRatings` API +
+`useMyChatParticipantRatings`/`useRateChatParticipant`. `SupplierChatPanel` now groups messages by
+sender; supplier-side group header gets a small star button (→ `RateEmployeeModal`) or the given
+stars + "змінити" when already rated.
+D. i18n: `supplierCabinet.pages.team.{tabTeam,tabPerformance}`, new `supplierCabinet.teamPerformance`,
+`marketplace.rateEmployee`, `marketplace.chatPanel.{rateParticipant,...}`, `marketplace.ordersPage.ordersTab.{managerRatingLabel,rateButton,editRating}` — uk+en parity holds (5021/5021).
+
+`tsc --noEmit` clean · `next lint` clean · i18n parity ok.
+
 ## TASK-691 (bugfix) — Bulk write-off approval hang (39+ items)
 
 **Status:** review (не запушено) · **Agent:** main session

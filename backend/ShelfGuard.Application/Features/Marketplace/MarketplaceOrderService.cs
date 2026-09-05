@@ -395,6 +395,9 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         {
             order.ConfirmedByUserId   = actingUserId;
             order.ConfirmedByUserName = (await _users.GetByIdAsync(actingUserId, ct))?.FullName;
+            // TASK-695 (Phase 8): stamp the confirm time next to the actor — the team-performance
+            // "avg hours to confirm" KPI measures ConfirmedAt - CreatedAt.
+            order.ConfirmedAt         = DateTimeOffset.UtcNow;
         }
 
         order.Status    = request.Status;

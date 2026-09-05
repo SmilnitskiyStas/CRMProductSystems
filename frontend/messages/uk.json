@@ -3432,7 +3432,22 @@
       },
       "chatPanel": {
         "emptyMessages": "Повідомлень ще немає. Напишіть перше.",
-        "inputPlaceholder": "Написати повідомлення..."
+        "inputPlaceholder": "Написати повідомлення...",
+        "rateParticipant": "Оцінити менеджера",
+        "rateParticipantTooltip": "Оцінити цього співробітника постачальника",
+        "editRating": "змінити"
+      },
+      "rateEmployee": {
+        "personLabel": "Співробітник",
+        "ratingLabel": "Ваша оцінка",
+        "commentLabel": "Коментар (необов'язково)",
+        "commentPlaceholder": "Коротко про досвід взаємодії…",
+        "submit": "Зберегти оцінку",
+        "submitEdit": "Змінити оцінку",
+        "saving": "Збереження…",
+        "cancel": "Скасувати",
+        "errorSelectRating": "Оберіть оцінку від 1 до 5 зірок.",
+        "toastSuccess": "Оцінку збережено"
       },
       "supportPanel": {
         "headerFallback": "Служба підтримки — {name}",
@@ -3590,7 +3605,10 @@
           "receiptHeaderReceived": "Отримано",
           "receiptHeaderBatch": "Партія",
           "receiptHeaderExpiry": "Термін придатності",
-          "receiptHeaderDiscrepancy": "Розбіжність"
+          "receiptHeaderDiscrepancy": "Розбіжність",
+          "managerRatingLabel": "Оцінка менеджера",
+          "rateButton": "Оцінити",
+          "editRating": "змінити"
         },
         "cooperationTab": {
           "loading": "Завантаження...",
@@ -3633,7 +3651,9 @@
         "team": {
           "title": "Команда",
           "subtitle": "Співробітники кабінету постачальника та ролі доступу",
-          "noAccess": "Немає доступу до управління командою."
+          "noAccess": "Немає доступу до управління командою.",
+          "tabTeam": "Команда",
+          "tabPerformance": "Ефективність"
         },
         "tasks": {
           "title": "Завдання",
@@ -4240,6 +4260,35 @@
         "sparseHistory": "Дані ще накопичуються — динаміка зʼявиться після кількох нічних розрахунків.",
         "errorLoad": "Не вдалося завантажити показники.",
         "updatedAt": "оновлено {date}"
+      },
+      "teamPerformance": {
+        "from": "З дати",
+        "to": "По дату",
+        "presetDays": "{n} дн.",
+        "vsPreviousPeriod": "проти попереднього періоду",
+        "deltaPp": "в.п.",
+        "hoursSuffix": "год.",
+        "colEmployee": "Співробітник",
+        "colConfirmed": "Підтверджено",
+        "colShipped": "Відвантажено",
+        "colAvgConfirmH": "Сер. год. до підтв.",
+        "colAvgShipH": "Сер. год. до відвант.",
+        "colOnTime": "Доставки вчасно",
+        "colDiscrepancyFree": "Без розбіжностей",
+        "colChatMsgs": "Повідомлень",
+        "colMedianResponseH": "Медіана відповіді",
+        "colSessions": "Сесій",
+        "colBuyerRating": "Рейтинг від покупців",
+        "reviewsAction": "Відгуки",
+        "empty": "Немає співробітників або даних за обраний період.",
+        "errorLoad": "Не вдалося завантажити показники команди.",
+        "reviewsModalTitle": "Відгуки про {name}",
+        "reviewsLoading": "Завантаження…",
+        "reviewsEmpty": "Ще немає відгуків від покупців.",
+        "ratedBy": "Оцінив: {name}",
+        "sourceOrder": "замовлення",
+        "sourceChat": "чат",
+        "close": "Закрити"
       }
     },
     "provider": {

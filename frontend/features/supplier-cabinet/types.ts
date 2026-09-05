@@ -630,3 +630,59 @@ export interface SupplierMetricsHistoryResponse {
   /** Latest snapshot in the window vs. the oldest. */
   deltas: SupplierMetricsHistoryDeltas;
 }
+
+// ── Team performance (TASK-696, Phase 8) ─────────────────────────────────────
+// GET /api/supplier-cabinet/team-performance?from=YYYY-MM-DD&to=YYYY-MM-DD (default last 30d,
+// range capped at 366d server-side). GET /api/supplier-cabinet/team/{userId}/reviews.
+// Gated: "marketplace_supplier" module + "staff_management" permission. Supplier-internal —
+// the buyer ratings here are NOT the public company rating. Backend DTOs:
+// ShelfGuard.Application/Features/SupplierAnalytics/Dtos/SupplierTeamPerformanceDtos.cs and
+// ShelfGuard.Application/Features/Marketplace/Dtos/SupplierEmployeeReviewDtos.cs.
+
+/**
+ * One staff member's KPIs for the window. Rates are fractions in [0, 1]; hour figures are
+ * means / medians in decimal hours. A figure is `null` when its denominator was zero (no data
+ * to compute it from) — render "—", never "0%".
+ */
+export interface SupplierEmployeePerformance {
+  userId: string;
+  userName: string;
+  ordersConfirmed: number;
+  ordersShipped: number;
+  avgHoursToConfirm: number | null;
+  avgHoursToShip: number | null;
+  onTimeDeliveryRate: number | null;
+  discrepancyFreeRate: number | null;
+  chatMessagesSent: number;
+  chatSessionsHandled: number;
+  medianFirstResponseHours: number | null;
+  avgBuyerRating: number | null;
+  buyerReviewCount: number;
+  /** vs the equal-length preceding window (backend PeriodMetricDto → SupplierPeriodMetric). */
+  ordersShippedDelta: SupplierPeriodMetric;
+  onTimeDeliveryRateDelta: SupplierPeriodMetric;
+  avgBuyerRatingDelta: SupplierPeriodMetric;
+}
+
+export interface SupplierTeamPerformance {
+  /** Resolved window (may differ from the request when capped at 366 days). "YYYY-MM-DD". */
+  from: string;
+  to: string;
+  /** One row per current staff member, ordered by name. */
+  employees: SupplierEmployeePerformance[];
+}
+
+/** One buyer review of a staff member, as the team manager sees it (adds `ratedByName`). */
+export interface SupplierEmployeeReviewDetail {
+  id: string;
+  supplierUserId: string;
+  supplierUserName: string;
+  rating: number;
+  comment: string | null;
+  /** "order" | "chat" */
+  source: string;
+  orderId: string | null;
+  chatSessionId: string | null;
+  ratedByName: string | null;
+  createdAt: string;
+}

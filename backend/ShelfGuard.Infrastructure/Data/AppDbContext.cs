@@ -98,6 +98,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<SupplierMetrics> SupplierMetrics  => Set<SupplierMetrics>();
     public DbSet<SupplierMetricsSnapshot> SupplierMetricsSnapshots => Set<SupplierMetricsSnapshot>();
     public DbSet<SupplierReview>  SupplierReviews  => Set<SupplierReview>();
+    public DbSet<SupplierEmployeeReview> SupplierEmployeeReviews => Set<SupplierEmployeeReview>();
     public DbSet<SupplierItemBarcode> SupplierItemBarcodes => Set<SupplierItemBarcode>();
     public DbSet<SupplierItemImage>   SupplierItemImages   => Set<SupplierItemImage>();
 
@@ -1640,6 +1641,48 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        // ── SupplierEmployeeReview (TASK-695, Phase 8) ─────────────────────────
+        // Buyer rates one supplier employee, from a delivered order or a chat thread. Split RLS
+        // (ADR-033 style): buyer writes (tenant_isolation on ClientTenantId), supplier reads
+        // (supplier_read FOR SELECT on SupplierTenantId) — see AddSupplierEmployeeReviews.
+        // Supplier-internal only: never on the public profile, never in SupplierMetrics.Rating.
+        builder.Entity<SupplierEmployeeReview>(e =>
+        {
+            e.ToTable("supplier_employee_reviews");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.SupplierTenantId).IsRequired();
+            e.Property(x => x.ClientTenantId).IsRequired();
+            e.Property(x => x.SupplierUserId).IsRequired();
+            e.Property(x => x.SupplierUserName).HasMaxLength(255).IsRequired();
+            e.Property(x => x.RatedByUserId).IsRequired();
+            e.Property(x => x.RatedByName).HasMaxLength(255).IsRequired(false);
+            e.Property(x => x.Rating).IsRequired();
+            e.Property(x => x.Comment).HasColumnType("character varying(2000)").IsRequired(false);
+            e.Property(x => x.Source).HasMaxLength(10).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+
+            // One order-rating per (employee, buyer, order); one chat-rating per (employee, buyer,
+            // session). Partial — only the relevant FK is set for each Source.
+            e.HasIndex(x => new { x.SupplierUserId, x.ClientTenantId, x.OrderId })
+             .IsUnique()
+             .HasFilter("\"OrderId\" IS NOT NULL");
+            e.HasIndex(x => new { x.SupplierUserId, x.ClientTenantId, x.ChatSessionId })
+             .IsUnique()
+             .HasFilter("\"ChatSessionId\" IS NOT NULL");
+            // The supplier's team-performance rollup reads by (tenant, employee) over a window.
+            e.HasIndex(x => new { x.SupplierTenantId, x.SupplierUserId, x.CreatedAt });
+
+            // Ids are plain columns for the two name snapshots' owners (users) — the name is the
+            // display path and the review must outlive staff churn on either side. The two source
+            // FKs are SET NULL: losing the order/session must not delete rating history.
+            e.HasOne<MarketplaceOrder>().WithMany()
+             .HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasOne<SupplierChatSession>().WithMany()
+             .HasForeignKey(x => x.ChatSessionId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
         // ── AsCustomer (v4 Auto Service) ────────────────────────────────────
         builder.Entity<AsCustomer>(e =>
         {
@@ -2233,6 +2276,9 @@ public sealed class AppDbContext : DbContext
             // plain columns (no FK): the name is the display path and the row must outlive staff.
             e.Property(x => x.ConfirmedByUserName).HasMaxLength(255).IsRequired(false);
             e.Property(x => x.ShippedByUserName).HasMaxLength(255).IsRequired(false);
+            // TASK-695 (Phase 8): timestamp of the new → confirmed transition, set alongside
+            // ConfirmedByUserId. Feeds the supplier team-performance "avg hours to confirm" KPI.
+            e.Property(x => x.ConfirmedAt).IsRequired(false);
             // D5 — mutable supplier-set expected delivery date (date only). Landed in Phase 1.
             e.Property(x => x.ExpectedDeliveryDate).IsRequired(false);
             // D4 (Phase 3) — supplier warehouse the order was picked from. One source location

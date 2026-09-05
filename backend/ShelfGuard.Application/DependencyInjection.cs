@@ -99,6 +99,12 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.SupplierAnalytics.ISupplierAnalyticsService,
             Features.SupplierAnalytics.SupplierAnalyticsService>();
 
+        // Supplier-portal expansion Phase 8 (TASK-695) — per-employee buyer ratings +
+        // supplier-internal team-performance KPI view.
+        services.AddScoped<ISupplierEmployeeReviewService, SupplierEmployeeReviewService>();
+        services.AddScoped<Features.SupplierAnalytics.ISupplierTeamPerformanceService,
+            Features.SupplierAnalytics.SupplierTeamPerformanceService>();
+
         // TASK-306 - Supplier staff roles + task board
         services.AddScoped<ISupplierRolesService, SupplierRolesService>();
         services.AddScoped<ISupplierTaskService, SupplierTaskService>();

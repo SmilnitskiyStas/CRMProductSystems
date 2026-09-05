@@ -1032,6 +1032,10 @@ public sealed class MarketplaceOrderServiceTests
         Assert.Equal("Петро Постачальник", order.ConfirmedByUserName);
         Assert.Equal(_supplierUserId, dto!.ConfirmedByUserId);
         Assert.Equal("Петро Постачальник", dto.ConfirmedByUserName);
+        // TASK-695 (Phase 8): the confirm timestamp is stamped next to the actor.
+        Assert.NotNull(order.ConfirmedAt);
+        Assert.InRange(
+            order.ConfirmedAt!.Value, DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1));
         // Confirming never touches the shipped actor.
         Assert.Null(order.ShippedByUserId);
         Assert.Null(order.ShippedByUserName);

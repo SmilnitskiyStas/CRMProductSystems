@@ -87,6 +87,13 @@ public sealed class MarketplaceOrder
     public string? ConfirmedByUserName { get; set; }
 
     /// <summary>
+    /// When the order moved new → confirmed (TASK-695, Phase 8). Set alongside
+    /// <see cref="ConfirmedByUserId"/>. Feeds the supplier team-performance "avg hours to confirm"
+    /// KPI. Nullable: not-yet-confirmed orders and orders confirmed before this column existed.
+    /// </summary>
+    public DateTimeOffset? ConfirmedAt { get; set; }
+
+    /// <summary>
     /// Supplier-side user who shipped the order (TASK-693, Phase 7, request #2) + their
     /// denormalized display name, snapshotted at ship time. Populated for both ship entry points
     /// (the Phase 3 <c>/ship</c> endpoint and the legacy <c>/status {shipped}</c> path). Nullable:

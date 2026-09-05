@@ -64,6 +64,12 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.SupplierAnalytics.ISupplierAnalyticsRepository,
             Data.Repositories.SupplierAnalyticsRepository>();
 
+        // Supplier-portal expansion Phase 8 (TASK-695) — per-employee buyer ratings + team performance
+        services.AddScoped<Domain.Interfaces.ISupplierEmployeeReviewRepository,
+            Data.Repositories.SupplierEmployeeReviewRepository>();
+        services.AddScoped<Application.Features.SupplierAnalytics.ISupplierTeamPerformanceRepository,
+            Data.Repositories.SupplierTeamPerformanceRepository>();
+
         // Locations
         services.AddScoped<ILocationRepository, LocationRepository>();
 

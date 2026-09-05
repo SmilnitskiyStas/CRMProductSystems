@@ -271,6 +271,41 @@ export interface AddSupplierItemRequest {
   imageUrls?: string[];
 }
 
+// ─── Per-employee supplier ratings, buyer side (TASK-696, Phase 8) ────────────
+// A buyer rating one supplier-side employee — after a delivered order (the responsible
+// manager) or from a chat thread (a staff member who replied). Supplier-internal: never on
+// the public supplier profile, never rolled into SupplierMetrics.Rating. Backend DTOs:
+// ShelfGuard.Application/Features/Marketplace/Dtos/SupplierEmployeeReviewDtos.cs.
+
+/** One buyer→supplier-employee rating, as the buyer sees it back (to render "you already
+ *  rated ★★★★"). Rating 1–5. */
+export interface SupplierEmployeeReviewDto {
+  id: string;
+  supplierUserId: string;
+  supplierUserName: string;
+  rating: number;
+  comment: string | null;
+  /** "order" | "chat" */
+  source: string;
+  orderId: string | null;
+  chatSessionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** POST /api/marketplace/orders/{orderId}/rate-manager */
+export interface RateSupplierEmployeeRequest {
+  rating: number;
+  comment?: string;
+}
+
+/** POST /api/marketplace/suppliers/{supplierId}/chat/rate-participant */
+export interface RateChatParticipantRequest {
+  supplierUserId: string;
+  rating: number;
+  comment?: string;
+}
+
 // ─── Supplier ↔ client chat, client side (TASK-314, Частина 2) ────────────────
 // Same shapes as the supplier-side ones in features/supplier-cabinet/types.ts.
 
