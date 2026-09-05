@@ -16171,6 +16171,283 @@
         }
       }
     },
+    "/api/marketplace/orders/{orderId}/rate-manager": {
+      "post": {
+        "tags": [
+          "MarketplaceCooperation"
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.RateSupplierEmployeeDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.RateSupplierEmployeeDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.RateSupplierEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": { }
+              },
+              "application/json": {
+                "schema": { }
+              },
+              "text/json": {
+                "schema": { }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": { }
+              },
+              "application/json": {
+                "schema": { }
+              },
+              "text/json": {
+                "schema": { }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/marketplace/orders/{orderId}/manager-rating": {
+      "get": {
+        "tags": [
+          "MarketplaceCooperation"
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": { }
+              },
+              "application/json": {
+                "schema": { }
+              },
+              "text/json": {
+                "schema": { }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/marketplace/suppliers/{supplierId}/chat/rate-participant": {
+      "post": {
+        "tags": [
+          "MarketplaceCooperation"
+        ],
+        "parameters": [
+          {
+            "name": "supplierId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.RateChatParticipantDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.RateChatParticipantDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.RateChatParticipantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": { }
+              },
+              "application/json": {
+                "schema": { }
+              },
+              "text/json": {
+                "schema": { }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": { }
+              },
+              "application/json": {
+                "schema": { }
+              },
+              "text/json": {
+                "schema": { }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/marketplace/suppliers/{supplierId}/chat/my-participant-ratings": {
+      "get": {
+        "tags": [
+          "MarketplaceCooperation"
+        ],
+        "parameters": [
+          {
+            "name": "supplierId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/marketplace/suppliers/{id}/support-tickets": {
       "post": {
         "tags": [
@@ -30744,6 +31021,102 @@
         }
       }
     },
+    "/api/supplier-cabinet/team-performance": {
+      "get": {
+        "tags": [
+          "SupplierCabinetTeamPerformance"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.SupplierAnalytics.Dtos.SupplierTeamPerformanceDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.SupplierAnalytics.Dtos.SupplierTeamPerformanceDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShelfGuard.Application.Features.SupplierAnalytics.Dtos.SupplierTeamPerformanceDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplier-cabinet/team/{userId}/reviews": {
+      "get": {
+        "tags": [
+          "SupplierCabinetTeamPerformance"
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDetailDto"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDetailDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDetailDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/supplier-cabinet/warehouses": {
       "get": {
         "tags": [
@@ -37462,6 +37835,34 @@
         },
         "additionalProperties": false
       },
+      "ShelfGuard.Application.Features.Catalog.Dtos.CategoryDefaults": {
+        "type": "object",
+        "properties": {
+          "vatRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "perishabilityClass": {
+            "type": "string",
+            "nullable": true
+          },
+          "managementType": {
+            "type": "string",
+            "nullable": true
+          },
+          "itemType": {
+            "type": "string",
+            "nullable": true
+          },
+          "shelfLifeDays": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ShelfGuard.Application.Features.Catalog.Dtos.CategoryDto": {
         "type": "object",
         "properties": {
@@ -37477,6 +37878,9 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ShelfGuard.Application.Features.Catalog.Dtos.CategoryDefaults"
           }
         },
         "additionalProperties": false
@@ -37526,6 +37930,9 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ShelfGuard.Application.Features.Catalog.Dtos.CategoryDefaults"
           }
         },
         "additionalProperties": false
@@ -37765,6 +38172,50 @@
           "perishabilityClass": {
             "type": "string",
             "nullable": true
+          },
+          "promoState": {
+            "type": "string",
+            "nullable": true
+          },
+          "promoStartsAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "promoDiscountPercent": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "promoOrderCoefficient": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "suggestedMinStock": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "suggestedMaxStock": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "suggestedSafetyBuffer": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "suggestedAduEffective": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "bufferCalculatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -37802,6 +38253,9 @@
           "itemCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ShelfGuard.Application.Features.Catalog.Dtos.CategoryDefaults"
           }
         },
         "additionalProperties": false
@@ -37872,6 +38326,9 @@
           },
           "isActive": {
             "type": "boolean"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ShelfGuard.Application.Features.Catalog.Dtos.CategoryDefaults"
           }
         },
         "additionalProperties": false
@@ -43949,6 +44406,24 @@
             "type": "string",
             "nullable": true
           },
+          "confirmedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "confirmedByUserName": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "shippedByUserName": {
+            "type": "string",
+            "nullable": true
+          },
           "items": {
             "type": "array",
             "items": {
@@ -44252,6 +44727,38 @@
           "repliedAt": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShelfGuard.Application.Features.Marketplace.Dtos.RateChatParticipantDto": {
+        "type": "object",
+        "properties": {
+          "supplierUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rating": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShelfGuard.Application.Features.Marketplace.Dtos.RateSupplierEmployeeDto": {
+        "type": "object",
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comment": {
+            "type": "string",
             "nullable": true
           }
         },
@@ -44700,6 +45207,102 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supplierUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supplierUserName": {
+            "type": "string",
+            "nullable": true
+          },
+          "rating": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "chatSessionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "ratedByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShelfGuard.Application.Features.Marketplace.Dtos.SupplierEmployeeReviewDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supplierUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supplierUserName": {
+            "type": "string",
+            "nullable": true
+          },
+          "rating": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "chatSessionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false
@@ -49477,6 +50080,100 @@
           "orderCount": {
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShelfGuard.Application.Features.SupplierAnalytics.Dtos.SupplierEmployeePerformanceDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userName": {
+            "type": "string",
+            "nullable": true
+          },
+          "ordersConfirmed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ordersShipped": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "avgHoursToConfirm": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "avgHoursToShip": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "onTimeDeliveryRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "discrepancyFreeRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "chatMessagesSent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "chatSessionsHandled": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "medianFirstResponseHours": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "avgBuyerRating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "buyerReviewCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ordersShippedDelta": {
+            "$ref": "#/components/schemas/ShelfGuard.Application.Features.Analytics.Dtos.PeriodMetricDto"
+          },
+          "onTimeDeliveryRateDelta": {
+            "$ref": "#/components/schemas/ShelfGuard.Application.Features.Analytics.Dtos.PeriodMetricDto"
+          },
+          "avgBuyerRatingDelta": {
+            "$ref": "#/components/schemas/ShelfGuard.Application.Features.Analytics.Dtos.PeriodMetricDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShelfGuard.Application.Features.SupplierAnalytics.Dtos.SupplierTeamPerformanceDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "format": "date"
+          },
+          "employees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShelfGuard.Application.Features.SupplierAnalytics.Dtos.SupplierEmployeePerformanceDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false

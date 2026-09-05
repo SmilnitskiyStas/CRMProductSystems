@@ -23,6 +23,15 @@ obj/
 appsettings.Production.json
 appsettings.Secrets.json
 
+# Throwaway build/test output dirs used by agents to verify without disturbing
+# the primary bin/obj (which another session's dev server may hold locked).
+.build-check*/
+.test-check*/
+.obj-check*/
+.refactor-obj*/
+.catalog-obj*/
+*.stackdump
+
 # ── Docker / Infrastructure ──────────────────────────────────────────────────
 docker-compose.override.yml
 
