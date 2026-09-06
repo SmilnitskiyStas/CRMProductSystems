@@ -222,6 +222,22 @@ function OrderExpandedContent({
           {order.confirmedByUserName && <ManagerRatingRow order={order} />}
         </>
       )}
+      {(order.catalogChanges?.length ?? 0) > 0 && (
+        <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
+          <div style={{ color: "#60A5FA", fontWeight: 600, marginBottom: 4 }}>
+            {t("catalogChangesLabel")}
+          </div>
+          {order.catalogChanges.map((c) => (
+            <div key={c.itemId}>
+              {t("catalogChangeLine", {
+                name: c.itemName,
+                barcodes: c.addedBarcodes.join(", ") || "—",
+                primary: c.primaryChanged ? t("catalogChangeNewPrimary") : "",
+              })}
+            </div>
+          ))}
+        </div>
+      )}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>

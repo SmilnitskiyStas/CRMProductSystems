@@ -518,6 +518,15 @@ table). All four null until the respective transition happens / on pre-migration
 the client may now cancel an order while it is `new` **or** `confirmed` (any time before it
 ships) — a `confirmed` order has consumed no stock, so cancel is unchanged mechanically.
 
+TASK-697: `MarketplaceOrderDto` carries `catalogChanges: MarketplaceOrderCatalogChangeDto[]`
+(`{ itemId, itemName, addedBarcodes[], primaryChanged, newPrimaryBarcode? }`, always present,
+usually empty). A line whose SupplierItem is already linked to a client Item
+(`SourceSupplierItemId`) is **never** a barcode conflict — the `/orders/conflicts` pre-flight
+skips it and `POST .../orders` silently merges any new supplier barcodes into that Item (supplier
+primary → `Barcodes[0]`, no existing barcode dropped), echoing each merge in `catalogChanges`
+(also persisted on the order row, jsonb column `marketplace_orders.CatalogChanges`). The
+conflict modal now only fires for a collision with a not-yet-linked Item.
+
 Key DTOs (`Features/Marketplace/Dtos/CooperationDtos.cs`): full shapes in
 `.claude/logs/handoffs/317-to-318_frontend-developer.md`. Contract numbers «ДС-{yyyy}-{NNN}»,
 order numbers «MP-{yyyy}-{NNN}» — sequential per supplier. Termination reason is stored in

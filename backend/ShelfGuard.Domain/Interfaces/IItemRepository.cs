@@ -78,6 +78,16 @@ public interface IItemRepository
     Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default);
 
     /// <summary>
+    /// No-include single-row load for the marketplace barcode-merge path (TASK-697, case 2 /
+    /// <c>catalogAction:"link"</c>). Deliberately omits the Category/Segment/DefaultSupplier
+    /// navigation includes <see cref="GetByIdAsync"/> pulls: the caller mutates the returned Item
+    /// and calls <see cref="Update"/>, and a loaded nav graph would be marked <c>Modified</c> too
+    /// — the cross-tenant multi-table write vector KI-036 / TASK-643 guards against. The merge
+    /// path needs only the row's own columns.
+    /// </summary>
+    Task<Item?> GetForBarcodeMergeAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
     /// Slice 3: promo state for the given catalog-page product ids, aggregated across every store
     /// of the tenant. Considers only <c>promo</c>-reason / campaign-linked discounts in
     /// <c>active</c> status. "upcoming" = starts in the future but within

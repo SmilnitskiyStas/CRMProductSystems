@@ -186,15 +186,19 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             });
         }
 
-        // Pass 2: every line cleared validation and planning — now actually create/link catalog
-        // Items, before the order itself is built/persisted below. A mid-loop failure here is a
-        // last-resort defence only (see ExecuteCatalogPlanAsync — planning already validated
-        // everything the execute step could otherwise fail on).
+        // Pass 2: every line cleared validation and planning — now actually create/link/merge
+        // catalog Items, before the order itself is built/persisted below. A mid-loop failure
+        // here is a last-resort defence only (see ExecuteCatalogPlanAsync — planning already
+        // validated everything the execute step could otherwise fail on). TASK-697: a case-2
+        // barcode merge into an already-linked Item is recorded here and echoed on the order.
+        var catalogChanges = new List<MarketplaceOrderCatalogChange>();
         foreach (var plan in plans)
         {
-            var execError = await ExecuteCatalogPlanAsync(clientTenantId, plan, ct);
+            var (change, execError) = await ExecuteCatalogPlanAsync(clientTenantId, plan, ct);
             if (execError is not null)
                 return (null, execError, false);
+            if (change is not null)
+                catalogChanges.Add(change);
         }
 
         // #4: snapshot the placing client user's display name, resolved under the caller's own
@@ -215,6 +219,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             CreatedByUserName = creator?.FullName,
             DestinationStoreId = request.DestinationStoreId,
             DestinationRegionCode = destination?.RegionCode,
+            CatalogChanges = catalogChanges.Count > 0 ? catalogChanges : null,
         };
 
         foreach (var item in orderItems)
@@ -249,6 +254,11 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     /// check against the calling client tenant's own Item catalog. Never creates or links
     /// anything — CreateOrderAsync re-runs the collision check itself and is the sole source of
     /// truth for what actually gets provisioned.
+    ///
+    /// TASK-697: an Item already linked to the ordered supplier item
+    /// (<c>SourceSupplierItemId == supplierItem.Id</c>) is NOT reported — a repeat order of an
+    /// already-linked product is silent, and CreateOrderAsync merges any new supplier barcodes
+    /// into that Item on its own. Only a collision with a not-yet-linked Item is a conflict.
     /// </summary>
     public async Task<(IReadOnlyList<MarketplaceOrderConflictDto>? Conflicts, string? Error, bool IsGateViolation)> CheckCatalogConflictsAsync(
         Guid clientTenantId, Guid supplierId, IReadOnlyList<CreateMarketplaceOrderItemDto> items,
@@ -285,8 +295,21 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             // tenant's Item could surface here and be echoed back (id, name, image, barcodes) as
             // a "conflict" to a client whose own catalog is empty. clientTenantId is JWT-derived
             // (MarketplaceCooperationController), never taken from the request body.
-            var matches = await _items.GetByAnyBarcodeAsync(barcodes, ct);
-            var match = matches.FirstOrDefault(m => m.TenantId == clientTenantId);
+            var ownMatches = (await _items.GetByAnyBarcodeAsync(barcodes, ct))
+                .Where(m => m.TenantId == clientTenantId)
+                .ToList();
+
+            // TASK-697 case 2: an Item already provenanced from THIS supplier item is never a
+            // conflict — a repeat order of an already-linked product must go through silently
+            // (CreateOrderAsync merges any new supplier barcodes itself). This holds even if
+            // another of the client's own Items also shares an EAN.
+            if (ownMatches.Any(m => m.SourceSupplierItemId == item.Id))
+                continue;
+
+            // TASK-697 case 3: a match with a not-yet-linked Item still needs the modal (same
+            // name or genuinely different product — the user picks "link" once, and the next
+            // order lands in case 2). Name is deliberately not checked.
+            var match = ownMatches.FirstOrDefault();
             if (match is null)
                 continue;
 
@@ -926,12 +949,19 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
     }
 
     /// <summary>
-    /// TASK-598: what CreateOrderAsync's pass 2 (<see cref="ExecuteCatalogPlanAsync"/>) should do
-    /// for one order line once planning has decided it's safe to proceed. "Create" builds a new
-    /// client Item from the SupplierItem snapshot; "Link" attaches SourceSupplierItemId to an
-    /// already-validated existing client Item instead.
+    /// TASK-598 / TASK-697: what CreateOrderAsync's pass 2 (<see cref="ExecuteCatalogPlanAsync"/>)
+    /// should do for one order line once planning has decided it's safe to proceed.
+    /// <list type="bullet">
+    /// <item><see cref="CatalogPlanKind.CreateNew"/> — build a new client Item from the SupplierItem snapshot.</item>
+    /// <item><see cref="CatalogPlanKind.Link"/> — the user chose "link": set SourceSupplierItemId on an
+    /// already-validated existing client Item, and merge the supplier's barcodes into it.</item>
+    /// <item><see cref="CatalogPlanKind.Merge"/> — case 2: the collision Item is already linked to this
+    /// supplier item; silently merge any new supplier barcodes, no modal, no new Item.</item>
+    /// </list>
     /// </summary>
-    private sealed record CatalogPlan(SupplierItem SupplierItem, bool IsLink, Item? LinkedItem);
+    private enum CatalogPlanKind { CreateNew, Link, Merge }
+
+    private sealed record CatalogPlan(SupplierItem SupplierItem, CatalogPlanKind Kind, Item? TargetItem);
 
     /// <summary>
     /// Read-only planning step (TASK-598): resolves what CatalogAction means for this line
@@ -963,7 +993,9 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             if (line.LinkedItemId is null)
                 return (null, LinkedItemRequiredError);
 
-            var linkedItem = await _items.GetByIdAsync(line.LinkedItemId.Value, ct);
+            // TASK-697: no-include load — pass 2 mutates this Item (SourceSupplierItemId +
+            // merged barcodes) and re-saves it, so a navigation graph must not be tracked.
+            var linkedItem = await _items.GetForBarcodeMergeAsync(line.LinkedItemId.Value, ct);
             // A foreign-tenant row is reported exactly like a missing one — never confirm that
             // some other tenant owns this id.
             if (linkedItem is null || linkedItem.TenantId != clientTenantId)
@@ -972,7 +1004,7 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             if (barcodes.Count == 0 || !linkedItem.Barcodes.Intersect(barcodes).Any())
                 return (null, LinkedItemBarcodeMismatchError);
 
-            return (new CatalogPlan(supplierItem, IsLink: true, linkedItem), null);
+            return (new CatalogPlan(supplierItem, CatalogPlanKind.Link, linkedItem), null);
         }
 
         if (barcodes.Count > 0)
@@ -982,6 +1014,15 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
             var collisions = (await _items.GetByAnyBarcodeAsync(barcodes, ct))
                 .Where(i => i.TenantId == clientTenantId)
                 .ToList();
+
+            // TASK-697 case 2: the collision Item is already linked to this supplier item —
+            // never a conflict; silently merge any new supplier barcodes in pass 2.
+            var linked = collisions.FirstOrDefault(i => i.SourceSupplierItemId == supplierItem.Id);
+            if (linked is not null)
+                return (new CatalogPlan(supplierItem, CatalogPlanKind.Merge, linked), null);
+
+            // TASK-697 case 3: a collision with a not-yet-linked Item still blocks the order
+            // until the user picks "link" or "create_new" (name deliberately not checked).
             if (collisions.Count > 0 && action != "create_new")
                 return (null, BarcodeCollisionError);
         }
@@ -994,62 +1035,149 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
         if (string.IsNullOrWhiteSpace(newItemName))
             return (null, SupplierItemNameMissingError);
 
-        return (new CatalogPlan(supplierItem, IsLink: false, null), null);
+        return (new CatalogPlan(supplierItem, CatalogPlanKind.CreateNew, null), null);
     }
 
     /// <summary>
-    /// Write step (TASK-598), only ever called after every line in the order has already been
-    /// planned successfully (see CreateOrderAsync pass 2). Link: sets SourceSupplierItemId on the
-    /// already-validated existing Item. Create: provisions a brand-new client Item from the
-    /// SupplierItem snapshot — no client-catalog category mapping, no supplier-side stock policy
-    /// equivalent (MinStock/MaxStock/SafetyBuffer = 0), ManagementType "NA" (no default exists),
-    /// VatRate 0 (no tenant-level default VAT rate exists in this codebase — known simplification,
-    /// see task log), PricePurchase from SupplierItem.Price, PriceRetail left null.
+    /// Write step (TASK-598 / TASK-697), only ever called after every line in the order has
+    /// already been planned successfully (see CreateOrderAsync pass 2).
+    /// <list type="bullet">
+    /// <item><b>CreateNew</b>: provisions a brand-new client Item from the SupplierItem snapshot —
+    /// no client-catalog category mapping, no supplier-side stock policy equivalent
+    /// (MinStock/MaxStock/SafetyBuffer = 0), ManagementType "NA" (no default exists), VatRate 0
+    /// (no tenant-level default VAT rate exists in this codebase — known simplification, see task
+    /// log), PricePurchase from SupplierItem.Price, PriceRetail left null.</item>
+    /// <item><b>Link</b> / <b>Merge</b> (shared path): merges the supplier's barcode set into the
+    /// target Item (never dropping an existing barcode; supplier primary moved to
+    /// <c>Barcodes[0]</c>), and for Link also stamps SourceSupplierItemId. Returns a
+    /// <see cref="MarketplaceOrderCatalogChange"/> when anything actually changed, so
+    /// CreateOrderAsync can record it on the order. Idempotent — a repeat order that adds nothing
+    /// new writes nothing.</item>
+    /// </list>
     /// </summary>
-    private async Task<string?> ExecuteCatalogPlanAsync(Guid clientTenantId, CatalogPlan plan, CancellationToken ct)
+    private async Task<(MarketplaceOrderCatalogChange? Change, string? Error)> ExecuteCatalogPlanAsync(
+        Guid clientTenantId, CatalogPlan plan, CancellationToken ct)
     {
-        if (plan.IsLink)
+        if (plan.Kind == CatalogPlanKind.CreateNew)
         {
-            // TASK-643/KI-036: re-validate ownership at the WRITE, not just at planning time.
-            // Pass 1 (planning) and pass 2 (execute) are separated by a whole loop, so the check
-            // that guarded the plan is not the check that guards the UPDATE. Cheap, and it closes
-            // the cross-tenant write vector even if a future refactor loosens planning.
-            if (plan.LinkedItem!.TenantId != clientTenantId)
-                return LinkedItemNotFoundError;
+            var supplierItem = plan.SupplierItem;
+            var request = new CreateProductRequest(
+                Name: supplierItem.CustomName ?? supplierItem.Item?.Name ?? string.Empty,
+                Barcodes: supplierItem.Barcodes.Select(b => b.Barcode).ToList(),
+                CategoryId: null,
+                SegmentId: null,
+                Unit: supplierItem.Unit ?? string.Empty,
+                ManagementType: "NA",
+                ItemType: null,
+                MinStock: 0,
+                MaxStock: 0,
+                SafetyBuffer: 0,
+                StorageTempMin: null,
+                StorageTempMax: null,
+                ShelfLifeDays: null,
+                DefaultSupplierId: null,
+                VatRate: 0,
+                PricePurchase: supplierItem.Price,
+                PriceRetail: null,
+                ImageUrl: PickImageUrl(supplierItem),
+                Manufacturer: supplierItem.Manufacturer,
+                CountryOrigin: supplierItem.ManufacturerCountry,
+                PerishabilityClass: null,
+                SourceSupplierItemId: supplierItem.Id);
 
-            plan.LinkedItem.SourceSupplierItemId = plan.SupplierItem.Id;
-            _items.Update(plan.LinkedItem);
-            await _items.SaveChangesAsync(ct);
-            return null;
+            var (created, error) = await _itemService.CreateAsync(clientTenantId, request, ct);
+            return (null, created is null ? error ?? CatalogProvisioningFailedError : null);
         }
 
-        var supplierItem = plan.SupplierItem;
-        var request = new CreateProductRequest(
-            Name: supplierItem.CustomName ?? supplierItem.Item?.Name ?? string.Empty,
-            Barcodes: supplierItem.Barcodes.Select(b => b.Barcode).ToList(),
-            CategoryId: null,
-            SegmentId: null,
-            Unit: supplierItem.Unit ?? string.Empty,
-            ManagementType: "NA",
-            ItemType: null,
-            MinStock: 0,
-            MaxStock: 0,
-            SafetyBuffer: 0,
-            StorageTempMin: null,
-            StorageTempMax: null,
-            ShelfLifeDays: null,
-            DefaultSupplierId: null,
-            VatRate: 0,
-            PricePurchase: supplierItem.Price,
-            PriceRetail: null,
-            ImageUrl: PickImageUrl(supplierItem),
-            Manufacturer: supplierItem.Manufacturer,
-            CountryOrigin: supplierItem.ManufacturerCountry,
-            PerishabilityClass: null,
-            SourceSupplierItemId: supplierItem.Id);
+        // Link + Merge — shared barcode-merge write path.
+        var target = plan.TargetItem!;
+        // TASK-643/KI-036: re-validate ownership at the WRITE, not just at planning time. Pass 1
+        // (planning) and pass 2 (execute) are separated by a whole loop, so the check that
+        // guarded the plan is not the check that guards the UPDATE. Cheap, and it closes the
+        // cross-tenant write vector even if a future refactor loosens planning.
+        if (target.TenantId != clientTenantId)
+            return (null, LinkedItemNotFoundError);
 
-        var (created, error) = await _itemService.CreateAsync(clientTenantId, request, ct);
-        return created is null ? error ?? CatalogProvisioningFailedError : null;
+        var supplierBarcodes = plan.SupplierItem.Barcodes.Select(b => b.Barcode).ToList();
+        var supplierPrimary  = plan.SupplierItem.Barcodes.FirstOrDefault(b => b.Kind == "primary")?.Barcode;
+        var (merged, added, primaryChanged, changed) =
+            MergeBarcodes(target.Barcodes, supplierBarcodes, supplierPrimary);
+
+        // Link still needs a write when it hasn't been stamped yet, even if the barcode set is
+        // already a superset (case: "link" chosen for an Item that already holds every barcode).
+        var needsLinkWrite = plan.Kind == CatalogPlanKind.Link
+            && target.SourceSupplierItemId != plan.SupplierItem.Id;
+
+        if (!changed && !needsLinkWrite)
+            return (null, null);   // idempotent — nothing to write
+
+        if (plan.Kind == CatalogPlanKind.Link)
+            target.SourceSupplierItemId = plan.SupplierItem.Id;
+        if (changed)
+            target.Barcodes = merged;
+
+        _items.Update(target);
+        await _items.SaveChangesAsync(ct);
+
+        return changed
+            ? (new MarketplaceOrderCatalogChange(
+                   target.Id, target.Name, added, primaryChanged,
+                   primaryChanged ? merged[0] : null),
+               null)
+            : (null, null);
+    }
+
+    /// <summary>
+    /// TASK-697: merges a supplier item's barcode set into a client Item's own <c>Barcodes</c>
+    /// list (jsonb, index 0 = the primary / "актуальний" barcode POS + analytics read). Rules:
+    /// <list type="number">
+    /// <item>trim, drop blanks, ordinal-dedupe both sides; order preserved.</item>
+    /// <item>a supplier barcode not already present is appended, in supplier order — an existing
+    /// barcode is <b>never</b> dropped.</item>
+    /// <item>if the supplier's primary barcode ends up in the union it is moved to the front.</item>
+    /// </list>
+    /// "nothing changed" (supplier barcodes ⊆ existing AND <c>existing[0]</c> already equals the
+    /// supplier primary) → <c>Added</c> empty, <c>PrimaryChanged</c> false, <c>Changed</c> false.
+    /// <c>internal</c> (assembly has <c>[InternalsVisibleTo("ShelfGuard.Tests")]</c>) for direct
+    /// unit testing.
+    /// </summary>
+    internal static (List<string> Merged, List<string> Added, bool PrimaryChanged, bool Changed)
+        MergeBarcodes(IReadOnlyList<string> existing, IReadOnlyList<string> supplierAll, string? supplierPrimary)
+    {
+        static List<string> Clean(IReadOnlyList<string> src)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var result = new List<string>();
+            foreach (var raw in src)
+            {
+                var b = raw?.Trim();
+                if (string.IsNullOrEmpty(b)) continue;
+                if (seen.Add(b)) result.Add(b);
+            }
+            return result;
+        }
+
+        var existN = Clean(existing);
+        var supN   = Clean(supplierAll);
+        var prim   = supplierPrimary?.Trim();
+
+        var existSet = new HashSet<string>(existN, StringComparer.Ordinal);
+        var added = supN.Where(b => !existSet.Contains(b)).ToList();
+
+        var union = new List<string>(existN);
+        union.AddRange(added);
+
+        if (!string.IsNullOrEmpty(prim) && union.Contains(prim))
+        {
+            var reordered = new List<string> { prim };
+            reordered.AddRange(union.Where(b => b != prim));
+            union = reordered;
+        }
+
+        var primaryChanged = union.Count > 0 && (existN.Count == 0 || union[0] != existN[0]);
+        var changed = added.Count > 0 || primaryChanged;
+
+        return (union, added, primaryChanged, changed);
     }
 
     /// <summary>
@@ -1295,6 +1423,11 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
                         .Select(b => new MarketplaceOrderItemBatchDto(
                             b.Id, b.ExpiryDate, b.BatchNumber, b.Qty, b.SupplierStockId))
                         .ToList()))
+                .ToList(),
+            // TASK-697: barcode auto-merges recorded when the order was placed (case 2).
+            (o.CatalogChanges ?? [])
+                .Select(c => new MarketplaceOrderCatalogChangeDto(
+                    c.ItemId, c.ItemName, c.AddedBarcodes, c.PrimaryChanged, c.NewPrimaryBarcode))
                 .ToList(),
             o.DestinationStoreId,
             o.SourceWarehouseId,

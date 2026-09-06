@@ -2287,6 +2287,20 @@ public sealed class AppDbContext : DbContext
             // TASK-649: destination region code, snapshotted at order creation (not a live
             // join through DestinationStoreId). varchar(20) — same sizing as Location.RegionCode.
             e.Property(x => x.DestinationRegionCode).HasMaxLength(20);
+            // TASK-697: barcode auto-merges recorded at order creation (case 2), nullable jsonb,
+            // no default (null = nothing changed). Value converter (not Npgsql dynamic-json) so
+            // the model also works under EF Core InMemory in ShelfGuard.Tests — mirrors
+            // SupplierItem.Attributes / User.TotpRecoveryCodes.
+            e.Property(x => x.CatalogChanges)
+             .HasColumnType("jsonb")
+             .HasConversion(
+                 v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                 v => v == null ? null : JsonSerializer.Deserialize<List<MarketplaceOrderCatalogChange>>(v, (JsonSerializerOptions?)null))
+             .IsRequired(false)
+             .Metadata.SetValueComparer(new ValueComparer<List<MarketplaceOrderCatalogChange>?>(
+                 (a, b) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null) == JsonSerializer.Serialize(b, (JsonSerializerOptions?)null),
+                 v => v == null ? 0 : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null).GetHashCode(),
+                 v => v == null ? null : JsonSerializer.Deserialize<List<MarketplaceOrderCatalogChange>>(JsonSerializer.Serialize(v, (JsonSerializerOptions?)null), (JsonSerializerOptions?)null)));
             e.HasIndex(x => x.SupplierTenantId);
             e.HasIndex(x => x.ClientTenantId);
             e.HasIndex(x => x.AgreementId);

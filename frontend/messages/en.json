@@ -3428,7 +3428,10 @@
         "conflictExistingLabel": "Already in your catalog",
         "conflictNoBarcodes": "No barcodes",
         "conflictLinkAction": "Link to this item",
-        "conflictCreateNewAction": "Create a new item anyway"
+        "conflictCreateNewAction": "Create a new item anyway",
+        "toastCatalogUpdated": "Catalog items updated: {count}",
+        "catalogChangeLine": "\"{name}\": added barcode {barcodes}{primary}",
+        "catalogChangeNewPrimary": ", new primary"
       },
       "chatPanel": {
         "emptyMessages": "No messages yet. Send the first one.",
@@ -3608,7 +3611,10 @@
           "receiptHeaderDiscrepancy": "Discrepancy",
           "managerRatingLabel": "Manager rating",
           "rateButton": "Rate",
-          "editRating": "change"
+          "editRating": "change",
+          "catalogChangesLabel": "Catalog changes",
+          "catalogChangeLine": "\"{name}\": added barcode {barcodes}{primary}",
+          "catalogChangeNewPrimary": ", new primary"
         },
         "cooperationTab": {
           "loading": "Loading...",

@@ -127,6 +127,23 @@ public record MarketplaceOrderConflictDto(
     MarketplaceOrderConflictingItemDto ExistingItem);
 
 /// <summary>
+/// One catalog auto-merge recorded on an order (TASK-697): a supplier barcode set was silently
+/// merged into the client's own already-linked <c>Item</c> at order-creation time (case 2 — the
+/// Item whose <c>SourceSupplierItemId</c> already points at this supplier item). No modal is
+/// shown; the client is informed via a toast right after checkout and a permanent "catalog
+/// changes" row on the order. <see cref="AddedBarcodes"/> lists the barcodes newly added to the
+/// Item; <see cref="PrimaryChanged"/> / <see cref="NewPrimaryBarcode"/> report whether the
+/// supplier's primary barcode became the Item's new primary (<c>Barcodes[0]</c>). No existing
+/// barcode is ever dropped.
+/// </summary>
+public record MarketplaceOrderCatalogChangeDto(
+    Guid ItemId,
+    string ItemName,
+    IReadOnlyList<string> AddedBarcodes,
+    bool PrimaryChanged,
+    string? NewPrimaryBarcode);
+
+/// <summary>
 /// One batch the supplier allocated to an order line at ship time (Phase 3, plan D4). The
 /// warehouse these came from is the order's <see cref="MarketplaceOrderDto.SourceWarehouseId"/>
 /// — one source warehouse per order, so it is not repeated per batch. Empty list for legacy
@@ -192,6 +209,12 @@ public record MarketplaceOrderDto(
     Guid? ShippedByUserId,
     string? ShippedByUserName,
     IReadOnlyList<MarketplaceOrderItemDto> Items,
+    /// <summary>
+    /// Barcodes auto-merged into the client's own already-linked Items when this order was placed
+    /// (TASK-697, case 2). Always present, possibly empty. Drives the post-checkout toast and the
+    /// permanent "catalog changes" row in the order detail view.
+    /// </summary>
+    IReadOnlyList<MarketplaceOrderCatalogChangeDto> CatalogChanges,
     /// <summary>
     /// Read-only (TASK-586, ADR-033 Decision 2). Nullable — orders placed before this column
     /// existed have no value and can never be received through the new client-confirmation flow.

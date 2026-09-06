@@ -44285,6 +44285,34 @@
         },
         "additionalProperties": false
       },
+      "ShelfGuard.Application.Features.Marketplace.Dtos.MarketplaceOrderCatalogChangeDto": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemName": {
+            "type": "string",
+            "nullable": true
+          },
+          "addedBarcodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "primaryChanged": {
+            "type": "boolean"
+          },
+          "newPrimaryBarcode": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ShelfGuard.Application.Features.Marketplace.Dtos.MarketplaceOrderConflictDto": {
         "type": "object",
         "properties": {
@@ -44428,6 +44456,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.MarketplaceOrderItemDto"
+            },
+            "nullable": true
+          },
+          "catalogChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShelfGuard.Application.Features.Marketplace.Dtos.MarketplaceOrderCatalogChangeDto"
             },
             "nullable": true
           },

@@ -520,7 +520,8 @@ public sealed class MarketplaceOrderServiceTests
             .Returns(new List<SupplierItem> { item });
 
         var existing = new Item { TenantId = _clientTenantId, Name = "Існуючий", Barcodes = ["444"] };
-        _items.GetByIdAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
+        // TASK-697: the "link" branch now loads via the no-include GetForBarcodeMergeAsync.
+        _items.GetForBarcodeMergeAsync(existing.Id, Arg.Any<CancellationToken>()).Returns(existing);
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
@@ -561,7 +562,7 @@ public sealed class MarketplaceOrderServiceTests
             Name     = "Чужий товар",
             Barcodes = ["555"],
         };
-        _items.GetByIdAsync(foreignItem.Id, Arg.Any<CancellationToken>()).Returns(foreignItem);
+        _items.GetForBarcodeMergeAsync(foreignItem.Id, Arg.Any<CancellationToken>()).Returns(foreignItem);
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
@@ -589,7 +590,7 @@ public sealed class MarketplaceOrderServiceTests
             .Returns(new List<SupplierItem> { item });
 
         var missingId = Guid.NewGuid();
-        _items.GetByIdAsync(missingId, Arg.Any<CancellationToken>()).Returns((Item?)null);
+        _items.GetForBarcodeMergeAsync(missingId, Arg.Any<CancellationToken>()).Returns((Item?)null);
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
@@ -718,8 +719,8 @@ public sealed class MarketplaceOrderServiceTests
 
         var ownItem = new Item { TenantId = _clientTenantId, Name = "Моє", Barcodes = ["1001"] };
         var foreignItem = new Item { TenantId = Guid.NewGuid(), Name = "Чуже", Barcodes = ["1002"] };
-        _items.GetByIdAsync(ownItem.Id, Arg.Any<CancellationToken>()).Returns(ownItem);
-        _items.GetByIdAsync(foreignItem.Id, Arg.Any<CancellationToken>()).Returns(foreignItem);
+        _items.GetForBarcodeMergeAsync(ownItem.Id, Arg.Any<CancellationToken>()).Returns(ownItem);
+        _items.GetForBarcodeMergeAsync(foreignItem.Id, Arg.Any<CancellationToken>()).Returns(foreignItem);
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
@@ -751,7 +752,7 @@ public sealed class MarketplaceOrderServiceTests
             .Returns(new List<SupplierItem> { item });
 
         var unrelated = new Item { TenantId = _clientTenantId, Name = "Не той товар", Barcodes = ["999"] };
-        _items.GetByIdAsync(unrelated.Id, Arg.Any<CancellationToken>()).Returns(unrelated);
+        _items.GetForBarcodeMergeAsync(unrelated.Id, Arg.Any<CancellationToken>()).Returns(unrelated);
 
         var (dto, error, _) = await _sut.CreateOrderAsync(
             _clientTenantId, _supplierId,
@@ -811,6 +812,307 @@ public sealed class MarketplaceOrderServiceTests
         await _items.DidNotReceive().GetByAnyBarcodeAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
         await _itemService.Received(1).CreateAsync(
             _clientTenantId, Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── TASK-697: repeat order of an already-linked item ────────────────────────
+
+    [Fact]
+    public async Task CheckCatalogConflicts_IdenticalNameIdenticalBarcode_FirstOrder_StillReportsConflict()
+    {
+        // Name is deliberately not checked: even a same-name, same-barcode own Item that isn't
+        // yet linked to this supplier item is a conflict — the client picks "link" once.
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var own = new Item
+        {
+            TenantId = _clientTenantId, Name = "Молоко 2.5%", Barcodes = ["111"], SourceSupplierItemId = null,
+        };
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("111")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { own });
+
+        var (conflicts, error, _) = await _sut.CheckCatalogConflictsAsync(
+            _clientTenantId, _supplierId, [new CreateMarketplaceOrderItemDto(item.Id, 1)]);
+
+        Assert.Null(error);
+        Assert.NotNull(conflicts);
+        var conflict = Assert.Single(conflicts);
+        Assert.Equal(own.Id, conflict.ExistingItem.Id);
+    }
+
+    [Fact]
+    public async Task CheckCatalogConflicts_AlreadyLinkedRepeatOrder_ReturnsZeroConflicts()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var linked = new Item
+        {
+            TenantId = _clientTenantId, Name = "Молоко 2.5%", Barcodes = ["111"], SourceSupplierItemId = item.Id,
+        };
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("111")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { linked });
+
+        var (conflicts, error, _) = await _sut.CheckCatalogConflictsAsync(
+            _clientTenantId, _supplierId, [new CreateMarketplaceOrderItemDto(item.Id, 1)]);
+
+        Assert.Null(error);
+        Assert.NotNull(conflicts);
+        Assert.Empty(conflicts);
+    }
+
+    [Fact]
+    public async Task CreateOrder_AlreadyLinked_SupplierAddedBarcode_MergesReordersPrimaryAndReportsChange()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "222", Kind = "primary" });
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "alternate" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var linked = new Item
+        {
+            TenantId = _clientTenantId, Name = "Молоко 2.5%", Barcodes = ["111"], SourceSupplierItemId = item.Id,
+        };
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("222")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { linked });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        // New supplier primary moved to the front; the client's original barcode is kept.
+        Assert.Equal(["222", "111"], linked.Barcodes);
+        _items.Received(1).Update(linked);
+        await _items.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _itemService.DidNotReceive().CreateAsync(
+            Arg.Any<Guid>(), Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
+
+        var change = Assert.Single(dto!.CatalogChanges);
+        Assert.Equal(linked.Id, change.ItemId);
+        Assert.Equal(["222"], change.AddedBarcodes);
+        Assert.True(change.PrimaryChanged);
+        Assert.Equal("222", change.NewPrimaryBarcode);
+    }
+
+    [Fact]
+    public async Task CreateOrder_AlreadyLinked_NoNewBarcodes_NoWriteNoChangeRecord()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "222", Kind = "primary" });
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "alternate" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var linked = new Item
+        {
+            TenantId = _clientTenantId, Name = "Молоко 2.5%", Barcodes = ["222", "111"], SourceSupplierItemId = item.Id,
+        };
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("222")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { linked });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Empty(dto!.CatalogChanges);
+        _items.DidNotReceive().Update(Arg.Any<Item>());
+        await _items.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _itemService.DidNotReceive().CreateAsync(
+            Arg.Any<Guid>(), Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_MergeNeverDropsExistingBarcode()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "222", Kind = "primary" });
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "alternate" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        // The client had added a manual barcode "AAA" of their own — the merge must keep it.
+        var linked = new Item
+        {
+            TenantId = _clientTenantId, Name = "Молоко 2.5%", Barcodes = ["111", "AAA"], SourceSupplierItemId = item.Id,
+        };
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("111")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { linked });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(["222", "111", "AAA"], linked.Barcodes);
+    }
+
+    [Fact]
+    public async Task CreateOrder_GenuinelyDifferentProduct_NotLinked_AutoAction_StillFails()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "primary" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var own = new Item
+        {
+            TenantId = _clientTenantId, Name = "Зовсім інше", Barcodes = ["111"], SourceSupplierItemId = null,
+        };
+        _items.GetByAnyBarcodeAsync(Arg.Is<IReadOnlyList<string>>(l => l.Contains("111")), Arg.Any<CancellationToken>())
+            .Returns(new List<Item> { own });
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto([new CreateMarketplaceOrderItemDto(item.Id, 1)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(dto);
+        Assert.Equal(MarketplaceOrderService.BarcodeCollisionError, error);
+        await _itemService.DidNotReceive().CreateAsync(
+            Arg.Any<Guid>(), Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
+        await _orders.DidNotReceive().AddAsync(Arg.Any<MarketplaceOrder>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateOrder_LinkModalBranch_SetsSourceAndMergesBarcodes()
+    {
+        _agreements.GetForPairAsync(_supplierTenantId, _clientTenantId, Arg.Any<CancellationToken>())
+            .Returns(Agreement(SupplierAgreementStatus.Active));
+
+        var item = CatalogItem(price: 10m);
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "222", Kind = "primary" });
+        item.Barcodes.Add(new SupplierItemBarcode { Barcode = "111", Kind = "alternate" });
+        _marketplace.GetSupplierItemsAsync(_supplierId, Arg.Any<CancellationToken>())
+            .Returns(new List<SupplierItem> { item });
+
+        var own = new Item
+        {
+            TenantId = _clientTenantId, Name = "Моє молоко", Barcodes = ["111"], SourceSupplierItemId = null,
+        };
+        _items.GetForBarcodeMergeAsync(own.Id, Arg.Any<CancellationToken>()).Returns(own);
+
+        var (dto, error, _) = await _sut.CreateOrderAsync(
+            _clientTenantId, _supplierId,
+            new CreateMarketplaceOrderDto(
+                [new CreateMarketplaceOrderItemDto(item.Id, 1, "link", own.Id)], null, Guid.NewGuid()),
+            _userId);
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(item.Id, own.SourceSupplierItemId);
+        Assert.Equal(["222", "111"], own.Barcodes);
+        _items.Received(1).Update(own);
+        await _itemService.DidNotReceive().CreateAsync(
+            Arg.Any<Guid>(), Arg.Any<CreateProductRequest>(), Arg.Any<CancellationToken>());
+
+        var change = Assert.Single(dto!.CatalogChanges);
+        Assert.Equal(own.Id, change.ItemId);
+        Assert.Equal(["222"], change.AddedBarcodes);
+        Assert.True(change.PrimaryChanged);
+        Assert.Equal("222", change.NewPrimaryBarcode);
+    }
+
+    // ── TASK-697: MergeBarcodes (direct unit) ──────────────────────────────────
+
+    [Fact]
+    public void MergeBarcodes_AppendsNewSupplierBarcodesInOrder_KeepingExistingFirst()
+    {
+        var (merged, added, primaryChanged, changed) =
+            MarketplaceOrderService.MergeBarcodes(["111"], ["111", "222", "333"], null);
+
+        Assert.Equal(["111", "222", "333"], merged);
+        Assert.Equal(["222", "333"], added);
+        Assert.False(primaryChanged);
+        Assert.True(changed);
+    }
+
+    [Fact]
+    public void MergeBarcodes_MovesSupplierPrimaryToFront()
+    {
+        var (merged, added, primaryChanged, changed) =
+            MarketplaceOrderService.MergeBarcodes(["111", "AAA"], ["222", "111"], "222");
+
+        Assert.Equal(["222", "111", "AAA"], merged);
+        Assert.Equal(["222"], added);
+        Assert.True(primaryChanged);
+        Assert.True(changed);
+    }
+
+    [Fact]
+    public void MergeBarcodes_NoOp_WhenSupplierSetIsSubsetAndPrimaryAlreadyFirst()
+    {
+        var (merged, added, primaryChanged, changed) =
+            MarketplaceOrderService.MergeBarcodes(["222", "111"], ["222", "111"], "222");
+
+        Assert.Equal(["222", "111"], merged);
+        Assert.Empty(added);
+        Assert.False(primaryChanged);
+        Assert.False(changed);
+    }
+
+    [Fact]
+    public void MergeBarcodes_AbsentPrimary_LeavesExistingOrder()
+    {
+        var (merged, added, primaryChanged, changed) =
+            MarketplaceOrderService.MergeBarcodes(["111", "222"], ["222"], null);
+
+        Assert.Equal(["111", "222"], merged);
+        Assert.Empty(added);
+        Assert.False(primaryChanged);
+        Assert.False(changed);
+    }
+
+    [Fact]
+    public void MergeBarcodes_EmptyExisting_TakesSupplierSetWithPrimaryFirst()
+    {
+        var (merged, added, primaryChanged, changed) =
+            MarketplaceOrderService.MergeBarcodes([], ["111", "222"], "222");
+
+        Assert.Equal(["222", "111"], merged);
+        Assert.Equal(["111", "222"], added);
+        Assert.True(primaryChanged);
+        Assert.True(changed);
+    }
+
+    [Fact]
+    public void MergeBarcodes_TrimsAndDeduplicates()
+    {
+        var (merged, added, _, _) =
+            MarketplaceOrderService.MergeBarcodes(["111"], [" 111 ", "222", "222", ""], null);
+
+        Assert.Equal(["111", "222"], merged);
+        Assert.Equal(["222"], added);
     }
 
     // ── Client cancellation ────────────────────────────────────────────────────

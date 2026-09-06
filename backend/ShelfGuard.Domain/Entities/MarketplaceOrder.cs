@@ -102,6 +102,14 @@ public sealed class MarketplaceOrder
     public Guid? ShippedByUserId { get; set; }
     public string? ShippedByUserName { get; set; }
 
+    /// <summary>
+    /// Barcodes auto-merged into the client's own already-linked <see cref="Item"/>(s) when this
+    /// order was created (TASK-697, case 2). <c>null</c> / empty for orders that changed nothing.
+    /// Durable jsonb so the client still sees the change on every later reopen of the order.
+    /// Barcodes only — never name / price / category.
+    /// </summary>
+    public List<MarketplaceOrderCatalogChange>? CatalogChanges { get; set; }
+
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

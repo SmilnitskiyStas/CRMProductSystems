@@ -173,6 +173,21 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               onClick: () => router.push("/marketplace/orders"),
             },
           });
+          // Case 2 — barcodes the backend silently merged into already-linked catalog Items.
+          // Informational only: the order is already placed.
+          if ((order.catalogChanges?.length ?? 0) > 0) {
+            toast.info(t("toastCatalogUpdated", { count: order.catalogChanges.length }), {
+              description: order.catalogChanges
+                .map((c) =>
+                  t("catalogChangeLine", {
+                    name: c.itemName,
+                    barcodes: c.addedBarcodes.join(", ") || "—",
+                    primary: c.primaryChanged ? t("catalogChangeNewPrimary") : "",
+                  })
+                )
+                .join("\n"),
+            });
+          }
           setComment("");
           setStoreId("");
           closeModal();

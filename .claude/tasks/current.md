@@ -6,6 +6,27 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Marketplace: «збіги штрихкодів» модалка на кожне замовлення — TASK-697
+
+**Status:** review · backend-developer агент + main session (фронт) · не запушено · Log: `.claude/logs/tasks/TASK-697_2026-09-06_marketplace-barcode-conflict-repeat-order_backend-developer.md`
+
+`CheckCatalogConflictsAsync` / `PlanCatalogOutcomeAsync` тепер: (case 2) `Item` уже привʼязаний до
+цього supplier-item (`SourceSupplierItemId == supplierItem.Id`) — **ніколи не конфлікт**;
+`CreateOrderAsync` мовчки зливає нові штрихкоди постачальника в цей Item (`MergeBarcodes`:
+supplier primary → `Barcodes[0]`, жоден наявний не видаляється) і пише запис у
+`marketplace_orders.CatalogChanges` (нова nullable jsonb-колонка, value-converter) + echo в
+`MarketplaceOrderDto.CatalogChanges`. Модалка лишається лише для незвʼязаного Item (case 3, назва
+не перевіряється). `GetByAnyBarcodeAsync` — прибрано 3 `.Include` (write-vector); новий
+`IItemRepository.GetForBarcodeMergeAsync` (no-include) для гілки «link».
+Міграція `20260906133809_AddMarketplaceOrderCatalogChanges` (1 AddColumn, no drift) — **застосовано
+на dev**; для prod це deploy-step. `dotnet build` чисто; повний `dotnet test` **2391/2391 зелений**
+(8 нових unit + 6 `MergeBarcodes_*` + новий real-Postgres integration
+`CreateOrder_repeat_of_an_already_linked_item_merges_barcodes_and_records_the_change`). Фронт
+(main session): `MarketplaceOrderCatalogChange` тип, тост після checkout у `SupplierOrderCart`,
+рядок «Зміни в каталозі» в `orders/page.tsx`, i18n uk/en — `tsc` + lint чисті. `openapi.json`
+регенеровано (+35 рядків, без сторонньої churn). Ручний browser E2E не проганявся (немає піднятого
+локального backend + сидів marketplace-сценарію) — покрито integration-тестом.
+
 ## Supplier portal «Phase 8» — team performance + per-employee ratings — TASK-695
 
 **Status:** review · **Agent:** backend-developer · не запушено · Log: `.claude/logs/tasks/695_2026-09-03_supplier-phase8-team-performance_backend-developer.md`

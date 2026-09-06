@@ -3428,7 +3428,10 @@
         "conflictExistingLabel": "Вже є у вашому каталозі",
         "conflictNoBarcodes": "Без штрихкодів",
         "conflictLinkAction": "Прив'язати до цього товару",
-        "conflictCreateNewAction": "Все одно створити новий товар"
+        "conflictCreateNewAction": "Все одно створити новий товар",
+        "toastCatalogUpdated": "Оновлено товарів у каталозі: {count}",
+        "catalogChangeLine": "Товар «{name}»: додано штрихкод {barcodes}{primary}",
+        "catalogChangeNewPrimary": ", новий основний"
       },
       "chatPanel": {
         "emptyMessages": "Повідомлень ще немає. Напишіть перше.",
@@ -3608,7 +3611,10 @@
           "receiptHeaderDiscrepancy": "Розбіжність",
           "managerRatingLabel": "Оцінка менеджера",
           "rateButton": "Оцінити",
-          "editRating": "змінити"
+          "editRating": "змінити",
+          "catalogChangesLabel": "Зміни в каталозі",
+          "catalogChangeLine": "Товар «{name}»: додано штрихкод {barcodes}{primary}",
+          "catalogChangeNewPrimary": ", новий основний"
         },
         "cooperationTab": {
           "loading": "Завантаження...",

@@ -409,6 +409,20 @@ export interface MarketplaceOrderItemDto {
   batches: MarketplaceOrderItemBatchDto[];
 }
 
+/** One own-catalog Item whose barcodes were auto-merged during order creation because it is
+ *  already the provisioned copy of an ordered supplier item and the supplier had added / re-primaried
+ *  a barcode (case 2 — no modal shown). Recorded on the order so it stays visible on reopening. */
+export interface MarketplaceOrderCatalogChange {
+  itemId: string;
+  itemName: string;
+  /** Supplier barcodes that were not already on the Item (order preserved). */
+  addedBarcodes: string[];
+  /** True when Barcodes[0] changed as a result of the merge. */
+  primaryChanged: boolean;
+  /** The new primary barcode when primaryChanged; null otherwise. */
+  newPrimaryBarcode: string | null;
+}
+
 export interface MarketplaceOrderDto {
   id: string;
   /** «MP-2026-001» */
@@ -457,6 +471,9 @@ export interface MarketplaceOrderDto {
    * or derived as shippedAt + estimatedDeliveryDays. Null until shipped. */
   expectedDeliveryDate: string | null;
   items: MarketplaceOrderItemDto[];
+  /** Own-catalog Items whose barcodes were auto-merged at order creation because they are already
+   *  linked to an ordered supplier item (case 2). Empty for orders that changed nothing. */
+  catalogChanges: MarketplaceOrderCatalogChange[];
 }
 
 /** How to resolve a barcode conflict on one order line (TASK-597). Omit/"auto" is only

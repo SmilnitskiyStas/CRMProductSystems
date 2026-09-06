@@ -54,6 +54,7 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
 
     private readonly string _run = Guid.NewGuid().ToString("N");
     private string Barcode => $"BC-644-{_run}";
+    private string Barcode2 => $"BC-644-{_run}-2";
 
     public MarketplaceOrderCatalogConflictsRlsIntegrationTests(RlsAuditRoleFixture fixture, ITestOutputHelper output)
     {
@@ -220,6 +221,70 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
         }
     }
 
+    // ── TASK-697: repeat order of an already-linked item merges barcodes ──────
+
+    [Fact]
+    public async Task CreateOrder_repeat_of_an_already_linked_item_merges_barcodes_and_records_the_change()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
+
+        var f = await SeedFixtureAsync(clientItemLinkedWithNewSupplierBarcode: true);
+        try
+        {
+            Guid orderId;
+            await using (var session = await OpenSessionAsync(f.ClientTenantId))
+            {
+                var service = BuildOrderService(session.Db);
+
+                var (dto, error, _) = await service.CreateOrderAsync(
+                    f.ClientTenantId, f.SupplierId,
+                    new CreateMarketplaceOrderDto(
+                        [new CreateMarketplaceOrderItemDto(f.SupplierItemId, 1)],
+                        Comment: null,
+                        DestinationStoreId: f.ClientLocationId),
+                    f.ClientUserId);
+
+                // No modal / no BarcodeCollisionError — the repeat order goes through silently.
+                Assert.Null(error);
+                Assert.NotNull(dto);
+                orderId = dto!.Id;
+
+                var change = Assert.Single(dto.CatalogChanges);
+                Assert.Equal(f.ClientOwnItemId, change.ItemId);
+                Assert.Equal([Barcode2], change.AddedBarcodes);
+                Assert.True(change.PrimaryChanged);
+                Assert.Equal(Barcode2, change.NewPrimaryBarcode);
+
+                // KI-036: the marketplace provider bypass must not have leaked past the repo call.
+                Assert.Equal("store_manager", await CurrentRoleAsync(session.Db));
+            }
+
+            await using var verify = NewContext();
+
+            // The client's own linked Item now carries both barcodes, supplier primary at index 0.
+            var linked = await verify.Items.AsNoTracking().SingleAsync(i => i.Id == f.ClientOwnItemId);
+            Assert.Equal([Barcode2, Barcode], linked.Barcodes);
+            Assert.Equal(f.SupplierItemId, linked.SourceSupplierItemId);
+
+            // The third tenant's Item (also shares Barcode) is untouched.
+            var third = await verify.Items.AsNoTracking().SingleAsync(i => i.Id == f.ThirdItemId);
+            Assert.Null(third.SourceSupplierItemId);
+            Assert.Equal([Barcode], third.Barcodes);
+
+            // CatalogChanges persisted on the order row (re-read through a fresh context).
+            var order = await verify.MarketplaceOrders.AsNoTracking().SingleAsync(o => o.Id == orderId);
+            Assert.NotNull(order.CatalogChanges);
+            var persisted = Assert.Single(order.CatalogChanges!);
+            Assert.Equal(f.ClientOwnItemId, persisted.ItemId);
+            Assert.Equal([Barcode2], persisted.AddedBarcodes);
+            Assert.True(persisted.PrimaryChanged);
+        }
+        finally
+        {
+            await CleanupAsync(f.AllTenantIds);
+        }
+    }
+
     // ── F2 write-vector negative control (TASK-641 R6) ────────────────────────
 
     [Fact]
@@ -326,7 +391,9 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
         public Guid[] AllTenantIds => [ClientTenantId, SupplierTenantId, ThirdTenantId];
     }
 
-    private async Task<Fixture> SeedFixtureAsync(bool clientOwnsBarcode = false, bool thirdItemHasGraph = false)
+    private async Task<Fixture> SeedFixtureAsync(
+        bool clientOwnsBarcode = false, bool thirdItemHasGraph = false,
+        bool clientItemLinkedWithNewSupplierBarcode = false)
     {
         await using var db = NewContext();
 
@@ -365,12 +432,22 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             SupplierItemId = supplierItem.Id,
             TenantId       = supplierTenant.Id,
             Barcode        = Barcode,
-            Kind           = "primary",
+            // TASK-697: when the client already linked to this item, model the supplier having
+            // since added a NEW primary — the old one demotes to alternate.
+            Kind           = clientItemLinkedWithNewSupplierBarcode ? "alternate" : "primary",
         };
         db.Suppliers.Add(supplier);
         db.SupplierProfiles.Add(profile);
         db.SupplierItems.Add(supplierItem);
         db.SupplierItemBarcodes.Add(supplierBarcode);
+        if (clientItemLinkedWithNewSupplierBarcode)
+            db.SupplierItemBarcodes.Add(new SupplierItemBarcode
+            {
+                SupplierItemId = supplierItem.Id,
+                TenantId       = supplierTenant.Id,
+                Barcode        = Barcode2,
+                Kind           = "primary",
+            });
 
         db.SupplierAgreements.Add(new SupplierAgreement
         {
@@ -414,6 +491,20 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             };
             db.Items.Add(clientItem);
             clientOwnItemId = clientItem.Id;
+        }
+
+        if (clientItemLinkedWithNewSupplierBarcode)
+        {
+            var linkedItem = new Item
+            {
+                TenantId             = clientTenant.Id,
+                Name                 = "Мій власний товар (привʼязаний)",
+                Barcodes             = [Barcode],
+                SourceSupplierItemId = supplierItem.Id,
+                ImageUrl             = "https://example.test/linked.jpg",
+            };
+            db.Items.Add(linkedItem);
+            clientOwnItemId = linkedItem.Id;
         }
 
         await db.SaveChangesAsync();

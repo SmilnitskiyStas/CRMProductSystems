@@ -202,6 +202,12 @@ public sealed class ItemRepository : IItemRepository
     // of these elements", exactly the semantics needed against Barcodes' `'[]'::jsonb` array
     // shape (same column GetByBarcodeAsync above already targets with JsonContains/`@>`).
     // One round trip regardless of how many barcodes are passed.
+    //
+    // TASK-697: no navigation .Include here. Both call sites (MarketplaceOrderService's
+    // conflict check + collision check) read only the row's own columns, and in the merge path
+    // the matched Item is mutated and re-saved — a loaded Category/DefaultSupplier graph would
+    // then be marked Modified too, re-opening the cross-tenant multi-table write the
+    // CreateOrder_link_to_a_foreign_tenant_item write-vector test guards against.
     public async Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default)
     {
         if (barcodes.Count == 0)
@@ -209,12 +215,15 @@ public sealed class ItemRepository : IItemRepository
 
         var needles = barcodes as string[] ?? barcodes.ToArray();
         return await _db.Items
-            .Include(p => p.Category)
-            .Include(p => p.Segment)
-            .Include(p => p.DefaultSupplier)
             .Where(p => EF.Functions.JsonExistAny(p.Barcodes, needles))
             .ToListAsync(ct);
     }
+
+    // TASK-697: no-include single-row load for the barcode-merge path (case 2 / "link"). See
+    // IItemRepository.GetForBarcodeMergeAsync — the returned Item is mutated and re-saved, so it
+    // must not drag a navigation graph into the change tracker.
+    public Task<Item?> GetForBarcodeMergeAsync(Guid id, CancellationToken ct = default) =>
+        _db.Items.FirstOrDefaultAsync(p => p.Id == id, ct);
 
     // Slice 3: promo highlight on the catalog table. One query over the page's product ids,
     // aggregated across the tenant's stores (the catalog list itself is tenant-wide, not

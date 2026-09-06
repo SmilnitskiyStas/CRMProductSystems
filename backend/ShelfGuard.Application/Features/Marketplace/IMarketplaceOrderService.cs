@@ -12,7 +12,13 @@ public interface IMarketplaceOrderService
 {
     // ── Client side ───────────────────────────────────────────────────────────
 
-    /// <summary>IsGateViolation = true → controller returns 403 (no active agreement).</summary>
+    /// <summary>
+    /// IsGateViolation = true → controller returns 403 (no active agreement). TASK-697: for a
+    /// line whose SupplierItem shares a barcode with an Item the client already linked to it
+    /// (<c>SourceSupplierItemId</c>), any new supplier barcodes are merged into that Item
+    /// silently (supplier primary → <c>Barcodes[0]</c>, no existing barcode dropped) and the
+    /// merge is echoed on <see cref="MarketplaceOrderDto.CatalogChanges"/>.
+    /// </summary>
     Task<(MarketplaceOrderDto? Order, string? Error, bool IsGateViolation)> CreateOrderAsync(
         Guid clientTenantId, Guid supplierId, CreateMarketplaceOrderDto request, Guid userId,
         CancellationToken ct = default);
@@ -23,7 +29,8 @@ public interface IMarketplaceOrderService
     /// the calling client tenant's own Item catalog. Creates nothing. Same gate as CreateOrderAsync
     /// (IsGateViolation = true → 403) since it previews exactly what a real order would need to
     /// pass. Empty conflicts list means the items are safe to submit as-is (CatalogAction can stay
-    /// null/"auto" on every line).
+    /// null/"auto" on every line). TASK-697: a line already linked to the ordered supplier item is
+    /// never returned as a conflict — the repeat order goes through silently.
     /// </summary>
     Task<(IReadOnlyList<MarketplaceOrderConflictDto>? Conflicts, string? Error, bool IsGateViolation)> CheckCatalogConflictsAsync(
         Guid clientTenantId, Guid supplierId, IReadOnlyList<CreateMarketplaceOrderItemDto> items,
