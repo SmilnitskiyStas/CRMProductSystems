@@ -129,7 +129,7 @@ interface NavGroup {
 // `useTranslations<...>` isn't wired up; the general translator shape is enough here.
 type SidebarGroupsT = ReturnType<typeof useTranslations>;
 
-function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
+export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
   return [
   {
     key: "operations",
@@ -292,56 +292,83 @@ function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
   ];
 }
 
-// Supplier cabinet (v4.1, TASK-286, ADR-016; permissions TASK-307) — the ONLY
-// group a supplier_admin sees. Rendered instead of NAV_GROUPS for that role;
-// not module-gated on the client (the backend already gates /api/supplier-cabinet
-// with marketplace_supplier). Items are additionally filtered by permission key
-// when the user has a non-null permissions dict (see effectiveSupplierPermissions
-// below) — null permissions = full/owner access, so nothing is hidden.
-function buildSupplierNavGroup(t: SidebarGroupsT): NavGroup {
-  return {
-  key: "supplier_cabinet",
-  label: t("supplierCabinet.label"),
-  icon: <Store size={18} />,
-  // supplier_admin only ever renders this one group (see sourceGroups below) —
-  // collapsing the sole group hid every cabinet link (items, reviews, etc.)
-  // behind an easy-to-miss toggle. Always expanded, no reason to collapse it.
-  alwaysExpanded: true,
-  items: [
-    // Profile viewing (TASK-585) — no permission key: backend no longer requires
-    // profile_management to GET the profile, only to edit/publish it.
-    { href: "/supplier/profile", label: t("supplierCabinet.profile"),  icon: <Store size={16} />,        roles: SUPPLIER_ONLY },
-    { href: "/supplier/items",   label: t("supplierCabinet.myItems"),  icon: <Package size={16} />,      roles: SUPPLIER_ONLY, permission: "catalog_management" },
-    // Supplier-portal expansion — gated by the provider-granted "supplier_inventory" module
-    // (item-level moduleKey; the cabinet group itself is never module-gated).
-    { href: "/supplier/warehouses", label: t("supplierCabinet.warehouses"), icon: <Warehouse size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
-    { href: "/supplier/inventory", label: t("supplierCabinet.inventory"), icon: <Boxes size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
-    { href: "/supplier/schedules", label: t("supplierCabinet.schedules"), icon: <CalendarDays size={16} />, roles: SUPPLIER_ONLY, permission: "workforce_management", moduleKey: "supplier_workforce" },
-    // Supplier-portal expansion Phase 6b/6c — no moduleKey (both ride the always-on
-    // marketplace_supplier gate; the backend action-gates on the permission below).
-    { href: "/supplier/analytics", label: t("supplierCabinet.analytics"), icon: <BarChart3 size={16} />, roles: SUPPLIER_ONLY, permission: "analytics_view" },
-    { href: "/supplier/reviews", label: t("supplierCabinet.reviews"),  icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
-    { href: "/supplier/performance", label: t("supplierCabinet.performance"), icon: <TrendingUp size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
-    { href: "/supplier/tasks",   label: t("supplierCabinet.tasks"),    icon: <ListOrdered size={16} />,   roles: SUPPLIER_ONLY, permission: "task_board" },
-    { href: "/supplier/clients", label: t("supplierCabinet.clients"), icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
-    { href: "/supplier/team",    label: t("supplierCabinet.team"),    icon: <Users size={16} />,         roles: SUPPLIER_ONLY, permission: "staff_management" },
-    // Cooperation flow (TASK-318) — без permission-ключів: у довіднику
-    // supplierPermissions поки немає відповідних прав. NOTE (TASK-359 audit):
-    // the backend does NOT gate these routes either — any supplier_admin
-    // staff member has full access regardless of their assigned SupplierRole.
-    // Flagged as an open product decision (which permission key(s), if any,
-    // should cover cooperation-requests/orders/contract-settings/support-tickets);
-    // not fixed here.
-    { href: "/supplier/requests",          label: t("supplierCabinet.requests"),          icon: <HeartHandshake size={16} />, roles: SUPPLIER_ONLY },
-    { href: "/supplier/orders",            label: t("supplierCabinet.orders"),            icon: <ShoppingBag size={16} />, roles: SUPPLIER_ONLY },
-    { href: "/supplier/contract-settings", label: t("supplierCabinet.contractSettings"),  icon: <FileText size={16} />,    roles: SUPPLIER_ONLY },
-    { href: "/supplier/support",           label: t("supplierCabinet.support"),           icon: <LifeBuoy size={16} />,    roles: SUPPLIER_ONLY },
-    // Messaging (BUG-019) — moved out from under /supplier/clients (client_management)
-    // because staff without that permission still need to reply to client chats;
-    // same ungated treatment as the TASK-318 items above.
-    { href: "/supplier/messages",          label: t("supplierCabinet.messages"),          icon: <MessageCircle size={16} />, roles: SUPPLIER_ONLY },
-  ],
-  };
+// Supplier cabinet (v4.1, TASK-286, ADR-016; permissions TASK-307) — the groups a
+// supplier_admin sees, rendered instead of NAV_GROUPS for that role. Split into
+// logical sections (TASK-699): Кабінет · Замовлення · Товари та склад · Команда ·
+// Аналітика · Договір. Not module-gated at the group level (the backend gates
+// /api/supplier-cabinet with marketplace_supplier); individual items carry their
+// own moduleKey where needed. Items are further filtered by permission key when the
+// user has a non-null permissions dict (see supplierEffectivePermissions below) —
+// null permissions = full/owner access, so nothing is hidden. Empty groups drop out
+// via the shared `visibleItems.length > 0` filter in the render pipeline.
+//
+// Notes carried over: /supplier/profile has no permission key (backend only requires
+// profile_management to edit/publish, not to view — TASK-585). The cooperation-flow
+// items (requests, orders, contract-settings, support) and messaging are deliberately
+// ungated (TASK-318/BUG-019 — SupplierPermissions has no matching key, and the backend
+// doesn't gate those routes either).
+export function buildSupplierNavGroups(t: SidebarGroupsT): NavGroup[] {
+  return [
+    {
+      key: "supplier_account",
+      label: t("supplierCabinet.label"),
+      icon: <Store size={18} />,
+      alwaysExpanded: true,
+      items: [
+        { href: "/supplier/profile", label: t("supplierCabinet.profile"), icon: <Store size={16} />, roles: SUPPLIER_ONLY },
+      ],
+    },
+    {
+      key: "supplier_orders",
+      label: t("supplierCabinet.sections.orders"),
+      icon: <ShoppingBag size={18} />,
+      items: [
+        { href: "/supplier/orders",   label: t("supplierCabinet.orders"),   icon: <ShoppingBag size={16} />,   roles: SUPPLIER_ONLY },
+        { href: "/supplier/requests", label: t("supplierCabinet.requests"), icon: <HeartHandshake size={16} />, roles: SUPPLIER_ONLY },
+        { href: "/supplier/messages", label: t("supplierCabinet.messages"), icon: <MessageCircle size={16} />, roles: SUPPLIER_ONLY },
+        { href: "/supplier/clients",  label: t("supplierCabinet.clients"),  icon: <Building2 size={16} />,     roles: SUPPLIER_ONLY, permission: "client_management" },
+        { href: "/supplier/reviews",  label: t("supplierCabinet.reviews"),  icon: <ClipboardList size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
+      ],
+    },
+    {
+      key: "supplier_catalog",
+      label: t("supplierCabinet.sections.catalog"),
+      icon: <Package size={18} />,
+      items: [
+        { href: "/supplier/items",      label: t("supplierCabinet.myItems"),    icon: <Package size={16} />,   roles: SUPPLIER_ONLY, permission: "catalog_management" },
+        { href: "/supplier/inventory",  label: t("supplierCabinet.inventory"),  icon: <Boxes size={16} />,     roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
+        { href: "/supplier/warehouses", label: t("supplierCabinet.warehouses"), icon: <Warehouse size={16} />, roles: SUPPLIER_ONLY, permission: "warehouse_management", moduleKey: "supplier_inventory" },
+      ],
+    },
+    {
+      key: "supplier_team",
+      label: t("supplierCabinet.sections.team"),
+      icon: <Users size={18} />,
+      items: [
+        { href: "/supplier/team",      label: t("supplierCabinet.team"),      icon: <Users size={16} />,        roles: SUPPLIER_ONLY, permission: "staff_management" },
+        { href: "/supplier/schedules", label: t("supplierCabinet.schedules"), icon: <CalendarDays size={16} />, roles: SUPPLIER_ONLY, permission: "workforce_management", moduleKey: "supplier_workforce" },
+        { href: "/supplier/tasks",     label: t("supplierCabinet.tasks"),     icon: <ListOrdered size={16} />,  roles: SUPPLIER_ONLY, permission: "task_board" },
+      ],
+    },
+    {
+      key: "supplier_analytics",
+      label: t("supplierCabinet.sections.analytics"),
+      icon: <BarChart3 size={18} />,
+      items: [
+        { href: "/supplier/analytics",   label: t("supplierCabinet.analytics"),   icon: <BarChart3 size={16} />,  roles: SUPPLIER_ONLY, permission: "analytics_view" },
+        { href: "/supplier/performance", label: t("supplierCabinet.performance"), icon: <TrendingUp size={16} />, roles: SUPPLIER_ONLY, permission: "client_reviews" },
+      ],
+    },
+    {
+      key: "supplier_contract",
+      label: t("supplierCabinet.sections.contract"),
+      icon: <FileText size={18} />,
+      items: [
+        { href: "/supplier/contract-settings", label: t("supplierCabinet.contractSettings"), icon: <FileText size={16} />, roles: SUPPLIER_ONLY },
+        { href: "/supplier/support",           label: t("supplierCabinet.support"),          icon: <LifeBuoy size={16} />, roles: SUPPLIER_ONLY },
+      ],
+    },
+  ];
 }
 
 /**
@@ -727,7 +754,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   const t = useTranslations("Dashboard.sidebar");
   const tGroups = useTranslations("Dashboard.sidebar.groups");
   const navGroups = useMemo(() => buildNavGroups(tGroups), [tGroups]);
-  const supplierNavGroup = useMemo(() => buildSupplierNavGroup(tGroups), [tGroups]);
+  const supplierNavGroups = useMemo(() => buildSupplierNavGroups(tGroups), [tGroups]);
 
   // Resolve effective permissions for PROVIDER_TEAM users
   const isProviderTeamMember = PROVIDER_TEAM.has(userRole);
@@ -817,8 +844,8 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     : null;
 
   // Filter groups by module activation, then by role and permissions.
-  // supplier_admin bypasses NAV_GROUPS entirely — only the cabinet group.
-  const sourceGroups = isSupplierAdmin ? [supplierNavGroup] : navGroups;
+  // supplier_admin bypasses NAV_GROUPS entirely — only the cabinet sections.
+  const sourceGroups = isSupplierAdmin ? supplierNavGroups : navGroups;
   const visibleGroups = sourceGroups
     .filter((group) => isModuleActive(group.moduleKey, modulesSet))
     .map((group) => ({

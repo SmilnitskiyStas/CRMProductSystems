@@ -10,6 +10,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { ImpersonationBanner } from "@/features/provider/components/ImpersonationBanner";
 import { TemporaryPasswordBanner } from "@/features/auth/components/TemporaryPasswordBanner";
 import { DashboardIntlProvider } from "@/i18n/DashboardIntlProvider";
+import { usePageTitle } from "@/features/dashboard/hooks/usePageTitle";
 
 interface ImpersonationInfo {
   tenantName: string;
@@ -47,6 +48,7 @@ function Loading() {
 
 function DashboardChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  usePageTitle();
   const { error, isLoading } = useMe();
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);

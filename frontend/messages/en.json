@@ -479,7 +479,14 @@
           "support": "Support",
           "messages": "Messages",
           "analytics": "Analytics",
-          "performance": "My performance"
+          "performance": "My performance",
+          "sections": {
+            "orders": "Orders",
+            "catalog": "Catalog & stock",
+            "team": "Team",
+            "analytics": "Analytics",
+            "contract": "Contract"
+          }
         }
       }
     },

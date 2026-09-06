@@ -479,7 +479,14 @@
           "support": "Підтримка",
           "messages": "Повідомлення",
           "analytics": "Аналітика",
-          "performance": "Моя ефективність"
+          "performance": "Моя ефективність",
+          "sections": {
+            "orders": "Замовлення",
+            "catalog": "Товари та склад",
+            "team": "Команда",
+            "analytics": "Аналітика",
+            "contract": "Договір"
+          }
         }
       }
     },
