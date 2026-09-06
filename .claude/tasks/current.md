@@ -6,6 +6,21 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Налаштування: рольова сторінка + змістовна вкладка «Огляд» — TASK-700
+
+**Status:** done · main session · запушено `origin/main` `6e353ef4` · Log: `.claude/logs/tasks/TASK-700_2026-09-06_settings-overview-role-aware_main-session.md`
+
+Frontend-only. `/settings` «Загальні» (заглушка) → «Огляд»: контекст-хедер (роль +
+компанія), read-only «Модулі бізнесу», «Швидкі дії», блок «Команда та доступ» для
+`store_manager+`. Гейтинг вкладок дзеркалить бекенд: «Інтеграції» →
+`store_manager+` або capability `integrations.view` (новий `canViewIntegrations` у
+`lib/roles.ts`); «Модулі» → provider team **або** enterprise_admin (read-only);
+прихована вкладка на `?tab=` → fallback на `overview`. `AuthUserDto` (fe) +=
+`capabilities`. `/users` приймає `?tab=role-templates`. i18n `generalTab`→`overviewTab`.
+`tsc`/`lint`/`build` чисто, `roles.test.ts` 17/17, у браузері перевірено під
+enterprise_admin (4 вкладки) і storekeeper (2 вкладки, без блоку «Команда»).
+Комічено через тимчасовий worktree (основна тека на гілці Codex-сесії).
+
 ## Supplier ship-flow: вибір / розбиття / додавання партій — TASK-698
 
 **Status:** review · main session · не запушено · Log: `.claude/logs/tasks/698_2026-09-06_supplier-ship-batch-picker_backend-developer.md`
