@@ -422,9 +422,10 @@ interface NavLinkProps {
   pathname: string;
   collapsed: boolean;
   indented?: boolean;
+  nested?: boolean;
 }
 
-function NavLink({ item, pathname, collapsed, indented }: NavLinkProps) {
+function NavLink({ item, pathname, collapsed, indented, nested }: NavLinkProps) {
   const active = isActive(pathname, item.href, item.exact);
 
   return (
@@ -436,7 +437,7 @@ function NavLink({ item, pathname, collapsed, indented }: NavLinkProps) {
         alignItems: "center",
         justifyContent: collapsed ? "center" : "flex-start",
         gap: collapsed ? 0 : 8,
-        padding: collapsed ? "8px 0" : indented ? "7px 12px 7px 32px" : "8px 12px",
+        padding: collapsed ? "8px 0" : nested ? "7px 12px 7px 44px" : indented ? "7px 12px 7px 32px" : "8px 12px",
         borderRadius: 8,
         background: active ? "#1D3461" : "transparent",
         color: active ? "#93C5FD" : "#6B7280",
@@ -479,6 +480,75 @@ function NavLink({ item, pathname, collapsed, indented }: NavLinkProps) {
         </span>
       )}
     </Link>
+  );
+}
+
+interface CollapsibleNavSectionProps {
+  section: NavItemSection;
+  group: NavGroup;
+  pathname: string;
+}
+
+/** A second-level menu group, used by the mobile-app navigation. */
+function CollapsibleNavSection({ section, group, pathname }: CollapsibleNavSectionProps) {
+  const hasActive = section.items.some((item) => isActive(pathname, item.href, item.exact));
+  const [expanded, setExpanded] = useState(hasActive);
+
+  // An active page must never be hidden after a route change.
+  useEffect(() => {
+    if (hasActive) setExpanded(true);
+  }, [hasActive]);
+
+  // Unsectioned items keep the original single-level rendering used by the other groups.
+  if (!section.label) {
+    return (
+      <>
+        {section.items.map((item) => (
+          <NavLink key={item.href + group.key} item={item} pathname={pathname} collapsed={false} indented />
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          marginTop: 6,
+          padding: "7px 12px 5px 32px",
+          background: "transparent",
+          border: "none",
+          color: hasActive ? "#94A3B8" : "#4B5563",
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+        }}
+        onMouseEnter={(event) => {
+          (event.currentTarget as HTMLElement).style.color = "#94A3B8";
+        }}
+        onMouseLeave={(event) => {
+          (event.currentTarget as HTMLElement).style.color = hasActive ? "#94A3B8" : "#4B5563";
+        }}
+      >
+        {section.label}
+        {expanded
+          ? <ChevronDown size={13} style={{ opacity: 0.7, flexShrink: 0 }} />
+          : <ChevronRight size={13} style={{ opacity: 0.7, flexShrink: 0 }} />}
+      </button>
+      {expanded && section.items.map((item) => (
+        <NavLink key={item.href + group.key} item={item} pathname={pathname} collapsed={false} nested />
+      ))}
+    </div>
   );
 }
 
@@ -774,25 +844,12 @@ function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupS
       {expanded && (
         <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 1 }}>
           {groupItemsBySection(visibleItems).map((section) => (
-            <div key={section.label ?? "default"}>
-              {section.label && (
-                <div
-                  style={{
-                    margin: "9px 12px 3px 32px",
-                    color: "#4B5563",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {section.label}
-                </div>
-              )}
-              {section.items.map((item) => (
-                <NavLink key={item.href + group.key} item={item} pathname={pathname} collapsed={false} indented />
-              ))}
-            </div>
+            <CollapsibleNavSection
+              key={section.label ?? "default"}
+              section={section}
+              group={group}
+              pathname={pathname}
+            />
           ))}
         </div>
       )}
