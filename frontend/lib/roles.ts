@@ -167,6 +167,23 @@ export function canViewAnalyticsMargin(
 }
 
 /**
+ * True when the current user can open the Settings → "Інтеграції" tab — mirrors backend
+ * `AppPolicies.IntegrationsViewOrCapability` (ADR-020): store_manager and above always, or
+ * any role holding the `integrations.view` TenantRole capability. Unlike the margin/PII
+ * helpers above (which read `me.permissions`), capability keys live only in the JWT
+ * `capabilities` claim / `me.capabilities`, so that's what this checks. The backend still
+ * 403s a caller who lacks both — this just keeps the tab (with its ПРРО/API-key config)
+ * out of the DOM for lower roles instead of showing a tab that errors.
+ */
+export function canViewIntegrations(
+  role: string | undefined,
+  capabilities?: string[] | null,
+): boolean {
+  if (hasRole(role, AT_LEAST_STORE_MANAGER)) return true;
+  return capabilities?.includes("integrations.view") === true;
+}
+
+/**
  * Supplier cabinet only (v4.1, ADR-016). supplier_admin is deliberately NOT part
  * of any tenant-staff set (stock/pos/warehouse/…) — the backend returns 403 on
  * all tenant-staff endpoints for this role. Mirror that here: the only pages a

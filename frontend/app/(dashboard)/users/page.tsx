@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { UserPlus } from "lucide-react";
 import { UsersList } from "@/features/users/components/UsersList";
@@ -19,9 +20,13 @@ export default function UsersPage() {
   const t = useTranslations("Dashboard.users.page");
   const { data: me } = useMe();
   const { data: users } = useUsers();
+  const searchParams = useSearchParams();
 
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [tab, setTab] = useState<PageTab>("staff");
+  // Deep-link support (e.g. Settings → "Керувати ролями" links to /users?tab=role-templates).
+  const [tab, setTab] = useState<PageTab>(() =>
+    searchParams.get("tab") === "role-templates" ? "role-templates" : "staff",
+  );
 
   const isAdmin = me?.role === "enterprise_admin" || me?.role === "provider";
   // TenantRole templates (ADR-020) are AtLeastEnterpriseAdmin-only on the backend — mirror

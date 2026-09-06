@@ -4,6 +4,7 @@ import {
   AT_LEAST_ENTERPRISE_ADMIN,
   CAN_ACCESS_POS,
   canManageLegalEntities,
+  canViewIntegrations,
   hasRole,
 } from "./roles";
 
@@ -58,6 +59,31 @@ describe("canManageLegalEntities", () => {
     expect(
       canManageLegalEntities(AppRoles.StoreManager, { "some.other.permission": true }),
     ).toBe(false);
+  });
+});
+
+describe("canViewIntegrations (Settings → Інтеграції tab gate)", () => {
+  it("allows store_manager and above unconditionally", () => {
+    expect(canViewIntegrations(AppRoles.StoreManager, null)).toBe(true);
+    expect(canViewIntegrations(AppRoles.EnterpriseAdmin, undefined)).toBe(true);
+  });
+
+  it("denies a lower role with no capability", () => {
+    expect(canViewIntegrations(AppRoles.Cashier, null)).toBe(false);
+    expect(canViewIntegrations(AppRoles.Storekeeper, [])).toBe(false);
+  });
+
+  it("allows a lower role holding the integrations.view capability", () => {
+    expect(canViewIntegrations(AppRoles.Storekeeper, ["integrations.view"])).toBe(true);
+  });
+
+  it("is unaffected by unrelated capability keys", () => {
+    expect(canViewIntegrations(AppRoles.Cashier, ["analytics.view"])).toBe(false);
+  });
+
+  it("denies the not-yet-loaded state (undefined role, no capabilities)", () => {
+    expect(canViewIntegrations(undefined, null)).toBe(false);
+    expect(canViewIntegrations(undefined, undefined)).toBe(false);
   });
 });
 

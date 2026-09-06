@@ -9,6 +9,11 @@ export interface AuthUserDto {
   phone?: string | null;
   telegramChatId?: string | null;
   permissions?: Record<string, boolean> | null;
+  /** Effective TenantRole capabilities (ADR-020) — mirrors the JWT "capabilities" claim;
+   * null/undefined/[] = no TenantRoleId or an empty/archived template. UI-only signal (real
+   * enforcement is server-side via RoleOrCapabilityRequirement) — used to mirror
+   * role-OR-capability gates like `canViewIntegrations` in `@/lib/roles`. */
+  capabilities?: string[] | null;
   twoFactorEnabled: boolean;
   /** UI locale the user picked ("uk"/"en"); null/undefined = client falls back to the
    * `sg_locale` cookie or browser language (i18n rollout Block 1, TASK-375/376). */

@@ -4872,23 +4872,33 @@
     "settings": {
       "page": {
         "title": "Settings",
-        "subtitle": "Manage notifications and integrations with external services",
-        "tabGeneral": "General",
+        "subtitle": "An overview of your account, notifications, and integrations with external services",
+        "tabOverview": "Overview",
         "tabNotifications": "Notifications",
         "tabIntegrations": "Integrations",
         "tabModules": "Modules",
         "tabMarketplaceProfile": "Marketplace profile"
       },
-      "generalTab": {
-        "description": "System settings apply to the whole store or network. Personal profile settings are available from the user menu.",
-        "notificationsTitle": "Notifications",
-        "notificationsDesc": "Set up the channels and events you want to be notified about.",
-        "integrationsTitle": "Integrations",
-        "integrationsDesc": "Connect external services: Telegram Bot, Email (Resend), POS webhook, IoT.",
-        "openButton": "Open →",
-        "personalSettingsTitle": "Personal settings",
-        "personalSettingsDesc": "Name, password, and Telegram — in your profile settings",
-        "myProfileLink": "My profile →"
+      "overviewTab": {
+        "loading": "Loading…",
+        "roleLabel": "Your role",
+        "companyLabel": "Company",
+        "modulesTitle": "Your business modules",
+        "businessTypeLabel": "Business type",
+        "modulesHint": "the module set is determined by your plan and managed by the provider",
+        "modulesNone": "No modules enabled.",
+        "quickActionsTitle": "Quick actions",
+        "quickActionsHint": "Personal account settings — name, password, two-factor authentication, and interface language.",
+        "actionProfile": "Personal information",
+        "actionPassword": "Change password",
+        "action2fa": "Two-factor authentication",
+        "teamTitle": "Team & access",
+        "teamHint": "Manage users, roles, and access permissions.",
+        "teamActive": "Active users",
+        "teamNeedsLocation": "Without an assigned store",
+        "manageTeam": "Manage team",
+        "manageRoles": "Role templates",
+        "legalEntities": "Legal entities"
       },
       "notificationsTab": {
         "title": "Notification channels",

@@ -4872,23 +4872,33 @@
     "settings": {
       "page": {
         "title": "Налаштування",
-        "subtitle": "Управління сповіщеннями та інтеграціями з зовнішніми сервісами",
-        "tabGeneral": "Загальні",
+        "subtitle": "Огляд вашого акаунта, сповіщення та інтеграції з зовнішніми сервісами",
+        "tabOverview": "Огляд",
         "tabNotifications": "Сповіщення",
         "tabIntegrations": "Інтеграції",
         "tabModules": "Модулі",
         "tabMarketplaceProfile": "Профіль маркетплейсу"
       },
-      "generalTab": {
-        "description": "Системні налаштування застосовуються до всього магазину або мережі. Особисті налаштування профілю доступні через меню користувача.",
-        "notificationsTitle": "Сповіщення",
-        "notificationsDesc": "Налаштуйте канали та події, про які потрібно отримувати повідомлення.",
-        "integrationsTitle": "Інтеграції",
-        "integrationsDesc": "Підключіть зовнішні сервіси: Telegram Bot, Email (Resend), Webhook до каси, IoT.",
-        "openButton": "Відкрити →",
-        "personalSettingsTitle": "Особисті налаштування",
-        "personalSettingsDesc": "Ім'я, пароль та Telegram — у розділі налаштувань вашого профілю",
-        "myProfileLink": "Мій профіль →"
+      "overviewTab": {
+        "loading": "Завантаження…",
+        "roleLabel": "Ваша роль",
+        "companyLabel": "Компанія",
+        "modulesTitle": "Модулі вашого бізнесу",
+        "businessTypeLabel": "Тип бізнесу",
+        "modulesHint": "набір модулів визначається тарифом і керується провайдером",
+        "modulesNone": "Жодного модуля не підключено.",
+        "quickActionsTitle": "Швидкі дії",
+        "quickActionsHint": "Особисті налаштування акаунта — ім'я, пароль, двофакторна автентифікація та мова інтерфейсу.",
+        "actionProfile": "Особисті дані",
+        "actionPassword": "Змінити пароль",
+        "action2fa": "Двофакторна автентифікація",
+        "teamTitle": "Команда та доступ",
+        "teamHint": "Керування користувачами, ролями та правами доступу.",
+        "teamActive": "Активних користувачів",
+        "teamNeedsLocation": "Без призначеного магазину",
+        "manageTeam": "Керувати командою",
+        "manageRoles": "Шаблони ролей",
+        "legalEntities": "Юридичні особи"
       },
       "notificationsTab": {
         "title": "Канали сповіщень",
