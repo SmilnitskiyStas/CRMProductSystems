@@ -442,7 +442,13 @@
           "pages": "Pages",
           "navigation": "Navigation",
           "features": "Features",
-          "versions": "Versions"
+          "versions": "Versions",
+          "sections": {
+            "content": "Content & promotions",
+            "configuration": "App settings",
+            "loyalty": "Loyalty",
+            "analytics": "Analytics"
+          }
         },
         "workforce": {
           "label": "Staff",

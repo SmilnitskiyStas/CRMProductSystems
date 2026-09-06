@@ -442,7 +442,13 @@
           "pages": "Сторінки",
           "navigation": "Навігація",
           "features": "Функції",
-          "versions": "Версії"
+          "versions": "Версії",
+          "sections": {
+            "content": "Контент і промо",
+            "configuration": "Налаштування застосунку",
+            "loyalty": "Лояльність",
+            "analytics": "Аналітика"
+          }
         },
         "workforce": {
           "label": "Персонал",

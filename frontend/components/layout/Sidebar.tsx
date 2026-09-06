@@ -89,6 +89,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  /** Optional second-level heading inside a navigation group. */
+  section?: string;
   roles?: Set<AppRole>;
   /** Permission key(s) required for PROVIDER_TEAM users — user needs at least one (OR logic) */
   permission?: string | string[];
@@ -239,17 +241,17 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Smartphone size={18} />,
     moduleKey: "mobile_app",
     items: [
-      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true },
-      { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
-      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
-      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
+      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
+      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
+      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
+      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
+      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
+      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
+      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
+      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
+      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true, section: t("consumerApp.sections.loyalty") },
+      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics", section: t("consumerApp.sections.analytics") },
     ],
   },
   {
@@ -388,6 +390,29 @@ function isModuleActive(moduleKey: ModuleKey | undefined, modulesSet: Set<string
 function isActive(pathname: string, href: string, exact?: boolean): boolean {
   if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+interface NavItemSection {
+  label?: string;
+  items: NavItem[];
+}
+
+/**
+ * Keeps the sidebar's original item order while adding optional second-level
+ * headings. Most groups remain a single unlabelled section; only groups that
+ * opt in through `NavItem.section` gain visible subgroups.
+ */
+function groupItemsBySection(items: NavItem[]): NavItemSection[] {
+  // `Map` is also a Lucide icon imported above, so reference the global explicitly.
+  const sections = new globalThis.Map<string | undefined, NavItem[]>();
+
+  for (const item of items) {
+    const sectionItems = sections.get(item.section);
+    if (sectionItems) sectionItems.push(item);
+    else sections.set(item.section, [item]);
+  }
+
+  return Array.from(sections, ([label, sectionItems]) => ({ label, items: sectionItems }));
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -565,56 +590,74 @@ function CollapsedGroupTrigger({ group, visibleItems, pathname, hasActive }: Col
             >
               {group.label}
             </div>
-            {visibleItems.map((item) => {
-              const active = isActive(pathname, item.href, item.exact);
-              return (
-                <Link
-                  key={item.href + group.key}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 9,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    background: active ? "#1D3461" : "transparent",
-                    color: active ? "#93C5FD" : "#9CA3AF",
-                    fontSize: 13,
-                    fontWeight: active ? 600 : 400,
-                    textDecoration: "none",
-                    transition: "background 0.1s, color 0.1s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = "#1F2937";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
-                  }}
-                >
-                  <span style={{ opacity: active ? 1 : 0.8, flexShrink: 0, display: "flex" }}>{item.icon}</span>
-                  {item.label}
-                  {!!item.badge && item.badge > 0 && (
-                    <span
+            {groupItemsBySection(visibleItems).map((section) => (
+              <div key={section.label ?? "default"}>
+                {section.label && (
+                  <div
+                    style={{
+                      padding: "8px 10px 3px",
+                      color: "#64748B",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {section.label}
+                  </div>
+                )}
+                {section.items.map((item) => {
+                  const active = isActive(pathname, item.href, item.exact);
+                  return (
+                    <Link
+                      key={item.href + group.key}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
                       style={{
-                        marginLeft: "auto",
-                        background: "#EF4444",
-                        color: "#fff",
-                        borderRadius: 999,
-                        padding: "1px 6px",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        minWidth: 16,
-                        textAlign: "center",
-                        lineHeight: 1.4,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 9,
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        background: active ? "#1D3461" : "transparent",
+                        color: active ? "#93C5FD" : "#9CA3AF",
+                        fontSize: 13,
+                        fontWeight: active ? 600 : 400,
+                        textDecoration: "none",
+                        transition: "background 0.1s, color 0.1s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!active) (e.currentTarget as HTMLElement).style.background = "#1F2937";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
                       }}
                     >
-                      {item.badge > 9 ? "9+" : item.badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+                      <span style={{ opacity: active ? 1 : 0.8, flexShrink: 0, display: "flex" }}>{item.icon}</span>
+                      {item.label}
+                      {!!item.badge && item.badge > 0 && (
+                        <span
+                          style={{
+                            marginLeft: "auto",
+                            background: "#EF4444",
+                            color: "#fff",
+                            borderRadius: 999,
+                            padding: "1px 6px",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            minWidth: 16,
+                            textAlign: "center",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {item.badge > 9 ? "9+" : item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
           </div>,
           document.body,
         )
@@ -730,8 +773,26 @@ function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupS
       {/* Children */}
       {expanded && (
         <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 1 }}>
-          {visibleItems.map((item) => (
-            <NavLink key={item.href + group.key} item={item} pathname={pathname} collapsed={false} indented />
+          {groupItemsBySection(visibleItems).map((section) => (
+            <div key={section.label ?? "default"}>
+              {section.label && (
+                <div
+                  style={{
+                    margin: "9px 12px 3px 32px",
+                    color: "#4B5563",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.05em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {section.label}
+                </div>
+              )}
+              {section.items.map((item) => (
+                <NavLink key={item.href + group.key} item={item} pathname={pathname} collapsed={false} indented />
+              ))}
+            </div>
           ))}
         </div>
       )}
