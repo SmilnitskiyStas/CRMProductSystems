@@ -48,6 +48,12 @@ public sealed class SupplierStockReceiptRepository : ISupplierStockReceiptReposi
 
     public void Update(SupplierStockReceipt receipt) => _db.SupplierStockReceipts.Update(receipt);
 
+    // Explicit Add — DbSet.Add unconditionally marks the entity Added, unlike adding to a
+    // tracked navigation (where DetectChanges infers Added/Modified from the key value and,
+    // because SupplierStockReceiptItem.Id already carries a Guid.NewGuid() default while the
+    // column is store-generated, wrongly picks Modified → UPDATE 0 rows → 500). TASK-697.
+    public void AddItem(SupplierStockReceiptItem item) => _db.SupplierStockReceiptItems.Add(item);
+
     public void RemoveItem(SupplierStockReceiptItem item) => _db.SupplierStockReceiptItems.Remove(item);
 
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);

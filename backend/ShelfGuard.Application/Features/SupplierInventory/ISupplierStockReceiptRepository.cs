@@ -20,6 +20,7 @@ public interface ISupplierStockReceiptRepository
     Task AddMovementAsync(SupplierStockMovement movement, CancellationToken ct = default);
 
     void Update(SupplierStockReceipt receipt);
+    void AddItem(SupplierStockReceiptItem item);
     void RemoveItem(SupplierStockReceiptItem item);
     Task SaveChangesAsync(CancellationToken ct = default);
 }

@@ -101,7 +101,12 @@ public sealed class SupplierStockReceiptService : ISupplierStockReceiptService
         if (!await _stockRepo.SupplierItemExistsAsync(tenantId, request.SupplierItemId, ct))
             return (null, "Товар не знайдено в каталозі постачальника.");
 
-        receipt.Items.Add(new SupplierStockReceiptItem
+        // Explicit AddItem (DbSet.Add), NOT receipt.Items.Add + _repo.Update(receipt): the item's
+        // Id already carries a client-side Guid.NewGuid() default while the column is
+        // store-generated, so a graph walk (Update / DetectChanges on the nav) infers Modified
+        // from the non-empty key → "UPDATE ... WHERE Id=<new guid>" affects 0 rows →
+        // DbUpdateConcurrencyException → 500 on every add-line (found in prod, TASK-697).
+        _repo.AddItem(new SupplierStockReceiptItem
         {
             ReceiptId = receipt.Id,
             TenantId = tenantId,
@@ -113,7 +118,6 @@ public sealed class SupplierStockReceiptService : ISupplierStockReceiptService
             Notes = request.Notes,
         });
 
-        _repo.Update(receipt);
         await _repo.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(tenantId, receiptId, ct);

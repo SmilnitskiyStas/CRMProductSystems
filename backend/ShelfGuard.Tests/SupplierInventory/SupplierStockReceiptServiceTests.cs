@@ -38,6 +38,11 @@ public sealed class SupplierStockReceiptServiceTests
         _repo.GetByIdAsync(_tenantId, _receipt.Id, Arg.Any<CancellationToken>()).Returns(_receipt);
         _stockRepo.WarehouseExistsAsync(_tenantId, _warehouseId, Arg.Any<CancellationToken>()).Returns(true);
         _stockRepo.SupplierItemExistsAsync(_tenantId, _supplierItemId, Arg.Any<CancellationToken>()).Returns(true);
+        // AddLineAsync now calls _repo.AddItem (explicit DbSet.Add) instead of receipt.Items.Add +
+        // _repo.Update — see TASK-697. Simulate the real repo+reload: a persisted line shows up in
+        // the receipt's Items on the next GetByIdAsync.
+        _repo.When(r => r.AddItem(Arg.Any<SupplierStockReceiptItem>()))
+             .Do(ci => _receipt.Items.Add(ci.Arg<SupplierStockReceiptItem>()));
     }
 
     private Task<(SupplierStockReceiptDto? Receipt, string? Error)> AddLine(
