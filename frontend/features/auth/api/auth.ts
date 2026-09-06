@@ -13,12 +13,31 @@ import {
   type TwoFactorVerifyRequest,
 } from "../types";
 
+/**
+ * The backend always ships a `permissions` object on the auth user, never null —
+ * `AuthService.BuildEffectivePermissionsAsync` returns an empty dict when the user has
+ * no per-user overrides and no active grants. An empty object means exactly "no
+ * overrides" — identical to null — but `{}` is truthy, so every `!me.permissions` /
+ * `me.permissions && …` owner check across the app (Sidebar, the `/supplier/*` page
+ * guards, `resolvePermissions`) would otherwise read it as "restricted to nothing".
+ * That mismatch hid the whole permission-gated supplier cabinet (items, team,
+ * schedules, …) from owner `supplier_admin` users, who have no role-default fallback.
+ * Normalise `{}` → null once, here, at every mint site.
+ */
+function normalizeAuthUser<T extends AuthUserDto>(user: T): T {
+  if (user.permissions && Object.keys(user.permissions).length === 0) {
+    user.permissions = null;
+  }
+  return user;
+}
+
 export const authApi = {
   login: async (payload: LoginRequest): Promise<LoginResponse> => {
     const res = await api.post<LoginResponse>("/api/auth/login", payload);
     // 2FA challenge — no tokens issued yet, the user must pass the code step first.
     if (isTwoFactorChallenge(res)) return res;
     setToken(res.accessToken);
+    normalizeAuthUser(res.user);
     setStoredUser(res.user);
     return res;
   },
@@ -27,6 +46,7 @@ export const authApi = {
   verifyTwoFactor: async (payload: TwoFactorVerifyRequest): Promise<LoginSuccessResponse> => {
     const res = await api.post<LoginSuccessResponse>("/api/auth/2fa/verify", payload);
     setToken(res.accessToken);
+    normalizeAuthUser(res.user);
     setStoredUser(res.user);
     return res;
   },
@@ -34,6 +54,7 @@ export const authApi = {
   refresh: async (): Promise<LoginSuccessResponse> => {
     const res = await api.post<LoginSuccessResponse>("/api/auth/refresh");
     setToken(res.accessToken);
+    normalizeAuthUser(res.user);
     setStoredUser(res.user);
     return res;
   },
@@ -47,7 +68,8 @@ export const authApi = {
     }
   },
 
-  getMe: (): Promise<AuthUserDto> => api.get<AuthUserDto>("/api/auth/me"),
+  getMe: async (): Promise<AuthUserDto> =>
+    normalizeAuthUser(await api.get<AuthUserDto>("/api/auth/me")),
 
   // ---- Forgot password (public) ----
 
