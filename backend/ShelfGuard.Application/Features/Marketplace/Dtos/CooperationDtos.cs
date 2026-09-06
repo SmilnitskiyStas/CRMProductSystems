@@ -277,14 +277,17 @@ public record ShipOrderResultDto(
     MarketplaceOrderDto Order,
     IReadOnlyList<string> Warnings);
 
-/// <summary>One proposed batch pick in a FEFO ship suggestion.</summary>
+/// <summary>
+/// One usable batch offered for a ship-suggestion line — either FEFO-picked (<see cref="Qty"/>
+/// &gt; 0) or merely offered so the supplier can split the line into it (<see cref="Qty"/> = 0).
+/// </summary>
 public record ShipSuggestionAllocationDto(
     Guid SupplierStockId,
     DateOnly ExpiryDate,
     string? BatchNumber,
     /// <summary>Quantity currently on that batch — the editable cap for this pick.</summary>
     decimal Available,
-    /// <summary>Proposed quantity to take from this batch.</summary>
+    /// <summary>Proposed quantity to take from this batch — 0 for a batch FEFO did not need.</summary>
     decimal Qty);
 
 public record ShipSuggestionLineDto(
@@ -293,9 +296,10 @@ public record ShipSuggestionLineDto(
     string ItemName,
     string? Unit,
     decimal Qty,
-    /// <summary>Sum of the proposed allocations — less than <see cref="Qty"/> when stock is short.</summary>
+    /// <summary>Sum of the FEFO-proposed allocation quantities — less than <see cref="Qty"/> when stock is short.</summary>
     decimal Covered,
     decimal Shortfall,
+    /// <summary>Every usable batch for this item in the warehouse — FEFO picks carry a non-zero Qty, the rest Qty = 0.</summary>
     IReadOnlyList<ShipSuggestionAllocationDto> Allocations);
 
 /// <summary>

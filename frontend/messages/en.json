@@ -4140,6 +4140,8 @@
         "shipModalAllocBatch": "Batch",
         "shipModalAllocAvailable": "Available",
         "shipModalAllocQty": "Quantity",
+        "shipModalAddBatch": "+ add batch ({count})",
+        "shipModalHideBatches": "collapse",
         "shipModalShortfallChip": "shipping {covered} of {qty} — without batch data",
         "shipModalExpectedDateLabel": "Expected delivery date",
         "shipModalEtaHint": "Enter a day count or a date — at least one.",

@@ -584,16 +584,23 @@ public sealed class MarketplaceOrderService : IMarketplaceOrderService
                 var batches = await _supplierStock.GetFefoOrderedAsync(
                     supplierTenantId, line.SupplierItemId.Value, warehouse!.Id, ct);
 
+                // TASK-698: offer EVERY usable batch for this item in the warehouse, not just the
+                // FEFO-picked ones. The batches FEFO consumes carry a non-zero take; the rest are
+                // listed with take = 0 so the supplier UI can split the line across batches or
+                // swap in a just-received one with a different expiry. covered/remaining below
+                // stay driven purely by the FEFO pre-fill, so the shortfall warning is unchanged.
                 foreach (var batch in batches)
                 {
-                    if (remaining <= 0) break;
-
                     var available = batch.Quantity - claimed.GetValueOrDefault(batch.Id);
                     if (available <= 0) continue;
 
-                    var take = Math.Min(available, remaining);
-                    claimed[batch.Id] = claimed.GetValueOrDefault(batch.Id) + take;
-                    remaining -= take;
+                    var take = 0m;
+                    if (remaining > 0)
+                    {
+                        take = Math.Min(available, remaining);
+                        claimed[batch.Id] = claimed.GetValueOrDefault(batch.Id) + take;
+                        remaining -= take;
+                    }
 
                     allocations.Add(new ShipSuggestionAllocationDto(
                         batch.Id, batch.ExpiryDate, batch.BatchNumber, batch.Quantity, take));

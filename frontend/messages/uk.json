@@ -4140,6 +4140,8 @@
         "shipModalAllocBatch": "Партія",
         "shipModalAllocAvailable": "Доступно",
         "shipModalAllocQty": "Кількість",
+        "shipModalAddBatch": "+ додати партію ({count})",
+        "shipModalHideBatches": "згорнути",
         "shipModalShortfallChip": "буде відвантажено {covered} з {qty} — без даних партії",
         "shipModalExpectedDateLabel": "Очікувана дата доставки",
         "shipModalEtaHint": "Вкажіть кількість днів або дату — принаймні одне.",

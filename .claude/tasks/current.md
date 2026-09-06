@@ -6,6 +6,21 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Supplier ship-flow: вибір / розбиття / додавання партій — TASK-698
+
+**Status:** review · main session · не запушено · Log: `.claude/logs/tasks/698_2026-09-06_supplier-ship-batch-picker_backend-developer.md`
+
+Розширення Phase 3 ship-flow (без міграції, без RLS). `GetShipSuggestionAsync` більше не
+`break`-ає на `remaining <= 0` — кожен рядок замовлення тепер віддає **всю палітру**
+придатних партій товару на складі: FEFO-обрані з `qty > 0`, решта з `qty: 0`. `covered` /
+`shortfall` / warnings рахуються тільки з FEFO-префілу (без змін). DTO-форма без змін; XML-doc
+оновлено. Бекенд-логіка `ApplyExplicitAllocationsAsync` вже приймала будь-яку партію — нічого
+не міняв. Фронт `ShipOrderModal`/`BatchShipForm`: рядки партій діляться на «активні» (префіл
+`qty>0` або користувач ввів к-сть) і «додаткові» (`qty 0`) — додаткові за per-line кнопкою
+«+ додати партію (N)» / «згорнути». i18n `ordersTab.shipModalAddBatch`/`shipModalHideBatches`
+(uk+en, parity 5029). `dotnet build -c Release` чисто; `dotnet test` filter 171/171
+(+2 нових тести ship-suggestion). `tsc` / `next lint` (touched) чисто; `next build` — див. лог.
+
 ## Marketplace: «збіги штрихкодів» модалка на кожне замовлення — TASK-697
 
 **Status:** review · backend-developer агент + main session (фронт) · не запушено · Log: `.claude/logs/tasks/TASK-697_2026-09-06_marketplace-barcode-conflict-repeat-order_backend-developer.md`

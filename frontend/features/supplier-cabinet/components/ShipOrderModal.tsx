@@ -73,6 +73,17 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
+const addBatchBtnStyle: React.CSSProperties = {
+  marginTop: 8,
+  background: "none",
+  border: "none",
+  color: "#60A5FA",
+  fontSize: 11,
+  fontFamily: "inherit",
+  padding: 0,
+  cursor: "pointer",
+};
+
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
   appearance: "auto",
@@ -244,6 +255,8 @@ function BatchShipForm({
 
   // Editable per-allocation quantities, keyed by orderItemId|supplierStockId.
   const [qty, setQty] = useState<Record<string, string>>({});
+  // Per-line reveal of the batches FEFO did not pre-fill (TASK-698).
+  const [expandedLines, setExpandedLines] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!suggestion) return;
     const next: Record<string, string> = {};
@@ -253,7 +266,15 @@ function BatchShipForm({
       }
     }
     setQty(next);
+    setExpandedLines({});
   }, [suggestion]);
+
+  // A batch row is "active" (always visible) when FEFO pre-filled it or the user typed a
+  // positive quantity into it; the rest ("extra") hide behind the per-line toggle.
+  function isActiveAlloc(orderItemId: string, a: { supplierStockId: string; qty: number }): boolean {
+    const typed = parseFloat(qty[allocKey(orderItemId, a.supplierStockId)] ?? "");
+    return (Number.isFinite(typed) && typed > 0) || a.qty > 0;
+  }
 
   const [days, setDays] = useState("");
   const [date, setDate] = useState("");
@@ -354,6 +375,11 @@ function BatchShipForm({
         suggestion?.lines.map((line) => {
           const covered = lineCovered(line);
           const shortfall = Math.max(0, line.qty - covered);
+          const isExpanded = !!expandedLines[line.orderItemId];
+          const extraAllocs = line.allocations.filter((a) => !isActiveAlloc(line.orderItemId, a));
+          const visibleAllocs = isExpanded
+            ? line.allocations
+            : line.allocations.filter((a) => isActiveAlloc(line.orderItemId, a));
           return (
             <div
               key={line.orderItemId}
@@ -385,31 +411,48 @@ function BatchShipForm({
               {line.allocations.length === 0 ? (
                 <div style={{ color: "#6B7280", fontSize: 11 }}>{t("shipModalNoBatches")}</div>
               ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 0.7fr 0.8fr",
-                    gap: 6,
-                    fontSize: 11,
-                  }}
-                >
-                  <span style={{ color: "#6B7280" }}>{t("shipModalAllocExpiry")}</span>
-                  <span style={{ color: "#6B7280" }}>{t("shipModalAllocBatch")}</span>
-                  <span style={{ color: "#6B7280", textAlign: "right" }}>{t("shipModalAllocAvailable")}</span>
-                  <span style={{ color: "#6B7280" }}>{t("shipModalAllocQty")}</span>
-                  {line.allocations.map((a) => (
-                    <AllocationRow
-                      key={a.supplierStockId}
-                      expiry={fmtDate(a.expiryDate, intlLocale)}
-                      batchNumber={a.batchNumber}
-                      available={a.available}
-                      value={qty[allocKey(line.orderItemId, a.supplierStockId)] ?? ""}
-                      onChange={(v) =>
-                        setQty((prev) => ({ ...prev, [allocKey(line.orderItemId, a.supplierStockId)]: v }))
+                <>
+                  {visibleAllocs.length > 0 && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 0.7fr 0.8fr",
+                        gap: 6,
+                        fontSize: 11,
+                      }}
+                    >
+                      <span style={{ color: "#6B7280" }}>{t("shipModalAllocExpiry")}</span>
+                      <span style={{ color: "#6B7280" }}>{t("shipModalAllocBatch")}</span>
+                      <span style={{ color: "#6B7280", textAlign: "right" }}>{t("shipModalAllocAvailable")}</span>
+                      <span style={{ color: "#6B7280" }}>{t("shipModalAllocQty")}</span>
+                      {visibleAllocs.map((a) => (
+                        <AllocationRow
+                          key={a.supplierStockId}
+                          expiry={fmtDate(a.expiryDate, intlLocale)}
+                          batchNumber={a.batchNumber}
+                          available={a.available}
+                          value={qty[allocKey(line.orderItemId, a.supplierStockId)] ?? ""}
+                          onChange={(v) =>
+                            setQty((prev) => ({ ...prev, [allocKey(line.orderItemId, a.supplierStockId)]: v }))
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {extraAllocs.length > 0 && (
+                    <button
+                      type="button"
+                      style={addBatchBtnStyle}
+                      onClick={() =>
+                        setExpandedLines((prev) => ({ ...prev, [line.orderItemId]: !prev[line.orderItemId] }))
                       }
-                    />
-                  ))}
-                </div>
+                    >
+                      {isExpanded
+                        ? t("shipModalHideBatches")
+                        : t("shipModalAddBatch", { count: extraAllocs.length })}
+                    </button>
+                  )}
+                </>
               )}
 
               {shortfall > 0 && (

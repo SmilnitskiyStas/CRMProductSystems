@@ -86,9 +86,13 @@ public interface IMarketplaceOrderService
         CancellationToken ct = default);
 
     /// <summary>
-    /// Editable FEFO allocation proposal for shipping an order out of one warehouse (Phase 3).
-    /// Read-only — consumes nothing. <paramref name="warehouseId"/> null → the supplier's first
-    /// active warehouse.
+    /// Editable ship allocation proposal for one warehouse (Phase 3; extended by TASK-698).
+    /// Read-only — consumes nothing. Every line now carries the FULL palette of usable batches
+    /// for its item in that warehouse: the FEFO-picked batches have a non-zero <c>Qty</c>, every
+    /// other in-stock batch is listed with <c>Qty = 0</c> so the supplier can split the line
+    /// across batches or swap in a just-received one. <c>Covered</c>/<c>Shortfall</c> and the
+    /// shortfall warnings still reflect the FEFO pre-fill only.
+    /// <paramref name="warehouseId"/> null → the supplier's first active warehouse.
     /// </summary>
     Task<(ShipSuggestionDto? Suggestion, string? Error)> GetShipSuggestionAsync(
         Guid supplierTenantId, Guid orderId, Guid? warehouseId, CancellationToken ct = default);

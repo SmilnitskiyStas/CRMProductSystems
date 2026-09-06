@@ -1775,6 +1775,75 @@ public sealed class MarketplaceOrderServiceTests
     }
 
     [Fact]
+    public async Task GetShipSuggestion_OffersUnpickedBatchesWithZeroQty()
+    {
+        // TASK-698: the FEFO need is fully covered by the first batch, but the second batch is
+        // still listed (qty 0) so the supplier can split the line into it or swap batches.
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        var line = OrderLine(order, "Молоко 2.5%", 60m, supplierItemId);
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var near = Batch(supplierItemId, warehouseId, new DateOnly(2026, 12, 1), 100m, "B-1");
+        var far  = Batch(supplierItemId, warehouseId, new DateOnly(2027, 2, 1), 40m, "B-2");
+        StubFefo(supplierItemId, warehouseId, near, far);
+        _locations.GetByIdAsync(warehouseId, Arg.Any<CancellationToken>())
+            .Returns(new Location { Id = warehouseId, TenantId = _supplierTenantId, Name = "Основний", Type = "warehouse" });
+
+        var (suggestion, error) = await _sut.GetShipSuggestionAsync(_supplierTenantId, order.Id, warehouseId);
+
+        Assert.Null(error);
+        var proposed = Assert.Single(suggestion!.Lines);
+        Assert.Equal(60m, proposed.Covered);      // unchanged — FEFO pre-fill only
+        Assert.Equal(0m, proposed.Shortfall);
+        Assert.Empty(suggestion.Warnings);
+
+        Assert.Equal(2, proposed.Allocations.Count);
+        Assert.Equal(near.Id, proposed.Allocations[0].SupplierStockId);
+        Assert.Equal(60m, proposed.Allocations[0].Qty);
+        Assert.Equal(far.Id, proposed.Allocations[1].SupplierStockId);
+        Assert.Equal(0m, proposed.Allocations[1].Qty);      // offered, not FEFO-picked
+        Assert.Equal(40m, proposed.Allocations[1].Available);
+    }
+
+    [Fact]
+    public async Task GetShipSuggestion_ListsEveryBatchForTheItem_FullyPartiallyAndNotPicked()
+    {
+        // TASK-698: three batches — first fully consumed, second partially, third offered at 0.
+        EnableSupplierInventory();
+
+        var supplierItemId = Guid.NewGuid();
+        var warehouseId = Guid.NewGuid();
+        var order = Order(MarketplaceOrderStatus.Confirmed);
+        var line = OrderLine(order, "Молоко 2.5%", 15m, supplierItemId);
+        order.Items.Add(line);
+        _orders.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var b1 = Batch(supplierItemId, warehouseId, new DateOnly(2026, 12, 1), 10m, "B-1");
+        var b2 = Batch(supplierItemId, warehouseId, new DateOnly(2027, 1, 1), 10m, "B-2");
+        var b3 = Batch(supplierItemId, warehouseId, new DateOnly(2027, 2, 1), 10m, "B-3");
+        StubFefo(supplierItemId, warehouseId, b1, b2, b3);
+        _locations.GetByIdAsync(warehouseId, Arg.Any<CancellationToken>())
+            .Returns(new Location { Id = warehouseId, TenantId = _supplierTenantId, Name = "Основний", Type = "warehouse" });
+
+        var (suggestion, error) = await _sut.GetShipSuggestionAsync(_supplierTenantId, order.Id, warehouseId);
+
+        Assert.Null(error);
+        var proposed = Assert.Single(suggestion!.Lines);
+        Assert.Equal(3, proposed.Allocations.Count);
+        Assert.Equal(10m, proposed.Allocations[0].Qty);
+        Assert.Equal(5m, proposed.Allocations[1].Qty);
+        Assert.Equal(0m, proposed.Allocations[2].Qty);
+        Assert.Equal(15m, proposed.Covered);
+        Assert.Equal(0m, proposed.Shortfall);
+        Assert.Empty(suggestion.Warnings);
+    }
+
+    [Fact]
     public async Task GetShipSuggestion_ForeignWarehouse_ReadsAsNotFound()
     {
         EnableSupplierInventory();

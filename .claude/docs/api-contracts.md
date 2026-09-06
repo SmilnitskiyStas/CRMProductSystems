@@ -606,6 +606,11 @@ ShipSuggestionLineDto {
 proposal; omit `warehouseId` to use the supplier's first active warehouse. Post the edited result
 back as `lines`.
 
+TASK-698: each line's `allocations` now lists **every** in-stock batch for that item in the
+warehouse — the FEFO-picked ones carry `qty > 0`, every other usable batch is included with
+`qty: 0` so the supplier can split a line across batches or swap in a just-received one. `covered`
+/ `shortfall` and `warnings` still reflect the FEFO pre-fill only. DTO shape unchanged.
+
 `ship` rules: order must be `confirmed`; at least one of `estimatedDeliveryDays`(>0) /
 `expectedDeliveryDate` (each derives the other). A line with explicit `allocations` uses them
 verbatim; a line without them is auto-FEFO'd from `sourceWarehouseId`. **A shortfall is not an
