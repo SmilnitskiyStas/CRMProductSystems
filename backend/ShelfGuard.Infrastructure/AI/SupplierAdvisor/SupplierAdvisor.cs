@@ -4,6 +4,7 @@ using Anthropic.Models.Messages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Features.Marketplace;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.AI.SupplierAdvisor;
@@ -24,12 +25,14 @@ public sealed class SupplierAdvisor : ISupplierAdvisor
     private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
 
     private readonly AppDbContext _db;
+    private readonly IAiPromptResolver _prompt;
     private readonly string? _envApiKey;
     private readonly string _defaultModel;
 
-    public SupplierAdvisor(AppDbContext db, IConfiguration config)
+    public SupplierAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
     {
         _db = db;
+        _prompt = prompt;
         _envApiKey = config["Claude:ApiKey"];
         _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
@@ -68,7 +71,7 @@ public sealed class SupplierAdvisor : ISupplierAdvisor
         var (apiKey, model) = await ResolveAsync(ct);
         if (apiKey is null)
             throw new InvalidOperationException(
-                "Claude API key is not configured. Add it in Налаштування → Інтеграції → Claude AI.");
+                "AI-агент не налаштований. Зверніться до вашого провайдера.");
 
         var candidateList = candidates.ToList();
         var prompt = BuildUserPrompt(request, candidateList);
@@ -79,7 +82,7 @@ public sealed class SupplierAdvisor : ISupplierAdvisor
         {
             Model      = model,
             MaxTokens  = 4096,
-            System     = BuildSystemPrompt(),
+            System     = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
             Messages   = [new() { Role = Role.User, Content = prompt }],
             OutputConfig = new OutputConfig
             {

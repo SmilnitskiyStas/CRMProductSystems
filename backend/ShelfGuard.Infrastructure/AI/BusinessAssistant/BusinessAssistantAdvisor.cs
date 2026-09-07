@@ -4,6 +4,7 @@ using Anthropic.Models.Messages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Features.AiAssistant;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.AI.BusinessAssistant;
@@ -28,12 +29,14 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
     private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
 
     private readonly AppDbContext _db;
+    private readonly IAiPromptResolver _prompt;
     private readonly string? _envApiKey;
     private readonly string _defaultModel;
 
-    public BusinessAssistantAdvisor(AppDbContext db, IConfiguration config)
+    public BusinessAssistantAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
     {
         _db = db;
+        _prompt = prompt;
         _envApiKey = config["Claude:ApiKey"];
         _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
@@ -72,7 +75,7 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
         var (apiKey, model) = await ResolveAsync(ct);
         if (apiKey is null)
             throw new InvalidOperationException(
-                "Claude API key is not configured. Add it in Налаштування → Інтеграції → Claude AI.");
+                "AI-агент не налаштований. Зверніться до вашого провайдера.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -161,7 +164,7 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
         {
             Model    = model,
             MaxTokens = 2048,
-            System   = BuildSystemPrompt(),
+            System   = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
             Messages = [new() { Role = Role.User, Content = userPrompt }],
         };
 

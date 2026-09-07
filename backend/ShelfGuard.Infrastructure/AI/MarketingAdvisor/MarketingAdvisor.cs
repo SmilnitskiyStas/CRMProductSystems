@@ -2,6 +2,7 @@ using Anthropic;
 using Anthropic.Models.Messages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Interfaces;
 using ShelfGuard.Infrastructure.Data;
 
@@ -26,12 +27,14 @@ public sealed class MarketingAdvisor : IMarketingAdvisor
     private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
 
     private readonly AppDbContext _db;
+    private readonly IAiPromptResolver _prompt;
     private readonly string? _envApiKey;
     private readonly string _defaultModel;
 
-    public MarketingAdvisor(AppDbContext db, IConfiguration config)
+    public MarketingAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
     {
         _db = db;
+        _prompt = prompt;
         _envApiKey = config["Claude:ApiKey"];
         _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
@@ -67,7 +70,7 @@ public sealed class MarketingAdvisor : IMarketingAdvisor
         var (apiKey, model) = await ResolveAsync(ct);
         if (apiKey is null)
             throw new InvalidOperationException(
-                "Claude API key is not configured. Add it in Налаштування → Інтеграції → Claude AI.");
+                "AI-агент не налаштований. Зверніться до вашого провайдера.");
 
         var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
 
@@ -75,7 +78,7 @@ public sealed class MarketingAdvisor : IMarketingAdvisor
         {
             Model = model,
             MaxTokens = 1024,
-            System = BuildSystemPrompt(),
+            System = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
             Messages = [new() { Role = Role.User, Content = BuildUserPrompt(context) }],
         };
 
