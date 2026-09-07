@@ -15,7 +15,7 @@ namespace ShelfGuard.Infrastructure.AI.SupplierAdvisor;
 /// AI integrations are isolated in Infrastructure/AI — never coupled to business logic.
 ///
 /// Key resolution mirrors ClaudeOrderAdvisor:
-///   tenant integration_configs row (service='claude', managed via Налаштування → Інтеграції)
+///   tenant integration_configs row (service='claude', provider-managed from the client card)
 ///   → fallback to Claude:ApiKey env var.
 /// </summary>
 public sealed class SupplierAdvisor : ISupplierAdvisor

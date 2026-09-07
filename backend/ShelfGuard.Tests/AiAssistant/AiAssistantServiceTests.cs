@@ -44,7 +44,7 @@ public sealed class AiAssistantServiceTests
         var (response, error) = await _sut.AskAsync(_tenantId, new BusinessAssistantRequest("Що з залишками?"));
 
         Assert.Null(response);
-        Assert.Contains("Claude API", error);
+        Assert.Contains("провайдер", error);
         await _advisor.DidNotReceive().AdviseAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 

@@ -24,7 +24,7 @@ public sealed class AiAssistantService : IAiAssistantService
             return (null, "Message cannot be empty.");
 
         if (!await _advisor.IsConfiguredAsync(ct))
-            return (null, "Claude API key не налаштовано. Додайте його: Налаштування → Інтеграції → Claude AI.");
+            return (null, "AI-агент не налаштований. Зверніться до вашого провайдера, щоб підключити його.");
 
         BusinessAssistantResult result;
         try

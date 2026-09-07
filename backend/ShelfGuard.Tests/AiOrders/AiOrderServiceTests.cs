@@ -87,7 +87,7 @@ public sealed class AiOrderServiceTests
 
         Assert.Null(order);
         Assert.NotNull(error);
-        Assert.Contains("Claude API", error);
+        Assert.Contains("провайдер", error);
         // Should short-circuit before touching the order formula / repo at all.
         await _orderCalc.DidNotReceive().CalculateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }

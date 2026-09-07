@@ -92,7 +92,7 @@ public sealed class AiOrderService : IAiOrderService
         Guid tenantId, Guid storeId, CancellationToken ct = default)
     {
         if (!await _advisor.IsConfiguredAsync(ct))
-            return (null, "Claude API key не налаштовано. Додайте його: Налаштування → Інтеграції → Claude AI.");
+            return (null, "AI-агент не налаштований. Зверніться до вашого провайдера, щоб підключити його.");
 
         var storeName = await _repo.GetStoreNameAsync(storeId, ct);
         if (storeName is null)
