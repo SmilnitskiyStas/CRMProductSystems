@@ -24,6 +24,15 @@ public sealed class IntegrationsController : ControllerBase
     public IntegrationsController(IIntegrationService integrations)
         => _integrations = integrations;
 
+    /// <summary>
+    /// Managed-AI Phase 1: the AI-agent connection is configured by the platform provider from
+    /// the client card (<c>/api/provider/tenants/{id}/ai-agent</c>), never self-serve by the
+    /// tenant. Tenant-facing view/manage of these services is blocked here; the tenant sees only
+    /// the connected/not-connected flag via <c>GET /api/integrations</c>.
+    /// </summary>
+    private static readonly HashSet<string> ProviderManagedServices =
+        new(StringComparer.OrdinalIgnoreCase) { "claude", "openai" };
+
     /// <summary>Returns a summary list of all configured integrations for the current tenant.</summary>
     [HttpGet]
     [Authorize(Policy = AppPolicies.IntegrationsViewOrCapability)]
@@ -47,6 +56,7 @@ public sealed class IntegrationsController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (ProviderManagedServices.Contains(service)) return Forbid();
 
         var (config, error) = await _integrations.GetByServiceAsync(tenantId.Value, service, ct);
 
@@ -68,6 +78,7 @@ public sealed class IntegrationsController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (ProviderManagedServices.Contains(service)) return Forbid();
 
         var error = await _integrations.UpsertAsync(tenantId.Value, service, request, ct);
         return error is null ? NoContent() : BadRequest(new { error });
@@ -83,6 +94,7 @@ public sealed class IntegrationsController : ControllerBase
     {
         var tenantId = ResolveTenantId();
         if (tenantId is null) return Forbid();
+        if (ProviderManagedServices.Contains(service)) return Forbid();
 
         var (ok, error) = await _integrations.DeleteAsync(tenantId.Value, service, ct);
 

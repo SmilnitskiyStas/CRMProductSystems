@@ -1,19 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations, useLocale } from "next-intl";
-import { X, LogIn, Save, ScrollText } from "lucide-react";
+import { X, LogIn, Save, ScrollText, PlugZap } from "lucide-react";
 import {
   PLAN_COLORS,
   ALL_MODULES, ALL_PLANS,
 } from "../types";
-import type { TenantDetailDto } from "../types";
-import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers, useActivateTenant, useDeactivateTenant } from "../hooks/useProvider";
+import type { TenantDetailDto, TenantAiAgentDto, AiAgentTestResult } from "../types";
+import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers, useActivateTenant, useDeactivateTenant, useTenantAiAgent, useUpdateAiAgent } from "../hooks/useProvider";
+import { providerApi } from "../api/provider";
 import { AddTenantUserModal } from "./AddTenantUserModal";
 import { setToken, getToken } from "@/lib/api";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
+import { DEFAULT_AI_MODEL, SUGGESTED_AI_MODELS } from "@/features/provider/aiModels";
 
 interface Props {
   tenantId: string;
@@ -30,6 +33,17 @@ function formatDate(iso: string | null, locale: string) {
   });
 }
 
+const aiInputStyle: CSSProperties = {
+  width: "100%",
+  background: "#0D1117",
+  border: "1px solid #374151",
+  borderRadius: 8,
+  padding: "8px 10px",
+  color: "#E8EDF5",
+  fontSize: 13,
+  outline: "none",
+};
+
 export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLogs }: Props) {
   const t = useTranslations("Dashboard.provider.tenantDetailPanel");
   const tPlans = useTranslations("Dashboard.provider.plans");
@@ -44,6 +58,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const deactivate    = useDeactivateTenant(tenantId);
   const queryClient   = useQueryClient();
 
+  const { data: aiAgent } = useTenantAiAgent(tenantId);
+  const updateAiAgent = useUpdateAiAgent(tenantId);
+
   const [editingPlan,    setEditingPlan]    = useState(false);
   const [editingModules, setEditingModules] = useState(false);
   const [selectedPlan,   setSelectedPlan]   = useState<string>("");
@@ -51,6 +68,14 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const [impersonating,  setImpersonating]  = useState(false);
   const [impersonateErr, setImpersonateErr] = useState("");
   const [showAddUser,    setShowAddUser]    = useState(false);
+
+  const [editingAi, setEditingAi] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiModel,   setAiModel]   = useState(DEFAULT_AI_MODEL);
+  const [aiKey,     setAiKey]     = useState("");
+  const [aiExtra,   setAiExtra]   = useState("");
+  const [aiTesting,    setAiTesting]    = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<AiAgentTestResult | null>(null);
 
   const { data: tenantUsers = [], isLoading: usersLoading } = useTenantUsers(tenantId);
 
@@ -78,6 +103,41 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
     setSelectedMods((prev) =>
       prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
     );
+  }
+
+  function startEditAi(cfg: TenantAiAgentDto | undefined) {
+    setAiEnabled(cfg?.isEnabled ?? true);
+    setAiModel(cfg?.model || DEFAULT_AI_MODEL);
+    setAiKey("");
+    setAiExtra(cfg?.extraInstructions ?? "");
+    setAiTestResult(null);
+    setEditingAi(true);
+  }
+
+  function aiRequestBody() {
+    return {
+      apiKey: aiKey.trim() || null,
+      model: aiModel.trim() || null,
+      extraInstructions: aiExtra.trim() || null,
+      isEnabled: aiEnabled,
+    };
+  }
+
+  async function saveAi() {
+    await updateAiAgent.mutateAsync(aiRequestBody());
+    setEditingAi(false);
+  }
+
+  async function runAiTest() {
+    setAiTesting(true);
+    setAiTestResult(null);
+    try {
+      setAiTestResult(await providerApi.testAiAgent(tenantId, aiRequestBody()));
+    } catch (err) {
+      setAiTestResult({ ok: false, model: null, error: (err as Error)?.message ?? "" });
+    } finally {
+      setAiTesting(false);
+    }
   }
 
   async function handleImpersonate() {
@@ -353,6 +413,111 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     {tModules.has(m) ? tModules(m) : m}
                   </span>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* AI agent (managed-AI Phase 1) */}
+          <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("aiSectionTitle")}</div>
+              {!editingAi && (
+                <button
+                  onClick={() => startEditAi(aiAgent)}
+                  style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
+                >
+                  {aiAgent?.isConfigured ? t("changeButton") : t("configureButton")}
+                </button>
+              )}
+            </div>
+
+            {editingAi ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#9CA3AF", fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={aiEnabled}
+                    onChange={(e) => setAiEnabled(e.target.checked)}
+                    style={{ accentColor: "#3B82F6", width: 14, height: 14, cursor: "pointer" }}
+                  />
+                  {t("aiEnabledLabel")}
+                </label>
+
+                <div>
+                  <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiModelLabel")}</div>
+                  <input
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    list="ai-model-suggestions"
+                    placeholder={DEFAULT_AI_MODEL}
+                    style={aiInputStyle}
+                  />
+                  <datalist id="ai-model-suggestions">
+                    {SUGGESTED_AI_MODELS.map((m) => <option key={m} value={m} />)}
+                  </datalist>
+                </div>
+
+                <div>
+                  <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiKeyLabel")}</div>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={aiKey}
+                    onChange={(e) => setAiKey(e.target.value)}
+                    placeholder={aiAgent?.apiKeyLast4 ? `••••${aiAgent.apiKeyLast4} — ${t("aiKeyPlaceholder")}` : "sk-ant-..."}
+                    style={aiInputStyle}
+                  />
+                </div>
+
+                <div>
+                  <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiExtraLabel")}</div>
+                  <textarea
+                    value={aiExtra}
+                    onChange={(e) => setAiExtra(e.target.value)}
+                    rows={3}
+                    placeholder={t("aiExtraPlaceholder")}
+                    style={{ ...aiInputStyle, resize: "vertical", fontFamily: "inherit" }}
+                  />
+                </div>
+
+                {aiTestResult && (
+                  <div style={{ color: aiTestResult.ok ? "#4ADE80" : "#F87171", fontSize: 12 }}>
+                    {aiTestResult.ok ? t("aiTestOk") : `${t("aiTestFail")}${aiTestResult.error ? `: ${aiTestResult.error}` : ""}`}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
+                  <Btn size="sm" icon={<Save size={13} />} onClick={saveAi} disabled={updateAiAgent.isPending}>
+                    {updateAiAgent.isPending ? t("saving") : t("saveButton")}
+                  </Btn>
+                  <Btn size="sm" variant="ghost" icon={<PlugZap size={13} />} onClick={runAiTest} disabled={aiTesting}>
+                    {aiTesting ? t("aiTesting") : t("aiTestButton")}
+                  </Btn>
+                  <Btn size="sm" variant="ghost" onClick={() => setEditingAi(false)}>
+                    {t("cancelButton")}
+                  </Btn>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <span
+                  style={{
+                    padding: "3px 10px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background: aiAgent?.isConfigured ? "#052e16" : "#1c1917",
+                    border: `1px solid ${aiAgent?.isConfigured ? "#166534" : "#374151"}`,
+                    color: aiAgent?.isConfigured ? "#4ADE80" : "#6B7280",
+                  }}
+                >
+                  {!aiAgent?.isConfigured
+                    ? t("aiStatusNotConnected")
+                    : `Claude · ${aiAgent.model || DEFAULT_AI_MODEL}`}
+                </span>
+                {aiAgent?.isConfigured && !aiAgent.isEnabled && (
+                  <span style={{ color: "#6B7280", fontSize: 12 }}>{t("aiStatusDisabled")}</span>
+                )}
               </div>
             )}
           </div>

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { providerApi } from "../api/provider";
-import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto, CreateTenantRequest, CreateTenantUserRequest } from "../types";
+import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto, CreateTenantRequest, CreateTenantUserRequest, TenantAiAgentDto, UpdateAiAgentRequest } from "../types";
 
 // ── Query keys ───────────────────────────────────────────────────────────────
 
@@ -105,6 +105,30 @@ export function useUpdateModules(tenantId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: tenantKey(tenantId) });
       qc.invalidateQueries({ queryKey: TENANTS_KEY });
+    },
+  });
+}
+
+// ── AI agent (managed-AI Phase 1) ────────────────────────────────────────────
+
+const tenantAiKey = (id: string) => ["provider", "tenants", id, "ai-agent"] as const;
+
+export function useTenantAiAgent(tenantId: string, enabled = true) {
+  return useQuery({
+    queryKey: tenantAiKey(tenantId),
+    queryFn: (): Promise<TenantAiAgentDto> => providerApi.getAiAgent(tenantId),
+    staleTime: 30_000,
+    enabled: Boolean(tenantId) && enabled,
+    retry: false,
+  });
+}
+
+export function useUpdateAiAgent(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateAiAgentRequest) => providerApi.updateAiAgent(tenantId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tenantAiKey(tenantId) });
     },
   });
 }

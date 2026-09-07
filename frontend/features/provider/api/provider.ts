@@ -9,6 +9,9 @@ import type {
   ImpersonateResponse,
   TenantUserDto,
   CreateTenantUserRequest,
+  TenantAiAgentDto,
+  UpdateAiAgentRequest,
+  AiAgentTestResult,
 } from "../types";
 
 export const providerApi = {
@@ -31,6 +34,18 @@ export const providerApi = {
   /** PUT /api/provider/tenants/:id/modules */
   updateModules: (id: string, modules: string[]): Promise<void> =>
     api.put<void>(`/api/provider/tenants/${id}/modules`, { modules }),
+
+  /** GET /api/provider/tenants/:id/ai-agent */
+  getAiAgent: (id: string): Promise<TenantAiAgentDto> =>
+    api.get<TenantAiAgentDto>(`/api/provider/tenants/${id}/ai-agent`),
+
+  /** PUT /api/provider/tenants/:id/ai-agent */
+  updateAiAgent: (id: string, body: UpdateAiAgentRequest): Promise<void> =>
+    api.put<void>(`/api/provider/tenants/${id}/ai-agent`, body),
+
+  /** POST /api/provider/tenants/:id/ai-agent/test */
+  testAiAgent: (id: string, body: UpdateAiAgentRequest): Promise<AiAgentTestResult> =>
+    api.post<AiAgentTestResult>(`/api/provider/tenants/${id}/ai-agent/test`, body),
 
   /** POST /api/provider/tenants/:id/impersonate */
   impersonate: (id: string): Promise<ImpersonateResponse> =>

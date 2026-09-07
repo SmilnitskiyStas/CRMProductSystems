@@ -17,10 +17,12 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class ProviderController : ControllerBase
 {
     private readonly IProviderService _provider;
+    private readonly ITenantAiConfigService _aiConfig;
 
-    public ProviderController(IProviderService provider)
+    public ProviderController(IProviderService provider, ITenantAiConfigService aiConfig)
     {
         _provider = provider;
+        _aiConfig = aiConfig;
     }
 
     // ── Tenants ─────────────────────────────────────────────────────────────
@@ -121,6 +123,45 @@ public sealed class ProviderController : ControllerBase
             : (error.Contains("not found", StringComparison.OrdinalIgnoreCase)
                 ? NotFound(new { error })
                 : BadRequest(new { error }));
+    }
+
+    // ── AI agent (managed-AI Phase 1) ───────────────────────────────────────
+
+    /// <summary>The tenant's AI-agent connection, as the provider configures it. Key masked to last 4.</summary>
+    [HttpGet("tenants/{id:guid}/ai-agent")]
+    [ProducesResponseType(typeof(TenantAiAgentDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAiAgent(Guid id, CancellationToken ct)
+        => Ok(await _aiConfig.GetAsync(id, ct));
+
+    /// <summary>Creates or updates the tenant's AI-agent connection. Blank apiKey keeps the stored key.</summary>
+    [HttpPut("tenants/{id:guid}/ai-agent")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateAiAgent(
+        Guid id,
+        [FromBody] UpdateAiAgentRequest request,
+        CancellationToken ct)
+    {
+        var error = await _aiConfig.UpdateAsync(id, request, ct);
+        return error is null ? NoContent() : BadRequest(new { error });
+    }
+
+    /// <summary>Connectivity probe for the AI-agent credentials. Always 200 — the result carries ok/error.</summary>
+    [HttpPost("tenants/{id:guid}/ai-agent/test")]
+    [ProducesResponseType(typeof(AiAgentTestResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestAiAgent(
+        Guid id,
+        [FromBody] UpdateAiAgentRequest? candidate,
+        CancellationToken ct)
+        => Ok(await _aiConfig.TestAsync(id, candidate, ct));
+
+    /// <summary>Removes the tenant's AI-agent connection.</summary>
+    [HttpDelete("tenants/{id:guid}/ai-agent")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteAiAgent(Guid id, CancellationToken ct)
+    {
+        await _aiConfig.DeleteAsync(id, ct);
+        return NoContent();
     }
 
     /// <summary>Activates a previously deactivated tenant.</summary>

@@ -56,6 +56,37 @@ public record UpdatePlanRequest(string Plan);
 /// <summary>PUT /provider/tenants/:id/modules</summary>
 public record UpdateModulesRequest(string[] Modules);
 
+// ── AI agent (managed-AI Phase 1) ───────────────────────────────────────────
+
+/// <summary>
+/// GET /provider/tenants/:id/ai-agent — the tenant's AI-agent connection, as the provider sees
+/// it. The key is never returned in full: <see cref="ApiKeyLast4"/> is the last 4 chars of the
+/// stored key (null when none). Phase 1 is Claude-only, so there is no provider field yet.
+/// </summary>
+public record TenantAiAgentDto(
+    bool      IsConfigured,
+    bool      IsEnabled,
+    string?   Model,
+    string?   ApiKeyLast4,
+    string?   ExtraInstructions,
+    DateTime? UpdatedAt);
+
+/// <summary>
+/// PUT /provider/tenants/:id/ai-agent (and the optional body of POST .../ai-agent/test).
+/// An empty/whitespace <see cref="ApiKey"/> means "keep the stored key" (nothing to change).
+/// </summary>
+public record UpdateAiAgentRequest(
+    string? ApiKey,
+    string? Model,
+    string? ExtraInstructions,
+    bool    IsEnabled = true);
+
+/// <summary>POST /provider/tenants/:id/ai-agent/test — connectivity probe result (always HTTP 200).</summary>
+public record AiAgentTestResult(
+    bool    Ok,
+    string? Model,
+    string? Error);
+
 // ── Impersonation ───────────────────────────────────────────────────────────
 
 /// <summary>POST /provider/tenants/:id/impersonate → response body</summary>

@@ -37,6 +37,32 @@ export interface TenantDetailDto extends TenantSummaryDto {
   lastActivityAt: string | null;
 }
 
+// ── AI agent (managed-AI Phase 1) ──────────────────────────────────────────
+
+/** GET /api/provider/tenants/:id/ai-agent — key never returned in full (last 4 only). */
+export interface TenantAiAgentDto {
+  isConfigured: boolean;
+  isEnabled: boolean;
+  model: string | null;
+  apiKeyLast4: string | null;
+  extraInstructions: string | null;
+  updatedAt: string | null;
+}
+
+/** PUT .../ai-agent (and optional body of POST .../ai-agent/test). Blank apiKey = keep stored. */
+export interface UpdateAiAgentRequest {
+  apiKey?: string | null;
+  model?: string | null;
+  extraInstructions?: string | null;
+  isEnabled: boolean;
+}
+
+export interface AiAgentTestResult {
+  ok: boolean;
+  model: string | null;
+  error: string | null;
+}
+
 export interface CreateTenantRequest {
   name: string;
   slug: string;

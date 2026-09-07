@@ -135,8 +135,10 @@ public static class DependencyInjection
         services.AddScoped<ITelegramLinkRepository, TelegramLinkRepository>();
         services.AddScoped<IAiOrderAdvisor, AI.ClaudeOrderAdvisor>();
         // Managed-AI Phase 1: mandatory per-tenant isolation guardrail wrapped around every
-        // advisor's system prompt (see IAiPromptResolver / AiGuardrail).
+        // advisor's system prompt (see IAiPromptResolver / AiGuardrail); provider "test
+        // connection" probe for the client-card AI config.
         services.AddScoped<Application.Services.IAiPromptResolver, AI.AiPromptResolver>();
+        services.AddScoped<Application.Services.IAiConnectivityTester, AI.AnthropicConnectivityTester>();
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
 
         // v3.2 - ПРРО fiscalization (ADR-013): per-tenant factory replaces the startup-time

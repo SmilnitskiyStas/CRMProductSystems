@@ -90,4 +90,9 @@ export const SERVICE_META: Record<IntegrationService, ServiceMeta> = {
   },
 };
 
-export const ALL_SERVICES: IntegrationService[] = ["claude", "telegram", "resend", "webhook", "prro", "iot"];
+// NOTE: "claude" is intentionally absent — the AI-agent connection is configured by the
+// platform provider in the client card (managed-AI Phase 1), never self-serve here. The tenant
+// sees only a read-only connected/not-connected row (IntegrationsTab.tsx). The "claude" member
+// stays on the IntegrationService union / SERVICE_META because the backend still knows the
+// service and GET /api/integrations reports its enabled flag.
+export const ALL_SERVICES: IntegrationService[] = ["telegram", "resend", "webhook", "prro", "iot"];

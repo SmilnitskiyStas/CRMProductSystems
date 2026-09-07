@@ -55,6 +55,9 @@ export function IntegrationsTab() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* AI-агент — read-only status; configured by the provider (managed-AI Phase 1) */}
+        <AiAgentRow connected={summaryMap["claude"]?.isEnabled === true} />
+
         {/* ПРРО card — dedicated modal */}
         <PrroCard
           provider={prroSettings?.provider ?? "disabled"}
@@ -81,6 +84,65 @@ export function IntegrationsTab() {
           onClose={() => setConfiguring(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Inline AI-агент row (read-only — provider-managed) ─────────────────────
+
+function AiAgentRow({ connected }: { connected: boolean }) {
+  const t = useTranslations("Dashboard.settings.integrationsTab");
+
+  return (
+    <div
+      style={{
+        background: "#111827",
+        border: `1px solid ${connected ? "#1e3a5f" : "#1F2937"}`,
+        borderRadius: 12,
+        padding: "20px 24px",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+      }}
+    >
+      <div
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 10,
+          background: "#1F2937",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 22,
+          flexShrink: 0,
+        }}
+      >
+        🤖
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+          <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
+            {t("aiAgentLabel")}
+          </span>
+          <span
+            style={{
+              padding: "2px 8px",
+              borderRadius: 4,
+              background: connected ? "#052e16" : "#1c1917",
+              color: connected ? "#4ADE80" : "#6B7280",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {connected ? t("aiAgentConnected") : t("aiAgentNotConnected")}
+          </span>
+        </div>
+        <p style={{ color: "#4B5563", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+          {t("aiAgentDescription")}
+        </p>
+      </div>
     </div>
   );
 }

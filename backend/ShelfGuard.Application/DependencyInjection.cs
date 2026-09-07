@@ -53,6 +53,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.PromotionCampaigns.IPromotionCampaignService, Features.PromotionCampaigns.PromotionCampaignService>();
         services.AddScoped<Features.ConsumerContent.IConsumerContentService, Features.ConsumerContent.ConsumerContentService>();
         services.AddScoped<IProviderService, ProviderService>();
+        services.AddScoped<ITenantAiConfigService, TenantAiConfigService>();
         services.AddScoped<IProviderTeamService, ProviderTeamService>();
         services.AddScoped<IMovementService, MovementService>();
         services.AddScoped<Features.Sales.IDailySalesService, Features.Sales.DailySalesService>();
