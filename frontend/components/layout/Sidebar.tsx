@@ -139,10 +139,10 @@ type SidebarGroupsT = ReturnType<typeof useTranslations>;
 
 export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
   const consumerAppSections = {
-    content: { key: "content", label: t("consumerApp.sections.content"), icon: <Megaphone size={14} /> },
-    configuration: { key: "configuration", label: t("consumerApp.sections.configuration"), icon: <Settings size={14} /> },
-    loyalty: { key: "loyalty", label: t("consumerApp.sections.loyalty"), icon: <Smartphone size={14} /> },
-    analytics: { key: "analytics", label: t("consumerApp.sections.analytics"), icon: <Activity size={14} /> },
+    content: { key: "content", label: t("consumerApp.sections.content"), icon: <Megaphone size={18} /> },
+    configuration: { key: "configuration", label: t("consumerApp.sections.configuration"), icon: <Settings size={18} /> },
+    loyalty: { key: "loyalty", label: t("consumerApp.sections.loyalty"), icon: <Smartphone size={18} /> },
+    analytics: { key: "analytics", label: t("consumerApp.sections.analytics"), icon: <Activity size={18} /> },
   } satisfies Record<string, NavSection>;
 
   return [
@@ -545,14 +545,14 @@ function CollapsibleNavSection({ section, group, pathname }: CollapsibleNavSecti
           alignItems: "center",
           justifyContent: "space-between",
           gap: 8,
-          marginTop: 6,
-          padding: "7px 12px 5px 32px",
+          marginTop: 4,
+          padding: "8px 12px 8px 32px",
           background: "transparent",
           border: "none",
           color: hasActive ? "#94A3B8" : "#4B5563",
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: "0.05em",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: "0.04em",
           textTransform: "uppercase",
           cursor: "pointer",
         }}
@@ -568,8 +568,8 @@ function CollapsibleNavSection({ section, group, pathname }: CollapsibleNavSecti
           {section.label}
         </span>
         {expanded
-          ? <ChevronDown size={13} style={{ opacity: 0.7, flexShrink: 0 }} />
-          : <ChevronRight size={13} style={{ opacity: 0.7, flexShrink: 0 }} />}
+          ? <ChevronDown size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
+          : <ChevronRight size={14} style={{ opacity: 0.6, flexShrink: 0 }} />}
       </button>
       {expanded && section.items.map((item) => (
         <NavLink key={item.href + group.key} item={item} pathname={pathname} collapsed={false} nested />
