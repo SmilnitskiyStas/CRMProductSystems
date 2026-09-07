@@ -8,6 +8,7 @@ import type { NewsPromotionProduct } from '@/features/loyalty/news';
 import { trackConsumerEvent } from '@/features/consumer-analytics/analytics';
 import { useMobileConfig } from '@/features/mobile-config/MobileConfigProvider';
 import { ConfiguredRetailPage } from '@/features/server-driven-ui/ConfiguredRetailPage';
+import { hasConfiguredPromotionsContent } from '@/features/server-driven-ui/pageSelection';
 
 function price(value: number | null) {
   return value === null ? '—' : value.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -73,7 +74,10 @@ function StaticPromotionsScreen() {
 
 export default function PromotionsScreen() {
   const { config, source } = useMobileConfig();
-  if ((source === 'published' || source === 'last-valid') && config.pages.promotions) {
+  const hasConfiguredPromotions = hasConfiguredPromotionsContent(config.pages.promotions);
+  // App Builder creates this page before any content is placed on it. An empty page must
+  // not hide promotions that are already available through the consumer API.
+  if ((source === 'published' || source === 'last-valid') && hasConfiguredPromotions) {
     return <ConfiguredRetailPage pageKey="promotions" title="Акції" />;
   }
   return <StaticPromotionsScreen />;

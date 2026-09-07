@@ -479,6 +479,12 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiv
   const initialVisual = block.props._visualEffect && typeof block.props._visualEffect === "object" ? block.props._visualEffect as Record<string, unknown> : {};
   const [borderEffect, setBorderEffect] = useState<"none" | "solid" | "gradient">(initialVisual.border === "solid" || initialVisual.border === "gradient" ? initialVisual.border : "none");
   const [effectSpeed, setEffectSpeed] = useState<"slow" | "normal" | "fast">(initialVisual.speed === "slow" || initialVisual.speed === "fast" ? initialVisual.speed : "normal");
+  const [effectTrailLength, setEffectTrailLength] = useState(
+    typeof initialVisual.trailLength === "number" ? Math.min(70, Math.max(8, initialVisual.trailLength)) : 14
+  );
+  const [neonGlow, setNeonGlow] = useState(initialVisual.neonGlow === true);
+  const [neonGlowMode, setNeonGlowMode] = useState<"static" | "moving">(initialVisual.neonGlowMode === "moving" ? "moving" : "static");
+  const [neonGlowColor, setNeonGlowColor] = useState(typeof initialVisual.neonGlowColor === "string" ? initialVisual.neonGlowColor : "#3B82F6");
   const [effectColor, setEffectColor] = useState(typeof initialVisual.color === "string" ? initialVisual.color : "#3B82F6");
   const [effectSecondaryColor, setEffectSecondaryColor] = useState(typeof initialVisual.secondaryColor === "string" ? initialVisual.secondaryColor : "#A855F7");
 
@@ -495,7 +501,7 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiv
   });
 
   const values = watch();
-  const withVisualEffect = useCallback((props: Record<string, unknown>) => ({ ...props, _visualEffect: { border: borderEffect, speed: effectSpeed, color: effectColor, secondaryColor: effectSecondaryColor } }), [borderEffect, effectSpeed, effectColor, effectSecondaryColor]);
+  const withVisualEffect = useCallback((props: Record<string, unknown>) => ({ ...props, _visualEffect: { border: borderEffect, speed: effectSpeed, trailLength: effectTrailLength, neonGlow, neonGlowMode, neonGlowColor, color: effectColor, secondaryColor: effectSecondaryColor } }), [borderEffect, effectSpeed, effectTrailLength, neonGlow, neonGlowMode, neonGlowColor, effectColor, effectSecondaryColor]);
 
   // TASK-565b (fix for TASK-566's regression): `watch()` called during render (above, still used
   // to drive this form's own controlled inputs, e.g. `StringArrayField`'s `value` prop) returns a
@@ -554,7 +560,9 @@ export function BlockPropertyEditor({ block, definition, onClose, onApply, onLiv
             <p style={{ ...hintStyle, marginBottom: 10 }}>Контур застосовується лише до цього блока. Користувачі зі зменшенням руху побачать статичний варіант.</p>
             <label style={labelStyle}>Контур</label>
             <select value={borderEffect} onChange={(e) => setBorderEffect(e.target.value as "none" | "solid" | "gradient")} style={{ ...inputStyle, cursor: "pointer" }}><option value="none">Без ефекту</option><option value="solid">Бігаючий — один колір</option><option value="gradient">Бігаючий — переливчастий</option></select>
-            {borderEffect !== "none" && <div style={{ display: "grid", gridTemplateColumns: borderEffect === "gradient" ? "1fr 1fr" : "1fr", gap: 10, marginTop: 12 }}><div><label style={labelStyle}>Основний колір</label><input type="color" value={effectColor} onChange={(e) => setEffectColor(e.target.value)} style={{ ...inputStyle, height: 38, padding: 4 }} /></div>{borderEffect === "gradient" && <div><label style={labelStyle}>Другий колір</label><input type="color" value={effectSecondaryColor} onChange={(e) => setEffectSecondaryColor(e.target.value)} style={{ ...inputStyle, height: 38, padding: 4 }} /></div>}<div><label style={labelStyle}>Швидкість</label><select value={effectSpeed} onChange={(e) => setEffectSpeed(e.target.value as "slow" | "normal" | "fast")} style={{ ...inputStyle, cursor: "pointer" }}><option value="slow">Повільна</option><option value="normal">Звичайна</option><option value="fast">Швидка</option></select></div></div>}
+            {borderEffect !== "none" && <div style={{ display: "grid", gridTemplateColumns: borderEffect === "gradient" ? "1fr 1fr" : "1fr", gap: 10, marginTop: 12 }}><div><label style={labelStyle}>Основний колір</label><input type="color" value={effectColor} onChange={(e) => setEffectColor(e.target.value)} style={{ ...inputStyle, height: 38, padding: 4 }} /></div>{borderEffect === "gradient" && <div><label style={labelStyle}>Другий колір</label><input type="color" value={effectSecondaryColor} onChange={(e) => setEffectSecondaryColor(e.target.value)} style={{ ...inputStyle, height: 38, padding: 4 }} /></div>}<div><label style={labelStyle}>Довжина смуги — {effectTrailLength}%</label><input type="range" min="8" max="70" step="1" value={effectTrailLength} onChange={(e) => setEffectTrailLength(Number(e.target.value))} style={{ width: "100%", accentColor: "#3B82F6", cursor: "pointer" }} /></div><div><label style={labelStyle}>Швидкість</label><select value={effectSpeed} onChange={(e) => setEffectSpeed(e.target.value as "slow" | "normal" | "fast")} style={{ ...inputStyle, cursor: "pointer" }}><option value="slow">Повільна</option><option value="normal">Звичайна</option><option value="fast">Швидка</option></select></div></div>}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}><input id="neon-glow" type="checkbox" checked={neonGlow} onChange={(e) => setNeonGlow(e.target.checked)} style={{ accentColor: "#3B82F6", cursor: "pointer" }} /><label htmlFor="neon-glow" style={{ color: "#E8EDF5", fontSize: 13, cursor: "pointer" }}>Неонова підсвітка</label></div>
+            {neonGlow && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}><div><label style={labelStyle}>Колір підсвітки</label><input type="color" value={neonGlowColor} onChange={(e) => setNeonGlowColor(e.target.value)} style={{ ...inputStyle, height: 38, padding: 4 }} /></div><div><label style={labelStyle}>Режим підсвітки</label><select value={neonGlowMode} onChange={(e) => setNeonGlowMode(e.target.value as "static" | "moving")} style={{ ...inputStyle, cursor: "pointer" }}><option value="static">Статичний</option><option value="moving">Рухається по контуру</option></select></div></div>}
           </div>
 
           {schemaDefs.length === 0 ? (

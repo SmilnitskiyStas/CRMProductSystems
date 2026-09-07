@@ -756,9 +756,23 @@ export function renderBlockPreview(block: MobileConfigBlockInstance, ctx: Previe
   if (!Component) return null;
   const visual = block.props._visualEffect && typeof block.props._visualEffect === "object" ? block.props._visualEffect as Record<string, unknown> : {};
   const border = visual.border === "solid" || visual.border === "gradient" ? visual.border : "none";
-  if (border === "none") return <Component key={block.id} block={block} ctx={ctx} />;
+  const neonGlow = visual.neonGlow === true;
+  if (border === "none" && !neonGlow) return <Component key={block.id} block={block} ctx={ctx} />;
+  const movingNeon = neonGlow && visual.neonGlowMode === "moving";
+  const hasContour = border !== "none" || movingNeon;
+  const previewBorder = border === "none" ? "solid" : border;
   const color = typeof visual.color === "string" ? visual.color : ctx.tokens.colors.primary;
   const secondary = typeof visual.secondaryColor === "string" ? visual.secondaryColor : ctx.tokens.colors.textSecondary;
+  const neonGlowColor = typeof visual.neonGlowColor === "string" ? visual.neonGlowColor : color;
+  const contourColor = border === "none" && movingNeon ? neonGlowColor : color;
   const duration = visual.speed === "slow" ? "5s" : visual.speed === "fast" ? "1.6s" : "3s";
-  return <div key={block.id} className="consumer-running-border" style={{ padding: 2, borderRadius: ctx.tokens.radius.card + 2, backgroundImage: border === "gradient" ? `linear-gradient(90deg, ${color}, ${secondary}, ${color})` : `linear-gradient(90deg, transparent, ${color}, transparent, ${color})`, backgroundSize: "300% 100%", animationDuration: duration }}><div style={{ borderRadius: ctx.tokens.radius.card, overflow: "hidden", background: ctx.tokens.colors.background }}><Component block={block} ctx={ctx} /></div></div>;
+  const trailPercent = typeof visual.trailLength === "number"
+    ? Math.min(70, Math.max(8, visual.trailLength))
+    : 14;
+  const trailStart = 50 - trailPercent / 2;
+  const trailEnd = 50 + trailPercent / 2;
+  const backgroundImage = previewBorder === "gradient"
+    ? `linear-gradient(90deg, transparent 0%, transparent ${trailStart}%, ${contourColor} ${trailStart + 2}%, ${secondary} 50%, ${contourColor} ${trailEnd - 2}%, transparent ${trailEnd}%, transparent 100%)`
+    : `linear-gradient(90deg, transparent 0%, transparent ${trailStart}%, ${contourColor} ${trailStart}%, ${contourColor} ${trailEnd}%, transparent ${trailEnd}%, transparent 100%)`;
+  return <div key={block.id} style={{ position: "relative", padding: hasContour ? 2 : 0, borderRadius: ctx.tokens.radius.card + 2, boxShadow: neonGlow && !movingNeon ? `0 0 8px ${neonGlowColor}, 0 0 20px ${neonGlowColor}` : undefined }}><div className={hasContour ? "consumer-running-border" : undefined} style={{ position: hasContour ? "absolute" : undefined, inset: hasContour ? 0 : undefined, borderRadius: ctx.tokens.radius.card + 2, backgroundImage: hasContour ? backgroundImage : undefined, backgroundSize: "300% 100%", animationDuration: duration, filter: movingNeon ? `drop-shadow(0 0 4px ${neonGlowColor}) drop-shadow(0 0 10px ${neonGlowColor})` : undefined, pointerEvents: "none" }} /><div style={{ position: "relative", borderRadius: ctx.tokens.radius.card, overflow: "hidden", background: ctx.tokens.colors.background }}><Component block={block} ctx={ctx} /></div></div>;
 }
