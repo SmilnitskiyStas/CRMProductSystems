@@ -1,6 +1,10 @@
 # План: керована провайдером AI-інтеграція («AI-агент для бізнесу»)
 
-**Статус:** чернетка v2 (уточнено рішеннями власника) · 2026-09-07
+**Статус:** **Фаза 1 — DEPLOYED prod 2026-09-07** (TASK-701, `7ffefeb7`/`5a93f3d3`/`0b298daa`,
+log `.claude/logs/tasks/TASK-701_2026-09-07_managed-ai-phase1_main-session.md`).
+Фаза 2 (OpenAI/Codex через `IAiChatClient` + тонкий HttpClient) і Фаза 3 (пресети по типах
+бізнесу) — не почато. Розділи нижче описують повний дизайн; де реалізація відхилилась —
+дивись task log.
 **Пов'язане:** TASK-700, memory `shelfguard-settings-page-role-aware`, ADR-015 (AI isolation),
 `shelfguard-rls-override-primitives`
 

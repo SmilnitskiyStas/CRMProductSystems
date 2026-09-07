@@ -6,6 +6,26 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Керована провайдером AI-інтеграція, Фаза 1 — TASK-701
+
+**Status:** done · main session · DEPLOYED prod 2026-09-07 (`7ffefeb7`, `5a93f3d3`, `0b298daa`) · Log: `.claude/logs/tasks/TASK-701_2026-09-07_managed-ai-phase1_main-session.md` · Design: `.claude/docs/managed-ai-integration-plan.md`
+
+**(1) Ізоляція:** обовʼязковий guardrail-префікс у системний промпт усіх 6 адвайзерів
+(`IAiPromptResolver`/`AiGuardrail`) — агент лише для бізнесу «{Назва}», лише його дані,
+відмовляє на конкурентів/ринок; `extra_instructions` між guardrail і базовим промптом.
+Не вимикається. + `AiAdvisorRlsContainmentTests` (жоден AI-тип не бере RLS-bypass) +
+cross-tenant RLS integration тест (пінить KI-036 F5). **(2) Провайдер керує:**
+`IntegrationsController` 403 для `claude`/`openai` тенанту; `ProviderController` +4
+`/api/provider/tenants/{id}/ai-agent` (GET/PUT/test/DELETE) → `ITenantAiConfigService`
+пише `integration_configs` claude чужого тенанта через `provider_bypass`; ключ через
+`GenericIntegrationSecrets` (порожній=зберегти, GET=last-4); `IAiConnectivityTester`
+(1-token probe). **(3) FE:** тенант — `claude` геть з `ALL_SERVICES`, read-only рядок
+«AI-агент»; провайдерська картка `TenantDetailPanel` — секція «AI-агент» (тумблер/модель/
+ключ/extra/тест). i18n uk+en. `dotnet test` 2416 green; fe tsc/lint/build чисто; e2e
+на проді перевірено (403/провайдерські ендпоінти/картка/тенантський рядок). Guardrail
+«модель реально відмовляє» — не e2e (нема робочого ключа на проді), покрито юніт-тестами.
+**Фаза 2** (OpenAI/Codex) і **Фаза 3** (пресети) — окремо.
+
 ## Налаштування: рольова сторінка + змістовна вкладка «Огляд» — TASK-700
 
 **Status:** done · main session · запушено `origin/main` `6e353ef4` · Log: `.claude/logs/tasks/TASK-700_2026-09-06_settings-overview-role-aware_main-session.md`
