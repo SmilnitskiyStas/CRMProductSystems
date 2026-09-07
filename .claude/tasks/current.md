@@ -6,6 +6,22 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Керована AI-інтеграція, Фаза 2 — провайдер-агностичний клієнт + OpenAI/Codex — TASK-702
+
+**Status:** done · main session · DEPLOYED prod 2026-09-07 (`ffe0b1b1`, `f65e289c`) · Log: `.claude/logs/tasks/TASK-702_2026-09-07_managed-ai-phase2-openai_main-session.md`
+
+**Крок 1 (чистий рефактор):** новий `IAiChatClient`/`IAiClientFactory` (`Application/Services`)
++ `AnthropicChatClient` / `OpenAiChatClient` (тонкий HttpClient, 0 пакетів) / `AiClientFactory`
+(`Infrastructure/AI`). Усі 6 адвайзерів — з `new AnthropicClient`+`ResolveAsync` на фабрику
+(борг TASK-367 закрито); `ClaudeOrderAdvisor`/`SupplierAdvisor` `ResponseSchema()` → `const`.
+**Крок 2 (OpenAI вибір):** `openai` у `KnownServices`/`GenericIntegrationSecrets`;
+`TenantAiConfigService` пише claude|openai рядок і **видаляє протилежний** (один активний
+провайдер); `IAiConnectivityTester.ProbeAsync(AiProviderConfig)` через `IAiClientFactory.Create`;
+`OpenAI__ApiKey`/`Model` env; FE — тумблер Claude/OpenAI + `base_url` (OpenAI) у картці клієнта.
+`dotnet test` **2423**, Release + `docker build` зелені; fe чисто; e2e на проді — OpenAI-probe
+з фейк-ключем робить справжній виклик `api.openai.com` → «Невірний API-ключ.». **Фаза 3**
+(пресети) — не почато.
+
 ## Керована провайдером AI-інтеграція, Фаза 1 — TASK-701
 
 **Status:** done · main session · DEPLOYED prod 2026-09-07 (`7ffefeb7`, `5a93f3d3`, `0b298daa`) · Log: `.claude/logs/tasks/TASK-701_2026-09-07_managed-ai-phase1_main-session.md` · Design: `.claude/docs/managed-ai-integration-plan.md`
