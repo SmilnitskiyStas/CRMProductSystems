@@ -1,97 +1,35 @@
-using Anthropic;
-using Anthropic.Models.Messages;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Interfaces;
-using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.AI.PostCampaignAdvisor;
 
 /// <summary>
-/// Claude-backed post-campaign advisor (Фаза 4, TASK-472). Key resolution is a byte-for-byte
-/// copy of <c>MarketingAdvisor.ResolveAsync</c>/<c>PriceSegmentAdvisor</c>'s own pattern (task
-/// brief: "reuse this exact interface/pattern... do not build a new AI plumbing path") — tenant's
-/// integration_configs (service='claude') → fallback to Claude:ApiKey env, RLS scopes the lookup
-/// to the caller's tenant. A separate advisor class (not a shared base with the 5 existing Claude
-/// advisors) for the same reason TASK-406/420 already gave: extracting the duplicated
-/// key-resolution logic is a tracked, deliberately-deferred refactor (TASK-367), not something to
-/// do as a side effect of adding a 6th advisor.
+/// Post-campaign advisor (Фаза 4, TASK-472). Provider-agnostic since managed-AI Phase 2 — the
+/// model call goes through <see cref="IAiClientFactory"/> / <see cref="IAiChatClient"/>. The
+/// per-tenant isolation guardrail is applied by <see cref="IAiPromptResolver"/> (Phase 1).
 /// </summary>
 public sealed class PostCampaignAdvisor : IPostCampaignAdvisor
 {
-    // Same bound as MarketingAdvisor/PriceSegmentAdvisor — a synchronous "Пояснити детальніше"
-    // click must not block the request indefinitely.
-    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
-
-    private readonly AppDbContext _db;
+    private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
-    private readonly string? _envApiKey;
-    private readonly string _defaultModel;
 
-    public PostCampaignAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
+    public PostCampaignAdvisor(IAiClientFactory ai, IAiPromptResolver prompt)
     {
-        _db = db;
+        _ai = ai;
         _prompt = prompt;
-        _envApiKey = config["Claude:ApiKey"];
-        _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
 
-    public async Task<bool> IsConfiguredAsync(CancellationToken ct = default) =>
-        (await ResolveAsync(ct)).ApiKey is not null;
-
-    private async Task<(string? ApiKey, string Model)> ResolveAsync(CancellationToken ct)
-    {
-        var row = await _db.IntegrationConfigs
-            .Where(i => i.Service == "claude" && i.IsEnabled)
-            .Select(i => i.Config)
-            .FirstOrDefaultAsync(ct);
-
-        if (row is not null)
-        {
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(row);
-                var key = doc.RootElement.TryGetProperty("api_key", out var k) ? k.GetString() : null;
-                var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
-                if (!string.IsNullOrWhiteSpace(key))
-                    return (key, string.IsNullOrWhiteSpace(model) ? _defaultModel : model!);
-            }
-            catch (System.Text.Json.JsonException) { /* malformed config — fall through to env */ }
-        }
-
-        return (string.IsNullOrWhiteSpace(_envApiKey) ? null : _envApiKey, _defaultModel);
-    }
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
 
     public async Task<PostCampaignAdvisorResult> ExplainAsync(PostCampaignAdvisorContext context, CancellationToken ct = default)
     {
-        var (apiKey, model) = await ResolveAsync(ct);
-        if (apiKey is null)
-            throw new InvalidOperationException(
-                "AI-агент не налаштований. Зверніться до вашого провайдера.");
+        var client = await _ai.ResolveAsync(ct)
+            ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
-        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var result = await client.CompleteAsync(new AiChatRequest(system, BuildUserPrompt(context), MaxTokens: 1024), ct);
 
-        var parameters = new MessageCreateParams
-        {
-            Model = model,
-            MaxTokens = 1024,
-            System = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
-            Messages = [new() { Role = Role.User, Content = BuildUserPrompt(context) }],
-        };
-
-        var response = await client.Messages.Create(parameters, cancellationToken: ct);
-
-        var text = response.Content
-            .Select(b => b.Value)
-            .OfType<TextBlock>()
-            .Select(t => t.Text)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException("Claude returned no text content.");
-
-        var tokens = (int)(response.Usage.InputTokens + response.Usage.OutputTokens);
-
-        return new PostCampaignAdvisorResult(text.Trim(), model, tokens);
+        return new PostCampaignAdvisorResult(result.Text.Trim(), result.Model, result.TokensUsed);
     }
 
     private static string BuildSystemPrompt() =>

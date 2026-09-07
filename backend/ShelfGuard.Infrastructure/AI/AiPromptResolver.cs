@@ -46,7 +46,8 @@ public sealed class AiPromptResolver : IAiPromptResolver
     private async Task<string?> ResolveExtraInstructionsAsync(CancellationToken ct)
     {
         var configJson = await _db.IntegrationConfigs
-            .Where(i => i.Service == "claude" && i.IsEnabled)
+            .Where(i => (i.Service == "claude" || i.Service == "openai") && i.IsEnabled)
+            .OrderBy(i => i.Service)
             .Select(i => i.Config)
             .FirstOrDefaultAsync(ct);
 

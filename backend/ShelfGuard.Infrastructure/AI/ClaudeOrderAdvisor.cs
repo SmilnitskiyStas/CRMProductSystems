@@ -1,101 +1,40 @@
 using System.Text.Json;
-using Anthropic;
-using Anthropic.Models.Messages;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Interfaces;
-using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.AI;
 
 /// <summary>
-/// Claude-backed order advisor (v2-spec §7). Prompt template and provider wiring live
-/// here per the architecture rule: AI integrations never couple to business logic.
-/// Uses structured outputs so the response is guaranteed-valid JSON.
-/// Key resolution: tenant's integration_configs (service='claude', managed via web UI)
-/// → fallback to Claude:ApiKey env. RLS scopes the lookup to the caller's tenant.
+/// AI order advisor (v2-spec §7). Prompt template lives here per the architecture rule; the
+/// model call is provider-agnostic since managed-AI Phase 2 — through <see cref="IAiClientFactory"/>
+/// / <see cref="IAiChatClient"/> (Claude or an OpenAI-compatible endpoint, per the tenant's
+/// provider config). Uses structured outputs so the response is guaranteed-valid JSON. The
+/// per-tenant isolation guardrail is applied by <see cref="IAiPromptResolver"/> (Phase 1).
 /// </summary>
 public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
 {
-    // SDK default is 10 minutes (retried up to 3x by default => worst case ~30 min blocking
-    // an inline HTTP request from a manager clicking "Generate"). Bounded to something a
-    // synchronous POST /api/ai-orders/generate call can reasonably wait on — Block 7 audit.
-    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
-
-    private readonly AppDbContext _db;
+    private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
-    private readonly string? _envApiKey;
-    private readonly string _defaultModel;
 
-    public ClaudeOrderAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
+    public ClaudeOrderAdvisor(IAiClientFactory ai, IAiPromptResolver prompt)
     {
-        _db = db;
+        _ai = ai;
         _prompt = prompt;
-        _envApiKey = config["Claude:ApiKey"];
-        _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
 
-    public async Task<bool> IsConfiguredAsync(CancellationToken ct = default) =>
-        (await ResolveAsync(ct)).ApiKey is not null;
-
-    private async Task<(string? ApiKey, string Model)> ResolveAsync(CancellationToken ct)
-    {
-        var row = await _db.IntegrationConfigs
-            .Where(i => i.Service == "claude" && i.IsEnabled)
-            .Select(i => i.Config)
-            .FirstOrDefaultAsync(ct);
-
-        if (row is not null)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(row);
-                var key = doc.RootElement.TryGetProperty("api_key", out var k) ? k.GetString() : null;
-                var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
-                if (!string.IsNullOrWhiteSpace(key))
-                    return (key, string.IsNullOrWhiteSpace(model) ? _defaultModel : model!);
-            }
-            catch (JsonException) { /* malformed config — fall through to env */ }
-        }
-
-        return (string.IsNullOrWhiteSpace(_envApiKey) ? null : _envApiKey, _defaultModel);
-    }
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
 
     public async Task<AiAdviceResult> AdviseAsync(AiOrderContext context, CancellationToken ct = default)
     {
-        var (apiKey, model) = await ResolveAsync(ct);
-        if (apiKey is null)
-            throw new InvalidOperationException(
-                "AI-агент не налаштований. Зверніться до вашого провайдера.");
+        var client = await _ai.ResolveAsync(ct)
+            ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
-        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var result = await client.CompleteAsync(
+            new AiChatRequest(system, BuildUserPrompt(context), MaxTokens: 8192, JsonSchema: ResponseSchemaJson), ct);
 
-        var parameters = new MessageCreateParams
-        {
-            Model = model,
-            MaxTokens = 8192,
-            System = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
-            Messages = [new() { Role = Role.User, Content = BuildUserPrompt(context) }],
-            OutputConfig = new OutputConfig
-            {
-                Format = new JsonOutputFormat { Schema = ResponseSchema() },
-            },
-        };
-
-        var response = await client.Messages.Create(parameters, cancellationToken: ct);
-
-        var text = response.Content
-            .Select(b => b.Value)
-            .OfType<TextBlock>()
-            .Select(t => t.Text)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException("Claude returned no text content.");
-
-        var items = ParseAdvice(text);
-        var tokens = (int)(response.Usage.InputTokens + response.Usage.OutputTokens);
-
-        return new AiAdviceResult(items, model, tokens);
+        var items = ParseAdvice(result.Text);
+        return new AiAdviceResult(items, result.Model, result.TokensUsed);
     }
 
     // ── prompt (v2-spec §7 template) ───────────────────────────────────────
@@ -123,9 +62,7 @@ public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
             $"ДАНІ ПО ТОВАРАХ:\n{JsonSerializer.Serialize(c.StockLines, opts)}";
     }
 
-    private static Dictionary<string, JsonElement> ResponseSchema()
-    {
-        const string schemaJson = """
+    private const string ResponseSchemaJson = """
         {
           "type": "object",
           "properties": {
@@ -158,11 +95,6 @@ public sealed class ClaudeOrderAdvisor : IAiOrderAdvisor
           "additionalProperties": false
         }
         """;
-
-        using var doc = JsonDocument.Parse(schemaJson);
-        return doc.RootElement.EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.Clone());
-    }
 
     /// <summary>Internal+static so unit tests can exercise parsing without an API call.</summary>
     internal static List<AiAdviceItem> ParseAdvice(string json)

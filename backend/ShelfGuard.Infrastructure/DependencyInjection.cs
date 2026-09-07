@@ -137,8 +137,12 @@ public static class DependencyInjection
         // Managed-AI Phase 1: mandatory per-tenant isolation guardrail wrapped around every
         // advisor's system prompt (see IAiPromptResolver / AiGuardrail); provider "test
         // connection" probe for the client-card AI config.
+        // Managed-AI Phase 2: provider-agnostic chat client — every advisor calls the model
+        // through IAiClientFactory (Claude SDK or a thin OpenAI-compatible HttpClient).
         services.AddScoped<Application.Services.IAiPromptResolver, AI.AiPromptResolver>();
+        services.AddScoped<Application.Services.IAiClientFactory, AI.AiClientFactory>();
         services.AddScoped<Application.Services.IAiConnectivityTester, AI.AnthropicConnectivityTester>();
+        services.AddHttpClient("openai", http => http.Timeout = TimeSpan.FromSeconds(60));
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
 
         // v3.2 - ПРРО fiscalization (ADR-013): per-tenant factory replaces the startup-time

@@ -1,8 +1,5 @@
 using System.Text.Json;
-using Anthropic;
-using Anthropic.Models.Messages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Features.AiAssistant;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Infrastructure.Data;
@@ -10,72 +7,34 @@ using ShelfGuard.Infrastructure.Data;
 namespace ShelfGuard.Infrastructure.AI.BusinessAssistant;
 
 /// <summary>
-/// Claude-backed business assistant (TASK-250, v4 Phase 6).
-///
-/// Aggregates cross-module context (critical stock batches, pending AI orders,
-/// last-7-days sales, active suppliers) per tenant, then calls Claude to answer
-/// the manager's natural-language question.
-///
-/// AI isolation rule (ADR-015): all prompt templates, provider wiring, and parsing
-/// live exclusively here — never in Application services or controllers.
-///
-/// Key resolution mirrors ClaudeOrderAdvisor:
-///   tenant integration_configs row (service='claude') → fallback to Claude:ApiKey env.
+/// Business assistant (TASK-250, v4 Phase 6). Aggregates cross-module context (critical stock
+/// batches, pending AI orders, last-7-days sales, active suppliers) per tenant, then asks the
+/// model. Provider-agnostic since managed-AI Phase 2 — the model call goes through
+/// <see cref="IAiClientFactory"/> / <see cref="IAiChatClient"/>. The per-tenant isolation
+/// guardrail is applied by <see cref="IAiPromptResolver"/> (Phase 1).
 /// </summary>
 public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
 {
-    // See ClaudeOrderAdvisor — SDK default (10 min, retried) is too long for a synchronous
-    // POST /api/ai/assistant call. Block 7 audit.
-    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
-
     private readonly AppDbContext _db;
+    private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
-    private readonly string? _envApiKey;
-    private readonly string _defaultModel;
 
-    public BusinessAssistantAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
+    public BusinessAssistantAdvisor(AppDbContext db, IAiClientFactory ai, IAiPromptResolver prompt)
     {
         _db = db;
+        _ai = ai;
         _prompt = prompt;
-        _envApiKey = config["Claude:ApiKey"];
-        _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
 
-    public async Task<bool> IsConfiguredAsync(CancellationToken ct = default) =>
-        (await ResolveAsync(ct)).ApiKey is not null;
-
-    private async Task<(string? ApiKey, string Model)> ResolveAsync(CancellationToken ct)
-    {
-        var row = await _db.IntegrationConfigs
-            .Where(i => i.Service == "claude" && i.IsEnabled)
-            .Select(i => i.Config)
-            .FirstOrDefaultAsync(ct);
-
-        if (row is not null)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(row);
-                var key   = doc.RootElement.TryGetProperty("api_key", out var k) ? k.GetString() : null;
-                var model = doc.RootElement.TryGetProperty("model",   out var m) ? m.GetString() : null;
-                if (!string.IsNullOrWhiteSpace(key))
-                    return (key, string.IsNullOrWhiteSpace(model) ? _defaultModel : model!);
-            }
-            catch (JsonException) { /* malformed config — fall through to env */ }
-        }
-
-        return (string.IsNullOrWhiteSpace(_envApiKey) ? null : _envApiKey, _defaultModel);
-    }
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
 
     public async Task<BusinessAssistantResult> AdviseAsync(
         Guid tenantId,
         string message,
         CancellationToken ct = default)
     {
-        var (apiKey, model) = await ResolveAsync(ct);
-        if (apiKey is null)
-            throw new InvalidOperationException(
-                "AI-агент не налаштований. Зверніться до вашого провайдера.");
+        var client = await _ai.ResolveAsync(ct)
+            ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -158,26 +117,8 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
             $"{JsonSerializer.Serialize(suppliers, opts)}\n\n" +
             $"Надай корисну відповідь на запит менеджера з урахуванням наведеного контексту.";
 
-        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
-
-        var parameters = new MessageCreateParams
-        {
-            Model    = model,
-            MaxTokens = 2048,
-            System   = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
-            Messages = [new() { Role = Role.User, Content = userPrompt }],
-        };
-
-        var response = await client.Messages.Create(parameters, cancellationToken: ct);
-
-        var reply = response.Content
-            .Select(b => b.Value)
-            .OfType<TextBlock>()
-            .Select(t => t.Text)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException("Claude returned no text content.");
-
-        var tokens = (int)(response.Usage.InputTokens + response.Usage.OutputTokens);
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var result = await client.CompleteAsync(new AiChatRequest(system, userPrompt, MaxTokens: 2048), ct);
 
         var contextSummary = new BusinessAssistantContextSummary(
             criticalLines.Count,
@@ -185,7 +126,7 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
             salesLines.Count,
             suppliers.Count);
 
-        return new BusinessAssistantResult(reply, contextSummary, model, tokens);
+        return new BusinessAssistantResult(result.Text, contextSummary, result.Model, result.TokensUsed);
     }
 
     private static string BuildSystemPrompt() =>

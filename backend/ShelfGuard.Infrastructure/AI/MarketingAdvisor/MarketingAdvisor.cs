@@ -1,99 +1,36 @@
-using Anthropic;
-using Anthropic.Models.Messages;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Interfaces;
-using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.AI.MarketingAdvisor;
 
 /// <summary>
-/// Claude-backed marketing advisor (TASK-406, plan §"Рекомендації — гібридний рушій" /
-/// "AI-адвайзер"). Key resolution is a byte-for-byte copy of
-/// <c>ClaudeOrderAdvisor.ResolveAsync</c>'s pattern per the task brief ("перевикористай ТОЧНО
-/// той самий патерн резолву Claude-ключа") — tenant's integration_configs (service='claude') →
-/// fallback to Claude:ApiKey env, RLS scopes the lookup to the caller's tenant. Deliberately a
-/// SEPARATE advisor class (not a shared base with ClaudeOrderAdvisor/SupplierAdvisor/
-/// BusinessAssistantAdvisor) — TASK-367's architecture audit already flagged the 3 existing
-/// advisors' duplicated key-resolution logic as a candidate for extraction, but doing that
-/// extraction is out of scope here; this file follows the existing (duplicated) shape rather
-/// than inventing a 4th pattern.
+/// Marketing advisor (TASK-406). Provider-agnostic since managed-AI Phase 2 — the model call
+/// goes through <see cref="IAiClientFactory"/> / <see cref="IAiChatClient"/> (Claude or an
+/// OpenAI-compatible endpoint, per the tenant's provider config). The mandatory per-tenant
+/// isolation guardrail is applied by <see cref="IAiPromptResolver"/> (Phase 1).
 /// </summary>
 public sealed class MarketingAdvisor : IMarketingAdvisor
 {
-    // Same bound as ClaudeOrderAdvisor — a synchronous "Пояснити детальніше" click must not
-    // block the request indefinitely.
-    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
-
-    private readonly AppDbContext _db;
+    private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
-    private readonly string? _envApiKey;
-    private readonly string _defaultModel;
 
-    public MarketingAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
+    public MarketingAdvisor(IAiClientFactory ai, IAiPromptResolver prompt)
     {
-        _db = db;
+        _ai = ai;
         _prompt = prompt;
-        _envApiKey = config["Claude:ApiKey"];
-        _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
 
-    public async Task<bool> IsConfiguredAsync(CancellationToken ct = default) =>
-        (await ResolveAsync(ct)).ApiKey is not null;
-
-    private async Task<(string? ApiKey, string Model)> ResolveAsync(CancellationToken ct)
-    {
-        var row = await _db.IntegrationConfigs
-            .Where(i => i.Service == "claude" && i.IsEnabled)
-            .Select(i => i.Config)
-            .FirstOrDefaultAsync(ct);
-
-        if (row is not null)
-        {
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(row);
-                var key = doc.RootElement.TryGetProperty("api_key", out var k) ? k.GetString() : null;
-                var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
-                if (!string.IsNullOrWhiteSpace(key))
-                    return (key, string.IsNullOrWhiteSpace(model) ? _defaultModel : model!);
-            }
-            catch (System.Text.Json.JsonException) { /* malformed config — fall through to env */ }
-        }
-
-        return (string.IsNullOrWhiteSpace(_envApiKey) ? null : _envApiKey, _defaultModel);
-    }
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
 
     public async Task<MarketingAdvisorResult> ExplainAsync(MarketingAdvisorContext context, CancellationToken ct = default)
     {
-        var (apiKey, model) = await ResolveAsync(ct);
-        if (apiKey is null)
-            throw new InvalidOperationException(
-                "AI-агент не налаштований. Зверніться до вашого провайдера.");
+        var client = await _ai.ResolveAsync(ct)
+            ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
-        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var result = await client.CompleteAsync(new AiChatRequest(system, BuildUserPrompt(context), MaxTokens: 1024), ct);
 
-        var parameters = new MessageCreateParams
-        {
-            Model = model,
-            MaxTokens = 1024,
-            System = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
-            Messages = [new() { Role = Role.User, Content = BuildUserPrompt(context) }],
-        };
-
-        var response = await client.Messages.Create(parameters, cancellationToken: ct);
-
-        var text = response.Content
-            .Select(b => b.Value)
-            .OfType<TextBlock>()
-            .Select(t => t.Text)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException("Claude returned no text content.");
-
-        var tokens = (int)(response.Usage.InputTokens + response.Usage.OutputTokens);
-
-        return new MarketingAdvisorResult(text.Trim(), model, tokens);
+        return new MarketingAdvisorResult(result.Text.Trim(), result.Model, result.TokensUsed);
     }
 
     private static string BuildSystemPrompt() =>

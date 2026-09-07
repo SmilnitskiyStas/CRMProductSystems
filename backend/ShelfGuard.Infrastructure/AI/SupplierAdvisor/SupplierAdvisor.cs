@@ -1,108 +1,43 @@
 using System.Text.Json;
-using Anthropic;
-using Anthropic.Models.Messages;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Features.Marketplace;
 using ShelfGuard.Application.Services;
-using ShelfGuard.Infrastructure.Data;
 
 namespace ShelfGuard.Infrastructure.AI.SupplierAdvisor;
 
 /// <summary>
-/// Claude-backed supplier recommendation advisor (v4-spec Phase 3, TASK-223).
-/// Prompt template and provider wiring live here per the architecture rule:
-/// AI integrations are isolated in Infrastructure/AI — never coupled to business logic.
-///
-/// Key resolution mirrors ClaudeOrderAdvisor:
-///   tenant integration_configs row (service='claude', provider-managed from the client card)
-///   → fallback to Claude:ApiKey env var.
+/// Supplier recommendation advisor (v4-spec Phase 3, TASK-223). Prompt template lives here per
+/// the architecture rule; the model call is provider-agnostic since managed-AI Phase 2 —
+/// through <see cref="IAiClientFactory"/> / <see cref="IAiChatClient"/>. Structured output.
+/// The per-tenant isolation guardrail is applied by <see cref="IAiPromptResolver"/> (Phase 1).
 /// </summary>
 public sealed class SupplierAdvisor : ISupplierAdvisor
 {
-    // See ClaudeOrderAdvisor — SDK default (10 min, retried) is too long for a synchronous
-    // request. Block 7 audit.
-    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(60);
-
-    private readonly AppDbContext _db;
+    private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
-    private readonly string? _envApiKey;
-    private readonly string _defaultModel;
 
-    public SupplierAdvisor(AppDbContext db, IAiPromptResolver prompt, IConfiguration config)
+    public SupplierAdvisor(IAiClientFactory ai, IAiPromptResolver prompt)
     {
-        _db = db;
+        _ai = ai;
         _prompt = prompt;
-        _envApiKey = config["Claude:ApiKey"];
-        _defaultModel = config["Claude:Model"] ?? "claude-sonnet-4-6";
     }
 
-    public async Task<bool> IsConfiguredAsync(CancellationToken ct = default) =>
-        (await ResolveAsync(ct)).ApiKey is not null;
-
-    private async Task<(string? ApiKey, string Model)> ResolveAsync(CancellationToken ct)
-    {
-        var row = await _db.IntegrationConfigs
-            .Where(i => i.Service == "claude" && i.IsEnabled)
-            .Select(i => i.Config)
-            .FirstOrDefaultAsync(ct);
-
-        if (row is not null)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(row);
-                var key   = doc.RootElement.TryGetProperty("api_key", out var k) ? k.GetString() : null;
-                var model = doc.RootElement.TryGetProperty("model",   out var m) ? m.GetString() : null;
-                if (!string.IsNullOrWhiteSpace(key))
-                    return (key, string.IsNullOrWhiteSpace(model) ? _defaultModel : model!);
-            }
-            catch (JsonException) { /* malformed config — fall through to env */ }
-        }
-
-        return (string.IsNullOrWhiteSpace(_envApiKey) ? null : _envApiKey, _defaultModel);
-    }
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
 
     public async Task<SupplierRecommendationResult> RecommendAsync(
         SupplierRecommendationRequest request,
         IEnumerable<SupplierCandidateDto> candidates,
         CancellationToken ct = default)
     {
-        var (apiKey, model) = await ResolveAsync(ct);
-        if (apiKey is null)
-            throw new InvalidOperationException(
-                "AI-агент не налаштований. Зверніться до вашого провайдера.");
+        var client = await _ai.ResolveAsync(ct)
+            ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
-        var candidateList = candidates.ToList();
-        var prompt = BuildUserPrompt(request, candidateList);
+        var prompt = BuildUserPrompt(request, candidates.ToList());
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var result = await client.CompleteAsync(
+            new AiChatRequest(system, prompt, MaxTokens: 4096, JsonSchema: ResponseSchemaJson), ct);
 
-        var client = new AnthropicClient { ApiKey = apiKey, Timeout = ApiTimeout };
-
-        var parameters = new MessageCreateParams
-        {
-            Model      = model,
-            MaxTokens  = 4096,
-            System     = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct),
-            Messages   = [new() { Role = Role.User, Content = prompt }],
-            OutputConfig = new OutputConfig
-            {
-                Format = new JsonOutputFormat { Schema = ResponseSchema() },
-            },
-        };
-
-        var response = await client.Messages.Create(parameters, cancellationToken: ct);
-
-        var text = response.Content
-            .Select(b => b.Value)
-            .OfType<TextBlock>()
-            .Select(t => t.Text)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException("Claude returned no text content.");
-
-        var items = ParseRecommendations(text);
-        var tokens = (int)(response.Usage.InputTokens + response.Usage.OutputTokens);
-
-        return new SupplierRecommendationResult(items, prompt, model, tokens);
+        var items = ParseRecommendations(result.Text);
+        return new SupplierRecommendationResult(items, prompt, result.Model, result.TokensUsed);
     }
 
     // ── Prompts ───────────────────────────────────────────────────────────────
@@ -130,9 +65,7 @@ public sealed class SupplierAdvisor : ISupplierAdvisor
             $"Поверни JSON масив recommendations з топ 3-5 постачальниками, відсортованими за придатністю.";
     }
 
-    private static Dictionary<string, JsonElement> ResponseSchema()
-    {
-        const string schemaJson = """
+    private const string ResponseSchemaJson = """
         {
           "type": "object",
           "properties": {
@@ -157,11 +90,6 @@ public sealed class SupplierAdvisor : ISupplierAdvisor
           "additionalProperties": false
         }
         """;
-
-        using var doc = JsonDocument.Parse(schemaJson);
-        return doc.RootElement.EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.Clone());
-    }
 
     /// <summary>Internal + static so unit tests can exercise parsing without an API call.</summary>
     internal static List<SupplierRecommendationItem> ParseRecommendations(string json)
