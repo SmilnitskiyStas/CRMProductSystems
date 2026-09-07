@@ -1,6 +1,7 @@
 "use client";
 
 import { ModuleGate } from "@/features/modules/components/ModuleGate";
+import { ConsumerAppSubnav } from "@/features/consumer-app/components/ConsumerAppSubnav";
 
 /**
  * TASK-674: every route under /consumer-app (bonus program, tiers, banners, promotions,
@@ -10,5 +11,10 @@ import { ModuleGate } from "@/features/modules/components/ModuleGate";
  * by NavGroup.moduleKey).
  */
 export default function ConsumerAppLayout({ children }: { children: React.ReactNode }) {
-  return <ModuleGate moduleKey="mobile_app">{children}</ModuleGate>;
+  return (
+    <ModuleGate moduleKey="mobile_app">
+      <ConsumerAppSubnav />
+      {children}
+    </ModuleGate>
+  );
 }

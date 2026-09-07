@@ -432,6 +432,7 @@
         },
         "consumerApp": {
           "label": "Застосунок",
+          "management": "Керування застосунком",
           "bonusProgram": "Бонусна програма",
           "customerMessages": "Повідомлення клієнтам",
           "loyaltyTiers": "Рівні лояльності",

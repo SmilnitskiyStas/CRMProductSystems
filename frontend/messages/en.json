@@ -432,6 +432,7 @@
         },
         "consumerApp": {
           "label": "App",
+          "management": "App management",
           "bonusProgram": "Bonus Program",
           "customerMessages": "Customer Messages",
           "loyaltyTiers": "Loyalty Tiers",

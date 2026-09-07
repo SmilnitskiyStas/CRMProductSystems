@@ -138,13 +138,6 @@ interface NavGroup {
 type SidebarGroupsT = ReturnType<typeof useTranslations>;
 
 export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
-  const consumerAppSections = {
-    content: { key: "content", label: t("consumerApp.sections.content"), icon: <Megaphone size={18} /> },
-    configuration: { key: "configuration", label: t("consumerApp.sections.configuration"), icon: <Settings size={18} /> },
-    loyalty: { key: "loyalty", label: t("consumerApp.sections.loyalty"), icon: <Smartphone size={18} /> },
-    analytics: { key: "analytics", label: t("consumerApp.sections.analytics"), icon: <Activity size={18} /> },
-  } satisfies Record<string, NavSection>;
-
   return [
   {
     key: "operations",
@@ -254,17 +247,8 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Smartphone size={18} />,
     moduleKey: "mobile_app",
     items: [
-      { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true, section: consumerAppSections.loyalty },
-      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics", section: consumerAppSections.analytics },
+      { href: "/consumer-app", label: t("consumerApp.management"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN },
+      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics" },
     ],
   },
   {
