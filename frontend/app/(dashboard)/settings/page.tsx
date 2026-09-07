@@ -10,13 +10,7 @@ import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab"
 import { ModulesTab } from "@/features/settings/components/ModulesTab";
 import { MarketplaceProfileTab } from "@/features/settings/components/MarketplaceProfileTab";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import {
-  hasRole,
-  canViewIntegrations,
-  PROVIDER_TEAM,
-  ENTERPRISE_ADMIN_ONLY,
-  SUPPLIER_ONLY,
-} from "@/lib/roles";
+import { hasRole, canViewIntegrations, PROVIDER_TEAM, SUPPLIER_ONLY } from "@/lib/roles";
 
 type Tab = "overview" | "notifications" | "integrations" | "modules" | "marketplace-profile";
 
@@ -27,11 +21,13 @@ export default function SettingsPage() {
 
   // Tab-level role gating — mirrors the backend authorization for each tab's endpoints:
   //  · integrations → AppPolicies.IntegrationsViewOrCapability (store_manager+ OR capability)
-  //  · modules      → GET /api/settings/modules is open to any tenant role, but the tab is
-  //                   read-only info: show it to provider team + the tenant's own admin
+  //  · modules      → PROVIDER TEAM ONLY. Module activation is a paid, provider-granted
+  //                   decision (per-module pricing) — a tenant must never see a modules
+  //                   surface that looks like a self-serve on/off list. The Overview tab
+  //                   still shows the tenant their *active* modules read-only.
   //  · marketplace-profile → supplier_admin only (ADR-016)
   const showIntegrations = canViewIntegrations(me?.role, me?.capabilities);
-  const showModules = hasRole(me?.role, PROVIDER_TEAM) || hasRole(me?.role, ENTERPRISE_ADMIN_ONLY);
+  const showModules = hasRole(me?.role, PROVIDER_TEAM);
   const isSupplier = hasRole(me?.role, SUPPLIER_ONLY);
 
   const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [

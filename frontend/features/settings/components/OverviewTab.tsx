@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { ALL_MODULE_KEYS } from "@/features/modules/types";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { LanguageSwitcher } from "@/features/profile/components/LanguageSwitcher";
 import { getRoleLabel } from "@/features/profile/types";
@@ -71,6 +72,14 @@ export function OverviewTab() {
       ? tBusinessTypes(modules.businessType)
       : modules?.businessType ?? "";
 
+  // Show only the canonical v4 modules that are active, by their human label — never the
+  // raw programmatic key. A tenant's `modules` array can still carry legacy keys
+  // (`shelf_manager`, `crm`, `notifications`) or non-display keys (`marketplace_supplier`)
+  // that have no catalog entry; those are superseded by the v4 keys and are left out of
+  // this summary. Same key list as the provider-only Модулі tab (ModulesTab.tsx).
+  const activeModuleSet = new Set(modules?.modules ?? []);
+  const activeModuleKeys = ALL_MODULE_KEYS.filter((key) => activeModuleSet.has(key));
+
   const activeUsers = users?.filter((u) => u.isActive).length ?? 0;
   const needsLocation = users?.filter((u) => u.needsLocationAssignment).length ?? 0;
 
@@ -109,11 +118,11 @@ export function OverviewTab() {
             {" — "}
             {t("modulesHint")}
           </p>
-          {modules.modules.length === 0 ? (
+          {activeModuleKeys.length === 0 ? (
             <div style={{ color: "#4B5563", fontSize: 12 }}>{t("modulesNone")}</div>
           ) : (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {modules.modules.map((key) => (
+              {activeModuleKeys.map((key) => (
                 <span
                   key={key}
                   style={{
@@ -125,7 +134,7 @@ export function OverviewTab() {
                     fontWeight: 500,
                   }}
                 >
-                  {tCatalog.has(`${key}.label`) ? tCatalog(`${key}.label`) : key}
+                  {tCatalog(`${key}.label`)}
                 </span>
               ))}
             </div>
