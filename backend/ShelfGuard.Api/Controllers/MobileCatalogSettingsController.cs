@@ -140,8 +140,8 @@ public sealed class MobileCatalogSettingsController : ControllerBase
     {
         var catalog = await Load(id, true, ct); if (catalog is null) return NotFound();
         if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date) return BadRequest(new { error = "The start date must not be later than the end date." });
-        var fromUtc = from?.Date;
-        var toExclusive = to?.Date.AddDays(1);
+        var fromUtc = UtcDateRange.StartOfDay(from);
+        var toExclusive = UtcDateRange.StartOfDay(to)?.AddDays(1);
         var requestedStores = storeIds?.Distinct().ToArray() ?? [];
         var catalogStores = catalog.Locations.Select(x => x.LocationId).Distinct().ToArray();
         var selectedStores = requestedStores.Length == 0 ? catalogStores : requestedStores.Intersect(catalogStores).ToArray();

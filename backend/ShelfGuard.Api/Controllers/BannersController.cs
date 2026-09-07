@@ -155,8 +155,8 @@ public sealed class BannersController : ControllerBase
         if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
             return BadRequest(new { error = "The start date must not be later than the end date." });
 
-        var fromUtc = from?.Date;
-        var toExclusive = to?.Date.AddDays(1);
+        var fromUtc = UtcDateRange.StartOfDay(from);
+        var toExclusive = UtcDateRange.StartOfDay(to)?.AddDays(1);
         var (analytics, error) = await _service.GetAnalyticsAsync(tenantId.Value, id, fromUtc, toExclusive, storeIds, ct);
         return analytics is null ? NotFound(new { error }) : Ok(analytics);
     }

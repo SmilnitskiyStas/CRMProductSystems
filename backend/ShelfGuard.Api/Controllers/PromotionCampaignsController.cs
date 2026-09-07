@@ -39,9 +39,9 @@ public sealed class PromotionCampaignsController : ControllerBase
             .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
         if (campaign is null) return NotFound();
         if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date) return BadRequest(new { error = "Invalid date range." });
-        var start = from?.Date ?? campaign.StartsAt;
+        var start = UtcDateRange.StartOfDay(from) ?? campaign.StartsAt;
         if (start < campaign.StartsAt) start = campaign.StartsAt;
-        var endExclusive = to?.Date.AddDays(1) ?? campaign.EndsAt?.AddTicks(1) ?? DateTime.UtcNow.AddTicks(1);
+        var endExclusive = UtcDateRange.StartOfDay(to)?.AddDays(1) ?? campaign.EndsAt?.AddTicks(1) ?? DateTime.UtcNow.AddTicks(1);
         if (campaign.EndsAt.HasValue && endExclusive > campaign.EndsAt.Value.AddTicks(1)) endExclusive = campaign.EndsAt.Value.AddTicks(1);
         var campaignStores = campaign.Locations.Select(x => x.LocationId).Distinct().ToArray();
         var requestedStores = storeIds?.Distinct().ToArray() ?? [];
