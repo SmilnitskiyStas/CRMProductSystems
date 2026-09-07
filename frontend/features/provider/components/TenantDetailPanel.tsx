@@ -7,9 +7,9 @@ import { useTranslations, useLocale } from "next-intl";
 import { X, LogIn, Save, ScrollText, PlugZap } from "lucide-react";
 import {
   PLAN_COLORS,
-  ALL_MODULES, ALL_PLANS,
+  ALL_MODULES, ALL_PLANS, ALL_BUSINESS_TYPES,
 } from "../types";
-import type { TenantDetailDto, TenantAiAgentDto, AiAgentTestResult } from "../types";
+import type { TenantDetailDto, TenantAiAgentDto, AiAgentTestResult, BusinessType } from "../types";
 import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers, useActivateTenant, useDeactivateTenant, useTenantAiAgent, useUpdateAiAgent } from "../hooks/useProvider";
 import { providerApi } from "../api/provider";
 import { AddTenantUserModal } from "./AddTenantUserModal";
@@ -22,6 +22,7 @@ import {
   SUGGESTED_AI_MODELS,
   type AiProvider,
 } from "@/features/provider/aiModels";
+import { AI_PROMPT_PRESETS } from "@/features/provider/aiPromptPresets";
 
 interface Props {
   tenantId: string;
@@ -53,6 +54,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const t = useTranslations("Dashboard.provider.tenantDetailPanel");
   const tPlans = useTranslations("Dashboard.provider.plans");
   const tModules = useTranslations("Dashboard.provider.modules");
+  const tBiz = useTranslations("Dashboard.provider.businessTypes");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: tenant, isLoading } = useTenant(tenantId, true);
@@ -131,6 +133,11 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
       setAiModel(DEFAULT_AI_MODELS[provider]);
     }
     setAiTestResult(null);
+  }
+
+  // Phase 3 — fill the editable extra-instructions field with a business-type starter preset.
+  function applyAiPreset(bt: BusinessType) {
+    setAiExtra(AI_PROMPT_PRESETS[bt]);
   }
 
   function aiRequestBody() {
@@ -530,6 +537,26 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3 }}>{t("aiBaseUrlHint")}</div>
                   </div>
                 )}
+
+                <div>
+                  <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiPresetLabel")}</div>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const bt = e.target.value as BusinessType;
+                      if (bt) applyAiPreset(bt);
+                    }}
+                    style={aiInputStyle}
+                  >
+                    <option value="">{t("aiPresetPlaceholder")}</option>
+                    {ALL_BUSINESS_TYPES.map((bt) => (
+                      <option key={bt} value={bt}>
+                        {tBiz(bt)}{bt === tenant.businessType ? ` — ${t("aiPresetRecommended")}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3 }}>{t("aiPresetHint")}</div>
+                </div>
 
                 <div>
                   <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiExtraLabel")}</div>

@@ -6,6 +6,19 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Керована AI-інтеграція, Фаза 3 — пресети промптів по типах бізнесу — TASK-703
+
+**Status:** review · main session · деплой через push→CI · Log: `.claude/logs/tasks/TASK-703_2026-09-07_managed-ai-phase3-prompt-presets_main-session.md`
+
+Чисто frontend. Новий `frontend/features/provider/aiPromptPresets.ts` —
+`AI_PROMPT_PRESETS: Record<BusinessType, string>`, 9 стислих україномовних пресетів
+бізнес-контексту. `TenantDetailPanel` секція «AI-агент» (edit-режим): `<select>` «Пресет
+промпту» над полем «Додаткові інструкції» → вибір заповнює `aiExtra`; пресет типу бізнесу
+клієнта позначено «— рекомендовано». +4 i18n ключі `tenantDetailPanel.aiPreset*`.
+**Нуль змін на бекенді** — `extra_instructions` плюмбінг з Фази 1 (guardrail ∙ extra ∙ база).
+Рішення власника: пресети фіксовані в коді (не БД), заповнюють поле (не зберігаються
+посиланням). `tsc`/`lint`/`build` чисто; браузер-верифікація — на проді після деплою.
+
 ## Керована AI-інтеграція, Фаза 2 — провайдер-агностичний клієнт + OpenAI/Codex — TASK-702
 
 **Status:** done · main session · DEPLOYED prod 2026-09-07 (`ffe0b1b1`, `f65e289c`) · Log: `.claude/logs/tasks/TASK-702_2026-09-07_managed-ai-phase2-openai_main-session.md`

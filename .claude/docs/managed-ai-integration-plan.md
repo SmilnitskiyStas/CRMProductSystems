@@ -1,11 +1,16 @@
 # План: керована провайдером AI-інтеграція («AI-агент для бізнесу»)
 
-**Статус:** **Фази 1 і 2 — DEPLOYED prod 2026-09-07.**
+**Статус:** **Фази 1, 2, 3 — реалізовано; деплой через push→CI (2026-09-07).**
 - Фаза 1 — TASK-701 (`7ffefeb7`/`5a93f3d3`/`0b298daa`), log
   `.claude/logs/tasks/TASK-701_2026-09-07_managed-ai-phase1_main-session.md`.
 - Фаза 2 — TASK-702 (`ffe0b1b1` рефактор `IAiChatClient` + `f65e289c` OpenAI/Codex вибір),
   log `.claude/logs/tasks/TASK-702_2026-09-07_managed-ai-phase2-openai_main-session.md`.
-- **Фаза 3** (пресети промптів по типах бізнесу) — не почато.
+- Фаза 3 — TASK-703 (пресети промптів по типах бізнесу), log
+  `.claude/logs/tasks/TASK-703_2026-09-07_managed-ai-phase3-prompt-presets_main-session.md`.
+  Реалізовано **простіше за початковий дизайн**: не таблиця в БД, а фіксований
+  frontend-конфіг `frontend/features/provider/aiPromptPresets.ts` (9 пресетів по типах
+  бізнесу); дропдаун у секції «AI-агент» картки клієнта **заповнює редаговане поле**
+  `extra_instructions` (не зберігається посиланням). Нуль змін на бекенді.
 Розділи нижче описують повний дизайн; де реалізація відхилилась — дивись task logs
 (зокрема: провайдер-конфіг на `/api/provider/tenants/{id}/ai-agent`, не `/api/admin`;
 switching-провайдера **видаляє** протилежний рядок, а не disable).
@@ -197,7 +202,7 @@ i18n: `Dashboard.provider.tenantDetail.aiSection.*` (uk+en).
 |---|---|---|
 | **1. Ізоляція + provider-config (Claude)** | guardrail-префікс у 6 адвайзерах + `TenantName` в контекст + RLS-верифікація + cross-tenant тест; `claude` write → provider-only; `AdminController` AI-секція; секція «AI-агент» у `TenantDetailPanel`; тенантський read-only статус; прибрати self-serve картку | середній, 1 backend + 1 frontend агент |
 | **2. OpenAI/Codex** | `IAiChatClient` + `OpenAiChatClient` (тонкий HttpClient) + `IAiClientFactory`; рефактор 6 адвайзерів на фабрику; вибір провайдера в картці; OpenAI env; Docker-білд перевірка | середній, backend-агент |
-| **3. (опц.) Пресети по типах бізнесу** | якщо `extra_instructions` руками набридне — маленька таблиця шаблонів + дропдаун у картці | низький |
+| **3. Пресети по типах бізнесу** ✅ TASK-703 | фіксований frontend-конфіг `aiPromptPresets.ts` (9 пресетів) + дропдаун у секції «AI-агент» картки клієнта, що заповнює редаговане поле `extra_instructions`. Без БД, без змін бекенду | низький, main session |
 
 Фаза 1 самодостатня: закриває головну вимогу (ізоляція + провайдер керує) на Claude-only,
 без абстракції провайдерів.
