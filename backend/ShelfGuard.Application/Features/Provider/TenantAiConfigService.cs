@@ -11,8 +11,10 @@ namespace ShelfGuard.Application.Features.Provider;
 /// <inheritdoc />
 public sealed class TenantAiConfigService : ITenantAiConfigService
 {
-    private const string Service = "claude";
-    private const string DefaultModel = "claude-sonnet-4-6";
+    private const string Claude = "claude";
+    private const string OpenAi = "openai";
+    private const string DefaultClaudeModel = "claude-sonnet-4-6";
+    private const string DefaultOpenAiModel = "gpt-4o-mini";
 
     private readonly IIntegrationService _integrations;
     private readonly IIntegrationRepository _repo;
@@ -28,29 +30,45 @@ public sealed class TenantAiConfigService : ITenantAiConfigService
         _tester = tester;
     }
 
+    private static string Normalize(string? provider) =>
+        string.Equals(provider, OpenAi, StringComparison.OrdinalIgnoreCase) ? OpenAi : Claude;
+
+    private static string Other(string service) => service == OpenAi ? Claude : OpenAi;
+
+    private static string DefaultModel(string service) => service == OpenAi ? DefaultOpenAiModel : DefaultClaudeModel;
+
     public async Task<TenantAiAgentDto> GetAsync(Guid tenantId, CancellationToken ct = default)
     {
-        var (config, _) = await _integrations.GetByServiceAsync(tenantId, Service, ct);
-        if (config?.Config is null)
-            return new TenantAiAgentDto(IsConfigured: false, IsEnabled: false, Model: null,
-                ApiKeyLast4: null, ExtraInstructions: null, UpdatedAt: null);
+        // Prefer the openai row (matches AiClientFactory's resolution order), then claude.
+        foreach (var service in new[] { OpenAi, Claude })
+        {
+            var (config, _) = await _integrations.GetByServiceAsync(tenantId, service, ct);
+            var maskedKey = config?.Config is null ? null : (string?)config!.Config["api_key"];
+            if (string.IsNullOrEmpty(maskedKey))
+                continue;
 
-        var maskedKey = (string?)config.Config["api_key"];
-        var last4 = PrroSecrets.IsMasked(maskedKey) && maskedKey!.Length > PrroSecrets.MaskToken.Length
-            ? maskedKey[PrroSecrets.MaskToken.Length..]
-            : null;
+            var last4 = PrroSecrets.IsMasked(maskedKey) && maskedKey!.Length > PrroSecrets.MaskToken.Length
+                ? maskedKey[PrroSecrets.MaskToken.Length..]
+                : null;
 
-        return new TenantAiAgentDto(
-            IsConfigured: !string.IsNullOrEmpty(maskedKey),
-            IsEnabled: config.IsEnabled,
-            Model: (string?)config.Config["model"],
-            ApiKeyLast4: last4,
-            ExtraInstructions: (string?)config.Config["extra_instructions"],
-            UpdatedAt: config.UpdatedAt);
+            return new TenantAiAgentDto(
+                IsConfigured: true,
+                IsEnabled: config!.IsEnabled,
+                Provider: service,
+                Model: (string?)config.Config!["model"],
+                ApiKeyLast4: last4,
+                BaseUrl: (string?)config.Config["base_url"],
+                ExtraInstructions: (string?)config.Config["extra_instructions"],
+                UpdatedAt: config.UpdatedAt);
+        }
+
+        return new TenantAiAgentDto(false, false, null, null, null, null, null, null);
     }
 
     public async Task<string?> UpdateAsync(Guid tenantId, UpdateAiAgentRequest request, CancellationToken ct = default)
     {
+        var service = Normalize(request.Provider);
+
         var payload = new JsonObject
         {
             // Blank key → masked placeholder so IntegrationService keeps the stored key
@@ -58,24 +76,38 @@ public sealed class TenantAiConfigService : ITenantAiConfigService
             ["api_key"] = string.IsNullOrWhiteSpace(request.ApiKey)
                 ? PrroSecrets.MaskToken
                 : request.ApiKey.Trim(),
-            ["model"] = string.IsNullOrWhiteSpace(request.Model) ? DefaultModel : request.Model.Trim(),
+            ["model"] = string.IsNullOrWhiteSpace(request.Model) ? DefaultModel(service) : request.Model.Trim(),
         };
 
         if (!string.IsNullOrWhiteSpace(request.ExtraInstructions))
             payload["extra_instructions"] = request.ExtraInstructions.Trim();
 
-        return await _integrations.UpsertAsync(
-            tenantId, Service, new UpsertIntegrationRequest(payload, request.IsEnabled), ct);
+        if (service == OpenAi && !string.IsNullOrWhiteSpace(request.BaseUrl))
+            payload["base_url"] = request.BaseUrl.Trim();
+
+        var error = await _integrations.UpsertAsync(
+            tenantId, service, new UpsertIntegrationRequest(payload, request.IsEnabled), ct);
+        if (error is not null)
+            return error;
+
+        // Exactly one AI provider per tenant — drop the other row so resolution is unambiguous.
+        await _integrations.DeleteAsync(tenantId, Other(service), ct);
+        return null;
     }
 
     public async Task DeleteAsync(Guid tenantId, CancellationToken ct = default)
-        => await _integrations.DeleteAsync(tenantId, Service, ct);
+    {
+        await _integrations.DeleteAsync(tenantId, Claude, ct);
+        await _integrations.DeleteAsync(tenantId, OpenAi, ct);
+    }
 
     public async Task<AiAgentTestResult> TestAsync(Guid tenantId, UpdateAiAgentRequest? candidate, CancellationToken ct = default)
     {
+        var provider = Normalize(candidate?.Provider);
+
         // Raw (unmasked) stored config so a "test the saved key" probe actually has the key.
-        var stored = await _repo.GetByServiceAsync(tenantId, Service, ct);
-        var (storedKey, storedModel) = ParseStored(stored?.Config);
+        var stored = await _repo.GetByServiceAsync(tenantId, provider, ct);
+        var (storedKey, storedModel, storedBaseUrl) = ParseStored(stored?.Config);
 
         var candidateKey = candidate?.ApiKey?.Trim();
         var apiKey = !string.IsNullOrWhiteSpace(candidateKey) && !PrroSecrets.IsMasked(candidateKey)
@@ -83,30 +115,39 @@ public sealed class TenantAiConfigService : ITenantAiConfigService
             : storedKey;
 
         var model = !string.IsNullOrWhiteSpace(candidate?.Model) ? candidate!.Model!.Trim()
-            : storedModel ?? DefaultModel;
+            : storedModel ?? DefaultModel(provider);
+
+        var baseUrl = !string.IsNullOrWhiteSpace(candidate?.BaseUrl) ? candidate!.BaseUrl!.Trim() : storedBaseUrl;
 
         if (string.IsNullOrWhiteSpace(apiKey))
             return new AiAgentTestResult(Ok: false, Model: model, Error: "Не вказано API-ключ.");
 
-        var probe = await _tester.ProbeAsync(apiKey, model, ct);
+        var probe = await _tester.ProbeAsync(new AiProviderConfig(provider, apiKey, model, baseUrl), ct);
         return new AiAgentTestResult(probe.Ok, model, probe.Error);
     }
 
-    private static (string? Key, string? Model) ParseStored(string? configJson)
+    private static (string? Key, string? Model, string? BaseUrl) ParseStored(string? configJson)
     {
         if (string.IsNullOrWhiteSpace(configJson))
-            return (null, null);
+            return (null, null, null);
 
         try
         {
             using var doc = JsonDocument.Parse(configJson);
-            var key = doc.RootElement.TryGetProperty("api_key", out var k) ? k.GetString() : null;
-            var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
-            return (string.IsNullOrWhiteSpace(key) ? null : key, string.IsNullOrWhiteSpace(model) ? null : model);
+            var root = doc.RootElement;
+            return (
+                Str(root, "api_key"),
+                Str(root, "model"),
+                Str(root, "base_url"));
         }
         catch (JsonException)
         {
-            return (null, null);
+            return (null, null, null);
         }
     }
+
+    private static string? Str(JsonElement obj, string prop) =>
+        obj.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString())
+            ? v.GetString()
+            : null;
 }

@@ -2,8 +2,10 @@ namespace ShelfGuard.Domain.Entities;
 
 /// <summary>
 /// Stores per-tenant credentials and settings for an external service integration.
-/// Config JSONB is encrypted at the Application layer before persistence.
-/// Supported services: telegram, resend, webhook, prro, iot
+/// Secret fields in the Config JSONB are masked write-only at the Application layer.
+/// Supported services: telegram, resend, webhook, prro, iot, vchasno, claude, openai.
+/// (claude/openai are provider-managed via /api/provider/tenants/{id}/ai-agent, not
+/// tenant self-serve — managed-AI Phase 1/2.)
 /// </summary>
 public sealed class IntegrationConfig
 {

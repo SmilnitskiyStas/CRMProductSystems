@@ -141,7 +141,7 @@ public static class DependencyInjection
         // through IAiClientFactory (Claude SDK or a thin OpenAI-compatible HttpClient).
         services.AddScoped<Application.Services.IAiPromptResolver, AI.AiPromptResolver>();
         services.AddScoped<Application.Services.IAiClientFactory, AI.AiClientFactory>();
-        services.AddScoped<Application.Services.IAiConnectivityTester, AI.AnthropicConnectivityTester>();
+        services.AddScoped<Application.Services.IAiConnectivityTester, AI.AiConnectivityTester>();
         services.AddHttpClient("openai", http => http.Timeout = TimeSpan.FromSeconds(60));
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
 

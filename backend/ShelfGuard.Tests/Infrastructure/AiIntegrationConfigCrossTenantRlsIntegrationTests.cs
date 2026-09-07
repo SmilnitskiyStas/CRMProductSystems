@@ -81,23 +81,24 @@ public sealed class AiIntegrationConfigCrossTenantRlsIntegrationTests : IAsyncLi
             ("a", tenantA), ("b", tenantB),
             ("slugA", $"rls-audit-ai-a-{tenantA:N}"), ("slugB", $"rls-audit-ai-b-{tenantB:N}"));
 
+        // Tenant A on claude, tenant B on openai — the AiClientFactory query matches either.
         await ExecAsync(
             "INSERT INTO integration_configs (\"Id\", \"TenantId\", \"Service\", \"Config\", \"IsEnabled\", \"CreatedAt\", \"UpdatedAt\") VALUES " +
             "(gen_random_uuid(), @a, 'claude', @cfgA::jsonb, true, now(), now()), " +
-            "(gen_random_uuid(), @b, 'claude', @cfgB::jsonb, true, now(), now());",
+            "(gen_random_uuid(), @b, 'openai', @cfgB::jsonb, true, now(), now());",
             ("a", tenantA), ("b", tenantB),
             ("cfgA", "{\"api_key\":\"sk-ant-AAAA-tenant-a\",\"model\":\"claude-sonnet-4-6\"}"),
-            ("cfgB", "{\"api_key\":\"sk-ant-BBBB-tenant-b\",\"model\":\"claude-sonnet-4-6\"}"));
+            ("cfgB", "{\"api_key\":\"sk-oai-BBBB-tenant-b\",\"model\":\"gpt-4o\"}"));
 
         try
         {
             await ExecAsync("SET ROLE rls_audit_test_role;");
             await ExecAsync($"SET app.tenant_id = '{tenantA:D}'; SET app.role = 'store_manager';");
 
-            // The advisors' exact query — no TenantId filter, ordered/limited by the unique
-            // (TenantId, Service) index. Must resolve to tenant A's key only.
+            // The AiClientFactory's exact query — no TenantId filter, RLS is the only scope.
+            // Must resolve to tenant A's row only, never tenant B's openai key.
             await using var cmd = new NpgsqlCommand(
-                "SELECT \"Config\"::text FROM integration_configs WHERE \"Service\" = 'claude' AND \"IsEnabled\";",
+                "SELECT \"Config\"::text FROM integration_configs WHERE (\"Service\" = 'claude' OR \"Service\" = 'openai') AND \"IsEnabled\";",
                 _connection);
             await using var reader = await cmd.ExecuteReaderAsync();
 

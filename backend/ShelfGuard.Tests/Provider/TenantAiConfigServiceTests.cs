@@ -12,7 +12,7 @@ using Xunit;
 namespace ShelfGuard.Tests.Provider;
 
 /// <summary>
-/// Managed-AI Phase 1 — provider-only per-tenant AI config service.
+/// Managed-AI Phase 1 (provider-only per-tenant AI config) + Phase 2 (Claude / OpenAI choice).
 /// </summary>
 public sealed class TenantAiConfigServiceTests
 {
@@ -26,37 +26,55 @@ public sealed class TenantAiConfigServiceTests
     public TenantAiConfigServiceTests() =>
         _sut = new TenantAiConfigService(_integrations, _repo, _tester);
 
+    private void StubRow(string service, JsonObject? config, bool enabled = true) =>
+        _integrations.GetByServiceAsync(Tenant, service, Arg.Any<CancellationToken>())
+            .Returns((config is null ? null : new IntegrationConfigDto(Guid.NewGuid(), service, config, enabled, DateTime.UtcNow),
+                      (string?)null));
+
     [Fact]
     public async Task Get_NoRow_ReturnsNotConfigured()
     {
-        _integrations.GetByServiceAsync(Tenant, "claude", Arg.Any<CancellationToken>())
-            .Returns(((IntegrationConfigDto?)null, (string?)null));
+        StubRow("claude", null);
+        StubRow("openai", null);
 
         var dto = await _sut.GetAsync(Tenant);
 
         Assert.False(dto.IsConfigured);
+        Assert.Null(dto.Provider);
         Assert.Null(dto.ApiKeyLast4);
     }
 
     [Fact]
-    public async Task Get_MaskedRow_ReshapesLast4AndFields()
+    public async Task Get_ClaudeRow_ReshapesLast4AndFields()
     {
-        var cfg = new JsonObject
+        StubRow("openai", null);
+        StubRow("claude", new JsonObject
         {
             ["api_key"] = "••••cdef",
             ["model"] = "claude-opus-4-1",
             ["extra_instructions"] = "Це аптека.",
-        };
-        _integrations.GetByServiceAsync(Tenant, "claude", Arg.Any<CancellationToken>())
-            .Returns((new IntegrationConfigDto(Guid.NewGuid(), "claude", cfg, true, DateTime.UtcNow), (string?)null));
+        });
 
         var dto = await _sut.GetAsync(Tenant);
 
         Assert.True(dto.IsConfigured);
-        Assert.True(dto.IsEnabled);
+        Assert.Equal("claude", dto.Provider);
         Assert.Equal("cdef", dto.ApiKeyLast4);
         Assert.Equal("claude-opus-4-1", dto.Model);
         Assert.Equal("Це аптека.", dto.ExtraInstructions);
+    }
+
+    [Fact]
+    public async Task Get_PrefersTheOpenAiRow()
+    {
+        StubRow("openai", new JsonObject { ["api_key"] = "••••1234", ["model"] = "gpt-4o", ["base_url"] = "https://proxy/v1" });
+        StubRow("claude", new JsonObject { ["api_key"] = "••••abcd", ["model"] = "claude-sonnet-4-6" });
+
+        var dto = await _sut.GetAsync(Tenant);
+
+        Assert.Equal("openai", dto.Provider);
+        Assert.Equal("1234", dto.ApiKeyLast4);
+        Assert.Equal("https://proxy/v1", dto.BaseUrl);
     }
 
     [Fact]
@@ -72,34 +90,54 @@ public sealed class TenantAiConfigServiceTests
         Assert.Equal("••••", (string?)captured!.Config["api_key"]);
         Assert.Equal("claude-sonnet-4-6", (string?)captured.Config["model"]);
         Assert.True(captured.IsEnabled);
+        // switching to (or staying on) claude removes any openai row
+        await _integrations.Received(1).DeleteAsync(Tenant, "openai", Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Update_RealApiKey_WritesItVerbatimAndOmitsBlankExtra()
+    public async Task Update_OpenAiProvider_WritesOpenAiRow_DropsClaude_AndKeepsBaseUrl()
     {
         UpsertIntegrationRequest? captured = null;
-        _integrations.UpsertAsync(Tenant, "claude", Arg.Do<UpsertIntegrationRequest>(r => captured = r), Arg.Any<CancellationToken>())
+        _integrations.UpsertAsync(Tenant, "openai", Arg.Do<UpsertIntegrationRequest>(r => captured = r), Arg.Any<CancellationToken>())
             .Returns((string?)null);
 
-        await _sut.UpdateAsync(Tenant, new UpdateAiAgentRequest(ApiKey: "sk-ant-real", Model: null, ExtraInstructions: "   ", IsEnabled: false));
+        await _sut.UpdateAsync(Tenant, new UpdateAiAgentRequest(
+            ApiKey: "sk-openai-real", Model: null, ExtraInstructions: null, IsEnabled: true,
+            Provider: "openai", BaseUrl: "https://azure.example/v1"));
 
-        Assert.Equal("sk-ant-real", (string?)captured!.Config["api_key"]);
-        Assert.Equal("claude-sonnet-4-6", (string?)captured.Config["model"]); // default filled in
-        Assert.False(captured.Config.ContainsKey("extra_instructions"));
-        Assert.False(captured.IsEnabled);
+        Assert.Equal("sk-openai-real", (string?)captured!.Config["api_key"]);
+        Assert.Equal("gpt-4o-mini", (string?)captured.Config["model"]); // openai default
+        Assert.Equal("https://azure.example/v1", (string?)captured.Config["base_url"]);
+        await _integrations.Received(1).DeleteAsync(Tenant, "claude", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Test_NoKeyAnywhere_ReturnsOkFalse_WithoutProbing()
     {
-        _repo.GetByServiceAsync(Tenant, "claude", Arg.Any<CancellationToken>())
-            .Returns((IntegrationConfig?)null);
+        _repo.GetByServiceAsync(Tenant, "claude", Arg.Any<CancellationToken>()).Returns((IntegrationConfig?)null);
 
         var result = await _sut.TestAsync(Tenant, candidate: null);
 
         Assert.False(result.Ok);
         Assert.NotNull(result.Error);
-        await _tester.DidNotReceiveWithAnyArgs().ProbeAsync(default!, default!, default);
+        await _tester.DidNotReceiveWithAnyArgs().ProbeAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task Test_OpenAiCandidate_ProbesWithTheRightProviderAndBaseUrl()
+    {
+        _repo.GetByServiceAsync(Tenant, "openai", Arg.Any<CancellationToken>()).Returns((IntegrationConfig?)null);
+        _tester.ProbeAsync(Arg.Any<AiProviderConfig>(), Arg.Any<CancellationToken>())
+            .Returns(new AiProbeResult(true, null));
+
+        var result = await _sut.TestAsync(Tenant, new UpdateAiAgentRequest(
+            ApiKey: "sk-oai", Model: "gpt-4o", ExtraInstructions: null, IsEnabled: true,
+            Provider: "openai", BaseUrl: "https://proxy/v1"));
+
+        Assert.True(result.Ok);
+        await _tester.Received(1).ProbeAsync(
+            Arg.Is<AiProviderConfig>(c => c.Provider == "openai" && c.ApiKey == "sk-oai" && c.Model == "gpt-4o" && c.BaseUrl == "https://proxy/v1"),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -112,12 +150,14 @@ public sealed class TenantAiConfigServiceTests
                 Service = "claude",
                 Config = "{\"api_key\":\"sk-ant-stored\",\"model\":\"claude-sonnet-4-6\"}",
             });
-        _tester.ProbeAsync("sk-ant-stored", "claude-sonnet-4-6", Arg.Any<CancellationToken>())
+        _tester.ProbeAsync(Arg.Any<AiProviderConfig>(), Arg.Any<CancellationToken>())
             .Returns(new AiProbeResult(true, null));
 
         var result = await _sut.TestAsync(Tenant, new UpdateAiAgentRequest(ApiKey: "••••stored", Model: null, ExtraInstructions: null));
 
         Assert.True(result.Ok);
-        await _tester.Received(1).ProbeAsync("sk-ant-stored", "claude-sonnet-4-6", Arg.Any<CancellationToken>());
+        await _tester.Received(1).ProbeAsync(
+            Arg.Is<AiProviderConfig>(c => c.Provider == "claude" && c.ApiKey == "sk-ant-stored" && c.Model == "claude-sonnet-4-6"),
+            Arg.Any<CancellationToken>());
     }
 }

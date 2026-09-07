@@ -56,7 +56,11 @@ export function IntegrationsTab() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {/* AI-агент — read-only status; configured by the provider (managed-AI Phase 1) */}
-        <AiAgentRow connected={summaryMap["claude"]?.isEnabled === true} />
+        <AiAgentRow
+          connected={
+            summaryMap["claude"]?.isEnabled === true || summaryMap["openai"]?.isEnabled === true
+          }
+        />
 
         {/* ПРРО card — dedicated modal */}
         <PrroCard

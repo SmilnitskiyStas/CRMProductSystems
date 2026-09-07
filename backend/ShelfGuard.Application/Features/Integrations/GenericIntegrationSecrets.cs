@@ -23,6 +23,7 @@ public static class GenericIntegrationSecrets
     private static readonly Dictionary<string, string> SecretFieldByService = new()
     {
         ["claude"]   = "api_key",
+        ["openai"]   = "api_key",
         ["telegram"] = "bot_token",
         ["resend"]   = "api_key",
         ["webhook"]  = "secret",

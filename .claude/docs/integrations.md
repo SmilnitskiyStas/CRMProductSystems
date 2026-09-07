@@ -42,12 +42,18 @@ notifications queue (temp_alert / iot_offline). Pure rules in `services/iot-rule
 (confidence 95/85/60, auto write-down ≥70; fridge alert >+8°C, freezer >-12°C;
 offline >30 min; sustained 2h violation → product_stock.status='temp_violation')
 
-## Claude API (v2.0)
-Provider: Anthropic
-Model: claude-sonnet-4
-Usage: AI order suggestions (daily 05:00 job)
-Location: ShelfGuard.Infrastructure/AI/
-Rule: Claude client NEVER referenced outside Infrastructure/AI
+## AI provider (v2.0; provider-agnostic since managed-AI Phase 2 / TASK-701+)
+Providers: Anthropic (Claude, official NuGet) OR any OpenAI-compatible endpoint
+  (OpenAI, Azure OpenAI, Codex, self-hosted) via a thin HttpClient + optional base_url.
+Per-tenant config: `integration_configs` service='claude' or 'openai', set by the
+  platform provider in the client card (`/api/provider/tenants/{id}/ai-agent`), NOT
+  self-serve by the tenant. Fallback: `Claude:ApiKey` / `OpenAI:ApiKey` env.
+Model default: claude-sonnet-4-6 / gpt-4o-mini.
+Usage: AI order suggestions (daily 05:00 job), business assistant, marketing/price-segment/
+  post-campaign "explain more".
+Location: ShelfGuard.Infrastructure/AI/ — `IAiChatClient` (`AnthropicChatClient` /
+  `OpenAiChatClient`), `IAiClientFactory`, `IAiPromptResolver` (mandatory per-tenant
+  isolation guardrail). AI client NEVER referenced outside Infrastructure/AI (ADR-015).
 
 ## BullMQ (v1.0 notifications)
 Runtime: Node.js worker service (/worker)

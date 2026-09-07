@@ -11,7 +11,7 @@ public sealed class IntegrationService : IIntegrationService
 
     // Known service identifiers â€” validated on write, not on read.
     private static readonly HashSet<string> KnownServices =
-        ["telegram", "resend", "webhook", "prro", "iot", "claude", "vchasno"];
+        ["telegram", "resend", "webhook", "prro", "iot", "claude", "openai", "vchasno"];
 
     public IntegrationService(IIntegrationRepository repo) => _repo = repo;
 

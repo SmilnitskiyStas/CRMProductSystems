@@ -37,14 +37,16 @@ export interface TenantDetailDto extends TenantSummaryDto {
   lastActivityAt: string | null;
 }
 
-// ── AI agent (managed-AI Phase 1) ──────────────────────────────────────────
+// ── AI agent (managed-AI Phase 1; Claude/OpenAI choice added in Phase 2) ────
 
 /** GET /api/provider/tenants/:id/ai-agent — key never returned in full (last 4 only). */
 export interface TenantAiAgentDto {
   isConfigured: boolean;
   isEnabled: boolean;
+  provider: "claude" | "openai" | null;
   model: string | null;
   apiKeyLast4: string | null;
+  baseUrl: string | null;
   extraInstructions: string | null;
   updatedAt: string | null;
 }
@@ -55,6 +57,8 @@ export interface UpdateAiAgentRequest {
   model?: string | null;
   extraInstructions?: string | null;
   isEnabled: boolean;
+  provider?: "claude" | "openai" | null;
+  baseUrl?: string | null;
 }
 
 export interface AiAgentTestResult {

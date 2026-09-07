@@ -28,6 +28,7 @@ public sealed class IntegrationServiceTests
 
     [Theory]
     [InlineData("claude", "api_key")]
+    [InlineData("openai", "api_key")]
     [InlineData("telegram", "bot_token")]
     [InlineData("resend", "api_key")]
     [InlineData("webhook", "secret")]

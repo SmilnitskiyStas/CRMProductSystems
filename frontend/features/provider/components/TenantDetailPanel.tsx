@@ -16,7 +16,12 @@ import { AddTenantUserModal } from "./AddTenantUserModal";
 import { setToken, getToken } from "@/lib/api";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
-import { DEFAULT_AI_MODEL, SUGGESTED_AI_MODELS } from "@/features/provider/aiModels";
+import {
+  AI_PROVIDERS,
+  DEFAULT_AI_MODELS,
+  SUGGESTED_AI_MODELS,
+  type AiProvider,
+} from "@/features/provider/aiModels";
 
 interface Props {
   tenantId: string;
@@ -69,11 +74,13 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const [impersonateErr, setImpersonateErr] = useState("");
   const [showAddUser,    setShowAddUser]    = useState(false);
 
-  const [editingAi, setEditingAi] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(true);
-  const [aiModel,   setAiModel]   = useState(DEFAULT_AI_MODEL);
-  const [aiKey,     setAiKey]     = useState("");
-  const [aiExtra,   setAiExtra]   = useState("");
+  const [editingAi,   setEditingAi]   = useState(false);
+  const [aiProvider,  setAiProvider]  = useState<AiProvider>("claude");
+  const [aiEnabled,   setAiEnabled]   = useState(true);
+  const [aiModel,     setAiModel]     = useState(DEFAULT_AI_MODELS.claude);
+  const [aiKey,       setAiKey]       = useState("");
+  const [aiBaseUrl,   setAiBaseUrl]   = useState("");
+  const [aiExtra,     setAiExtra]     = useState("");
   const [aiTesting,    setAiTesting]    = useState(false);
   const [aiTestResult, setAiTestResult] = useState<AiAgentTestResult | null>(null);
 
@@ -106,12 +113,24 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   }
 
   function startEditAi(cfg: TenantAiAgentDto | undefined) {
+    const provider: AiProvider = cfg?.provider === "openai" ? "openai" : "claude";
+    setAiProvider(provider);
     setAiEnabled(cfg?.isEnabled ?? true);
-    setAiModel(cfg?.model || DEFAULT_AI_MODEL);
+    setAiModel(cfg?.model || DEFAULT_AI_MODELS[provider]);
     setAiKey("");
+    setAiBaseUrl(cfg?.baseUrl ?? "");
     setAiExtra(cfg?.extraInstructions ?? "");
     setAiTestResult(null);
     setEditingAi(true);
+  }
+
+  function pickAiProvider(provider: AiProvider) {
+    setAiProvider(provider);
+    // re-default the model to the new provider's default unless the user typed a custom one
+    if (!aiModel || Object.values(DEFAULT_AI_MODELS).includes(aiModel)) {
+      setAiModel(DEFAULT_AI_MODELS[provider]);
+    }
+    setAiTestResult(null);
   }
 
   function aiRequestBody() {
@@ -120,6 +139,8 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
       model: aiModel.trim() || null,
       extraInstructions: aiExtra.trim() || null,
       isEnabled: aiEnabled,
+      provider: aiProvider,
+      baseUrl: aiProvider === "openai" ? aiBaseUrl.trim() || null : null,
     };
   }
 
@@ -444,16 +465,44 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                 </label>
 
                 <div>
+                  <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiProviderLabel")}</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {AI_PROVIDERS.map((p) => {
+                      const active = aiProvider === p;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => pickAiProvider(p)}
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: 7,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            background: active ? "#0F1F3D" : "#111827",
+                            border: `1px solid ${active ? "#3B82F6" : "#374151"}`,
+                            color: active ? "#93C5FD" : "#6B7280",
+                          }}
+                        >
+                          {p === "openai" ? t("aiProviderOpenai") : t("aiProviderClaude")}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
                   <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiModelLabel")}</div>
                   <input
                     value={aiModel}
                     onChange={(e) => setAiModel(e.target.value)}
-                    list="ai-model-suggestions"
-                    placeholder={DEFAULT_AI_MODEL}
+                    list={`ai-model-suggestions-${aiProvider}`}
+                    placeholder={DEFAULT_AI_MODELS[aiProvider]}
                     style={aiInputStyle}
                   />
-                  <datalist id="ai-model-suggestions">
-                    {SUGGESTED_AI_MODELS.map((m) => <option key={m} value={m} />)}
+                  <datalist id={`ai-model-suggestions-${aiProvider}`}>
+                    {SUGGESTED_AI_MODELS[aiProvider].map((m) => <option key={m} value={m} />)}
                   </datalist>
                 </div>
 
@@ -464,10 +513,23 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     autoComplete="new-password"
                     value={aiKey}
                     onChange={(e) => setAiKey(e.target.value)}
-                    placeholder={aiAgent?.apiKeyLast4 ? `••••${aiAgent.apiKeyLast4} — ${t("aiKeyPlaceholder")}` : "sk-ant-..."}
+                    placeholder={aiAgent?.apiKeyLast4 ? `••••${aiAgent.apiKeyLast4} — ${t("aiKeyPlaceholder")}` : "sk-..."}
                     style={aiInputStyle}
                   />
                 </div>
+
+                {aiProvider === "openai" && (
+                  <div>
+                    <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiBaseUrlLabel")}</div>
+                    <input
+                      value={aiBaseUrl}
+                      onChange={(e) => setAiBaseUrl(e.target.value)}
+                      placeholder={t("aiBaseUrlPlaceholder")}
+                      style={aiInputStyle}
+                    />
+                    <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3 }}>{t("aiBaseUrlHint")}</div>
+                  </div>
+                )}
 
                 <div>
                   <div style={{ color: "#6B7280", fontSize: 11, marginBottom: 4 }}>{t("aiExtraLabel")}</div>
@@ -513,7 +575,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                 >
                   {!aiAgent?.isConfigured
                     ? t("aiStatusNotConnected")
-                    : `Claude · ${aiAgent.model || DEFAULT_AI_MODEL}`}
+                    : `${aiAgent.provider === "openai" ? "OpenAI" : "Claude"} · ${aiAgent.model || DEFAULT_AI_MODELS[aiAgent.provider === "openai" ? "openai" : "claude"]}`}
                 </span>
                 {aiAgent?.isConfigured && !aiAgent.isEnabled && (
                   <span style={{ color: "#6B7280", fontSize: 12 }}>{t("aiStatusDisabled")}</span>
