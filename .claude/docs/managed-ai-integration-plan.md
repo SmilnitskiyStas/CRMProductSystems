@@ -1,140 +1,152 @@
-# План: керована провайдером AI-інтеграція («AI-агенти як послуга»)
+# План: керована провайдером AI-інтеграція («AI-агент для бізнесу»)
 
-**Статус:** чернетка на обговорення · автор: main session · 2026-09-07
-**Пов'язане:** TASK-700 (рольова сторінка Налаштувань), `shelfguard-settings-page-role-aware` (memory)
+**Статус:** чернетка v2 (уточнено рішеннями власника) · 2026-09-07
+**Пов'язане:** TASK-700, memory `shelfguard-settings-page-role-aware`, ADR-015 (AI isolation),
+`shelfguard-rls-override-primitives`
 
 ## Контекст
 
-Зараз вкладка **Налаштування → Інтеграції** має картку «Claude AI», де **тенант сам
-вставляє свій Anthropic API-ключ** + модель. Ключ пише `PUT /api/integrations/claude`
-(політика `IntegrationsManageOrCapability` — `store_manager+` тенанта), лягає в
-`integration_configs` (service='claude', per-tenant RLS, jsonb `Config`), звідки його
-читають 6 AI-адвайзерів у `ShelfGuard.Infrastructure/AI/`
-(`ClaudeOrderAdvisor`, `BusinessAssistant`, `MarketingAdvisor`, `PostCampaignAdvisor`,
-`PriceSegmentAdvisor`, `SupplierAdvisor`) — резолв: `integration_configs` → fallback
-`Claude:ApiKey` env. Промпти захардкожені в кожному адвайзері (`BuildSystemPrompt()`).
+Вкладка **Налаштування → Інтеграції** має картку «Claude AI», де **тенант сам вставляє
+Anthropic API-ключ**. Ключ пише `PUT /api/integrations/claude` (`IntegrationsManageOrCapability`),
+лягає в `integration_configs` (service='claude', per-tenant RLS, jsonb `Config`). Його читають
+6 AI-адвайзерів у `ShelfGuard.Infrastructure/AI/`: `ClaudeOrderAdvisor`, `BusinessAssistant`,
+`MarketingAdvisor`, `PostCampaignAdvisor`, `PriceSegmentAdvisor`, `SupplierAdvisor`. Резолв:
+`integration_configs` → fallback env `Claude:ApiKey`. Промпти захардкожені (`BuildSystemPrompt()`).
 
-**Нова модель (рішення власника):** AI-агентів для бізнесу налаштовує **провайдер** як
-платну послугу — ми готуємо ключі, промпти, скіли, вибір моделі. Тенант ключі не вводить.
-Підтримуємо **Claude і OpenAI/Codex**.
+**Нова модель (рішення власника):**
+1. AI-агента налаштовує **провайдер** — у картці клієнта на `/provider` (вкладка «Клієнти»),
+   там де вже редагуються план і модулі. Конфіг привʼязаний до `tenant.Id`.
+2. Тенант у себе бачить **лише статус**: підключено / не підключено. Жодних полів, жодного ключа.
+3. Підтримка **Claude і OpenAI/Codex**.
+4. **Найважливіше — ізоляція:** агент відповідає **тільки** на питання про власний бізнес
+   клієнта і бачить **тільки** його дані. На питання типу «розкажи про моїх конкурентів, де я
+   просідаю» агент відповідає, що такі відповіді не надаються — тільки по бізнесу «{Назва}».
 
-## Цілі
+---
 
-1. Прибрати self-serve введення AI-ключа з тенантської вкладки.
-2. Дати провайдеру per-tenant екран керування AI-підключенням (провайдер, ключ, модель,
-   пресет промптів/скілів, увімк/вимк).
-3. Зробити AI-шар провайдер-агностичним: Claude **або** OpenAI за конфігом тенанта.
-4. Тенант бачить лише статус («налаштовано / не підключено») + CTA «замовити».
+## Принцип №1 — ізоляція тенанта (найважливіше)
 
-## Не в скоупі (окремі рішення)
+### Рівень даних — вже майже готово, треба верифікувати
 
-- Ціноутворення / білінг за AI-послугу (модуль? окремий тариф?) — впливає лише на тексти.
-- Стрімінг відповідей, ліміти токенів per-tenant, облік вартості — фаза 2+.
-- Прибирання решти карток Інтеграцій (ПРРО / Telegram / Webhook / IoT) — вони справді
-  self-serve тенантські, лишаються.
+- Усі 6 адвайзерів будують контекст запитами `WHERE TenantId == {tenantId}` (tenantId з JWT
+  `tenant_id`), поверх RLS. Тобто модель фізично не отримує чужих даних.
+- **Треба перевірити й закріпити тестом:**
+  - жоден адвайзер не використовує `analytics_bypass` / інші RLS-примітиви
+    (`shelfguard-rls-override-primitives`) — лише звичайний tenant-scope;
+  - `SupplierAdvisor` та marketplace-контекст не підтягують дані інших тенантів про
+    спільного постачальника (рейтинги/обсяги інших магазинів);
+  - контекст-білдери не мають галузевих бенчмарків/агрегатів по всіх тенантах.
+- Додати інтеграційний тест: два тенанти з даними, запит асистента від тенанта A ніколи не
+  повертає сутностей тенанта B (аналогічно `RlsAudit` тестам).
+
+### Рівень поведінки — нове: обовʼязковий guardrail у промпті
+
+Спільний **префікс системного промпту**, який `IAiPromptResolver` **завжди** додає до
+`BuildSystemPrompt()` кожного адвайзера, параметризований назвою бізнесу:
+
+> Ти — AI-асистент виключно для бізнесу «{TenantName}». Ти маєш доступ лише до власних даних
+> цього бізнесу. Якщо запит стосується інших компаній, конкурентів, порівнянь з ринком чи
+> галуззю, бенчмарків, або будь-чого, що вимагає даних поза «{TenantName}» — відповідай, що
+> надаєш інформацію тільки по бізнесу «{TenantName}» і не даєш даних про конкурентів чи інші
+> компанії. Не вигадуй зовнішні цифри.
+
+- Адвайзери отримують `TenantName` (зараз мають лише `tenantId`) — один запит
+  `_db.Tenants.Where(t => t.Id == tenantId).Select(t => t.Name)` або прокидання з сервісу.
+- `BuildSystemPrompt()` → `BuildSystemPrompt(AiPromptContext ctx)` де `ctx` несе назву +
+  розвʼязаний текст guardrail.
+- Guardrail **не вимикається** конфігом — це інваріант, не опція.
 
 ---
 
 ## Модель даних
 
-`integration_configs` **лишається** носієм, розширюємо семантику `Config` (jsonb) для
-`service` ∈ {`claude`, `openai`}:
+`integration_configs` лишається носієм; для `service ∈ {claude, openai}` вміст `Config` (jsonb):
 
 ```jsonc
 {
-  "provider": "anthropic" | "openai",   // дублює service для явності
-  "api_key": "…",                        // масковано на GET (last-4), як зараз
+  "provider": "anthropic" | "openai",
+  "api_key": "…",                         // масковано на будь-якому GET (last-4)
   "model": "claude-sonnet-4-6" | "gpt-…",
-  "base_url": null,                      // для OpenAI-сумісних проксі, опц.
-  "prompt_preset_id": "retail-default",  // → таблиця пресетів (нижче)
-  "prompt_overrides": { "order_advisor": "…" },  // опц., per-advisor текст
+  "base_url": null,                        // для OpenAI-сумісних проксі (опц.)
+  "extra_instructions": null,              // вільний текст: бізнес-контекст від провайдера
+                                           // ("це аптека, акцент на термінах придатності")
   "configured_by": "<provider user id>",
   "configured_at": "2026-09-07T…Z"
 }
 ```
 
-**Нова таблиця `ai_prompt_presets`** (глобальна, провайдер-керована, без RLS — за
-зразком `platform_categories`):
+**Без нової таблиці.** Глобальні пресети промптів (`ai_prompt_presets`) з v1 **прибрано** —
+замість них вільне поле `extra_instructions` у картці клієнта. Пресети по типах бізнесу —
+можлива пізніша ітерація, якщо провайдер втомиться писати те саме руками.
 
-| колонка | тип | нотатки |
-|---|---|---|
-| Id | uuid pk | |
-| Key | varchar unique | `retail-default`, `auto-service`, … |
-| Name | varchar | UI-назва |
-| Description | text | |
-| Prompts | jsonb | `{ "<advisor-key>": "<system prompt template>" }` для 6 адвайзерів |
-| Skills | jsonb | опц. — структуровані «скіли» (набори інструкцій/інструментів), фаза 2 |
-| IsActive | bool | |
-
-Тенант обирає **один пресет**; `prompt_overrides` у `integration_configs` перекриває
-окремі адвайзери. Якщо пресет не заданий → поточні захардкожені `BuildSystemPrompt()`.
-
-Міграція: `AddAiPromptPresets` (1 таблиця) + seed 1-2 базових пресетів (retail, auto).
-`integration_configs` схему не чіпаємо — тільки вміст jsonb.
+Міграції немає — тільки семантика вмісту jsonb + guardrail у коді.
 
 ---
 
 ## Бекенд
 
-### 1. Провайдер-агностичний AI-клієнт
-
-Нова абстракція в `ShelfGuard.Infrastructure/AI/`:
+### 1. Провайдер-агностичний клієнт
 
 ```
-IAiChatClient                          // Complete(system, messages, jsonSchema?) → text/json
-├── AnthropicChatClient   (Anthropic SDK, наявний код з ClaudeOrderAdvisor.CallAsync)
-└── OpenAiChatClient      (OpenAI .NET SDK або HttpClient до /v1/chat/completions;
-                           structured outputs через response_format=json_schema)
+IAiChatClient : Complete(system, userMessage, jsonSchema?) → text|json
+├── AnthropicChatClient   — наявний код (Anthropic SDK), винести з адвайзерів
+└── OpenAiChatClient      — ТОНКИЙ HttpClient до {base_url|https://api.openai.com}/v1/chat/completions
+                            (Bearer, response_format=json_schema для structured output)
 IAiClientFactory.ResolveAsync(tenantId, ct) → IAiChatClient
-   // читає integration_configs (claude|openai, IsEnabled) → створює відповідний клієнт
-   // → fallback env (Claude:ApiKey / OpenAI:ApiKey)
+   // integration_configs (claude|openai, IsEnabled) → потрібний клієнт; fallback env
+IAiPromptResolver.Build(advisorKey, tenantId, ct) → system prompt
+   // guardrail(tenantName) + extra_instructions + захардкожений текст адвайзера
 ```
 
-6 адвайзерів рефакторяться: замість `new AnthropicClient{…}` беруть `IAiChatClient` з
-фабрики. `BuildSystemPrompt()` → бере текст із пресету (`IAiPromptResolver.For(advisorKey,
-tenantId)`), fallback на наявний захардкожений рядок. Structured-output контракт (JSON
-schema) уже є — обидва провайдери його підтримують, формат виклику інкапсулюється в клієнті.
+**Q4 — рекомендація: тонкий HttpClient для OpenAI, не офіційний SDK.**
+Причини: менше залежностей → безпечніший Docker-білд (`shelfguard-cicd-and-deploy`: був
+інцидент, коли CI-green ≠ Docker-green через транзитивну залежність); нам потрібен лише
+`/v1/chat/completions` + structured outputs — маленька стабільна поверхня; той самий клієнт
+працює з Azure OpenAI / Codex / локальними OpenAI-сумісними бекендами через `base_url`.
+Anthropic-бік лишаємо на наявному `Anthropic` NuGet — він уже працює, `IAiChatClient` ховає різницю.
 
-Обсяг: ~2 нових клієнти + фабрика + резолвер промптів + правки в 6 адвайзерах (механічні,
-одна форма). OpenAI SDK: додати `OpenAI` NuGet (офіційний) — перевірити Docker-білд
-(`shelfguard-cicd-and-deploy`: CI-green ≠ Docker-green).
+6 адвайзерів рефакторяться механічно: `new AnthropicClient{…}` → `_aiClientFactory` +
+`BuildSystemPrompt()` → `_promptResolver.Build(...)`. Одна форма, ~10 рядків на адвайзер.
 
-### 2. Права: `claude`/`openai` config стає provider-only на запис
+### 2. Права: `claude`/`openai` — provider-only
 
-- `IntegrationsController` `PUT/DELETE /api/integrations/{service}` — для `service ∈
-  {claude, openai}` повертає 403 для тенантських ролей (лишити `telegram/resend/webhook/iot`).
-- **GET лишається** тенанту, але сервіс віддає лише `{ isConfigured, provider, model,
-  updatedAt }` — **без** ключа (навіть маскованого) для не-провайдера.
-- Новий **`AdminAiController`** (`api/admin/tenants/{id}/ai`, політика `ProviderOnly`):
-  - `GET` → повна конфігурація (ключ масковано last-4) + список пресетів
-  - `PUT` → `{ provider, apiKey?, model, promptPresetId?, promptOverrides?, isEnabled }`
-  - `POST /test` → пінг обраного провайдера (як `PrroSettingsController` `/test`)
-  - `DELETE` → від'єднати
-- `ai_prompt_presets` CRUD: `ProviderAiPresetsController` (`ProviderOnly`).
-- RLS: `integration_configs` уже має `tenant_isolation` + `provider_bypass` — провайдерський
-  запис іде через `provider_bypass` primitive (`shelfguard-rls-override-primitives`).
-  `ai_prompt_presets` — без RLS (глобальна).
+- `IntegrationsController` `PUT/DELETE /api/integrations/{service}` для `service ∈ {claude,
+  openai}` → 403 тенантським ролям (лишити `telegram/resend/webhook/iot` як self-serve).
+- `GET /api/integrations` тенанту віддає для цих сервісів лише `{ service, isEnabled }` —
+  **без** `provider`/`model`/ключа.
+- **Розширити `AdminController`** (`api/admin`, `ProviderOnly`) — нова секція, поряд з plan/modules:
+  - `GET  /api/admin/tenants/{id}/ai` → `{ provider, model, baseUrl, extraInstructions, apiKeyLast4, isEnabled, configuredAt }`
+  - `PUT  /api/admin/tenants/{id}/ai` → `{ provider, apiKey?, model, baseUrl?, extraInstructions?, isEnabled }`
+    (порожній `apiKey` = не міняти)
+  - `POST /api/admin/tenants/{id}/ai/test` → пінг обраного провайдера (як `PrroSettingsController` `/test`)
+  - `DELETE /api/admin/tenants/{id}/ai` → відʼєднати
+- Запис `integration_configs` для чужого тенанта — через `provider_bypass` primitive
+  (`shelfguard-rls-override-primitives`), як решта `ITenantAdminRepository`.
+- `TenantAdminService` (або новий `TenantAiConfigService`) — валідація моделі/провайдера, маскування.
 
 ### 3. Env
 
-`OpenAI:ApiKey`, `OpenAI:Model` у `.env` (fallback, як `Claude:ApiKey`). `.env` на сервері
-руками (`shelfguard-cicd-and-deploy` — деплой env не чіпає).
+`OpenAI:ApiKey`, `OpenAI:Model` у `.env` на сервері (fallback, руками — деплой env не чіпає).
 
 ---
 
-## Провайдерська консоль (frontend)
+## Провайдерська консоль (frontend) — у картці клієнта
 
-Новий екран у розділі провайдера (поряд з `/provider/team`, `/provider/categories`):
-**`/provider/ai`** або таб на сторінці тенанта в адмін-панелі («Клієнти» → тенант → «AI»).
+**Без окремого екрана.** Нова секція **«AI-агент»** у
+`frontend/features/provider/components/TenantDetailPanel.tsx` (462 рядки — вже має секції
+«План», «Модулі», «Адміни»; додаємо 4-ту, той самий патерн collapse/edit/save):
 
-- Таблиця тенантів: статус AI (не підключено / Claude / OpenAI), модель, пресет, останнє оновл.
-- Форма на тенанта: вибір провайдера (Claude / OpenAI), поле ключа (write-only, маскується),
-  модель (dropdown відомих + вільний ввід), вибір пресету промптів, per-advisor overrides
-  (collapsible, необов'язково), тумблер «увімкнено», кнопка «Перевірити підключення».
-- Окремий екран **`/provider/ai/presets`** — CRUD пресетів промптів/скілів.
+- бейдж статусу: «Не підключено» / «Claude · {model}» / «OpenAI · {model}»
+- в режимі редагування: вибір провайдера (Claude / OpenAI), поле ключа (write-only,
+  показує `••••1234`), модель (список відомих + вільний ввід), `base_url` (опц., під OpenAI),
+  `extra_instructions` (textarea), тумблер «увімкнено», кнопка «Перевірити підключення»
+- хук `useTenantAi(tenantId)` + `updateTenantAi` у `frontend/features/provider/api/provider.ts`
+  / `hooks/useProvider.ts` (там уже `useUpdatePlan` / `useUpdateModules` — та сама форма)
 
-Feature-модуль: `frontend/features/provider/` (наявний, 14 компонентів) + `api/ai.ts`,
-`hooks/useAdminAi.ts`. Гейт: `PROVIDER_TEAM` (+ `providerPermissions` якщо треба гранульованість).
+Опційно — крок «AI-агент» у `CreateTenantWizard.tsx` (444 рядки). Радше **ні** для v1:
+провайдер створює бізнес, потім відкриває картку й налаштовує AI окремо (менше полів у візарді).
+
+i18n: `Dashboard.provider.tenantDetail.aiSection.*` (uk+en).
 
 ---
 
@@ -142,40 +154,32 @@ Feature-модуль: `frontend/features/provider/` (наявний, 14 комп
 
 - **Прибрати** `claude` з `ALL_SERVICES` / `SERVICE_META` (`features/integrations/types.ts`)
   → картка введення ключа зникає.
-- **Додати** окремий read-only блок «AI-помічник» вгорі вкладки (над ПРРО), за зразком
-  `PrroCard`:
-  - бейдж статусу: «Налаштовано (Claude)» / «Налаштовано (OpenAI)» / «Не підключено»
-  - короткий опис що вміє AI (автозамовлення, бізнес-асистент, маркетинг-поради…)
-  - якщо не підключено → кнопка **«Замовити налаштування»** → відкриває support-chat або
-    створює service-desk тикет категорії `feature_request` (обидва механізми вже є)
-  - якщо підключено → лише «Керується вашим провайдером», без дій
-- Джерело даних: `GET /api/integrations` (той самий, віддає урізаний summary для тенанта).
-- i18n: новий `Dashboard.settings.integrationsTab.aiManaged.*` (uk+en).
-
-Гейтинг вкладки «Інтеграції» (з TASK-700) не змінюється — `store_manager+` або
-capability `integrations.view`.
+- **Додати** read-only рядок «AI-агент» вгорі вкладки (над ПРРО), мінімально:
+  - «AI-агент: **Підключено**» (зелений бейдж) або «AI-агент: **Не підключено**» (сірий)
+  - один рядок опису: «Налаштування AI-агента виконує ваш провайдер.»
+  - якщо не підключено — маленьке посилання «Дізнатися більше» → support-chat (без форми замовлення в v1)
+- Джерело: `GET /api/integrations` (урізаний summary: лише `isEnabled`).
+- i18n: `Dashboard.settings.integrationsTab.aiAgent.*` (uk+en).
+- Гейтинг вкладки (TASK-700) не змінюється.
 
 ---
 
 ## Рефактор наявних згадок
 
-- `ClaudeOrderAdvisor` кидає текст помилки «Add it in Налаштування → Інтеграції → Claude
-  AI» → замінити на «AI-помічник не налаштований. Зверніться до провайдера.» (6 місць /
-  grep `Налаштування → Інтеграції`).
-- `frontend` — усі підказки/лінки на self-config Claude (`grep -ri "claude" features/integrations`).
-- `openapi.json` регенерувати (нові admin-ендпоінти) — `shelfguard-mobile-app-analytics-modules`
-  вже має pending-regen нотатку.
+- Текст помилки в адвайзерах «Add it in Налаштування → Інтеграції → Claude AI» (grep
+  `Налаштування → Інтеграції`, ~2-3 місця) → «AI-агент не налаштований. Зверніться до провайдера.»
+- `frontend` self-config згадки Claude (`grep -ri claude frontend/features/integrations`).
+- `backend/openapi.json` регенерувати (нові admin-ендпоінти).
 
 ---
 
-## Рол-аут / міграція наявних тенантів
+## Рол-аут наявних тенантів
 
-1. Тенанти, що вже поклали свій ключ у `integration_configs` (service='claude') —
-   **нічого не ламається**: адвайзери й далі його читають. Просто тенант більше не може
-   його змінити з UI; провайдер бачить і керує ним зі своєї консолі.
-2. Деплой — звичайний push→CI→deploy. Міграція `AddAiPromptPresets` застосується авто на
-   старті API (`shelfguard-cicd-and-deploy`).
-3. Після деплою — провайдер проходить по активних тенантах з AI й привʼязує пресет.
+1. Тенанти з уже заданим ключем у `integration_configs` (service='claude') — **нічого не
+   ламається**: адвайзери й далі його читають. Тенант більше не редагує його з UI; провайдер
+   бачить/керує з картки клієнта.
+2. Guardrail починає діяти одразу для всіх (він у коді, не в конфігу).
+3. Деплой — звичайний push→CI→deploy. Міграцій немає.
 
 ---
 
@@ -183,19 +187,18 @@ capability `integrations.view`.
 
 | Фаза | Обсяг | Ризик |
 |---|---|---|
-| **1. Замок + статус** | Тенантський `PUT claude` → provider-only; тенантська картка → read-only статус + CTA; `AdminAiController` (Claude лише); provider-консоль форма (без пресетів) | низький, 1 агент |
-| **2. OpenAI** | `IAiChatClient` абстракція + `OpenAiChatClient` + фабрика; рефактор 6 адвайзерів; OpenAI env/SDK; Docker-білд перевірка | середній, backend-агент |
-| **3. Пресети промптів/скілів** | `ai_prompt_presets` таблиця + CRUD + `IAiPromptResolver`; provider `/ai/presets` екран; per-advisor overrides | середній |
+| **1. Ізоляція + provider-config (Claude)** | guardrail-префікс у 6 адвайзерах + `TenantName` в контекст + RLS-верифікація + cross-tenant тест; `claude` write → provider-only; `AdminController` AI-секція; секція «AI-агент» у `TenantDetailPanel`; тенантський read-only статус; прибрати self-serve картку | середній, 1 backend + 1 frontend агент |
+| **2. OpenAI/Codex** | `IAiChatClient` + `OpenAiChatClient` (тонкий HttpClient) + `IAiClientFactory`; рефактор 6 адвайзерів на фабрику; вибір провайдера в картці; OpenAI env; Docker-білд перевірка | середній, backend-агент |
+| **3. (опц.) Пресети по типах бізнесу** | якщо `extra_instructions` руками набридне — маленька таблиця шаблонів + дропдаун у картці | низький |
 
-Фази незалежні: 1 можна зробити зараз без 2/3 (Claude-only, промпти лишаються захардкожені).
+Фаза 1 самодостатня: закриває головну вимогу (ізоляція + провайдер керує) на Claude-only,
+без абстракції провайдерів.
 
-## Відкриті питання
+## Залишкові дрібні питання
 
-1. AI-послуга — це **новий модуль** (`ai_assistant` у `tenants.modules`, гейт
-   `[RequireModule]`) чи просто вкл/викл у `integration_configs`? Модуль дає чистий
-   per-module білінг (узгоджується з логікою «за кожен модуль окрема ціна»).
-2. Пресети «скілів» — що це технічно? Наперед заготовлені набори інструкцій у промпті,
-   чи справжні tool-/ function-набори (тоді потрібен tool-execution шар)?
-3. Provider-консоль — окремий розділ `/provider/ai` чи таб у картці тенанта в `/admin`?
-4. OpenAI — офіційний `OpenAI` NuGet чи тонкий `HttpClient` (менше залежностей, легший
-   Docker-білд)?
+1. Модель списку для `model` dropdown — тримати перелік відомих Claude/OpenAI моделей у
+   `frontend` конфізі чи віддавати з бекенду (`GET /api/admin/ai/models`)? → FE-константа, простіше.
+2. `POST /ai/test` — що саме шле (мінімальний «ping» промпт «відповідай OK») — 1 короткий call,
+   рахувати як витрату токенів провайдера, не тенанта.
+3. Чи логувати запити асистента (промпт+відповідь) для аудиту зловживань? — окреме рішення
+   (приватність vs. можливість довести, що агент відмовив на competitor-запит).
