@@ -90,7 +90,7 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   /** Optional second-level heading inside a navigation group. */
-  section?: string;
+  section?: NavSection;
   roles?: Set<AppRole>;
   /** Permission key(s) required for PROVIDER_TEAM users — user needs at least one (OR logic) */
   permission?: string | string[];
@@ -103,6 +103,12 @@ interface NavItem {
    * group that is never module-gated. No-op when the module set hasn't loaded yet.
    */
   moduleKey?: ModuleKey;
+}
+
+interface NavSection {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
 }
 
 interface NavGroup {
@@ -132,6 +138,13 @@ interface NavGroup {
 type SidebarGroupsT = ReturnType<typeof useTranslations>;
 
 export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
+  const consumerAppSections = {
+    content: { key: "content", label: t("consumerApp.sections.content"), icon: <Megaphone size={14} /> },
+    configuration: { key: "configuration", label: t("consumerApp.sections.configuration"), icon: <Settings size={14} /> },
+    loyalty: { key: "loyalty", label: t("consumerApp.sections.loyalty"), icon: <Smartphone size={14} /> },
+    analytics: { key: "analytics", label: t("consumerApp.sections.analytics"), icon: <Activity size={14} /> },
+  } satisfies Record<string, NavSection>;
+
   return [
   {
     key: "operations",
@@ -241,17 +254,17 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Smartphone size={18} />,
     moduleKey: "mobile_app",
     items: [
-      { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
-      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
-      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
-      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.content") },
-      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
-      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
-      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
-      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
-      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: t("consumerApp.sections.configuration") },
-      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true, section: t("consumerApp.sections.loyalty") },
-      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics", section: t("consumerApp.sections.analytics") },
+      { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
+      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
+      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
+      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
+      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
+      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
+      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
+      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
+      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
+      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true, section: consumerAppSections.loyalty },
+      { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics", section: consumerAppSections.analytics },
     ],
   },
   {
@@ -393,7 +406,9 @@ function isActive(pathname: string, href: string, exact?: boolean): boolean {
 }
 
 interface NavItemSection {
+  key: string;
   label?: string;
+  icon?: React.ReactNode;
   items: NavItem[];
 }
 
@@ -404,15 +419,23 @@ interface NavItemSection {
  */
 function groupItemsBySection(items: NavItem[]): NavItemSection[] {
   // `Map` is also a Lucide icon imported above, so reference the global explicitly.
-  const sections = new globalThis.Map<string | undefined, NavItem[]>();
+  const sections = new globalThis.Map<string, NavItemSection>();
 
   for (const item of items) {
-    const sectionItems = sections.get(item.section);
-    if (sectionItems) sectionItems.push(item);
-    else sections.set(item.section, [item]);
+    const key = item.section?.key ?? "default";
+    const section = sections.get(key);
+    if (section) section.items.push(item);
+    else {
+      sections.set(key, {
+        key,
+        label: item.section?.label,
+        icon: item.section?.icon,
+        items: [item],
+      });
+    }
   }
 
-  return Array.from(sections, ([label, sectionItems]) => ({ label, items: sectionItems }));
+  return Array.from(sections.values());
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -540,7 +563,10 @@ function CollapsibleNavSection({ section, group, pathname }: CollapsibleNavSecti
           (event.currentTarget as HTMLElement).style.color = hasActive ? "#94A3B8" : "#4B5563";
         }}
       >
-        {section.label}
+        <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <span style={{ display: "flex", opacity: 0.8 }}>{section.icon}</span>
+          {section.label}
+        </span>
         {expanded
           ? <ChevronDown size={13} style={{ opacity: 0.7, flexShrink: 0 }} />
           : <ChevronRight size={13} style={{ opacity: 0.7, flexShrink: 0 }} />}
@@ -661,10 +687,13 @@ function CollapsedGroupTrigger({ group, visibleItems, pathname, hasActive }: Col
               {group.label}
             </div>
             {groupItemsBySection(visibleItems).map((section) => (
-              <div key={section.label ?? "default"}>
+              <div key={section.key}>
                 {section.label && (
                   <div
                     style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
                       padding: "8px 10px 3px",
                       color: "#64748B",
                       fontSize: 10,
@@ -673,6 +702,7 @@ function CollapsedGroupTrigger({ group, visibleItems, pathname, hasActive }: Col
                       textTransform: "uppercase",
                     }}
                   >
+                    <span style={{ display: "flex", opacity: 0.8 }}>{section.icon}</span>
                     {section.label}
                   </div>
                 )}
@@ -845,7 +875,7 @@ function NavGroupSection({ group, visibleItems, pathname, collapsed }: NavGroupS
         <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 1 }}>
           {groupItemsBySection(visibleItems).map((section) => (
             <CollapsibleNavSection
-              key={section.label ?? "default"}
+              key={section.key}
               section={section}
               group={group}
               pathname={pathname}
