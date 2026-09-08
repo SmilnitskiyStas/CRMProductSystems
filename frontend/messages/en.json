@@ -2746,6 +2746,50 @@
         }
       }
     },
+    "weatherPromo": {
+      "title": "AI weekly tips",
+      "generate": "Generate tips",
+      "refresh": "Refresh",
+      "updatedAt": "updated {time}",
+      "notConfigured": "The \"Analyst\" AI agent is not configured",
+      "insufficientData": "Not enough data — set the location coordinates (Locations page) and make sure there are sales in the last few weeks.",
+      "noSuggestions": "The AI found no worthwhile weather promos this week.",
+      "confidence": {
+        "low": "low confidence",
+        "medium": "medium confidence",
+        "high": "high confidence"
+      },
+      "weatherWindow": "{from} – {to}",
+      "discountLabel": "Discount, %",
+      "storesLabel": "Stores",
+      "storesSelected": "{count} stores selected",
+      "storesPlaceholder": "All stores",
+      "storesDone": "Done",
+      "allStores": "all",
+      "createDiscountsLabel": "Discounts to register",
+      "createEventLabel": "Mark in calendar",
+      "applyButton": "Create promo",
+      "applying": "Creating…",
+      "confirmTitle": "Confirm promo creation",
+      "confirmBody": "Create a {pct}% discount on {products} products in {stores} stores, {from} – {to}? Discounts activate immediately and go to the register.",
+      "confirmCalendarNote": "A \"Promo\" event will also be created in the demand calendar with a coefficient on the selected products.",
+      "confirmCta": "Create promo",
+      "cancel": "Cancel",
+      "toastCreated": "Promo created: {discounts} discounts",
+      "created": "Promo created",
+      "viewCalendar": "view calendar",
+      "activeDiscountsTitle": "Active promo discounts ({count})",
+      "cancelDiscount": "Cancel discount",
+      "discountCancelled": "Discount cancelled",
+      "compactTitle": "AI weekly tip",
+      "viewAll": "View all",
+      "loadError": "Failed to load tips",
+      "columns": {
+        "product": "Product",
+        "price": "Current price",
+        "reason": "Reason"
+      }
+    },
     "autoService": {
       "moduleGate": {
         "title": "Auto Service module is not active",

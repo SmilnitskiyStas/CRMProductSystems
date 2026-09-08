@@ -8,6 +8,7 @@ import { AttentionTable } from "@/features/dashboard/components/AttentionTable";
 import { QuickActions } from "@/features/dashboard/components/QuickActions";
 import { StoreMap } from "@/features/dashboard/components/StoreMap";
 import { WeeklyKpiCards } from "@/features/dashboard/components/WeeklyKpiCards";
+import { WeatherPromoCompactCard } from "@/features/weather-promo/components/WeatherPromoCompactCard";
 import {
   useAttentionItems,
   useDashboardStats,
@@ -47,6 +48,9 @@ export default function DashboardPage() {
 
       {/* Weekly KPI cards */}
       <WeeklyKpiCards data={weeklyKpi} isLoading={weeklyKpiLoading} />
+
+      {/* AI weekly weather-promo teaser (self-hides without cached suggestions) */}
+      <WeatherPromoCompactCard />
 
       {/* Main content: table + quick actions */}
       <div

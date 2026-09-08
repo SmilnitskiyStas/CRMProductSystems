@@ -6,6 +6,41 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## AI-поради — погодні тижневі акції — TASK-711
+
+**Status:** review · main session + backend/frontend агенти · перевірено в браузері · не запушено · гілка `feat/ai-weather-promo` (від `origin/main`) · Log: `.claude/logs/tasks/711_2026-09-08_ai-weather-promo-backend_backend-developer.md`
+
+Новий «Analyst» AI-адвайзер: прогноз погоди + топ-продажі (45 днів) + `WeatherCoefficient`
+→ structured-output поради «тепла погода → морозиво/вода на тижневу знижку»; `POST apply`
+матеріалізує обрану пораду в реальні `Discount` (create+approve → active, вебхук на касу) +
+календарний `DemandEvent` promo з per-product коефіцієнтами. Нова тека
+`Infrastructure/AI/WeatherPromoAdvisor/` (наявні адвайзери не чіпав, лише Phase-4a примітиви).
+`Application/Features/WeatherPromo/` — сервіс + DTOs + `IWeatherPromoRepository` (Application не
+бачить `AppDbContext`) + 12h `IMemoryCache`. Контролер `[Route("api/ai/weather-promo")]`,
+`AtLeastStoreManager` + `[RequireModule("inventory")]`.
+
+**Orchestrator-доробки після агентів:**
+- `GET suggestions` без `?refresh=true` **більше не викликає AI** на cache-miss → новий статус
+  `not_generated` (картка показує кнопку «Згенерувати»). AI лише за явним кліком / 1×12год кеш.
+- Прогалина: `Discount` пише на касу, але екран керування знижками `[RequireModule("mobile_app")]` —
+  тенант без цього модуля не бачив би створені знижки. Додано `GET active-discounts` +
+  `POST cancel-discounts` (лише свої активні promo-знижки) + список «Активні знижки акцій» із
+  кнопкою скасування прямо в `WeatherPromoPanel` (видно навіть коли AI не налаштований).
+
+**Frontend:** `frontend/features/weather-promo/` (`types`/`api`/`hooks`/`SuggestionCard`/
+`WeatherPromoPanel`/`WeatherPromoCompactCard`). Панель у `CollapsibleSection` на `/events`;
+`SuggestionCard` — поле знижки %, мультивибір магазинів, 2 чекбокси, **confirm-`Modal`** перед
+`apply`. Компактна картка на дашборді — `useWeatherPromoSuggestions({enabled:false})` (лише кеш).
+i18n `Dashboard.weatherPromo.*` uk+en.
+
+**Верифікація:** `dotnet build` clean, `~WeatherPromo` 19/19, `~Event|~Discount` 53. `tsc`/`lint`/
+`vitest` 64/`next build` clean. Браузер (тенант без AI-агента): `GET suggestions` → `not_configured`,
+картка ховається; `POST apply` (curl) → 3 active `Discount` (ціна −15% коректна, warning на товар
+без ціни) + `DemandEvent` з 3 коеф. видно на календарі; `GET active-discounts` → список; кнопка
+скасування в панелі працює (2→1, тост). **Не перевірено: реальна AI-генерація** (нема ключа
+`ai_analyst` локально) — покрито юніт-тестами + той самий механізм structured-output, що в
+робочому `SupplierAdvisor`.
+
 ## Погода на календарі: помітний callout «нема координат» + CTA — TASK-710
 
 **Status:** review · main session · перевірено в браузері · follow-up до TASK-708 · Log: `.claude/logs/tasks/710_2026-09-08_weather-no-coords-cta_frontend-developer.md`

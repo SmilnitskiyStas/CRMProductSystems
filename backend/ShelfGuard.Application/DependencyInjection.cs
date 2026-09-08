@@ -225,6 +225,9 @@ services.AddScoped<IAuthService, AuthService>();
         // TASK-648 - Geo taxonomy (UkraineRegions registry -> GET /api/geo/regions)
         services.AddScoped<IGeoService, GeoService>();
 
+        // TASK-711 - AI weekly weather-promo suggestions ("Analyst" agent)
+        services.AddScoped<Features.WeatherPromo.IWeatherPromoService, Features.WeatherPromo.WeatherPromoService>();
+
         return services;
     }
 }

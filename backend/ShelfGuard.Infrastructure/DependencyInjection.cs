@@ -222,6 +222,12 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.AiAssistant.IBusinessAssistantAdvisor,
             AI.BusinessAssistant.BusinessAssistantAdvisor>();
 
+        // TASK-711 - AI weekly weather-promo suggestions ("Analyst" agent)
+        services.AddScoped<Application.Features.WeatherPromo.IWeatherPromoAdvisor,
+            AI.WeatherPromoAdvisor.WeatherPromoAdvisor>();
+        services.AddScoped<Application.Features.WeatherPromo.IWeatherPromoRepository,
+            Data.Repositories.WeatherPromoRepository>();
+
         // TASK-252 - CRM Customers
         services.AddScoped<Domain.Interfaces.ICustomerRepository,
             Data.Repositories.CustomerRepository>();

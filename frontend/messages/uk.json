@@ -2746,6 +2746,50 @@
         }
       }
     },
+    "weatherPromo": {
+      "title": "AI-поради на тиждень",
+      "generate": "Згенерувати поради",
+      "refresh": "Оновити",
+      "updatedAt": "оновлено {time}",
+      "notConfigured": "AI-агента «Аналітик» не налаштовано",
+      "insufficientData": "Недостатньо даних — задайте координати локації (сторінка Локації) та переконайтесь, що є продажі за останні тижні.",
+      "noSuggestions": "AI не знайшов вигідних погодних акцій цього тижня.",
+      "confidence": {
+        "low": "низька впевненість",
+        "medium": "середня впевненість",
+        "high": "висока впевненість"
+      },
+      "weatherWindow": "{from} – {to}",
+      "discountLabel": "Знижка, %",
+      "storesLabel": "Магазини",
+      "storesSelected": "Обрано магазинів: {count}",
+      "storesPlaceholder": "Усі магазини",
+      "storesDone": "Готово",
+      "allStores": "всіх",
+      "createDiscountsLabel": "Знижки на касу",
+      "createEventLabel": "Позначити в календарі",
+      "applyButton": "Створити акцію",
+      "applying": "Створення…",
+      "confirmTitle": "Підтвердьте створення акції",
+      "confirmBody": "Створити знижку {pct}% на {products} товарів у {stores} магазинах, {from} – {to}? Знижки одразу активуються й підуть на касу.",
+      "confirmCalendarNote": "Також буде створено подію «Акція» в календарі попиту з коефіцієнтом на обрані товари.",
+      "confirmCta": "Створити акцію",
+      "cancel": "Скасувати",
+      "toastCreated": "Акцію створено: {discounts} знижок",
+      "created": "Акцію створено",
+      "viewCalendar": "переглянути календар",
+      "activeDiscountsTitle": "Активні знижки акцій ({count})",
+      "cancelDiscount": "Скасувати знижку",
+      "discountCancelled": "Знижку скасовано",
+      "compactTitle": "AI-порада на тиждень",
+      "viewAll": "Переглянути всі",
+      "loadError": "Не вдалося завантажити поради",
+      "columns": {
+        "product": "Товар",
+        "price": "Поточна ціна",
+        "reason": "Причина"
+      }
+    },
     "autoService": {
       "moduleGate": {
         "title": "Модуль Auto Service не активний",

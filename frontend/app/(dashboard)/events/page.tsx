@@ -14,6 +14,7 @@ import {
 } from "@/features/events/hooks/useEvents";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useWeatherMonth } from "@/features/weather/hooks/useWeatherMonth";
+import { WeatherPromoPanel } from "@/features/weather-promo/components/WeatherPromoPanel";
 import { useStoreContext } from "@/lib/useStoreContext";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, AT_LEAST_STORE_MANAGER, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
@@ -192,6 +193,8 @@ export default function EventsPage() {
           )}
         </div>
       )}
+
+      <WeatherPromoPanel />
 
       {isLoading ? (
         <p style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</p>
