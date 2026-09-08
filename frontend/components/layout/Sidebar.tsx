@@ -157,7 +157,19 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
       { href: "/pos",       label: t("sales.pos"),       icon: <CreditCard size={16} />,   roles: CAN_ACCESS_POS },
       { href: "/sales",     label: t("sales.sales"),     icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
       { href: "/customers", label: t("sales.customers"), icon: <Users size={16} />,        roles: AT_LEAST_STORE_MANAGER },
-      { href: "/events",    label: t("sales.events"),    icon: <CalendarDays size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+    ],
+  },
+  {
+    // Демонд-івенти (свята / акції / локальні події) — універсальний інструмент планування,
+    // не привʼязаний до POS. Тому власна група БЕЗ moduleKey: видима будь-якому store_manager+
+    // незалежно від бізнес-типу й активних модулів. Тонше керування — через TenantRole
+    // «Видимі розділи» (groupKey "calendar" / itemKey "/events"), як і всі інші розділи.
+    // Раніше пункт жив у POS-gated групі "sales" і зникав у тенантів без модуля pos (TASK-210).
+    key: "calendar",
+    label: t("calendar.label"),
+    icon: <CalendarDays size={18} />,
+    items: [
+      { href: "/events", label: t("calendar.events"), icon: <CalendarDays size={16} />, roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {

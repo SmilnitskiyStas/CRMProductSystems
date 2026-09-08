@@ -6,6 +6,19 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Календар подій: власна секція меню замість POS-gated групи — TASK-706
+
+**Status:** review · main session · не запушено · Log: `.claude/logs/tasks/704_2026-09-08_events-calendar-standalone-nav-group_frontend-developer.md`
+
+Bugfix: календар (`/events`) зникав у тенантів без модуля `pos` — його пункт «Події» сидів у
+`pos`-gated групі Sidebar «Продажі» (TASK-210). Винесено в окрему ungated-групу «Календар»
+(`Sidebar.tsx` + i18n uk/en). Бекенд `TenantRoleTabs.cs`: новий groupKey `calendar` → секція
+«Календар» у «Видимі розділи» (динамічний каталог, редактор ролей не чіпав). `/events` page
+отримав `useRequireTab("/events","calendar",…)`. Без міграцій, бекенд-авторизація без змін.
+`tsc`/`lint`/`vitest` 59, `dotnet build`/`dotnet test` TenantRole 43 — чисто. Браузер: з `pos`
+і без `pos` — CALENDAR видно в обох, `/events` відкривається. KI-019 доповнено Events
+sub-decision.
+
 ## Supplier ship-flow: вибір / розбиття / додавання партій — TASK-698
 
 **Status:** review · main session · не запушено · Log: `.claude/logs/tasks/698_2026-09-06_supplier-ship-batch-picker_backend-developer.md`

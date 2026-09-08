@@ -13,6 +13,9 @@ import {
 } from "@/features/events/hooks/useEvents";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useStoreContext } from "@/lib/useStoreContext";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { hasRole, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
+import { useRequireTab } from "@/lib/useRequireTab";
 import { EVENT_TYPES, EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent, type UpsertEventPayload } from "@/features/events/types";
 
 export default function EventsPage() {
@@ -20,6 +23,14 @@ export default function EventsPage() {
   const tTypes = useTranslations("Dashboard.events.types");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
+  // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397; per-item
+  // granularity as of TASK-399): mirrors Sidebar.tsx's /events NavItem in the standalone
+  // "calendar" group (roles: AT_LEAST_STORE_MANAGER, no moduleKey). A non-empty tabs claim is
+  // authoritative in both directions — a TenantRole granted "/events" or "calendar" reaches this
+  // page, and one whose "Видимі розділи" excludes both is blocked here too, not just in the nav.
+  const { data: me } = useMe();
+  useRequireTab("/events", "calendar", hasRole(me?.role, AT_LEAST_STORE_MANAGER));
+
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
