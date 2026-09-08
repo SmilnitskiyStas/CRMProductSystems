@@ -43,19 +43,25 @@ public sealed class TenantAiConfigService : ITenantAiConfigService
         foreach (var service in new[] { OpenAi, Claude })
         {
             var (config, _) = await _integrations.GetByServiceAsync(tenantId, service, ct);
-            var maskedKey = config?.Config is null ? null : (string?)config!.Config["api_key"];
-            if (string.IsNullOrEmpty(maskedKey))
+            if (config?.Config is null)
                 continue;
 
-            var last4 = PrroSecrets.IsMasked(maskedKey) && maskedKey!.Length > PrroSecrets.MaskToken.Length
-                ? maskedKey[PrroSecrets.MaskToken.Length..]
+            // A row without a per-tenant key is still a real config — the model, preset
+            // (extra_instructions) and enabled flag were saved and the agent runs on the
+            // provider's shared env key (AiClientFactory). Reporting "not configured" here
+            // made a saved preset look like it vanished.
+            var maskedKey = (string?)config.Config["api_key"];
+            var last4 = !string.IsNullOrEmpty(maskedKey)
+                        && PrroSecrets.IsMasked(maskedKey!)
+                        && maskedKey!.Length > PrroSecrets.MaskToken.Length
+                ? maskedKey![PrroSecrets.MaskToken.Length..]
                 : null;
 
             return new TenantAiAgentDto(
                 IsConfigured: true,
-                IsEnabled: config!.IsEnabled,
+                IsEnabled: config.IsEnabled,
                 Provider: service,
-                Model: (string?)config.Config!["model"],
+                Model: (string?)config.Config["model"],
                 ApiKeyLast4: last4,
                 BaseUrl: (string?)config.Config["base_url"],
                 ExtraInstructions: (string?)config.Config["extra_instructions"],

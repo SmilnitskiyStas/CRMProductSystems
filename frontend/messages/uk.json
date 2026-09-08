@@ -4375,6 +4375,7 @@
         "aiSectionTitle": "AI-АГЕНТ",
         "aiStatusNotConnected": "Не підключено",
         "aiStatusDisabled": "вимкнено",
+        "aiStatusNoKey": "Ключ клієнта не задано — агент працює на системному ключі провайдера.",
         "aiEnabledLabel": "Увімкнено",
         "aiProviderLabel": "Провайдер",
         "aiProviderClaude": "Claude (Anthropic)",

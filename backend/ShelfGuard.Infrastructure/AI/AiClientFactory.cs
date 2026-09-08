@@ -59,11 +59,19 @@ public sealed class AiClientFactory : IAiClientFactory
             .Select(i => new { i.Service, i.Config })
             .FirstOrDefaultAsync(ct);
 
+        var isOpenAiRow = row is not null && string.Equals(row.Service, "openai", StringComparison.OrdinalIgnoreCase);
+
         if (row is not null)
         {
             var (key, model, baseUrl) = ParseConfig(row.Config);
             if (!string.IsNullOrWhiteSpace(key))
                 return Create(new AiProviderConfig(row.Service, key!, model ?? "", baseUrl));
+
+            // Keyless row (the provider saved model/preset/enabled but no per-tenant key):
+            // run on the shared env key, but keep the row's provider + model + base_url choice.
+            var envKeyForRow = isOpenAiRow ? _envOpenAiKey : _envClaudeKey;
+            if (!string.IsNullOrWhiteSpace(envKeyForRow))
+                return Create(new AiProviderConfig(row.Service, envKeyForRow!, model ?? "", baseUrl));
         }
 
         if (!string.IsNullOrWhiteSpace(_envClaudeKey))

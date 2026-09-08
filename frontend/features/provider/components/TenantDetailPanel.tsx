@@ -607,6 +607,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                 {aiAgent?.isConfigured && !aiAgent.isEnabled && (
                   <span style={{ color: "#6B7280", fontSize: 12 }}>{t("aiStatusDisabled")}</span>
                 )}
+                {aiAgent?.isConfigured && !aiAgent.apiKeyLast4 && (
+                  <span style={{ color: "#FCD34D", fontSize: 12, width: "100%" }}>{t("aiStatusNoKey")}</span>
+                )}
               </div>
             )}
           </div>

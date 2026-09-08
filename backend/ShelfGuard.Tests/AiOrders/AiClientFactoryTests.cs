@@ -76,14 +76,36 @@ public sealed class AiClientFactoryTests
     }
 
     [Fact]
-    public async Task Resolve_ignores_a_disabled_row_and_a_keyless_row()
+    public async Task Resolve_ignores_a_disabled_row()
     {
         var db = NewDb();
         Seed(db, "claude", """{"api_key":"sk-ant"}""", enabled: false);
+        var sut = new AiClientFactory(db, HttpFactory(), Config());
+
+        Assert.Null(await sut.ResolveAsync());
+    }
+
+    [Fact]
+    public async Task Resolve_keyless_row_with_no_env_key_is_null()
+    {
+        var db = NewDb();
         Seed(db, "openai", """{"model":"gpt-4o"}""");
         var sut = new AiClientFactory(db, HttpFactory(), Config());
 
         Assert.Null(await sut.ResolveAsync());
+    }
+
+    [Fact]
+    public async Task Resolve_keyless_row_falls_back_to_the_env_key_for_that_provider()
+    {
+        // Provider saved a model/preset but no per-tenant key → run on the shared env key,
+        // keeping the row's provider choice (openai here, not the claude env key).
+        var db = NewDb();
+        Seed(db, "openai", """{"model":"gpt-4o"}""");
+        var sut = new AiClientFactory(db, HttpFactory(),
+            Config(("Claude:ApiKey", "sk-ant-env"), ("OpenAI:ApiKey", "sk-oai-env")));
+
+        Assert.IsType<OpenAiChatClient>(await sut.ResolveAsync());
     }
 
     [Fact]

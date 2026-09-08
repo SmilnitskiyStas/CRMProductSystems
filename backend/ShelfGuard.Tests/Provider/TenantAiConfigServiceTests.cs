@@ -65,6 +65,27 @@ public sealed class TenantAiConfigServiceTests
     }
 
     [Fact]
+    public async Task Get_RowWithoutKey_StillReturnsTheSavedConfig()
+    {
+        // Regression: a preset (extra_instructions) saved without a per-tenant key used to
+        // come back as IsConfigured=false with everything null — the preset "vanished".
+        StubRow("openai", null);
+        StubRow("claude", new JsonObject
+        {
+            ["model"] = "claude-sonnet-4-6",
+            ["extra_instructions"] = "Це квітковий магазин.",
+        });
+
+        var dto = await _sut.GetAsync(Tenant);
+
+        Assert.True(dto.IsConfigured);
+        Assert.Equal("claude", dto.Provider);
+        Assert.Null(dto.ApiKeyLast4);
+        Assert.Equal("claude-sonnet-4-6", dto.Model);
+        Assert.Equal("Це квітковий магазин.", dto.ExtraInstructions);
+    }
+
+    [Fact]
     public async Task Get_PrefersTheOpenAiRow()
     {
         StubRow("openai", new JsonObject { ["api_key"] = "••••1234", ["model"] = "gpt-4o", ["base_url"] = "https://proxy/v1" });

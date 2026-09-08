@@ -4375,6 +4375,7 @@
         "aiSectionTitle": "AI AGENT",
         "aiStatusNotConnected": "Not connected",
         "aiStatusDisabled": "disabled",
+        "aiStatusNoKey": "No tenant key set — the agent runs on the provider's system key.",
         "aiEnabledLabel": "Enabled",
         "aiProviderLabel": "Provider",
         "aiProviderClaude": "Claude (Anthropic)",
