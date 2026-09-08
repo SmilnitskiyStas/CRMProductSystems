@@ -393,8 +393,11 @@
           "label": "Sales",
           "pos": "POS",
           "sales": "Sales",
-          "customers": "Customers",
-          "events": "Events"
+          "customers": "Customers"
+        },
+        "calendar": {
+          "label": "Calendar",
+          "events": "Event Calendar"
         },
         "procurement": {
           "label": "Procurement",

@@ -2,8 +2,10 @@ namespace ShelfGuard.Domain.Constants;
 
 /// <summary>
 /// Definition of a single sidebar-tab key for the "per-role tab visibility" feature (TASK-391).
-/// Used both for the 10 legacy group-level keys and the TASK-398 item-level (href) keys — same
-/// shape, "Key" is just a coarser or finer-grained string depending on which list it came from.
+/// Used both for the group-level keys (10 at TASK-391, one more — "calendar" — added when the
+/// events calendar was split out of the "sales" group into its own) and the TASK-398 item-level
+/// (href) keys — same shape, "Key" is just a coarser or finer-grained string depending on which
+/// list it came from.
 /// </summary>
 public sealed record TenantRoleTabDefinition(string Key, string LabelUa);
 
@@ -38,8 +40,9 @@ public sealed record TenantRoleTabGroupDefinition(
 /// visibility check that was never meant to understand THEM either. Keeping them on two columns
 /// with two catalogs keeps each consumer's valid-value set exactly as wide as it needs to be.
 ///
-/// TASK-398 ("per-page, not just per-group" product feedback): the original 10 keys below
-/// (<see cref="Dashboard"/> + the 9 <c>NavGroup.key</c> values) only let a template grant/deny a
+/// TASK-398 ("per-page, not just per-group" product feedback): the group-level keys below
+/// (<see cref="Dashboard"/> + the <c>NavGroup.key</c> values — 9 at TASK-398, plus "calendar"
+/// added later when the events calendar was split out of "sales") only let a template grant/deny a
 /// WHOLE nav group at once (e.g. "operations" = Inventory+Stock+Receipts+Transfers+WriteOffs+
 /// Locations+IoT, all-or-nothing). They are kept exactly as-is — still valid, still in
 /// <see cref="All"/> — for backward compat with every already-configured TenantRole row; nothing
@@ -95,6 +98,9 @@ public static class TenantRoleTabs
     public const string Dashboard = "dashboard";
     public const string Operations = "operations";
     public const string Sales = "sales";
+    // Standalone "Календар" group in Sidebar.tsx (no moduleKey — demand events aren't POS-bound).
+    // Was folded into the "sales" group's items until it was split out into its own group.
+    public const string Calendar = "calendar";
     public const string Procurement = "procurement";
     public const string Marketplace = "marketplace";
     public const string AutoService = "auto_service";
@@ -103,13 +109,14 @@ public static class TenantRoleTabs
     public const string Workforce = "workforce";
     public const string Support = "support";
 
-    /// <summary>Every group-level key, i.e. every <see cref="Entities.TenantRole"/>-grantable key
-    /// that existed before TASK-398. Deliberately excludes <see cref="Dashboard"/> — Dashboard
-    /// has no group of its own to bulk-grant (see the "no second key" rationale above); it is
-    /// listed on its own throughout this file instead of folded into this set.</summary>
+    /// <summary>Every group-level key — one per real <c>NavGroup</c> in Sidebar.tsx (all the
+    /// pre-TASK-398 ones plus "calendar", added when the events calendar became its own group).
+    /// Deliberately excludes <see cref="Dashboard"/> — Dashboard has no group of its own to
+    /// bulk-grant (see the "no second key" rationale above); it is listed on its own throughout
+    /// this file instead of folded into this set.</summary>
     public static readonly HashSet<string> GroupKeys =
     [
-        Operations, Sales, Procurement, Marketplace,
+        Operations, Sales, Calendar, Procurement, Marketplace,
         AutoService, Production, Analytics, Workforce, Support,
     ];
 
@@ -131,6 +138,8 @@ public static class TenantRoleTabs
     public const string ItemPos = "/pos";
     public const string ItemSales = "/sales";
     public const string ItemCustomers = "/customers";
+
+    // Calendar (no moduleKey — always visible per role/AllowedTabs)
     public const string ItemEvents = "/events";
 
     // Procurement (moduleKey "procurement")
@@ -175,7 +184,8 @@ public static class TenantRoleTabs
     public static readonly HashSet<string> ItemKeys =
     [
         ItemInventory, ItemStock, ItemReceipts, ItemTransfers, ItemWriteOffs, ItemLocations, ItemIot,
-        ItemPos, ItemSales, ItemCustomers, ItemEvents,
+        ItemPos, ItemSales, ItemCustomers,
+        ItemEvents,
         ItemOrders, ItemAiOrders,
         ItemMarketplaceSuppliers, ItemMarketplaceOrders,
         ItemAutoServiceWorkOrders, ItemAutoServiceCustomers, ItemAutoServiceCatalog,
@@ -222,7 +232,10 @@ public static class TenantRoleTabs
             new(ItemPos, "Каса"),
             new(ItemSales, "Продажі"),
             new(ItemCustomers, "Клієнти"),
-            new(ItemEvents, "Події"),
+        ]),
+        new(Calendar, "Календар",
+        [
+            new(ItemEvents, "Календар подій"),
         ]),
         new(Procurement, "Постачання",
         [

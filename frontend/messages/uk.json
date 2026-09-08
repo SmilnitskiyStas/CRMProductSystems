@@ -393,8 +393,11 @@
           "label": "Продажі",
           "pos": "Каса",
           "sales": "Продажі",
-          "customers": "Клієнти",
-          "events": "Події"
+          "customers": "Клієнти"
+        },
+        "calendar": {
+          "label": "Календар",
+          "events": "Календар подій"
         },
         "procurement": {
           "label": "Постачання",

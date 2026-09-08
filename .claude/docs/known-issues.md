@@ -406,6 +406,15 @@ Chosen model for those: new keys, **no backfill**, default-off (the product answ
 "clients who didn't pay for it should lose it"). The v2/v3 controllers listed above are still
 open — that answer does not generalise (breaking existing near-launch tenants on `pos`/`iot`/
 `auto_order` is a different risk calculus).
+Events sub-decision (TASK-706, 2026-09-08): the product answer for the **demand-events calendar** is the
+opposite — it is a universal planning tool, not a paid add-on, so it must NOT be module-gated at
+all. It used to be hidden as collateral: its `/events` sidebar link sat inside the `pos`-gated
+"Продажі" group (TASK-210), so every tenant without the `pos` module (business types
+`auto_service`/`warehouse`/`production`/`distribution`, or `pos` toggled off) lost the calendar.
+Fix: `/events` moved into its own standalone, ungated Sidebar group "Календар"
+(`Sidebar.tsx` group key `calendar`; `TenantRoleTabs.cs` groupKey `calendar` / itemKey `/events`
+for per-role "Видимі розділи" control). `EventsController` stays role-gated only, as designed.
+IoT/Weather/Cannibalization are still open under this KI.
 
 ### KI-020: No frontend error tracking (Sentry or equivalent)
 Severity: medium (no visibility into production JS errors — a real error boundary was added in
