@@ -6,9 +6,20 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Погода на календарі: помітний callout «нема координат» + CTA — TASK-710
+
+**Status:** review · main session · перевірено в браузері · follow-up до TASK-708 · Log: `.claude/logs/tasks/710_2026-09-08_weather-no-coords-cta_frontend-developer.md`
+
+Юзер-фідбек: календар порожній, дрібна сіра підказка «нема координат» непомітна. `events/page.tsx`:
+`weatherHint` → discriminated (`pickOne` | `noCoords{locationId,locationName}`); `noCoords` → callout-бокс
+із назвою локації + синя кнопка **«Задати координати»** → `/locations?edit=<id>` (для `AT_LEAST_ENTERPRISE_ADMIN`,
+решті — «додає адміністратор»). `locations/page.tsx`: `useSearchParams` + `useEffect` відкриває діалог
+локації по `?edit=<id>` (як `users/page.tsx` `?tab=`), потім `router.replace`. i18n: `-hintNoCoords`,
+`+noCoordsBody/Cta/NoPermission`. Тільки фронт. `tsc`/`lint`/`next build` чисто.
+
 ## Погода на календарі подій — TASK-708
 
-**Status:** review · main session + backend/frontend агенти · не запушено · перевірено в браузері (локальний стек, координати Києва: температура на клітинках, `WeatherDayCard` у drawer, хінти, geocode 200) · Log: `.claude/logs/tasks/708_2026-09-08_weather-on-calendar_backend+frontend.md`
+**Status:** DEPLOYED prod 2026-09-08 (`214c9a99`, CI run 34245537850) · main session + backend/frontend агенти · Log: `.claude/logs/tasks/708_2026-09-08_weather-on-calendar_backend+frontend.md`
 
 ### Бекенд
 
@@ -53,7 +64,7 @@ create/update. i18n uk+en: `Dashboard.events.weather.*` (+`codes.*` 11 buckets),
 
 ## Календар подій: власна секція меню замість POS-gated групи — TASK-706
 
-**Status:** deploy → prod через push у `main` (CI/CD) · Log: `.claude/logs/tasks/706_2026-09-08_events-calendar-standalone-nav-group_frontend-developer.md`
+**Status:** DEPLOYED prod 2026-09-08 (`4070b333`) · Log: `.claude/logs/tasks/706_2026-09-08_events-calendar-standalone-nav-group_frontend-developer.md`
 
 Bugfix: календар (`/events`) зникав у тенантів без модуля `pos` — його пункт «Події» сидів у
 `pos`-gated групі Sidebar «Продажі» (TASK-210). Винесено в окрему ungated-групу «Календар»

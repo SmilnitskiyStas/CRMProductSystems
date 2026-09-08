@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Map } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -81,6 +82,19 @@ export default function LocationsPage() {
   const create = useCreateLocation();
   const updateId = dialog && dialog !== "create" ? dialog.id : "";
   const update = useUpdateLocation(updateId);
+
+  // Deep link `/locations?edit=<id>` — e.g. the "set coordinates" CTA on the events calendar
+  // when the selected store has no lat/lon. Opens that location's edit dialog once, then drops
+  // the query param so a refresh / back doesn't reopen it. Only for roles that can actually edit.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editParam = searchParams.get("edit");
+  useEffect(() => {
+    if (!editParam || !canManageLocations || dialog !== null || !locations) return;
+    const target = locations.find((loc) => loc.id === editParam);
+    if (target) setDialog(target);
+    router.replace("/locations");
+  }, [editParam, canManageLocations, dialog, locations, router]);
 
   function handleSubmit(values: {
     name: string;

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { CalendarPlus, ChevronLeft, ChevronRight, MapPin, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
@@ -15,7 +16,7 @@ import { useStores } from "@/features/stores/hooks/useStores";
 import { useWeatherMonth } from "@/features/weather/hooks/useWeatherMonth";
 import { useStoreContext } from "@/lib/useStoreContext";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { hasRole, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
+import { hasRole, AT_LEAST_STORE_MANAGER, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
 import { EVENT_TYPES, EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent, type UpsertEventPayload } from "@/features/events/types";
 
@@ -57,11 +58,20 @@ export default function EventsPage() {
     () => new Map(weatherDays.map((w) => [w.date, w])),
     [weatherDays],
   );
-  const weatherHint =
+  // Weather setup callout: which of the two prerequisites (one store selected + that store has
+  // coordinates) is unmet. `noCoords` carries the location so the callout can deep-link straight
+  // to its card. Editing a location is enterprise-admin-only (mirrors LocationsPage), so lower
+  // roles get a "ask your admin" line instead of the CTA.
+  const canManageLocations = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN);
+  const weatherHint: null | { kind: "pickOne" } | { kind: "noCoords"; locationId: string; locationName: string } =
     selectedStoreIds.length !== 1
-      ? tWeather("hintPickOneStore")
+      ? { kind: "pickOne" }
       : weatherLocationId && !weatherLoading && weatherDays.length === 0
-        ? tWeather("hintNoCoords")
+        ? {
+            kind: "noCoords",
+            locationId: weatherLocationId,
+            locationName: stores.find((s) => s.id === weatherLocationId)?.name ?? "",
+          }
         : null;
 
   const createEvent = useCreateEvent();
@@ -146,10 +156,41 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {weatherHint && (
+      {weatherHint?.kind === "pickOne" && (
         <p style={{ color: "#4B5563", fontSize: 12, marginTop: -6, marginBottom: 16 }}>
-          {weatherHint}
+          {tWeather("hintPickOneStore")}
         </p>
+      )}
+
+      {weatherHint?.kind === "noCoords" && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+            background: "#1E293B", border: "1px solid #334155", borderRadius: 10,
+            padding: "12px 16px", marginTop: -6, marginBottom: 16,
+          }}
+        >
+          <MapPin size={16} color="#93C5FD" style={{ flexShrink: 0 }} />
+          <span style={{ color: "#CBD5E1", fontSize: 13, flex: 1, minWidth: 200 }}>
+            {tWeather("noCoordsBody", { location: weatherHint.locationName })}
+          </span>
+          {canManageLocations ? (
+            <Link
+              href={`/locations?edit=${weatherHint.locationId}`}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "#2563EB", color: "#fff", fontSize: 13, fontWeight: 500,
+                borderRadius: 8, padding: "7px 14px", textDecoration: "none", flexShrink: 0,
+              }}
+            >
+              {tWeather("noCoordsCta")}
+            </Link>
+          ) : (
+            <span style={{ color: "#64748B", fontSize: 12, flexShrink: 0 }}>
+              {tWeather("noCoordsNoPermission")}
+            </span>
+          )}
+        </div>
       )}
 
       {isLoading ? (

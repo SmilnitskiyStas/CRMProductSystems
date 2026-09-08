@@ -6484,7 +6484,9 @@
       },
       "weather": {
         "hintPickOneStore": "Select a single store in the switcher above to see weather",
-        "hintNoCoords": "No coordinates set for this store — add them in the location card",
+        "noCoordsBody": "To see weather on the calendar, set coordinates for the location “{location}”.",
+        "noCoordsCta": "Set coordinates",
+        "noCoordsNoPermission": "Coordinates are added by a company admin",
         "forecastBadge": "forecast",
         "actualBadge": "actual",
         "tempMax": "Maximum",
