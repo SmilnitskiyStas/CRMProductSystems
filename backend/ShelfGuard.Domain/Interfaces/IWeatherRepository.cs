@@ -8,6 +8,12 @@ public interface IWeatherRepository
     Task<List<WeatherData>> GetHistoryAsync(Guid storeId, DateOnly from, DateOnly to, CancellationToken ct = default);
     Task<WeatherData?> GetForDateAsync(Guid storeId, DateOnly date, CancellationToken ct = default);
 
+    /// <summary>Every stored row for a location in [from, to], ordered by date, regardless of the IsForecast flag.</summary>
+    Task<List<WeatherData>> GetRangeAsync(Guid storeId, DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>The location itself (for its coordinates) — tenant-scoped by RLS on <c>locations</c>.</summary>
+    Task<Location?> GetLocationAsync(Guid locationId, CancellationToken ct = default);
+
     /// <summary>Locations of the tenant context that have coordinates set.</summary>
     Task<List<Location>> GetStoresWithCoordinatesAsync(CancellationToken ct = default);
 

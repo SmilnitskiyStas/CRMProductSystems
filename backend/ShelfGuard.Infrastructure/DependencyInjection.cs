@@ -144,6 +144,7 @@ public static class DependencyInjection
         services.AddScoped<Application.Services.IAiConnectivityTester, AI.AiConnectivityTester>();
         services.AddHttpClient("openai", http => http.Timeout = TimeSpan.FromSeconds(60));
         services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
+        services.AddHttpClient<Domain.Interfaces.IGeocodingClient, Integrations.NominatimGeocodingClient>();
 
         // v3.2 - ПРРО fiscalization (ADR-013): per-tenant factory replaces the startup-time
         // PRRO:PROVIDER switch. The factory reads each tenant's integration_configs row and

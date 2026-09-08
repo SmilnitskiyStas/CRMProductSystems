@@ -1388,7 +1388,13 @@
         "create": "Create",
         "validationRequired": "Name is required",
         "regionLabel": "Region / city",
-        "regionPlaceholder": "Not specified"
+        "regionPlaceholder": "Not specified",
+        "latitudeLabel": "Latitude",
+        "longitudeLabel": "Longitude",
+        "geocodeButton": "Resolve coordinates",
+        "geocodeResolving": "Resolving…",
+        "geocodeError": "Could not resolve coordinates for this address.",
+        "geocodeResolvedTo": "Found: {name}"
       },
       "types": {
         "retail_store": "Retail Store",
@@ -6475,6 +6481,30 @@
         ],
         "eventTooltip": "{name} ({type}, coefficients: {count})",
         "moreEvents": "+{count} more"
+      },
+      "weather": {
+        "hintPickOneStore": "Select a single store in the switcher above to see weather",
+        "hintNoCoords": "No coordinates set for this store — add them in the location card",
+        "forecastBadge": "forecast",
+        "actualBadge": "actual",
+        "tempMax": "Maximum",
+        "tempMin": "Minimum",
+        "tempAvg": "Average",
+        "precipitation": "Precipitation",
+        "precipitationValue": "{value} mm",
+        "codes": {
+          "clear": "Clear",
+          "partlyCloudy": "Partly cloudy",
+          "cloudy": "Cloudy",
+          "fog": "Fog",
+          "drizzle": "Drizzle",
+          "rain": "Rain",
+          "snow": "Snow",
+          "showers": "Rain showers",
+          "snowShowers": "Snow showers",
+          "thunder": "Thunderstorm",
+          "thunderHail": "Thunderstorm with hail"
+        }
       },
       "eventForm": {
         "validationRequired": "Required field",

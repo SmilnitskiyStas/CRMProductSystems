@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using ShelfGuard.Domain.Interfaces;
 
@@ -9,6 +10,10 @@ namespace ShelfGuard.Infrastructure.Integrations;
 /// </summary>
 public sealed class OpenMeteoClient : IOpenMeteoClient
 {
+    private const string ForecastBase = "https://api.open-meteo.com/v1/forecast";
+    private const string ArchiveBase = "https://archive-api.open-meteo.com/v1/archive";
+    private const string DailyVars = "temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode";
+
     private readonly HttpClient _http;
 
     public OpenMeteoClient(HttpClient http) => _http = http;
@@ -40,6 +45,49 @@ public sealed class OpenMeteoClient : IOpenMeteoClient
 
         return result;
     }
+
+    public Task<List<DailyForecast>> GetRangeAsync(
+        decimal latitude, decimal longitude, int pastDays, int forecastDays, CancellationToken ct = default)
+    {
+        var url = $"{ForecastBase}?latitude={Coord(latitude)}&longitude={Coord(longitude)}" +
+                  $"&daily={DailyVars}&past_days={pastDays}&forecast_days={forecastDays}&timezone=UTC";
+        return FetchDailyAsync(url, ct);
+    }
+
+    public Task<List<DailyForecast>> GetArchiveAsync(
+        decimal latitude, decimal longitude, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var url = $"{ArchiveBase}?latitude={Coord(latitude)}&longitude={Coord(longitude)}" +
+                  $"&start_date={from:yyyy-MM-dd}&end_date={to:yyyy-MM-dd}" +
+                  $"&daily={DailyVars}&timezone=UTC";
+        return FetchDailyAsync(url, ct);
+    }
+
+    // ── shared ─────────────────────────────────────────────────────────────
+
+    private async Task<List<DailyForecast>> FetchDailyAsync(string url, CancellationToken ct)
+    {
+        var resp = await _http.GetFromJsonAsync<OpenMeteoResponse>(url, ct)
+            ?? throw new HttpRequestException("Open-Meteo returned an empty response.");
+
+        var daily = resp.Daily
+            ?? throw new HttpRequestException("Open-Meteo response has no daily block.");
+
+        var result = new List<DailyForecast>();
+        for (var i = 0; i < daily.Time.Count; i++)
+        {
+            result.Add(new DailyForecast(
+                DateOnly.Parse(daily.Time[i], CultureInfo.InvariantCulture),
+                daily.Temperature2mMin?.ElementAtOrDefault(i),
+                daily.Temperature2mMax?.ElementAtOrDefault(i),
+                daily.PrecipitationSum?.ElementAtOrDefault(i),
+                daily.WeatherCode?.ElementAtOrDefault(i)));
+        }
+
+        return result;
+    }
+
+    private static string Coord(decimal value) => value.ToString(CultureInfo.InvariantCulture);
 
     // ── wire DTOs ──────────────────────────────────────────────────────────
 

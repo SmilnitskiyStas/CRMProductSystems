@@ -6,14 +6,18 @@ import { useLocale, useTranslations } from "next-intl";
 import { DetailDrawer } from "@/components/ui/DetailDrawer";
 import { Btn } from "@/components/ui/Btn";
 import type { StoreDto as Store } from "@/features/stores/types";
+import type { WeatherDay } from "@/features/weather/types";
 import { EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent } from "../types";
 import { isEventActiveOnDate } from "../utils";
 import { EventDetailPanel } from "./EventDetailPanel";
+import { WeatherDayCard } from "./WeatherDayCard";
 
 interface Props {
   dateIso: string;
   allEvents: DemandEvent[];
   stores: Store[];
+  /** Weather for `dateIso` — present only when a single location is selected. */
+  weather?: WeatherDay;
   onAddEvent: () => void;
   onEditEvent: (event: DemandEvent) => void;
   onClose: () => void;
@@ -22,7 +26,7 @@ interface Props {
 const LIST_WIDTH = 480;
 const DETAIL_WIDTH = 860;
 
-export function EventDayDetailDrawer({ dateIso, allEvents, stores, onAddEvent, onEditEvent, onClose }: Props) {
+export function EventDayDetailDrawer({ dateIso, allEvents, stores, weather, onAddEvent, onEditEvent, onClose }: Props) {
   const t = useTranslations("Dashboard.events.dayDetail");
   const tTypes = useTranslations("Dashboard.events.types");
   const locale = useLocale();
@@ -77,6 +81,7 @@ export function EventDayDetailDrawer({ dateIso, allEvents, stores, onAddEvent, o
       title={t("drawerTitle", { date: formattedDate })}
       width={LIST_WIDTH}
     >
+      {weather && <WeatherDayCard weather={weather} />}
       {dayEvents.length === 0 ? (
         <div style={{ textAlign: "center", padding: "24px 0" }}>
           <p style={{ color: "#4B5563", fontSize: 13, marginBottom: 14 }}>{t("emptyState")}</p>

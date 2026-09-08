@@ -1388,7 +1388,13 @@
         "create": "Створити",
         "validationRequired": "Назва обов'язкова",
         "regionLabel": "Область / місто",
-        "regionPlaceholder": "Не вказано"
+        "regionPlaceholder": "Не вказано",
+        "latitudeLabel": "Широта",
+        "longitudeLabel": "Довгота",
+        "geocodeButton": "Визначити координати",
+        "geocodeResolving": "Визначення…",
+        "geocodeError": "Не вдалося визначити координати за адресою.",
+        "geocodeResolvedTo": "Знайдено: {name}"
       },
       "types": {
         "retail_store": "Роздрібний магазин",
@@ -6475,6 +6481,30 @@
         ],
         "eventTooltip": "{name} ({type}, коефіцієнтів: {count})",
         "moreEvents": "+{count} ще"
+      },
+      "weather": {
+        "hintPickOneStore": "Оберіть один магазин у перемикачі вгорі, щоб бачити погоду",
+        "hintNoCoords": "Для цього магазину не задано координати — вкажіть їх у картці локації",
+        "forecastBadge": "прогноз",
+        "actualBadge": "факт",
+        "tempMax": "Максимальна",
+        "tempMin": "Мінімальна",
+        "tempAvg": "Середня",
+        "precipitation": "Опади",
+        "precipitationValue": "{value} мм",
+        "codes": {
+          "clear": "Ясно",
+          "partlyCloudy": "Мінлива хмарність",
+          "cloudy": "Хмарно",
+          "fog": "Туман",
+          "drizzle": "Мряка",
+          "rain": "Дощ",
+          "snow": "Сніг",
+          "showers": "Зливи",
+          "snowShowers": "Снігопад",
+          "thunder": "Гроза",
+          "thunderHail": "Гроза з градом"
+        }
       },
       "eventForm": {
         "validationRequired": "Обов'язкове поле",

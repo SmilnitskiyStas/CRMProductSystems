@@ -54,6 +54,12 @@ public sealed record UpdateFloorPlanRequest(
     string FloorPlan
 );
 
+/// <summary>Body for <c>POST /api/locations/geocode</c> — the free-text address to resolve.</summary>
+public sealed record GeocodeAddressRequest(string Query);
+
+/// <summary>Resolved coordinates for an address. The location form sends the lat/lon back via the normal update.</summary>
+public sealed record GeocodeAddressResult(decimal Latitude, decimal Longitude, string DisplayName);
+
 public sealed record CreateZoneRequest(
     string Name,
     string Type,

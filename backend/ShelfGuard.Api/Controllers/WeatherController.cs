@@ -27,6 +27,13 @@ public sealed class WeatherController : ControllerBase
         Guid storeId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
         => Ok(await _weather.GetHistoryAsync(storeId, from, to, ct));
 
+    /// <summary>Daily weather for a whole calendar month at a location — feeds the events-calendar cells.</summary>
+    [HttpGet("{locationId:guid}/month")]
+    [ProducesResponseType(typeof(List<WeatherDayDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMonth(
+        Guid locationId, [FromQuery] int year, [FromQuery] int month, CancellationToken ct)
+        => Ok(await _weather.GetMonthAsync(locationId, year, month, ct));
+
     [HttpPost("fetch")]
     [Authorize(Policy = AppPolicies.AtLeastNetworkManager)]
     [ProducesResponseType(typeof(FetchWeatherResult), StatusCodes.Status200OK)]

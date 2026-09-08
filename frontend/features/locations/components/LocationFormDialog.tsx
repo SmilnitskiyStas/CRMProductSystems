@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
+import { locationsApi } from "../api/locations";
 import { LOCATION_TYPE_VALUES, type LocationDto, type LocationType } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
@@ -20,6 +22,8 @@ function buildSchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
     name: z.string().min(1, t("validationRequired")).max(255),
     address: z.string().max(500).optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
     locationType: z.enum([
       "retail_store",
       "warehouse",
@@ -46,6 +50,8 @@ interface Props {
   onSubmit: (values: {
     name: string;
     address: string | null;
+    latitude: number | null;
+    longitude: number | null;
     locationType: LocationType;
     isActive: boolean;
     legalEntityId: string | null;
@@ -95,6 +101,8 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
     defaultValues: {
       name: "",
       address: "",
+      latitude: null,
+      longitude: null,
       locationType: "retail_store",
       isActive: true,
       legalEntityId: "",
@@ -102,12 +110,18 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
     },
   });
 
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodedLabel, setGeocodedLabel] = useState<string | null>(null);
+
   // Populate form when editing
   useEffect(() => {
+    setGeocodedLabel(null);
     if (location) {
       reset({
         name: location.name,
         address: location.address ?? "",
+        latitude: location.latitude ?? null,
+        longitude: location.longitude ?? null,
         locationType: location.locationType,
         isActive: location.isActive,
         legalEntityId: location.legalEntityId ?? "",
@@ -117,6 +131,8 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       reset({
         name: "",
         address: "",
+        latitude: null,
+        longitude: null,
         locationType: "retail_store",
         isActive: true,
         legalEntityId: "",
@@ -129,12 +145,33 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
     onSubmit({
       name: values.name,
       address: values.address?.trim() || null,
+      latitude: values.latitude ?? null,
+      longitude: values.longitude ?? null,
       locationType: values.locationType,
       isActive: values.isActive,
       legalEntityId: values.legalEntityId || null,
       regionCode: values.regionCode ?? null,
     });
   }
+
+  async function handleGeocode() {
+    const query = (watch("address") ?? "").trim();
+    if (!query) return;
+    setGeocoding(true);
+    try {
+      const res = await locationsApi.geocode(query);
+      setValue("latitude", res.latitude, { shouldDirty: true });
+      setValue("longitude", res.longitude, { shouldDirty: true });
+      setGeocodedLabel(res.displayName);
+    } catch {
+      setGeocodedLabel(null);
+      toast.error(t("geocodeError"));
+    } finally {
+      setGeocoding(false);
+    }
+  }
+
+  const addressValue = (watch("address") ?? "").trim();
 
   return (
     <div
@@ -200,6 +237,48 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
               style={inputStyle}
             />
           </Field>
+
+          {/* Coordinates */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <Field label={t("latitudeLabel")} error={errors.latitude?.message}>
+                  <input
+                    type="number"
+                    step="any"
+                    {...register("latitude", { setValueAs: toNullableNumber })}
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label={t("longitudeLabel")} error={errors.longitude?.message}>
+                  <input
+                    type="number"
+                    step="any"
+                    {...register("longitude", { setValueAs: toNullableNumber })}
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Btn
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={handleGeocode}
+                disabled={geocoding || !addressValue}
+              >
+                {geocoding ? t("geocodeResolving") : t("geocodeButton")}
+              </Btn>
+            </div>
+            {geocodedLabel && (
+              <span style={{ color: "#6B7280", fontSize: 11 }}>
+                {t("geocodeResolvedTo", { name: geocodedLabel })}
+              </span>
+            )}
+          </div>
 
           {/* Region */}
           <Field label={t("regionLabel")} error={errors.regionCode?.message}>
@@ -267,6 +346,13 @@ function Field({
       {error && <span style={{ color: "#ef4444", fontSize: 11 }}>{error}</span>}
     </div>
   );
+}
+
+/** number-input string → number | null (empty / unparseable → null). */
+function toNullableNumber(v: unknown): number | null {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
 }
 
 const inputStyle: React.CSSProperties = {

@@ -88,6 +88,22 @@ public sealed class LocationsController : ControllerBase
         return Ok(location);
     }
 
+    /// <summary>
+    /// Resolves a free-text address to coordinates (OpenStreetMap Nominatim). The location form
+    /// calls this on a button click and sends the returned lat/lon back via the normal update.
+    /// </summary>
+    [HttpPost("geocode")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(GeocodeAddressResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Geocode(GeocodeAddressRequest request, CancellationToken ct)
+    {
+        var result = await _locations.GeocodeAddressAsync(request.Query, ct);
+        return result is null
+            ? NotFound(new { error = "Не вдалося визначити координати за адресою." })
+            : Ok(result);
+    }
+
     // ── Zones ──────────────────────────────────────────────────────────────
 
     [HttpGet("{id:guid}/zones")]

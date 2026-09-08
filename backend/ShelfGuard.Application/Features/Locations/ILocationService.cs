@@ -24,6 +24,13 @@ public interface ILocationService
     Task<(LocationDto? Location, string? Error)> UpdateFloorPlanAsync(
         Guid id, UpdateFloorPlanRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Resolves a free-text address to coordinates via <see cref="Domain.Interfaces.IGeocodingClient"/>.
+    /// No persistence — the location form sends the returned lat/lon back through the normal update.
+    /// Returns <c>null</c> when the address cannot be resolved.
+    /// </summary>
+    Task<GeocodeAddressResult?> GeocodeAddressAsync(string query, CancellationToken ct = default);
+
     Task<List<LocationZoneDto>> GetZonesAsync(Guid locationId, CancellationToken ct = default);
 
     Task<(LocationZoneDto? Zone, string? Error)> CreateZoneAsync(
