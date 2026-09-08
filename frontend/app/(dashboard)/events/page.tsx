@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CalendarPlus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
@@ -12,6 +12,7 @@ import {
   useCreateEvent, useDeleteEvent, useEvents, useSeedDefaults, useUpdateEvent,
 } from "@/features/events/hooks/useEvents";
 import { useStores } from "@/features/stores/hooks/useStores";
+import { useWeatherMonth } from "@/features/weather/hooks/useWeatherMonth";
 import { useStoreContext } from "@/lib/useStoreContext";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
@@ -21,6 +22,7 @@ import { EVENT_TYPES, EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent, ty
 export default function EventsPage() {
   const t = useTranslations("Dashboard.events.page");
   const tTypes = useTranslations("Dashboard.events.types");
+  const tWeather = useTranslations("Dashboard.events.weather");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   // Sidebar tab visibility (TASK-391c; authoritative/exclusive as of TASK-397; per-item
@@ -46,6 +48,22 @@ export default function EventsPage() {
   const selectedStoreIds = useStoreContext((s) => s.selectedStoreIds);
   const { data: events = [], isLoading } = useEvents(from, to, selectedStoreIds);
   const { data: stores = [] } = useStores();
+
+  // Weather needs one concrete location — the header's store selector doubles as the
+  // location selector here (a store IS a location). Empty / multi selection = no weather.
+  const weatherLocationId = selectedStoreIds.length === 1 ? selectedStoreIds[0] : undefined;
+  const { data: weatherDays = [], isLoading: weatherLoading } = useWeatherMonth(weatherLocationId, year, month);
+  const weatherByDate = useMemo(
+    () => new Map(weatherDays.map((w) => [w.date, w])),
+    [weatherDays],
+  );
+  const weatherHint =
+    selectedStoreIds.length !== 1
+      ? tWeather("hintPickOneStore")
+      : weatherLocationId && !weatherLoading && weatherDays.length === 0
+        ? tWeather("hintNoCoords")
+        : null;
+
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
@@ -128,6 +146,12 @@ export default function EventsPage() {
         </div>
       </div>
 
+      {weatherHint && (
+        <p style={{ color: "#4B5563", fontSize: 12, marginTop: -6, marginBottom: 16 }}>
+          {weatherHint}
+        </p>
+      )}
+
       {isLoading ? (
         <p style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</p>
       ) : (
@@ -135,6 +159,7 @@ export default function EventsPage() {
           year={year}
           month={month}
           events={events}
+          weatherByDate={weatherByDate}
           onEventClick={setEditing}
           onDayClick={setSelectedDay}
         />
@@ -145,6 +170,7 @@ export default function EventsPage() {
           dateIso={selectedDay}
           allEvents={events}
           stores={stores}
+          weather={weatherByDate.get(selectedDay)}
           onAddEvent={() => setCreating(selectedDay)}
           onEditEvent={(ev) => setEditing(ev)}
           onClose={() => setSelectedDay(null)}

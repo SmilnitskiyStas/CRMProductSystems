@@ -4,6 +4,8 @@ import type { LocationDto, LocationType, LocationZoneDto } from "../types";
 export interface CreateLocationDto {
   name: string;
   address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   locationType: LocationType;
   legalEntityId?: string | null;
   regionCode?: string | null;
@@ -12,10 +14,18 @@ export interface CreateLocationDto {
 export interface UpdateLocationDto {
   name: string;
   address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   locationType: LocationType;
   isActive: boolean;
   legalEntityId?: string | null;
   regionCode?: string | null;
+}
+
+export interface GeocodeAddressResult {
+  latitude: number;
+  longitude: number;
+  displayName: string;
 }
 
 export interface CreateZoneDto {
@@ -32,6 +42,8 @@ export const locationsApi = {
   create: (data: CreateLocationDto) => api.post<LocationDto>("/api/locations", data),
   update: (id: string, data: UpdateLocationDto) =>
     api.put<LocationDto>(`/api/locations/${id}`, data),
+  geocode: (query: string) =>
+    api.post<GeocodeAddressResult>("/api/locations/geocode", { query }),
   updateFloorPlan: (id: string, floorPlan: string) =>
     api.put<LocationDto>(`/api/locations/${id}/floor-plan`, { floorPlan }),
   createZone: (locationId: string, data: CreateZoneDto) =>

@@ -85,6 +85,8 @@ export default function LocationsPage() {
   function handleSubmit(values: {
     name: string;
     address: string | null;
+    latitude: number | null;
+    longitude: number | null;
     locationType: LocationType;
     isActive: boolean;
     legalEntityId: string | null;
@@ -95,6 +97,8 @@ export default function LocationsPage() {
         {
           name: values.name,
           address: values.address,
+          latitude: values.latitude,
+          longitude: values.longitude,
           locationType: values.locationType,
           legalEntityId: values.legalEntityId,
           regionCode: values.regionCode,

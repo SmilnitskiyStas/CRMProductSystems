@@ -29,6 +29,16 @@ public sealed class WeatherRepository : IWeatherRepository
     public Task<WeatherData?> GetForDateAsync(Guid storeId, DateOnly date, CancellationToken ct = default) =>
         _db.WeatherData.FirstOrDefaultAsync(w => w.StoreId == storeId && w.Date == date, ct);
 
+    public Task<List<WeatherData>> GetRangeAsync(
+        Guid storeId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        _db.WeatherData
+            .Where(w => w.StoreId == storeId && w.Date >= from && w.Date <= to)
+            .OrderBy(w => w.Date)
+            .ToListAsync(ct);
+
+    public Task<Location?> GetLocationAsync(Guid locationId, CancellationToken ct = default) =>
+        _db.Locations.FirstOrDefaultAsync(l => l.Id == locationId, ct);
+
     public Task<List<Location>> GetStoresWithCoordinatesAsync(CancellationToken ct = default) =>
         _db.Locations
             .Where(s => s.IsActive && s.Latitude != null && s.Longitude != null)

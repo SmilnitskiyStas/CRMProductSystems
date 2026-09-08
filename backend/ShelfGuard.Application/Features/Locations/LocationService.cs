@@ -26,11 +26,16 @@ public sealed class LocationService : ILocationService
 
     private readonly ILocationRepository _repo;
     private readonly IUserLocationRepository _userLocations;
+    private readonly IGeocodingClient _geocoder;
 
-    public LocationService(ILocationRepository repo, IUserLocationRepository userLocations)
+    public LocationService(
+        ILocationRepository repo,
+        IUserLocationRepository userLocations,
+        IGeocodingClient geocoder)
     {
         _repo = repo;
         _userLocations = userLocations;
+        _geocoder = geocoder;
     }
 
     public async Task<List<LocationDto>> GetAllAsync(
@@ -141,6 +146,17 @@ public sealed class LocationService : ILocationService
         await _repo.SaveChangesAsync(ct);
 
         return (ToDto(location), null);
+    }
+
+    public async Task<GeocodeAddressResult?> GeocodeAddressAsync(string query, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return null;
+
+        var result = await _geocoder.GeocodeAsync(query.Trim(), ct);
+        return result is null
+            ? null
+            : new GeocodeAddressResult(result.Latitude, result.Longitude, result.DisplayName);
     }
 
     public async Task<List<LocationZoneDto>> GetZonesAsync(Guid locationId, CancellationToken ct = default)

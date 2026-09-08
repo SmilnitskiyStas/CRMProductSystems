@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ShelfGuard.Application.Features.Weather.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -6,13 +7,22 @@ namespace ShelfGuard.Application.Features.Weather;
 
 public sealed class WeatherService : IWeatherService
 {
+    /// <summary>How far back / forward the Open-Meteo forecast API can serve (past_days ≤ 92, forecast_days ≤ 16).</summary>
+    private const int ForecastPastDaysMax = 92;
+    private const int ForecastFutureDaysMax = 16;
+
+    /// <summary>Stored rows for today-1 onward are re-fetched once they age past this.</summary>
+    private static readonly TimeSpan RecentStaleAfter = TimeSpan.FromHours(6);
+
     private readonly IWeatherRepository _repo;
     private readonly IOpenMeteoClient _meteo;
+    private readonly ILogger<WeatherService> _logger;
 
-    public WeatherService(IWeatherRepository repo, IOpenMeteoClient meteo)
+    public WeatherService(IWeatherRepository repo, IOpenMeteoClient meteo, ILogger<WeatherService> logger)
     {
         _repo = repo;
         _meteo = meteo;
+        _logger = logger;
     }
 
     public async Task<List<WeatherDayDto>> GetForecastAsync(Guid storeId, CancellationToken ct = default)
@@ -26,6 +36,83 @@ public sealed class WeatherService : IWeatherService
     {
         var rows = await _repo.GetHistoryAsync(storeId, from, to, ct);
         return rows.Select(ToDto).ToList();
+    }
+
+    public async Task<List<WeatherDayDto>> GetMonthAsync(
+        Guid locationId, int year, int month, CancellationToken ct = default)
+    {
+        if (month is < 1 or > 12 || year is < 2000 or > 2100)
+            return [];
+
+        var monthStart = new DateOnly(year, month, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var location = await _repo.GetLocationAsync(locationId, ct);
+        if (location?.Latitude is null || location.Longitude is null)
+            return [];
+
+        var stored = await _repo.GetRangeAsync(locationId, monthStart, monthEnd, ct);
+        var storedByDate = stored.ToDictionary(w => w.Date);
+        var staleBefore = DateTime.UtcNow - RecentStaleAfter;
+
+        bool IsMissingOrStale(DateOnly d)
+        {
+            if (!storedByDate.TryGetValue(d, out var row))
+                return true;
+            // Only recent/future rows drift (forecast → actual); older history is stable once stored.
+            return d >= today.AddDays(-1) && row.FetchedAt < staleBefore;
+        }
+
+        var forecastFloor = today.AddDays(-ForecastPastDaysMax);
+        var forecastCeil = today.AddDays(ForecastFutureDaysMax);
+
+        List<DailyForecast>? fetched = null;
+        List<DateOnly> needed;
+
+        try
+        {
+            if (monthEnd < forecastFloor)
+            {
+                // Whole month predates the forecast API's past window → archive API.
+                needed = EnumerateDates(monthStart, monthEnd).Where(IsMissingOrStale).ToList();
+                if (needed.Count > 0)
+                    fetched = await _meteo.GetArchiveAsync(
+                        location.Latitude.Value, location.Longitude.Value, needed.Min(), needed.Max(), ct);
+            }
+            else
+            {
+                needed = EnumerateDates(monthStart, monthEnd)
+                    .Where(d => d >= forecastFloor && d <= forecastCeil)
+                    .Where(IsMissingOrStale)
+                    .ToList();
+                if (needed.Count > 0)
+                {
+                    var from = needed.Min();
+                    var to = needed.Max();
+                    var pastDays = Math.Clamp(today.DayNumber - from.DayNumber, 0, ForecastPastDaysMax);
+                    var forecastDays = Math.Clamp(to.DayNumber - today.DayNumber + 1, 1, ForecastFutureDaysMax);
+                    fetched = await _meteo.GetRangeAsync(
+                        location.Latitude.Value, location.Longitude.Value, pastDays, forecastDays, ct);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Weather month fetch failed for location {LocationId} {Year}-{Month:D2}; returning stored rows only",
+                locationId, year, month);
+            return stored.Select(ToDto).ToList();
+        }
+
+        if (fetched is { Count: > 0 })
+        {
+            var neededSet = needed.ToHashSet();
+            await UpsertRangeAsync(locationId, fetched.Where(d => neededSet.Contains(d.Date)).ToList(), today, ct);
+            stored = await _repo.GetRangeAsync(locationId, monthStart, monthEnd, ct);
+        }
+
+        return stored.OrderBy(w => w.Date).Select(ToDto).ToList();
     }
 
     public async Task<FetchWeatherResult> FetchAsync(CancellationToken ct = default)
@@ -132,6 +219,57 @@ public sealed class WeatherService : IWeatherService
         coef.Source = "manual";
         await _repo.SaveChangesAsync(ct);
         return (ToDto(coef), null);
+    }
+
+    /// <summary>Upserts a set of daily forecasts for one location, mirroring <see cref="FetchAsync"/>'s shape.</summary>
+    private async Task UpsertRangeAsync(
+        Guid locationId, List<DailyForecast> days, DateOnly today, CancellationToken ct)
+    {
+        if (days.Count == 0)
+            return;
+
+        var existing = await _repo.GetByStoreDatesAsync(
+            locationId, days.Select(d => d.Date).ToList(), ct);
+
+        foreach (var day in days)
+        {
+            decimal? tempAvg = day.TempMin is not null && day.TempMax is not null
+                ? Math.Round((day.TempMin.Value + day.TempMax.Value) / 2, 1)
+                : null;
+
+            if (existing.TryGetValue(day.Date, out var row))
+            {
+                row.TempMin = day.TempMin;
+                row.TempMax = day.TempMax;
+                row.TempAvg = tempAvg;
+                row.Precipitation = day.Precipitation;
+                row.WeatherCode = day.WeatherCode;
+                row.IsForecast = day.Date >= today;
+                row.FetchedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                await _repo.AddAsync(new WeatherData
+                {
+                    StoreId = locationId,
+                    Date = day.Date,
+                    TempMin = day.TempMin,
+                    TempMax = day.TempMax,
+                    TempAvg = tempAvg,
+                    Precipitation = day.Precipitation,
+                    WeatherCode = day.WeatherCode,
+                    IsForecast = day.Date >= today,
+                }, ct);
+            }
+        }
+
+        await _repo.SaveChangesAsync(ct);
+    }
+
+    private static IEnumerable<DateOnly> EnumerateDates(DateOnly from, DateOnly to)
+    {
+        for (var d = from; d <= to; d = d.AddDays(1))
+            yield return d;
     }
 
     private static WeatherDayDto ToDto(WeatherData w) => new(

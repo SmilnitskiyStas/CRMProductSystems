@@ -6,6 +6,51 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Погода на календарі подій — TASK-708
+
+**Status:** review · main session + backend/frontend агенти · не запушено · перевірено в браузері (локальний стек, координати Києва: температура на клітинках, `WeatherDayCard` у drawer, хінти, geocode 200) · Log: `.claude/logs/tasks/708_2026-09-08_weather-on-calendar_backend+frontend.md`
+
+### Бекенд
+
+Без міграції. **A — геокодер:** `POST /api/locations/geocode`
+`{query}` → `{latitude,longitude,displayName}` / `404 {error}` (uk), policy `AtLeastStoreManager`;
+новий `IGeocodingClient` + `NominatimGeocodingClient` (OSM Nominatim, обов'язковий `User-Agent`),
+DI поряд з Open-Meteo; `LocationService.GeocodeAddressAsync` (+ DTOs, контролер) — без персистенсу.
+`LocationService` ctor += `IGeocodingClient`. **B — погода на місяць:** `GET
+/api/weather/{locationId}/month?year=&month=` → `List<WeatherDayDto>` (той самий DTO), клас-гейт
+`AtLeastStoreManager`, без `[RequireModule]` (KI-019). `WeatherService.GetMonthAsync`: читає
+збережені `weather_data`, догейфілює відсутні/застарілі (>6h для date>=today-1) дні в вікні
+`[today-92, today+16]` одним forecast-викликом (`past_days`+`forecast_days`) або archive-API для
+старих місяців, upsert (`IsForecast = date>=today`, `TempAvg` round1), re-read, sorted. Без
+координат → `[]`; збій Open-Meteo → лог + збережене, не 500. `IOpenMeteoClient` += `GetRangeAsync`
+/ `GetArchiveAsync` (старий `GetForecastAsync` без змін); `IWeatherRepository` += `GetRangeAsync`
+/ `GetLocationAsync`; `WeatherService` ctor += `ILogger`. RLS: user-context upsert дозволений
+наявною `tenant_isolation` на `weather_data`. Nominatim: `countrycodes=ua`. `dotnet build` чисто;
+`~Weather`+`~Location` 86/86. openapi.json regen — pending (KI-040).
+
+### Фронт
+
+Нова feature `frontend/features/weather/` (`types.ts`, `api/weather.ts`,
+`hooks/useWeatherMonth.ts` — key `["weather","month",locId,year,month]`, `staleTime 30хв`,
+`enabled: !!locId`; `weatherCodes.ts` — WMO-код → bucket + emoji + i18n-key, `weatherCodeInfo()`
+data-fallback). **Календар (`EventCalendar`):** новий prop `weatherByDate?: Map<string,WeatherDay>`;
+у комірці дня рядок `{emoji} {max}° / {min}°` вгорі-праворуч навпроти числа (день-номер → flex
+`space-between`), прогноз — dimmer + крапка. **Drawer дня (`EventDayDetailDrawer`):** новий prop
+`weather?`; нова `WeatherDayCard.tsx` (dark `#111827`) вгорі list-в'ю — заголовок emoji+label +
+бейдж «прогноз»(amber)/«факт», рядки Макс/Мін/Середня °C + Опади мм (null-рядки приховані).
+**Сторінка `/events`:** `weatherLocationId = selectedStoreIds.length===1 ? [0] : undefined`,
+`useWeatherMonth`, `weatherByDate` (useMemo). Хінт: >1 або 0 магазинів → «оберіть один магазин»;
+1 магазин + порожня відповідь після `!isLoading` → «не задано координати». **Форма локації
+(`LocationFormDialog`):** `latitude`/`longitude` у zod (`z.number().nullable().optional()`),
+defaultValues, edit-`reset`, payload + `Props.onSubmit` тип; поля «Широта»/«Довгота» (number) +
+кнопка «Визначити координати» → `locationsApi.geocode(address)`, `setValue` + muted caption
+`displayName`, `toast.error` на 404; disabled поки порожня адреса / pending. `api/locations.ts`:
+**`UpdateLocationDto` += `latitude?`/`longitude?`** (latent-баг — edit нуляв координати) +
+`CreateLocationDto` + `geocode()`. `locations/page.tsx` `handleSubmit` проброшує обидва поля в
+create/update. i18n uk+en: `Dashboard.events.weather.*` (+`codes.*` 11 buckets),
+`Dashboard.locations.form.{latitude,longitude,geocode*}`. `tsc` + `next lint` чисто; `vitest` 59/59;
+`next build` ok.
+
 ## Календар подій: власна секція меню замість POS-gated групи — TASK-706
 
 **Status:** deploy → prod через push у `main` (CI/CD) · Log: `.claude/logs/tasks/706_2026-09-08_events-calendar-standalone-nav-group_frontend-developer.md`

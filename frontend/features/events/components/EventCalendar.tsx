@@ -1,6 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import type { WeatherDay } from "@/features/weather/types";
+import { weatherBucketEmoji, weatherCodeBucket } from "@/features/weather/weatherCodes";
 import { EVENT_TYPE_STYLES, getEventTypeLabel, type DemandEvent } from "../types";
 import { isEventActiveOnDate } from "../utils";
 
@@ -10,13 +12,15 @@ interface Props {
   events: DemandEvent[];
   onEventClick: (event: DemandEvent) => void;
   onDayClick: (isoDate: string) => void;
+  /** Weather per `yyyy-MM-dd`, when a single location is selected. */
+  weatherByDate?: Map<string, WeatherDay>;
 }
 
 function iso(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-export function EventCalendar({ year, month, events, onEventClick, onDayClick }: Props) {
+export function EventCalendar({ year, month, events, onEventClick, onDayClick, weatherByDate }: Props) {
   const t = useTranslations("Dashboard.events.calendar");
   const tTypes = useTranslations("Dashboard.events.types");
   const weekdayLabels = t.raw("weekdayLabels") as string[];
@@ -52,6 +56,11 @@ export function EventCalendar({ year, month, events, onEventClick, onDayClick }:
           const dayEvents = events.filter((ev) => isEventActiveOnDate(ev, dateIso));
           const isToday = dateIso === todayIso;
 
+          const weather = weatherByDate?.get(dateIso);
+          const showWeather = weather != null && weather.tempMax != null && weather.tempMin != null;
+          const weatherBucket = weather ? weatherCodeBucket(weather.weatherCode) : null;
+          const weatherEmoji = weatherBucket ? `${weatherBucketEmoji(weatherBucket)} ` : "";
+
           return (
             <div
               key={dateIso}
@@ -66,10 +75,33 @@ export function EventCalendar({ year, month, events, onEventClick, onDayClick }:
               }}
             >
               <div style={{
-                color: isToday ? "#93C5FD" : "#6B7280",
-                fontSize: 12, fontWeight: isToday ? 700 : 500, marginBottom: 6,
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: 4, marginBottom: 6,
               }}>
-                {day}
+                <span style={{
+                  color: isToday ? "#93C5FD" : "#6B7280",
+                  fontSize: 12, fontWeight: isToday ? 700 : 500,
+                }}>
+                  {day}
+                </span>
+                {showWeather && weather && (
+                  <span
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 3,
+                      color: "#9CA3AF", fontSize: 10, whiteSpace: "nowrap",
+                      opacity: weather.isForecast ? 0.7 : 1,
+                    }}
+                  >
+                    {weather.isForecast && (
+                      <span style={{
+                        width: 3, height: 3, borderRadius: "50%",
+                        background: "#9CA3AF", flexShrink: 0,
+                      }} />
+                    )}
+                    {weatherEmoji}
+                    {Math.round(weather.tempMax!)}° / {Math.round(weather.tempMin!)}°
+                  </span>
+                )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {dayEvents.slice(0, 3).map((ev) => {

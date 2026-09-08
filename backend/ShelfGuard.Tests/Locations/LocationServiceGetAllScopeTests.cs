@@ -19,6 +19,7 @@ public sealed class LocationServiceGetAllScopeTests
 {
     private readonly ILocationRepository _repo = Substitute.For<ILocationRepository>();
     private readonly IUserLocationRepository _userLocations = Substitute.For<IUserLocationRepository>();
+    private readonly IGeocodingClient _geocoder = Substitute.For<IGeocodingClient>();
     private readonly LocationService _sut;
 
     private readonly Guid _tenantId = Guid.NewGuid();
@@ -29,7 +30,7 @@ public sealed class LocationServiceGetAllScopeTests
 
     public LocationServiceGetAllScopeTests()
     {
-        _sut = new LocationService(_repo, _userLocations);
+        _sut = new LocationService(_repo, _userLocations, _geocoder);
 
         _storeA = new Location { TenantId = _tenantId, Name = "Store A" };
         _storeB = new Location { TenantId = _tenantId, Name = "Store B" };
