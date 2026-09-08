@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Provider;
 using ShelfGuard.Application.Features.Provider.Dtos;
+using ShelfGuard.Application.Services;
 using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
@@ -125,42 +126,85 @@ public sealed class ProviderController : ControllerBase
                 : BadRequest(new { error }));
     }
 
-    // ── AI agent (managed-AI Phase 1) ───────────────────────────────────────
+    // ── AI agents (managed-AI Phase 1; per-slot since Phase 4) ───────────────
 
-    /// <summary>The tenant's AI-agent connection, as the provider configures it. Key masked to last 4.</summary>
-    [HttpGet("tenants/{id:guid}/ai-agent")]
+    private static bool TryParseSlot(string slot, out AiSlot parsed) =>
+        Enum.TryParse(slot, ignoreCase: true, out parsed) && Enum.IsDefined(parsed);
+
+    /// <summary>All AI-agent slots for the tenant (analyst / assistant / consumer). Keys masked to last 4.</summary>
+    [HttpGet("tenants/{id:guid}/ai-agents")]
+    [ProducesResponseType(typeof(IReadOnlyList<TenantAiAgentDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAiAgents(Guid id, CancellationToken ct)
+        => Ok(await _aiConfig.GetAllAsync(id, ct));
+
+    /// <summary>One AI-agent slot for the tenant.</summary>
+    [HttpGet("tenants/{id:guid}/ai-agents/{slot}")]
     [ProducesResponseType(typeof(TenantAiAgentDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAiAgent(Guid id, CancellationToken ct)
-        => Ok(await _aiConfig.GetAsync(id, ct));
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAiAgentSlot(Guid id, string slot, CancellationToken ct)
+        => TryParseSlot(slot, out var s) ? Ok(await _aiConfig.GetAsync(id, s, ct)) : NotFound();
 
-    /// <summary>Creates or updates the tenant's AI-agent connection. Blank apiKey keeps the stored key.</summary>
-    [HttpPut("tenants/{id:guid}/ai-agent")]
+    /// <summary>Creates or updates one AI-agent slot. Blank apiKey keeps the stored key.</summary>
+    [HttpPut("tenants/{id:guid}/ai-agents/{slot}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> UpdateAiAgent(
-        Guid id,
-        [FromBody] UpdateAiAgentRequest request,
-        CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateAiAgentSlot(Guid id, string slot, [FromBody] UpdateAiAgentRequest request, CancellationToken ct)
     {
-        var error = await _aiConfig.UpdateAsync(id, request, ct);
+        if (!TryParseSlot(slot, out var s)) return NotFound();
+        var error = await _aiConfig.UpdateAsync(id, s, request, ct);
         return error is null ? NoContent() : BadRequest(new { error });
     }
 
-    /// <summary>Connectivity probe for the AI-agent credentials. Always 200 — the result carries ok/error.</summary>
+    /// <summary>Connectivity probe for one AI-agent slot. Always 200 — the result carries ok/error.</summary>
+    [HttpPost("tenants/{id:guid}/ai-agents/{slot}/test")]
+    [ProducesResponseType(typeof(AiAgentTestResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> TestAiAgentSlot(Guid id, string slot, [FromBody] UpdateAiAgentRequest? candidate, CancellationToken ct)
+        => TryParseSlot(slot, out var s) ? Ok(await _aiConfig.TestAsync(id, s, candidate, ct)) : NotFound();
+
+    /// <summary>Removes one AI-agent slot.</summary>
+    [HttpDelete("tenants/{id:guid}/ai-agents/{slot}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteAiAgentSlot(Guid id, string slot, CancellationToken ct)
+    {
+        if (!TryParseSlot(slot, out var s)) return NotFound();
+        await _aiConfig.DeleteAsync(id, s, ct);
+        return NoContent();
+    }
+
+    // Legacy single-agent alias → the analyst slot (kept for a release or two while the
+    // frontend / openapi consumers move to /ai-agents/{slot}).
+
+    /// <summary>Legacy alias — the analyst slot.</summary>
+    [HttpGet("tenants/{id:guid}/ai-agent")]
+    [ProducesResponseType(typeof(TenantAiAgentDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAiAgent(Guid id, CancellationToken ct)
+        => Ok(await _aiConfig.GetAsync(id, AiSlot.Analyst, ct));
+
+    /// <summary>Legacy alias — the analyst slot.</summary>
+    [HttpPut("tenants/{id:guid}/ai-agent")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateAiAgent(Guid id, [FromBody] UpdateAiAgentRequest request, CancellationToken ct)
+    {
+        var error = await _aiConfig.UpdateAsync(id, AiSlot.Analyst, request, ct);
+        return error is null ? NoContent() : BadRequest(new { error });
+    }
+
+    /// <summary>Legacy alias — the analyst slot.</summary>
     [HttpPost("tenants/{id:guid}/ai-agent/test")]
     [ProducesResponseType(typeof(AiAgentTestResult), StatusCodes.Status200OK)]
-    public async Task<IActionResult> TestAiAgent(
-        Guid id,
-        [FromBody] UpdateAiAgentRequest? candidate,
-        CancellationToken ct)
-        => Ok(await _aiConfig.TestAsync(id, candidate, ct));
+    public async Task<IActionResult> TestAiAgent(Guid id, [FromBody] UpdateAiAgentRequest? candidate, CancellationToken ct)
+        => Ok(await _aiConfig.TestAsync(id, AiSlot.Analyst, candidate, ct));
 
-    /// <summary>Removes the tenant's AI-agent connection.</summary>
+    /// <summary>Legacy alias — the analyst slot.</summary>
     [HttpDelete("tenants/{id:guid}/ai-agent")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> DeleteAiAgent(Guid id, CancellationToken ct)
     {
-        await _aiConfig.DeleteAsync(id, ct);
+        await _aiConfig.DeleteAsync(id, AiSlot.Analyst, ct);
         return NoContent();
     }
 

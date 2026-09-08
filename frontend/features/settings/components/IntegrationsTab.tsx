@@ -55,11 +55,12 @@ export function IntegrationsTab() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* AI-агент — read-only status; configured by the provider (managed-AI Phase 1) */}
+        {/* AI-агент — read-only status; configured by the provider (managed-AI Phase 1/4).
+            Any enabled ai_* slot (or a legacy claude row) counts as connected. */}
         <AiAgentRow
-          connected={
-            summaryMap["claude"]?.isEnabled === true || summaryMap["openai"]?.isEnabled === true
-          }
+          connected={(summaries ?? []).some(
+            (s) => s.isEnabled && (String(s.service).startsWith("ai_") || s.service === "claude"),
+          )}
         />
 
         {/* ПРРО card — dedicated modal */}

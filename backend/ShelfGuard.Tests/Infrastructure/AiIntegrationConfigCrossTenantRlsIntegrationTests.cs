@@ -7,8 +7,8 @@ namespace ShelfGuard.Tests.Infrastructure;
 /// <summary>
 /// Managed-AI Phase 1 — tenant isolation, data layer (real Postgres).
 ///
-/// The 6 AI advisors read the tenant's Claude key with exactly
-/// <c>SELECT "Config" FROM integration_configs WHERE "Service" = 'claude' AND "IsEnabled"</c>
+/// The 6 AI advisors read the tenant's AI-slot config with exactly
+/// <c>SELECT "Config" FROM integration_configs WHERE "Service" = 'ai_analyst' AND "IsEnabled"</c>
 /// and NO <c>"TenantId"</c> filter of their own — RLS <c>tenant_isolation</c> is the only thing
 /// scoping that read. Historically KI-036 "F5" was this exact query returning another tenant's
 /// key after a leaked <c>app.role='provider'</c>. This test pins that a normal
@@ -84,21 +84,21 @@ public sealed class AiIntegrationConfigCrossTenantRlsIntegrationTests : IAsyncLi
         // Tenant A on claude, tenant B on openai — the AiClientFactory query matches either.
         await ExecAsync(
             "INSERT INTO integration_configs (\"Id\", \"TenantId\", \"Service\", \"Config\", \"IsEnabled\", \"CreatedAt\", \"UpdatedAt\") VALUES " +
-            "(gen_random_uuid(), @a, 'claude', @cfgA::jsonb, true, now(), now()), " +
-            "(gen_random_uuid(), @b, 'openai', @cfgB::jsonb, true, now(), now());",
+            "(gen_random_uuid(), @a, 'ai_analyst', @cfgA::jsonb, true, now(), now()), " +
+            "(gen_random_uuid(), @b, 'ai_analyst', @cfgB::jsonb, true, now(), now());",
             ("a", tenantA), ("b", tenantB),
-            ("cfgA", "{\"api_key\":\"sk-ant-AAAA-tenant-a\",\"model\":\"claude-sonnet-4-6\"}"),
-            ("cfgB", "{\"api_key\":\"sk-oai-BBBB-tenant-b\",\"model\":\"gpt-4o\"}"));
+            ("cfgA", "{\"provider\":\"claude\",\"api_key\":\"sk-ant-AAAA-tenant-a\",\"model\":\"claude-sonnet-4-6\"}"),
+            ("cfgB", "{\"provider\":\"openai\",\"api_key\":\"sk-oai-BBBB-tenant-b\",\"model\":\"gpt-4o\"}"));
 
         try
         {
             await ExecAsync("SET ROLE rls_audit_test_role;");
             await ExecAsync($"SET app.tenant_id = '{tenantA:D}'; SET app.role = 'store_manager';");
 
-            // The AiClientFactory's exact query — no TenantId filter, RLS is the only scope.
-            // Must resolve to tenant A's row only, never tenant B's openai key.
+            // The AiClientFactory's exact per-slot query — no TenantId filter, RLS is the only
+            // scope. Must resolve to tenant A's row only, never tenant B's key.
             await using var cmd = new NpgsqlCommand(
-                "SELECT \"Config\"::text FROM integration_configs WHERE (\"Service\" = 'claude' OR \"Service\" = 'openai') AND \"IsEnabled\";",
+                "SELECT \"Config\"::text FROM integration_configs WHERE \"Service\" = 'ai_analyst' AND \"IsEnabled\";",
                 _connection);
             await using var reader = await cmd.ExecuteReaderAsync();
 

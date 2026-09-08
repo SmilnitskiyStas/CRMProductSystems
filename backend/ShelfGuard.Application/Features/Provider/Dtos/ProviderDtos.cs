@@ -59,13 +59,15 @@ public record UpdateModulesRequest(string[] Modules);
 // ── AI agent (managed-AI Phase 1; provider choice added in Phase 2) ─────────
 
 /// <summary>
-/// GET /provider/tenants/:id/ai-agent — the tenant's AI-agent connection, as the provider sees
-/// it. The key is never returned in full: <see cref="ApiKeyLast4"/> is the last 4 chars of the
-/// stored key (null when none).
+/// GET /provider/tenants/:id/ai-agents (one entry per slot) / .../ai-agent (analyst alias) —
+/// a tenant's AI-agent slot connection, as the provider sees it. The key is never returned in
+/// full: <see cref="ApiKeyLast4"/> is the last 4 chars of the stored key (null when none).
 /// </summary>
-/// <param name="Provider">"claude" or "openai" — which AI provider the connection uses.</param>
+/// <param name="Slot">"analyst" | "assistant" | "consumer" (managed-AI Phase 4).</param>
+/// <param name="Provider">"claude" or "openai" — which AI provider this slot uses.</param>
 /// <param name="BaseUrl">Optional OpenAI-compatible base URL (null / default for OpenAI proper).</param>
 public record TenantAiAgentDto(
+    string    Slot,
     bool      IsConfigured,
     bool      IsEnabled,
     string?   Provider,
@@ -76,10 +78,11 @@ public record TenantAiAgentDto(
     DateTime? UpdatedAt);
 
 /// <summary>
-/// PUT /provider/tenants/:id/ai-agent (and the optional body of POST .../ai-agent/test).
+/// PUT /provider/tenants/:id/ai-agents/{slot} (and the optional body of .../{slot}/test).
 /// An empty/whitespace <see cref="ApiKey"/> means "keep the stored key" (nothing to change).
+/// Each slot is independent — updating one never touches another.
 /// </summary>
-/// <param name="Provider">"claude" (default) or "openai". Switching providers removes the other row.</param>
+/// <param name="Provider">"claude" (default) or "openai".</param>
 public record UpdateAiAgentRequest(
     string? ApiKey,
     string? Model,
