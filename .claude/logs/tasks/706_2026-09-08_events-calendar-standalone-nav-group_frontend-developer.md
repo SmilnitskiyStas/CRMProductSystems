@@ -2,7 +2,7 @@
 
 **Дата:** 2026-09-08
 **Тип:** bugfix (навігація / module-gating), frontend + backend-константа
-**Status:** review · main session · не запушено
+**Status:** review · гілка `fix/events-calendar-standalone-nav` (від `origin/codex/mobile-app-menu-subgroups`@`713a5ddb`), запушено, PR у main не створено (заблоковано класифікатором — створити вручну за посиланням GitHub)
 
 ## Проблема
 

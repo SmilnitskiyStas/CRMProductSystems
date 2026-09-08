@@ -8,7 +8,7 @@
 
 ## Календар подій: власна секція меню замість POS-gated групи — TASK-706
 
-**Status:** review · main session · не запушено · Log: `.claude/logs/tasks/704_2026-09-08_events-calendar-standalone-nav-group_frontend-developer.md`
+**Status:** review · гілка `fix/events-calendar-standalone-nav` запушена, PR у main створити вручну · Log: `.claude/logs/tasks/706_2026-09-08_events-calendar-standalone-nav-group_frontend-developer.md`
 
 Bugfix: календар (`/events`) зникав у тенантів без модуля `pos` — його пункт «Події» сидів у
 `pos`-gated групі Sidebar «Продажі» (TASK-210). Винесено в окрему ungated-групу «Календар»
