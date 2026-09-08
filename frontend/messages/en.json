@@ -4375,7 +4375,17 @@
         "modulesSectionTitle": "MODULES",
         "configureButton": "Configure",
         "noModulesConnected": "No modules connected",
-        "aiSectionTitle": "AI AGENT",
+        "aiSectionTitle": "AI AGENTS",
+        "aiSlot": {
+          "analyst": "Analyst",
+          "assistant": "Assistant",
+          "consumer": "Consumer"
+        },
+        "aiSlotHint": {
+          "analyst": "Deep analysis: auto-orders, business assistant, supplier picks. Strong model.",
+          "assistant": "Quick explainers: marketing, price segments, campaign wrap-ups. Cheap model.",
+          "consumer": "Customer-facing assistant in the mobile app. Hardened isolation (4b)."
+        },
         "aiStatusNotConnected": "Not connected",
         "aiStatusDisabled": "disabled",
         "aiStatusNoKey": "No tenant key set — the agent runs on the provider's system key.",

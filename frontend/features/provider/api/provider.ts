@@ -12,6 +12,7 @@ import type {
   TenantAiAgentDto,
   UpdateAiAgentRequest,
   AiAgentTestResult,
+  AiSlot,
 } from "../types";
 
 export const providerApi = {
@@ -35,17 +36,21 @@ export const providerApi = {
   updateModules: (id: string, modules: string[]): Promise<void> =>
     api.put<void>(`/api/provider/tenants/${id}/modules`, { modules }),
 
-  /** GET /api/provider/tenants/:id/ai-agent */
-  getAiAgent: (id: string): Promise<TenantAiAgentDto> =>
-    api.get<TenantAiAgentDto>(`/api/provider/tenants/${id}/ai-agent`),
+  /** GET /api/provider/tenants/:id/ai-agents — all slots (analyst / assistant / consumer) */
+  getAiAgents: (id: string): Promise<TenantAiAgentDto[]> =>
+    api.get<TenantAiAgentDto[]>(`/api/provider/tenants/${id}/ai-agents`),
 
-  /** PUT /api/provider/tenants/:id/ai-agent */
-  updateAiAgent: (id: string, body: UpdateAiAgentRequest): Promise<void> =>
-    api.put<void>(`/api/provider/tenants/${id}/ai-agent`, body),
+  /** PUT /api/provider/tenants/:id/ai-agents/:slot */
+  updateAiAgent: (id: string, slot: AiSlot, body: UpdateAiAgentRequest): Promise<void> =>
+    api.put<void>(`/api/provider/tenants/${id}/ai-agents/${slot}`, body),
 
-  /** POST /api/provider/tenants/:id/ai-agent/test */
-  testAiAgent: (id: string, body: UpdateAiAgentRequest): Promise<AiAgentTestResult> =>
-    api.post<AiAgentTestResult>(`/api/provider/tenants/${id}/ai-agent/test`, body),
+  /** POST /api/provider/tenants/:id/ai-agents/:slot/test */
+  testAiAgent: (id: string, slot: AiSlot, body: UpdateAiAgentRequest): Promise<AiAgentTestResult> =>
+    api.post<AiAgentTestResult>(`/api/provider/tenants/${id}/ai-agents/${slot}/test`, body),
+
+  /** DELETE /api/provider/tenants/:id/ai-agents/:slot */
+  deleteAiAgent: (id: string, slot: AiSlot): Promise<void> =>
+    api.delete<void>(`/api/provider/tenants/${id}/ai-agents/${slot}`),
 
   /** POST /api/provider/tenants/:id/impersonate */
   impersonate: (id: string): Promise<ImpersonateResponse> =>

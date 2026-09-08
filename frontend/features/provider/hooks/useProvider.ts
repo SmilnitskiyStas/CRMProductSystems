@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { providerApi } from "../api/provider";
-import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto, CreateTenantRequest, CreateTenantUserRequest, TenantAiAgentDto, UpdateAiAgentRequest } from "../types";
+import type { TenantSummaryDto, ProviderHealthDto, ProviderLogsFilter, ProviderLogsPageDto, TenantDetailDto, CreateTenantRequest, CreateTenantUserRequest, TenantAiAgentDto, UpdateAiAgentRequest, AiSlot } from "../types";
 
 // ── Query keys ───────────────────────────────────────────────────────────────
 
@@ -109,14 +109,14 @@ export function useUpdateModules(tenantId: string) {
   });
 }
 
-// ── AI agent (managed-AI Phase 1) ────────────────────────────────────────────
+// ── AI agents (managed-AI Phase 1; per-slot since Phase 4) ────────────────────
 
-const tenantAiKey = (id: string) => ["provider", "tenants", id, "ai-agent"] as const;
+const tenantAiKey = (id: string) => ["provider", "tenants", id, "ai-agents"] as const;
 
-export function useTenantAiAgent(tenantId: string, enabled = true) {
+export function useTenantAiAgents(tenantId: string, enabled = true) {
   return useQuery({
     queryKey: tenantAiKey(tenantId),
-    queryFn: (): Promise<TenantAiAgentDto> => providerApi.getAiAgent(tenantId),
+    queryFn: (): Promise<TenantAiAgentDto[]> => providerApi.getAiAgents(tenantId),
     staleTime: 30_000,
     enabled: Boolean(tenantId) && enabled,
     retry: false,
@@ -126,7 +126,18 @@ export function useTenantAiAgent(tenantId: string, enabled = true) {
 export function useUpdateAiAgent(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: UpdateAiAgentRequest) => providerApi.updateAiAgent(tenantId, body),
+    mutationFn: (args: { slot: AiSlot; body: UpdateAiAgentRequest }) =>
+      providerApi.updateAiAgent(tenantId, args.slot, args.body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tenantAiKey(tenantId) });
+    },
+  });
+}
+
+export function useDeleteAiAgent(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (slot: AiSlot) => providerApi.deleteAiAgent(tenantId, slot),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: tenantAiKey(tenantId) });
     },

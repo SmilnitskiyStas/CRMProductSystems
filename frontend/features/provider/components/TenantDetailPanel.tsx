@@ -7,10 +7,10 @@ import { useTranslations, useLocale } from "next-intl";
 import { X, LogIn, Save, ScrollText, PlugZap } from "lucide-react";
 import {
   PLAN_COLORS,
-  ALL_MODULES, ALL_PLANS, ALL_BUSINESS_TYPES,
+  ALL_MODULES, ALL_PLANS, ALL_BUSINESS_TYPES, AI_SLOTS,
 } from "../types";
-import type { TenantDetailDto, TenantAiAgentDto, AiAgentTestResult, BusinessType } from "../types";
-import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers, useActivateTenant, useDeactivateTenant, useTenantAiAgent, useUpdateAiAgent } from "../hooks/useProvider";
+import type { TenantDetailDto, TenantAiAgentDto, AiAgentTestResult, BusinessType, AiSlot } from "../types";
+import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers, useActivateTenant, useDeactivateTenant, useTenantAiAgents, useUpdateAiAgent } from "../hooks/useProvider";
 import { providerApi } from "../api/provider";
 import { AddTenantUserModal } from "./AddTenantUserModal";
 import { setToken, getToken } from "@/lib/api";
@@ -22,7 +22,7 @@ import {
   SUGGESTED_AI_MODELS,
   type AiProvider,
 } from "@/features/provider/aiModels";
-import { AI_PROMPT_PRESETS } from "@/features/provider/aiPromptPresets";
+import { aiPromptPreset } from "@/features/provider/aiPromptPresets";
 
 interface Props {
   tenantId: string;
@@ -65,8 +65,10 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const deactivate    = useDeactivateTenant(tenantId);
   const queryClient   = useQueryClient();
 
-  const { data: aiAgent } = useTenantAiAgent(tenantId);
+  const { data: aiAgents } = useTenantAiAgents(tenantId);
   const updateAiAgent = useUpdateAiAgent(tenantId);
+  const [aiSlot, setAiSlot] = useState<AiSlot>("analyst");
+  const aiAgent = aiAgents?.find((a) => a.slot === aiSlot);
 
   const [editingPlan,    setEditingPlan]    = useState(false);
   const [editingModules, setEditingModules] = useState(false);
@@ -135,9 +137,16 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
     setAiTestResult(null);
   }
 
-  // Phase 3 — fill the editable extra-instructions field with a business-type starter preset.
+  // Phase 3/4 — fill the editable extra-instructions field with a slot + business-type preset.
   function applyAiPreset(bt: BusinessType) {
-    setAiExtra(AI_PROMPT_PRESETS[bt]);
+    setAiExtra(aiPromptPreset(aiSlot, bt));
+  }
+
+  function pickAiSlot(slot: AiSlot) {
+    if (slot === aiSlot) return;
+    setAiSlot(slot);
+    setEditingAi(false);
+    setAiTestResult(null);
   }
 
   function aiRequestBody() {
@@ -152,7 +161,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   }
 
   async function saveAi() {
-    await updateAiAgent.mutateAsync(aiRequestBody());
+    await updateAiAgent.mutateAsync({ slot: aiSlot, body: aiRequestBody() });
     setEditingAi(false);
   }
 
@@ -160,7 +169,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
     setAiTesting(true);
     setAiTestResult(null);
     try {
-      setAiTestResult(await providerApi.testAiAgent(tenantId, aiRequestBody()));
+      setAiTestResult(await providerApi.testAiAgent(tenantId, aiSlot, aiRequestBody()));
     } catch (err) {
       setAiTestResult({ ok: false, model: null, error: (err as Error)?.message ?? "" });
     } finally {
@@ -445,7 +454,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
             )}
           </div>
 
-          {/* AI agent (managed-AI Phase 1) */}
+          {/* AI agents (managed-AI Phase 1; per-slot since Phase 4) */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("aiSectionTitle")}</div>
@@ -458,6 +467,36 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                 </button>
               )}
             </div>
+
+            {/* slot tabs */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+              {AI_SLOTS.map((s) => {
+                const active = aiSlot === s;
+                const configured = aiAgents?.find((a) => a.slot === s)?.isConfigured === true;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => pickAiSlot(s)}
+                    style={{
+                      flex: 1,
+                      padding: "5px 6px",
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      background: active ? "#0F1F3D" : "#111827",
+                      border: `1px solid ${active ? "#3B82F6" : "#1F2937"}`,
+                      color: active ? "#93C5FD" : "#6B7280",
+                    }}
+                  >
+                    {t(`aiSlot.${s}`)}
+                    {configured && <span style={{ color: "#4ADE80" }}> ●</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 10 }}>{t(`aiSlotHint.${aiSlot}`)}</div>
 
             {editingAi ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

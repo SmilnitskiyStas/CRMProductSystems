@@ -37,10 +37,16 @@ export interface TenantDetailDto extends TenantSummaryDto {
   lastActivityAt: string | null;
 }
 
-// ── AI agent (managed-AI Phase 1; Claude/OpenAI choice added in Phase 2) ────
+// ── AI agents (managed-AI Phase 1; Claude/OpenAI choice Phase 2; per-slot Phase 4) ────
 
-/** GET /api/provider/tenants/:id/ai-agent — key never returned in full (last 4 only). */
+/** Agent profile: deep analysis / light explainers / consumer-app assistant. */
+export type AiSlot = "analyst" | "assistant" | "consumer";
+
+export const AI_SLOTS: AiSlot[] = ["analyst", "assistant", "consumer"];
+
+/** GET /api/provider/tenants/:id/ai-agents[/:slot] — key never returned in full (last 4 only). */
 export interface TenantAiAgentDto {
+  slot: AiSlot;
   isConfigured: boolean;
   isEnabled: boolean;
   provider: "claude" | "openai" | null;
@@ -51,7 +57,7 @@ export interface TenantAiAgentDto {
   updatedAt: string | null;
 }
 
-/** PUT .../ai-agent (and optional body of POST .../ai-agent/test). Blank apiKey = keep stored. */
+/** PUT .../ai-agents/:slot (and optional body of .../:slot/test). Blank apiKey = keep stored. */
 export interface UpdateAiAgentRequest {
   apiKey?: string | null;
   model?: string | null;

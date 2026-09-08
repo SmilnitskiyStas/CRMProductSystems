@@ -203,7 +203,8 @@ i18n: `Dashboard.provider.tenantDetail.aiSection.*` (uk+en).
 | **1. Ізоляція + provider-config (Claude)** | guardrail-префікс у 6 адвайзерах + `TenantName` в контекст + RLS-верифікація + cross-tenant тест; `claude` write → provider-only; `AdminController` AI-секція; секція «AI-агент» у `TenantDetailPanel`; тенантський read-only статус; прибрати self-serve картку | середній, 1 backend + 1 frontend агент |
 | **2. OpenAI/Codex** | `IAiChatClient` + `OpenAiChatClient` (тонкий HttpClient) + `IAiClientFactory`; рефактор 6 адвайзерів на фабрику; вибір провайдера в картці; OpenAI env; Docker-білд перевірка | середній, backend-агент |
 | **3. Пресети по типах бізнесу** ✅ TASK-703 | фіксований frontend-конфіг `aiPromptPresets.ts` (9 пресетів) + дропдаун у секції «AI-агент» картки клієнта, що заповнює редаговане поле `extra_instructions`. Без БД, без змін бекенду | низький, main session |
-| **4. Кілька агентів на бізнес** (slot-и `analyst`/`assistant`/`consumer`) | дизайн у `.claude/docs/managed-ai-phase4-plan.md`, не почато | 4a середній, 4b великий |
+| **4a. Кілька агентів на бізнес** ✅ TASK-707 | slot-и `analyst`/`assistant`/`consumer` у `integration_configs` (service=slot, provider у jsonb, data-міграція); `AiSlot` + per-slot factory/resolver/guardrail; 6 адвайзерів 3+3; `/api/provider/tenants/{id}/ai-agents[/{slot}]` (+alias `/ai-agent`→analyst); таб-стрічка в картці клієнта; per-slot пресети (тон+тип бізнесу) | середній, main session поетапно. Деталі: `.claude/docs/managed-ai-phase4-plan.md` |
+| **4b. Споживчий агент** (`consumer`) | новий `ConsumerAssistantAdvisor` + споживчий контекст + посилений guardrail (плюмбінг уже є) + rate-limit + consumer-ендпоінт + мобільний UI + аудит-лог | великий, окремий спринт, не почато |
 
 Фаза 1 самодостатня: закриває головну вимогу (ізоляція + провайдер керує) на Claude-only,
 без абстракції провайдерів.

@@ -19,21 +19,23 @@ Bugfix: календар (`/events`) зникав у тенантів без м�
 і без `pos` — CALENDAR видно в обох, `/events` відкривається. KI-019 доповнено Events
 sub-decision.
 
-## Керована AI-інтеграція — фікс keyless-конфіг + тири моделей + план Фази 4 — TASK-704/705
+## Керована AI-інтеграція, Фаза 4a — кілька агентів на бізнес (slot-и) — TASK-707
 
-**Status:** review · main session · деплой через push→CI
+**Status:** review · main session (поетапно) · деплой через push→CI · Log:
+`.claude/logs/tasks/TASK-707_2026-09-08_managed-ai-phase4a-agent-slots_main-session.md`
 
-- **TASK-704 (фікс, `03e6c9ed` — DEPLOYED):** пресет, збережений без ключа клієнта, читався
-  як «не підключено» і зникав. `TenantAiConfigService.GetAsync` — рядок є конфігом незалежно
-  від ключа; `AiClientFactory.ResolveAsync` — keyless-рядок працює на env-ключі провайдера
-  (зберігає провайдера+модель); картка показує «працює на системному ключі». +2 тести.
-- **TASK-705 (тири моделей, frontend):** `aiModels.ts` `SUGGESTED_AI_MODELS` → `{id, tier}[]`
-  (`budget`/`balanced`/`premium`); картка клієнта — клікабельні чіпи моделі з тиром під полем.
-  +i18n `tenantDetailPanel.aiModelTier.*`. Набір: claude haiku-4-5/sonnet-4-6/opus-4-1,
-  openai gpt-4o-mini/gpt-4.1-mini/gpt-4o/gpt-4.1. Поле лишається вільним.
-- **Фаза 4 (дизайн):** `.claude/docs/managed-ai-phase4-plan.md` — slot-и `analyst`/`assistant`/
-  `consumer` в `integration_configs` (service=slot, provider у jsonb), 4a внутрішні профілі,
-  4b споживчий агент. Чекає на відповіді власника (4 відкриті питання). Не почато.
+Один агент → 3 slot-и (`analyst` order/supplier/business-assistant, `assistant` marketing/
+price-segment/post-campaign, `consumer` = плюмбінг для 4b). Без нової таблиці:
+`integration_configs` `Service`=slot-ключ, `provider` у jsonb. Data-міграція
+`20260908084725` (claude/openai рядок → `ai_analyst`). `AiSlot` + per-slot factory/resolver/
+guardrail (посилений consumer-варіант); `/api/provider/tenants/{id}/ai-agents[/{slot}]`
+(+alias `/ai-agent`→analyst); `TenantDetailPanel` — таб-стрічка над одним редактором;
+`aiPromptPreset(slot, bt)` = тон slot-у + контекст типу бізнесу. Кроки: `274a0dd0` (resolution),
+`5c424975` (provider API), frontend. Backend suite **2435 green**; fe tsc/lint/build чисто.
+**4b (споживчий адвайзер) — не почато.** openapi.json регенерувати.
+
+- **TASK-704 (`03e6c9ed` — DEPLOYED):** keyless-конфіг більше не читається як «не підключено».
+- **TASK-705 (`176bc1c3` — DEPLOYED):** тири моделей (економ/баланс/преміум) у картці.
 
 ## Керована AI-інтеграція, Фаза 3 — пресети промптів по типах бізнесу — TASK-703
 
