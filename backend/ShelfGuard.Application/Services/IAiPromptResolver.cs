@@ -13,8 +13,12 @@ namespace ShelfGuard.Application.Services;
 /// Resolution reads the current tenant from <see cref="ITenantContext"/> (JWT-scoped). When
 /// there is no tenant context (provider / worker / unauthenticated), the base prompt is
 /// returned unchanged.
+///
+/// <paramref name="slot"/> (managed-AI Phase 4) selects which agent profile's
+/// <c>extra_instructions</c> to append and which guardrail variant to use — the
+/// <see cref="AiSlot.Consumer"/> guardrail is hardened for a customer-facing audience.
 /// </summary>
 public interface IAiPromptResolver
 {
-    Task<string> WrapSystemPromptAsync(string basePrompt, CancellationToken ct = default);
+    Task<string> WrapSystemPromptAsync(string basePrompt, AiSlot slot, CancellationToken ct = default);
 }

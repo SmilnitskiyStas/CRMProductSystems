@@ -7,14 +7,15 @@ namespace ShelfGuard.Infrastructure.AI;
 
 /// <summary>
 /// Default <see cref="IAiPromptResolver"/>. Looks up the current tenant's name and the
-/// provider-set <c>extra_instructions</c>, then delegates the string composition to the pure
-/// <see cref="AiGuardrail"/>.
+/// provider-set <c>extra_instructions</c> for the requested <see cref="AiSlot"/>, then delegates
+/// the string composition to the pure <see cref="AiGuardrail"/>.
 ///
-/// Both reads are RLS-scoped to the caller's tenant exactly like the advisors' own
-/// <c>ResolveAsync</c> — the <c>integration_configs</c> read is the same <c>Service == "claude"
-/// &amp;&amp; IsEnabled</c> row, and <c>tenants</c> has no RLS so the name lookup is a plain filtered
-/// query. No RLS bypass primitive is taken here (enforced by
-/// <c>AiPromptResolverRlsContainmentTests</c>).
+/// Both reads are RLS-scoped to the caller's tenant exactly like <c>AiClientFactory</c> — the
+/// <c>integration_configs</c> read is filtered only by <c>Service == slot key &amp;&amp; IsEnabled</c>
+/// (RLS <c>tenant_isolation</c> is the tenant scope), and <c>tenants</c> has no RLS so the name
+/// lookup is a plain filtered query. No RLS bypass primitive is taken here (enforced by
+/// <c>AiAdvisorRlsContainmentTests</c>). A slot with no row falls back to the analyst slot's
+/// <c>extra_instructions</c>, mirroring the client fallback.
 /// </summary>
 public sealed class AiPromptResolver : IAiPromptResolver
 {
@@ -27,7 +28,7 @@ public sealed class AiPromptResolver : IAiPromptResolver
         _tenant = tenant;
     }
 
-    public async Task<string> WrapSystemPromptAsync(string basePrompt, CancellationToken ct = default)
+    public async Task<string> WrapSystemPromptAsync(string basePrompt, AiSlot slot, CancellationToken ct = default)
     {
         var tenantId = _tenant.TenantId;
         if (tenantId is null)
@@ -38,16 +39,23 @@ public sealed class AiPromptResolver : IAiPromptResolver
             .Select(t => t.Name)
             .FirstOrDefaultAsync(ct);
 
-        var extra = await ResolveExtraInstructionsAsync(ct);
+        var extra = await ResolveExtraInstructionsAsync(slot, ct);
 
-        return AiGuardrail.Compose(name, extra, basePrompt);
+        return AiGuardrail.Compose(name, extra, basePrompt, slot);
     }
 
-    private async Task<string?> ResolveExtraInstructionsAsync(CancellationToken ct)
+    private async Task<string?> ResolveExtraInstructionsAsync(AiSlot slot, CancellationToken ct)
+    {
+        var extra = await ReadExtraAsync(slot.ServiceKey(), ct);
+        if (extra is null && slot != AiSlot.Analyst)
+            extra = await ReadExtraAsync(AiSlot.Analyst.ServiceKey(), ct);
+        return extra;
+    }
+
+    private async Task<string?> ReadExtraAsync(string service, CancellationToken ct)
     {
         var configJson = await _db.IntegrationConfigs
-            .Where(i => (i.Service == "claude" || i.Service == "openai") && i.IsEnabled)
-            .OrderBy(i => i.Service)
+            .Where(i => i.Service == service && i.IsEnabled)
             .Select(i => i.Config)
             .FirstOrDefaultAsync(ct);
 

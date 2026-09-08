@@ -10,8 +10,12 @@ public sealed class IntegrationService : IIntegrationService
     private readonly IIntegrationRepository _repo;
 
     // Known service identifiers â€” validated on write, not on read.
+    // ai_analyst/ai_assistant/ai_consumer are the managed-AI Phase 4 agent slots (provider name
+    // inside the Config jsonb). claude/openai are kept for the pre-Phase-4 row shape and the
+    // legacy /ai-agent alias during the transition.
     private static readonly HashSet<string> KnownServices =
-        ["telegram", "resend", "webhook", "prro", "iot", "claude", "openai", "vchasno"];
+        ["telegram", "resend", "webhook", "prro", "iot", "claude", "openai", "vchasno",
+         "ai_analyst", "ai_assistant", "ai_consumer"];
 
     public IntegrationService(IIntegrationRepository repo) => _repo = repo;
 

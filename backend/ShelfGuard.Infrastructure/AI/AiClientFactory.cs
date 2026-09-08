@@ -7,16 +7,16 @@ using ShelfGuard.Infrastructure.Data;
 namespace ShelfGuard.Infrastructure.AI;
 
 /// <summary>
-/// Default <see cref="IAiClientFactory"/>. Resolution order for the calling tenant:
-/// its enabled <c>integration_configs</c> AI row (service 'openai' or 'claude') →
-/// <c>Claude:ApiKey</c> env → <c>OpenAI:ApiKey</c> env → null.
+/// Default <see cref="IAiClientFactory"/>. Per-slot resolution (managed-AI Phase 4) for the
+/// calling tenant: the slot's enabled <c>integration_configs</c> row (service
+/// <c>ai_analyst</c> / <c>ai_assistant</c> / <c>ai_consumer</c>, provider inside the jsonb) →
+/// the same row keyless on the shared env key → the <see cref="AiSlot.Analyst"/> row → the
+/// <c>Claude:ApiKey</c> / <c>OpenAI:ApiKey</c> env vars → null.
 ///
 /// The <c>integration_configs</c> read is RLS-scoped through the request-scoped
-/// <see cref="AppDbContext"/> exactly like the advisors' old <c>ResolveAsync</c> — no
-/// <c>TenantId</c> filter, no RLS-override primitive (enforced by
-/// <c>AiAdvisorRlsContainmentTests</c>). <c>TenantAiConfigService</c> keeps at most one AI
-/// row enabled per tenant, so the <c>OrderBy(Service)</c> is only a tiebreaker for a
-/// misconfigured state (prefers 'claude').
+/// <see cref="AppDbContext"/> — no <c>TenantId</c> filter, no RLS-override primitive (enforced
+/// by <c>AiAdvisorRlsContainmentTests</c>). <c>(TenantId, Service)</c> is unique, so each slot
+/// resolves to at most one row.
 /// </summary>
 public sealed class AiClientFactory : IAiClientFactory
 {
@@ -48,30 +48,21 @@ public sealed class AiClientFactory : IAiClientFactory
                 c.ApiKey,
                 string.IsNullOrWhiteSpace(c.Model) ? _defaultClaudeModel : c.Model);
 
-    public async Task<bool> IsConfiguredAsync(CancellationToken ct = default) =>
-        await ResolveAsync(ct) is not null;
+    public async Task<bool> IsConfiguredAsync(AiSlot slot, CancellationToken ct = default) =>
+        await ResolveAsync(slot, ct) is not null;
 
-    public async Task<IAiChatClient?> ResolveAsync(CancellationToken ct = default)
+    public async Task<IAiChatClient?> ResolveAsync(AiSlot slot, CancellationToken ct = default)
     {
-        var row = await _db.IntegrationConfigs
-            .Where(i => (i.Service == "openai" || i.Service == "claude") && i.IsEnabled)
-            .OrderBy(i => i.Service) // "claude" < "openai" — deterministic tiebreaker
-            .Select(i => new { i.Service, i.Config })
-            .FirstOrDefaultAsync(ct);
+        var fromSlot = await ResolveRowAsync(slot, ct);
+        if (fromSlot is not null)
+            return fromSlot;
 
-        var isOpenAiRow = row is not null && string.Equals(row.Service, "openai", StringComparison.OrdinalIgnoreCase);
-
-        if (row is not null)
+        // Slot has no usable row → fall back to the analyst slot's config.
+        if (slot != AiSlot.Analyst)
         {
-            var (key, model, baseUrl) = ParseConfig(row.Config);
-            if (!string.IsNullOrWhiteSpace(key))
-                return Create(new AiProviderConfig(row.Service, key!, model ?? "", baseUrl));
-
-            // Keyless row (the provider saved model/preset/enabled but no per-tenant key):
-            // run on the shared env key, but keep the row's provider + model + base_url choice.
-            var envKeyForRow = isOpenAiRow ? _envOpenAiKey : _envClaudeKey;
-            if (!string.IsNullOrWhiteSpace(envKeyForRow))
-                return Create(new AiProviderConfig(row.Service, envKeyForRow!, model ?? "", baseUrl));
+            var fromAnalyst = await ResolveRowAsync(AiSlot.Analyst, ct);
+            if (fromAnalyst is not null)
+                return fromAnalyst;
         }
 
         if (!string.IsNullOrWhiteSpace(_envClaudeKey))
@@ -83,20 +74,47 @@ public sealed class AiClientFactory : IAiClientFactory
         return null;
     }
 
-    private static (string? Key, string? Model, string? BaseUrl) ParseConfig(string? json)
+    /// <summary>Builds a client from the slot's own row, or null when the row is missing / has no key and no env key.</summary>
+    private async Task<IAiChatClient?> ResolveRowAsync(AiSlot slot, CancellationToken ct)
+    {
+        var service = slot.ServiceKey();
+        var configJson = await _db.IntegrationConfigs
+            .Where(i => i.Service == service && i.IsEnabled)
+            .Select(i => i.Config)
+            .FirstOrDefaultAsync(ct);
+
+        if (string.IsNullOrWhiteSpace(configJson))
+            return null;
+
+        var (provider, key, model, baseUrl) = ParseConfig(configJson);
+        var resolvedProvider = string.Equals(provider, "openai", StringComparison.OrdinalIgnoreCase) ? "openai" : "claude";
+
+        if (!string.IsNullOrWhiteSpace(key))
+            return Create(new AiProviderConfig(resolvedProvider, key!, model ?? "", baseUrl));
+
+        // Keyless row (model / preset / enabled saved, no per-tenant key): run on the shared
+        // env key for the row's provider, keeping the row's model + base_url.
+        var envKey = resolvedProvider == "openai" ? _envOpenAiKey : _envClaudeKey;
+        if (!string.IsNullOrWhiteSpace(envKey))
+            return Create(new AiProviderConfig(resolvedProvider, envKey!, model ?? "", baseUrl));
+
+        return null;
+    }
+
+    private static (string? Provider, string? Key, string? Model, string? BaseUrl) ParseConfig(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
-            return (null, null, null);
+            return (null, null, null, null);
 
         try
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            return (Str(root, "api_key"), Str(root, "model"), Str(root, "base_url"));
+            return (Str(root, "provider"), Str(root, "api_key"), Str(root, "model"), Str(root, "base_url"));
         }
         catch (JsonException)
         {
-            return (null, null, null);
+            return (null, null, null, null);
         }
     }
 

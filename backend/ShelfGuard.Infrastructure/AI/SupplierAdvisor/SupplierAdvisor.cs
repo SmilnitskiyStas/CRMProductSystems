@@ -12,6 +12,8 @@ namespace ShelfGuard.Infrastructure.AI.SupplierAdvisor;
 /// </summary>
 public sealed class SupplierAdvisor : ISupplierAdvisor
 {
+    private const AiSlot Slot = AiSlot.Analyst;
+
     private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
 
@@ -21,18 +23,18 @@ public sealed class SupplierAdvisor : ISupplierAdvisor
         _prompt = prompt;
     }
 
-    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(Slot, ct);
 
     public async Task<SupplierRecommendationResult> RecommendAsync(
         SupplierRecommendationRequest request,
         IEnumerable<SupplierCandidateDto> candidates,
         CancellationToken ct = default)
     {
-        var client = await _ai.ResolveAsync(ct)
+        var client = await _ai.ResolveAsync(Slot, ct)
             ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
         var prompt = BuildUserPrompt(request, candidates.ToList());
-        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), Slot, ct);
         var result = await client.CompleteAsync(
             new AiChatRequest(system, prompt, MaxTokens: 4096, JsonSchema: ResponseSchemaJson), ct);
 

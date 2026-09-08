@@ -22,12 +22,15 @@ public static class GenericIntegrationSecrets
     /// <summary>Secret JSONB field name per service. Services not listed here have nothing to mask.</summary>
     private static readonly Dictionary<string, string> SecretFieldByService = new()
     {
-        ["claude"]   = "api_key",
-        ["openai"]   = "api_key",
-        ["telegram"] = "bot_token",
-        ["resend"]   = "api_key",
-        ["webhook"]  = "secret",
-        ["iot"]      = "api_key",
+        ["claude"]       = "api_key",
+        ["openai"]       = "api_key",
+        ["ai_analyst"]   = "api_key",
+        ["ai_assistant"] = "api_key",
+        ["ai_consumer"]  = "api_key",
+        ["telegram"]     = "bot_token",
+        ["resend"]       = "api_key",
+        ["webhook"]      = "secret",
+        ["iot"]          = "api_key",
     };
 
     public static bool HasSecretField(string service) => SecretFieldByService.ContainsKey(service);

@@ -15,6 +15,8 @@ namespace ShelfGuard.Infrastructure.AI.BusinessAssistant;
 /// </summary>
 public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
 {
+    private const AiSlot Slot = AiSlot.Analyst;
+
     private readonly AppDbContext _db;
     private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
@@ -26,14 +28,14 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
         _prompt = prompt;
     }
 
-    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(Slot, ct);
 
     public async Task<BusinessAssistantResult> AdviseAsync(
         Guid tenantId,
         string message,
         CancellationToken ct = default)
     {
-        var client = await _ai.ResolveAsync(ct)
+        var client = await _ai.ResolveAsync(Slot, ct)
             ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -117,7 +119,7 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
             $"{JsonSerializer.Serialize(suppliers, opts)}\n\n" +
             $"Надай корисну відповідь на запит менеджера з урахуванням наведеного контексту.";
 
-        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), Slot, ct);
         var result = await client.CompleteAsync(new AiChatRequest(system, userPrompt, MaxTokens: 2048), ct);
 
         var contextSummary = new BusinessAssistantContextSummary(

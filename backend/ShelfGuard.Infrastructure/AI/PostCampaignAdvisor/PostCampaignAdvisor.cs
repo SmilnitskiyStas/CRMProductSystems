@@ -10,6 +10,8 @@ namespace ShelfGuard.Infrastructure.AI.PostCampaignAdvisor;
 /// </summary>
 public sealed class PostCampaignAdvisor : IPostCampaignAdvisor
 {
+    private const AiSlot Slot = AiSlot.Assistant;
+
     private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
 
@@ -19,14 +21,14 @@ public sealed class PostCampaignAdvisor : IPostCampaignAdvisor
         _prompt = prompt;
     }
 
-    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(ct);
+    public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(Slot, ct);
 
     public async Task<PostCampaignAdvisorResult> ExplainAsync(PostCampaignAdvisorContext context, CancellationToken ct = default)
     {
-        var client = await _ai.ResolveAsync(ct)
+        var client = await _ai.ResolveAsync(Slot, ct)
             ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
-        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), ct);
+        var system = await _prompt.WrapSystemPromptAsync(BuildSystemPrompt(), Slot, ct);
         var result = await client.CompleteAsync(new AiChatRequest(system, BuildUserPrompt(context), MaxTokens: 1024), ct);
 
         return new PostCampaignAdvisorResult(result.Text.Trim(), result.Model, result.TokensUsed);

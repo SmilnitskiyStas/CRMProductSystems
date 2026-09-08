@@ -1,20 +1,22 @@
 namespace ShelfGuard.Application.Services;
 
 /// <summary>
-/// Resolves the right <see cref="IAiChatClient"/> for the current request (managed-AI Phase 2).
-/// The advisors call <see cref="ResolveAsync"/>, which reads the caller's tenant AI config
-/// (<c>integration_configs</c> service = 'claude' or 'openai') under RLS, falling back to the
-/// <c>Claude:ApiKey</c> / <c>OpenAI:ApiKey</c> env vars. <see cref="Create"/> builds a client
+/// Resolves the right <see cref="IAiChatClient"/> for the current request (managed-AI Phase 2;
+/// per-slot since Phase 4). The advisors call <see cref="ResolveAsync"/> with their
+/// <see cref="AiSlot"/>, which reads that slot's tenant AI config
+/// (<c>integration_configs</c> service = <c>ai_analyst</c> / <c>ai_assistant</c> / <c>ai_consumer</c>)
+/// under RLS. A slot with no config falls back to the <see cref="AiSlot.Analyst"/> slot, then to
+/// the <c>Claude:ApiKey</c> / <c>OpenAI:ApiKey</c> env vars. <see cref="Create"/> builds a client
 /// from explicit credentials for the provider's "test connection" button.
 /// Implementation: <c>ShelfGuard.Infrastructure.AI.AiClientFactory</c>.
 /// </summary>
 public interface IAiClientFactory
 {
-    /// <summary>The current tenant's configured chat client, or null when none is configured (nor env).</summary>
-    Task<IAiChatClient?> ResolveAsync(CancellationToken ct = default);
+    /// <summary>The chat client for <paramref name="slot"/> (with analyst / env fallback), or null when nothing is configured.</summary>
+    Task<IAiChatClient?> ResolveAsync(AiSlot slot, CancellationToken ct = default);
 
-    /// <summary>True iff <see cref="ResolveAsync"/> would return a client.</summary>
-    Task<bool> IsConfiguredAsync(CancellationToken ct = default);
+    /// <summary>True iff <see cref="ResolveAsync"/> would return a client for <paramref name="slot"/>.</summary>
+    Task<bool> IsConfiguredAsync(AiSlot slot, CancellationToken ct = default);
 
     /// <summary>A client built from explicit credentials — used by the connectivity probe.</summary>
     IAiChatClient Create(AiProviderConfig config);

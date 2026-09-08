@@ -31,7 +31,12 @@ public sealed class IntegrationsController : ControllerBase
     /// the connected/not-connected flag via <c>GET /api/integrations</c>.
     /// </summary>
     private static readonly HashSet<string> ProviderManagedServices =
-        new(StringComparer.OrdinalIgnoreCase) { "claude", "openai" };
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "claude", "openai",
+            // managed-AI Phase 4 agent slots
+            "ai_analyst", "ai_assistant", "ai_consumer",
+        };
 
     /// <summary>Returns a summary list of all configured integrations for the current tenant.</summary>
     [HttpGet]
