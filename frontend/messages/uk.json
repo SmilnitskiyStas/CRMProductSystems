@@ -4381,6 +4381,11 @@
         "aiProviderClaude": "Claude (Anthropic)",
         "aiProviderOpenai": "OpenAI",
         "aiModelLabel": "Модель",
+        "aiModelTier": {
+          "budget": "економ",
+          "balanced": "баланс",
+          "premium": "преміум"
+        },
         "aiKeyLabel": "API-ключ",
         "aiKeyPlaceholder": "залишити без змін",
         "aiBaseUrlLabel": "Base URL (необов'язково)",

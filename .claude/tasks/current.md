@@ -6,9 +6,25 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Керована AI-інтеграція — фікс keyless-конфіг + тири моделей + план Фази 4 — TASK-704/705
+
+**Status:** review · main session · деплой через push→CI
+
+- **TASK-704 (фікс, `03e6c9ed` — DEPLOYED):** пресет, збережений без ключа клієнта, читався
+  як «не підключено» і зникав. `TenantAiConfigService.GetAsync` — рядок є конфігом незалежно
+  від ключа; `AiClientFactory.ResolveAsync` — keyless-рядок працює на env-ключі провайдера
+  (зберігає провайдера+модель); картка показує «працює на системному ключі». +2 тести.
+- **TASK-705 (тири моделей, frontend):** `aiModels.ts` `SUGGESTED_AI_MODELS` → `{id, tier}[]`
+  (`budget`/`balanced`/`premium`); картка клієнта — клікабельні чіпи моделі з тиром під полем.
+  +i18n `tenantDetailPanel.aiModelTier.*`. Набір: claude haiku-4-5/sonnet-4-6/opus-4-1,
+  openai gpt-4o-mini/gpt-4.1-mini/gpt-4o/gpt-4.1. Поле лишається вільним.
+- **Фаза 4 (дизайн):** `.claude/docs/managed-ai-phase4-plan.md` — slot-и `analyst`/`assistant`/
+  `consumer` в `integration_configs` (service=slot, provider у jsonb), 4a внутрішні профілі,
+  4b споживчий агент. Чекає на відповіді власника (4 відкриті питання). Не почато.
+
 ## Керована AI-інтеграція, Фаза 3 — пресети промптів по типах бізнесу — TASK-703
 
-**Status:** review · main session · деплой через push→CI · Log: `.claude/logs/tasks/TASK-703_2026-09-07_managed-ai-phase3-prompt-presets_main-session.md`
+**Status:** DEPLOYED prod 2026-09-07 (`076e1733`) · main session · Log: `.claude/logs/tasks/TASK-703_2026-09-07_managed-ai-phase3-prompt-presets_main-session.md`
 
 Чисто frontend. Новий `frontend/features/provider/aiPromptPresets.ts` —
 `AI_PROMPT_PRESETS: Record<BusinessType, string>`, 9 стислих україномовних пресетів

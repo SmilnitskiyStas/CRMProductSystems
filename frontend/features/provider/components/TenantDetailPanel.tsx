@@ -509,8 +509,32 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     style={aiInputStyle}
                   />
                   <datalist id={`ai-model-suggestions-${aiProvider}`}>
-                    {SUGGESTED_AI_MODELS[aiProvider].map((m) => <option key={m} value={m} />)}
+                    {SUGGESTED_AI_MODELS[aiProvider].map((m) => <option key={m.id} value={m.id} />)}
                   </datalist>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                    {SUGGESTED_AI_MODELS[aiProvider].map((m) => {
+                      const active = aiModel === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setAiModel(m.id)}
+                          title={m.id}
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            cursor: "pointer",
+                            background: active ? "#0F1F3D" : "#111827",
+                            border: `1px solid ${active ? "#3B82F6" : "#374151"}`,
+                            color: active ? "#93C5FD" : "#9CA3AF",
+                          }}
+                        >
+                          {m.id} <span style={{ color: active ? "#60A5FA" : "#6B7280" }}>· {t(`aiModelTier.${m.tier}`)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>

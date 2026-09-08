@@ -4381,6 +4381,11 @@
         "aiProviderClaude": "Claude (Anthropic)",
         "aiProviderOpenai": "OpenAI",
         "aiModelLabel": "Model",
+        "aiModelTier": {
+          "budget": "budget",
+          "balanced": "balanced",
+          "premium": "premium"
+        },
         "aiKeyLabel": "API key",
         "aiKeyPlaceholder": "leave unchanged",
         "aiBaseUrlLabel": "Base URL (optional)",
