@@ -56,6 +56,20 @@ public sealed class AiClientFactoryTests
     }
 
     [Fact]
+    public void CreateOrEnv_uses_the_explicit_key_then_the_provider_env_key_then_null()
+    {
+        var withEnv = new AiClientFactory(NewDb(), HttpFactory(),
+            Config(("Claude:ApiKey", "sk-ant-env"), ("OpenAI:ApiKey", "sk-oai-env")));
+
+        Assert.IsType<AnthropicChatClient>(withEnv.CreateOrEnv("claude", "sk-explicit", "m", null));
+        Assert.IsType<AnthropicChatClient>(withEnv.CreateOrEnv("claude", null, "m", null));   // → claude env
+        Assert.IsType<OpenAiChatClient>(withEnv.CreateOrEnv("openai", "  ", "m", null));       // → openai env
+
+        var noEnv = new AiClientFactory(NewDb(), HttpFactory(), Config());
+        Assert.Null(noEnv.CreateOrEnv("claude", null, "m", null));
+    }
+
+    [Fact]
     public async Task Resolve_reads_the_slot_row_and_its_provider_from_the_jsonb()
     {
         var db = NewDb();

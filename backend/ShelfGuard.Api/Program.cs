@@ -173,6 +173,22 @@ builder.Services.AddRateLimiter(options =>
                 Window      = TimeSpan.FromMinutes(1),
                 QueueLimit  = 0,
             }));
+
+    // managed-AI Phase 4b: the consumer AI assistant makes a real (paid) model call per
+    // request. Partitioned by consumer_account_id (falls back to IP for an odd tokenless
+    // hit) — 6 questions / 3 min per consumer keeps a single account from running up the
+    // provider's model bill while leaving room for a normal back-and-forth.
+    options.AddPolicy("consumer-ai", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.FindFirst("consumer_account_id")?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 6,
+                Window      = TimeSpan.FromMinutes(3),
+                QueueLimit  = 0,
+            }));
 });
 
 var jwtSecret = builder.Configuration["Jwt:Secret"]

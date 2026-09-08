@@ -28,6 +28,9 @@ public sealed class AiPromptResolver : IAiPromptResolver
         _tenant = tenant;
     }
 
+    public string Compose(string? tenantName, string? extraInstructions, string basePrompt, AiSlot slot) =>
+        AiGuardrail.Compose(tenantName, extraInstructions, basePrompt, slot);
+
     public async Task<string> WrapSystemPromptAsync(string basePrompt, AiSlot slot, CancellationToken ct = default)
     {
         var tenantId = _tenant.TenantId;

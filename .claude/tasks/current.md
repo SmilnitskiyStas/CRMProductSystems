@@ -19,9 +19,25 @@ Bugfix: календар (`/events`) зникав у тенантів без м�
 і без `pos` — CALENDAR видно в обох, `/events` відкривається. KI-019 доповнено Events
 sub-decision.
 
+## Керована AI-інтеграція, Фаза 4b-backend — споживчий AI-консультант — TASK-709
+
+**Status:** review · main session · деплой через push→CI · Log:
+`.claude/logs/tasks/TASK-709_2026-09-08_managed-ai-phase4b-backend-consumer-assistant_main-session.md`
+
+Backend-only (`mobile/` не чіпається). `Application/Features/ConsumerAssistant/` (не
+`Infrastructure.AI`): `ConsumerAssistantService.AskAsync(consumerId, tenantId, message)` —
+`ai_consumer`-конфіг через `ITenantSessionOverride` (споживча сесія без `app.tenant_id`),
+споживчі дані з `ILoyaltyService` + каталог з `IConsumerContentService`, guardrail
+`AiSlot.Consumer` через нову `IAiPromptResolver.Compose` (sync pure) + нову
+`IAiClientFactory.CreateOrEnv`. `POST /api/consumer/assistant/{tenantId}/ask` `[Authorize]` +
+rate-limit `consumer-ai` (6/3хв per consumer). Gate = налаштований `ai_consumer` slot (без
+нового feature-flag). Нова таблиця `consumer_ai_requests` (міграція `20260908122806`, RLS-тріада
++ consumer_self_access; метадані + 200-симв. excerpts). Повний suite **2442 green**.
+**4b-mobile (чат-екран) — mobile-власнику.** Ретеншн-джоб + openapi.json — follow-up.
+
 ## Керована AI-інтеграція, Фаза 4a — кілька агентів на бізнес (slot-и) — TASK-707
 
-**Status:** review · main session (поетапно) · деплой через push→CI · Log:
+**Status:** DEPLOYED prod 2026-09-08 (`260f6401`) · main session (поетапно) · Log:
 `.claude/logs/tasks/TASK-707_2026-09-08_managed-ai-phase4a-agent-slots_main-session.md`
 
 Один агент → 3 slot-и (`analyst` order/supplier/business-assistant, `assistant` marketing/

@@ -1,7 +1,9 @@
 # План: керована AI-інтеграція — Фаза 4 («кілька агентів на бізнес»)
 
-**Статус:** **4a реалізовано** (TASK-707, коміти `274a0dd0` step 1 / `5c424975` step 2 /
-frontend step 3), деплой через push→CI. **4b (споживчий агент) — не почато.**
+**Статус:** **4a DEPLOYED prod 2026-09-08** (TASK-707, `274a0dd0`/`754a719b`/`260f6401`).
+**4b-backend реалізовано** (TASK-709 — `ConsumerAssistantService` + `/api/consumer/assistant/
+{tenantId}/ask` + rate-limit `consumer-ai` + `consumer_ai_requests` аудит-таблиця);
+**4b-mobile (чат-екран) — не почато, mobile-власнику.**
 Продовження `.claude/docs/managed-ai-integration-plan.md` (Фази 1–3 — DEPLOYED).
 
 **Реалізація 4a (де відхилилась від дизайну нижче):**
@@ -115,39 +117,46 @@ rate-limiter policy-и в `Program.cs` (`AddPolicy` + `GetFixedWindowLimiter`,
    Мобільний чат-екран 4b **не робити** в цій сесії — координувати з mobile-власником або
    окрема задача після backend-частини.
 
-### 4b-backend (ця сесія може зробити — не чіпає `mobile/`)
+### 4b-backend — ✅ РЕАЛІЗОВАНО (TASK-709)
 
-- `ConsumerAssistantAdvisor` (`Infrastructure/AI/`) — параметри `consumerAccountId` + `tenantId`.
-  Агрегує контекст споживача (аналог `BusinessAssistantAdvisor`, але споживчі дані):
-  loyalty-членство цього споживача в цьому тенанті (баланс/рівень), остання історія покупок
-  (`_loyalty.GetHistoryAsync`), публічний каталог + наявність, правила програми, список/графік
-  магазинів. **Нічого внутрішнього.**
-- Guardrail: `AiGuardrail.Prefix(tenantName, AiSlot.Consumer)` (вже є) + `extra_instructions`
-  slot-у `ai_consumer` (резолвиться через окремий сервіс, п.1).
-- `ConsumerAssistantController` (`/api/consumer/assistant/{tenantId}/ask`, `[Authorize]`
-  споживчим JWT, `[EnableRateLimiting("consumer-ai")]` — нова fixed-window policy партиціонована
-  по `consumer_account_id`). Gate: `[RequireConsumerFeature("ai_assistant")]` (новий feature-flag
-  у mobile-config `features`) — рішення власника.
-- **Аудит-лог** (`consumer_ai_requests` таблиця: consumer_account_id, tenant_id, prompt,
-  response, model, tokens, created_at; RLS — provider_bypass для розгляду скарг) — закриває
-  залишкове питання №3 основного плану.
+**Рішення власника (2026-09-08):** дані = власне + публічне; аудит = метадані + обрізаний
+текст; напрям = backend зараз, mobile пізніше.
 
-### 4b-mobile (окремо, mobile-власник)
+- **`Application/Features/ConsumerAssistant/`** (НЕ `Infrastructure.AI` — щоб не тригерити
+  `AiAdvisorRlsContainmentTests`): `IConsumerAssistantService.AskAsync(consumerAccountId,
+  tenantId, message)`.
+  1. `ITenantSessionOverride.ExecuteAsync(tenantId, …)` — читає `integration_configs`
+     `Service == "ai_consumer" && IsEnabled` (споживча сесія не має `app.tenant_id` — це
+     санкціонований примітив, як `ConsumerContentService`). Нема рядка / нема ключа й env →
+     404 «недоступний».
+  2. Поза override, споживчо-безпечні прямі виклики `ILoyaltyService`:
+     `GetMembershipsForConsumerAsync` (баланс, preferred store), `GetTierProgressAsync`,
+     `GetTierLadderForConsumerAsync`, `GetHistoryAsync` (10), `GetNetworksForConsumerAsync`
+     (магазини+адреси). Каталог — `IConsumerContentService.GetCatalogAsync(tenantId,
+     preferredStoreId, search: message, …, 15)` (керує власною tx — не викликати з override).
+  3. Промпт: `IAiPromptResolver.Compose(tenantName, extra_instructions, base, AiSlot.Consumer)`
+     — нова **синхронна pure** перевантаження (звичайний `WrapSystemPromptAsync` мовчки
+     скинув би guardrail для null-`ITenantContext`).
+  4. `IAiClientFactory.CreateOrEnv(provider, apiKey|null, model, baseUrl)` — нова: явні креди
+     з fallback на env-ключ провайдера. `CompleteAsync(MaxTokens 1024)`. Помилка моделі → 502.
+  5. Аудит: 2-й `ITenantSessionOverride.ExecuteAsync` пише `consumer_ai_requests`
+     (метадані + перші 200 симв. prompt/response).
+- **`ConsumerAssistantController`** `POST /api/consumer/assistant/{tenantId}/ask`,
+  `[Authorize]` (споживчий JWT), `[EnableRateLimiting("consumer-ai")]`. **Gate = сам факт
+  налаштованого `ai_consumer` slot** — нового feature-flag не додавали (щоб не чіпати
+  App Builder / mobile-config, які веде Codex).
+- **`consumer_ai_requests`** — нова таблиця + міграція `20260908122806` з канонічною RLS-тріадою
+  + `consumer_self_access`. Ретеншн (прунити >90 днів) — follow-up для worker.
+- **Rate-limit** `consumer-ai` у `Program.cs`: fixed-window **6 / 3 хв** партиціонований по
+  `consumer_account_id`.
+- Тести: `ConsumerAssistantServiceTests` (7) — gate, guardrail-wiring, аудит, 502.
+
+### 4b-mobile (окремо, mobile-власник) — НЕ ПОЧАТО
 
 Чат-екран у споживчому застосунку (`mobile/app/(personal)/…`), викликає
-`/api/consumer/assistant/{tenantId}/ask`. Не в цій сесії.
-
-### Рішення власника перед 4b-backend
-
-1. **Дані, які бачить споживчий агент** — підтвердити межу: власне loyalty-членство + історія
-   покупок цього споживача в цьому тенанті + публічний каталог/наявність + правила програми +
-   магазини (адреси/графік). Щось додати / прибрати?
-2. **Gate** — новий consumer feature-flag `features.ai_assistant` (тенант вмикає в App Builder),
-   чи просто `mobile_app`/`loyalty` модуль?
-3. **Rate-limit** — скільки запитів на споживача (напр. 20/день, 5/хв)?
-4. **Аудит-лог** — зберігати повний prompt+response (потрібно для розгляду скарг на агента,
-   але це PII), чи лише метадані (токени, час, тенант)?
-5. **4b-mobile** — координувати з Codex-сесією зараз, чи backend їде окремо й mobile підхоплює пізніше?
+`POST /api/consumer/assistant/{tenantId}/ask` з тілом `{ "message": "…" }`, відповідь
+`{ text, model, tokensUsed }`. 404 = провайдер не налаштував консультанта для цього магазину.
+429 = rate-limit. **Не в цій сесії** (`mobile/` — територія Codex).
 
 ## Провайдерська картка (frontend)
 

@@ -339,6 +339,10 @@ public static class DependencyInjection
         services.AddScoped<Domain.Interfaces.IPurchaseReviewRepository,
             Data.Repositories.PurchaseReviewRepository>();
 
+        // managed-AI Phase 4b - consumer AI assistant audit trail
+        services.AddScoped<Domain.Interfaces.IConsumerAiRequestRepository,
+            Data.Repositories.ConsumerAiRequestRepository>();
+
         // TASK-625 - Realtime SignalR transport for consumer support ticket threads
         // (ConsumerSupportHub, mapped in Program.cs at /api/hubs/consumer-support). Keep-alive/
         // client-timeout set explicitly (spec §5 "бажано додати keep-alive") — these values match

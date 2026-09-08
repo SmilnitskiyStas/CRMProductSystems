@@ -20,6 +20,14 @@ public interface IAiClientFactory
 
     /// <summary>A client built from explicit credentials — used by the connectivity probe.</summary>
     IAiChatClient Create(AiProviderConfig config);
+
+    /// <summary>
+    /// A client for an explicit provider config, falling back to the shared env key for that
+    /// provider when <paramref name="apiKey"/> is null/blank. Null when neither has a key. Used
+    /// by the consumer assistant (Phase 4b), which reads the tenant's <c>ai_consumer</c> config
+    /// itself (through <see cref="ITenantSessionOverride"/>) and cannot use <see cref="ResolveAsync"/>.
+    /// </summary>
+    IAiChatClient? CreateOrEnv(string provider, string? apiKey, string? model, string? baseUrl);
 }
 
 /// <param name="Provider">"claude" (Anthropic) or "openai" (OpenAI-compatible / Azure / Codex).</param>

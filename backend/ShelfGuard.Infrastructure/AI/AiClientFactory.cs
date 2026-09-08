@@ -48,6 +48,18 @@ public sealed class AiClientFactory : IAiClientFactory
                 c.ApiKey,
                 string.IsNullOrWhiteSpace(c.Model) ? _defaultClaudeModel : c.Model);
 
+    public IAiChatClient? CreateOrEnv(string provider, string? apiKey, string? model, string? baseUrl)
+    {
+        var isOpenAi = string.Equals(provider, "openai", StringComparison.OrdinalIgnoreCase);
+        var key = string.IsNullOrWhiteSpace(apiKey)
+            ? (isOpenAi ? _envOpenAiKey : _envClaudeKey)
+            : apiKey;
+
+        return string.IsNullOrWhiteSpace(key)
+            ? null
+            : Create(new AiProviderConfig(isOpenAi ? "openai" : "claude", key!, model ?? "", baseUrl));
+    }
+
     public async Task<bool> IsConfiguredAsync(AiSlot slot, CancellationToken ct = default) =>
         await ResolveAsync(slot, ct) is not null;
 

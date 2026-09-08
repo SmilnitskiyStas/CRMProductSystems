@@ -21,4 +21,12 @@ namespace ShelfGuard.Application.Services;
 public interface IAiPromptResolver
 {
     Task<string> WrapSystemPromptAsync(string basePrompt, AiSlot slot, CancellationToken ct = default);
+
+    /// <summary>
+    /// Pure guardrail composition for a caller that already holds the tenant name and the
+    /// slot's <c>extra_instructions</c> (managed-AI Phase 4b — the consumer assistant has no
+    /// <see cref="ITenantContext"/>, so it must not go through <see cref="WrapSystemPromptAsync"/>,
+    /// which would silently drop the guardrail for a null tenant context). No I/O.
+    /// </summary>
+    string Compose(string? tenantName, string? extraInstructions, string basePrompt, AiSlot slot);
 }

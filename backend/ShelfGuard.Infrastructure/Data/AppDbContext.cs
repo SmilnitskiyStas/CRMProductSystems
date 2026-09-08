@@ -216,6 +216,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<ConsumerSupportTicket> ConsumerSupportTickets => Set<ConsumerSupportTicket>();
     public DbSet<ConsumerSupportTicketMessage> ConsumerSupportTicketMessages => Set<ConsumerSupportTicketMessage>();
     public DbSet<PurchaseReview> PurchaseReviews => Set<PurchaseReview>();
+    public DbSet<ConsumerAiRequest> ConsumerAiRequests => Set<ConsumerAiRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -3021,6 +3022,28 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(x => x.PosTransactionId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.RepliedByUser).WithMany()
              .HasForeignKey(x => x.RepliedByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── ConsumerAiRequest (consumer AI assistant audit, managed-AI Phase 4b) ──
+        // Metadata + short excerpts only. Canonical RLS triad + consumer_self_access on
+        // ConsumerAccountId (the write happens inside an ITenantSessionOverride block).
+        builder.Entity<ConsumerAiRequest>(e =>
+        {
+            e.ToTable("consumer_ai_requests");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.TenantId).IsRequired();
+            e.Property(x => x.ConsumerAccountId).IsRequired();
+            e.Property(x => x.PromptExcerpt).HasMaxLength(400).IsRequired();
+            e.Property(x => x.ResponseExcerpt).HasMaxLength(400).IsRequired();
+            e.Property(x => x.Model).HasMaxLength(120).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt }).IsDescending(false, true);
+            e.HasIndex(x => x.ConsumerAccountId);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<ConsumerAccount>().WithMany()
+             .HasForeignKey(x => x.ConsumerAccountId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── PriceSegmentSettings (Marketing Analytics Фаза 2, TASK-419) ───────
