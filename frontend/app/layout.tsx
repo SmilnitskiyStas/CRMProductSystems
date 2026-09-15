@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <QueryClientProvider client={queryClient}>
           {children}
-          <Toaster position="bottom-right" richColors />
+          <Toaster position="top-right" richColors />
         </QueryClientProvider>
       </body>
     </html>
