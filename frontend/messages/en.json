@@ -568,6 +568,7 @@
       "signingIn": "Signing in…",
       "signIn": "Sign in",
       "sessionExpired": "Your session has expired. Please sign in again.",
+      "idleTimeout": "You were automatically signed out after 5 minutes of inactivity. Please sign in again.",
       "temporaryPasswordExpiredError": "Your temporary password has expired. Please request a new one.",
       "forgotPasswordLink": "Forgot password?",
       "forgotPasswordTitle": "Reset your password",

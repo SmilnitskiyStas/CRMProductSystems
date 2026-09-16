@@ -1396,3 +1396,13 @@ merge, ідемпотентна) — застосовано на dev, усі 11 
 `ShipOrderAsync`); `MarketplaceOrderDto` +4 поля. `dotnet build -c Release` чисто; `dotnet test`
 **2350/2350** (RLS-audit green). Фронт — окремим агентом (кнопка cancel для `new|confirmed`, нові
 DTO-поля «Підтвердив/Відвантажив», змінений рядок помилки).
+
+## Idle-based session logout — TASK-712
+
+**Status:** done · **Agent:** frontend-developer · Log: `.claude/logs/tasks/TASK-712_2026-09-15_idle-session-logout_frontend-developer.md`
+
+5 хв бездіяльності (mousemove/keydown/scroll/touch, cross-tab через `localStorage`) → тихий
+logout, без модалки, редірект `/login?reason=idle_timeout`. Хардкод-константа, не tenant setting.
+Новий `useIdleLogout.ts`; `useLogout()` += опційний `reason` (typed `string | void` щоб `mutate()`
+залишався викличним без аргументів); підключено в `DashboardChrome`; `SessionExpiredNotice` +
+`Dashboard.auth.idleTimeout` (uk/en, parity 5039). Фронтенд-only, бек не чіпали. tsc/lint чисто.
