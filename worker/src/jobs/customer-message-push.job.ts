@@ -38,7 +38,10 @@ async function dispatchCampaignPushes(): Promise<void> {
         } catch { failed += batch.length; }
       }
       const status = failed > 0 && failed === valid.length ? "failed" : "sent";
-      await client.query(`UPDATE notification_queue SET "Status" = $2, "SentAt" = CASE WHEN $2 = 'sent' THEN NOW() ELSE NULL END WHERE "Id" = $1`, [campaign.queue_id, status]);
+      await client.query(
+        `UPDATE notification_queue SET "Status" = $2, "SentAt" = CASE WHEN $3 THEN NOW() ELSE NULL END WHERE "Id" = $1`,
+        [campaign.queue_id, status, status === "sent"],
+      );
       await client.query(`UPDATE customer_message_campaigns SET "Status" = $2 WHERE "Id" = $1`, [campaign.campaign_id, status === "sent" ? "completed" : "failed"]);
     }
   } finally { client.release(); }
