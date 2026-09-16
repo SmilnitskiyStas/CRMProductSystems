@@ -1,0 +1,64 @@
+import Image from "next/image";
+import { getTranslations } from "next-intl/server";
+import { Button } from "@/components/ui/button";
+import { BrowserFrame } from "./BrowserFrame";
+
+// Vertical-specific hero for /retail (TASK-713). Same visual system as the
+// homepage HeroSection, own copy + own screenshot (store zone map instead of
+// the full dashboard) so the two hero sections don't look identical.
+export async function RetailHeroSection() {
+  const t = await getTranslations("Landing.verticals.retail.hero");
+
+  return (
+    <section id="top" className="relative overflow-hidden pb-16 pt-32 sm:pb-24 sm:pt-40">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-[#2D7DD2]/[0.12] blur-[140px]"
+      />
+
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="hero-fade hero-fade-1 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-[13px] text-slate-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+            {t("badge")}
+          </p>
+
+          <h1 className="hero-fade hero-fade-2 mt-6 text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
+            {t("titleLine")} <span className="text-[#5EA3E8]">{t("titleHighlight")}</span>
+          </h1>
+
+          <p className="hero-fade hero-fade-3 mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-400">
+            {t("description")}
+          </p>
+
+          <div className="hero-fade hero-fade-4 mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Button asChild size="lg" className="w-full sm:w-auto">
+              <a href="#lead-form">{t("ctaPrimary")}</a>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
+              <a href="#features">{t("ctaSecondary")}</a>
+            </Button>
+          </div>
+        </div>
+
+        <div className="hero-fade hero-fade-4 mx-auto mt-16 max-w-5xl sm:mt-20">
+          <BrowserFrame glow>
+            <Image
+              src="/landing/dashboard-2.jpg"
+              alt={t("imageAlt")}
+              width={1280}
+              height={181}
+              priority
+              sizes="(max-width: 640px) 100vw, (max-width: 1100px) 92vw, 1024px"
+              className="h-auto w-full"
+            />
+          </BrowserFrame>
+        </div>
+      </div>
+    </section>
+  );
+}

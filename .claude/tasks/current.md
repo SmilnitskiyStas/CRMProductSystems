@@ -6,6 +6,24 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Публічна сторінка галузі «Роздрібні мережі» — TASK-713
+
+**Status:** review · main session (frontend-developer) · не запушено · Log: `.claude/logs/tasks/713_2026-09-16_retail-vertical-page_frontend-developer.md`
+
+Дослідили конкурента (uployal.net): окремі сторінки під галузь на одному шаблоні замість
+однієї лендінг-сторінки. Початковий бриф просив 4 галузі (retail/auto-service/production/
+warehouses); **юзер скоротив скоуп ще до першого файлу** — готовий до публічного маркетингу
+лише retail, решта — майбутнє після відповідної продуктової роботи. Auto-service/production/
+warehouses свідомо НЕ будувались (жодних файлів/i18n-ключів/nav-пунктів для них немає).
+Збудовано: `/retail` (SSG, той самий патерн що й `/`) — hero + 6 фіч-карток + 4-кроковий
+приклад + cross-link на `/` + `LeadSection` (без змін бекенду). Контент — з v4-spec.md
+Inventory+Procurement+POS модулів, без вигаданих клієнтів/цифр. Header (`LandingHeader.tsx`):
++1 locale-aware посилання «Мережі магазинів» у desktop-наві й мобільній шухляді (4 існуючі
+якорі не чіпали). **Бáгфікс по дорозі:** `middleware.ts` мав allowlist шляхів, які йдуть через
+next-intl locale-middleware — `/retail` там не було, тому uk-версія без префіксу («/retail»)
+давала 404, доки `en`-версія («/en/retail») працювала. Додано в allowlist. `tsc`/`next build`
+чисті; браузер-перевірка uk+en, desktop+mobile, header+drawer — все ок.
+
 ## Погода на календарі: помітний callout «нема координат» + CTA — TASK-710
 
 **Status:** review · main session · перевірено в браузері · follow-up до TASK-708 · Log: `.claude/logs/tasks/710_2026-09-08_weather-no-coords-cta_frontend-developer.md`

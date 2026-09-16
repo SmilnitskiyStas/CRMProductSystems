@@ -14,6 +14,7 @@
       "menuCloseAriaLabel": "Close menu",
       "login": "Log in",
       "cta": "Request a demo",
+      "retailNavLabel": "Retail chains",
       "nav": [
         {
           "href": "#features",
@@ -349,6 +350,83 @@
     "footer": {
       "rights": "© 2026 AgruSystems. All rights reserved.",
       "login": "Log in"
+    },
+    "verticals": {
+      "retail": {
+        "meta": {
+          "title": "ShelfGuard for retail chains — expiry and stock control across every location",
+          "description": "Software for retail chains: FEFO expiry-date control in every store, AI-driven reordering, POS with fiscal receipts (Checkbox), and chain-wide analytics on one screen."
+        },
+        "hero": {
+          "badge": "For grocery retail chains",
+          "titleLine": "Every store under control.",
+          "titleHighlight": "The whole chain on one screen.",
+          "description": "ShelfGuard tracks the expiry date of every batch in every store in your chain, suggests what to reorder, issues fiscal receipts through PRRO, and rolls every location's status up into one dashboard.",
+          "ctaPrimary": "Request a demo",
+          "ctaSecondary": "See what's included",
+          "imageAlt": "ShelfGuard store map showing batch statuses — Safe, Warning, Critical — by zone"
+        },
+        "features": {
+          "heading": "What a retail chain gets",
+          "subheading": "The same tool that runs a single store also shows the state of the whole chain on one screen.",
+          "items": [
+            {
+              "title": "FEFO batch control",
+              "text": "Every batch carries its own expiry date and batch number — the system always shows which one to sell or write off first."
+            },
+            {
+              "title": "Every store, and the whole chain, at once",
+              "text": "The dashboard shows batch status — normal, warning, critical, expired — for each location separately and for the whole chain together."
+            },
+            {
+              "title": "Transfers between stores",
+              "text": "Move stock from one store to another with a transfer document — the expiry date and batch number never change."
+            },
+            {
+              "title": "AI-driven reordering",
+              "text": "AI analyzes each store's own sales and builds a reorder suggestion tailored to that specific location."
+            },
+            {
+              "title": "POS with fiscal receipts",
+              "text": "Every sale issues a fiscal receipt through Checkbox right at the register, and stock updates instantly."
+            },
+            {
+              "title": "Write-offs and loss control",
+              "text": "Expired or damaged stock is written off with a documented reason — so you can see exactly how much the chain is losing, and where."
+            }
+          ]
+        },
+        "example": {
+          "heading": "How it works for a chain",
+          "subheading": "From a batch in the stockroom to a receipt at the register — one continuous process per store.",
+          "steps": [
+            {
+              "number": "1",
+              "title": "Each store keeps its own records",
+              "text": "Batches, sales, and the register — tracked separately per location, with no manual spreadsheet roll-up."
+            },
+            {
+              "number": "2",
+              "title": "The whole chain on one screen",
+              "text": "A single dashboard shows where stock is expiring, where items are running low, and where everything's under control — across every store at once."
+            },
+            {
+              "number": "3",
+              "title": "AI suggests an order per location",
+              "text": "Each store gets its own reorder suggestion, based on that store's own sales and stock levels."
+            },
+            {
+              "number": "4",
+              "title": "POS and PRRO close the loop",
+              "text": "A sale issues a fiscal receipt, stock updates immediately — and feeds straight into the next reorder suggestion."
+            }
+          ]
+        },
+        "backHome": {
+          "text": "This is part of what ShelfGuard can do.",
+          "linkLabel": "See the full platform feature set"
+        }
+      }
     }
   },
   "Common": {

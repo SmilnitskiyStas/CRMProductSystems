@@ -58,6 +58,7 @@ Block 13. For the current inventory see CLAUDE.md's frontend layout.
 | Route | Status | Notes |
 |---|---|---|
 | / | ✅ done | Public SSG marketing landing + lead form (TASK-334) |
+| /retail | ✅ done | Public SSG vertical marketing page for retail chains (TASK-713); reuses `LeadSection`. auto-service/production/warehouses verticals intentionally not built — only retail is ready enough in the product to publish |
 | /login | ✅ done | Auth form + 2FA step (TOTP/recovery); token in localStorage (KI-021) |
 | /dashboard | ✅ done | Stats cards, attention table, quick actions, store map (KI-007/010 = placeholder data) |
 | /inventory /stock /receipts /transfers /write-offs /analytics | ✅ done | Core v1 flows |

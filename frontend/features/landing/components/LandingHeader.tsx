@@ -17,6 +17,10 @@ export function LandingHeader() {
 
   const nav = t.raw("nav") as { href: string; label: string }[];
   const [hash, setHash] = useState("");
+  // These nav items are anchors into sections that only exist on the homepage.
+  // On any other page (e.g. /retail) they must link back to "/" with the hash
+  // instead of a bare "#..." — otherwise they're dead links there.
+  const isHome = pathname === "/";
 
   useEffect(() => {
     const syncHash = () => setHash(window.location.hash);
@@ -46,15 +50,31 @@ export function LandingHeader() {
         </a>
 
         <nav className="hidden items-center gap-7 md:flex" aria-label={t("mainNavAriaLabel")}>
-          {nav.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="text-sm text-slate-400 transition-colors hover:text-white"
-            >
-              {item.label}
-            </a>
-          ))}
+          <LocaleLink
+            href="/retail"
+            className="text-sm text-slate-400 transition-colors hover:text-white"
+          >
+            {t("retailNavLabel")}
+          </LocaleLink>
+          {nav.map((item) =>
+            isHome ? (
+              <a
+                key={item.href}
+                href={item.href}
+                className="text-sm text-slate-400 transition-colors hover:text-white"
+              >
+                {item.label}
+              </a>
+            ) : (
+              <LocaleLink
+                key={item.href}
+                href={{ pathname: "/", hash: item.href.slice(1) }}
+                className="text-sm text-slate-400 transition-colors hover:text-white"
+              >
+                {item.label}
+              </LocaleLink>
+            ),
+          )}
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
@@ -84,16 +104,34 @@ export function LandingHeader() {
           aria-label={t("mobileNavAriaLabel")}
         >
           <div className="flex flex-col gap-1">
-            {nav.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={() => setMenuOpen(false)}
-                className="rounded-md px-3 py-2.5 text-[15px] text-slate-300 hover:bg-white/5 hover:text-white"
-              >
-                {item.label}
-              </a>
-            ))}
+            <LocaleLink
+              href="/retail"
+              onClick={() => setMenuOpen(false)}
+              className="rounded-md px-3 py-2.5 text-[15px] text-slate-300 hover:bg-white/5 hover:text-white"
+            >
+              {t("retailNavLabel")}
+            </LocaleLink>
+            {nav.map((item) =>
+              isHome ? (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-md px-3 py-2.5 text-[15px] text-slate-300 hover:bg-white/5 hover:text-white"
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <LocaleLink
+                  key={item.href}
+                  href={{ pathname: "/", hash: item.href.slice(1) }}
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-md px-3 py-2.5 text-[15px] text-slate-300 hover:bg-white/5 hover:text-white"
+                >
+                  {item.label}
+                </LocaleLink>
+              ),
+            )}
           </div>
           <div className="mt-4 flex flex-col gap-2.5">
             <div className="flex justify-center">
