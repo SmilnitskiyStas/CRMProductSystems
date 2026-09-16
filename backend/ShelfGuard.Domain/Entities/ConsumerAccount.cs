@@ -26,6 +26,8 @@ public sealed class ConsumerAccount
     public string LoyaltyTotpSecret { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Email { get; set; }
+    /// <summary>Current Expo push token for the consumer's mobile device.</summary>
+    public string? PushToken { get; set; }
 
     // Account lockout — same shape as User.FailedLoginAttempts/LockoutUntil (TASK-329).
     public int FailedLoginAttempts { get; set; }

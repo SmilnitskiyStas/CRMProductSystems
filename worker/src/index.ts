@@ -17,6 +17,7 @@ import { startLoyaltyAnnualResetWorker } from "./jobs/loyalty-annual-reset.job";
 import { startLoyaltyBonusExpiryWorker } from "./jobs/loyalty-bonus-expiry.job";
 import { startSupplierMetricsRecomputeWorker } from "./jobs/supplier-metrics-recompute.job";
 import { startReplenishmentRecomputeWorker } from "./jobs/replenishment-recompute.job";
+import { startCustomerMessagePushWorker } from "./jobs/customer-message-push.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
@@ -97,6 +98,11 @@ async function scheduleRecurringJobs(): Promise<void> {
     { name: "notification-dispatch" }
   );
 
+  const customerMessagePushQueue = new Queue("customer-message-push", { connection: redisConnection });
+  await customerMessagePushQueue.upsertJobScheduler(
+    "customer-message-push-cron", { pattern: "* * * * *" }, { name: "customer-message-push" }
+  );
+
   // ADR-019 §4: every 15 min — scan user_permission_grants for expiring-soon (24h) /
   // just-expired temporary grants and enqueue targeted outbox rows (TASK-342)
   const permissionGrantExpiryQueue = new Queue("permission-grant-expiry", { connection: redisConnection });
@@ -129,6 +135,7 @@ async function main(): Promise<void> {
   startFiscalizationRetryWorker();
   startNotificationDispatchWorker();
   startPermissionGrantExpiryWorker();
+  startCustomerMessagePushWorker();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

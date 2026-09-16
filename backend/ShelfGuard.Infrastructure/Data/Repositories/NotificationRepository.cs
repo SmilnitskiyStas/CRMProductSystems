@@ -183,13 +183,17 @@ public sealed class NotificationRepository : INotificationRepository
         campaign.DeliveryMode = deliveryMode;
         campaign.ScheduledAt = scheduledAt;
         campaign.SubmittedAt = DateTime.UtcNow;
-        campaign.Status = deliveryMode == "scheduled" ? "scheduled" : "integration_pending";
+        campaign.Status = deliveryMode == "scheduled" ? "scheduled" :
+            campaign.Channels.Contains("push", StringComparer.OrdinalIgnoreCase) ? "sending" : "integration_pending";
         var campaignToken = JsonSerializer.Serialize(new { campaignId });
         var queueItems = await _db.NotificationQueues
             .Where(x => x.TenantId == tenantId && x.EventType == "customer_message.created" &&
                 x.Payload != null && EF.Functions.JsonContains(x.Payload, campaignToken))
             .ToListAsync(ct);
-        foreach (var item in queueItems) item.Status = campaign.Status;
+        foreach (var item in queueItems)
+            item.Status = item.Channel.Equals("push", StringComparison.OrdinalIgnoreCase)
+                ? (deliveryMode == "scheduled" ? "scheduled" : "pending")
+                : "integration_pending";
         await _db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return campaign;

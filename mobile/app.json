@@ -25,7 +25,8 @@
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",

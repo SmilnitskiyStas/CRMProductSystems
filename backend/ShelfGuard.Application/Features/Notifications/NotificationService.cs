@@ -197,7 +197,7 @@ public sealed class NotificationService : INotificationService
         {
             "draft" => "draft",
             "scheduled" => "scheduled",
-            _ => "integration_pending",
+            _ => channels.Contains("push", StringComparer.OrdinalIgnoreCase) ? "sending" : "integration_pending",
         };
 
         (string Title, string? ImageUrl)? content = null;
@@ -230,7 +230,7 @@ public sealed class NotificationService : INotificationService
             },
             resolvedRecipients = request.Audience is "rfm_segment" or "purchase_history" ? recipientIds.Count : (int?)null,
             createdBy = userId,
-            delivery = "provider_not_connected",
+            delivery = channels.Contains("push", StringComparer.OrdinalIgnoreCase) ? "expo" : "provider_not_connected",
         });
         var items = channels.Select(channel => new NotificationQueue
         {
@@ -240,9 +240,9 @@ public sealed class NotificationService : INotificationService
             Channel = channel.ToLowerInvariant(),
             EventType = "customer_message.created",
             Payload = payload,
-            // Deliberately not "pending": the worker must not attempt delivery before a
-            // provider adapter is configured. Future integrations can promote this status.
-            Status = campaignStatus,
+            Status = channel.Equals("push", StringComparison.OrdinalIgnoreCase)
+                ? (deliveryMode == "draft" ? "draft" : deliveryMode == "scheduled" ? "scheduled" : "pending")
+                : "integration_pending",
         }).ToArray();
         var audienceDefinition = request.Audience == "rfm_segment"
             ? JsonSerializer.Serialize(new
