@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "716157489929",
+    "project_id": "shelfguard-d4616",
+    "storage_bucket": "shelfguard-d4616.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:716157489929:android:b79e63ba4305eeb9bc39d8",
+        "android_client_info": {
+          "package_name": "com.shelfguard.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMZ_16duT3G3Xoo0V7Wdc1rCeMlQK3h-U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
