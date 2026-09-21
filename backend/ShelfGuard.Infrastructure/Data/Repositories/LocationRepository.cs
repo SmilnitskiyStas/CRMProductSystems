@@ -30,6 +30,13 @@ public sealed class LocationRepository : ILocationRepository
     public Task<LocationZone?> GetZoneByIdAsync(Guid zoneId, CancellationToken ct = default) =>
         _db.LocationZones.FirstOrDefaultAsync(z => z.Id == zoneId, ct);
 
+    // TASK-714: sibling of GetZoneByIdAsync with Location included, for ItemService's cross-tenant
+    // guard (zone.Location.TenantId) when assigning a product to a zone.
+    public Task<LocationZone?> GetZoneWithLocationAsync(Guid zoneId, CancellationToken ct = default) =>
+        _db.LocationZones
+            .Include(z => z.Location)
+            .FirstOrDefaultAsync(z => z.Id == zoneId, ct);
+
     public async Task AddAsync(Location location, CancellationToken ct = default) =>
         await _db.Locations.AddAsync(location, ct);
 

@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, Plus, Save, Trash2, Unlink2 } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -14,12 +15,67 @@ import {
 } from "@dnd-kit/core";
 import { createSnapModifier } from "@dnd-kit/modifiers";
 import { useTranslations } from "next-intl";
+import { ApiError } from "@/lib/api";
 import { useLocation } from "@/features/locations/hooks/useLocations";
 import {
   parseShelfPlan,
   useUpdateZonePosition,
+  useZoneItemStatusCounts,
 } from "@/features/locations/hooks/useFloorPlan";
-import type { ShelfItemPlacement, ShelfPlanLayout } from "@/features/locations/types";
+import { STATUS_CONFIG, worstStatus } from "@/features/locations/components/FloorPlanCanvas";
+import type {
+  ShelfItemPlacement,
+  ShelfPlanLayout,
+  ZoneStatus,
+  ZoneStatusCounts,
+} from "@/features/locations/types";
+import { productsApi } from "@/features/inventory/api/products";
+import { useProductsByIds } from "@/features/inventory/hooks/useProducts";
+import { ProductSearchPicker } from "@/features/inventory/components/ProductSearchPicker";
+import type { Product } from "@/features/inventory/types";
+
+// Shared icon-button look for the per-section link/unlink/delete controls below (TASK-716).
+const iconButtonStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  color: "#6B7280",
+  cursor: "pointer",
+  padding: 2,
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+};
+
+// After the layout saves, make sure item_zone_assignments (TASK-714) reflects every product
+// placed on this zone's canvas. Fires one assignZone per linked item; a 400 ("already exists" —
+// e.g. the product was already tagged via ProductZonesSection, or a previous save) is expected
+// and swallowed silently. Deliberately asymmetric: unlinking a product from a shelf box, or
+// deleting the box, never auto-removes the zone tag — that stays a manual action from the
+// product's own Zones section (confirmed in the approved plan, not a bug to "fix" into symmetry).
+async function syncZoneTags(
+  plan: ShelfPlanLayout,
+  zoneId: string,
+  queryClient: QueryClient
+): Promise<string | null> {
+  const itemIds = Array.from(
+    new Set(plan.items.map((i) => i.itemId).filter((id): id is string => Boolean(id)))
+  );
+  if (itemIds.length === 0) return null;
+
+  const results = await Promise.allSettled(
+    itemIds.map((itemId) => productsApi.assignZone(itemId, zoneId))
+  );
+  for (const itemId of itemIds) {
+    queryClient.invalidateQueries({ queryKey: ["products", itemId, "zones"] });
+  }
+
+  const unexpected = results.find(
+    (r): r is PromiseRejectedResult =>
+      r.status === "rejected" && !(r.reason instanceof ApiError && r.reason.status === 400)
+  );
+  if (!unexpected) return null;
+  return unexpected.reason instanceof Error ? unexpected.reason.message : String(unexpected.reason);
+}
 
 export default function ShelvesPage() {
   const t = useTranslations("Dashboard.locations.shelvesPage");
@@ -40,13 +96,42 @@ export default function ShelvesPage() {
 
   const [plan, setPlan] = useState<ShelfPlanLayout | null>(null);
   const [dirty, setDirty] = useState(false);
+  // shelfId of the row whose inline product picker is expanded in the side panel; null = none
+  // open. A single value naturally keeps at most one row's picker open at a time (TASK-716).
+  const [linkingShelfId, setLinkingShelfId] = useState<string | null>(null);
 
   useEffect(() => {
     if (zone) {
       setPlan(parseShelfPlan(zone.position));
       setDirty(false);
+      setLinkingShelfId(null);
     }
   }, [zone?.id, zone?.position]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const queryClient = useQueryClient();
+
+  // Resolve display names for every linked product in one batched call (not one query per shelf
+  // box — TASK-716 brief).
+  const linkedItemIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (plan?.items ?? []).map((i) => i.itemId).filter((id): id is string => Boolean(id))
+        )
+      ),
+    [plan]
+  );
+  const { data: linkedProducts = [] } = useProductsByIds(linkedItemIds);
+  const productNameById = useMemo(
+    () => new Map(linkedProducts.map((p) => [p.id, p.name])),
+    [linkedProducts]
+  );
+
+  // Per-product stock-status counts within this zone, for the status dot on linked rows/boxes.
+  const { data: itemStatusCounts = new Map<string, ZoneStatusCounts>() } = useZoneItemStatusCounts(
+    locationId,
+    zoneId
+  );
 
   function patchPlan(fn: (prev: ShelfPlanLayout) => ShelfPlanLayout) {
     setPlan((prev) => (prev ? fn(prev) : prev));
@@ -90,14 +175,32 @@ export default function ShelvesPage() {
     patchPlan((prev) => ({ ...prev, canvasW: w, canvasH: h }));
   }
 
+  function handleLinkProduct(shelfId: string, product: Product) {
+    patchPlan((prev) => ({
+      ...prev,
+      items: prev.items.map((i) => (i.shelfId === shelfId ? { ...i, itemId: product.id } : i)),
+    }));
+    setLinkingShelfId(null);
+  }
+
+  function handleUnlinkProduct(shelfId: string) {
+    patchPlan((prev) => ({
+      ...prev,
+      items: prev.items.map((i) => (i.shelfId === shelfId ? { ...i, itemId: null } : i)),
+    }));
+  }
+
   function handleSave() {
     if (!plan || !zone) return;
+    const layoutToSync = plan;
     updateZonePosition.mutate(
       { zone, shelfLayout: plan },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
           setDirty(false);
           toast.success(t("toastSaved"));
+          const errorMessage = await syncZoneTags(layoutToSync, zoneId, queryClient);
+          if (errorMessage) toast.error(t("zoneSyncError", { message: errorMessage }));
         },
         onError: (e) => toast.error(t("toastError", { message: e.message })),
       }
@@ -173,6 +276,8 @@ export default function ShelvesPage() {
           plan={plan}
           onMove={handleMove}
           onResize={handleResize}
+          productNames={productNameById}
+          itemStatusCounts={itemStatusCounts}
         />
 
         {/* Side panel */}
@@ -243,40 +348,100 @@ export default function ShelvesPage() {
               <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>{t("noSections")}</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {plan.items.map((item) => (
-                  <div
-                    key={item.shelfId}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      background: "#0B0E14",
-                      border: "1px solid #1F2937",
-                      borderRadius: 8,
-                      padding: "7px 10px",
-                    }}
-                  >
-                    <span style={{ color: "#E8EDF5", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {item.label}
-                    </span>
-                    <button
-                      onClick={() => handleDeleteSection(item.shelfId)}
+                {plan.items.map((item) => {
+                  const productName = item.itemId ? productNameById.get(item.itemId) : undefined;
+                  const status = item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)) : null;
+                  const isLinking = linkingShelfId === item.shelfId;
+                  return (
+                    <div
+                      key={item.shelfId}
                       style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "#6B7280",
-                        cursor: "pointer",
-                        padding: 2,
-                        flexShrink: 0,
-                        display: "flex",
-                        alignItems: "center",
+                        background: "#0B0E14",
+                        border: "1px solid #1F2937",
+                        borderRadius: 8,
+                        padding: "7px 10px",
                       }}
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                          {status && (
+                            <span
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: "50%",
+                                background: STATUS_CONFIG[status].color,
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                          <span
+                            style={{
+                              color: "#E8EDF5",
+                              fontSize: 12,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {productName ?? item.label}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => setLinkingShelfId(isLinking ? null : item.shelfId)}
+                            title={item.itemId ? t("changeProduct") : t("linkProduct")}
+                            style={iconButtonStyle}
+                          >
+                            <Link2 size={13} />
+                          </button>
+                          {item.itemId && (
+                            <button
+                              type="button"
+                              onClick={() => handleUnlinkProduct(item.shelfId)}
+                              title={t("unlinkProduct")}
+                              style={iconButtonStyle}
+                            >
+                              <Unlink2 size={13} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSection(item.shelfId)}
+                            style={iconButtonStyle}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isLinking && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1F2937" }}>
+                          <ProductSearchPicker
+                            excludeIds={[]}
+                            onPick={(product) => handleLinkProduct(item.shelfId, product)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setLinkingShelfId(null)}
+                            style={{
+                              marginTop: 6,
+                              background: "transparent",
+                              border: "none",
+                              color: "#6B7280",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
+                          >
+                            {t("cancelLinking")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -290,9 +455,11 @@ interface ShelfCanvasProps {
   plan: ShelfPlanLayout;
   onMove: (shelfId: string, x: number, y: number) => void;
   onResize: (shelfId: string, w: number, h: number) => void;
+  productNames: Map<string, string>;
+  itemStatusCounts: Map<string, ZoneStatusCounts>;
 }
 
-function ShelfCanvas({ plan, onMove, onResize }: ShelfCanvasProps) {
+function ShelfCanvas({ plan, onMove, onResize, productNames, itemStatusCounts }: ShelfCanvasProps) {
   const t = useTranslations("Dashboard.locations.shelvesPage");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -339,6 +506,8 @@ function ShelfCanvas({ plan, onMove, onResize }: ShelfCanvasProps) {
               item={item}
               grid={grid}
               onResize={onResize}
+              productName={item.itemId ? productNames.get(item.itemId) : undefined}
+              status={item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)) : undefined}
             />
           ))}
           {plan.items.length === 0 && (
@@ -366,9 +535,11 @@ interface ShelfItemBoxProps {
   item: ShelfItemPlacement;
   grid: number;
   onResize: (shelfId: string, w: number, h: number) => void;
+  productName?: string;
+  status?: ZoneStatus | "empty";
 }
 
-function ShelfItemBox({ item, grid, onResize }: ShelfItemBoxProps) {
+function ShelfItemBox({ item, grid, onResize, productName, status }: ShelfItemBoxProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.shelfId,
   });
@@ -429,13 +600,30 @@ function ShelfItemBox({ item, grid, onResize }: ShelfItemBoxProps) {
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
+          paddingRight: status ? 12 : 0,
         }}
       >
-        {item.label}
+        {productName ?? item.label}
       </div>
       <div style={{ color: "#6366f1", fontSize: 10 }}>
         {item.w} × {item.h}
       </div>
+
+      {/* Linked-product status badge (TASK-716) */}
+      {status && (
+        <div
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: STATUS_CONFIG[status].color,
+            border: "1px solid rgba(0,0,0,0.4)",
+          }}
+        />
+      )}
 
       {/* Resize handle */}
       <div

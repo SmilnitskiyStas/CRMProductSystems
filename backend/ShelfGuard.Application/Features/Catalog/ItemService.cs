@@ -10,11 +10,13 @@ public sealed class ItemService : IItemService
 {
     private readonly IItemRepository _repo;
     private readonly ICategoryRepository _categoryRepo;
+    private readonly ILocationRepository _locationRepo;
 
-    public ItemService(IItemRepository repo, ICategoryRepository categoryRepo)
+    public ItemService(IItemRepository repo, ICategoryRepository categoryRepo, ILocationRepository locationRepo)
     {
         _repo = repo;
         _categoryRepo = categoryRepo;
+        _locationRepo = locationRepo;
     }
 
     public async Task<List<ItemDto>> GetAllAsync(
@@ -28,7 +30,8 @@ public sealed class ItemService : IItemService
         var products = await _repo.GetAllAsync(categoryId, segmentId, managementType, uncategorized, ct);
         var promo = await LoadPromoStatesAsync(products, ct);
         var suggestions = await LoadBufferSuggestionsAsync(products, ct);
-        return products.Select(p => ToDto(p, promo, suggestions)).ToList();
+        var zoneNames = await LoadZoneNamesAsync(products, ct);
+        return products.Select(p => ToDto(p, promo, suggestions, zoneNames)).ToList();
     }
 
     // Slice 3: one extra query per catalog page for the promo highlight.
@@ -49,6 +52,16 @@ public sealed class ItemService : IItemService
         if (products.Count == 0) return new Dictionary<Guid, ItemBufferSuggestion>();
         var s = await _repo.GetBufferSuggestionsAsync(products.Select(p => p.Id).ToList(), ct);
         return s ?? new Dictionary<Guid, ItemBufferSuggestion>();
+    }
+
+    // TASK-717: one extra query per catalog page for the "Zones" column (item_zone_assignments,
+    // TASK-714).
+    private async Task<IReadOnlyDictionary<Guid, List<string>>> LoadZoneNamesAsync(
+        IReadOnlyCollection<Item> products, CancellationToken ct)
+    {
+        if (products.Count == 0) return new Dictionary<Guid, List<string>>();
+        var names = await _repo.GetZoneNamesAsync(products.Select(p => p.Id).ToList(), ct);
+        return names ?? new Dictionary<Guid, List<string>>();
     }
 
     public async Task<PagedResult<ItemDto>> GetPagedAsync(
@@ -72,9 +85,10 @@ public sealed class ItemService : IItemService
             minPrice, maxPrice, uncategorized, ct);
         var promo = await LoadPromoStatesAsync(products, ct);
         var suggestions = await LoadBufferSuggestionsAsync(products, ct);
+        var zoneNames = await LoadZoneNamesAsync(products, ct);
         return new PagedResult<ItemDto>
         {
-            Items = products.Select(p => ToDto(p, promo, suggestions)).ToList(),
+            Items = products.Select(p => ToDto(p, promo, suggestions, zoneNames)).ToList(),
             TotalCount = total,
             Page = page,
             PageSize = pageSize,
@@ -281,6 +295,64 @@ public sealed class ItemService : IItemService
         return (created is null ? ToSupplierDtoMinimal(setting) : ToSupplierDto(created), null);
     }
 
+    // TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716).
+    public async Task<List<ItemZoneDto>> GetZonesAsync(Guid itemId, CancellationToken ct = default)
+    {
+        var assignments = await _repo.GetZoneAssignmentsAsync(itemId, ct);
+        return assignments.Select(ToZoneDto).ToList();
+    }
+
+    public async Task<(ItemZoneDto? Zone, string? Error)> AssignZoneAsync(
+        Guid itemId,
+        Guid tenantId,
+        AssignItemZoneRequest request,
+        CancellationToken ct = default)
+    {
+        var product = await _repo.GetByIdAsync(itemId, ct);
+        if (product is null)
+            return (null, "Product not found.");
+
+        var zone = await _locationRepo.GetZoneWithLocationAsync(request.ZoneId, ct);
+        if (zone is null || zone.Location is null || zone.Location.TenantId != tenantId)
+            return (null, "Zone not found.");
+
+        var exists = await _repo.ZoneAssignmentExistsAsync(itemId, request.ZoneId, ct);
+        if (exists)
+            return (null, "Zone assignment for this product already exists.");
+
+        var assignment = new ItemZoneAssignment
+        {
+            TenantId = tenantId,
+            ItemId = itemId,
+            ZoneId = request.ZoneId,
+        };
+
+        await _repo.AddZoneAssignmentAsync(assignment, ct);
+        await _repo.SaveChangesAsync(ct);
+
+        return (new ItemZoneDto(
+            assignment.Id,
+            assignment.ItemId,
+            assignment.ZoneId,
+            zone.Name,
+            zone.Type,
+            zone.LocationId,
+            zone.Location.Name,
+            assignment.CreatedAt), null);
+    }
+
+    public async Task<(bool Success, string? Error)> UnassignZoneAsync(Guid itemId, Guid zoneId, CancellationToken ct = default)
+    {
+        var assignment = await _repo.GetZoneAssignmentAsync(itemId, zoneId, ct);
+        if (assignment is null)
+            return (false, "Zone assignment not found.");
+
+        _repo.RemoveZoneAssignment(assignment);
+        await _repo.SaveChangesAsync(ct);
+
+        return (true, null);
+    }
+
     public async Task<BarcodeProductLookupDto?> LookupByBarcodeExternalAsync(string barcode, CancellationToken ct)
     {
         using var http = new HttpClient();
@@ -423,7 +495,8 @@ public sealed class ItemService : IItemService
     private static ItemDto ToDto(
         Item p,
         IReadOnlyDictionary<Guid, ItemPromoInfo>? promoStates,
-        IReadOnlyDictionary<Guid, ItemBufferSuggestion>? suggestions = null)
+        IReadOnlyDictionary<Guid, ItemBufferSuggestion>? suggestions = null,
+        IReadOnlyDictionary<Guid, List<string>>? zoneNames = null)
     {
         var promo = promoStates is not null && promoStates.TryGetValue(p.Id, out var pi) ? pi : null;
         var sug = suggestions is not null && suggestions.TryGetValue(p.Id, out var si) ? si : null;
@@ -465,7 +538,8 @@ public sealed class ItemService : IItemService
             sug?.SuggestedMaxStock,
             sug?.SuggestedSafetyBuffer,
             sug?.AduEffective,
-            sug?.CalculatedAt);
+            sug?.CalculatedAt,
+            zoneNames?.GetValueOrDefault(p.Id));
     }
 
     private static ProductSupplierSettingDto ToSupplierDto(ProductSupplierSetting s) => new(
@@ -490,6 +564,17 @@ public sealed class ItemService : IItemService
         s.DeliveryDays,
         s.IsPrimary,
         s.IsActive
+    );
+
+    private static ItemZoneDto ToZoneDto(ItemZoneAssignment a) => new(
+        a.Id,
+        a.ItemId,
+        a.ZoneId,
+        a.Zone?.Name ?? string.Empty,
+        a.Zone?.Type ?? string.Empty,
+        a.Zone?.LocationId ?? Guid.Empty,
+        a.Zone?.Location?.Name ?? string.Empty,
+        a.CreatedAt
     );
 
     private static bool IsValidManagementType(string type) =>

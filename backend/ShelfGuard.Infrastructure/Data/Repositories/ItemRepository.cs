@@ -353,11 +353,55 @@ public sealed class ItemRepository : IItemRepository
         _db.ProductSupplierSettings
             .AnyAsync(s => s.ProductId == productId && s.SupplierId == supplierId, ct);
 
+    // TASK-717: zone names for the catalog table's "Zones" column. One query over the page's item
+    // ids (mirrors GetPromoStatesAsync/GetBufferSuggestionsAsync above), grouped in memory. Items
+    // with no zone tags are absent from the result.
+    public async Task<Dictionary<Guid, List<string>>> GetZoneNamesAsync(
+        IReadOnlyList<Guid> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0)
+            return new Dictionary<Guid, List<string>>();
+
+        var ids = itemIds as Guid[] ?? itemIds.ToArray();
+
+        var assignments = await _db.ItemZoneAssignments
+            .Include(a => a.Zone)
+            .Where(a => ids.Contains(a.ItemId))
+            .ToListAsync(ct);
+
+        return assignments
+            .GroupBy(a => a.ItemId)
+            .ToDictionary(g => g.Key, g => g.Select(a => a.Zone!.Name).ToList());
+    }
+
+    // TASK-714: product ↔ store-zone tags. .Zone.Location included so ItemService's DTO mapper
+    // has zone name/type + location id/name without a second round trip.
+    public Task<List<ItemZoneAssignment>> GetZoneAssignmentsAsync(Guid itemId, CancellationToken ct = default) =>
+        _db.ItemZoneAssignments
+            .Include(a => a.Zone!).ThenInclude(z => z.Location)
+            .Where(a => a.ItemId == itemId)
+            .OrderBy(a => a.CreatedAt)
+            .ToListAsync(ct);
+
+    public Task<bool> ZoneAssignmentExistsAsync(Guid itemId, Guid zoneId, CancellationToken ct = default) =>
+        _db.ItemZoneAssignments
+            .AnyAsync(a => a.ItemId == itemId && a.ZoneId == zoneId, ct);
+
+    public Task<ItemZoneAssignment?> GetZoneAssignmentAsync(Guid itemId, Guid zoneId, CancellationToken ct = default) =>
+        _db.ItemZoneAssignments
+            .FirstOrDefaultAsync(a => a.ItemId == itemId && a.ZoneId == zoneId, ct);
+
     public async Task AddAsync(Item product, CancellationToken ct = default) =>
         await _db.Items.AddAsync(product, ct);
 
     public async Task AddSupplierSettingAsync(ProductSupplierSetting setting, CancellationToken ct = default) =>
         await _db.ProductSupplierSettings.AddAsync(setting, ct);
+
+    public async Task AddZoneAssignmentAsync(ItemZoneAssignment assignment, CancellationToken ct = default) =>
+        await _db.ItemZoneAssignments.AddAsync(assignment, ct);
+
+    public void RemoveZoneAssignment(ItemZoneAssignment assignment) =>
+        _db.ItemZoneAssignments.Remove(assignment);
 
     public void Update(Item product) =>
         _db.Items.Update(product);

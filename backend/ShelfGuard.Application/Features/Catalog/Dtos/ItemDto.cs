@@ -50,7 +50,11 @@ public sealed record ItemDto(
     decimal? SuggestedMaxStock = null,
     decimal? SuggestedSafetyBuffer = null,
     decimal? SuggestedAduEffective = null,
-    DateTime? BufferCalculatedAt = null
+    DateTime? BufferCalculatedAt = null,
+    // TASK-717 — store-zone tags (item_zone_assignments, TASK-714) for the catalog table's
+    // "Zones" column. Only populated by the paged / list catalog endpoints (same convention as
+    // SuggestedMinStock above); null on single-item GetByIdAsync.
+    IReadOnlyList<string>? ZoneNames = null
 );
 
 public sealed record CreateProductRequest(
@@ -128,3 +132,17 @@ public sealed record AddProductSupplierRequest(
     int DeliveryDays,
     bool IsPrimary
 );
+
+// TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716).
+public sealed record ItemZoneDto(
+    Guid Id,
+    Guid ItemId,
+    Guid ZoneId,
+    string ZoneName,
+    string ZoneType,
+    Guid LocationId,
+    string LocationName,
+    DateTime CreatedAt
+);
+
+public sealed record AssignItemZoneRequest(Guid ZoneId);

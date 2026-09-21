@@ -11,6 +11,7 @@ public sealed class ItemServiceTests
 {
     private readonly IItemRepository _repo = Substitute.For<IItemRepository>();
     private readonly ICategoryRepository _categoryRepo = Substitute.For<ICategoryRepository>();
+    private readonly ILocationRepository _locationRepo = Substitute.For<ILocationRepository>();
     private readonly ItemService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
 
@@ -19,7 +20,7 @@ public sealed class ItemServiceTests
         // Default: any category id the create/update path checks resolves to an active row.
         // The negative test overrides this for a specific id.
         _categoryRepo.ActiveExistsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
-        _sut = new ItemService(_repo, _categoryRepo);
+        _sut = new ItemService(_repo, _categoryRepo, _locationRepo);
     }
 
     // ── Create ─────────────────────────────────────────────────────────────
@@ -261,6 +262,27 @@ public sealed class ItemServiceTests
         Assert.Equal(3.5m, dto.SuggestedAduEffective);
         Assert.Equal(new DateTime(2026, 9, 3), dto.BufferCalculatedAt);
         Assert.Null(result.Items.Single(i => i.Id == plain.Id).SuggestedMinStock);
+    }
+
+    // TASK-717: zone names (item_zone_assignments, TASK-714) for the catalog "Zones" column.
+    [Fact]
+    public async Task GetPagedAsync_MapsZoneNamesIntoDto()
+    {
+        var tagged = new Item { TenantId = _tenantId, Name = "Tagged", ManagementType = "MTS" };
+        var plain = new Item { TenantId = _tenantId, Name = "Plain", ManagementType = "MTS" };
+        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>())
+            .Returns((new List<Item> { tagged, plain }, 2));
+        _repo.GetZoneNamesAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, List<string>>
+            {
+                [tagged.Id] = new() { "Zone A", "Zone B" },
+            });
+
+        var result = await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, null, null, 1, 50);
+
+        var dto = result.Items.Single(i => i.Id == tagged.Id);
+        Assert.Equal(new[] { "Zone A", "Zone B" }, dto.ZoneNames);
+        Assert.Null(result.Items.Single(i => i.Id == plain.Id).ZoneNames);
     }
 
     // ── Slice 5: single-product promo detail (banner) ────────────────────────

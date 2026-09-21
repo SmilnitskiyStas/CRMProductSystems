@@ -46,6 +46,24 @@ export interface Product {
   suggestedSafetyBuffer: number | null;
   suggestedAduEffective: number | null;
   bufferCalculatedAt: string | null;
+  // TASK-717 — flattened zone tags (see ItemZone below) for the catalog table's Zones column.
+  // Populated only by the paged catalog list (GET /api/items), same as the promo/suggested*
+  // fields above; null/absent on the single-item GET.
+  zoneNames: string[] | null;
+}
+
+// Mirrors ItemZoneDto (TASK-714 backend) — a product↔zone tag. A product can carry several,
+// across one or more locations (TASK-715). `zoneType` is a LocationZoneDto.type value (shelf/
+// fridge/freezer/display/production/warehouse), translatable via Dashboard.locations.zoneTypes.
+export interface ItemZone {
+  id: string;
+  itemId: string;
+  zoneId: string;
+  zoneName: string;
+  zoneType: string;
+  locationId: string;
+  locationName: string;
+  createdAt: string;
 }
 
 export interface BarcodeProductLookup {

@@ -149,8 +149,20 @@ file sealed class RetryFakeCatalogRepo : IItemRepository
         Task.FromResult<ItemPromoDetail?>(null);
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) => Task.FromResult(new List<ProductSupplierSetting>());
     public Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default) => Task.FromResult(false);
+
+    // TASK-717: zone names for the catalog "Zones" column — unused by fiscalization retry tests.
+    public Task<Dictionary<Guid, List<string>>> GetZoneNamesAsync(IReadOnlyList<Guid> itemIds, CancellationToken ct = default) =>
+        Task.FromResult(new Dictionary<Guid, List<string>>());
+
+    // TASK-714: product ↔ store-zone tags — unused by fiscalization retry tests.
+    public Task<List<ItemZoneAssignment>> GetZoneAssignmentsAsync(Guid itemId, CancellationToken ct = default) => Task.FromResult(new List<ItemZoneAssignment>());
+    public Task<bool> ZoneAssignmentExistsAsync(Guid itemId, Guid zoneId, CancellationToken ct = default) => Task.FromResult(false);
+    public Task<ItemZoneAssignment?> GetZoneAssignmentAsync(Guid itemId, Guid zoneId, CancellationToken ct = default) => Task.FromResult<ItemZoneAssignment?>(null);
+
     public Task AddAsync(Item product, CancellationToken ct = default) => Task.CompletedTask;
     public Task AddSupplierSettingAsync(ProductSupplierSetting setting, CancellationToken ct = default) => Task.CompletedTask;
+    public Task AddZoneAssignmentAsync(ItemZoneAssignment assignment, CancellationToken ct = default) => Task.CompletedTask;
+    public void RemoveZoneAssignment(ItemZoneAssignment assignment) { }
     public void Update(Item product) { }
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }

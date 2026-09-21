@@ -182,6 +182,47 @@ public sealed class ItemsController : ControllerBase
         return CreatedAtAction(nameof(GetSuppliers), new { id }, setting);
     }
 
+    // TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716).
+    [HttpGet("{id:guid}/zones")]
+    [ProducesResponseType(typeof(List<ItemZoneDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetZones(Guid id, CancellationToken ct)
+    {
+        var zones = await _catalog.GetZonesAsync(id, ct);
+        return Ok(zones);
+    }
+
+    [HttpPost("{id:guid}/zones")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ItemZoneDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AssignZone(Guid id, AssignItemZoneRequest request, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null)
+            return Forbid();
+
+        var (zone, error) = await _catalog.AssignZoneAsync(id, tenantId.Value, request, ct);
+
+        if (error is "Product not found." or "Zone not found.")
+            return NotFound(new { error });
+
+        if (error is not null)
+            return BadRequest(new { error });
+
+        return CreatedAtAction(nameof(GetZones), new { id }, zone);
+    }
+
+    [HttpDelete("{id:guid}/zones/{zoneId:guid}")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UnassignZone(Guid id, Guid zoneId, CancellationToken ct)
+    {
+        var (success, _) = await _catalog.UnassignZoneAsync(id, zoneId, ct);
+        return success ? NoContent() : NotFound();
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
 
     private Guid? GetTenantId()
