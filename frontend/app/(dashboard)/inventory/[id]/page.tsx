@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, BarChart2, Info, ExternalLink,
   ArrowDownToLine, TrendingUp, Trash2, RefreshCw, Loader2,
 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
-import { useProduct } from "@/features/inventory/hooks/useProducts";
+import { useProduct, useItemZones } from "@/features/inventory/hooks/useProducts";
 import { ProductAnalyticsTab } from "@/features/inventory/components/ProductAnalyticsTab";
 import type { Product } from "@/features/inventory/types";
 
@@ -159,6 +160,46 @@ function PromoBanner({ product }: { product: Product }) {
       <span style={{ fontWeight: 600 }}>{headline}.</span>
       <span style={{ opacity: 0.85 }}>{forecast}.</span>
     </div>
+  );
+}
+
+// ── Placement (TASK-715) ─────────────────────────────────────────────────────
+//
+// Read-only list of the store zones/counters this product is tagged to (tagging itself happens
+// in ProductForm's edit mode via ProductZonesSection). Each row links to that zone's shelf
+// canvas — TASK-716 (not implemented here) is what will let a shelf box reference one of these
+// tags back.
+function PlacementSection({ productId }: { productId: string }) {
+  const t = useTranslations("Dashboard.inventory.itemZones");
+  const { data: zones = [], isLoading } = useItemZones(productId);
+
+  return (
+    <Section title={t("placementSectionTitle")}>
+      {isLoading ? (
+        <div style={{ color: "#4B5563", fontSize: 12 }}>{t("loading")}</div>
+      ) : zones.length === 0 ? (
+        <div style={{ color: "#4B5563", fontSize: 12 }}>{t("empty")}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {zones.map((z) => (
+            <Link
+              key={z.id}
+              href={`/locations/${z.locationId}/zones/${z.zoneId}/shelves`}
+              title={t("placementLinkLabel")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "8px 10px", borderRadius: 8,
+                background: "#111827", border: "1px solid #1F2937",
+                color: "#E8EDF5", fontSize: 12, textDecoration: "none",
+              }}
+            >
+              <span>{z.locationName} — {z.zoneName}</span>
+              <ExternalLink size={13} color="#4B5563" />
+            </Link>
+          ))}
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -370,6 +411,9 @@ export default function ProductPage() {
                 />
               </div>
             </Section>
+
+            {/* Placement — the zones/counters this product is tagged to (TASK-715) */}
+            <PlacementSection productId={product.id} />
           </div>
         </div>
       )}

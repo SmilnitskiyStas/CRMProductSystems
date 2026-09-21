@@ -99,3 +99,30 @@ export function useZoneStatusCounts(locationId: string | null) {
     enabled: !!locationId,
   });
 }
+
+// Per-product safe/warning/critical/expired counts within a single zone of one location, for the
+// shelf-builder canvas's per-box status dot (TASK-716). Same /api/stock source and shape as
+// useZoneStatusCounts above, but grouped by productId and additionally filtered to one zoneId.
+// Kept as a separate query (distinct queryKey/queryFn) rather than deriving from
+// useZoneStatusCounts's cache entry — the two hooks group the same rows differently and are used
+// by different pages, so decoupling them avoids coupling one call site's shape to the other's.
+export function useZoneItemStatusCounts(locationId: string | null, zoneId: string | null) {
+  return useQuery({
+    queryKey: ["locations", locationId, "zone-item-status", zoneId],
+    queryFn: async () => {
+      const page = await stockApi.getAll({ store_id: locationId!, pageSize: 200 });
+      const byProduct = new Map<string, ZoneStatusCounts>();
+      for (const b of page.items) {
+        if (b.storeId !== locationId || b.zoneId !== zoneId || b.quantity <= 0) continue;
+        let counts = byProduct.get(b.productId);
+        if (!counts) {
+          counts = { safe: 0, warning: 0, critical: 0, expired: 0 };
+          byProduct.set(b.productId, counts);
+        }
+        if (b.status in counts) counts[b.status as keyof ZoneStatusCounts]++;
+      }
+      return byProduct;
+    },
+    enabled: !!locationId && !!zoneId,
+  });
+}

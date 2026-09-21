@@ -356,7 +356,7 @@ public sealed class MarketplaceOrderCatalogConflictsRlsIntegrationTests : IAsync
             // would return a null OrderNumber and the insert would violate the NOT NULL column.
             new TenantSessionOverride(db),
             new ItemRepository(db),
-            new ItemService(new ItemRepository(db), new CategoryRepository(db)),
+            new ItemService(new ItemRepository(db), new CategoryRepository(db), new LocationRepository(db)),
             new LocationRepository(db),
             new UserRepository(db),
             // Phase 3 (plan D4): real repositories — these two only participate in the shipping

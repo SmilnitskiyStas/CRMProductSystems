@@ -98,3 +98,32 @@ export function useDeleteProduct() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY }),
   });
 }
+
+// Product↔zone tagging (TASK-715, backend from TASK-714).
+function itemZonesKey(productId: string) {
+  return [...PRODUCTS_KEY, productId, "zones"] as const;
+}
+
+export function useItemZones(productId: string) {
+  return useQuery({
+    queryKey: itemZonesKey(productId),
+    queryFn: () => productsApi.getZones(productId),
+    enabled: Boolean(productId),
+  });
+}
+
+export function useAssignItemZone(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (zoneId: string) => productsApi.assignZone(productId, zoneId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: itemZonesKey(productId) }),
+  });
+}
+
+export function useUnassignItemZone(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (zoneId: string) => productsApi.unassignZone(productId, zoneId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: itemZonesKey(productId) }),
+  });
+}

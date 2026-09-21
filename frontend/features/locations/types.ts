@@ -59,6 +59,9 @@ export interface ShelfItemPlacement {
   y: number;
   w: number;
   h: number;
+  /** Linked catalog product (TASK-716). Optional so plans saved before this feature keep
+   * loading unchanged — absent/null means "no product linked, free-text label only". */
+  itemId?: string | null;
 }
 
 export interface ShelfPlanLayout {

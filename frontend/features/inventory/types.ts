@@ -48,6 +48,20 @@ export interface Product {
   bufferCalculatedAt: string | null;
 }
 
+// Mirrors ItemZoneDto (TASK-714 backend) — a product↔zone tag. A product can carry several,
+// across one or more locations (TASK-715). `zoneType` is a LocationZoneDto.type value (shelf/
+// fridge/freezer/display/production/warehouse), translatable via Dashboard.locations.zoneTypes.
+export interface ItemZone {
+  id: string;
+  itemId: string;
+  zoneId: string;
+  zoneName: string;
+  zoneType: string;
+  locationId: string;
+  locationName: string;
+  createdAt: string;
+}
+
 export interface BarcodeProductLookup {
   name: string;
   barcodes: string[];

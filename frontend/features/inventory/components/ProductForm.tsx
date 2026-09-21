@@ -10,6 +10,7 @@ import type { CreateProductPayload, Product, UpdateProductPayload } from "../typ
 import { productsApi } from "../api/products";
 import { useCategories } from "../hooks/useCategories";
 import { CategorySelect } from "./CategorySelect";
+import { ProductZonesSection } from "./ProductZonesSection";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 
 export const PERISHABILITY_CLASS_VALUES = ["fresh", "chilled", "standard", "durable"] as const;
@@ -657,6 +658,13 @@ export function ProductForm({ open, product, isPending, onClose, onCreate, onUpd
               </div>
             </div>
             </CollapsibleSection>
+
+            {/* ── Зони (edit only — a new product has no id to tag yet) ─── */}
+            {product && (
+              <CollapsibleSection title={t("sectionZones")}>
+                <ProductZonesSection productId={product.id} />
+              </CollapsibleSection>
+            )}
 
             {/* isActive — edit only */}
             {isEditing && (

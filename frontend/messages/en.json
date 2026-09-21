@@ -888,6 +888,7 @@
         "sectionStock": "Stock management",
         "sectionProperties": "Properties",
         "sectionAdvanced": "Advanced settings",
+        "sectionZones": "Zones",
         "managementTypeLabel": "Management type",
         "managementTypeMts": "MTS — to stock",
         "managementTypeMto": "MTO — to order",
@@ -1008,6 +1009,29 @@
         "noMovements": "No movements in the selected period",
         "eventLog": "Event log",
         "balancePrefix": "balance:"
+      },
+      "itemZones": {
+        "loading": "Loading zones…",
+        "empty": "This product isn't tagged to any zone yet",
+        "locationLabel": "Location",
+        "locationPlaceholder": "Select a location",
+        "zoneLabel": "Zone",
+        "zonePlaceholderPickLocation": "Select a location first",
+        "zonePlaceholder": "Select a zone",
+        "zoneNoneAvailable": "All zones for this location are already added",
+        "addButton": "Add",
+        "adding": "Adding…",
+        "removeTooltip": "Remove zone",
+        "addError": "Failed to add zone",
+        "removeError": "Failed to remove zone",
+        "placementSectionTitle": "Placement",
+        "placementLinkLabel": "View shelves"
+      },
+      "productPicker": {
+        "placeholder": "Search products…",
+        "hint": "Type to search the product catalog",
+        "loading": "Searching…",
+        "empty": "No matching products"
       }
     },
     "shelf": {
@@ -1550,7 +1574,12 @@
         "canvasEmptyHint": "Add sections from the panel on the right",
         "newSectionLabel": "Section {n}",
         "toastSaved": "Shelf layout saved",
-        "toastError": "Failed to save: {message}"
+        "toastError": "Failed to save: {message}",
+        "linkProduct": "Link product",
+        "changeProduct": "Change product",
+        "unlinkProduct": "Unlink product",
+        "cancelLinking": "Cancel",
+        "zoneSyncError": "Layout saved, but failed to update the product-zone link: {message}"
       },
       "floorPlanIndex": {
         "noLocations": "No locations",

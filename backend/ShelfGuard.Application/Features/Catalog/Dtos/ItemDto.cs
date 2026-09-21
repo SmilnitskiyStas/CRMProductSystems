@@ -128,3 +128,17 @@ public sealed record AddProductSupplierRequest(
     int DeliveryDays,
     bool IsPrimary
 );
+
+// TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716).
+public sealed record ItemZoneDto(
+    Guid Id,
+    Guid ItemId,
+    Guid ZoneId,
+    string ZoneName,
+    string ZoneType,
+    Guid LocationId,
+    string LocationName,
+    DateTime CreatedAt
+);
+
+public sealed record AssignItemZoneRequest(Guid ZoneId);

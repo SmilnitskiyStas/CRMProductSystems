@@ -29,6 +29,8 @@ public sealed class AppDbContext : DbContext
     // Products (v1 tenant-aware)
     public DbSet<Item> Items => Set<Item>();
     public DbSet<ProductSupplierSetting> ProductSupplierSettings => Set<ProductSupplierSetting>();
+    // TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716)
+    public DbSet<ItemZoneAssignment> ItemZoneAssignments => Set<ItemZoneAssignment>();
 
     // Stock
     public DbSet<ProductStock> ProductStocks => Set<ProductStock>();
@@ -537,6 +539,22 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(s => s.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(s => s.Supplier).WithMany()
              .HasForeignKey(s => s.SupplierId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ItemZoneAssignment (TASK-714: product ↔ store-zone tags) ────────
+        builder.Entity<ItemZoneAssignment>(e =>
+        {
+            e.ToTable("item_zone_assignments");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(a => new { a.ItemId, a.ZoneId }).IsUnique();
+            e.HasIndex(a => new { a.TenantId, a.ZoneId })
+             .HasDatabaseName("idx_item_zone_assignments_tenant_zone");
+            e.HasOne(a => a.Item).WithMany()
+             .HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Zone).WithMany()
+             .HasForeignKey(a => a.ZoneId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── ProductStock ────────────────────────────────────────────────────

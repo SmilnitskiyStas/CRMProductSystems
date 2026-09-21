@@ -6,6 +6,79 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Тегування товару зонами/прилавками (фронт) — TASK-715
+
+**Status:** review · main session (frontend-developer) · не запушено · Log: `.claude/logs/tasks/715_2026-09-17_product-zone-tagging_frontend-developer.md`
+
+Фронт-половина floor-plan canvas фічі поверх бекенду TASK-714 (`GET/POST /api/items/{id}/zones`,
+`DELETE …/zones/{zoneId}`). Нове: `ItemZone` тип, `productsApi.getZones/assignZone/unassignZone`,
+хуки `useItemZones`/`useAssignItemZone`/`useUnassignItemZone` (інвалідують
+`[...PRODUCTS_KEY, productId, "zones"]`), компонент `ProductZonesSection.tsx` — чіпи
+«Локація — Зона» + каскадний `<select>` локація→зона (за зразком `AddBatchForm`), відфільтровує
+вже-тегнуті зони й неактивні локації/зони з піка. Вшито в `ProductForm.tsx` новою
+`CollapsibleSection`, тільки режим редагування (`product &&`, новому товару ще нема id). Плюс
+read-only секція «Розміщення» на `/inventory/[id]` — рядки-посилання на
+`/locations/{locationId}/zones/{zoneId}/shelves`. i18n: `Dashboard.inventory.form.sectionZones`
++ новий неймспейс `Dashboard.inventory.itemZones` (не `zones` — щоб не плутати з уже існуючим
+`analytics.zones`, це інша річ, легенда зон графіка). Backend (`*.cs`), `features/locations/`,
+shelf-canvas — не чіпали, per бриф. TASK-716 (canvas-бокс → тег) — окрема задача, не робили.
+
+`tsc --noEmit`/`lint` — чисто (спершу `npm install`, `node_modules` не було у цьому worktree).
+Ручна перевірка — часткова: Postgres/бекенд недоступні в цьому середовищі (Docker не запущено,
+порти 5435/5000 відмовляють), логін неможливий. Перевірено: `frontend-dev` стартує, `/inventory`
+і `/inventory/[id]` компілюються Next dev-бандлером без помилок (2228/2243 модулів), у консолі —
+лише очікувані `ERR_CONNECTION_REFUSED` від відсутнього бекенду. Реальний клік-тест
+додавання/видалення зони на живих даних — не зроблено, потрібен хтось із піднятим бекендом.
+
+## Shelf-canvas бокс → прив'язаний товар (фронт) — TASK-716
+
+**Status:** review · main session (frontend-developer) · не запушено · Log: `.claude/logs/tasks/716_2026-09-17_shelf-product-placement_frontend-developer.md`
+
+Друга половина floor-plan фічі поверх TASK-714/715. `ShelfItemPlacement.itemId?` (nullable, старі
+плани без нього далі працюють), `useZoneItemStatusCounts` (сиблінг `useZoneStatusCounts`,
+групування по productId), новий `ProductSearchPicker.tsx` (узагальнений з `EventProductPicker`,
+свій неймспейс `Dashboard.inventory.productPicker`). На сторінці `shelves/page.tsx`: у панелі
+«Sections» — лінк/зміна/відв'язка товару на рядок (inline picker, без модалки), назва товару +
+статус-крапка (`STATUS_CONFIG`/`worstStatus`) і на боксі canvas, і в панелі. `handleSave` після
+успішного PUT шле `assignZone` для кожного прив'язаного товару (авто-синхронізація тегу зони),
+400 «вже існує» — тихо ковтається, інша помилка — toast. Відв'язка товару від боксу НЕ знімає тег
+зони — асиметрія навмисна, за брифом (untagging — тільки вручну з `ProductZonesSection`).
+
+`tsc --noEmit`/`lint` — чисто. `npm run build` падає на непов'язаній з задачею внутрішній
+Next.js-помилці (`PageNotFoundError: /_document` під час "Collecting page data", відтворюється й
+після чистки `.next`; compile+typecheck встигають пройти чисто до цього). Ручна перевірка — повна,
+на живому backend+frontend-dev: додав секцію, прив'язав 2 різні товари через пікер (назва+крапка
+рендеряться на canvas і в панелі), Save → reload → `itemId` коректно збережений у `zone.position`.
+На мережі підтверджено обидва шляхи `assignZone`: новий товар → `201 Created`, вже тегнутий → `400`
+мовчки проковтнутий (без error-тосту). Unlink перевірено клієнтськи. `ProductZonesSection` саму не
+відкрив (роль без прав редагування товару) — але `201 Created` в мережі напряму підтверджує запис.
+
+Побічно помічено (не чіпав, поза скоупом): відсутній i18n-ключ `Dashboard.locations.types.shop`
+на сторінці Locations; кілька окремих 401 від невідомого фонового polling.
+
+## Item ↔ LocationZone many-to-many tags (backend) — TASK-714
+
+**Status:** review · **Agent:** backend-developer · не запушено · Log: `.claude/logs/tasks/714_2026-09-17_item-zone-assignments_backend-developer.md`
+
+Бекенд-фундамент для floor-plan canvas фічі (TASK-715/716 — фронт і розміщення на canvas,
+окремо). Новий join-ентіті `ItemZoneAssignment` (`item_zone_assignments`, без soft-delete,
+за зразком `ProductSupplierSetting`) — тег «продукт належить зоні/прилавку», один продукт
+може мати кілька зон. Окремо від `ProductStock.ZoneId`/`ShelfNumber` (per-batch, не чіпали).
+Міграція `AddItemZoneAssignments` — унікальний індекс `(ItemId, ZoneId)`, індекс
+`(TenantId, ZoneId)`, RLS-блок дописаний вручну (скопійовано з `AddMobileCatalogLocations`):
+`tenant_isolation` + `provider_bypass` + `worker_bypass`, без `store_scope` (це catalog
+metadata, як самі `items`/`location_zones`). Model-snapshot diff — лише нова сутність
+(53 рядки), нічого зайвого. `ItemRepository`/`LocationRepository` += нові методи (мовою
+брифу: `GetZoneAssignmentsAsync` з `.Include(.Zone.Location)`, `GetZoneWithLocationAsync`
+як сиблінг `GetZoneByIdAsync`, не чіпали). `ItemService` += `ILocationRepository`-залежність
++ `GetZonesAsync`/`AssignZoneAsync`(явний cross-tenant guard поверх RLS)/`UnassignZoneAsync`.
+`ItemsController` += `GET/POST /api/items/{id}/zones`, `DELETE …/zones/{zoneId}` (POST/DELETE
+= `AtLeastStoreManager`). Довелось поправити тестові дублери (нові члени інтерфейсу /
+конструктор) — без зміни поведінки: `ItemServiceTests`, 2 RLS-інтеграційні тести, `PosServiceTests`
++ `FiscalizationRetryTests` фейки. `dotnet build` (весь solution) — 0 warnings/errors. Усі
+профільні `dotnet test` фільтри зелені (RLS-інтеграційні self-skip, немає локального Postgres).
+Фронт (zone picker у формі продукту) і canvas — поза скоупом, не чіпали.
+
 ## Публічна сторінка галузі «Роздрібні мережі» — TASK-713
 
 **Status:** review · main session (frontend-developer) · не запушено · Log: `.claude/logs/tasks/713_2026-09-16_retail-vertical-page_frontend-developer.md`

@@ -888,6 +888,7 @@
         "sectionStock": "Управління запасами",
         "sectionProperties": "Властивості",
         "sectionAdvanced": "Розширені налаштування",
+        "sectionZones": "Зони",
         "managementTypeLabel": "Тип управління",
         "managementTypeMts": "MTS — на склад",
         "managementTypeMto": "MTO — на замовлення",
@@ -1008,6 +1009,29 @@
         "noMovements": "Немає рухів за вибраний період",
         "eventLog": "Журнал подій",
         "balancePrefix": "залишок:"
+      },
+      "itemZones": {
+        "loading": "Завантаження зон…",
+        "empty": "Товар ще не прив'язано до жодної зони",
+        "locationLabel": "Локація",
+        "locationPlaceholder": "Оберіть локацію",
+        "zoneLabel": "Зона",
+        "zonePlaceholderPickLocation": "Спочатку оберіть локацію",
+        "zonePlaceholder": "Оберіть зону",
+        "zoneNoneAvailable": "Усі зони цієї локації вже додано",
+        "addButton": "Додати",
+        "adding": "Додавання…",
+        "removeTooltip": "Прибрати зону",
+        "addError": "Не вдалося додати зону",
+        "removeError": "Не вдалося прибрати зону",
+        "placementSectionTitle": "Розміщення",
+        "placementLinkLabel": "Переглянути полиці"
+      },
+      "productPicker": {
+        "placeholder": "Пошук товарів…",
+        "hint": "Почніть вводити назву для пошуку в каталозі",
+        "loading": "Пошук…",
+        "empty": "Товарів не знайдено"
       }
     },
     "shelf": {
@@ -1550,7 +1574,12 @@
         "canvasEmptyHint": "Додайте секції з панелі праворуч",
         "newSectionLabel": "Секція {n}",
         "toastSaved": "Конструктор поличок збережено",
-        "toastError": "Не вдалося зберегти: {message}"
+        "toastError": "Не вдалося зберегти: {message}",
+        "linkProduct": "Прив'язати товар",
+        "changeProduct": "Змінити товар",
+        "unlinkProduct": "Відв'язати товар",
+        "cancelLinking": "Скасувати",
+        "zoneSyncError": "Розкладку збережено, але не вдалося оновити зв'язок товару із зоною: {message}"
       },
       "floorPlanIndex": {
         "noLocations": "Немає локацій",

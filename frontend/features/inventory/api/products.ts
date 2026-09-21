@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
-import type { BarcodeProductLookup, CreateProductPayload, Product, UpdateProductPayload } from "../types";
+import type { BarcodeProductLookup, CreateProductPayload, ItemZone, Product, UpdateProductPayload } from "../types";
 
 export const productsApi = {
   getAll: (params?: {
@@ -45,4 +45,8 @@ export const productsApi = {
     form.append("file", file);
     return api.postForm<{ imageUrl: string }>(`/api/items/${id}/image`, form);
   },
+  // Product↔zone tagging (TASK-715, backend from TASK-714).
+  getZones: (id: string) => api.get<ItemZone[]>(`/api/items/${id}/zones`),
+  assignZone: (id: string, zoneId: string) => api.post<ItemZone>(`/api/items/${id}/zones`, { zoneId }),
+  unassignZone: (id: string, zoneId: string) => api.delete<void>(`/api/items/${id}/zones/${zoneId}`),
 };

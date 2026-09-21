@@ -11,6 +11,7 @@ public sealed class ItemServiceTests
 {
     private readonly IItemRepository _repo = Substitute.For<IItemRepository>();
     private readonly ICategoryRepository _categoryRepo = Substitute.For<ICategoryRepository>();
+    private readonly ILocationRepository _locationRepo = Substitute.For<ILocationRepository>();
     private readonly ItemService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
 
@@ -19,7 +20,7 @@ public sealed class ItemServiceTests
         // Default: any category id the create/update path checks resolves to an active row.
         // The negative test overrides this for a specific id.
         _categoryRepo.ActiveExistsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
-        _sut = new ItemService(_repo, _categoryRepo);
+        _sut = new ItemService(_repo, _categoryRepo, _locationRepo);
     }
 
     // ── Create ─────────────────────────────────────────────────────────────
