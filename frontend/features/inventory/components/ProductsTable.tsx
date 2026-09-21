@@ -417,6 +417,30 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
       render: (product) => product.categoryName ?? "—",
     },
     {
+      key: "zones",
+      header: t("headers.zones"),
+      render: (product) => {
+        const zones = product.zoneNames;
+        if (!zones || zones.length === 0) return "—";
+        const joined = zones.join(", ");
+        return (
+          <span
+            title={joined}
+            style={{
+              display: "inline-block",
+              maxWidth: 180,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              verticalAlign: "bottom",
+            }}
+          >
+            {joined}
+          </span>
+        );
+      },
+    },
+    {
       key: "itemType",
       header: tFields("itemType"),
       render: (product) =>

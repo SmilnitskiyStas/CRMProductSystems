@@ -116,6 +116,14 @@ public interface IItemRepository
     Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default);
     Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-717: zone names for the given catalog-page item ids, batched in one query for the
+    /// "Zones" column on the catalog table. Sourced from <c>item_zone_assignments</c> (TASK-714).
+    /// Items with no zone tags are absent from the result.
+    /// </summary>
+    Task<Dictionary<Guid, List<string>>> GetZoneNamesAsync(
+        IReadOnlyList<Guid> itemIds, CancellationToken ct = default);
+
     // TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716). Include
     // graph mirrors GetSupplierSettingsAsync — .Zone.Location loaded so the DTO mapper has zone
     // name/type + location id/name without a second round trip.

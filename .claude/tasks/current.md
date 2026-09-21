@@ -6,6 +6,39 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Catalog «Zones» колонка + create/edit: модалка → окремі сторінки (фронт) — TASK-718
+
+**Status:** review · main session (frontend-developer) · не запушено · Log: `.claude/logs/tasks/718_2026-09-21_catalog-zones-column-and-product-pages_frontend-developer.md`
+
+Дві пов'язані частини поверх TASK-717. **(1)** Колонка «Zones» на `/inventory` між `category` і
+`itemType` — `Product.zoneNames` (нове поле типу), `"—"`/joined-список з `title`-тултипом.
+**(2)** Create/edit товару — модалка → 2 нові сторінки (`inventory/new`, `inventory/[id]/edit`),
+за явним проханням юзера. `ProductForm.tsx`: знято backdrop/centered-box/header-обгортку, лишився
+голий `<form>`; `open`/`onClose` → `onCancel`. `inventory/page.tsx` втратив
+`formOpen`/create-update-вайринг, «Add product»/Edit-дія тепер `router.push`. Заодно домонтовано
+`useUploadProductImage` (стара модалка НІКОЛИ не вайрила `onImageUpload` — мертвий пропс) — нова
+edit-сторінка вайрить по-справжньому. Detail-сторінка/drawer/`ProductZonesSection` — не чіпали.
+`tsc`/`lint`/`next build` чисто. Повний browser E2E на живих backend+Postgres (дані вже
+були): колонка Zones з реальними даними, create/edit-сторінки без модалки, edit
+завантажує/префілить товар (включно з `ProductZonesSection`), PUT → `200` → toast + redirect
+підтверджено мережею. POST (create) стабільно `403` саме для Provider-акаунта (PUT/GET тим
+самим акаунтом — ОК) — бекенд-asymmetry поза скоупом, бекенд не чіпали.
+
+## Zone names на paginated item list (бекенд) — TASK-717
+
+**Status:** review · **Agent:** backend-developer · не запушено · Log: `.claude/logs/tasks/717_2026-09-21_item-list-zone-names_backend-developer.md`
+
+Третій екземпляр Slice 3/4c batch-load патерну (promo state, buffer suggestion) — тепер для
+зон. `GET /api/items` (paged + all) повертає `ItemDto.ZoneNames` (нове trailing optional поле,
+`null` на single-item шляхах). `IItemRepository`/`ItemRepository` += `GetZoneNamesAsync` — один
+запит по `item_zone_assignments` на всю сторінку, групування в пам'яті (без N+1). `ItemService`
++= `LoadZoneNamesAsync`, вшито в `GetAllAsync`/`GetPagedAsync` поруч з `promo`/`suggestions`;
+`GetByIdAsync`/`CreateAsync`/`UpdateAsync` не чіпали. Довелось доповнити 2 ручні тестові фейки
+нового члена інтерфейсу (`PosServiceTests`/`FiscalizationRetryTests`, no-op). Додано 1 новий
+тест (дзеркалить `GetPagedAsync_MapsBufferSuggestionIntoDto`). `dotnet build` — 0 errors/warnings
+(1 pre-existing warning в чужому файлі). `dotnet test` повний прогін — **2454/2454 зелений**.
+Фронтова колонка «Zones» — окрема задача, не чіпали.
+
 ## Тегування товару зонами/прилавками (фронт) — TASK-715
 
 **Status:** review · main session (frontend-developer) · не запушено · Log: `.claude/logs/tasks/715_2026-09-17_product-zone-tagging_frontend-developer.md`

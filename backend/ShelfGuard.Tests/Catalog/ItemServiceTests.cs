@@ -264,6 +264,27 @@ public sealed class ItemServiceTests
         Assert.Null(result.Items.Single(i => i.Id == plain.Id).SuggestedMinStock);
     }
 
+    // TASK-717: zone names (item_zone_assignments, TASK-714) for the catalog "Zones" column.
+    [Fact]
+    public async Task GetPagedAsync_MapsZoneNamesIntoDto()
+    {
+        var tagged = new Item { TenantId = _tenantId, Name = "Tagged", ManagementType = "MTS" };
+        var plain = new Item { TenantId = _tenantId, Name = "Plain", ManagementType = "MTS" };
+        _repo.GetPagedAsync(null, null, null, null, null, null, null, 1, 50, null, null, null, Arg.Any<CancellationToken>())
+            .Returns((new List<Item> { tagged, plain }, 2));
+        _repo.GetZoneNamesAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, List<string>>
+            {
+                [tagged.Id] = new() { "Zone A", "Zone B" },
+            });
+
+        var result = await _sut.GetPagedAsync(_tenantId, null, null, null, null, null, null, null, 1, 50);
+
+        var dto = result.Items.Single(i => i.Id == tagged.Id);
+        Assert.Equal(new[] { "Zone A", "Zone B" }, dto.ZoneNames);
+        Assert.Null(result.Items.Single(i => i.Id == plain.Id).ZoneNames);
+    }
+
     // ── Slice 5: single-product promo detail (banner) ────────────────────────
 
     [Fact]

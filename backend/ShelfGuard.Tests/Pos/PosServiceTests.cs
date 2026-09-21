@@ -151,6 +151,10 @@ file sealed class FakeCatalogRepo : IItemRepository
     public Task<List<ProductSupplierSetting>> GetSupplierSettingsAsync(Guid productId, CancellationToken ct = default) => Task.FromResult(new List<ProductSupplierSetting>());
     public Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default) => Task.FromResult(false);
 
+    // TASK-717: zone names for the catalog "Zones" column — unused by POS tests.
+    public Task<Dictionary<Guid, List<string>>> GetZoneNamesAsync(IReadOnlyList<Guid> itemIds, CancellationToken ct = default) =>
+        Task.FromResult(new Dictionary<Guid, List<string>>());
+
     // TASK-714: product ↔ store-zone tags — unused by POS tests.
     public Task<List<ItemZoneAssignment>> GetZoneAssignmentsAsync(Guid itemId, CancellationToken ct = default) => Task.FromResult(new List<ItemZoneAssignment>());
     public Task<bool> ZoneAssignmentExistsAsync(Guid itemId, Guid zoneId, CancellationToken ct = default) => Task.FromResult(false);

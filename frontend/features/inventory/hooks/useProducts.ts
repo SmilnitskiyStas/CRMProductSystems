@@ -91,6 +91,17 @@ export function useUpdateProduct() {
   });
 }
 
+// Mirrors useUploadBannerImage (features/consumer-app/hooks/useBanners.ts) — ProductForm has
+// always supported picking + previewing an image via its `onImageUpload` prop, but no page ever
+// wired a mutation to it (TASK-718 is the first caller, from the new edit page).
+export function useUploadProductImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => productsApi.uploadImage(id, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY }),
+  });
+}
+
 export function useDeleteProduct() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -46,6 +46,10 @@ export interface Product {
   suggestedSafetyBuffer: number | null;
   suggestedAduEffective: number | null;
   bufferCalculatedAt: string | null;
+  // TASK-717 — flattened zone tags (see ItemZone below) for the catalog table's Zones column.
+  // Populated only by the paged catalog list (GET /api/items), same as the promo/suggested*
+  // fields above; null/absent on the single-item GET.
+  zoneNames: string[] | null;
 }
 
 // Mirrors ItemZoneDto (TASK-714 backend) — a product↔zone tag. A product can carry several,

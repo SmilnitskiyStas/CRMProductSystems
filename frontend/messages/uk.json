@@ -924,6 +924,7 @@
       "table": {
         "headers": {
           "class": "Клас",
+          "zones": "Зони",
           "purchase": "Закупівля",
           "retail": "Роздриб",
           "min": "Мін.",

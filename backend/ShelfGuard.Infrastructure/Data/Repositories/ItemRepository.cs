@@ -353,6 +353,27 @@ public sealed class ItemRepository : IItemRepository
         _db.ProductSupplierSettings
             .AnyAsync(s => s.ProductId == productId && s.SupplierId == supplierId, ct);
 
+    // TASK-717: zone names for the catalog table's "Zones" column. One query over the page's item
+    // ids (mirrors GetPromoStatesAsync/GetBufferSuggestionsAsync above), grouped in memory. Items
+    // with no zone tags are absent from the result.
+    public async Task<Dictionary<Guid, List<string>>> GetZoneNamesAsync(
+        IReadOnlyList<Guid> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0)
+            return new Dictionary<Guid, List<string>>();
+
+        var ids = itemIds as Guid[] ?? itemIds.ToArray();
+
+        var assignments = await _db.ItemZoneAssignments
+            .Include(a => a.Zone)
+            .Where(a => ids.Contains(a.ItemId))
+            .ToListAsync(ct);
+
+        return assignments
+            .GroupBy(a => a.ItemId)
+            .ToDictionary(g => g.Key, g => g.Select(a => a.Zone!.Name).ToList());
+    }
+
     // TASK-714: product ↔ store-zone tags. .Zone.Location included so ItemService's DTO mapper
     // has zone name/type + location id/name without a second round trip.
     public Task<List<ItemZoneAssignment>> GetZoneAssignmentsAsync(Guid itemId, CancellationToken ct = default) =>

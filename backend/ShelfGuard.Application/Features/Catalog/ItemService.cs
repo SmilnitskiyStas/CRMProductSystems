@@ -30,7 +30,8 @@ public sealed class ItemService : IItemService
         var products = await _repo.GetAllAsync(categoryId, segmentId, managementType, uncategorized, ct);
         var promo = await LoadPromoStatesAsync(products, ct);
         var suggestions = await LoadBufferSuggestionsAsync(products, ct);
-        return products.Select(p => ToDto(p, promo, suggestions)).ToList();
+        var zoneNames = await LoadZoneNamesAsync(products, ct);
+        return products.Select(p => ToDto(p, promo, suggestions, zoneNames)).ToList();
     }
 
     // Slice 3: one extra query per catalog page for the promo highlight.
@@ -51,6 +52,16 @@ public sealed class ItemService : IItemService
         if (products.Count == 0) return new Dictionary<Guid, ItemBufferSuggestion>();
         var s = await _repo.GetBufferSuggestionsAsync(products.Select(p => p.Id).ToList(), ct);
         return s ?? new Dictionary<Guid, ItemBufferSuggestion>();
+    }
+
+    // TASK-717: one extra query per catalog page for the "Zones" column (item_zone_assignments,
+    // TASK-714).
+    private async Task<IReadOnlyDictionary<Guid, List<string>>> LoadZoneNamesAsync(
+        IReadOnlyCollection<Item> products, CancellationToken ct)
+    {
+        if (products.Count == 0) return new Dictionary<Guid, List<string>>();
+        var names = await _repo.GetZoneNamesAsync(products.Select(p => p.Id).ToList(), ct);
+        return names ?? new Dictionary<Guid, List<string>>();
     }
 
     public async Task<PagedResult<ItemDto>> GetPagedAsync(
@@ -74,9 +85,10 @@ public sealed class ItemService : IItemService
             minPrice, maxPrice, uncategorized, ct);
         var promo = await LoadPromoStatesAsync(products, ct);
         var suggestions = await LoadBufferSuggestionsAsync(products, ct);
+        var zoneNames = await LoadZoneNamesAsync(products, ct);
         return new PagedResult<ItemDto>
         {
-            Items = products.Select(p => ToDto(p, promo, suggestions)).ToList(),
+            Items = products.Select(p => ToDto(p, promo, suggestions, zoneNames)).ToList(),
             TotalCount = total,
             Page = page,
             PageSize = pageSize,
@@ -483,7 +495,8 @@ public sealed class ItemService : IItemService
     private static ItemDto ToDto(
         Item p,
         IReadOnlyDictionary<Guid, ItemPromoInfo>? promoStates,
-        IReadOnlyDictionary<Guid, ItemBufferSuggestion>? suggestions = null)
+        IReadOnlyDictionary<Guid, ItemBufferSuggestion>? suggestions = null,
+        IReadOnlyDictionary<Guid, List<string>>? zoneNames = null)
     {
         var promo = promoStates is not null && promoStates.TryGetValue(p.Id, out var pi) ? pi : null;
         var sug = suggestions is not null && suggestions.TryGetValue(p.Id, out var si) ? si : null;
@@ -525,7 +538,8 @@ public sealed class ItemService : IItemService
             sug?.SuggestedMaxStock,
             sug?.SuggestedSafetyBuffer,
             sug?.AduEffective,
-            sug?.CalculatedAt);
+            sug?.CalculatedAt,
+            zoneNames?.GetValueOrDefault(p.Id));
     }
 
     private static ProductSupplierSettingDto ToSupplierDto(ProductSupplierSetting s) => new(

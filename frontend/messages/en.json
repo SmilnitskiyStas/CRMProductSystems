@@ -924,6 +924,7 @@
       "table": {
         "headers": {
           "class": "Class",
+          "zones": "Zones",
           "purchase": "Purchase",
           "retail": "Retail",
           "min": "Min",
