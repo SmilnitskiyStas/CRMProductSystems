@@ -10,7 +10,8 @@
   "allow": [
     "$defaults",
     "Bash(git push*)",
-    "PowerShell(git push*)"
+    "PowerShell(git push*)",
+    "Bash(ssh -i ~/.ssh/workmate-deploy * administrator@93.127.143.98 *)"
   ]
 }
 }
