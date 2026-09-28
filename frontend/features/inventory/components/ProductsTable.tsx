@@ -390,10 +390,22 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
       key: "name",
       header: tFields("name"),
       sortKey: "name",
+      width: 280,
       cellStyle: { color: "#E8EDF5", fontWeight: 500 },
       render: (product) => (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {product.name}
+        <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+          <span
+            title={product.name}
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              wordBreak: "break-word",
+            }}
+          >
+            {product.name}
+          </span>
           <PromoBadge product={product} />
         </span>
       ),
@@ -549,7 +561,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
         sortBy={sortBy}
         sortDescending={sortDescending}
         onSort={onSort}
-        minWidth={800}
+        minWidth={1500}
         emptyMessage={t("empty")}
       />
 
