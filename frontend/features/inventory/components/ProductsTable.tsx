@@ -390,8 +390,10 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
       key: "name",
       header: tFields("name"),
       sortKey: "name",
-      width: 280,
-      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      // minWidth (not just width) — under table-layout:auto a plain `width` is only a hint the
+      // browser happily overrides once the line-clamped content becomes free to shrink; minWidth
+      // is the one that actually holds this column's floor when other columns compete for space.
+      cellStyle: { color: "#E8EDF5", fontWeight: 500, minWidth: 130 },
       render: (product) => (
         <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
           <span
@@ -426,11 +428,30 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
       key: "category",
       header: tFields("category"),
       sortKey: "category",
-      render: (product) => product.categoryName ?? "—",
+      cellStyle: { minWidth: 90 },
+      render: (product) =>
+        product.categoryName ? (
+          <span
+            title={product.categoryName}
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              wordBreak: "break-word",
+              maxWidth: 110,
+            }}
+          >
+            {product.categoryName}
+          </span>
+        ) : (
+          "—"
+        ),
     },
     {
       key: "zones",
       header: t("headers.zones"),
+      cellStyle: { minWidth: 100 },
       render: (product) => {
         const zones = product.zoneNames;
         if (!zones || zones.length === 0) return "—";
@@ -439,12 +460,12 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
           <span
             title={joined}
             style={{
-              display: "inline-block",
-              maxWidth: 180,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
               overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              verticalAlign: "bottom",
+              wordBreak: "break-word",
+              maxWidth: 110,
             }}
           >
             {joined}
@@ -561,7 +582,8 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
         sortBy={sortBy}
         sortDescending={sortDescending}
         onSort={onSort}
-        minWidth={1500}
+        density="compact"
+        minWidth={900}
         emptyMessage={t("empty")}
       />
 

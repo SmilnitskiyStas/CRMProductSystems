@@ -56,6 +56,13 @@ export interface TableProps<T> {
   minWidth?: number;
   emptyMessage?: ReactNode;
   isLoading?: boolean;
+  /**
+   * "compact" tightens header/cell horizontal padding (16px -> 10px) for tables with an
+   * unusually high column count, where the default padding alone can push the table wider
+   * than a laptop viewport. Opt-in only — omitted/"comfortable" keeps every existing table's
+   * padding exactly as before.
+   */
+  density?: "comfortable" | "compact";
 }
 
 const thStyle: CSSProperties = {
@@ -77,6 +84,8 @@ const tdStyle: CSSProperties = {
   borderBottom: "1px solid #1F2937",
   borderRight: "1px solid #1F2937",
 };
+
+const compactPadding = "10px 10px";
 
 type Align = "left" | "center" | "right";
 
@@ -149,7 +158,9 @@ export function Table<T>({
   minWidth,
   emptyMessage,
   isLoading,
+  density = "comfortable",
 }: TableProps<T>) {
+  const paddingOverride: CSSProperties | null = density === "compact" ? { padding: compactPadding } : null;
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const columnCount = columns.length;
   const showEmptyRow = isLoading || rows.length === 0;
@@ -182,6 +193,7 @@ export function Table<T>({
                   textAlign: align,
                   ...(isLast ? { borderRight: "none" } : null),
                   ...(column.width != null ? { width: column.width } : null),
+                  ...paddingOverride,
                 };
                 return (
                   <th key={column.key} style={style}>
@@ -241,6 +253,7 @@ export function Table<T>({
                           textAlign: align,
                           ...(isLast ? { borderRight: "none" } : null),
                           ...(column.width != null ? { width: column.width } : null),
+                          ...paddingOverride,
                           ...column.cellStyle,
                         };
                         return (
