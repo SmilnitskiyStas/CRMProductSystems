@@ -329,6 +329,15 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
   };
 
   return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 640px) minmax(280px, 360px)",
+        gap: 24,
+        alignItems: "start",
+        maxWidth: 1040,
+      }}
+    >
     <form onSubmit={handleSubmit(onSubmit)} style={{ padding: 22 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Name — always visible, the one field that can't be defaulted */}
@@ -597,13 +606,6 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
         </div>
         </CollapsibleSection>
 
-        {/* ── Зони (edit only — a new product has no id to tag yet) ─── */}
-        {product && (
-          <CollapsibleSection title={t("sectionZones")}>
-            <ProductZonesSection productId={product.id} />
-          </CollapsibleSection>
-        )}
-
         {/* isActive — edit only */}
         {isEditing && (
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -630,5 +632,34 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
         </Btn>
       </div>
     </form>
+
+    {/* Sidebar — Zones lives here since it's its own widget (independent data/mutations,
+        not part of this form's submit). A brand-new product has no id to tag zones with
+        yet, so create mode shows a hint instead until the first save. */}
+    <aside>
+      <div style={{ border: "1px solid #1F2937", borderRadius: 10 }}>
+        <div
+          style={{
+            padding: "10px 14px",
+            borderBottom: "1px solid #1F2937",
+            color: "#9CA3AF",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          {t("sectionZones")}
+        </div>
+        <div style={{ padding: 14 }}>
+          {product ? (
+            <ProductZonesSection productId={product.id} />
+          ) : (
+            <p style={{ color: "#4B5563", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+              {t("sectionZonesCreateHint")}
+            </p>
+          )}
+        </div>
+      </div>
+    </aside>
+    </div>
   );
 }
