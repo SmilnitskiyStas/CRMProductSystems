@@ -889,6 +889,7 @@
         "sectionProperties": "Властивості",
         "sectionAdvanced": "Розширені налаштування",
         "sectionZones": "Зони",
+        "sectionZonesCreateHint": "Спочатку збережіть товар — після цього можна буде прив'язати його до зон.",
         "managementTypeLabel": "Тип управління",
         "managementTypeMts": "MTS — на склад",
         "managementTypeMto": "MTO — на замовлення",

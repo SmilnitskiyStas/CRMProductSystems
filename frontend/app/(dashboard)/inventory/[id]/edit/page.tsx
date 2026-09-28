@@ -76,17 +76,15 @@ export default function EditProductPage() {
         </h1>
       </div>
 
-      <div style={{ maxWidth: 640 }}>
-        <ProductForm
-          product={product}
-          isPending={updateProduct.isPending}
-          onCancel={() => router.push(`/inventory/${id}`)}
-          // Edit-only page — ProductForm only calls onCreate when `product` is null.
-          onCreate={() => {}}
-          onUpdate={handleUpdate}
-          onImageUpload={handleImageUpload}
-        />
-      </div>
+      <ProductForm
+        product={product}
+        isPending={updateProduct.isPending}
+        onCancel={() => router.push(`/inventory/${id}`)}
+        // Edit-only page — ProductForm only calls onCreate when `product` is null.
+        onCreate={() => {}}
+        onUpdate={handleUpdate}
+        onImageUpload={handleImageUpload}
+      />
     </div>
   );
 }

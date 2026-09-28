@@ -889,6 +889,7 @@
         "sectionProperties": "Properties",
         "sectionAdvanced": "Advanced settings",
         "sectionZones": "Zones",
+        "sectionZonesCreateHint": "Save the product first — you'll be able to assign it to zones right after.",
         "managementTypeLabel": "Management type",
         "managementTypeMts": "MTS — to stock",
         "managementTypeMto": "MTO — to order",

@@ -48,16 +48,14 @@ export default function NewProductPage() {
         </h1>
       </div>
 
-      <div style={{ maxWidth: 640 }}>
-        <ProductForm
-          product={null}
-          isPending={createProduct.isPending}
-          onCancel={() => router.push("/inventory")}
-          onCreate={handleCreate}
-          // Create-only page — ProductForm only calls onUpdate when `product` is non-null.
-          onUpdate={() => {}}
-        />
-      </div>
+      <ProductForm
+        product={null}
+        isPending={createProduct.isPending}
+        onCancel={() => router.push("/inventory")}
+        onCreate={handleCreate}
+        // Create-only page — ProductForm only calls onUpdate when `product` is non-null.
+        onUpdate={() => {}}
+      />
     </div>
   );
 }
