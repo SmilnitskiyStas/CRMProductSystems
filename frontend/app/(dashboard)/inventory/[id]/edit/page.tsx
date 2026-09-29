@@ -61,7 +61,7 @@ export default function EditProductPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <button
-          onClick={() => router.push(`/inventory/${id}`)}
+          onClick={() => router.back()}
           style={{
             background: "transparent", border: "none",
             color: "#6B7280", cursor: "pointer",
@@ -79,7 +79,7 @@ export default function EditProductPage() {
       <ProductForm
         product={product}
         isPending={updateProduct.isPending}
-        onCancel={() => router.push(`/inventory/${id}`)}
+        onCancel={() => router.back()}
         // Edit-only page — ProductForm only calls onCreate when `product` is null.
         onCreate={() => {}}
         onUpdate={handleUpdate}
