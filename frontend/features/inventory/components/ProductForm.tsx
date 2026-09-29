@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations, useLocale } from "next-intl";
+import { Power } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import type { CreateProductPayload, Product, UpdateProductPayload } from "../types";
 import { productsApi } from "../api/products";
@@ -102,6 +103,25 @@ const sectionBodyStyle: React.CSSProperties = {
   gap: 14,
 };
 const twoColStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 };
+
+// Active/inactive toggle button, next to Cancel/Save in the top action bar. Same green/gray
+// convention as the product-page header status badge (app/(dashboard)/inventory/[id]/page.tsx).
+function activeToggleStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 14px",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    background: active ? "#052e16" : "#111827",
+    border: `1px solid ${active ? "#166534" : "#374151"}`,
+    color: active ? "#4ADE80" : "#6B7280",
+    transition: "background 0.15s, border-color 0.15s, color 0.15s",
+  };
+}
 
 // Slice 4c/4d — the "system suggests …" box and the promo note inside the stock section.
 const noteBoxStyle: React.CSSProperties = {
@@ -330,15 +350,37 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={{ maxWidth: 1100 }}>
-      {/* Actions — top, right-aligned, so Save/Cancel stay visible without scrolling either
-          column (the two columns below can end up different heights). */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, justifyContent: "flex-end" }}>
-        <Btn variant="ghost" type="button" onClick={onCancel}>
-          {tCommon("cancel")}
-        </Btn>
-        <Btn type="submit" disabled={isPending}>
-          {isPending ? t("saving") : isEditing ? t("saveChanges") : t("titleCreate")}
-        </Btn>
+      {/* Actions — top, so Save/Cancel (and, when editing, the active/inactive toggle) stay
+          visible without scrolling either column (the two columns below can end up different
+          heights). The active toggle moved here from the bottom of the form so it doesn't
+          require scrolling past Zones to find. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 20,
+          justifyContent: isEditing ? "space-between" : "flex-end",
+        }}
+      >
+        {isEditing && (
+          <button
+            type="button"
+            onClick={() => setValue("isActive", !watch("isActive"), { shouldDirty: true })}
+            style={activeToggleStyle(watch("isActive"))}
+          >
+            <Power size={14} />
+            {watch("isActive") ? t("isActiveOn") : t("isActiveOff")}
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn variant="ghost" type="button" onClick={onCancel}>
+            {tCommon("cancel")}
+          </Btn>
+          <Btn type="submit" disabled={isPending}>
+            {isPending ? t("saving") : isEditing ? t("saveChanges") : t("titleCreate")}
+          </Btn>
+        </div>
       </div>
 
       <div
@@ -646,20 +688,6 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
             </div>
           </div>
 
-          {/* isActive — edit only */}
-          {isEditing && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input
-                type="checkbox"
-                id="isActive"
-                {...register("isActive")}
-                style={{ accentColor: "#3B82F6", width: 16, height: 16, cursor: "pointer" }}
-              />
-              <label htmlFor="isActive" style={{ ...labelStyle, marginBottom: 0, cursor: "pointer" }}>
-                {t("isActiveLabel")}
-              </label>
-            </div>
-          )}
         </div>
       </div>
     </form>

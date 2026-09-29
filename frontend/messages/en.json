@@ -918,6 +918,8 @@
         "pricePurchaseLabel": "Purchase price (₴)",
         "priceRetailLabel": "Retail price (₴)",
         "isActiveLabel": "Active product",
+        "isActiveOn": "Active",
+        "isActiveOff": "Inactive",
         "saving": "Saving…",
         "saveChanges": "Save changes",
         "validationRequired": "This field is required"

@@ -918,6 +918,8 @@
         "pricePurchaseLabel": "Закупівельна ціна (₴)",
         "priceRetailLabel": "Роздрібна ціна (₴)",
         "isActiveLabel": "Активний товар",
+        "isActiveOn": "Активний",
+        "isActiveOff": "Неактивний",
         "saving": "Збереження…",
         "saveChanges": "Зберегти зміни",
         "validationRequired": "Обов'язкове поле"
