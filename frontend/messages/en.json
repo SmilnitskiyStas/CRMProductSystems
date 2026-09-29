@@ -1583,7 +1583,11 @@
         "changeProduct": "Change product",
         "unlinkProduct": "Unlink product",
         "cancelLinking": "Cancel",
-        "zoneSyncError": "Layout saved, but failed to update the product-zone link: {message}"
+        "zoneSyncError": "Layout saved, but failed to update the product-zone link: {message}",
+        "clickToAdd": "Click to add a product",
+        "clickToChange": "Click to change the product",
+        "hoverQuantity": "Quantity: {qty} {unit}",
+        "hoverExpiry": "Nearest expiry: {date}"
       },
       "floorPlanIndex": {
         "noLocations": "No locations",

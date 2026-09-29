@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { locationsApi, type CreateZoneDto } from "../api/locations";
 import { stockApi } from "@/features/shelf/api/stock";
-import type { FloorPlanLayout, LocationZoneDto, ShelfPlanLayout, ZoneStatusCounts } from "../types";
+import type {
+  FloorPlanLayout,
+  LocationZoneDto,
+  ShelfPlanLayout,
+  ZoneItemSummary,
+  ZoneStatusCounts,
+} from "../types";
 
 export function parseFloorPlan(raw: string | null): FloorPlanLayout {
   const empty: FloorPlanLayout = { version: 1, grid: 20, canvasW: 1400, canvasH: 900, zones: [] };
@@ -100,26 +106,38 @@ export function useZoneStatusCounts(locationId: string | null) {
   });
 }
 
-// Per-product safe/warning/critical/expired counts within a single zone of one location, for the
-// shelf-builder canvas's per-box status dot (TASK-716). Same /api/stock source and shape as
-// useZoneStatusCounts above, but grouped by productId and additionally filtered to one zoneId.
-// Kept as a separate query (distinct queryKey/queryFn) rather than deriving from
-// useZoneStatusCounts's cache entry — the two hooks group the same rows differently and are used
-// by different pages, so decoupling them avoids coupling one call site's shape to the other's.
+// Per-product stock summary (status-bucket batch counts + total quantity + nearest expiry)
+// within a single zone of one location, for the shelf-builder canvas's per-box status dot and
+// hover popover (TASK-716, extended for the hover-detail request). Filters server-side with
+// zone_id (not just store_id) — a single zone's batch count is far less likely to brush the
+// backend's 200-row page clamp than the whole location's, unlike useZoneStatusCounts above
+// (which genuinely needs every zone in one page and has no narrower filter to lean on). Kept as
+// a separate query (distinct queryKey/queryFn) rather than deriving from useZoneStatusCounts's
+// cache entry — the two hooks group the same rows differently and are used by different pages.
 export function useZoneItemStatusCounts(locationId: string | null, zoneId: string | null) {
   return useQuery({
     queryKey: ["locations", locationId, "zone-item-status", zoneId],
     queryFn: async () => {
-      const page = await stockApi.getAll({ store_id: locationId!, pageSize: 200 });
-      const byProduct = new Map<string, ZoneStatusCounts>();
+      const page = await stockApi.getAll({ store_id: locationId!, zone_id: zoneId!, pageSize: 200 });
+      const byProduct = new Map<string, ZoneItemSummary>();
       for (const b of page.items) {
         if (b.storeId !== locationId || b.zoneId !== zoneId || b.quantity <= 0) continue;
-        let counts = byProduct.get(b.productId);
-        if (!counts) {
-          counts = { safe: 0, warning: 0, critical: 0, expired: 0 };
-          byProduct.set(b.productId, counts);
+        let summary = byProduct.get(b.productId);
+        if (!summary) {
+          summary = {
+            counts: { safe: 0, warning: 0, critical: 0, expired: 0 },
+            totalQuantity: 0,
+            nearestExpiryDays: null,
+            nearestExpiryDate: null,
+          };
+          byProduct.set(b.productId, summary);
         }
-        if (b.status in counts) counts[b.status as keyof ZoneStatusCounts]++;
+        if (b.status in summary.counts) summary.counts[b.status as keyof ZoneStatusCounts]++;
+        summary.totalQuantity += b.quantity;
+        if (summary.nearestExpiryDays === null || b.daysLeft < summary.nearestExpiryDays) {
+          summary.nearestExpiryDays = b.daysLeft;
+          summary.nearestExpiryDate = b.expiryDate;
+        }
       }
       return byProduct;
     },

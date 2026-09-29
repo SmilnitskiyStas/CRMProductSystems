@@ -1583,7 +1583,11 @@
         "changeProduct": "Змінити товар",
         "unlinkProduct": "Відв'язати товар",
         "cancelLinking": "Скасувати",
-        "zoneSyncError": "Розкладку збережено, але не вдалося оновити зв'язок товару із зоною: {message}"
+        "zoneSyncError": "Розкладку збережено, але не вдалося оновити зв'язок товару із зоною: {message}",
+        "clickToAdd": "Клікніть, щоб додати товар",
+        "clickToChange": "Клікніть, щоб змінити товар",
+        "hoverQuantity": "Кількість: {qty} {unit}",
+        "hoverExpiry": "Найближчий строк: {date}"
       },
       "floorPlanIndex": {
         "noLocations": "Немає локацій",

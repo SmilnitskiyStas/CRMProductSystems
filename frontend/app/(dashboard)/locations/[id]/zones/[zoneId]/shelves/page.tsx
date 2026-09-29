@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -26,8 +27,7 @@ import { STATUS_CONFIG, worstStatus } from "@/features/locations/components/Floo
 import type {
   ShelfItemPlacement,
   ShelfPlanLayout,
-  ZoneStatus,
-  ZoneStatusCounts,
+  ZoneItemSummary,
 } from "@/features/locations/types";
 import { productsApi } from "@/features/inventory/api/products";
 import { useProductsByIds } from "@/features/inventory/hooks/useProducts";
@@ -126,9 +126,15 @@ export default function ShelvesPage() {
     () => new Map(linkedProducts.map((p) => [p.id, p.name])),
     [linkedProducts]
   );
+  // Unit label for the hover popover's quantity line (e.g. "12 шт").
+  const productUnitById = useMemo(
+    () => new Map(linkedProducts.map((p) => [p.id, p.unit])),
+    [linkedProducts]
+  );
 
-  // Per-product stock-status counts within this zone, for the status dot on linked rows/boxes.
-  const { data: itemStatusCounts = new Map<string, ZoneStatusCounts>() } = useZoneItemStatusCounts(
+  // Per-product stock summary within this zone — status dot on linked rows/boxes, plus the
+  // canvas box's hover popover (quantity + nearest expiry).
+  const { data: itemStatusCounts = new Map<string, ZoneItemSummary>() } = useZoneItemStatusCounts(
     locationId,
     zoneId
   );
@@ -277,7 +283,9 @@ export default function ShelvesPage() {
           onMove={handleMove}
           onResize={handleResize}
           productNames={productNameById}
+          productUnits={productUnitById}
           itemStatusCounts={itemStatusCounts}
+          onRequestLink={(shelfId) => setLinkingShelfId((prev) => (prev === shelfId ? null : shelfId))}
         />
 
         {/* Side panel */}
@@ -350,7 +358,7 @@ export default function ShelvesPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {plan.items.map((item) => {
                   const productName = item.itemId ? productNameById.get(item.itemId) : undefined;
-                  const status = item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)) : null;
+                  const status = item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)?.counts) : null;
                   const isLinking = linkingShelfId === item.shelfId;
                   return (
                     <div
@@ -456,10 +464,20 @@ interface ShelfCanvasProps {
   onMove: (shelfId: string, x: number, y: number) => void;
   onResize: (shelfId: string, w: number, h: number) => void;
   productNames: Map<string, string>;
-  itemStatusCounts: Map<string, ZoneStatusCounts>;
+  productUnits: Map<string, string>;
+  itemStatusCounts: Map<string, ZoneItemSummary>;
+  onRequestLink: (shelfId: string) => void;
 }
 
-function ShelfCanvas({ plan, onMove, onResize, productNames, itemStatusCounts }: ShelfCanvasProps) {
+function ShelfCanvas({
+  plan,
+  onMove,
+  onResize,
+  productNames,
+  productUnits,
+  itemStatusCounts,
+  onRequestLink,
+}: ShelfCanvasProps) {
   const t = useTranslations("Dashboard.locations.shelvesPage");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -506,8 +524,10 @@ function ShelfCanvas({ plan, onMove, onResize, productNames, itemStatusCounts }:
               item={item}
               grid={grid}
               onResize={onResize}
+              onRequestLink={() => onRequestLink(item.shelfId)}
               productName={item.itemId ? productNames.get(item.itemId) : undefined}
-              status={item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)) : undefined}
+              productUnit={item.itemId ? productUnits.get(item.itemId) : undefined}
+              summary={item.itemId ? itemStatusCounts.get(item.itemId) : undefined}
             />
           ))}
           {plan.items.length === 0 && (
@@ -531,18 +551,92 @@ function ShelfCanvas({ plan, onMove, onResize, productNames, itemStatusCounts }:
   );
 }
 
+// Days-to-expiry color, same thresholds as features/shelf/components/StockTable.tsx's
+// getDaysColor (kept as a local copy — no shared "expiry formatting" module today, same
+// posture that file's own comments already document for its sibling helpers).
+function daysColor(days: number): string {
+  if (days <= 0) return STATUS_CONFIG.expired.color;
+  if (days <= 3) return STATUS_CONFIG.critical.color;
+  if (days <= 7) return STATUS_CONFIG.warning.color;
+  return "#6B7280";
+}
+
+function formatExpiryDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}.${m}.${y}`;
+}
+
 interface ShelfItemBoxProps {
   item: ShelfItemPlacement;
   grid: number;
   onResize: (shelfId: string, w: number, h: number) => void;
+  onRequestLink: () => void;
   productName?: string;
-  status?: ZoneStatus | "empty";
+  productUnit?: string;
+  summary?: ZoneItemSummary;
 }
 
-function ShelfItemBox({ item, grid, onResize, productName, status }: ShelfItemBoxProps) {
+interface PopPos {
+  top: number;
+  left: number;
+}
+
+function ShelfItemBox({
+  item,
+  grid,
+  onResize,
+  onRequestLink,
+  productName,
+  productUnit,
+  summary,
+}: ShelfItemBoxProps) {
+  const t = useTranslations("Dashboard.locations.shelvesPage");
+  const tZoneStatus = useTranslations("Dashboard.locations.zoneStatus");
+  const tOverdue = useTranslations("Dashboard.shelf.stockTable");
+  const status = summary ? worstStatus(summary.counts) : undefined;
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.shelfId,
   });
+
+  // Guards the click handler below against firing right after a real drag (dnd-kit's
+  // PointerSensor only "activates" a drag past a 4px movement threshold, but the browser's
+  // native click still fires on pointerup regardless of the movement in between — without
+  // this, every drag-to-reposition would also pop the link picker open).
+  const didDragRef = useRef(false);
+  useEffect(() => {
+    if (isDragging) didDragRef.current = true;
+  }, [isDragging]);
+
+  function handleClick() {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      return;
+    }
+    onRequestLink();
+  }
+
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pos, setPos] = useState<PopPos | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showPopover = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (!boxRef.current) return;
+    const rect = boxRef.current.getBoundingClientRect();
+    setPos({ top: rect.top + window.scrollY, left: rect.right + 8 + window.scrollX });
+    setHovered(true);
+  }, []);
+
+  const hidePopoverSoon = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setHovered(false), 100);
+  }, []);
+
+  useEffect(() => () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+  }, []);
 
   function startResize(e: React.PointerEvent) {
     e.stopPropagation();
@@ -567,9 +661,16 @@ function ShelfItemBox({ item, grid, onResize, productName, status }: ShelfItemBo
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        boxRef.current = node;
+      }}
       {...listeners}
       {...attributes}
+      onClick={handleClick}
+      onMouseEnter={showPopover}
+      onMouseLeave={hidePopoverSoon}
+      title={item.itemId ? t("clickToChange") : t("clickToAdd")}
       style={{
         position: "absolute",
         left: item.x,
@@ -581,7 +682,7 @@ function ShelfItemBox({ item, grid, onResize, productName, status }: ShelfItemBo
         border: "1px solid #4F46E5",
         borderRadius: 8,
         padding: "10px 12px",
-        cursor: isDragging ? "grabbing" : "grab",
+        cursor: isDragging ? "grabbing" : "pointer",
         zIndex: isDragging ? 50 : 1,
         userSelect: "none",
         touchAction: "none",
@@ -640,6 +741,66 @@ function ShelfItemBox({ item, grid, onResize, productName, status }: ShelfItemBo
           borderBottomRightRadius: 6,
         }}
       />
+
+      {/* Hover popover — product detail (stock quantity, nearest expiry, batch-status
+          breakdown) when linked; a plain "click to add" hint otherwise. */}
+      {hovered &&
+        pos &&
+        createPortal(
+          <div
+            onMouseEnter={showPopover}
+            onMouseLeave={hidePopoverSoon}
+            style={{
+              position: "absolute",
+              top: pos.top,
+              left: pos.left,
+              background: "#111827",
+              border: "1px solid #1F2937",
+              borderRadius: 10,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+              zIndex: 9999,
+              padding: "10px 12px",
+              minWidth: 200,
+              maxWidth: 260,
+            }}
+          >
+            {summary ? (
+              <>
+                <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                  {productName}
+                </div>
+                <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
+                  {t("hoverQuantity", { qty: summary.totalQuantity, unit: productUnit ?? "" })}
+                </div>
+                {summary.nearestExpiryDate && summary.nearestExpiryDays !== null && (
+                  <div style={{ fontSize: 12, marginBottom: 6, color: "#9CA3AF" }}>
+                    {t("hoverExpiry", { date: formatExpiryDate(summary.nearestExpiryDate) })}{" "}
+                    <span style={{ color: daysColor(summary.nearestExpiryDays), fontWeight: 600 }}>
+                      (
+                      {summary.nearestExpiryDays <= 0
+                        ? tOverdue("overdue", { days: Math.abs(summary.nearestExpiryDays) })
+                        : summary.nearestExpiryDays}
+                      )
+                    </span>
+                  </div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 6, borderTop: "1px solid #1F2937" }}>
+                  {(["expired", "critical", "warning", "safe"] as const)
+                    .filter((s) => summary.counts[s] > 0)
+                    .map((s) => (
+                      <div key={s} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 11 }}>
+                        <span style={{ color: STATUS_CONFIG[s].color }}>{tZoneStatus(s)}</span>
+                        <span style={{ color: "#9CA3AF", fontFamily: "monospace" }}>{summary.counts[s]}</span>
+                      </div>
+                    ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ color: "#6B7280", fontSize: 12 }}>{t("clickToAdd")}</div>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

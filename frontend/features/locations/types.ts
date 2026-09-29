@@ -81,6 +81,20 @@ export interface ZoneStatusCounts {
   expired: number;
 }
 
+/**
+ * Per-product stock summary within one zone, for the shelf-builder canvas's hover popover.
+ * `counts` is batch counts per status (same shape/semantics as `ZoneStatusCounts` elsewhere —
+ * batches, not units). `totalQuantity` sums `quantity` across every batch. `nearestExpiryDays`/
+ * `nearestExpiryDate` describe the single soonest-expiring batch (the one driving `worstStatus`
+ * most of the time); both null when there is no stock.
+ */
+export interface ZoneItemSummary {
+  counts: ZoneStatusCounts;
+  totalQuantity: number;
+  nearestExpiryDays: number | null;
+  nearestExpiryDate: string | null;
+}
+
 export interface LocationDto {
   id: string;
   name: string;
