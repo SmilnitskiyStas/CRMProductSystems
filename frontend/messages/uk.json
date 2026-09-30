@@ -1587,7 +1587,19 @@
         "clickToAdd": "Клікніть, щоб додати товар",
         "clickToChange": "Клікніть, щоб змінити товар",
         "hoverQuantity": "Кількість: {qty} {unit}",
-        "hoverExpiry": "Найближчий строк: {date}"
+        "hoverExpiry": "Найближчий строк: {date}",
+        "modalTitle": "Секція «{label}»",
+        "addProduct": "Додати товар",
+        "backToProduct": "Назад до товару",
+        "backToSearch": "Назад до пошуку",
+        "confirmLink": "Прив'язати цей товар",
+        "infoStockTitle": "Залишки та строки придатності",
+        "infoTotalQuantity": "Всього: {qty} {unit}",
+        "infoNoStock": "Немає залишків цього товару в магазині",
+        "infoPopularityTitle": "Популярність",
+        "infoSoldLast30Days": "Продано за 30 днів: {qty} {unit}",
+        "infoSimilarTitle": "Схожі товари в категорії",
+        "infoNoSimilar": "Немає інших товарів у цій категорії"
       },
       "floorPlanIndex": {
         "noLocations": "Немає локацій",

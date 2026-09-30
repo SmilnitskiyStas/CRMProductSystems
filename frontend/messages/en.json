@@ -1587,7 +1587,19 @@
         "clickToAdd": "Click to add a product",
         "clickToChange": "Click to change the product",
         "hoverQuantity": "Quantity: {qty} {unit}",
-        "hoverExpiry": "Nearest expiry: {date}"
+        "hoverExpiry": "Nearest expiry: {date}",
+        "modalTitle": "Section “{label}”",
+        "addProduct": "Add product",
+        "backToProduct": "Back to product",
+        "backToSearch": "Back to search",
+        "confirmLink": "Link this product",
+        "infoStockTitle": "Stock & expiry dates",
+        "infoTotalQuantity": "Total: {qty} {unit}",
+        "infoNoStock": "No stock of this product in the store",
+        "infoPopularityTitle": "Popularity",
+        "infoSoldLast30Days": "Sold in the last 30 days: {qty} {unit}",
+        "infoSimilarTitle": "Similar products in this category",
+        "infoNoSimilar": "No other products in this category"
       },
       "floorPlanIndex": {
         "noLocations": "No locations",

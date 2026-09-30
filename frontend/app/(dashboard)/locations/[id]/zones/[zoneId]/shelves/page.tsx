@@ -31,7 +31,7 @@ import type {
 } from "@/features/locations/types";
 import { productsApi } from "@/features/inventory/api/products";
 import { useProductsByIds } from "@/features/inventory/hooks/useProducts";
-import { ProductSearchPicker } from "@/features/inventory/components/ProductSearchPicker";
+import { ShelfProductModal } from "@/features/locations/components/ShelfProductModal";
 import type { Product } from "@/features/inventory/types";
 
 // Shared icon-button look for the per-section link/unlink/delete controls below (TASK-716).
@@ -96,15 +96,15 @@ export default function ShelvesPage() {
 
   const [plan, setPlan] = useState<ShelfPlanLayout | null>(null);
   const [dirty, setDirty] = useState(false);
-  // shelfId of the row whose inline product picker is expanded in the side panel; null = none
-  // open. A single value naturally keeps at most one row's picker open at a time (TASK-716).
-  const [linkingShelfId, setLinkingShelfId] = useState<string | null>(null);
+  // shelfId of the section whose detail/pick modal is open; null = none open. A single value
+  // naturally keeps at most one section's modal open at a time.
+  const [modalShelfId, setModalShelfId] = useState<string | null>(null);
 
   useEffect(() => {
     if (zone) {
       setPlan(parseShelfPlan(zone.position));
       setDirty(false);
-      setLinkingShelfId(null);
+      setModalShelfId(null);
     }
   }, [zone?.id, zone?.position]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -186,7 +186,8 @@ export default function ShelvesPage() {
       ...prev,
       items: prev.items.map((i) => (i.shelfId === shelfId ? { ...i, itemId: product.id } : i)),
     }));
-    setLinkingShelfId(null);
+    // Modal stays open — it switches to showing the just-linked product's own detail view,
+    // which doubles as confirmation of what was just picked.
   }
 
   function handleUnlinkProduct(shelfId: string) {
@@ -220,6 +221,8 @@ export default function ShelvesPage() {
       </div>
     );
   }
+
+  const modalItem = modalShelfId ? plan.items.find((i) => i.shelfId === modalShelfId) ?? null : null;
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -285,7 +288,7 @@ export default function ShelvesPage() {
           productNames={productNameById}
           productUnits={productUnitById}
           itemStatusCounts={itemStatusCounts}
-          onRequestLink={(shelfId) => setLinkingShelfId((prev) => (prev === shelfId ? null : shelfId))}
+          onRequestLink={(shelfId) => setModalShelfId(shelfId)}
         />
 
         {/* Side panel */}
@@ -359,7 +362,6 @@ export default function ShelvesPage() {
                 {plan.items.map((item) => {
                   const productName = item.itemId ? productNameById.get(item.itemId) : undefined;
                   const status = item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)?.counts) : null;
-                  const isLinking = linkingShelfId === item.shelfId;
                   return (
                     <div
                       key={item.shelfId}
@@ -398,7 +400,7 @@ export default function ShelvesPage() {
                         <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                           <button
                             type="button"
-                            onClick={() => setLinkingShelfId(isLinking ? null : item.shelfId)}
+                            onClick={() => setModalShelfId(item.shelfId)}
                             title={item.itemId ? t("changeProduct") : t("linkProduct")}
                             style={iconButtonStyle}
                           >
@@ -423,30 +425,6 @@ export default function ShelvesPage() {
                           </button>
                         </div>
                       </div>
-
-                      {isLinking && (
-                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1F2937" }}>
-                          <ProductSearchPicker
-                            excludeIds={[]}
-                            onPick={(product) => handleLinkProduct(item.shelfId, product)}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setLinkingShelfId(null)}
-                            style={{
-                              marginTop: 6,
-                              background: "transparent",
-                              border: "none",
-                              color: "#6B7280",
-                              fontSize: 11,
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                          >
-                            {t("cancelLinking")}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -455,6 +433,18 @@ export default function ShelvesPage() {
           </div>
         </div>
       </div>
+
+      {modalItem && (
+        <ShelfProductModal
+          key={modalItem.shelfId}
+          onClose={() => setModalShelfId(null)}
+          storeId={locationId}
+          sectionLabel={(modalItem.itemId && productNameById.get(modalItem.itemId)) ?? modalItem.label}
+          currentProductId={modalItem.itemId ?? null}
+          onLink={(product) => handleLinkProduct(modalItem.shelfId, product)}
+          onUnlink={() => handleUnlinkProduct(modalItem.shelfId)}
+        />
+      )}
     </div>
   );
 }

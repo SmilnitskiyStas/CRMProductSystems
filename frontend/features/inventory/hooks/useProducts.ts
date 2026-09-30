@@ -30,10 +30,14 @@ function productsListQuery(params?: ProductsListParams) {
 }
 
 // Flat `Product[]` list — unchanged external shape for existing callers (e.g. sales/page.tsx)
-// that just want a simple product list, not pagination metadata.
-export function useProducts(params?: ProductsListParams) {
+// that just want a simple product list, not pagination metadata. `enabled` (ShelfProductModal's
+// "similar products in this category" panel — skips the fetch entirely when the product being
+// shown has no category, rather than falling back to an arbitrary unfiltered page) defaults to
+// true so every pre-existing call site is unaffected.
+export function useProducts(params?: ProductsListParams, enabled = true) {
   return useQuery({
     ...productsListQuery(params),
+    enabled,
     placeholderData: (prev) => prev,
     select: (r) => r.items,
   });
