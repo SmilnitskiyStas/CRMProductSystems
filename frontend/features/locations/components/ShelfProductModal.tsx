@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
+import { ApiError } from "@/lib/api";
 import { ProductSearchPicker } from "@/features/inventory/components/ProductSearchPicker";
+import { productsApi } from "@/features/inventory/api/products";
 import { useProduct, useProducts } from "@/features/inventory/hooks/useProducts";
 import { useStock } from "@/features/shelf/hooks/useStock";
 import { StatusBadge } from "@/features/shelf/components/StatusBadge";
@@ -14,6 +18,7 @@ import type { Product } from "@/features/inventory/types";
 interface Props {
   onClose: () => void;
   storeId: string;
+  zoneId: string;
   sectionLabel: string;
   currentProductId: string | null;
   onLink: (product: Product) => void;
@@ -33,8 +38,9 @@ interface Props {
  *   list    — ProductSearchPicker
  *   preview — the searched candidate's detail, with a confirm/back pair
  */
-export function ShelfProductModal({ onClose, storeId, sectionLabel, currentProductId, onLink, onUnlink }: Props) {
+export function ShelfProductModal({ onClose, storeId, zoneId, sectionLabel, currentProductId, onLink, onUnlink }: Props) {
   const t = useTranslations("Dashboard.locations.shelvesPage");
+  const queryClient = useQueryClient();
 
   const [step, setStep] = useState<"view" | "list" | "preview">(currentProductId ? "view" : "list");
   const [activeProductId, setActiveProductId] = useState(currentProductId);
@@ -47,12 +53,32 @@ export function ShelfProductModal({ onClose, storeId, sectionLabel, currentProdu
     setStep("preview");
   }
 
-  function confirmLink() {
+  // Confirming here persists the item_zone_assignments tag immediately (productsApi.assignZone)
+  // rather than waiting for the page's own "Save" — that button only ever persisted the shelf
+  // *layout* JSON, and shelves/page.tsx's syncZoneTags ran afterward as a batch. A merchandiser
+  // who links a product here reasonably expects "this product is now in this zone" to already be
+  // true elsewhere (catalog Zones column, the product's own Zones section) even if they never
+  // click that unrelated Save button. A 400 (already tagged — e.g. this exact zone was assigned
+  // on a previous save) is expected and not surfaced as an error.
+  async function confirmLink() {
     if (!previewProduct) return;
-    onLink(previewProduct);
-    setActiveProductId(previewProduct.id);
+    const product = previewProduct;
+    onLink(product);
+    setActiveProductId(product.id);
     setPreviewProduct(null);
     setStep("view");
+
+    try {
+      await productsApi.assignZone(product.id, zoneId);
+      toast.success(t("productLinkedToast"));
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 400)) {
+        toast.error(err instanceof Error ? err.message : String(err));
+        return;
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ["products", product.id, "zones"] });
+    queryClient.invalidateQueries({ queryKey: ["products"] });
   }
 
   function handleUnlink() {

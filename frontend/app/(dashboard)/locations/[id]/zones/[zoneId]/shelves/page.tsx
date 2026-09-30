@@ -46,10 +46,14 @@ const iconButtonStyle: React.CSSProperties = {
   alignItems: "center",
 };
 
-// After the layout saves, make sure item_zone_assignments (TASK-714) reflects every product
-// placed on this zone's canvas. Fires one assignZone per linked item; a 400 ("already exists" —
-// e.g. the product was already tagged via ProductZonesSection, or a previous save) is expected
-// and swallowed silently. Deliberately asymmetric: unlinking a product from a shelf box, or
+// Reconciliation pass on top of ShelfProductModal's own immediate assignZone call (fired the
+// moment a link is confirmed, so "this product is in this zone" is already true elsewhere —
+// catalog Zones column, the product's own Zones section — without waiting for this page's Save).
+// This still runs after every layout save as a belt-and-suspenders catch-up: it re-asserts
+// item_zone_assignments (TASK-714) for every product currently placed on the canvas, so a link
+// whose immediate call failed (a network blip) gets fixed the next time the user saves anyway.
+// Fires one assignZone per linked item; a 400 ("already exists") is expected and swallowed
+// silently either way. Deliberately asymmetric: unlinking a product from a shelf box, or
 // deleting the box, never auto-removes the zone tag — that stays a manual action from the
 // product's own Zones section (confirmed in the approved plan, not a bug to "fix" into symmetry).
 async function syncZoneTags(
@@ -439,6 +443,7 @@ export default function ShelvesPage() {
           key={modalItem.shelfId}
           onClose={() => setModalShelfId(null)}
           storeId={locationId}
+          zoneId={zoneId}
           sectionLabel={(modalItem.itemId && productNameById.get(modalItem.itemId)) ?? modalItem.label}
           currentProductId={modalItem.itemId ?? null}
           onLink={(product) => handleLinkProduct(modalItem.shelfId, product)}

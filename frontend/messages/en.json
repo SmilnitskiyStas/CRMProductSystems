@@ -1599,7 +1599,8 @@
         "infoPopularityTitle": "Popularity",
         "infoSoldLast30Days": "Sold in the last 30 days: {qty} {unit}",
         "infoSimilarTitle": "Similar products in this category",
-        "infoNoSimilar": "No other products in this category"
+        "infoNoSimilar": "No other products in this category",
+        "productLinkedToast": "Product added to this zone"
       },
       "floorPlanIndex": {
         "noLocations": "No locations",

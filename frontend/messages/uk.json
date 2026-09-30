@@ -1599,7 +1599,8 @@
         "infoPopularityTitle": "Популярність",
         "infoSoldLast30Days": "Продано за 30 днів: {qty} {unit}",
         "infoSimilarTitle": "Схожі товари в категорії",
-        "infoNoSimilar": "Немає інших товарів у цій категорії"
+        "infoNoSimilar": "Немає інших товарів у цій категорії",
+        "productLinkedToast": "Товар додано до цієї зони"
       },
       "floorPlanIndex": {
         "noLocations": "Немає локацій",
