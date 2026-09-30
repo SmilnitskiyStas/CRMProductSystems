@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Link2, Plus, Save, Trash2, Unlink2 } from "lucide-react";
+import { ArrowLeft, LayoutGrid, Link2, Plus, Save, Trash2, Unlink2 } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -33,6 +33,10 @@ import { productsApi } from "@/features/inventory/api/products";
 import { useProductsByIds } from "@/features/inventory/hooks/useProducts";
 import { ShelfProductModal } from "@/features/locations/components/ShelfProductModal";
 import type { Product } from "@/features/inventory/types";
+
+const DEFAULT_SECTION_W = 200;
+const DEFAULT_SECTION_H = 80;
+const PLACEMENT_COLUMNS = 4;
 
 // Shared icon-button look for the per-section link/unlink/delete controls below (TASK-716).
 const iconButtonStyle: React.CSSProperties = {
@@ -148,18 +152,38 @@ export default function ShelvesPage() {
     setDirty(true);
   }
 
+  // New sections start unplaced (not drawn on the canvas) — see handlePlaceSection below for
+  // why, and ShelfItemPlacement.placed for the flag itself.
   function handleAddSection() {
     patchPlan((prev) => {
       const n = prev.items.length + 1;
       const newItem: ShelfItemPlacement = {
         shelfId: crypto.randomUUID(),
         label: t("newSectionLabel", { n }),
-        x: prev.grid * 2,
-        y: prev.grid * 2 + (n - 1) * (80 + prev.grid),
-        w: 200,
-        h: 80,
+        x: 0,
+        y: 0,
+        w: DEFAULT_SECTION_W,
+        h: DEFAULT_SECTION_H,
+        placed: false,
       };
       return { ...prev, items: [...prev.items, newItem] };
+    });
+  }
+
+  // Places an unplaced section on the canvas at the next free grid cell — a 4-column, row-by-row
+  // layout (same pattern as the location floor-plan editor's handleAdd), instead of the old
+  // behavior of always stacking every new section below the last one regardless of where the
+  // user had since dragged existing sections, which pushed the list further and further down.
+  function handlePlaceSection(shelfId: string) {
+    patchPlan((prev) => {
+      const placedCount = prev.items.filter((i) => i.placed !== false).length;
+      const x = prev.grid * 2 + (placedCount % PLACEMENT_COLUMNS) * (DEFAULT_SECTION_W + prev.grid);
+      const y =
+        prev.grid * 2 + Math.floor(placedCount / PLACEMENT_COLUMNS) * (DEFAULT_SECTION_H + prev.grid);
+      return {
+        ...prev,
+        items: prev.items.map((i) => (i.shelfId === shelfId ? { ...i, placed: true, x, y } : i)),
+      };
     });
   }
 
@@ -284,9 +308,10 @@ export default function ShelvesPage() {
 
       {/* Canvas + panel */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 240px", gap: 20, alignItems: "start" }}>
-        {/* Canvas */}
+        {/* Canvas — only sections placed on it (see ShelfItemPlacement.placed); a freshly
+            created section stays list-only until the user places it. */}
         <ShelfCanvas
-          plan={plan}
+          plan={{ ...plan, items: plan.items.filter((i) => i.placed !== false) }}
           onMove={handleMove}
           onResize={handleResize}
           productNames={productNameById}
@@ -366,12 +391,13 @@ export default function ShelvesPage() {
                 {plan.items.map((item) => {
                   const productName = item.itemId ? productNameById.get(item.itemId) : undefined;
                   const status = item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)?.counts) : null;
+                  const notPlaced = item.placed === false;
                   return (
                     <div
                       key={item.shelfId}
                       style={{
                         background: "#0B0E14",
-                        border: "1px solid #1F2937",
+                        border: `1px solid ${notPlaced ? "#854D0E" : "#1F2937"}`,
                         borderRadius: 8,
                         padding: "7px 10px",
                       }}
@@ -402,6 +428,16 @@ export default function ShelvesPage() {
                           </span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                          {notPlaced && (
+                            <button
+                              type="button"
+                              onClick={() => handlePlaceSection(item.shelfId)}
+                              title={t("placeOnCanvas")}
+                              style={iconButtonStyle}
+                            >
+                              <LayoutGrid size={13} color="#FCD34D" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setModalShelfId(item.shelfId)}
@@ -429,6 +465,11 @@ export default function ShelvesPage() {
                           </button>
                         </div>
                       </div>
+                      {notPlaced && (
+                        <div style={{ color: "#FCD34D", fontSize: 11, marginTop: 4 }}>
+                          {t("notPlacedBadge")}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

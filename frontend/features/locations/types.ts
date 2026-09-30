@@ -62,6 +62,12 @@ export interface ShelfItemPlacement {
   /** Linked catalog product (TASK-716). Optional so plans saved before this feature keep
    * loading unchanged — absent/null means "no product linked, free-text label only". */
   itemId?: string | null;
+  /** Whether this section has a position on the canvas. Optional so plans saved before this
+   * flag existed keep rendering unchanged — absent means placed (`true`). A freshly-created
+   * section starts as `false` (exists in the Sections list only, not drawn on the canvas)
+   * until explicitly placed, so "Add section" no longer keeps stacking new boxes below the
+   * last one and forcing a long scroll. */
+  placed?: boolean;
 }
 
 export interface ShelfPlanLayout {
