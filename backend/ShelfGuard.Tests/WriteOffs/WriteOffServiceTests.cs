@@ -577,6 +577,54 @@ public sealed class WriteOffServiceTests
         await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task ApproveWithOptionsAsync_ExcludeProblemItems_DropsEmptyLineApprovesRestAndRecomputesTotals()
+    {
+        var good = new ProductStock
+        {
+            TenantId = _tenantId, ProductId = _productId, StoreId = _storeId,
+            Quantity = 20, QuantityInitial = 20,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
+            Status = "expired", LastCheckedAt = DateTime.UtcNow,
+        };
+        var empty = new ProductStock
+        {
+            TenantId = _tenantId, ProductId = _productId, StoreId = _storeId,
+            Quantity = 0, QuantityInitial = 5,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
+            Status = "expired", LastCheckedAt = DateTime.UtcNow,
+        };
+
+        var writeOff = BuildWriteOff(stock: good);
+        writeOff.Items.Clear();
+        writeOff.Items.Add(new WriteOffItem
+        {
+            WriteOffId = writeOff.Id, ProductStockId = good.Id, ProductId = _productId,
+            Quantity = 10, LossAmount = 100m, LossAmountPurchase = 60m,
+        });
+        writeOff.Items.Add(new WriteOffItem
+        {
+            WriteOffId = writeOff.Id, ProductStockId = empty.Id, ProductId = _productId,
+            Quantity = 5, LossAmount = 85m, LossAmountPurchase = 55m,
+        });
+        writeOff.TotalLossAmount = 185m; writeOff.TotalLossAmountPurchase = 115m;
+
+        _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
+        _repo.GetStocksByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).Returns([good, empty]);
+
+        var (result, error, problems) = await _sut.ApproveWithOptionsAsync(writeOff.Id, _userId, excludeProblemItems: true);
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.Single(problems);
+        Assert.Equal("approved", writeOff.Status);
+        Assert.Single(writeOff.Items);
+        Assert.Equal(100m, writeOff.TotalLossAmount);
+        Assert.Equal(60m, writeOff.TotalLossAmountPurchase);
+        Assert.Equal(10, good.Quantity);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // ── Reject ─────────────────────────────────────────────────────────────
 
     [Fact]

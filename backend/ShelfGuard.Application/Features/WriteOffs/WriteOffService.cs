@@ -182,15 +182,23 @@ public sealed class WriteOffService : IWriteOffService
     public async Task<(WriteOffDto? WriteOff, string? Error)> ApproveAsync(
         Guid id, Guid approvedBy, CancellationToken ct = default)
     {
+        var (writeOff, error, _) = await ApproveWithOptionsAsync(id, approvedBy, false, ct);
+        return (writeOff, error);
+    }
+
+    public async Task<(WriteOffDto? WriteOff, string? Error, List<WriteOffApprovalProblemDto> Problems)> ApproveWithOptionsAsync(
+        Guid id, Guid approvedBy, bool excludeProblemItems, CancellationToken ct = default)
+    {
+        var noProblems = new List<WriteOffApprovalProblemDto>();
         var writeOff = await _repo.GetByIdAsync(id, ct);
         if (writeOff is null)
-            return (null, "Write-off not found.");
+            return (null, "Write-off not found.", noProblems);
 
         if (writeOff.Status == "approved")
-            return (null, "Write-off is already approved.");
+            return (null, "Write-off is already approved.", noProblems);
 
         if (writeOff.Status == "rejected")
-            return (null, "Cannot approve a rejected write-off.");
+            return (null, "Cannot approve a rejected write-off.", noProblems);
 
         // Batch-load everything the loop below needs BEFORE mutating anything, instead of
         // querying once per item. The old code called GetStockByIdAsync/GetFefoOrderedAsync
@@ -218,32 +226,70 @@ public sealed class WriteOffService : IWriteOffService
                 .GroupBy(s => s.ProductId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-        // Validate every explicit-batch line up front and report ALL shortfalls at once, naming
-        // the product + batch (not a GUID). Requested quantity is summed per batch because several
-        // lines may point at the same batch. Failing here also keeps the in-memory stock entities
-        // untouched when a later line would have failed after earlier ones were already deducted.
-        var problems = new List<string>();
+        // Validate every line up front and collect ALL shortfalls, naming the product + batch
+        // (not a GUID). Requested quantity is summed per batch (explicit lines) / per product
+        // (FEFO lines) because several lines may draw on the same stock. Failing here also keeps
+        // the in-memory stock entities untouched when a later line would have failed after earlier
+        // ones were already deducted.
+        var problems = new List<WriteOffApprovalProblemDto>();
         foreach (var group in writeOff.Items.Where(i => i.ProductStockId.HasValue).GroupBy(i => i.ProductStockId!.Value))
         {
             var first = group.First();
-            var label = $"«{first.Product?.Name ?? first.ProductId.ToString()}»" +
-                        (first.ProductStock?.BatchNumber is { } batchNo ? $" (партія {batchNo})" : "");
+            var requested = group.Sum(i => i.Quantity);
+            var found = stocksById.TryGetValue(group.Key, out var batchStock);
+            if (found && batchStock!.Quantity >= requested)
+                continue;
 
-            if (!stocksById.TryGetValue(group.Key, out var batchStock))
-                problems.Add($"{label}: Stock batch {group.Key} not found");
-            else
-            {
-                var requested = group.Sum(i => i.Quantity);
-                if (batchStock.Quantity < requested)
-                    problems.Add($"{label}: Insufficient quantity in batch — available {batchStock.Quantity}, requested {requested}");
-            }
+            problems.Add(new WriteOffApprovalProblemDto(
+                group.Select(i => i.Id).ToList(),
+                first.ProductId,
+                first.Product?.Name ?? first.ProductId.ToString(),
+                first.ProductStock?.BatchNumber,
+                found ? batchStock!.Quantity : 0m,
+                requested,
+                found ? "insufficient_quantity" : "batch_not_found"));
+        }
+
+        foreach (var group in writeOff.Items.Where(i => !i.ProductStockId.HasValue).GroupBy(i => i.ProductId))
+        {
+            var requested = group.Sum(i => i.Quantity);
+            var available = fefoBatchesByProduct.TryGetValue(group.Key, out var pb) ? pb.Sum(b => b.Quantity) : 0m;
+            if (available >= requested)
+                continue;
+
+            problems.Add(new WriteOffApprovalProblemDto(
+                group.Select(i => i.Id).ToList(),
+                group.Key,
+                group.First().Product?.Name ?? group.Key.ToString(),
+                null,
+                available,
+                requested,
+                "insufficient_stock"));
         }
 
         if (problems.Count > 0)
         {
-            var shown = string.Join("; ", problems.Take(5));
-            var more = problems.Count > 5 ? $"; … ще {problems.Count - 5}" : "";
-            return (null, $"Неможливо підтвердити списання. {shown}{more}. Видаліть/виправте ці позиції та створіть списання знову.");
+            if (!excludeProblemItems)
+            {
+                var shown = string.Join("; ", problems.Take(5).Select(p =>
+                    $"«{p.ProductName}»" + (p.BatchNumber is null ? "" : $" (партія {p.BatchNumber})") +
+                    $": {(p.Reason == "insufficient_stock" ? "Insufficient stock" : "Insufficient quantity")} — available {p.Available}, requested {p.Requested}"));
+                var more = problems.Count > 5 ? $"; … ще {problems.Count - 5}" : "";
+                return (null, $"Неможливо підтвердити списання. {shown}{more}.", problems);
+            }
+
+            // Drop the problem lines (removed from the tracked collection → EF deletes the orphans
+            // on save) and recompute header totals from what remains.
+            var excludedIds = problems.SelectMany(p => p.ItemIds).ToHashSet();
+            foreach (var dropped in writeOff.Items.Where(i => excludedIds.Contains(i.Id)).ToList())
+                writeOff.Items.Remove(dropped);
+
+            if (writeOff.Items.Count == 0)
+                return (null, "Усі позиції списання без достатнього залишку — підтверджувати нічого.", problems);
+
+            writeOff.TotalLossAmount = writeOff.Items.Where(i => i.LossAmount.HasValue).Sum(i => i.LossAmount!.Value);
+            writeOff.TotalLossAmountPurchase = writeOff.Items.Where(i => i.LossAmountPurchase.HasValue).Sum(i => i.LossAmountPurchase!.Value);
+            writeOff.TotalReimbursementAmount = writeOff.Items.Where(i => i.ReimbursementAmount.HasValue).Sum(i => i.ReimbursementAmount!.Value);
         }
 
         // Deduct stock and log movements for every item. Two shapes are supported:
@@ -262,10 +308,10 @@ public sealed class WriteOffService : IWriteOffService
             if (item.ProductStockId.HasValue)
             {
                 if (!stocksById.TryGetValue(item.ProductStockId.Value, out var stock))
-                    return (null, $"Stock batch {item.ProductStockId} not found.");
+                    return (null, $"Stock batch {item.ProductStockId} not found.", noProblems);
 
                 if (stock.Quantity < item.Quantity)
-                    return (null, $"Insufficient quantity in batch {item.ProductStockId}. Available: {stock.Quantity}, requested: {item.Quantity}.");
+                    return (null, $"Insufficient quantity in batch {item.ProductStockId}. Available: {stock.Quantity}, requested: {item.Quantity}.", noProblems);
 
                 var before = stock.Quantity;
                 stock.Quantity -= item.Quantity;
@@ -329,7 +375,7 @@ public sealed class WriteOffService : IWriteOffService
                 }
 
                 if (remaining > 0)
-                    return (null, $"Insufficient stock for product «{item.Product?.Name ?? item.ProductId.ToString()}» in store {writeOff.StoreId}. Available: {item.Quantity - remaining}, requested: {item.Quantity}.");
+                    return (null, $"Insufficient stock for product «{item.Product?.Name ?? item.ProductId.ToString()}» in store {writeOff.StoreId}. Available: {item.Quantity - remaining}, requested: {item.Quantity}.", noProblems);
             }
         }
 
@@ -341,7 +387,7 @@ public sealed class WriteOffService : IWriteOffService
         await _repo.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(id, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : ToDto(saved), null, problems);
     }
 
     public async Task<(WriteOffDto? WriteOff, string? Error)> RejectAsync(

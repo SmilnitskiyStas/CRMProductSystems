@@ -1357,6 +1357,16 @@
           "reject": "Reject",
           "downloadPdf": "Download PDF"
         },
+        "approveProblems": {
+          "title": "Could not approve the write-off",
+          "intro": "There is not enough stock for these lines, so the write-off cannot be approved as is:",
+          "line": "{product}{batch} — available {available}, requested {requested}",
+          "batch": " (batch {batch})",
+          "excludeHint": "You can exclude these lines and approve the rest — totals will be recalculated.",
+          "excludeAndApprove": "Exclude these lines and approve the rest",
+          "cancel": "Close",
+          "excluded": "Approved. Lines excluded: {count}"
+        },
         "filterChips": {
           "reason": "Reason: {value}",
           "store": "Store: {value}"

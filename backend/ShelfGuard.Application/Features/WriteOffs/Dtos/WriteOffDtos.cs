@@ -50,3 +50,13 @@ public sealed record CreateWriteOffItemRequest(
     string? ReimbursementType = null,
     decimal? ReimbursementValue = null
 );
+
+public sealed record WriteOffApprovalProblemDto(
+    List<Guid> ItemIds,
+    Guid ProductId,
+    string ProductName,
+    string? BatchNumber,
+    decimal Available,
+    decimal Requested,
+    string Reason
+);

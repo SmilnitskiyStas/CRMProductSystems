@@ -35,7 +35,8 @@ export const writeOffsApi = {
 
   create: (data: CreateWriteOffRequest) => api.post<WriteOffDto>("/api/write-offs", data),
 
-  approve: (id: string) => api.put<WriteOffDto>(`/api/write-offs/${id}/approve`),
+  approve: (id: string, excludeProblemItems = false) =>
+    api.put<WriteOffDto>(`/api/write-offs/${id}/approve${excludeProblemItems ? "?excludeProblemItems=true" : ""}`),
 
   reject: (id: string) => api.put<WriteOffDto>(`/api/write-offs/${id}/reject`),
 

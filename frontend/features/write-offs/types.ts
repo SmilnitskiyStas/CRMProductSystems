@@ -75,3 +75,14 @@ export const WRITE_OFF_REASON_VALUES = [
   "production_loss",
   "other",
 ] as const;
+
+// Returned in the 400 body of PUT /api/write-offs/{id}/approve when stock is short.
+export interface WriteOffApprovalProblem {
+  itemIds: string[];
+  productId: string;
+  productName: string;
+  batchNumber: string | null;
+  available: number;
+  requested: number;
+  reason: string;
+}

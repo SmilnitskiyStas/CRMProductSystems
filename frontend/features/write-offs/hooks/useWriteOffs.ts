@@ -49,7 +49,8 @@ export function useCreateWriteOff() {
 export function useApproveWriteOff() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => writeOffsApi.approve(id),
+    mutationFn: ({ id, excludeProblemItems }: { id: string; excludeProblemItems?: boolean }) =>
+      writeOffsApi.approve(id, excludeProblemItems),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["write-offs"] });
       qc.invalidateQueries({ queryKey: ["stock"] });

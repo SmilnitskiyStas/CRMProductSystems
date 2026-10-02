@@ -68,15 +68,15 @@ public sealed class WriteOffsController : ControllerBase
     [ProducesResponseType(typeof(WriteOffDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Approve(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Approve(Guid id, [FromQuery] bool excludeProblemItems = false, CancellationToken ct = default)
     {
         var (_, userId) = GetContext();
         if (userId is null) return Forbid();
 
-        var (writeOff, error) = await _writeOffs.ApproveAsync(id, userId.Value, ct);
+        var (writeOff, error, problems) = await _writeOffs.ApproveWithOptionsAsync(id, userId.Value, excludeProblemItems, ct);
 
         if (error == "Write-off not found.") return NotFound();
-        if (error is not null) return BadRequest(new { error });
+        if (error is not null) return BadRequest(new { error, problems });
 
         return Ok(writeOff);
     }

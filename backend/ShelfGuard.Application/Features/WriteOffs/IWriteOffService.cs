@@ -20,6 +20,13 @@ public interface IWriteOffService
     Task<(WriteOffDto? WriteOff, string? Error)> ApproveAsync(
         Guid id, Guid approvedBy, CancellationToken ct = default);
 
+    /// <summary>
+    /// Approve with structured shortfall info. When <paramref name="excludeProblemItems"/> is true,
+    /// lines lacking stock are dropped from the document (totals recomputed) and the rest approved.
+    /// </summary>
+    Task<(WriteOffDto? WriteOff, string? Error, List<WriteOffApprovalProblemDto> Problems)> ApproveWithOptionsAsync(
+        Guid id, Guid approvedBy, bool excludeProblemItems, CancellationToken ct = default);
+
     Task<(WriteOffDto? WriteOff, string? Error)> RejectAsync(
         Guid id, CancellationToken ct = default);
 }

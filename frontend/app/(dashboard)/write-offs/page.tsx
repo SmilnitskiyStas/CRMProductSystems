@@ -13,7 +13,8 @@ import {
   useApproveWriteOff,
   useRejectWriteOff,
 } from "@/features/write-offs/hooks/useWriteOffs";
-import type { WriteOffDto, WriteOffStatus, WriteOffSortBy } from "@/features/write-offs/types";
+import type { WriteOffDto, WriteOffStatus, WriteOffSortBy, WriteOffApprovalProblem } from "@/features/write-offs/types";
+import { ApiError } from "@/lib/api";
 import { WRITE_OFF_STATUS_COLOR } from "@/features/write-offs/types";
 import { CreateWriteOffForm } from "@/features/write-offs/components/CreateWriteOffForm";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -381,6 +382,27 @@ function WriteOffsPageContent() {
 
   const [selected, setSelected] = useState<WriteOffDto | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // Set when approve fails because some lines lack stock — drives the "exclude & approve" dialog.
+  const [approveBlock, setApproveBlock] = useState<{ id: string; problems: WriteOffApprovalProblem[] } | null>(null);
+
+  const runApprove = (id: string, excludeProblemItems = false) =>
+    approve.mutate(
+      { id, excludeProblemItems },
+      {
+        onSuccess: (_w, vars) => {
+          setApproveBlock(null);
+          if (vars.excludeProblemItems && approveBlock)
+            toast.success(tPage("approveProblems.excluded", { count: approveBlock.problems.length }));
+        },
+        onError: (e) => {
+          const problems = (e instanceof ApiError
+            ? (e.body as { problems?: WriteOffApprovalProblem[] } | undefined)?.problems
+            : undefined) ?? [];
+          if (problems.length > 0) setApproveBlock({ id, problems });
+          else toast.error(e.message);
+        },
+      },
+    );
 
   // Client-side filtering for reason (store filtering now happens server-side via
   // the global header selector — see usePrimaryStoreId() above)
@@ -461,7 +483,7 @@ function WriteOffsPageContent() {
                     icon: <CheckCircle size={13} />,
                     variant: "success" as const,
                     disabled: approve.isPending,
-                    onClick: () => approve.mutate(w.id, { onError: (e) => toast.error(e.message) }),
+                    onClick: () => runApprove(w.id),
                   },
                   {
                     label: tPage("actionMenu.reject"),
@@ -636,6 +658,35 @@ function WriteOffsPageContent() {
           />
         )}
       </DetailDrawer>
+
+      {approveBlock && (
+        <Modal title={tPage("approveProblems.title")} onClose={() => setApproveBlock(null)} width={620}>
+          <p style={{ color: "#E8EDF5", fontSize: 14, marginBottom: 12 }}>{tPage("approveProblems.intro")}</p>
+          <ul style={{ margin: "0 0 12px", paddingLeft: 18, maxHeight: 280, overflowY: "auto", color: "#FCA5A5", fontSize: 13, lineHeight: 1.6 }}>
+            {approveBlock.problems.map((p) => (
+              <li key={p.itemIds.join("-")}>
+                {tPage("approveProblems.line", {
+                  product: p.productName,
+                  batch: p.batchNumber ? tPage("approveProblems.batch", { batch: p.batchNumber }) : "",
+                  available: p.available,
+                  requested: p.requested,
+                })}
+              </li>
+            ))}
+          </ul>
+          <p style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 16 }}>{tPage("approveProblems.excludeHint")}</p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <Btn variant="ghost" onClick={() => setApproveBlock(null)}>{tPage("approveProblems.cancel")}</Btn>
+            <Btn
+              variant="success"
+              disabled={approve.isPending}
+              onClick={() => runApprove(approveBlock.id, true)}
+            >
+              {tPage("approveProblems.excludeAndApprove")}
+            </Btn>
+          </div>
+        </Modal>
+      )}
 
       {showCreateModal && (
         <Modal title={t("createForm.modalTitle")} onClose={() => setShowCreateModal(false)} width={700}>
