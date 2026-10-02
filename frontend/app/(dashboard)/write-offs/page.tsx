@@ -7,6 +7,7 @@ import {
   Eye, CheckCircle, XCircle, FileDown, BarChart2, Plus,
 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
+import { toast } from "sonner";
 import {
   useWriteOffs,
   useApproveWriteOff,
@@ -460,14 +461,14 @@ function WriteOffsPageContent() {
                     icon: <CheckCircle size={13} />,
                     variant: "success" as const,
                     disabled: approve.isPending,
-                    onClick: () => approve.mutate(w.id),
+                    onClick: () => approve.mutate(w.id, { onError: (e) => toast.error(e.message) }),
                   },
                   {
                     label: tPage("actionMenu.reject"),
                     icon: <XCircle size={13} />,
                     variant: "danger" as const,
                     disabled: reject.isPending,
-                    onClick: () => reject.mutate(w.id),
+                    onClick: () => reject.mutate(w.id, { onError: (e) => toast.error(e.message) }),
                   },
                 ]
               : []),

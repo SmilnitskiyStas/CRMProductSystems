@@ -550,6 +550,33 @@ public sealed class WriteOffServiceTests
         await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task ApproveAsync_ExplicitStockRef_EmptyBatch_ErrorNamesProductAndBatch()
+    {
+        var stock = new ProductStock
+        {
+            TenantId = _tenantId, ProductId = _productId, StoreId = _storeId,
+            BatchNumber = "BATCH-EMPTY-001",
+            Quantity = 0, QuantityInitial = 5,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
+            Status = "expired", LastCheckedAt = DateTime.UtcNow,
+        };
+
+        var writeOff = BuildWriteOff(stock: stock);
+        writeOff.Items.First().ProductStock = stock;
+        writeOff.Items.First().Product = new Item { Id = _productId, Name = "Батон тестовий" };
+        _repo.GetByIdAsync(writeOff.Id, Arg.Any<CancellationToken>()).Returns(writeOff);
+        _repo.GetStocksByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).Returns([stock]);
+
+        var (result, error) = await _sut.ApproveAsync(writeOff.Id, _userId);
+
+        Assert.Null(result);
+        Assert.Contains("Батон тестовий", error);
+        Assert.Contains("BATCH-EMPTY-001", error);
+        Assert.DoesNotContain(stock.Id.ToString(), error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // ── Reject ─────────────────────────────────────────────────────────────
 
     [Fact]

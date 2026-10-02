@@ -218,6 +218,34 @@ public sealed class WriteOffService : IWriteOffService
                 .GroupBy(s => s.ProductId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
+        // Validate every explicit-batch line up front and report ALL shortfalls at once, naming
+        // the product + batch (not a GUID). Requested quantity is summed per batch because several
+        // lines may point at the same batch. Failing here also keeps the in-memory stock entities
+        // untouched when a later line would have failed after earlier ones were already deducted.
+        var problems = new List<string>();
+        foreach (var group in writeOff.Items.Where(i => i.ProductStockId.HasValue).GroupBy(i => i.ProductStockId!.Value))
+        {
+            var first = group.First();
+            var label = $"«{first.Product?.Name ?? first.ProductId.ToString()}»" +
+                        (first.ProductStock?.BatchNumber is { } batchNo ? $" (партія {batchNo})" : "");
+
+            if (!stocksById.TryGetValue(group.Key, out var batchStock))
+                problems.Add($"{label}: Stock batch {group.Key} not found");
+            else
+            {
+                var requested = group.Sum(i => i.Quantity);
+                if (batchStock.Quantity < requested)
+                    problems.Add($"{label}: Insufficient quantity in batch — available {batchStock.Quantity}, requested {requested}");
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            var shown = string.Join("; ", problems.Take(5));
+            var more = problems.Count > 5 ? $"; … ще {problems.Count - 5}" : "";
+            return (null, $"Неможливо підтвердити списання. {shown}{more}. Видаліть/виправте ці позиції та створіть списання знову.");
+        }
+
         // Deduct stock and log movements for every item. Two shapes are supported:
         //  - item.ProductStockId set  → deduct that exact batch (explicit selection).
         //  - item.ProductStockId null → FEFO-consume across the product's batches at
@@ -301,7 +329,7 @@ public sealed class WriteOffService : IWriteOffService
                 }
 
                 if (remaining > 0)
-                    return (null, $"Insufficient stock for product {item.ProductId} in store {writeOff.StoreId}. Available: {item.Quantity - remaining}, requested: {item.Quantity}.");
+                    return (null, $"Insufficient stock for product «{item.Product?.Name ?? item.ProductId.ToString()}» in store {writeOff.StoreId}. Available: {item.Quantity - remaining}, requested: {item.Quantity}.");
             }
         }
 
