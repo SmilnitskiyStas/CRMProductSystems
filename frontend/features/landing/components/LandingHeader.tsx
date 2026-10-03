@@ -17,9 +17,6 @@ export function LandingHeader() {
 
   const nav = t.raw("nav") as { href: string; label: string }[];
   const [hash, setHash] = useState("");
-  // These nav items are anchors into sections that only exist on the homepage.
-  // On any other page (e.g. /retail) they must link back to "/" with the hash
-  // instead of a bare "#..." — otherwise they're dead links there.
   const isHome = pathname === "/";
 
   useEffect(() => {
@@ -45,39 +42,23 @@ export function LandingHeader() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <a href="#top" aria-label={t("logoAriaLabel")}>
+        <LocaleLink href="/" aria-label={t("logoAriaLabel")}>
           <Logo />
-        </a>
+        </LocaleLink>
 
-        <nav className="hidden items-center gap-7 md:flex" aria-label={t("mainNavAriaLabel")}>
-          <LocaleLink
-            href="/retail"
-            className="text-sm text-slate-400 transition-colors hover:text-white"
-          >
-            {t("retailNavLabel")}
-          </LocaleLink>
-          {nav.map((item) =>
-            isHome ? (
-              <a
-                key={item.href}
-                href={item.href}
-                className="text-sm text-slate-400 transition-colors hover:text-white"
-              >
-                {item.label}
-              </a>
-            ) : (
-              <LocaleLink
-                key={item.href}
-                href={{ pathname: "/", hash: item.href.slice(1) }}
-                className="text-sm text-slate-400 transition-colors hover:text-white"
-              >
-                {item.label}
-              </LocaleLink>
-            ),
-          )}
+        <nav className="hidden items-center gap-6 lg:flex" aria-label={t("mainNavAriaLabel")}>
+          {nav.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              isHome={isHome}
+              pathname={pathname}
+              className="text-sm"
+            />
+          ))}
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           <LangSwitch locale={locale} pathname={pathname} hash={hash} t={t} />
           <Button asChild variant="ghost">
             <Link href="/login">{t("login")}</Link>
@@ -89,7 +70,7 @@ export function LandingHeader() {
 
         <button
           type="button"
-          className="rounded-md p-2 text-slate-300 hover:bg-white/5 hover:text-white md:hidden"
+          className="rounded-md p-2 text-slate-300 hover:bg-white/5 hover:text-white lg:hidden"
           onClick={() => setMenuOpen((v) => !v)}
           aria-expanded={menuOpen}
           aria-label={menuOpen ? t("menuCloseAriaLabel") : t("menuOpenAriaLabel")}
@@ -100,38 +81,20 @@ export function LandingHeader() {
 
       {menuOpen && (
         <nav
-          className="border-t border-white/[0.07] bg-[#0B0F17]/95 px-4 pb-5 pt-3 backdrop-blur-md md:hidden"
+          className="border-t border-white/[0.07] bg-[#0B0F17]/95 px-4 pb-5 pt-3 backdrop-blur-md lg:hidden"
           aria-label={t("mobileNavAriaLabel")}
         >
           <div className="flex flex-col gap-1">
-            <LocaleLink
-              href="/retail"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-md px-3 py-2.5 text-[15px] text-slate-300 hover:bg-white/5 hover:text-white"
-            >
-              {t("retailNavLabel")}
-            </LocaleLink>
-            {nav.map((item) =>
-              isHome ? (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-md px-3 py-2.5 text-[15px] text-slate-300 hover:bg-white/5 hover:text-white"
-                >
-                  {item.label}
-                </a>
-              ) : (
-                <LocaleLink
-                  key={item.href}
-                  href={{ pathname: "/", hash: item.href.slice(1) }}
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-md px-3 py-2.5 text-[15px] text-slate-300 hover:bg-white/5 hover:text-white"
-                >
-                  {item.label}
-                </LocaleLink>
-              ),
-            )}
+            {nav.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                isHome={isHome}
+                pathname={pathname}
+                onNavigate={() => setMenuOpen(false)}
+                className="rounded-md px-3 py-2.5 text-[15px] hover:bg-white/5"
+              />
+            ))}
           </div>
           <div className="mt-4 flex flex-col gap-2.5">
             <div className="flex justify-center">
@@ -149,6 +112,46 @@ export function LandingHeader() {
         </nav>
       )}
     </header>
+  );
+}
+
+// "#section" hrefs are homepage anchors: plain anchor on the homepage, link back
+// to "/" + hash elsewhere. "/path" or "/#hash" hrefs are real routes.
+function NavLink({
+  item,
+  isHome,
+  pathname,
+  onNavigate,
+  className,
+}: {
+  item: { href: string; label: string };
+  isHome: boolean;
+  pathname: string;
+  onNavigate?: () => void;
+  className: string;
+}) {
+  const [path, hash] = item.href.split("#");
+  const active = !!path && path !== "/" && pathname === path;
+  const cls = `${className} transition-colors ${
+    active ? "text-white" : "text-slate-400 hover:text-white"
+  }`;
+
+  if (item.href.startsWith("#") && isHome) {
+    return (
+      <a href={item.href} onClick={onNavigate} className={cls}>
+        {item.label}
+      </a>
+    );
+  }
+  return (
+    <LocaleLink
+      href={hash ? { pathname: path || "/", hash } : path}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cls}
+    >
+      {item.label}
+    </LocaleLink>
   );
 }
 
