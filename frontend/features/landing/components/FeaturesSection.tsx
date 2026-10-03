@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Reveal } from "./Reveal";
+import { Section, SectionHeading, TeaserLink } from "./Section";
 
 const ICONS = [
   CalendarClock,
@@ -24,17 +25,12 @@ const ICONS = [
 
 export async function FeaturesSection() {
   const t = await getTranslations("Landing.features");
+  const tTeasers = await getTranslations("Landing.teasers");
   const items = t.raw("items") as { title: string; text: string }[];
 
   return (
-    <section id="features" className="scroll-mt-20 py-16 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            {t("heading")}
-          </h2>
-          <p className="mt-4 text-lg text-slate-400">{t("subheading")}</p>
-        </Reveal>
+    <Section id="features">
+      <SectionHeading title={t("heading")} subtitle={t("subheading")} />
 
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {items.map((item, i) => {
@@ -52,7 +48,10 @@ export async function FeaturesSection() {
             );
           })}
         </div>
-      </div>
-    </section>
+
+      <Reveal className="mt-10 text-center">
+        <TeaserLink href="/features">{tTeasers("features")}</TeaserLink>
+      </Reveal>
+    </Section>
   );
 }

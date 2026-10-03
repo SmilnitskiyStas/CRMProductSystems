@@ -1,7 +1,9 @@
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
+import { Link } from "@/i18n/navigation";
 import { BrowserFrame } from "./BrowserFrame";
+import { TrustStrip } from "./TrustStrip";
 
 export async function HeroSection() {
   const t = await getTranslations("Landing.hero");
@@ -15,7 +17,11 @@ export async function HeroSection() {
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-[#2D7DD2]/[0.12] blur-[140px]"
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[480px] w-[900px] max-w-full -translate-x-1/2 rounded-full bg-[var(--l-accent-strong)]/[0.16] blur-[140px]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-24 top-64 -z-10 h-72 w-72 rounded-full bg-[var(--l-ok)]/[0.05] blur-[120px]"
       />
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
@@ -26,7 +32,7 @@ export async function HeroSection() {
           </p>
 
           <h1 className="hero-fade hero-fade-2 mt-6 text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
-            {t("titleLine")} <span className="text-[#5EA3E8]">{t("titleHighlight")}</span>
+            {t("titleLine")} <span className="bg-gradient-to-r from-[#5EA3E8] to-[#7DD3C0] bg-clip-text text-transparent">{t("titleHighlight")}</span>
           </h1>
 
           <p className="hero-fade hero-fade-3 mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-400">
@@ -38,7 +44,7 @@ export async function HeroSection() {
               <a href="#lead-form">{t("ctaPrimary")}</a>
             </Button>
             <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
-              <a href="#features">{t("ctaSecondary")}</a>
+              <Link href="/features">{t("ctaSecondary")}</Link>
             </Button>
           </div>
         </div>
@@ -56,6 +62,8 @@ export async function HeroSection() {
             />
           </BrowserFrame>
         </div>
+
+        <TrustStrip />
       </div>
     </section>
   );

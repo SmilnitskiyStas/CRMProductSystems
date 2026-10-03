@@ -42,3 +42,18 @@ html:has([data-landing]) {
     transform: none;
   }
 }
+
+/* Landing palette — single source for new/shared landing components.
+   Tailwind arbitrary values reference these (e.g. bg-[var(--l-bg)]). */
+[data-landing] {
+  --l-bg: #0b0f17;
+  --l-surface: rgba(255, 255, 255, 0.03);
+  --l-surface-strong: rgba(255, 255, 255, 0.06);
+  --l-border: rgba(255, 255, 255, 0.08);
+  --l-text: #e2e8f0;
+  --l-muted: #94a3b8;
+  --l-accent: #5ea3e8;
+  --l-accent-strong: #2d7dd2;
+  --l-ok: #22c55e;
+  --l-warn: #f59e0b;
+}
