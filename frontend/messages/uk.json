@@ -7317,7 +7317,20 @@
       "total": "Всього: {count}",
       "saveError": "Не вдалося зберегти зміни",
       "loadError": "Не вдалося завантажити заявки",
-      "processedAt": "Оброблено {date}"
+      "processedAt": "Оброблено {date}",
+      "open": "Відкрити",
+      "sectionContact": "Контакт",
+      "sectionMessage": "Повідомлення",
+      "sectionOrigin": "Звідки заявка",
+      "sectionHistory": "Історія",
+      "fieldStatus": "Статус",
+      "fieldPhone": "Телефон",
+      "fieldPage": "Сторінка",
+      "fieldLocale": "Мова сайту",
+      "fieldReferrer": "Перехід з",
+      "fieldCreated": "Отримано",
+      "fieldProcessed": "Оброблено",
+      "noMessage": "Повідомлення не залишено."
     }
   }
 }

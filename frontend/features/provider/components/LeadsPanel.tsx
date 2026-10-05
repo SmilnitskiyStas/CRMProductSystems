@@ -7,39 +7,23 @@ import { Phone, Search } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { useProviderLeads, useUpdateLead } from "../hooks/useProviderLeads";
 import type { LandingLeadDto, LeadStatusFilter } from "../types";
+import { LeadDetailDrawer, formatLeadDate } from "./LeadDetailDrawer";
 
 const PAGE_SIZE = 20;
 const TABS: LeadStatusFilter[] = ["new", "processed", "all"];
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function utmLine(l: LandingLeadDto): string {
   return [l.utmSource, l.utmMedium, l.utmCampaign].filter(Boolean).join(" / ");
 }
 
-function LeadCard({ lead }: { lead: LandingLeadDto }) {
+function LeadCard({ lead, onOpen }: { lead: LandingLeadDto; onOpen: () => void }) {
   const t = useTranslations("Dashboard.providerLeads");
   const update = useUpdateLead();
-  const [editing, setEditing] = useState(false);
-  const [note, setNote] = useState(lead.adminNote ?? "");
-
-  const onError = () => toast.error(t("saveError"));
 
   const toggleProcessed = () =>
-    update.mutate({ id: lead.id, body: { isProcessed: !lead.isProcessed } }, { onError });
-
-  const saveNote = () =>
     update.mutate(
-      { id: lead.id, body: { adminNote: note } },
-      { onSuccess: () => setEditing(false), onError },
+      { id: lead.id, body: { isProcessed: !lead.isProcessed } },
+      { onError: () => toast.error(t("saveError")) },
     );
 
   const utm = utmLine(lead);
@@ -47,6 +31,15 @@ function LeadCard({ lead }: { lead: LandingLeadDto }) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
       style={{
         background: "#0D1117",
         border: `1px solid ${lead.isProcessed ? "#1F2937" : "#1D3461"}`,
@@ -55,6 +48,7 @@ function LeadCard({ lead }: { lead: LandingLeadDto }) {
         display: "flex",
         flexDirection: "column",
         gap: 10,
+        cursor: "pointer",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -62,6 +56,7 @@ function LeadCard({ lead }: { lead: LandingLeadDto }) {
           <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>{lead.name}</div>
           <a
             href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`}
+            onClick={(e) => e.stopPropagation()}
             style={{ color: "#93C5FD", fontSize: 14, display: "inline-flex", alignItems: "center", gap: 6, marginTop: 2 }}
           >
             <Phone size={13} />
@@ -83,15 +78,24 @@ function LeadCard({ lead }: { lead: LandingLeadDto }) {
           >
             {lead.isProcessed ? t("statusProcessed") : t("statusNew")}
           </span>
-          <div style={{ ...muted, marginTop: 4 }}>{formatDate(lead.createdAt)}</div>
-          {lead.isProcessed && lead.processedAt && (
-            <div style={muted}>{t("processedAt", { date: formatDate(lead.processedAt) })}</div>
-          )}
+          <div style={{ ...muted, marginTop: 4 }}>{formatLeadDate(lead.createdAt)}</div>
         </div>
       </div>
 
       {lead.message && (
-        <p style={{ color: "#D1D5DB", fontSize: 13, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        <p
+          style={{
+            color: "#D1D5DB",
+            fontSize: 13,
+            margin: 0,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
           {lead.message}
         </p>
       )}
@@ -99,68 +103,15 @@ function LeadCard({ lead }: { lead: LandingLeadDto }) {
       <div style={{ ...muted, display: "flex", flexWrap: "wrap", gap: "2px 14px" }}>
         <span>
           {t("colSource")}: {lead.source}
-          {lead.pageUrl ? ` (${lead.pageUrl})` : ""}
-          {lead.locale ? ` · ${lead.locale}` : ""}
         </span>
         {utm && <span>UTM: {utm}</span>}
-        {lead.referrer && <span style={{ wordBreak: "break-all" }}>ref: {lead.referrer}</span>}
+        {lead.adminNote && <span>{t("note")}: ✓</span>}
       </div>
 
-      {editing ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={1000}
-            rows={3}
-            placeholder={t("notePlaceholder")}
-            style={{
-              width: "100%",
-              background: "#111827",
-              border: "1px solid #374151",
-              borderRadius: 8,
-              color: "#E8EDF5",
-              fontSize: 13,
-              padding: 8,
-              resize: "vertical",
-            }}
-          />
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn size="sm" onClick={saveNote} disabled={update.isPending}>
-              {t("noteSave")}
-            </Btn>
-            <Btn
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setNote(lead.adminNote ?? "");
-                setEditing(false);
-              }}
-            >
-              {t("noteCancel")}
-            </Btn>
-          </div>
-        </div>
-      ) : (
-        lead.adminNote && (
-          <div
-            style={{
-              background: "#111827",
-              borderLeft: "3px solid #3B82F6",
-              borderRadius: 6,
-              padding: "6px 10px",
-              color: "#D1D5DB",
-              fontSize: 13,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}
-          >
-            {lead.adminNote}
-          </div>
-        )
-      )}
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
+        <Btn size="sm" onClick={onOpen}>
+          {t("open")}
+        </Btn>
         <Btn
           size="sm"
           variant={lead.isProcessed ? "ghost" : "success"}
@@ -169,11 +120,6 @@ function LeadCard({ lead }: { lead: LandingLeadDto }) {
         >
           {lead.isProcessed ? t("markUnprocessed") : t("markProcessed")}
         </Btn>
-        {!editing && (
-          <Btn size="sm" variant="ghost" onClick={() => setEditing(true)}>
-            {lead.adminNote ? t("noteEdit") : t("noteAdd")}
-          </Btn>
-        )}
       </div>
     </div>
   );
@@ -185,6 +131,7 @@ export function LeadsPanel() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   // Debounce the search box; reset to the first page when the query changes.
   useEffect(() => {
@@ -197,6 +144,7 @@ export function LeadsPanel() {
 
   const { data, isLoading, isError } = useProviderLeads({ status, search, page, pageSize: PAGE_SIZE });
   const items = data?.items ?? [];
+  const openLead = items.find((l) => l.id === openId) ?? null;
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -253,7 +201,7 @@ export function LeadsPanel() {
       ) : (
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
           {items.map((lead) => (
-            <LeadCard key={`${lead.id}:${lead.isProcessed}:${lead.adminNote ?? ""}`} lead={lead} />
+            <LeadCard key={lead.id} lead={lead} onOpen={() => setOpenId(lead.id)} />
           ))}
         </div>
       )}
@@ -269,6 +217,8 @@ export function LeadsPanel() {
           </Btn>
         </div>
       )}
+
+      <LeadDetailDrawer key={openLead?.id ?? "none"} lead={openLead} onClose={() => setOpenId(null)} />
     </div>
   );
 }

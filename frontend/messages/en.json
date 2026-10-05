@@ -7317,7 +7317,20 @@
       "total": "Total: {count}",
       "saveError": "Could not save changes",
       "loadError": "Could not load leads",
-      "processedAt": "Processed {date}"
+      "processedAt": "Processed {date}",
+      "open": "Open",
+      "sectionContact": "Contact",
+      "sectionMessage": "Message",
+      "sectionOrigin": "Where it came from",
+      "sectionHistory": "History",
+      "fieldStatus": "Status",
+      "fieldPhone": "Phone",
+      "fieldPage": "Page",
+      "fieldLocale": "Site language",
+      "fieldReferrer": "Referred from",
+      "fieldCreated": "Received",
+      "fieldProcessed": "Processed",
+      "noMessage": "No message left."
     }
   }
 }
