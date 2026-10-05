@@ -4,10 +4,8 @@ import { routing } from "@/i18n/routing";
 import { buildPageMetadata } from "@/features/landing/page-meta";
 import { LandingShell } from "@/features/landing/components/LandingShell";
 import { PageHero, Section } from "@/features/landing/components/Section";
-import {
-  RoadmapColumns,
-  type RoadmapColumn,
-} from "@/features/landing/components/RoadmapColumns";
+import { RoadmapTimeline } from "@/features/landing/components/RoadmapTimeline";
+import { RoadmapProgress, getRoadmapColumns } from "@/features/landing/components/RoadmapProgress";
 import { PageCtaStrip } from "@/features/landing/components/PageCtaStrip";
 import { LeadSection } from "@/features/landing/components/LeadSection";
 
@@ -36,10 +34,7 @@ export default async function RoadmapPage({
   setRequestLocale(locale);
   const t = await getTranslations("Landing.pages.roadmap");
   const common = await getTranslations("Landing.pages.common");
-
-  const done = t.raw("columns.done") as RoadmapColumn;
-  const inProgress = t.raw("columns.inProgress") as RoadmapColumn;
-  const planned = t.raw("columns.planned") as RoadmapColumn;
+  const { done, inProgress, planned } = await getRoadmapColumns();
 
   return (
     <LandingShell>
@@ -49,8 +44,9 @@ export default async function RoadmapPage({
         description={t("hero.description")}
       />
       <Section className="!pt-4">
-        <RoadmapColumns
-          columns={[
+        <RoadmapProgress className="mb-12" />
+        <RoadmapTimeline
+          stages={[
             { tone: "done", column: done },
             { tone: "inProgress", column: inProgress },
             { tone: "planned", column: planned },

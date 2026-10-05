@@ -2,7 +2,7 @@
   "Landing": {
     "meta": {
       "title": "ShelfGuard — expiry tracking and stock control for retail stores",
-      "description": "Inventory management for grocery stores and chains: FEFO expiry tracking, AI auto-ordering, fiscal POS checkout (Checkbox), analytics, and a mobile app with a built-in scanner.",
+      "description": "Inventory management for grocery stores and chains: FEFO expiry tracking, AI auto-ordering, B2B marketplace, analytics, and a mobile app with a built-in scanner.",
       "ogSiteName": "ShelfGuard",
       "ogImageAlt": "ShelfGuard dashboard"
     },
@@ -45,7 +45,7 @@
       "badge": "Inventory management for grocery stores and chains",
       "titleLine": "Expiring stock shows up weeks out.",
       "titleHighlight": "Your customers never see it.",
-      "description": "ShelfGuard tracks every batch's expiry date using FEFO, tells you what and how much to order, prints fiscal receipts through ПРРО, and shows the status of every store on a single screen.",
+      "description": "ShelfGuard tracks every batch's expiry date using FEFO, tells you what and how much to order, tracks sales, and shows the status of every store on a single screen.",
       "ctaPrimary": "Request a demo",
       "ctaSecondary": "See what it does",
       "imageAlt": "ShelfGuard dashboard: batch statuses Safe, Warning, Critical, Expired, a list of items needing attention, and quick actions"
@@ -70,7 +70,7 @@
     },
     "features": {
       "heading": "Everything a store needs, in one system",
-      "subheading": "From receiving stock to a fiscal receipt. Modules turn on based on your type of business.",
+      "subheading": "From receiving stock to sales analytics. Modules turn on based on your type of business.",
       "items": [
         {
           "title": "Expiry tracking (FEFO)",
@@ -81,8 +81,8 @@
           "text": "AI analyzes sales, stock levels, and seasonality, and prepares an order suggestion every morning. All you do is review and confirm it."
         },
         {
-          "title": "Fiscal POS checkout",
-          "text": "A full point-of-sale system fiscalized through Checkbox: receipts, shifts, Z-reports. Every sale deducts stock instantly — batch by batch, following FEFO."
+          "title": "Sales tracking",
+          "text": "Sales are entered into the system and deduct stock instantly — batch by batch, following FEFO. Our own point-of-sale with fiscalization is being built separately."
         },
         {
           "title": "Analytics and reports",
@@ -98,7 +98,7 @@
         },
         {
           "title": "Mobile app with a scanner",
-          "text": "Receiving, write-offs, stocktaking, and sales — all from a phone. The barcode scanner works through the camera, no extra hardware needed."
+          "text": "Receiving, write-offs, and stocktaking — all from a phone. The barcode scanner works through the camera, no extra hardware needed."
         },
         {
           "title": "Staff scheduling",
@@ -150,10 +150,10 @@
     },
     "loyalty": {
       "heading": "A loyalty program with a dedicated customer app",
-      "subheading": "Not just a loyalty card inside the CRM — a real mobile app for your customers, running on the same backend as the POS.",
+      "subheading": "Not just a loyalty card inside the CRM — a real mobile app for your customers, running on the same backend as the CRM.",
       "mainBadge": "Customer app",
       "mainTitle": "A personal account with a loyalty card",
-      "mainText": "At checkout, the customer shows a QR or barcode and bonuses are credited instantly — no separate terminal needed. The app shows their balance, loyalty tier, and the store's catalog; one account can hold memberships in several retail chains at once.",
+      "mainText": "The customer shows a QR or barcode and bonuses are credited — no separate terminal needed. The app shows their balance, loyalty tier, and the store's catalog; one account can hold memberships in several retail chains at once.",
       "secondary": [
         {
           "title": "Loyalty tiers",
@@ -161,14 +161,14 @@
         },
         {
           "title": "Accrual and redemption",
-          "text": "Every operation is logged: bonuses earned on a purchase, bonuses redeemed at checkout, manual adjustments made by staff."
+          "text": "Every operation is logged: bonuses earned on a purchase, bonuses redeemed, manual adjustments made by staff."
         },
         {
           "title": "Purchase history and reviews",
           "text": "Customers see every receipt and can leave a review for a purchase right inside the app."
         }
       ],
-      "footer": "Same backend as the CRM: bonuses, tiers, and history stay in sync with the POS in real time."
+      "footer": "Same backend as the CRM: bonuses, tiers, and purchase history live in one system."
     },
     "marketingAnalytics": {
       "heading": "Marketing analytics and customer segmentation",
@@ -252,7 +252,7 @@
         {
           "number": "03",
           "title": "You run everything from one screen",
-          "text": "Expiry dates, stock, orders, and checkout — all in one system. You spot problems before they cost you money."
+          "text": "Expiry dates, stock, orders, and sales — all in one system. You spot problems before they cost you money."
         }
       ]
     },
@@ -284,7 +284,7 @@
       "priceTitle": "Pricing — on request",
       "priceText": "Leave a request and we'll prepare a quote tailored to your business within one day.",
       "included": [
-        "Every module: expiry tracking, stock, checkout, analytics, marketplace",
+        "Every module: expiry tracking, stock, sales, analytics, marketplace",
         "Mobile app with a barcode scanner",
         "Setup tailored to your store plus product import",
         "Team training — from cashiers to managers",
@@ -305,7 +305,7 @@
         },
         {
           "q": "Does it work with fiscal registrars (ПРРО)?",
-          "a": "Yes. Built-in integration with Checkbox: fiscal receipts, opening and closing shifts, Z-reports. Every sale automatically deducts stock following FEFO."
+          "a": "Not yet. We are planning our own point-of-sale and a fiscal registrar (ПРРО) integration — they are still in development. For now ShelfGuard tracks batches, stock and sales, and you keep issuing fiscal receipts on your existing register."
         },
         {
           "q": "I have multiple stores — is that supported?",
@@ -317,7 +317,7 @@
         },
         {
           "q": "Can I work from my phone?",
-          "a": "Yes. The mobile app covers day-to-day operations: scanning, receiving deliveries, write-offs, stocktaking, and even checkout. Managers see the dashboard and notifications right on their phone."
+          "a": "Yes. The mobile app covers day-to-day operations: scanning, receiving deliveries, write-offs, and stocktaking. Managers see the dashboard and notifications right on their phone."
         }
       ]
     },
@@ -417,13 +417,13 @@
       "retail": {
         "meta": {
           "title": "ShelfGuard for retail chains — expiry and stock control across every location",
-          "description": "Software for retail chains: FEFO expiry-date control in every store, AI-driven reordering, POS with fiscal receipts (Checkbox), and chain-wide analytics on one screen."
+          "description": "Software for retail chains: FEFO expiry-date control in every store, AI-driven reordering, transfers between stores, and chain-wide analytics on one screen."
         },
         "hero": {
           "badge": "For grocery retail chains",
           "titleLine": "Every store under control.",
           "titleHighlight": "The whole chain on one screen.",
-          "description": "ShelfGuard tracks the expiry date of every batch in every store in your chain, suggests what to reorder, issues fiscal receipts through PRRO, and rolls every location's status up into one dashboard.",
+          "description": "ShelfGuard tracks the expiry date of every batch in every store in your chain, suggests what to reorder, tracks sales, and rolls every location's status up into one dashboard.",
           "ctaPrimary": "Request a demo",
           "ctaSecondary": "See what's included",
           "imageAlt": "ShelfGuard store map showing batch statuses — Safe, Warning, Critical — by zone"
@@ -449,8 +449,8 @@
               "text": "AI analyzes each store's own sales and builds a reorder suggestion tailored to that specific location."
             },
             {
-              "title": "POS with fiscal receipts",
-              "text": "Every sale issues a fiscal receipt through Checkbox right at the register, and stock updates instantly."
+              "title": "Sales tracking per store",
+              "text": "Sales are entered per store and deduct stock instantly, following FEFO."
             },
             {
               "title": "Write-offs and loss control",
@@ -460,12 +460,12 @@
         },
         "example": {
           "heading": "How it works for a chain",
-          "subheading": "From a batch in the stockroom to a receipt at the register — one continuous process per store.",
+          "subheading": "From a batch in the stockroom to a sale to the customer — one continuous process per store.",
           "steps": [
             {
               "number": "1",
               "title": "Each store keeps its own records",
-              "text": "Batches, sales, and the register — tracked separately per location, with no manual spreadsheet roll-up."
+              "text": "Batches and sales — tracked separately per location, with no manual spreadsheet roll-up."
             },
             {
               "number": "2",
@@ -479,8 +479,8 @@
             },
             {
               "number": "4",
-              "title": "POS and PRRO close the loop",
-              "text": "A sale issues a fiscal receipt, stock updates immediately — and feeds straight into the next reorder suggestion."
+              "title": "Sales close the loop",
+              "text": "After a sale, stock updates immediately — and feeds straight into the next reorder suggestion."
             }
           ]
         },
@@ -498,8 +498,8 @@
           "text": "Consumption by nearest expiry"
         },
         {
-          "title": "Checkbox fiscal POS",
-          "text": "Fiscal receipts from the till"
+          "title": "B2B marketplace",
+          "text": "Orders to suppliers"
         },
         {
           "title": "AI auto-ordering",
@@ -519,16 +519,7 @@
     },
     "miniRoadmap": {
       "heading": "What exists and what's next",
-      "subheading": "We build the product openly: below is what works today, and the roadmap page covers plans.",
-      "doneTitle": "Already working",
-      "done": [
-        "Batch tracking and expiry control (FEFO)",
-        "POS with fiscalization via Checkbox",
-        "AI auto-ordering and AI assistant",
-        "B2B supplier marketplace",
-        "IoT temperature monitoring",
-        "Mobile app with a barcode scanner"
-      ],
+      "subheading": "We build the product openly: the bar shows what already works, what is in progress and what is still ahead.",
       "nextTitle": "What's next",
       "nextText": "We collect priorities and development plans on a separate page. They may change depending on customer needs."
     },
@@ -541,8 +532,8 @@
       },
       "features": {
         "meta": {
-          "title": "ShelfGuard features — FEFO, fiscal POS, AI ordering, IoT",
-          "description": "All implemented ShelfGuard capabilities: FEFO expiry control, POS with Checkbox fiscalization, AI auto-ordering, B2B marketplace, IoT temperature, loyalty and a mobile app."
+          "title": "ShelfGuard features — FEFO, AI ordering, marketplace, IoT",
+          "description": "All implemented ShelfGuard capabilities: FEFO expiry control, AI auto-ordering, B2B marketplace, IoT temperature, loyalty and a mobile app."
         },
         "hero": {
           "eyebrow": "Features",
@@ -566,14 +557,13 @@
           },
           {
             "id": "sales",
-            "title": "Sales and fiscalization",
-            "solves": "The till, the stock records and fiscalization live apart and drift.",
-            "text": "A full POS that writes stock off immediately and issues fiscal receipts.",
+            "title": "Sales",
+            "solves": "Sales and stock records live apart and drift.",
+            "text": "Sales are entered into the system and immediately change batch stock.",
             "items": [
-              "Shifts, receipts and Z-reports",
-              "Fiscalization via Checkbox, configured per company",
-              "A sale writes stock off by FEFO right away",
-              "Manual sales entry when the POS is not used"
+              "Manual sales entry",
+              "A sale writes stock off by FEFO, batch by batch",
+              "Sales analytics per store and across the chain"
             ]
           },
           {
@@ -630,7 +620,6 @@
             "items": [
               "Receiving, write-offs, transfers and stocktaking",
               "Camera barcode scanner, no extra hardware",
-              "POS from the phone",
               "Shift schedule view"
             ]
           },
@@ -663,6 +652,10 @@
           "description": "We show the real state of the product, with no promises about timing."
         },
         "disclaimer": "Plans and priorities may change depending on customer needs. This is not a commitment on delivery dates.",
+        "progress": {
+          "summary": "{done} of {total} directions done",
+          "ariaLabel": "Roadmap progress: {done} done, {inProgress} in progress, {planned} planned — {total} directions in total"
+        },
         "columns": {
           "done": {
             "title": "Done",
@@ -675,10 +668,6 @@
               {
                 "title": "Receiving, transfers, write-offs",
                 "text": "Documents for stock moving between suppliers and locations."
-              },
-              {
-                "title": "Fiscal POS",
-                "text": "Shifts, receipts, Z-reports, fiscalization via Checkbox."
               },
               {
                 "title": "AI auto-ordering",
@@ -702,7 +691,7 @@
               },
               {
                 "title": "Mobile app",
-                "text": "Barcode scanner, receiving, write-offs, POS."
+                "text": "Barcode scanner, receiving, write-offs, stocktaking."
               },
               {
                 "title": "Staff and notifications",
@@ -730,7 +719,7 @@
             "items": [
               {
                 "title": "Our own point-of-sale system",
-                "text": "A more pleasant checkout interface and a dedicated app the business customises in its own account."
+                "text": "A more pleasant checkout interface and a dedicated app the business customises in its own account. It will include fiscalization (ПРРО) support."
               },
               {
                 "title": "Surveillance camera integration",
@@ -775,7 +764,7 @@
       "howItWorks": {
         "meta": {
           "title": "How ShelfGuard works — from onboarding to daily use",
-          "description": "Step by step: onboarding, catalog and batches, sales and POS, auto-ordering and analytics. Team roles and the mobile scenario."
+          "description": "Step by step: onboarding, catalog and batches, sales tracking, auto-ordering and analytics. Team roles and the mobile scenario."
         },
         "hero": {
           "eyebrow": "How it works",
@@ -795,8 +784,8 @@
           },
           {
             "number": "03",
-            "title": "Sales and POS",
-            "text": "The POS issues fiscal receipts and writes stock off by FEFO right away, batch by batch."
+            "title": "Sales tracking",
+            "text": "Sales are entered into the system and write stock off by FEFO right away, batch by batch. Analytics shows what sells best."
           },
           {
             "number": "04",
@@ -822,8 +811,8 @@
               "text": "Expiry, stock, orders, team schedules."
             },
             {
-              "title": "Cashier and staff",
-              "text": "POS, receiving and write-offs — simple and scanner-driven."
+              "title": "Store staff",
+              "text": "Receiving and write-offs — simple and scanner-driven."
             }
           ]
         },
@@ -834,7 +823,7 @@
             "Scan a barcode with the phone camera",
             "Receive a delivery or write off a product",
             "See expiry dates and notifications",
-            "Sell from the POS on your phone if needed"
+            "Check the shift schedule and dashboard"
           ]
         },
         "cta": {

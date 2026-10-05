@@ -43,6 +43,26 @@ html:has([data-landing]) {
   }
 }
 
+/* Roadmap: pulsing "in progress" marker + subtle shimmer on its progress segment */
+@media (prefers-reduced-motion: no-preference) {
+  [data-landing] .rm-pulse {
+    animation: sg-pulse 1.8s ease-in-out infinite;
+  }
+  [data-landing] .rm-shimmer {
+    animation: sg-shimmer 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes sg-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(94, 163, 232, 0.55); }
+  50% { box-shadow: 0 0 0 6px rgba(94, 163, 232, 0); }
+}
+
+@keyframes sg-shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
 /* Landing palette — single source for new/shared landing components.
    Tailwind arbitrary values reference these (e.g. bg-[var(--l-bg)]). */
 [data-landing] {
