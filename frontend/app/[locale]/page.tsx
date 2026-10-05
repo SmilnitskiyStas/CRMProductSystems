@@ -1,22 +1,18 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import "@/features/landing/landing.css";
 import { routing } from "@/i18n/routing";
-import { LandingHeader } from "@/features/landing/components/LandingHeader";
+import { LandingShell } from "@/features/landing/components/LandingShell";
+import { MiniRoadmapSection } from "@/features/landing/components/MiniRoadmapSection";
 import { HeroSection } from "@/features/landing/components/HeroSection";
 import { ProblemSection } from "@/features/landing/components/ProblemSection";
 import { FeaturesSection } from "@/features/landing/components/FeaturesSection";
 import { ShowcaseSection } from "@/features/landing/components/ShowcaseSection";
-import { LoyaltySection } from "@/features/landing/components/LoyaltySection";
-import { MarketingAnalyticsSection } from "@/features/landing/components/MarketingAnalyticsSection";
-import { ProductionSection } from "@/features/landing/components/ProductionSection";
 import { AiAssistantSection } from "@/features/landing/components/AiAssistantSection";
 import { HowItWorksSection } from "@/features/landing/components/HowItWorksSection";
 import { AudienceSection } from "@/features/landing/components/AudienceSection";
 import { PricingSection } from "@/features/landing/components/PricingSection";
 import { FaqSection } from "@/features/landing/components/FaqSection";
 import { LeadSection } from "@/features/landing/components/LeadSection";
-import { LandingFooter } from "@/features/landing/components/LandingFooter";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -64,24 +60,18 @@ export default async function LandingPage({
   setRequestLocale(locale);
 
   return (
-    <div data-landing className="min-h-screen bg-[#0B0F17] text-slate-200 antialiased">
-      <LandingHeader />
-      <main>
-        <HeroSection />
-        <ProblemSection />
-        <FeaturesSection />
-        <ShowcaseSection />
-        <LoyaltySection />
-        <MarketingAnalyticsSection />
-        <ProductionSection />
-        <AiAssistantSection />
-        <HowItWorksSection />
-        <AudienceSection />
-        <PricingSection />
-        <FaqSection />
-        <LeadSection />
-      </main>
-      <LandingFooter />
-    </div>
+    <LandingShell>
+      <HeroSection />
+      <ProblemSection />
+      <FeaturesSection />
+      <ShowcaseSection />
+      <AiAssistantSection />
+      <HowItWorksSection />
+      <AudienceSection />
+      <MiniRoadmapSection />
+      <PricingSection />
+      <FaqSection />
+      <LeadSection />
+    </LandingShell>
   );
 }

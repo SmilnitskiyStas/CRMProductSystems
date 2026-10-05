@@ -1,21 +1,18 @@
 import { Factory, Store, Warehouse, Wrench } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Reveal } from "./Reveal";
+import { Section, SectionHeading, TeaserLink } from "./Section";
 
 const SECONDARY_ICONS = [Factory, Warehouse, Wrench];
 
 export async function AudienceSection() {
   const t = await getTranslations("Landing.audience");
+  const tTeasers = await getTranslations("Landing.teasers");
   const secondary = t.raw("secondary") as { title: string; text: string }[];
 
   return (
-    <section className="py-16 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            {t("heading")}
-          </h2>
-        </Reveal>
+    <Section id="audience">
+      <SectionHeading title={t("heading")} />
 
         <div className="mt-12 grid gap-5 lg:grid-cols-2">
           <Reveal>
@@ -53,10 +50,10 @@ export async function AudienceSection() {
           </div>
         </div>
 
-        <Reveal className="mt-8">
-          <p className="text-center text-sm text-slate-500">{t("footer")}</p>
-        </Reveal>
-      </div>
-    </section>
+      <Reveal className="mt-8 space-y-4 text-center">
+        <p className="text-sm text-slate-500">{t("footer")}</p>
+        <TeaserLink href="/for-whom">{tTeasers("forWhom")}</TeaserLink>
+      </Reveal>
+    </Section>
   );
 }

@@ -17,20 +17,24 @@
       "retailNavLabel": "Retail chains",
       "nav": [
         {
-          "href": "#features",
+          "href": "/features",
           "label": "Features"
         },
         {
-          "href": "#how-it-works",
+          "href": "/how-it-works",
           "label": "How it works"
         },
         {
-          "href": "#pricing",
-          "label": "Pricing"
+          "href": "/for-whom",
+          "label": "Who it's for"
         },
         {
-          "href": "#faq",
-          "label": "FAQ"
+          "href": "/roadmap",
+          "label": "Roadmap"
+        },
+        {
+          "href": "/#pricing",
+          "label": "Pricing"
         }
       ],
       "langSwitchLabel": "Language",
@@ -260,15 +264,15 @@
       "secondary": [
         {
           "title": "Manufacturing",
-          "text": "Recipes, production batches, finished-goods expiry dates."
+          "text": "A dedicated format for manufacturers — on our roadmap."
         },
         {
           "title": "Warehouses",
-          "text": "Batch tracking, transfers, storage-condition monitoring."
+          "text": "A dedicated format for warehouses — on our roadmap."
         },
         {
           "title": "Auto service shops",
-          "text": "Parts, labor, work orders — a dedicated module."
+          "text": "A dedicated app for auto service shops — on our roadmap."
         }
       ],
       "footer": "The system is modular: we turn on only what your business needs."
@@ -349,7 +353,65 @@
     },
     "footer": {
       "rights": "© 2026 AgruSystems. All rights reserved.",
-      "login": "Log in"
+      "login": "Log in",
+      "tagline": "Expiry, stock and sales control for stores and chains.",
+      "columns": [
+        {
+          "title": "Product",
+          "links": [
+            {
+              "href": "/features",
+              "label": "Features"
+            },
+            {
+              "href": "/how-it-works",
+              "label": "How it works"
+            },
+            {
+              "href": "/roadmap",
+              "label": "Roadmap"
+            },
+            {
+              "href": "/#pricing",
+              "label": "Pricing"
+            }
+          ]
+        },
+        {
+          "title": "Solutions",
+          "links": [
+            {
+              "href": "/retail",
+              "label": "Retail chains"
+            },
+            {
+              "href": "/for-whom",
+              "label": "Who it's for"
+            },
+            {
+              "href": "/#faq",
+              "label": "FAQ"
+            }
+          ]
+        },
+        {
+          "title": "Company",
+          "links": [
+            {
+              "href": "/for-whom#lead-form",
+              "label": "Request a demo"
+            },
+            {
+              "href": "/#pricing",
+              "label": "Pricing on request"
+            }
+          ]
+        }
+      ],
+      "contactTitle": "Contact",
+      "contactText": "Leave a request — we will call you back and show the system live.",
+      "contactCta": "Request a demo",
+      "languageLabel": "Language"
     },
     "verticals": {
       "retail": {
@@ -425,6 +487,420 @@
         "backHome": {
           "text": "This is part of what ShelfGuard can do.",
           "linkLabel": "See the full platform feature set"
+        }
+      }
+    },
+    "trust": {
+      "label": "Already working in the system",
+      "items": [
+        {
+          "title": "FEFO",
+          "text": "Consumption by nearest expiry"
+        },
+        {
+          "title": "Checkbox fiscal POS",
+          "text": "Fiscal receipts from the till"
+        },
+        {
+          "title": "AI auto-ordering",
+          "text": "A suggestion every morning"
+        },
+        {
+          "title": "IoT sensors",
+          "text": "Temperature monitoring"
+        }
+      ]
+    },
+    "teasers": {
+      "features": "All features",
+      "howItWorks": "How onboarding works",
+      "forWhom": "Who it's for",
+      "roadmap": "See the roadmap"
+    },
+    "miniRoadmap": {
+      "heading": "What exists and what's next",
+      "subheading": "We build the product openly: below is what works today, and the roadmap page covers plans.",
+      "doneTitle": "Already working",
+      "done": [
+        "Batch tracking and expiry control (FEFO)",
+        "POS with fiscalization via Checkbox",
+        "AI auto-ordering and AI assistant",
+        "B2B supplier marketplace",
+        "IoT temperature monitoring",
+        "Mobile app with a barcode scanner"
+      ],
+      "nextTitle": "What's next",
+      "nextText": "We collect priorities and development plans on a separate page. They may change depending on customer needs."
+    },
+    "pages": {
+      "common": {
+        "ready": "Ready",
+        "soon": "Coming soon",
+        "ctaLead": "Request a demo",
+        "backHome": "Back to home"
+      },
+      "features": {
+        "meta": {
+          "title": "ShelfGuard features — FEFO, fiscal POS, AI ordering, IoT",
+          "description": "All implemented ShelfGuard capabilities: FEFO expiry control, POS with Checkbox fiscalization, AI auto-ordering, B2B marketplace, IoT temperature, loyalty and a mobile app."
+        },
+        "hero": {
+          "eyebrow": "Features",
+          "title": "Everything that already works in ShelfGuard",
+          "description": "Only real capabilities, grouped by the job they do. Modules are switched on to fit your type of business."
+        },
+        "solvesLabel": "What it solves",
+        "groups": [
+          {
+            "id": "stock",
+            "title": "Stock and FEFO",
+            "solves": "Products spoil unnoticed and write-offs eat your margin.",
+            "text": "Every batch has an expiry date and a status. The system always tells you what to sell or write off first.",
+            "items": [
+              "Batch tracking with expiry dates and statuses: safe, warning, critical, expired",
+              "All consumption follows FEFO — the batch with the nearest expiry goes first",
+              "Supplier deliveries and write-off documents",
+              "Transfers between locations keep the expiry date and batch number",
+              "Store zones and shelves"
+            ]
+          },
+          {
+            "id": "sales",
+            "title": "Sales and fiscalization",
+            "solves": "The till, the stock records and fiscalization live apart and drift.",
+            "text": "A full POS that writes stock off immediately and issues fiscal receipts.",
+            "items": [
+              "Shifts, receipts and Z-reports",
+              "Fiscalization via Checkbox, configured per company",
+              "A sale writes stock off by FEFO right away",
+              "Manual sales entry when the POS is not used"
+            ]
+          },
+          {
+            "id": "ai",
+            "title": "AI ordering and assistant",
+            "solves": "Ordering by gut feeling means shortages one day and surplus the next.",
+            "text": "AI analyses sales and stock and prepares an order suggestion — you only review and confirm.",
+            "items": [
+              "A morning auto-order suggestion based on sales and stock",
+              "Seasonality, events and weather forecast taken into account",
+              "AI business assistant: answers questions about your own data",
+              "Weather-aware promotion suggestions"
+            ]
+          },
+          {
+            "id": "marketplace",
+            "title": "B2B marketplace",
+            "solves": "Supplier orders get lost in calls and messengers.",
+            "text": "A supplier catalog and ordering straight from the system.",
+            "items": [
+              "Supplier catalog with prices and terms",
+              "Orders are sent to the supplier from the system",
+              "Supplier performance metrics",
+              "Delivery coverage by region"
+            ]
+          },
+          {
+            "id": "iot",
+            "title": "IoT monitoring",
+            "solves": "A fridge failure is noticed after the goods are already spoiled.",
+            "text": "Sensors report temperature in real time.",
+            "items": [
+              "Refrigerated display temperature in real time",
+              "Instant alerts on deviations",
+              "Device connection via MQTT"
+            ]
+          },
+          {
+            "id": "loyalty",
+            "title": "Loyalty and RFM",
+            "solves": "It is hard to tell who your most valuable customers are.",
+            "text": "A customer directory, loyalty and marketing analytics.",
+            "items": [
+              "Customer directory",
+              "Loyalty program",
+              "RFM customer segmentation for marketing decisions"
+            ]
+          },
+          {
+            "id": "mobile",
+            "title": "Mobile app",
+            "solves": "People on the floor and in the warehouse are not at a computer.",
+            "text": "Core operations from a phone, with a camera barcode scanner.",
+            "items": [
+              "Receiving, write-offs, transfers and stocktaking",
+              "Camera barcode scanner, no extra hardware",
+              "POS from the phone",
+              "Shift schedule view"
+            ]
+          },
+          {
+            "id": "team",
+            "title": "Team and chain",
+            "solves": "Managing several locations and people is hard.",
+            "text": "Multiple locations, roles, schedules and notifications in one place.",
+            "items": [
+              "Several stores and locations in one system",
+              "Roles and access rights for the team",
+              "Staff shift schedules",
+              "Notifications, including Telegram"
+            ]
+          }
+        ],
+        "cta": {
+          "heading": "Want to see it on your own data?",
+          "text": "Leave a request and we will show the system live."
+        }
+      },
+      "roadmap": {
+        "meta": {
+          "title": "ShelfGuard roadmap — what's ready and what's next",
+          "description": "What is already implemented in ShelfGuard and how we plan to develop it further. Plans may change."
+        },
+        "hero": {
+          "eyebrow": "Roadmap",
+          "title": "What exists and what's next",
+          "description": "We show the real state of the product, with no promises about timing."
+        },
+        "disclaimer": "Plans and priorities may change depending on customer needs. This is not a commitment on delivery dates.",
+        "columns": {
+          "done": {
+            "title": "Done",
+            "subtitle": "Working in the system today",
+            "items": [
+              {
+                "title": "Batches and FEFO",
+                "text": "Expiry dates, statuses, consumption by nearest expiry."
+              },
+              {
+                "title": "Receiving, transfers, write-offs",
+                "text": "Documents for stock moving between suppliers and locations."
+              },
+              {
+                "title": "Fiscal POS",
+                "text": "Shifts, receipts, Z-reports, fiscalization via Checkbox."
+              },
+              {
+                "title": "AI auto-ordering",
+                "text": "A daily order suggestion based on sales and stock."
+              },
+              {
+                "title": "AI assistant",
+                "text": "Answers about your business based on your data."
+              },
+              {
+                "title": "B2B marketplace",
+                "text": "A supplier catalog and ordering from the system."
+              },
+              {
+                "title": "IoT temperature monitoring",
+                "text": "Sensors and deviation alerts."
+              },
+              {
+                "title": "Loyalty and RFM analytics",
+                "text": "Customer directory and segmentation."
+              },
+              {
+                "title": "Mobile app",
+                "text": "Barcode scanner, receiving, write-offs, POS."
+              },
+              {
+                "title": "Staff and notifications",
+                "text": "Shift schedules, notifications, Telegram."
+              },
+              {
+                "title": "Multiple locations and modules",
+                "text": "Roles, access, enabling only the modules you need."
+              }
+            ]
+          },
+          "inProgress": {
+            "title": "In progress",
+            "subtitle": "What we are working on now",
+            "items": [
+              {
+                "title": "More automation through the AI agent",
+                "text": "The agent handles most routine work — ordering, expiry control, suggestions — and a person only corrects its decisions."
+              }
+            ]
+          },
+          "planned": {
+            "title": "Planned",
+            "subtitle": "Directions we are considering",
+            "items": [
+              {
+                "title": "Our own point-of-sale system",
+                "text": "A more pleasant checkout interface and a dedicated app the business customises in its own account."
+              },
+              {
+                "title": "Surveillance camera integration",
+                "text": "AI sees the shelves and reports which are empty and need restocking."
+              },
+              {
+                "title": "Production",
+                "text": "A dedicated format for manufacturers: recipes, production batches and finished-goods expiry dates."
+              },
+              {
+                "title": "Warehouses",
+                "text": "A dedicated format for warehouses: batch tracking, transfers and storage-condition control."
+              },
+              {
+                "title": "Auto-service app",
+                "text": "A dedicated workspace for service shops and mechanics."
+              },
+              {
+                "title": "Beauty business solution",
+                "text": "A work cabinet and mobile app, a CRM tracking earnings and services, stock and purchasing, suppliers, and AI agent tips to earn more."
+              },
+              {
+                "title": "Website builder for businesses",
+                "text": "Build your site on your own or with our help."
+              },
+              {
+                "title": "Hotel software",
+                "text": "A dedicated solution for the hospitality business."
+              },
+              {
+                "title": "Healthcare",
+                "text": "Clinics, pharmacies and wellness centres."
+              }
+            ]
+          }
+        },
+        "cta": {
+          "heading": "Have an idea or a need?",
+          "text": "Tell us what is missing — it helps us set priorities."
+        }
+      },
+      "howItWorks": {
+        "meta": {
+          "title": "How ShelfGuard works — from onboarding to daily use",
+          "description": "Step by step: onboarding, catalog and batches, sales and POS, auto-ordering and analytics. Team roles and the mobile scenario."
+        },
+        "hero": {
+          "eyebrow": "How it works",
+          "title": "From the first call to daily work",
+          "description": "There is no self sign-up — we onboard you personally and set the system up for your business."
+        },
+        "steps": [
+          {
+            "number": "01",
+            "title": "Onboarding and setup",
+            "text": "You leave a request, we show the system, set up the company, stores and required modules, and train your team."
+          },
+          {
+            "number": "02",
+            "title": "Catalog and batches",
+            "text": "We import your products. With every delivery the system keeps batches with expiry dates and statuses."
+          },
+          {
+            "number": "03",
+            "title": "Sales and POS",
+            "text": "The POS issues fiscal receipts and writes stock off by FEFO right away, batch by batch."
+          },
+          {
+            "number": "04",
+            "title": "Auto-ordering",
+            "text": "Every morning AI suggests what and how much to order. You review and confirm, and the order goes to the supplier."
+          },
+          {
+            "number": "05",
+            "title": "Analytics",
+            "text": "Stock, write-offs and sales for every store and for the whole chain on one screen."
+          }
+        ],
+        "roles": {
+          "heading": "Everyone sees their own view",
+          "subheading": "Access is configured by role, so people see only what they need.",
+          "items": [
+            {
+              "title": "Owner or chain manager",
+              "text": "The overall picture across all stores, analytics, settings."
+            },
+            {
+              "title": "Store manager",
+              "text": "Expiry, stock, orders, team schedules."
+            },
+            {
+              "title": "Cashier and staff",
+              "text": "POS, receiving and write-offs — simple and scanner-driven."
+            }
+          ]
+        },
+        "mobile": {
+          "heading": "The mobile scenario",
+          "text": "Core operations are available from a phone, with no extra hardware.",
+          "items": [
+            "Scan a barcode with the phone camera",
+            "Receive a delivery or write off a product",
+            "See expiry dates and notifications",
+            "Sell from the POS on your phone if needed"
+          ]
+        },
+        "cta": {
+          "heading": "Ready to start?",
+          "text": "Leave a request and we will explain onboarding in more detail."
+        }
+      },
+      "forWhom": {
+        "meta": {
+          "title": "Who ShelfGuard is for — grocery stores, chains and more",
+          "description": "Grocery retail is production-ready. Auto service, production and warehouses are coming soon. Pricing on request."
+        },
+        "hero": {
+          "eyebrow": "Who it's for",
+          "title": "Solutions by business type",
+          "description": "An honest status: where the system is ready and what is still in progress."
+        },
+        "moreLabel": "Learn more",
+        "verticals": [
+          {
+            "id": "retail",
+            "title": "Grocery stores and chains",
+            "status": "ready",
+            "text": "Short shelf life, daily deliveries, dozens of categories. One store or a chain — the system shows each location separately and all of them together.",
+            "href": "/retail"
+          },
+          {
+            "id": "autoService",
+            "title": "Auto service",
+            "status": "soon",
+            "text": "Parts, labor and work orders. We are preparing this format for launch."
+          },
+          {
+            "id": "production",
+            "title": "Production",
+            "status": "soon",
+            "text": "Recipes, production batches and finished-goods expiry. We are preparing this format for launch."
+          },
+          {
+            "id": "warehouses",
+            "title": "Warehouses",
+            "status": "soon",
+            "text": "Batch tracking, transfers and storage-condition control. We are preparing this format for launch."
+          },
+          {
+            "id": "beauty",
+            "title": "Beauty business",
+            "status": "soon",
+            "text": "A work cabinet, mobile app and CRM: services, earnings, stock and suppliers. On our roadmap."
+          },
+          {
+            "id": "hotels",
+            "title": "Hotels",
+            "status": "soon",
+            "text": "A dedicated program for the hotel business. On our roadmap."
+          },
+          {
+            "id": "medical",
+            "title": "Healthcare and wellness",
+            "status": "soon",
+            "text": "Clinics, pharmacies and wellness centres. On our roadmap."
+          }
+        ],
+        "pricing": {
+          "heading": "Pricing on request",
+          "text": "The price depends on the number of stores and the modules you need, so we calculate it individually. Leave a request and we will prepare a quote for your setup."
         }
       }
     }

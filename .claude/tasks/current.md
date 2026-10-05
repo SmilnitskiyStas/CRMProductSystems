@@ -6,6 +6,12 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Landing: redesign головної + /features /roadmap /how-it-works /for-whom — TASK-719
+
+**Status:** review · frontend-developer · не закомічено · Log: `.claude/logs/tasks/719_2026-10-03_landing-redesign-and-pages_frontend-developer.md`
+
+4 нові SSG-сторінки (uk/en), спільні примітиви, hero + trust strip, міні-роадмап, новий header/footer, палітра в CSS-змінних. Роадмап «В роботі/Заплановано» — порожні масиви в messages (чекаємо список від користувача).
+
 ## Catalog «Zones» колонка + create/edit: модалка → окремі сторінки (фронт) — TASK-718
 
 **Status:** review · main session (frontend-developer) · не запушено · Log: `.claude/logs/tasks/718_2026-09-21_catalog-zones-column-and-product-pages_frontend-developer.md`

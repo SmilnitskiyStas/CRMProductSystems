@@ -13,7 +13,8 @@ const AUTH_ROUTES = ["/login", "/forgot-password"];
 // pages under app/[locale]/ — the landing page (`/` = uk, `/en` = en), the
 // QR/deep-link retailer join page (`/join/{slug}` = uk, `/en/join/{slug}` = en,
 // TASK-549), and the retail vertical marketing page (`/retail` = uk,
-// `/en/retail` = en, TASK-713). Everything else (dashboard, auth, API routes)
+// `/en/retail` = en, TASK-713), plus /features, /roadmap, /how-it-works and
+// /for-whom (TASK-719). Everything else (dashboard, auth, API routes)
 // keeps going through the existing auth logic below, untouched.
 //
 // This rewrite is load-bearing, not cosmetic: `uk` has no URL prefix, so an
@@ -24,7 +25,15 @@ const AUTH_ROUTES = ["/login", "/forgot-password"];
 // top-level page under app/[locale]/ must be added to INTL_PATH_PREFIXES below
 // or it will 404 on its unprefixed (uk) URL.
 const intlMiddleware = createIntlMiddleware(routing);
-const INTL_PATH_PREFIXES = ["/en", "/join", "/retail"];
+const INTL_PATH_PREFIXES = [
+  "/en",
+  "/join",
+  "/retail",
+  "/features",
+  "/roadmap",
+  "/how-it-works",
+  "/for-whom",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
