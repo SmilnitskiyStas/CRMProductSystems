@@ -167,6 +167,11 @@ jobs:
           port: 10048
           username: administrator
           key: ${{ secrets.AUTO_DEPLOY_DATABASEMATE }}
+          # deploy.sh rebuilds images on the server and now runs ~10m — right at
+          # ssh-action's 10m default command_timeout, which caused a false-negative
+          # "Run Command Timeout" failure on a deploy that had already completed
+          # (2026-09-21, run 35628780487). Headroom for future growth.
+          command_timeout: 25m
           script: |
             cd ~/shelfguard
             bash deploy.sh
