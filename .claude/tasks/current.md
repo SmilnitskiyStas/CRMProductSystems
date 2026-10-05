@@ -1,3 +1,5 @@
+- **TASK-720** (done, frontend) Landing: POS/ПРРО прибрано з публічних текстів (uk+en); /roadmap → progress bar + stage timeline (`RoadmapProgress`, `RoadmapTimeline`), mini-roadmap на головній з тим же баром. tsc/lint/build OK. Лог: logs/tasks/720_*.
+
 # Активна робота — Marketplace: delivery-coverage + performance-metrics (серп.–вер. 2026)
 
 Поточний кластер: **TASK-648..673** — geo-регіони → структуроване delivery-coverage
