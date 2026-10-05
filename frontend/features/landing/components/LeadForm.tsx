@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CheckCircle2, Loader2, Send } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { submitLead } from "../api/leads";
+import {
+  clearPendingLead,
+  loadPendingLead,
+  resendPendingLead,
+  submitLead,
+  type LeadBody,
+} from "../api/leads";
+import { trackEvent } from "../lib/analytics";
 
 function buildLeadSchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
@@ -37,6 +44,7 @@ export function LeadForm() {
   const t = useTranslations("Landing.leadForm");
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [retryable, setRetryable] = useState(false);
 
   const leadSchema = useMemo(() => buildLeadSchema(t), [t]);
 
@@ -49,9 +57,20 @@ export function LeadForm() {
     defaultValues: { name: "", phone: "", company: "", message: "", website: "" },
   });
 
+  // A lead that failed to send earlier (network / 5xx) is parked in localStorage; offer a resend.
+  const [pending, setPending] = useState<LeadBody | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resentOk, setResentOk] = useState(false);
+
+  useEffect(() => {
+    // localStorage is client-only: read after mount to avoid a hydration mismatch.
+    setPending(loadPendingLead());
+  }, []);
+
   const onSubmit = async (values: LeadFormValues) => {
     setServerError(null);
-    const result = await submitLead({
+    setRetryable(false);
+    const { result, source } = await submitLead({
       name: values.name,
       phone: values.phone,
       company: values.company ?? "",
@@ -59,13 +78,36 @@ export function LeadForm() {
       website: values.website ?? "",
     });
     if (result.ok) {
+      trackEvent("generate_lead", { source });
+      setPending(null);
       setSubmitted(true);
     } else {
+      // Form values stay in place; the user can retry with one click.
       setServerError(result.error);
+      setRetryable(result.retryable);
+      if (result.retryable) setPending(loadPendingLead());
     }
   };
 
-  if (submitted) {
+  const onResend = async () => {
+    setResending(true);
+    const outcome = await resendPendingLead();
+    setResending(false);
+    if (outcome?.result.ok) {
+      trackEvent("generate_lead", { source: outcome.source });
+      setPending(null);
+      setResentOk(true);
+    } else if (outcome && !outcome.result.ok) {
+      setServerError(outcome.result.error);
+    }
+  };
+
+  const onDiscardPending = () => {
+    clearPendingLead();
+    setPending(null);
+  };
+
+  if (submitted || resentOk) {
     return (
       <div className="flex flex-col items-center rounded-xl border border-[#22c55e]/25 bg-[#22c55e]/[0.06] px-6 py-12 text-center">
         <CheckCircle2 className="h-12 w-12 text-[#22c55e]" aria-hidden="true" />
@@ -77,6 +119,25 @@ export function LeadForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      {pending && (
+        <div
+          role="status"
+          className="rounded-md border border-[#f59e0b]/30 bg-[#f59e0b]/[0.08] px-4 py-3 text-sm text-[#fcd34d]"
+        >
+          <p className="font-medium">{t("pendingTitle")}</p>
+          <p className="mt-1 text-[#fde68a]/80">{t("pendingText")}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" size="sm" disabled={resending} onClick={onResend}>
+              {resending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {t("pendingResend")}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onDiscardPending}>
+              {t("pendingDiscard")}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="lead-name" className="mb-1.5 block text-sm font-medium text-slate-300">
@@ -162,7 +223,7 @@ export function LeadForm() {
         ) : (
           <Send className="h-4 w-4" aria-hidden="true" />
         )}
-        {isSubmitting ? t("submitting") : t("submit")}
+        {isSubmitting ? t("submitting") : retryable ? t("retry") : t("submit")}
       </Button>
     </form>
   );

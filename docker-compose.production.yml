@@ -41,6 +41,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-G-3YWKV939R2}
     container_name: shelfguard_web
     restart: unless-stopped
     # NOT loopback-bound — same reason as api above: the provider edge proxy

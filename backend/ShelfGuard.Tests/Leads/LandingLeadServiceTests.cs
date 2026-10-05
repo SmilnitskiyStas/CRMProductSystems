@@ -158,4 +158,129 @@ public sealed class LandingLeadServiceTests
             Arg.Is<LandingLead>(l => l.Name == "Іван" && l.Phone == "+380671234567"),
             Arg.Any<CancellationToken>());
     }
+
+    // ── TASK-721: attribution, whitelist, persistence failure ──────────────
+
+    [Fact]
+    public async Task CaptureAsync_StoresAttributionFields_TruncatingLongValues()
+    {
+        var request = Valid() with
+        {
+            Source = "Retail",
+            PageUrl = "/uk/retail",
+            Locale = "UK",
+            Referrer = new string('r', 500),
+            UtmSource = "google",
+            UtmMedium = "cpc",
+            UtmCampaign = new string('c', 400),
+        };
+
+        var error = await _sut.CaptureAsync(request, CancellationToken.None);
+
+        Assert.Null(error);
+        await _repo.Received(1).AddAsync(
+            Arg.Is<LandingLead>(l =>
+                l.Source == "retail" && l.PageUrl == "/uk/retail" && l.Locale == "uk" &&
+                l.Referrer!.Length == 300 && l.UtmSource == "google" && l.UtmMedium == "cpc" &&
+                l.UtmCampaign!.Length == 150),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("evil-source")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task CaptureAsync_UnknownSource_FallsBackToLanding(string? source)
+    {
+        await _sut.CaptureAsync(Valid() with { Source = source, Locale = "xx" }, CancellationToken.None);
+
+        await _repo.Received(1).AddAsync(
+            Arg.Is<LandingLead>(l => l.Source == "landing" && l.Locale == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CaptureAsync_DbFailure_Propagates_SoApiReturns5xx()
+    {
+        _repo.SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("db down")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.CaptureAsync(Valid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListAsync_NormalizesStatusPagingAndSearch()
+    {
+        _repo.ListAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns((new List<LandingLead>(), 0));
+
+        var result = await _sut.ListAsync("bogus", "  ivan ", 0, 5000, CancellationToken.None);
+
+        await _repo.Received(1).ListAsync("all", "ivan", 1, 100, Arg.Any<CancellationToken>());
+        Assert.Equal(1, result.Page);
+        Assert.Equal(100, result.PageSize);
+    }
+
+    [Fact]
+    public async Task CountUnprocessedAsync_ReturnsRepositoryCount()
+    {
+        _repo.CountUnprocessedAsync(Arg.Any<CancellationToken>()).Returns(7);
+
+        var dto = await _sut.CountUnprocessedAsync(CancellationToken.None);
+
+        Assert.Equal(7, dto.Unprocessed);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NotFound_ReturnsError()
+    {
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((LandingLead?)null);
+
+        var (lead, error) = await _sut.UpdateAsync(
+            Guid.NewGuid(), new UpdateLeadRequest(true, null), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(lead);
+        Assert.Contains("not found", error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_MarkProcessed_SetsActorAndTimestamp_ThenUnmarkClears()
+    {
+        var entity = LandingLead.Create("Ivan", "+380671234567", null, null);
+        _repo.GetByIdAsync(entity.Id, Arg.Any<CancellationToken>()).Returns(entity);
+        var actor = Guid.NewGuid();
+
+        var (processed, err1) = await _sut.UpdateAsync(
+            entity.Id, new UpdateLeadRequest(true, "  called back "), actor, CancellationToken.None);
+
+        Assert.Null(err1);
+        Assert.True(processed!.IsProcessed);
+        Assert.Equal(actor, processed.ProcessedByUserId);
+        Assert.NotNull(processed.ProcessedAt);
+        Assert.Equal("called back", processed.AdminNote);
+
+        var (reopened, err2) = await _sut.UpdateAsync(
+            entity.Id, new UpdateLeadRequest(false, ""), actor, CancellationToken.None);
+
+        Assert.Null(err2);
+        Assert.False(reopened!.IsProcessed);
+        Assert.Null(reopened.ProcessedAt);
+        Assert.Null(reopened.ProcessedByUserId);
+        Assert.Null(reopened.AdminNote);
+        await _repo.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NoteTooLong_ReturnsError_DoesNotSave()
+    {
+        var entity = LandingLead.Create("Ivan", "+380671234567", null, null);
+        _repo.GetByIdAsync(entity.Id, Arg.Any<CancellationToken>()).Returns(entity);
+
+        var (_, error) = await _sut.UpdateAsync(
+            entity.Id, new UpdateLeadRequest(null, new string('n', 1001)), null, CancellationToken.None);
+
+        Assert.NotNull(error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
 }

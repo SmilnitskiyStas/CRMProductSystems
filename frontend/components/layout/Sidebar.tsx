@@ -51,6 +51,7 @@ import {
   History,
   Activity,
   FolderTree,
+  Inbox,
   Warehouse,
   Boxes,
 } from "lucide-react";
@@ -61,6 +62,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useSupplierChatSessions } from "@/features/supplier-cabinet/hooks/useSupplierCabinet";
 import { useUnseenOrderCount } from "@/features/supplier-cabinet/hooks/useCabinetCooperation";
+import { useUnprocessedLeadsCount } from "@/features/provider/hooks/useProviderLeads";
 import type { ModuleKey } from "@/features/modules/types";
 import {
   AppRoles,
@@ -312,6 +314,7 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Shield size={18} />,
     items: [
       { href: "/provider", label: t("admin.provider"), icon: <Shield size={16} />,   roles: PROVIDER_TEAM, exact: true, permission: ["view_clients", "manage_clients"] },
+      { href: "/provider/leads", label: t("admin.leads"), icon: <Inbox size={16} />, roles: PROVIDER_TEAM, permission: ["view_clients", "manage_clients"] },
       { href: "/provider/categories", label: t("admin.categories"), icon: <FolderTree size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
       { href: "/admin",    label: t("admin.admin"),    icon: <Settings size={16} />, roles: PROVIDER_ONLY, permission: "admin_panel" },
     ],
@@ -988,6 +991,14 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   const { data: unseenOrders } = useUnseenOrderCount(isSupplierAdmin);
   const supplierUnseenOrders = isSupplierAdmin ? unseenOrders?.count ?? 0 : 0;
 
+  // Unprocessed landing leads badge for the admin "Заявки" item (TASK-721). Provider team
+  // members with client-view/manage permission only; polled every 60s, hidden when 0.
+  const canSeeLeads =
+    !!effectivePermissions &&
+    (effectivePermissions.has("view_clients") || effectivePermissions.has("manage_clients"));
+  const { data: leadsCount } = useUnprocessedLeadsCount(canSeeLeads);
+  const unprocessedLeads = canSeeLeads ? leadsCount?.unprocessed ?? 0 : 0;
+
   // Only bare provider sessions have no tenant_id — /api/settings/modules would 403.
   // enterprise_admin (real clients AND impersonation sessions) must go through module
   // gating so only their tenant's enabled modules are visible.
@@ -1069,6 +1080,9 @@ export function Sidebar({ collapsed, onToggle }: Props) {
       visibleItems: visibleItems.map((item) => {
         if (item.href === "/supplier/messages" && supplierUnreadTotal > 0) {
           return { ...item, badge: supplierUnreadTotal };
+        }
+        if (item.href === "/provider/leads" && unprocessedLeads > 0) {
+          return { ...item, badge: unprocessedLeads };
         }
         if (item.href === "/supplier/orders" && supplierUnseenOrders > 0) {
           return { ...item, badge: supplierUnseenOrders };

@@ -252,3 +252,39 @@ export interface UpdateCategoryBody {
   isActive: boolean;
   defaults?: CategoryDefaults;
 }
+
+// ── Landing leads (TASK-721) ────────────────────────────────────────────────
+
+export type LeadStatusFilter = "new" | "processed" | "all";
+
+export interface LandingLeadDto {
+  id: string;
+  name: string;
+  phone: string;
+  company: string | null;
+  message: string | null;
+  source: string;
+  pageUrl: string | null;
+  locale: string | null;
+  referrer: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  isProcessed: boolean;
+  createdAt: string;
+  processedAt: string | null;
+  processedByUserId: string | null;
+  adminNote: string | null;
+}
+
+export interface LandingLeadListDto {
+  items: LandingLeadDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface UpdateLeadBody {
+  isProcessed?: boolean;
+  adminNote?: string;
+}

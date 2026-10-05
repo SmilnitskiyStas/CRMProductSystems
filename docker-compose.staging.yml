@@ -79,6 +79,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5101}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
     container_name: shelfguard_staging_web
     restart: unless-stopped
     # Dockerfile hardcodes PORT=3100 inside the container — only the host-side

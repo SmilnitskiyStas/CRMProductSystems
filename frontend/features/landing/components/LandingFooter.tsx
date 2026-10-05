@@ -4,6 +4,7 @@ import { Link as LocaleLink } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Container } from "./Section";
 import { Logo } from "./Logo";
+import { CookieSettingsLink } from "./CookieSettingsLink";
 
 interface FooterColumn {
   title: string;
@@ -71,6 +72,7 @@ export async function LandingFooter() {
                 EN
               </LocaleLink>
             </span>
+            <CookieSettingsLink />
             <Link
               href="/login"
               className="text-[var(--l-muted)] transition-colors hover:text-white"

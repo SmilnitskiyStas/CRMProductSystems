@@ -2050,7 +2050,17 @@ public sealed class AppDbContext : DbContext
             e.Property(l => l.Source).HasMaxLength(50).IsRequired().HasDefaultValue("landing");
             e.Property(l => l.IsProcessed).HasDefaultValue(false);
             e.Property(l => l.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(l => l.PageUrl).HasMaxLength(300).IsRequired(false);
+            e.Property(l => l.Locale).HasMaxLength(10).IsRequired(false);
+            e.Property(l => l.Referrer).HasMaxLength(300).IsRequired(false);
+            e.Property(l => l.UtmSource).HasMaxLength(100).IsRequired(false);
+            e.Property(l => l.UtmMedium).HasMaxLength(100).IsRequired(false);
+            e.Property(l => l.UtmCampaign).HasMaxLength(150).IsRequired(false);
+            e.Property(l => l.ProcessedAt).IsRequired(false);
+            e.Property(l => l.ProcessedByUserId).IsRequired(false);
+            e.Property(l => l.AdminNote).HasMaxLength(1000).IsRequired(false);
             e.HasIndex(l => l.CreatedAt);
+            e.HasIndex(l => l.IsProcessed);
         });
 
         // ── SupplierRole (TASK-305) ───────────────────────────────────────────
