@@ -6,6 +6,11 @@
 Усе від **TASK-647** і старіше винесено в `.claude/tasks/archive/` (розбито за
 спринтами). Для старих задач — `grep` по TASK-ID в `archive/`. Історія — в git.
 
+## Заявки з лендингу в адмінці + GA4 з consent — TASK-721
+
+**Status:** review · fullstack · не закомічено (гілка `feat/leads-admin-and-ga`) · Log: `.claude/logs/tasks/721_2026-10-05_leads-admin-and-ga_fullstack.md`
+Міграція `ExtendLandingLeadsAttribution`; `api/provider/leads`; сторінка `/provider/leads` + badge в Sidebar; GA4 через `NEXT_PUBLIC_GA_ID` (build-time, треба в server `.env`).
+
 ## Landing: redesign головної + /features /roadmap /how-it-works /for-whom — TASK-719
 
 **Status:** review · frontend-developer · не закомічено · Log: `.claude/logs/tasks/719_2026-10-03_landing-redesign-and-pages_frontend-developer.md`
