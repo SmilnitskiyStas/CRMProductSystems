@@ -1019,6 +1019,9 @@ export function Sidebar({ collapsed, onToggle }: Props) {
   const sourceGroups = isSupplierAdmin ? supplierNavGroups : navGroups;
   const visibleGroups = sourceGroups
     .filter((group) => isModuleActive(group.moduleKey, modulesSet))
+    // The "Застосунок" section is the tenant's consumer-app builder — not a provider tool.
+    // Provider team members never see it (impersonation sessions are enterprise_admin, unaffected).
+    .filter((group) => !(isProviderTeamMember && group.key === "consumer_app"))
     .map((group) => ({
       group,
       visibleItems: group.items.filter((item) => {
