@@ -34,6 +34,11 @@ services:
       PRRO__CASHIER__PASSWORD: ${PRRO__CASHIER__PASSWORD:-}
     external_links:
       - shelfguard_postgres
+    # HEALTHCHECK itself lives in backend/Dockerfile (/health/live); deploy.sh gates on it.
+    # Limits are a safety net so one runaway container can't starve the others on the single
+    # host - generous on purpose, tune after `docker stats` on the server.
+    mem_limit: 1536m
+    cpus: 2.0
 
   web:
     build:
@@ -50,6 +55,8 @@ services:
       - '3100:3100'
     depends_on:
       - api
+    mem_limit: 768m
+    cpus: 1.0
 
   redis:
     image: redis:7-alpine
@@ -68,6 +75,14 @@ services:
     command: redis-server ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     volumes:
       - shelfguard_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a $$REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    mem_limit: 384m
 
   mosquitto:
     image: eclipse-mosquitto:2
@@ -93,8 +108,12 @@ services:
     container_name: shelfguard_worker
     restart: unless-stopped
     depends_on:
-      - redis
-      - mosquitto
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    mem_limit: 768m
+    cpus: 1.0
     environment:
       REDIS_URL: ${REDIS_URL:-redis://localhost:6380}
       # node-pg needs a postgres:// URL - DATABASE_URL is the .NET-format string for the API

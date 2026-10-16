@@ -1533,3 +1533,6 @@ merge, ідемпотентна) — застосовано на dev, усі 11 
 `ShipOrderAsync`); `MarketplaceOrderDto` +4 поля. `dotnet build -c Release` чисто; `dotnet test`
 **2350/2350** (RLS-audit green). Фронт — окремим агентом (кнопка cancel для `new|confirmed`, нові
 DTO-поля «Підтвердив/Відвантажив», змінений рядок помилки).
+
+### TASK-722 — Resilience stage 1 (health checks, limits, deploy) — review
+`/health/live|ready` в API, HEALTHCHECK у 3 Dockerfile, ліміти в prod compose, deploy.sh: build до down + health-gate. Тести 2467/2467; не задеплоєно. Лог: `.claude/logs/tasks/722_*`.

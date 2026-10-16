@@ -250,13 +250,20 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowCredentials()));
 
+// Health probes (DbReadinessHealthCheck is in ShelfGuard.Api.Infrastructure): "live" = process is up (no dependencies, so a DB blip never restarts the API),
+// "ready" = the DB answers. Used by Docker HEALTHCHECK and the deploy.sh health gate.
+builder.Services.AddHealthChecks()
+    .AddCheck<DbReadinessHealthCheck>("database", tags: new[] { "ready" });
+
 var app = builder.Build();
 
-// Auto-apply pending migrations on startup (dev convenience)
+// Auto-apply pending migrations on startup. Set Migrations:RunOnStartup=false to run them as a
+// separate step instead (the RLS-role guard below still runs either way).
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+    if (builder.Configuration.GetValue("Migrations:RunOnStartup", true))
+        await db.Database.MigrateAsync();
 
     // KI-028: fail fast if the app connects as a role that bypasses RLS. RLS is the sole
     // tenant-isolation layer for single-object reads (Get*ByIdAsync repos have no app-level
@@ -347,6 +354,15 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false,
+}).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+}).AllowAnonymous();
 
 // TASK-625: realtime transport for consumer support ticket threads (see ConsumerSupportHub's
 // own doc for the Join/LeaveTicket authorization model). WebSocket is the primary transport;
